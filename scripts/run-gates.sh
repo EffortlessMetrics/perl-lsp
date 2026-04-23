@@ -30,11 +30,13 @@ json_escape() {
 overall_failure=0
 
 declare -a gate_ids gate_commands gate_required gate_status gate_exit_codes gate_durations gate_logs
+declare -a gate_reasons
 
 run_gate() {
   local gate_id="$1"
   local gate_cmd="$2"
   local required="$3"
+  local reason="${4:-required merge gate}"
   local log_path="$LOG_DIR/${gate_id}.log"
 
   echo "==> Running ${gate_id}: ${gate_cmd}"
@@ -61,15 +63,16 @@ run_gate() {
   gate_exit_codes+=("$exit_code")
   gate_durations+=("$duration")
   gate_logs+=("$log_path")
+  gate_reasons+=("$reason")
 
   if [[ "$required" == "true" && "$exit_code" -ne 0 ]]; then
     overall_failure=1
   fi
 }
 
-run_gate "ci-gate" "just ci-gate" "true"
+run_gate "ci-gate" "just ci-gate" "true" "Always required for merge-readiness validation"
 if [[ "${RUN_FULL:-}" == "1" ]]; then
-  run_gate "ci-full" "just ci-full" "false"
+  run_gate "ci-full" "just ci-full" "false" "RUN_FULL=1 requested expanded diagnostics"
 fi
 
 artifact_paths=()
@@ -102,6 +105,18 @@ except Exception:
 fi
 
 receipt_path="$RECEIPTS_DIR/receipt.json"
+selected_scope="merge-gate"
+if [[ "${RUN_FULL:-}" == "1" ]]; then
+  selected_scope="merge-gate+full"
+fi
+
+failure_count=0
+for i in "${!gate_ids[@]}"; do
+  if [[ "${gate_status[$i]}" == "failure" ]]; then
+    failure_count=$((failure_count + 1))
+  fi
+done
+
 {
   echo "{"
   echo "  \"schema\": 1,"
@@ -110,6 +125,29 @@ receipt_path="$RECEIPTS_DIR/receipt.json"
   echo "  \"rustc\": \"$(json_escape "$rustc_ver")\","
   echo "  \"cargo\": \"$(json_escape "$cargo_ver")\","
   echo "  \"host\": \"$(json_escape "$host_info")\","
+  echo "  \"scope\": \"$(json_escape "$selected_scope")\","
+  echo "  \"selected_lanes\": ["
+  for i in "${!gate_ids[@]}"; do
+    printf "    \"%s\"" "$(json_escape "${gate_ids[$i]}")"
+    if [[ $i -lt $(( ${#gate_ids[@]} - 1 )) ]]; then
+      echo ","
+    else
+      echo ""
+    fi
+  done
+  echo "  ],"
+  echo "  \"reasons\": ["
+  for i in "${!gate_ids[@]}"; do
+    printf "    {\"lane\":\"%s\",\"reason\":\"%s\"}" \
+      "$(json_escape "${gate_ids[$i]}")" \
+      "$(json_escape "${gate_reasons[$i]}")"
+    if [[ $i -lt $(( ${#gate_ids[@]} - 1 )) ]]; then
+      echo ","
+    else
+      echo ""
+    fi
+  done
+  echo "  ],"
   echo "  \"policy_path\": \"$(json_escape "$policy_path")\","
   echo "  \"gates\": ["
 
@@ -152,6 +190,38 @@ receipt_path="$RECEIPTS_DIR/receipt.json"
     done
   fi
 
+  echo "  ],"
+  echo "  \"failures\": {"
+  echo "    \"count\": $failure_count,"
+  echo "    \"repro\": ["
+  repro_written=0
+  for i in "${!gate_ids[@]}"; do
+    if [[ "${gate_status[$i]}" == "failure" ]]; then
+      if [[ $repro_written -eq 1 ]]; then
+        echo ","
+      fi
+      printf "      \"%s\"" "$(json_escape "${gate_commands[$i]}")"
+      repro_written=1
+    fi
+  done
+  if [[ $repro_written -eq 1 ]]; then
+    echo ""
+  fi
+  echo "    ]"
+  echo "  },"
+  echo "  \"baselines\": ["
+  echo "    \".ci/common-corpus-manifest.txt\","
+  echo "    \".ci/parser-corpus-baseline.json\","
+  echo "    \".ci/public-api-baselines/\""
+  echo "  ],"
+  echo "  \"next_actions\": ["
+  if [[ "$failure_count" -gt 0 ]]; then
+    echo "    \"Re-run the failing command(s) listed in failures.repro\","
+    echo "    \"Inspect matching logs under target/receipts/logs/\","
+    echo "    \"Apply fixes, then re-run ./scripts/run-gates.sh\""
+  else
+    echo "    \"No action needed: all selected lanes passed\""
+  fi
   echo "  ],"
   echo "  \"debt_status\": ${debt_status:-null}"
   echo "}"
