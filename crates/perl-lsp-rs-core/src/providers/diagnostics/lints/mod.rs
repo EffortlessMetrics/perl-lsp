@@ -115,6 +115,12 @@
 //! |------|----------|-------------|
 //! | `PL409` | Warning | `goto LABEL` references a label that is not defined in the file |
 //!
+//! ## Loop control labels (`loop_control_label.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL410` | Warning | `next`/`last`/`redo LABEL` references a label that is not defined in the file |
+//!
 //! # Severity Levels
 //!
 //! Each lint produces diagnostics with appropriate severity:
@@ -142,6 +148,8 @@ pub mod eval_error_flow;
 pub mod ffi_checklib;
 /// Conservative `goto LABEL` validation
 pub mod goto_label;
+/// Conservative `next`/`last`/`redo LABEL` validation (PL410)
+pub mod loop_control_label;
 /// Missing module detection (PL701)
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
