@@ -28,6 +28,7 @@ impl DebugAdapter {
         let variables_ref = args.variables_reference as i32;
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
+        let can_use_root_cache = start == 0 && args.count.is_none();
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -47,7 +48,7 @@ impl DebugAdapter {
 
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             // Return cached variables first for stable references and fast repeated expansion.
-            if let Some(vars) = session.variables.get(&variables_ref) {
+            if can_use_root_cache && let Some(vars) = session.variables.get(&variables_ref) {
                 used_session_cache = true;
                 parsed_from_output = vars.clone();
             } else {
@@ -150,6 +151,7 @@ impl DebugAdapter {
 
         // Cache parsed variables and generated child references for expansion requests.
         if !used_session_cache
+            && can_use_root_cache
             && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
         {
             session.variables.insert(variables_ref, variables.clone());
