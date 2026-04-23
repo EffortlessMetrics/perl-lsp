@@ -271,3 +271,36 @@ jobs:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
         run: just ux-tests
+
+  # ── Compile All Targets: catch integration-test + bench bit-rot ───────
+  check-all-targets:
+    name: Compile All Targets (bit-rot guard)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-all-targets-${{ hashFiles('Cargo.lock') }}
+
+      - name: Compile all targets (catches integration-test + bench bit-rot)
+        run: just check-all-targets
