@@ -134,32 +134,49 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 /// This avoids re-creating a parser for each call and is preferred in
 /// throughput-sensitive loops.
 ///
+/// # Precondition
+///
+/// `parser` **must** already be configured with a language (e.g. created via
+/// [`try_create_parser`]).  If `parser` has no language set, tree-sitter
+/// returns `None` from `parse` and this function returns an error — the
+/// same as a cancellation or timeout — with no further distinction.
+/// Use [`try_create_parser`] to ensure the parser is correctly configured
+/// before calling this function.
+///
 /// # Errors
 ///
-/// Returns an error when tree-sitter returns `None` from `parse` (cancelled or
-/// timed out).
+/// Returns an error when tree-sitter returns `None` from `parse`. This can
+/// happen when:
+/// - The parser has no language configured (see precondition above).
+/// - The parse was externally cancelled or timed out.
 pub fn parse_perl_code_with_parser(
     parser: &mut Parser,
     code: &str,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
+        None => Err("parse returned None: parser may lack a configured language, or was cancelled".into()),
     }
 }
 
 /// Reads a file from `path` and parses it as Perl source.
 ///
+/// The file is read as raw bytes so that Perl source files containing
+/// non-UTF-8 bytes (e.g. Latin-1 encoded comments) are accepted.
+///
 /// # Errors
 ///
 /// Returns an error if the file cannot be read or if parsing fails (see
-/// [`parse_perl_code`]).
+/// [`parse_perl_code_with_parser`]).
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read_to_string(path)?;
+    let bytes = std::fs::read(path)?;
     let mut parser = try_create_parser()?;
-    parse_perl_code_with_parser(&mut parser, &code)
+    match parser.parse(bytes.as_slice(), None) {
+        Some(tree) => Ok(tree),
+        None => Err("parse returned None: cancelled or timed out".into()),
+    }
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -259,6 +276,32 @@ mod tests {
 
         assert!(!first.root_node().has_error());
         assert!(!second.root_node().has_error());
+        Ok(())
+    }
+
+    /// Verify that passing an unconfigured `Parser` (no language set) to
+    /// `parse_perl_code_with_parser` returns an error rather than panicking.
+    /// This guards the precondition documented on the function.
+    #[test]
+    fn test_parse_with_unconfigured_parser_returns_error() {
+        use tree_sitter::Parser as RawParser;
+        let mut unconfigured = RawParser::new();
+        // No set_language call — parser has no language
+        let result = parse_perl_code_with_parser(&mut unconfigured, "my $x = 1;");
+        assert!(result.is_err(), "unconfigured parser should return Err, not Ok");
+    }
+
+    /// Verify `parse_perl_file` handles non-UTF-8 source bytes gracefully.
+    #[test]
+    fn test_parse_perl_file_accepts_non_utf8_bytes() -> Result<(), Box<dyn std::error::Error>> {
+        let path =
+            std::env::temp_dir().join("tree_sitter_perl_c_reuse_non_utf8_test.pl");
+        // Latin-1 byte 0xE9 ('é') in a comment — valid Perl, invalid UTF-8
+        let source = b"# caf\xE9\nmy $x = 1;\n";
+        std::fs::write(&path, source)?;
+        let result = parse_perl_file(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(result.is_ok(), "parse_perl_file should handle non-UTF-8 bytes, got: {result:?}");
         Ok(())
     }
 }
