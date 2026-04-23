@@ -9,7 +9,7 @@
 pub use crate::features::contracts::{
     BddFeatureRow, Feature, FeatureProfileSpec, LSP_VERSION, VERSION, advertised_features,
     all_features, bdd_feature_rows, catalog, compliance_percent, compliance_percent_for_grid,
-    feature_profile_specs, has_feature, trackable_feature_count_for_grid,
+    feature_profile_specs, has_feature, lsp_bdd_feature_rows, trackable_feature_count_for_grid,
 };
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 
@@ -146,8 +146,13 @@ fn feature_grid_payload(
             "columns": FEATURE_GRID_COLUMNS,
             "rows": bdd_feature_rows(),
         },
+        "lsp_feature_grid": {
+            "columns": FEATURE_GRID_COLUMNS,
+            "rows": lsp_bdd_feature_rows(),
+        },
         "profiles": profile_summaries,
         "feature_count": all_features().len(),
+        "lsp_feature_count": lsp_bdd_feature_rows().len(),
     });
 
     if let Some(profile) = selected_profile {
@@ -195,10 +200,13 @@ mod tests {
         assert!(value.get("lsp_version").is_some());
         assert!(value.get("compliance_percent").is_some());
         assert!(value.get("feature_grid").is_some());
+        assert!(value.get("lsp_feature_grid").is_some());
         assert!(value.get("feature_profiles").is_some());
         assert!(value.get("profiles").is_some());
         assert!(value["feature_grid"].get("columns").is_some());
         assert!(value["feature_grid"].get("rows").is_some());
+        assert!(value["lsp_feature_grid"].get("columns").is_some());
+        assert!(value["lsp_feature_grid"].get("rows").is_some());
         let profiles = must_some(value.get("profiles").and_then(|profiles| profiles.as_array()));
         assert!(!profiles.is_empty());
         let rows = must_some(
@@ -208,6 +216,16 @@ mod tests {
                 .and_then(|rows| rows.as_array()),
         );
         assert!(!rows.is_empty());
+        let lsp_rows = must_some(
+            value
+                .get("lsp_feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array()),
+        );
+        assert!(!lsp_rows.is_empty());
+        assert!(lsp_rows.iter().all(|row| {
+            row.get("id").and_then(|id| id.as_str()).is_some_and(|id| id.starts_with("lsp."))
+        }));
     }
 
     #[test]
@@ -396,6 +414,15 @@ mod tests {
         let value: serde_json::Value = must(serde_json::from_str(&payload));
         assert_eq!(value["profile"].as_str(), Some("production"));
         assert!(value.get("feature_count").is_some());
+        let lsp_count = must_some(value.get("lsp_feature_count").and_then(|count| count.as_u64()));
+        let lsp_rows_len = must_some(
+            value
+                .get("lsp_feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array())
+                .map(|rows| rows.len() as u64),
+        );
+        assert_eq!(lsp_count, lsp_rows_len);
     }
 
     // ── Default to_json has no profile key ───────────────────────────

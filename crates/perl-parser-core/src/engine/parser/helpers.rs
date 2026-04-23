@@ -620,6 +620,25 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::RightParen)
                 | Some(TokenKind::RightBracket)
+                // Statement-starter keywords cannot serve as an expression RHS.
+                // Treating them as "missing operand" allows declaration parsing
+                // to recover cleanly and resume at the next statement boundary.
+                | Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::Local)
+                | Some(TokenKind::State)
+                | Some(TokenKind::Sub)
+                | Some(TokenKind::Package)
+                | Some(TokenKind::Use)
+                | Some(TokenKind::No)
+                | Some(TokenKind::If)
+                | Some(TokenKind::Unless)
+                | Some(TokenKind::Elsif)
+                | Some(TokenKind::Else)
+                | Some(TokenKind::While)
+                | Some(TokenKind::Until)
+                | Some(TokenKind::For)
+                | Some(TokenKind::Foreach)
                 | Some(TokenKind::Eof)
                 | None
         )

@@ -172,19 +172,22 @@ The rule that should have been invoked: **when the user intervenes and the orche
 
 ## Economics snapshot
 
-| Side | 5h session | Weekly | Output |
-|---|---|---|---|
-| **Claude Code (orchestrator + agents, 20× Max)** | ~31% | ~5% | 116 merges, 120 closes, 31 issues filed |
-| **Codex Pro (generation)** | ~26% | ~7% | ~150 PRs generated (50% useful, 50% dup/drift) |
-| **Master CI** | — | — | Many cancelled runs (concurrency group) + ~100 successful gate runs; green master at session close |
+Plan names used throughout: **Claude 20× Max** (orchestrator + agents) and **Codex Pro** (PR generation).
 
-Both sides ran at near-matched 5-hour session intensity (**~26–31% each**) and near-matched weekly share (**~5–7% each**), which is how 150 dispositions/hour became achievable. The balance is worth naming: a session that's only-Claude or only-Codex won't reach these rates; the **matched-intensity parallel burn on both tools** is what makes spray-and-filter work at this scale.
+| Iteration | Claude 20× Max — 5h | Claude 20× Max — weekly | Codex Pro — 5h | Codex Pro — weekly | Output |
+|---|---|---|---|---|---|
+| **Iteration 1** (2026-04-22) | ~31% | ~5% | ~26% | ~7% | 116 merges, 120 closes, 31 issues filed |
+| **Iteration 2** (follow-up) | ~13% | ~2% | ~10% | ~2% | ~85 merges, ~60 closes, ~22 issues + 53 structural sub-issues |
+| **Cumulative** | — | ~7% | — | ~9% | ~201 merges, ~180 closes, ~53 structural sub-issues |
+| **Master CI** | — | — | — | — | Many cancelled runs (concurrency group) + ~100 successful gate runs; green master at session close |
 
-The ratio that matters: **Codex is cheaper per attempt; Claude is cheaper per decision**. The orchestration pattern exploits this asymmetry by letting Codex spray variation attempts and letting Claude filter to the best one.
+Both sides ran at near-matched 5-hour session intensity, confirmed across two iterations (**31%/26% then 13%/10% session burns**). This matched-intensity parallel burn on both tools is what makes spray-and-filter work at this scale — a session that's only-Claude 20× Max or only-Codex Pro won't reach these rates. The weekly slices cumulate to **~7% Claude 20× Max + ~9% Codex Pro** for both iterations combined.
 
-For the 236 dispositions processed:
-- **Codex side**: ~$0.07 per attempt (at 7%/week ÷ ~150 PRs)
-- **Claude side**: ~$0.05 per decision (at 5%/week ÷ 236 dispositions)
+The ratio that matters: **Codex Pro is cheaper per attempt; Claude 20× Max is cheaper per decision**. The orchestration pattern exploits this asymmetry by letting Codex Pro spray variation attempts and letting Claude 20× Max filter to the best one.
+
+For the iteration-1 dispositions (236 processed):
+- **Codex Pro side**: ~$0.07 per attempt (at 7%/week ÷ ~150 PRs)
+- **Claude 20× Max side**: ~$0.05 per decision (at 5%/week ÷ 236 dispositions)
 - **Combined per *landed* merge**: roughly **$0.25–$0.50 amortised**
 
 For comparison, a typical enterprise code-review process runs $50–$200 per PR reviewed by a senior engineer. The agentic stack delivers comparable rigor (full clippy, test, API surface, security audit on every merged PR) at a 100–1000× cost reduction. The quality of decisions doesn't match a senior engineer's individually, but the *composition* of checks — triage + lightweight review + deep review + diff auditor + CI gates — closes the gap substantially on aggregate.

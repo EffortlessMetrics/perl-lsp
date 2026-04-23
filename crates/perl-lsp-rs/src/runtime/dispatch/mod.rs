@@ -119,6 +119,7 @@ impl LspServer {
                     | "workspace/symbol"
                     | "callHierarchy/incomingCalls"
                     | "callHierarchy/outgoingCalls"
+                    | "textDocument/inlayHint"
             );
 
             if needs_cancellation {
@@ -333,12 +334,9 @@ impl LspServer {
             }
         };
 
-        // Clean up cancellation token after request processing
-        if let Some(ref request_id) = id {
-            GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
-        }
-
-        // Check for enhanced cancellation with provider context
+        // Check for enhanced cancellation with provider context before cleanup.
+        // This preserves cancelled responses for requests that are interrupted while
+        // handlers are already running.
         if let Some(ref request_id) = id {
             if let Some(token) = GLOBAL_CANCELLATION_REGISTRY.get_token(request_id) {
                 if token.is_cancelled() {
@@ -346,9 +344,12 @@ impl LspServer {
                         GLOBAL_CANCELLATION_REGISTRY.cancel_request(request_id).map_err(|e| {
                             tracing::trace!(error = %e, "cancellation: failed to cancel request (post-dispatch)");
                         }).ok().flatten();
+                    GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
                     return Some(enhanced_cancelled_response(&token, cleanup_context.as_ref()));
                 }
             }
+            // Clean up cancellation token after request processing.
+            GLOBAL_CANCELLATION_REGISTRY.remove_request(request_id);
         }
 
         match result {

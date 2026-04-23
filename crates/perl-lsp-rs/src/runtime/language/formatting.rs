@@ -24,6 +24,14 @@ fn formatting_error_to_rpc(context: &str, e: FormattingError) -> JsonRpcError {
     }
 }
 
+fn document_not_open_error(uri: &str) -> JsonRpcError {
+    JsonRpcError {
+        code: INVALID_REQUEST,
+        message: format!("Document not open: {}", uri),
+        data: None,
+    }
+}
+
 impl LspServer {
     /// Build a `PerlTidyConfig` from the current server configuration.
     fn build_perltidy_config(&self) -> PerlTidyConfig {
@@ -103,36 +111,36 @@ impl LspServer {
             tracing::debug!(uri, "Formatting document");
 
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let config = self.build_perltidy_config();
-                let formatter = CodeFormatter::with_config(config);
-                match formatter.format_document(&doc.text, &options) {
-                    Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits
-                            .into_iter()
-                            .map(|edit| {
-                                json!({
-                                    "range": {
-                                        "start": {
-                                            "line": edit.range.start.line,
-                                            "character": edit.range.start.character,
-                                        },
-                                        "end": {
-                                            "line": edit.range.end.line,
-                                            "character": edit.range.end.character,
-                                        },
+            let doc =
+                self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
+            let config = self.build_perltidy_config();
+            let formatter = CodeFormatter::with_config(config);
+            match formatter.format_document(&doc.text, &options) {
+                Ok(edits) => {
+                    let lsp_edits: Vec<Value> = edits
+                        .into_iter()
+                        .map(|edit| {
+                            json!({
+                                "range": {
+                                    "start": {
+                                        "line": edit.range.start.line,
+                                        "character": edit.range.start.character,
                                     },
-                                    "newText": edit.new_text,
-                                })
+                                    "end": {
+                                        "line": edit.range.end.line,
+                                        "character": edit.range.end.character,
+                                    },
+                                },
+                                "newText": edit.new_text,
                             })
-                            .collect();
+                        })
+                        .collect();
 
-                        return Ok(Some(json!(lsp_edits)));
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Formatting error");
-                        return Err(formatting_error_to_rpc("Formatting failed", e));
-                    }
+                    return Ok(Some(json!(lsp_edits)));
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Formatting error");
+                    return Err(formatting_error_to_rpc("Formatting failed", e));
                 }
             }
         }
@@ -165,36 +173,36 @@ impl LspServer {
             tracing::debug!(uri, "Formatting range in document");
 
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let config = self.build_perltidy_config();
-                let formatter = CodeFormatter::with_config(config);
-                match formatter.format_range(&doc.text, &range, &options) {
-                    Ok(edits) => {
-                        let lsp_edits: Vec<Value> = edits
-                            .into_iter()
-                            .map(|edit| {
-                                json!({
-                                    "range": {
-                                        "start": {
-                                            "line": edit.range.start.line,
-                                            "character": edit.range.start.character,
-                                        },
-                                        "end": {
-                                            "line": edit.range.end.line,
-                                            "character": edit.range.end.character,
-                                        },
+            let doc =
+                self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
+            let config = self.build_perltidy_config();
+            let formatter = CodeFormatter::with_config(config);
+            match formatter.format_range(&doc.text, &range, &options) {
+                Ok(edits) => {
+                    let lsp_edits: Vec<Value> = edits
+                        .into_iter()
+                        .map(|edit| {
+                            json!({
+                                "range": {
+                                    "start": {
+                                        "line": edit.range.start.line,
+                                        "character": edit.range.start.character,
                                     },
-                                    "newText": edit.new_text,
-                                })
+                                    "end": {
+                                        "line": edit.range.end.line,
+                                        "character": edit.range.end.character,
+                                    },
+                                },
+                                "newText": edit.new_text,
                             })
-                            .collect();
+                        })
+                        .collect();
 
-                        return Ok(Some(json!(lsp_edits)));
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Range formatting error");
-                        return Err(formatting_error_to_rpc("Range formatting failed", e));
-                    }
+                    return Ok(Some(json!(lsp_edits)));
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "Range formatting error");
+                    return Err(formatting_error_to_rpc("Range formatting failed", e));
                 }
             }
         }
@@ -231,85 +239,85 @@ impl LspServer {
             tracing::debug!(count = ranges_array.len(), uri, "Formatting ranges in document");
 
             let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                let config = self.build_perltidy_config();
-                let formatter = CodeFormatter::with_config(config);
-                let mut all_edits = Vec::new();
+            let doc =
+                self.get_document(&documents, uri).ok_or_else(|| document_not_open_error(uri))?;
+            let config = self.build_perltidy_config();
+            let formatter = CodeFormatter::with_config(config);
+            let mut all_edits = Vec::new();
 
-                // Process each range
-                for (idx, range_val) in ranges_array.iter().enumerate() {
-                    let start_line_u64 =
-                        range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].start.line", idx)),
-                        )?;
-                    let start_line = u32::try_from(start_line_u64).map_err(|_| {
-                        invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
+            // Process each range
+            for (idx, range_val) in ranges_array.iter().enumerate() {
+                let start_line_u64 =
+                    range_val.pointer("/start/line").and_then(|v| v.as_u64()).ok_or_else(|| {
+                        invalid_params(&format!("Missing ranges[{}].start.line", idx))
                     })?;
+                let start_line = u32::try_from(start_line_u64).map_err(|_| {
+                    invalid_params(&format!("ranges[{}].start.line exceeds u32::MAX", idx))
+                })?;
 
-                    let start_char_u64 =
-                        range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
-                        )?;
-                    let start_char = u32::try_from(start_char_u64).map_err(|_| {
-                        invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
-                    })?;
+                let start_char_u64 =
+                    range_val.pointer("/start/character").and_then(|v| v.as_u64()).ok_or_else(
+                        || invalid_params(&format!("Missing ranges[{}].start.character", idx)),
+                    )?;
+                let start_char = u32::try_from(start_char_u64).map_err(|_| {
+                    invalid_params(&format!("ranges[{}].start.character exceeds u32::MAX", idx))
+                })?;
 
-                    let end_line_u64 =
-                        range_val.pointer("/end/line").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].end.line", idx)),
-                        )?;
-                    let end_line = u32::try_from(end_line_u64).map_err(|_| {
-                        invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
-                    })?;
+                let end_line_u64 = range_val
+                    .pointer("/end/line")
+                    .and_then(|v| v.as_u64())
+                    .ok_or_else(|| invalid_params(&format!("Missing ranges[{}].end.line", idx)))?;
+                let end_line = u32::try_from(end_line_u64).map_err(|_| {
+                    invalid_params(&format!("ranges[{}].end.line exceeds u32::MAX", idx))
+                })?;
 
-                    let end_char_u64 =
-                        range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
-                            || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
-                        )?;
-                    let end_char = u32::try_from(end_char_u64).map_err(|_| {
-                        invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
-                    })?;
+                let end_char_u64 =
+                    range_val.pointer("/end/character").and_then(|v| v.as_u64()).ok_or_else(
+                        || invalid_params(&format!("Missing ranges[{}].end.character", idx)),
+                    )?;
+                let end_char = u32::try_from(end_char_u64).map_err(|_| {
+                    invalid_params(&format!("ranges[{}].end.character exceeds u32::MAX", idx))
+                })?;
 
-                    let range = WireRange::new(
-                        WirePosition::new(start_line, start_char),
-                        WirePosition::new(end_line, end_char),
-                    );
+                let range = WireRange::new(
+                    WirePosition::new(start_line, start_char),
+                    WirePosition::new(end_line, end_char),
+                );
 
-                    match formatter.format_range(&doc.text, &range, &options) {
-                        Ok(edits) => {
-                            all_edits.extend(edits);
-                        }
-                        Err(e) => {
-                            tracing::warn!(idx, error = %e, "Range formatting error");
-                            return Err(formatting_error_to_rpc(
-                                &format!("Range formatting failed for range {}", idx),
-                                e,
-                            ));
-                        }
+                match formatter.format_range(&doc.text, &range, &options) {
+                    Ok(edits) => {
+                        all_edits.extend(edits);
+                    }
+                    Err(e) => {
+                        tracing::warn!(idx, error = %e, "Range formatting error");
+                        return Err(formatting_error_to_rpc(
+                            &format!("Range formatting failed for range {}", idx),
+                            e,
+                        ));
                     }
                 }
-
-                let lsp_edits: Vec<Value> = all_edits
-                    .into_iter()
-                    .map(|edit| {
-                        json!({
-                            "range": {
-                                "start": {
-                                    "line": edit.range.start.line,
-                                    "character": edit.range.start.character,
-                                },
-                                "end": {
-                                    "line": edit.range.end.line,
-                                    "character": edit.range.end.character,
-                                },
-                            },
-                            "newText": edit.new_text,
-                        })
-                    })
-                    .collect();
-
-                return Ok(Some(json!(lsp_edits)));
             }
+
+            let lsp_edits: Vec<Value> = all_edits
+                .into_iter()
+                .map(|edit| {
+                    json!({
+                        "range": {
+                            "start": {
+                                "line": edit.range.start.line,
+                                "character": edit.range.start.character,
+                            },
+                            "end": {
+                                "line": edit.range.end.line,
+                                "character": edit.range.end.character,
+                            },
+                        },
+                        "newText": edit.new_text,
+                    })
+                })
+                .collect();
+
+            return Ok(Some(json!(lsp_edits)));
         }
 
         Ok(Some(json!([])))
@@ -371,5 +379,14 @@ mod tests {
             Some("io_error"),
             "data.error_kind should be 'io_error'"
         );
+    }
+
+    #[test]
+    fn document_not_open_error_uses_invalid_request_code() {
+        let uri = "file:///tmp/missing.pl";
+        let rpc = document_not_open_error(uri);
+        assert_eq!(rpc.code, INVALID_REQUEST);
+        assert_eq!(rpc.message, format!("Document not open: {uri}"));
+        assert!(rpc.data.is_none(), "document-not-open error should not include data");
     }
 }

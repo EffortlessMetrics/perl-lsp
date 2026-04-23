@@ -19,6 +19,28 @@ use serde_json::Value;
 pub use crate::features::flags::{AdvertisedFeatures, BuildFlags};
 /// Re-export `ServerCapabilities` from `lsp_types` for public access.
 pub use lsp_types::ServerCapabilities;
+
+/// Canonical completion trigger characters advertised to LSP clients.
+///
+/// LSP requires each trigger to be a single character. Multi-character Perl
+/// operators (`->`, `::`) are supported by advertising their component chars.
+#[must_use]
+pub fn completion_trigger_characters() -> Vec<String> {
+    vec![
+        "$".to_string(),
+        "@".to_string(),
+        "%".to_string(),
+        // Method and package separators.
+        "-".to_string(),
+        ">".to_string(),
+        ":".to_string(),
+        // File path completion inside string literals.
+        "/".to_string(),
+        "\\".to_string(),
+        "\"".to_string(),
+        "'".to_string(),
+    ]
+}
 /// Generate server capabilities from build flags
 #[allow(clippy::field_reassign_with_default)]
 pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
@@ -66,19 +88,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.completion {
         caps.completion_provider = Some(CompletionOptions {
             resolve_provider: Some(true),
-            trigger_characters: Some(vec![
-                "$".to_string(),
-                "@".to_string(),
-                "%".to_string(),
-                // LSP spec requires single-char trigger characters; ">" fires on the
-                // second character of "->" so method-completion still triggers.
-                ">".to_string(),
-                // ":" fires on the second character of "::" for package member completion.
-                ":".to_string(),
-                // "-" fires on the first character of "->" so method-completion appears
-                // immediately; context detection in completion.rs filters non-arrow uses.
-                "-".to_string(),
-            ]),
+            trigger_characters: Some(completion_trigger_characters()),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions::default(),
             completion_item: None,
@@ -486,5 +496,16 @@ mod tests {
             json["codeLensProvider"]["resolveProvider"].as_bool().unwrap_or(false),
             "codeLensProvider.resolveProvider must be true"
         );
+    }
+
+    #[test]
+    fn completion_trigger_characters_include_file_path_and_perl_tokens() {
+        let triggers = completion_trigger_characters();
+        for expected in ["$", "@", "%", "-", ">", ":", "/", "\\", "\"", "'"] {
+            assert!(
+                triggers.iter().any(|trigger| trigger == expected),
+                "missing completion trigger character: {expected}"
+            );
+        }
     }
 }

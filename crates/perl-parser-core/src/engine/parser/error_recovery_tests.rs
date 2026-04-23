@@ -58,6 +58,34 @@ fn test_recovery_missing_expression() {
 }
 
 #[test]
+fn test_recovery_missing_rhs_before_sub_declaration_keyword() {
+    // Missing RHS before `sub foo { ... }` should recover at `sub` as a
+    // statement boundary, instead of consuming `sub` as an identifier.
+    let code = "my $x = sub foo { print 1; }";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover missing assignment RHS");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 2, "Should recover and keep the following sub declaration");
+        assert!(
+            matches!(statements[0].kind, NodeKind::VariableDeclaration { .. }),
+            "First statement should stay a recovered variable declaration"
+        );
+        assert!(
+            matches!(statements[1].kind, NodeKind::Subroutine { .. }),
+            "Second statement should parse as subroutine declaration"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(!parser.errors().is_empty(), "Recovery should record a missing operand diagnostic");
+}
+
+#[test]
 fn test_recovery_multiple_errors() {
     // Phase 2: `my $x = ;` now produces a VariableDeclaration with MissingExpression
     // instead of an Error node. Each missing RHS emits exactly 1 Recovered error.

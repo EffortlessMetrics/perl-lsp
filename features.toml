@@ -24,7 +24,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_hover_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_hover_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_11_hover.rs",
+]
 description = "Hover information with POD markdown rendering, XS::Typemap integration, Moo/Moose attribute display (isa, is, required, predicate, builder, clearer), inherited method resolution across the class hierarchy, pragma documentation, special variable explanations, regex explainer, and file-test operator reference"
 
 [[feature]]
@@ -42,7 +46,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_definition_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_definition_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_10_goto_definition.rs",
+]
 description = "Go to definition"
 
 [[feature]]
@@ -51,7 +59,11 @@ spec = "LSP 3.14"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_definition_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_definition_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_10_goto_definition.rs",
+]
 description = "Go to declaration"
 
 [[feature]]
@@ -60,7 +72,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_references_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_references_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Find references across workspace"
 
 [[feature]]
@@ -69,7 +84,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_symbols_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_symbols_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_13_document_symbols.rs",
+]
 description = "Document symbols with hierarchy"
 
 [[feature]]
@@ -87,7 +106,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Code lens with reference counts"
 
 [[feature]]
@@ -96,7 +118,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_formatting_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Document formatting with Perl::Tidy"
 
 [[feature]]
@@ -105,7 +130,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_formatting_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Range formatting (single range)"
 
 [[feature]]
@@ -132,7 +160,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_rename_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_rename_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Rename symbol across files"
 
 [[feature]]
@@ -168,7 +199,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Folding ranges with fallback"
 
 [[feature]]
@@ -177,7 +211,10 @@ spec = "LSP 3.15"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_selection_range_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_selection_range_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Smart selection expansion"
 
 [[feature]]
@@ -222,7 +259,11 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Pull model diagnostics"
 
 [[feature]]
@@ -231,7 +272,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use strict' pragma diagnostic (PL100) — warns when .pm/.pl files lack strict enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -240,7 +281,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -250,8 +291,8 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
-  "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
-  "crates/perl-lsp-code-actions/src/code_actions.rs",
+  "crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs",
+  "crates/perl-lsp-rs-core/src/providers/code_actions/code_actions.rs",
 ]
 description = "Phase-scoped pragma misconception diagnostics (PL502/PL503) — warns when `use strict` or `use warnings` appears only inside BEGIN/END/INIT/CHECK/UNITCHECK and offers a quick fix to move it to file scope"
 
@@ -261,7 +302,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/unreachable_code_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/tests/unreachable_code_continue_tests.rs"]
 description = "Unreachable code highlighting (PL406) with DiagnosticTag::Unnecessary — detects code after return/die/exit/croak statements"
 
 [[feature]]
@@ -270,7 +311,11 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Unused variable diagnostics (PL102) via scope analyzer — warns on declared-but-never-used variables, suppressed by underscore prefix"
 
 [[feature]]
@@ -344,7 +389,11 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Workspace-wide pull diagnostics"
 
 [[feature]]
@@ -847,7 +896,10 @@ spec = "LSP 3.12"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_rename_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_rename_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Validate rename and compute placeholder/range"
 
 [[feature]]
@@ -894,7 +946,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Resolve code lens command"
 
 [[feature]]
@@ -1035,7 +1090,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
 # Window / Telemetry

@@ -135,14 +135,10 @@ impl CodeActionsProvider {
             Some(code) if code.starts_with("parse-error-") => {
                 fixes::fix_parse_error(self, diagnostic, code)
             }
-            // PL001 / PL002 are general parse error codes. When the diagnostic message
-            // indicates a missing semicolon, route through the same fix as
-            // "parse-error-missingsemicolon" so the quick-fix fires correctly.
-            Some("PL001") | Some("PL002")
-                if diagnostic.message.to_ascii_lowercase().contains("missing semicolon") =>
-            {
-                fixes::fix_parse_error(self, diagnostic, "parse-error-missingsemicolon")
-            }
+            // PL001 / PL002 are general parse error codes. Route known parse
+            // message patterns through the same targeted parse quick-fixes.
+            Some("PL001") | Some("PL002") => parse_error_fix_code_from_message(&diagnostic.message)
+                .map_or_else(Vec::new, |code| fixes::fix_parse_error(self, diagnostic, code)),
             _ => Vec::new(),
         }
     }
@@ -150,6 +146,26 @@ impl CodeActionsProvider {
     pub(super) fn source(&self) -> &str {
         &self.source
     }
+}
+
+fn parse_error_fix_code_from_message(message: &str) -> Option<&'static str> {
+    let message_lower = message.to_ascii_lowercase();
+    if message_lower.contains("missing semicolon") {
+        return Some("parse-error-missingsemicolon");
+    }
+    if message_lower.contains("unclosed string") || message_lower.contains("unterminated string") {
+        return Some("parse-error-unclosedstring");
+    }
+    if message_lower.contains("unclosed parenthesis") {
+        return Some("parse-error-unclosedparen");
+    }
+    if message_lower.contains("unclosed brace")
+        || message_lower.contains("missing '}'")
+        || message_lower.contains("unclosed `{`")
+    {
+        return Some("parse-error-unclosedbrace");
+    }
+    None
 }
 
 #[cfg(test)]
@@ -932,6 +948,12 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_quoted_value_double_quotes() {
+        let result = source_utils::extract_quoted_value("Variable \"$baz\" is undefined");
+        assert_eq!(result, Some("$baz".to_string()));
+    }
+
+    #[test]
     fn test_extract_quoted_value_single_quote_preferred_over_backtick() {
         // Single quotes appear first in the message, so they should be extracted
         let result = source_utils::extract_quoted_value("'first' then `second`");
@@ -1138,6 +1160,24 @@ mod tests {
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
         assert!(actions.is_empty(), "PL001 with unrelated message must not produce actions");
+    }
+
+    #[test]
+    fn test_pl002_unclosed_brace_message_triggers_fix() {
+        let source = "sub x { print 'ok';\n".to_string();
+        let provider = CodeActionsProvider::new(source);
+
+        let diagnostic = make_diagnostic(
+            (6, 7),
+            DiagnosticSeverity::Error,
+            "PL002",
+            "Unclosed `{` -- check for a missing `}` to close the block",
+        );
+
+        let actions = provider.get_actions_for_diagnostic(&diagnostic);
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Add closing brace");
+        assert_eq!(actions[0].edit.new_text, "}");
     }
 
     #[test]

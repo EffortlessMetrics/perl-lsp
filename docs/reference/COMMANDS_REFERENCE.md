@@ -12,6 +12,27 @@ just status-check
 just release-check
 ```
 
+## Tooling Prerequisites
+
+`just` is required for the short command forms used throughout this repository.
+
+```bash
+# Install just (https://github.com/casey/just)
+cargo install just
+```
+
+If you are in a constrained environment where `just` is unavailable, you can still
+run the equivalent core checks directly with Cargo:
+
+```bash
+# Fast local validation fallback
+cargo xtask fmt
+cargo test --workspace --lib
+
+# Broader validation fallback
+cargo test --workspace
+```
+
 ## Installation Commands
 
 ### LSP Server

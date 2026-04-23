@@ -231,7 +231,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use strict' pragma diagnostic (PL100) — warns when .pm/.pl files lack strict enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -240,7 +240,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -250,8 +250,8 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
-  "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
-  "crates/perl-lsp-code-actions/src/code_actions.rs",
+  "crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs",
+  "crates/perl-lsp-rs-core/src/providers/code_actions/code_actions.rs",
 ]
 description = "Phase-scoped pragma misconception diagnostics (PL502/PL503) — warns when `use strict` or `use warnings` appears only inside BEGIN/END/INIT/CHECK/UNITCHECK and offers a quick fix to move it to file scope"
 
@@ -261,7 +261,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/unreachable_code_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/tests/unreachable_code_continue_tests.rs"]
 description = "Unreachable code highlighting (PL406) with DiagnosticTag::Unnecessary — detects code after return/die/exit/croak statements"
 
 [[feature]]

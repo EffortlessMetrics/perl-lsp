@@ -370,6 +370,24 @@ enum Commands {
         output: PathBuf,
     },
 
+    /// Compute the CI scope — changed crates, reverse-dep closure, and architectural wideners.
+    ///
+    /// Emits a JSON (or text) payload listing changed files, mapped crates, the
+    /// reverse-dependency closure, architectural wideners applied, and the
+    /// selected CI lanes with reasons. Deterministic given the same diff and
+    /// `cargo metadata` output.
+    ///
+    /// Example: `cargo xtask ci-scope --base origin/master --format json`
+    CiScope {
+        /// Base git reference to diff against (default: origin/master).
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Output format: `json` or `text` (default: json).
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1399,6 +1417,9 @@ fn main() -> Result<()> {
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {
             ci_metrics::run_ci_baseline(branch, days, limit, output)
+        }
+        Commands::CiScope { base, format } => {
+            ci_scope::run(ci_scope::CiScopeConfig { base, format })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
