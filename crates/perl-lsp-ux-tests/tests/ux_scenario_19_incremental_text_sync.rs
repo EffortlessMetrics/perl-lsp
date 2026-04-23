@@ -77,13 +77,19 @@ fn scenario_19_didchange_recovers_after_parse_error_fix() {
     // Given: user opens a file that initially has parse issues.
     harness.open_file("sync.pl", BROKEN_SOURCE).expect("didOpen should succeed");
     let initial_diagnostics = harness.wait_for_diagnostics("sync.pl", Duration::from_secs(5));
-    let saw_parse_issue_before_fix = has_parse_like_diagnostic(&initial_diagnostics);
-    if !saw_parse_issue_before_fix {
-        eprintln!(
-            "INFO scenario_19: initial parse-like diagnostics were not observed; \
-             continuing with non-crash recovery checks"
-        );
-    }
+
+    // The GIVEN clause is load-bearing: if the server never reports a
+    // parse-like problem for `my $value = ;` the rest of the test is
+    // meaningless (we cannot prove "recovery" without a prior broken state).
+    // We require at least one diagnostic; we keep the parse-keyword check as
+    // a soft preference so wording changes in the server don't break the test,
+    // but we refuse to silently continue when the server emitted nothing.
+    assert!(
+        !initial_diagnostics.is_empty(),
+        "GIVEN preconditions failed: expected at least one diagnostic for \
+         `my $value = ;` before the fix, got empty. Recovery assertion would \
+         otherwise pass vacuously."
+    );
 
     // Clear previously buffered notifications so post-change assertions inspect fresh server output.
     let _ = harness.collect_notifications();
@@ -98,13 +104,31 @@ fn scenario_19_didchange_recovers_after_parse_error_fix() {
         "expected parse-like diagnostics to clear after fixing file; got: {:?}",
         post_change_diagnostics
     );
+    // And the diagnostic set must have strictly shrunk or changed — if we
+    // see an identical list we didn't actually recover from anything.
+    assert_ne!(
+        post_change_diagnostics, initial_diagnostics,
+        "diagnostics after fix are identical to before; didChange had no effect"
+    );
 
+    // Hover must not only avoid error but also be wired up (Err, or Ok(None)
+    // when the server cannot reach the symbol index, is an observable
+    // regression for first-session UX — let the test flag it).
     let hover_result = harness.hover("sync.pl", 4, 2);
     assert!(
         hover_result.is_ok(),
-        "hover should stay available after didChange recovery flow: {:?}",
+        "hover should not JSON-RPC error after didChange recovery: {:?}",
         hover_result
     );
+    // Note: we accept Ok(None) with a log but still require the call itself
+    // to be well-formed. Downgrading to None-only would hide a real bug where
+    // hover stops returning anything at all after a didChange.
+    if let Ok(None) = hover_result {
+        eprintln!(
+            "INFO scenario_19: hover returned null after didChange (degraded \
+             but not a protocol error)"
+        );
+    }
 
     let diagnostics_event = wait_for_any_diagnostics_event(&harness, Duration::from_secs(1));
     assert!(
