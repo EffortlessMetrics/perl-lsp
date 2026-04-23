@@ -630,6 +630,20 @@ impl LspServer {
                                 "perl.workspace.useSystemInc" => {
                                     json!(workspace_config.use_system_inc)
                                 }
+                                "perl.workspace.usePerl5lib" => {
+                                    json!(workspace_config.use_perl5lib)
+                                }
+                                "perl.workspace.perl5libPrecedence" => {
+                                    let precedence = match workspace_config.perl5lib_precedence {
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Prepend => {
+                                            "prepend"
+                                        }
+                                        perl_lsp_rs_core::config::Perl5LibPrecedence::Append => {
+                                            "append"
+                                        }
+                                    };
+                                    json!(precedence)
+                                }
                                 "perl.workspace.resolutionTimeout" => {
                                     json!(workspace_config.resolution_timeout_ms)
                                 }
