@@ -205,6 +205,11 @@ Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://g
 
 ### Fixed
 
+- **Parser error recovery and symbol extraction under partial `Error` nodes**
+  — unclosed block recovery landed in `perl-parser-core` (PR #4079) and
+  symbol extraction now descends into partial `Error` nodes (PR #4071),
+  closing issue [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499).
+
 - **Navigation: inherited and role methods in goto-def, hover, and
   completion** — BFS traversal now chains `model.roles` alongside
   `model.parents` in `inherited_method_definition_location`; hover
