@@ -3355,7 +3355,10 @@ fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
 
 fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
     users_name_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("name"))
+        captures.get(1).is_some_and(|name| {
+            let value = name.as_str();
+            !(value.eq_ignore_ascii_case("name") || value.eq_ignore_ascii_case("user"))
+        })
     })
 }
 
@@ -4481,6 +4484,10 @@ mod tests {
 
         assert!(!has_machine_specific_users_path(
             "Template: /Users/Name/project",
+            &users_name_path,
+        ));
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/user/project",
             &users_name_path,
         ));
         assert!(has_machine_specific_users_path(
