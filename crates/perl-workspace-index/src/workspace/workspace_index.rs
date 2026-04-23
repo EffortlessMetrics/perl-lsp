@@ -4865,15 +4865,14 @@ Utils::process_data();
         // 3. find_dependents("MyBase") should return child.pl
         let index = WorkspaceIndex::new();
 
-        let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
-        index
-            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
-            .expect("indexing MyBase.pm");
+        let base_url = must(url::Url::parse("file:///test/workspace/lib/MyBase.pm"));
+        must(index.index_file(
+            base_url,
+            "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string(),
+        ));
 
-        let child_url = url::Url::parse("file:///test/workspace/child.pl").unwrap();
-        index
-            .index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string())
-            .expect("indexing child.pl");
+        let child_url = must(url::Url::parse("file:///test/workspace/child.pl"));
+        must(index.index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string()));
 
         let dependents = index.find_dependents("MyBase");
         assert!(
@@ -4926,7 +4925,7 @@ Utils::process_data();
         // the quotes and registers the dependency under the bare name "MyBase".
         use crate::Parser;
         let mut p = Parser::new("package Child;\nuse parent 'MyBase';\n1;\n");
-        let ast = p.parse().expect("parse succeeded");
+        let ast = must(p.parse());
         assert!(
             matches!(ast.kind, NodeKind::Program { .. }),
             "Expected Program root, got {:?}",
