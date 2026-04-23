@@ -9,6 +9,7 @@
 //! |------|----------|-------------|
 //! | `assignment-in-condition` | Warning | `=` in `if`/`while` condition (likely meant `==`) |
 //! | `numeric-undef` | Warning | `==`/`!=` with potentially undefined value |
+//! | `PL400` | Information | Bareword filehandle in `open` call |
 
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
@@ -54,9 +55,62 @@ pub fn check_common_mistakes(
                     });
                 }
             }
+            NodeKind::FunctionCall { name, args } => {
+                check_bareword_filehandle(name, args, n, diagnostics);
+            }
 
             _ => {}
         }
+    });
+}
+
+fn check_bareword_filehandle(
+    function_name: &str,
+    args: &[Node],
+    node: &Node,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    if function_name != "open" {
+        return;
+    }
+
+    let open_args: &[Node] = if args.len() == 1 {
+        if let NodeKind::ArrayLiteral { elements } = &args[0].kind {
+            elements
+        } else {
+            args
+        }
+    } else {
+        args
+    };
+
+    if open_args.len() < 2 {
+        return;
+    }
+
+    let NodeKind::Identifier { name } = &open_args[0].kind else {
+        return;
+    };
+
+    if matches!(
+        name.as_str(),
+        "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA"
+    ) {
+        return;
+    }
+
+    diagnostics.push(Diagnostic {
+        range: (node.location.start, node.location.end),
+        severity: DiagnosticSeverity::Information,
+        code: Some(DiagnosticCode::BarewordFilehandle.as_str().to_string()),
+        message: "Use lexical filehandles instead of bareword filehandles".to_string(),
+        related_information: vec![RelatedInformation {
+            location: (node.location.start, node.location.end),
+            message: "Bareword filehandles are global and can lead to accidental reuse across scopes"
+                .to_string(),
+        }],
+        tags: Vec::new(),
+        suggestion: Some("Use lexical filehandle: open(my $fh, ... )".to_string()),
     });
 }
 
@@ -116,5 +170,48 @@ fn might_be_undef(node: &Node, symbol_table: &SymbolTable) -> bool {
         }
         NodeKind::Undef => true,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser_core::parser::Parser;
+    use perl_semantic_analyzer::analysis::symbol::SymbolExtractor;
+    use perl_tdd_support::must;
+
+    fn common_mistakes_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let symbol_table = SymbolExtractor::new_with_source(source).extract(&ast);
+        let mut diagnostics = Vec::new();
+        check_common_mistakes(&ast, &symbol_table, &mut diagnostics);
+        diagnostics
+    }
+
+    #[test]
+    fn bareword_filehandle_open_is_flagged() {
+        let diags = common_mistakes_diags(r#"open(FH, "<", "file.txt");"#);
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL400")),
+            "bareword filehandle should be flagged as PL400: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn lexical_filehandle_open_is_not_flagged() {
+        let diags = common_mistakes_diags(r#"open(my $fh, "<", "file.txt");"#);
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL400")),
+            "lexical filehandle open should not be flagged as PL400: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn std_handles_are_not_flagged() {
+        let diags = common_mistakes_diags(r#"open(STDOUT, ">", "out.txt");"#);
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL400")),
+            "STDOUT handle should not be flagged as PL400: {diags:?}"
+        );
     }
 }
