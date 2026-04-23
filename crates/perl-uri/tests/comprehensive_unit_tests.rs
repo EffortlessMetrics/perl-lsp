@@ -112,6 +112,11 @@ fn is_special_scheme_detects_vscode_notebook() {
 }
 
 #[test]
+fn is_special_scheme_detects_vscode_notebook_cell() {
+    assert!(is_special_scheme("vscode-notebook-cell:/path/to/notebook.ipynb#cell-1"));
+}
+
+#[test]
 fn is_special_scheme_detects_vscode_vfs() {
     assert!(is_special_scheme("vscode-vfs://github/repo/file.pl"));
 }
