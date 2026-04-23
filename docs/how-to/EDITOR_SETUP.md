@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Windsurf | install `perl-lsp-rs` extension or use `perllsp --stdio` | [docs/EDITORS/WINDSURF_SETUP.md](../EDITORS/WINDSURF_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,11 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Windsurf
+
+Windsurf is VS Code-compatible. Install `EffortlessMetrics.perl-lsp-rs` in
+Windsurf, or configure a generic client to run `perllsp --stdio`.
 
 ## When Setup Fails
 
