@@ -3474,7 +3474,16 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
 ///
 /// Returns a deduplicated list of bare constant names (e.g. `["FOO", "BAR"]`).
 fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    fn push_unique(names: &mut Vec<String>, seen: &mut HashSet<String>, candidate: &str) {
+        if seen.insert(candidate.to_string()) {
+            names.push(candidate.to_string());
+        }
+    }
+
     let mut names = Vec::new();
+    let mut seen = HashSet::new();
 
     // Scalar form (most common): args = ["FOO", <value...>]
     // The first arg is a plain identifier with no `=>` in args at all.
@@ -3492,7 +3501,7 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
         for word in content.split_whitespace() {
             if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                names.push(word.to_string());
+                push_unique(&mut names, &mut seen, word);
             }
         }
         return names;
@@ -3512,7 +3521,7 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
             let is_plain_ident =
                 !arg.is_empty() && arg.chars().all(|c| c.is_alphanumeric() || c == '_');
             if is_plain_ident && iter.peek().map(|s| s.as_str()) == Some("=>") {
-                names.push(arg.clone());
+                push_unique(&mut names, &mut seen, arg);
             }
         }
         return names;
@@ -3525,7 +3534,7 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         && !first.is_empty()
         && first.chars().all(|c| c.is_alphanumeric() || c == '_')
     {
-        names.push(first.to_string());
+        push_unique(&mut names, &mut seen, first);
     }
 
     names
@@ -3662,6 +3671,33 @@ use constant {
         // Qualified lookup should also work
         let def = index.find_definition("My::Config::PI");
         assert!(def.is_some(), "find_definition('My::Config::PI') should succeed");
+    }
+
+    #[test]
+    fn test_extract_constant_names_deduplicates_qw_form() {
+        let names = extract_constant_names_from_use_args(&["qw(FOO BAR FOO)".to_string()]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_use_constant_duplicate_names_indexed_once() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/DedupConfig.pm";
+        let code = r#"package My::DedupConfig;
+use constant {
+    RETRY_COUNT => 3,
+    RETRY_COUNT => 5,
+};
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        let retry_count_symbols = symbols.iter().filter(|s| s.name == "RETRY_COUNT").count();
+        assert_eq!(
+            retry_count_symbols, 1,
+            "RETRY_COUNT should be indexed once even when repeated in use constant hash form"
+        );
     }
 
     #[test]
