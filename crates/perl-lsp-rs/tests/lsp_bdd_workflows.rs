@@ -2181,6 +2181,77 @@ sub collect_metrics {
 
 #[test]
 #[serial]
+fn bdd_workspace_symbols_refresh_after_incremental_package_rename()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Workspace symbols refresh after incremental package rename");
+    scenario.given("a workspace containing a package that is renamed in-place");
+
+    let before = r#"package SymbolHub;
+use strict;
+use warnings;
+
+sub collect_metrics {
+    return 1;
+}
+
+1;
+"#;
+
+    let after = before.replace("SymbolHub", "MetricsHub");
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", before)])?;
+    let module_uri = workspace.uri("lib/SymbolHub.pm");
+    harness.open(&module_uri, before)?;
+    harness.wait_for_symbol("SymbolHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("querying workspace symbols before and after a didChange rename");
+    let before_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "SymbolHub"
+        }),
+    )?;
+
+    harness.change_full(&module_uri, 2, &after)?;
+    harness.wait_for_symbol("MetricsHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    let after_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "MetricsHub"
+        }),
+    )?;
+
+    scenario.then("workspace symbol search reflects the updated package name");
+    let before_names: Vec<String> = before_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+    let after_names: Vec<String> = after_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+
+    assert!(
+        before_names.iter().any(|name| name == "SymbolHub"),
+        "pre-change workspace symbols should include SymbolHub; got {before_names:?}"
+    );
+    assert!(
+        after_names.iter().any(|name| name == "MetricsHub"),
+        "post-change workspace symbols should include MetricsHub; got {after_names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_folding_ranges_cover_package_and_subroutine_blocks() -> Result<(), Box<dyn std::error::Error>>
 {
     let scenario = BddScenario::new("Folding ranges cover package and subroutine blocks");
