@@ -23,12 +23,13 @@ use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use crate::tasks::ci_scope::{self, ScopeOutput};
 use crate::utils::project_root;
 
 // =============================================================================
@@ -208,8 +209,40 @@ pub struct Receipt {
     pub metadata: ReceiptMetadata,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
+    pub agent_receipt: AgentReceipt,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentReceipt {
+    pub scope: AgentScope,
+    pub selected_lanes: Vec<AgentLane>,
+    pub reasons: BTreeMap<String, String>,
+    pub failures: AgentFailures,
+    pub baselines: Vec<String>,
+    pub next_actions: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct AgentScope {
+    pub base: String,
+    pub diff_class: String,
+    pub changed_files: Vec<String>,
+    pub direct_crates: Vec<String>,
+    pub reverse_dep_closure: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentLane {
+    pub lane: String,
+    pub scope: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct AgentFailures {
+    pub blocking: Vec<String>,
+    pub repro: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -702,14 +735,156 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
+    let agent_receipt = build_agent_receipt(&root, &results);
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
         metadata,
         gates: results,
         summary,
+        agent_receipt,
         diff_config: None,
     })
+}
+
+fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
+    let scope_output = compute_scope_output(root).ok();
+    let selected_lanes = scope_output
+        .as_ref()
+        .map(|scope| {
+            scope
+                .selected_lanes
+                .iter()
+                .map(|lane| AgentLane { lane: lane.lane.clone(), scope: lane.scope.clone() })
+                .collect()
+        })
+        .unwrap_or_default();
+    let reasons = scope_output
+        .as_ref()
+        .map(|scope| {
+            scope
+                .selected_lanes
+                .iter()
+                .map(|lane| {
+                    let explanation =
+                        scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                    let reason = if explanation.is_empty() {
+                        lane.reason.clone()
+                    } else {
+                        format!("{} — {}", lane.reason, explanation)
+                    };
+                    (lane.lane.clone(), reason)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let (blocking, repro, next_actions) = failure_guidance(results);
+    let baselines = discover_baselines(root);
+
+    let scope = if let Some(scope) = scope_output {
+        AgentScope {
+            base: scope.base,
+            diff_class: scope.diff_class,
+            changed_files: scope.changed_files,
+            direct_crates: scope.direct_crates.into_iter().map(|entry| entry.name).collect(),
+            reverse_dep_closure: scope
+                .reverse_dep_closure
+                .into_iter()
+                .map(|entry| entry.name)
+                .collect(),
+        }
+    } else {
+        AgentScope::default()
+    };
+
+    AgentReceipt {
+        scope,
+        selected_lanes,
+        reasons,
+        failures: AgentFailures { blocking, repro },
+        baselines,
+        next_actions,
+    }
+}
+
+fn failure_guidance(results: &[GateResult]) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let blocking = blocking_failure_gate_names(results);
+    let repro: Vec<String> = results
+        .iter()
+        .filter(|result| blocking.iter().any(|name| name == &result.gate_name))
+        .map(|result| format!("{} # gate={}", result.command, result.gate_name))
+        .collect();
+    let next_actions = if blocking.is_empty() {
+        vec!["No blocking failures detected. Proceed with review or merge flow.".to_string()]
+    } else {
+        blocking
+            .iter()
+            .map(|gate| {
+                format!(
+                    "Reproduce and fix gate '{gate}' locally, then rerun: cargo xtask gates --gate {gate}"
+                )
+            })
+            .collect()
+    };
+    (blocking, repro, next_actions)
+}
+
+fn discover_baselines(root: &Path) -> Vec<String> {
+    let candidates = [
+        ".ci/public-api-baselines",
+        ".ci/metrics/baselines",
+        "benchmarks/baselines",
+        ".ci/parser-corpus-baseline.json",
+        ".ci/cpan-corpus-baseline.json",
+    ];
+    candidates
+        .iter()
+        .filter(|path| root.join(path).exists())
+        .map(|path| (*path).to_string())
+        .collect()
+}
+
+fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
+    let base = select_scope_base(root);
+    let changed_files = cmd("git", ["diff", "--name-only", &format!("{base}...HEAD")])
+        .dir(root)
+        .read()
+        .with_context(|| format!("Failed to read changed files for base '{base}'"))?
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+
+    let metadata_raw = cmd("cargo", ["metadata", "--format-version=1", "--no-deps"])
+        .dir(root)
+        .read()
+        .context("Failed to load cargo metadata for agent receipt scope")?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&metadata_raw).context("Failed to parse cargo metadata JSON")?;
+
+    let workspace_root = root.to_string_lossy().replace('\\', "/");
+    let mut scope = ci_scope::classify_files(&changed_files, &metadata, &workspace_root)?;
+    scope.base = base;
+    scope.head_sha = cmd("git", ["rev-parse", "HEAD"]).dir(root).read()?.trim().to_string();
+    scope.changed_files = changed_files;
+    Ok(scope)
+}
+
+fn select_scope_base(root: &Path) -> String {
+    let env_candidates = [
+        std::env::var("CI_SCOPE_BASE").ok(),
+        std::env::var("GITHUB_BASE_REF").ok().map(|name| format!("origin/{name}")),
+        std::env::var("GITHUB_BASE_REF").ok(),
+    ];
+    let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
+    candidates.extend(["origin/master", "master", "HEAD~1"].into_iter().map(str::to_string));
+    for candidate in candidates {
+        let exists = cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).run().is_ok();
+        if exists {
+            return candidate;
+        }
+    }
+    "HEAD".to_string()
 }
 
 /// Run a single gate and capture its result
@@ -1361,7 +1536,8 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, is_blocking_gate_status,
+        GateResult, blocking_failure_gate_names, determine_overall_status, failure_guidance,
+        is_blocking_gate_status,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1408,5 +1584,23 @@ mod tests {
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
         assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
+
+    #[test]
+    fn failure_guidance_includes_repro_and_next_actions_for_blocking_gates() {
+        let results = vec![
+            gate_result("clippy", "fail", true),
+            gate_result("doc", "pass", true),
+            gate_result("lint", "fail", false),
+        ];
+        let (blocking, repro, next_actions) = failure_guidance(&results);
+        assert_eq!(blocking, vec!["clippy"]);
+        assert_eq!(repro, vec!["true # gate=clippy"]);
+        assert_eq!(
+            next_actions,
+            vec![
+                "Reproduce and fix gate 'clippy' locally, then rerun: cargo xtask gates --gate clippy"
+            ]
+        );
     }
 }
