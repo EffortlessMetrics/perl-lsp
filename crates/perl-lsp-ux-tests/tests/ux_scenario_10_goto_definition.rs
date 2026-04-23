@@ -13,6 +13,7 @@
 //!   pointing back into that file.
 //! - No crash signatures after the request.
 
+use anyhow::Result;
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::Duration;
 
@@ -123,4 +124,75 @@ fn scenario_10_definition_on_unknown_position_returns_empty() {
     let _ = defs;
 
     harness.assert_no_crash();
+}
+
+const IMPORTED_FUNCTION_CALLER: &str = "\
+use strict;\n\
+use warnings;\n\
+use lib 'lib';\n\
+use Foo qw(bar);\n\
+\n\
+bar();\n\
+";
+
+const IMPORTED_FUNCTION_MODULE: &str = "\
+package Foo;\n\
+use strict;\n\
+use warnings;\n\
+use Exporter qw(import);\n\
+our @EXPORT_OK = qw(bar);\n\
+\n\
+sub bar {\n\
+    return 'ok';\n\
+}\n\
+\n\
+1;\n\
+";
+
+#[test]
+fn scenario_10_definition_resolves_imported_function_call_site() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_10: perl-lsp binary not found");
+        return Ok(());
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("script.pl", IMPORTED_FUNCTION_CALLER)
+            .with_file("lib/Foo.pm", IMPORTED_FUNCTION_MODULE),
+    )?;
+
+    harness.open_file("lib/Foo.pm", IMPORTED_FUNCTION_MODULE)?;
+    harness.open_file("script.pl", IMPORTED_FUNCTION_CALLER)?;
+
+    std::thread::sleep(Duration::from_millis(700));
+
+    // `bar();` call site — line 5, char 0.
+    let defs = harness.definition("script.pl", 5, 0)?;
+    assert!(
+        !defs.is_empty(),
+        "Expected goto-definition to resolve imported function `bar`, got empty results."
+    );
+
+    let resolves_to_module = defs.iter().any(|entry| {
+        entry
+            .get("uri")
+            .and_then(|uri| uri.as_str())
+            .map(|uri| uri.ends_with("lib/Foo.pm"))
+            .unwrap_or(false)
+            || entry
+                .get("targetUri")
+                .and_then(|uri| uri.as_str())
+                .map(|uri| uri.ends_with("lib/Foo.pm"))
+                .unwrap_or(false)
+    });
+
+    assert!(
+        resolves_to_module,
+        "Expected goto-definition target to point at lib/Foo.pm for imported `bar`, got: {:?}",
+        defs
+    );
+
+    harness.assert_no_crash();
+    Ok(())
 }
