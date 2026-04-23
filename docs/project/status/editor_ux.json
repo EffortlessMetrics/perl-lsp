@@ -47,5 +47,10 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "tracking_signals": {
+    "known_gap_issue_links": 8,
+    "manual_smoke_workflow_reference": "docs/reference/UX_TESTING.md",
+    "workflow_harness_scenario_count": 17
+  }
 }

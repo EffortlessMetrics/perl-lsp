@@ -122,6 +122,43 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn count_known_gap_issue_links(root: &Path) -> usize {
+    let Ok(readme) = fs::read_to_string(root.join("README.md")) else {
+        return 0;
+    };
+
+    let mut in_known_gaps = false;
+    let mut issues = std::collections::BTreeSet::new();
+
+    for line in readme.lines() {
+        if line.starts_with("### Known gaps toward solid UX") {
+            in_known_gaps = true;
+            continue;
+        }
+
+        if in_known_gaps && line.starts_with("## ") {
+            break;
+        }
+
+        if !in_known_gaps {
+            continue;
+        }
+
+        let mut remaining = line;
+        while let Some(idx) = remaining.find("/issues/") {
+            let tail = &remaining[idx + "/issues/".len()..];
+            let digits: String = tail.chars().take_while(|ch| ch.is_ascii_digit()).collect();
+            let digits_len = digits.len();
+            if !digits.is_empty() {
+                issues.insert(digits);
+            }
+            remaining = &tail[digits_len..];
+        }
+    }
+
+    issues.len()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +167,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let known_gap_issues = count_known_gap_issue_links(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -142,8 +180,10 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked scorecard metadata lives in \
            `docs/project/status/editor_ux.json`\n\
+         - **UX gap burn-down tracker**: {known_gap_issues} linked issue(s) in the README \
+           \"Known gaps toward solid UX\" section\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,6 +209,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let known_gap_issues = count_known_gap_issue_links(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -201,6 +242,11 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+        },
+        "tracking_signals": {
+            "workflow_harness_scenario_count": scenario_count,
+            "known_gap_issue_links": known_gap_issues,
+            "manual_smoke_workflow_reference": "docs/reference/UX_TESTING.md",
         },
     });
 
@@ -280,6 +326,30 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["tracking_signals"]["known_gap_issue_links"].as_u64(),
+            Some(count_known_gap_issue_links(&root) as u64)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_count_known_gap_issue_links_from_readme_slice() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let readme = r#"
+## Status
+irrelevant
+
+### Known gaps toward solid UX
+- one [#100](https://github.com/EffortlessMetrics/perl-lsp/issues/100)
+- dup [#100](https://github.com/EffortlessMetrics/perl-lsp/issues/100)
+- two [#200](https://github.com/EffortlessMetrics/perl-lsp/issues/200)
+
+## Security
+done
+"#;
+        fs::write(dir.path().join("README.md"), readme)?;
+        assert_eq!(count_known_gap_issue_links(dir.path()), 2);
         Ok(())
     }
 }
