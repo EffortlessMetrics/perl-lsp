@@ -120,8 +120,9 @@ perllsp --health
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl | text.perl",
+      "syntaxes": ["Packages/Perl/Perl.sublime-syntax", "Packages/Perl/Pod.sublime-syntax"],
       "initializationOptions": {
         "perl": {
           "workspace": {
@@ -168,8 +169,9 @@ Open LSP settings (`Preferences: LSP Settings`) and add:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl | text.perl",
+      "syntaxes": ["Packages/Perl/Perl.sublime-syntax", "Packages/Perl/Pod.sublime-syntax"],
       "priority": 1,
       "initializationOptions": {
         "perl": {
@@ -651,7 +653,8 @@ Use a custom formatter instead of perltidy:
   "clients": {
     "perl-lsp": {
       "command": ["custom-formatter", "--lsp"],
-      "selector": "source.perl"
+      "selector": "source.perl | text.perl",
+      "syntaxes": ["Packages/Perl/Perl.sublime-syntax", "Packages/Perl/Pod.sublime-syntax"]
     }
   }
 }
@@ -739,8 +742,9 @@ Enable detailed logging for troubleshooting:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
-      "selector": "source.perl",
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl | text.perl",
+      "syntaxes": ["Packages/Perl/Perl.sublime-syntax", "Packages/Perl/Pod.sublime-syntax"],
       "priority": 1,
       "initializationOptions": {
         "perl": {

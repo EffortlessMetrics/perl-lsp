@@ -61,8 +61,9 @@ args = ["--stdio"]
 
 ### Sublime Text
 
-Register a client whose command is `["perllsp", "--stdio"]` and scope it to
-Perl source files.
+Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
+`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
+`.pl`, `.t`, and Pod buffers consistently attach to the server.
 
 ## When Setup Fails
 
