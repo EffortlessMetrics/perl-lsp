@@ -16,10 +16,14 @@ fn out_of_bounds_line_returns_none() {
 
 #[test]
 fn checked_position_rejects_columns_past_line_end() {
+    // "abc\ndef": line 0 = "abc\n" (bytes 0-3), line 1 = "def" (bytes 4-6)
     let index = LineIndex::new("abc\ndef");
+    // column 3 = '\n' byte — last byte on line 0, still addressable
     assert_eq!(index.position_to_byte_checked(0, 3), Some(3));
-    assert_eq!(index.position_to_byte_checked(0, 4), Some(4));
+    // column 4 would be the 'd' on line 1 — NOT accessible via line 0
+    assert_eq!(index.position_to_byte_checked(0, 4), None);
     assert_eq!(index.position_to_byte_checked(0, 5), None);
+    // line 1 = "def" (bytes 4-6), text_len=7 so max col = 7-4 = 3
     assert_eq!(index.position_to_byte_checked(1, 3), Some(7));
     assert_eq!(index.position_to_byte_checked(1, 4), None);
 }
