@@ -37,18 +37,8 @@ pub fn run() -> Result<()> {
     println!("== Rust components ==");
     if has_command("rustup") {
         let installed_components = get_installed_rustup_components();
-
-        if is_component_installed("rustfmt", installed_components.as_deref()) {
-            pass("rustup component installed: rustfmt");
-        } else {
-            warn("rustup component missing: rustfmt (install: rustup component add rustfmt)");
-        }
-
-        if is_component_installed("clippy", installed_components.as_deref()) {
-            pass("rustup component installed: clippy");
-        } else {
-            warn("rustup component missing: clippy (install: rustup component add clippy)");
-        }
+        check_rust_component("rustfmt", true, &mut missing_required, installed_components.as_deref());
+        check_rust_component("clippy", true, &mut missing_required, installed_components.as_deref());
     } else {
         warn("rustup unavailable; cannot verify components");
     }
@@ -177,6 +167,27 @@ fn is_component_installed(component: &str, installed_components: Option<&str>) -
         let value = line.split_whitespace().next().unwrap_or("");
         value == component || value.starts_with(&(format!("{component}-")))
     })
+}
+
+fn check_rust_component(
+    component: &str,
+    required: bool,
+    missing_required: &mut bool,
+    installed_components: Option<&str>,
+) {
+    if is_component_installed(component, installed_components) {
+        pass(&format!("rustup component installed: {component}"));
+        return;
+    }
+
+    let message = format!(
+        "rustup component missing: {component} (install: rustup component add {component})"
+    );
+
+    warn(&message);
+    if required {
+        *missing_required = true;
+    }
 }
 
 fn show_version(program: &str, command: &str, args: &[&str]) {
