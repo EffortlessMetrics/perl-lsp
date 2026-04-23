@@ -1,0 +1,126 @@
+name: Winget Manifest Refresh
+
+# Update the repo-local winget manifest on release
+# Cost: negligible
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to refresh (e.g., v0.10.0)'
+        required: false
+
+concurrency:
+  group: winget-bump-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Get release tag
+        id: tag
+        shell: pwsh
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:RELEASE_TAG_INPUT) {
+            $tag = $env:RELEASE_TAG_INPUT
+          } else {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+          }
+
+          $version = $tag.TrimStart('v')
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Wait for release assets
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 20; $i++) {
+            Write-Host "Checking for release assets (attempt $i/20)..."
+            $assetCount = gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length'
+            if ($assetCount -match '^[1-9]') {
+              Write-Host "Assets found!"
+              break
+            }
+            Start-Sleep -Seconds 30
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Windows binary
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
+
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          Write-Host "Downloading perllsp-$version-x86_64-pc-windows-msvc.zip..."
+          gh release download $tag `
+            --pattern "perllsp-$version-x86_64-pc-windows-msvc.zip" `
+            --dir $assetDir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA256
+        id: checksum
+        shell: pwsh
+        run: |
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'winget-assets'
+          $assetPath = Join-Path $assetDir "perllsp-$version-x86_64-pc-windows-msvc.zip"
+
+          $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash.ToLowerInvariant()
+          "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "SHA256: $sha"
+
+      - name: Update winget manifest
+        shell: pwsh
+        run: |
+          ./distribution/windows/update-manifests.ps1 `
+            -Version "${{ steps.tag.outputs.version }}" `
+            -ReleaseSha256 "${{ steps.checksum.outputs.sha256 }}" `
+            -WingetManifestPath 'distribution/winget/perl-lsp.yaml'
+
+          if (Select-String -Path 'distribution/winget/perl-lsp.yaml' -Pattern '__RELEASE_VERSION__|__RELEASE_URL__|__RELEASE_SHA256__' -Quiet) {
+            throw 'Winget manifest still contains unreplaced placeholders after update.'
+          }
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: bump-perl-lsp-winget-${{ steps.tag.outputs.version }}
+          title: "winget: perl-lsp ${{ steps.tag.outputs.version }}"
+          body: |
+            Refresh the repo-local winget manifest for perl-lsp ${{ steps.tag.outputs.version }}.
+
+            This keeps the Windows package metadata in sync with the release artifacts.
+            The upstream winget-pkgs submission remains a follow-up manual step.
+          commit-message: "winget: perl-lsp ${{ steps.tag.outputs.version }}"
+          labels: automated-pr
+          signoff: false
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Winget Manifest Refresh Complete :rocket:"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **Version**: ${{ steps.tag.outputs.version }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **SHA256**: ${{ steps.checksum.outputs.sha256 }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **PR**: Created in the current repository"

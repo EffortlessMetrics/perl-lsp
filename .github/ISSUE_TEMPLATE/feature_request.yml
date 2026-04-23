@@ -1,0 +1,94 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe what you'd like and why it would be useful.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      options:
+        - LSP feature (completion, hover, diagnostics, etc.)
+        - Parser (new Perl syntax support)
+        - Editor integration (VSCode, Neovim, etc.)
+        - DAP / debugging
+        - Performance
+        - Developer experience / tooling
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? What frustration does it address?
+      placeholder: "When working with large Perl codebases, I can't ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe what you'd like to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: perl-example
+    attributes:
+      label: Example Perl Code
+      description: If applicable, provide example Perl code that would benefit from this feature.
+      render: perl
+
+  - type: textarea
+    id: competitor-reference
+    attributes:
+      label: Competitor or Prior Art Reference
+      description: |
+        Does another tool already implement this? Describing how it works there helps us understand the expected behavior and set a quality bar.
+      placeholder: |
+        - rust-analyzer shows type hints inline (inlay hints); it works by ...
+        - PerlNavigator supports goto-definition for @INC modules; example: ...
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: |
+        How will we know this feature is done? List specific, observable outcomes.
+      placeholder: |
+        - [ ] `go to definition` on a `use`d module name navigates to the correct `.pm` file
+        - [ ] Works for both installed modules and local project modules
+        - [ ] Responds in <100ms on a 200-module workspace
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've considered.
+
+  - type: dropdown
+    id: willing
+    attributes:
+      label: Willing to Contribute?
+      description: Would you be willing to submit a PR for this feature?
+      options:
+        - "Yes, I'd like to implement this"
+        - "I could help with testing"
+        - "No, just suggesting"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or references.

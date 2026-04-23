@@ -1,0 +1,119 @@
+{
+  "description": "Manifest of perl-corpus test files relevant for DAP testing",
+  "version": "1.0.0",
+  "corpus_crate_path": "../../../perl-corpus",
+  "integration_categories": {
+    "breakpoint_validation": {
+      "description": "Comprehensive Perl syntax patterns for breakpoint AST validation",
+      "test_requirements": [
+        "Validate breakpoints on all executable statement types",
+        "Reject breakpoints on comments, POD, heredoc content, blank lines",
+        "Support BEGIN/END/CHECK/INIT block breakpoints",
+        "Handle multiline statement breakpoint adjustment"
+      ],
+      "corpus_references": [
+        "/crates/perl-corpus/fuzz/transliteration_parser_issue.pl",
+        "/crates/perl-parser/tests/fixtures/*.pl"
+      ],
+      "acceptance_criteria": [
+        "AC14: Breakpoint matrix edge cases"
+      ]
+    },
+    "variable_rendering": {
+      "description": "Complex Perl data structures for variable inspection testing",
+      "test_requirements": [
+        "Render scalars, arrays, hashes, blessed objects",
+        "Handle circular references safely",
+        "Truncate large data (>1KB scalar, >10KB total)",
+        "Unicode-safe rendering (emoji, CJK, RTL)",
+        "Nested data structure expansion"
+      ],
+      "corpus_references": [
+        "/crates/perl-parser/tests/fixtures/complex_data_structures.pl",
+        "/crates/perl-parser/tests/fixtures/unicode_*.pl"
+      ],
+      "acceptance_criteria": [
+        "AC13: Variable rendering edge cases",
+        "AC16: Unicode boundary safety"
+      ]
+    },
+    "performance_benchmarks": {
+      "description": "Performance testing corpus files",
+      "test_requirements": [
+        "<50ms breakpoint validation for 100K+ LOC",
+        "<100ms step/continue p95 latency",
+        "<200ms initial scope retrieval",
+        "<1ms incremental parsing updates"
+      ],
+      "corpus_references": [
+        "/crates/perl-dap/tests/fixtures/performance/small_file.pl",
+        "/crates/perl-dap/tests/fixtures/performance/medium_file.pl",
+        "/crates/perl-dap/tests/fixtures/performance/large_file.pl"
+      ],
+      "acceptance_criteria": [
+        "AC15: Performance benchmarks"
+      ]
+    },
+    "security_validation": {
+      "description": "Security-focused test cases from corpus",
+      "test_requirements": [
+        "Path traversal prevention",
+        "Safe eval enforcement",
+        "Timeout enforcement (5s default)",
+        "Unicode boundary safety (PR #153)"
+      ],
+      "corpus_references": [
+        "/crates/perl-dap/tests/fixtures/security/path_traversal_attempts.json",
+        "/crates/perl-dap/tests/fixtures/security/eval_security_tests.json"
+      ],
+      "acceptance_criteria": [
+        "AC16: Security validation"
+      ]
+    },
+    "syntax_coverage": {
+      "description": "Comprehensive Perl syntax pattern coverage",
+      "coverage_areas": [
+        "Operators: arithmetic, logical, bitwise, string, file test",
+        "Control flow: if/elsif/else, unless, for/foreach, while/until, given/when",
+        "Subroutines: named, anonymous, signatures, prototypes, attributes",
+        "Packages: declarations, namespaces, inheritance",
+        "References: scalar, array, hash, code refs",
+        "Regular expressions: match, substitution, transliteration",
+        "Special variables: $_, @ARGV, %ENV, $0, $!, $@",
+        "Pragmas: strict, warnings, feature, utf8",
+        "Built-ins: map, grep, sort with {} blocks (v0.8.9 enhanced)",
+        "I/O: open, close, print, printf, read, write",
+        "BEGIN/END/CHECK/INIT/UNITCHECK blocks",
+        "Heredocs: quoted, interpolated, indented",
+        "POD documentation",
+        "Unicode: identifiers, strings, emoji support"
+      ],
+      "corpus_references": [
+        "All files in /crates/perl-parser/tests/",
+        "/crates/perl-corpus/fuzz/*.pl"
+      ],
+      "acceptance_criteria": [
+        "~100% Perl syntax coverage as documented in CLAUDE.md"
+      ]
+    }
+  },
+  "property_based_testing": {
+    "description": "Property-based testing integration with perl-corpus",
+    "test_strategies": [
+      "Random Perl syntax generation for DAP fuzzing",
+      "Breakpoint location property testing (all executable lines should accept breakpoints)",
+      "Variable rendering property testing (all valid Perl values should render without crashes)",
+      "Performance regression property testing (operations should maintain latency SLAs)"
+    ],
+    "tools": [
+      "proptest crate for Rust property-based testing",
+      "perl-corpus test generation infrastructure"
+    ]
+  },
+  "integration_instructions": {
+    "rust_test_integration": "Use `use perl_corpus;` in DAP tests to reference comprehensive corpus",
+    "fixture_loading": "Load corpus files via `std::fs::read_to_string()` from workspace-relative paths",
+    "ast_validation": "Parse corpus files with `perl_parser::parse()` for AST-based testing",
+    "performance_measurement": "Use `std::time::Instant` for latency measurements against corpus files"
+  }
+}

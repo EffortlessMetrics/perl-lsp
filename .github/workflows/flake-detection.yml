@@ -1,0 +1,237 @@
+name: Flake Detection
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      test_filter:
+        description: 'Optional additional cargo test args (e.g., --test cli)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  detect-flakes:
+    name: Detect Flaky Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # nightly (master)
+        with:
+          toolchain: nightly
+
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: flake-detection-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Run full test suite (capture results)
+        id: initial_run
+        run: |
+          set -euo pipefail
+          FILTER="${{ github.event.inputs.test_filter }}"
+          cargo test --workspace --lib --locked -Z unstable-options --format json \
+            $FILTER > test-results.jsonl 2>&1 || true
+
+          python3 .ci/scripts/extract-failed-tests.py \
+            test-results.jsonl > failed-tests.txt || true
+
+          FLAKE_COUNT=0
+          if [ -s failed-tests.txt ]; then
+            FLAKE_COUNT=$(wc -l < failed-tests.txt)
+            echo "Found $FLAKE_COUNT initially failed tests"
+          else
+            echo "No failed tests in initial run"
+          fi
+          echo "flake_count=$FLAKE_COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Retry failed tests 3x
+        if: steps.initial_run.outputs.flake_count != '0'
+        id: retry_results
+        run: |
+          set -euo pipefail
+          declare -a FLAKES=()
+          declare -a STABLE_FAILURES=()
+
+          while IFS= read -r test_name; do
+            [[ -z "$test_name" ]] && continue
+            PASSED=false
+            RETRY_LOG=""
+
+            for i in 1 2 3; do
+              echo "::group::Retry $i/3 for $test_name"
+              if cargo test "$test_name" --lib --locked -- --test-threads=1 2>&1 | tee retry-run.log; then
+                PASSED=true
+                RETRY_LOG=$(cat retry-run.log)
+                echo "::endgroup::"
+                break
+              fi
+              echo "::endgroup::"
+              sleep 1
+            done
+
+            if $PASSED; then
+              echo "FLAKY: $test_name passed on retry"
+              FLAKES+=("$test_name")
+              if echo "$RETRY_LOG" | grep -qi "timeout\|timed out"; then
+                echo "$test_name|timing" >> flake-classification.txt
+              elif echo "$RETRY_LOG" | grep -qi "deadlock\|race\|poison"; then
+                echo "$test_name|race_condition" >> flake-classification.txt
+              elif echo "$RETRY_LOG" | grep -qi "oom\|memory\|resource"; then
+                echo "$test_name|resource_leak" >> flake-classification.txt
+              elif echo "$RETRY_LOG" | grep -qi "random\|prop\|fuzz"; then
+                echo "$test_name|random_seed" >> flake-classification.txt
+              else
+                echo "$test_name|unknown" >> flake-classification.txt
+              fi
+            else
+              echo "STABLE FAILURE: $test_name failed all retries"
+              STABLE_FAILURES+=("$test_name")
+            fi
+          done < failed-tests.txt
+
+          printf '%s\n' "${FLAKES[@]}" > flaky-tests.txt
+          printf '%s\n' "${STABLE_FAILURES[@]}" > stable-failures.txt
+          echo "flake_count=${#FLAKES[@]}" >> "$GITHUB_OUTPUT"
+          echo "stable_failure_count=${#STABLE_FAILURES[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-quarantine flaky tests
+        if: steps.retry_results.outputs.flake_count > 0
+        id: quarantine
+        run: |
+          bash .ci/scripts/quarantine-flaky.sh \
+            --flake-list flaky-tests.txt \
+            --classification flake-classification.txt \
+            --ledger .ci/debt-ledger.yaml
+
+      - name: Create PR for quarantine changes
+        if: steps.quarantine.outcome == 'success'
+        run: |
+          if git diff --quiet .ci/debt-ledger.yaml; then
+            echo "No ledger changes needed"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            BRANCH="chore/auto-quarantine-${{ github.run_number }}"
+            git checkout -b "$BRANCH"
+            git add .ci/debt-ledger.yaml
+            git commit -m "chore: auto-quarantine flaky tests from nightly run #${{ github.run_number }}"
+            git push origin "$BRANCH"
+            gh pr create \
+              --title "chore: auto-quarantine flaky tests" \
+              --body "Automated quarantine from flake detection run #${{ github.run_number }}.
+
+              Tests detected as flaky (pass on retry after initial failure):
+              $(cat flaky-tests.txt | sed 's/^/- \`/;s/$/\`/')
+
+              Closes #2093" \
+              --label testing \
+              --label flake \
+              --label chore \
+              --base master
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Comment on #2093 with flake report
+        if: steps.retry_results.outputs.flake_count > 0
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            let flakeContent = '';
+            let stableContent = '';
+            try { flakeContent = fs.readFileSync('flaky-tests.txt', 'utf8'); } catch(e) {}
+            try { stableContent = fs.readFileSync('stable-failures.txt', 'utf8'); } catch(e) {}
+
+            const flakes = flakeContent.trim().split('\n').filter(Boolean);
+            const stable = stableContent.trim().split('\n').filter(Boolean);
+            if (flakes.length === 0 && stable.length === 0) return;
+
+            const body = [
+              '## 🔄 Flake Detection Report',
+              '',
+              `**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              '',
+              flakes.length > 0 ? `**Flaky tests** (failed initially, passed on retry): ${flakes.length}\n${flakes.map(t => '- `' + t + '`').join('\n')}` : '',
+              stable.length > 0 ? `\n**Stable failures** (failed all retries): ${stable.length}\n${stable.map(t => '- `' + t + '`').join('\n')}` : '',
+              '',
+              'Flaky tests will be auto-quarantined if threshold is exceeded.',
+              '_Generated by flake-detection.yml · #2093_',
+            ].filter(Boolean).join('\n');
+
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: 2093,
+                body: body
+              });
+            } catch (e) {
+              core.warning('Failed to comment on #2093: ' + e.message);
+            }
+
+      - name: Create issue for stable failures
+        if: steps.retry_results.outputs.stable_failure_count > 0
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            let stableContent = '';
+            try { stableContent = fs.readFileSync('stable-failures.txt', 'utf8'); } catch(e) {}
+            const stable = stableContent.trim().split('\n').filter(Boolean);
+            if (stable.length === 0) return;
+
+            const body = [
+              '## Stable Test Failures Detected',
+              '',
+              `${stable.length} test(s) failed consistently (initial run + 3 retries):`,
+              '',
+              stable.map(t => '- `' + t + '`').join('\n'),
+              '',
+              `**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
+              '',
+              'These are NOT flaky — they indicate real failures.',
+              '_Generated by flake detection pipeline · #2093_',
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `ci: ${stable.length} stable test failure(s) [${new Date().toISOString().split('T')[0]}]`,
+              body: body,
+              labels: ['bug', 'testing']
+            });
+
+      - name: Upload flake detection artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flake-detection-report-${{ github.run_number }}
+          path: |
+            test-results.jsonl
+            failed-tests.txt
+            flaky-tests.txt
+            flake-classification.txt
+            stable-failures.txt
+          retention-days: 30

@@ -1,0 +1,587 @@
+==========================================
+SUPER method calls
+==========================================
+
+sub method {
+    my $self = shift;
+    $self->SUPER::method(@_);
+    $self->SUPER::new();
+    $self->Some::Parent::SUPER::method();
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)
+          (array
+            (varname))))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method))))))
+
+==========================================
+UNIVERSAL methods
+==========================================
+
+$obj->isa('Some::Class');
+$obj->isa($class);
+$obj->can('method_name');
+$obj->can($method);
+$obj->DOES('Some::Role');
+$obj->VERSION(1.23);
+UNIVERSAL::isa($ref, 'ARRAY');
+UNIVERSAL::can($obj, 'method');
+
+---
+
+(source_file
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (scalar
+        (varname))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (scalar
+        (varname))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (number)))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content))))))
+
+==========================================
+DESTROY and AUTOLOAD
+==========================================
+
+sub DESTROY {
+    my $self = shift;
+    print "Destroying $self\n";
+    $self->cleanup();
+}
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    my $method = $AUTOLOAD;
+    $method =~ s/.*:://;
+    print "Calling undefined method: $method\n";
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (substitution_regexp
+            (regexp_content))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence))))))))
+
+==========================================
+Tied variables
+==========================================
+
+tie %hash, 'Tie::Hash::Class', @args;
+tie @array, 'Tie::Array::Class';
+tie $scalar, 'Tie::Scalar::Class';
+tie *HANDLE, 'Tie::Handle::Class';
+
+tied(%hash)->method();
+untie %hash;
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (hash
+          (varname))
+        (string_literal
+          (string_content))
+        (array
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (glob
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (method_call_expression
+      (func1op_call_expression
+        (hash
+          (varname)))
+      (method)))
+  (expression_statement
+    (func1op_call_expression
+      (hash
+        (varname)))))
+
+==========================================
+Operator overloading
+==========================================
+
+use overload
+    '+' => \&add,
+    '-' => \&subtract,
+    '*' => \&multiply,
+    '""' => \&stringify,
+    '0+' => \&numify,
+    'bool' => \&boolify,
+    '<=>' => \&compare,
+    'cmp' => \&string_compare,
+    '=' => \&copy,
+    fallback => 1;
+
+use overload
+    '+=' => sub { $_[0]->{value} += $_[1]; $_[0] },
+    '++' => sub { $_[0]->{value}++; $_[0] },
+    '--' => sub { $_[0]->{value}--; $_[0] };
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (autoquoted_bareword)
+      (number)))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (postinc_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (postinc_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number))))))))
+
+==========================================
+Blessed references
+==========================================
+
+$obj = bless {}, 'MyClass';
+$obj = bless \$scalar, 'ScalarClass';
+$obj = bless [], 'ArrayClass';
+$obj = bless \&sub, 'CodeClass';
+
+$class = ref($obj);
+$class = ref($obj) || $obj;
+$is_blessed = blessed($obj);
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (ambiguous_function_call_expression
+        (function)
+        (list_expression
+          (anonymous_hash_expression)
+          (string_literal
+            (string_content))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (ambiguous_function_call_expression
+        (function)
+        (list_expression
+          (refgen_expression
+            (scalar
+              (varname)))
+          (string_literal
+            (string_content))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (ambiguous_function_call_expression
+        (function)
+        (list_expression
+          (anonymous_array_expression)
+          (string_literal
+            (string_content))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (ambiguous_function_call_expression
+        (function)
+        (list_expression
+          (refgen_expression
+            (function
+              (varname)))
+          (string_literal
+            (string_content))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (func1op_call_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (binary_expression
+        (func1op_call_expression
+          (scalar
+            (varname)))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname))))))
+
+==========================================
+Method chaining
+==========================================
+
+$result = $obj
+    ->method1()
+    ->method2($arg)
+    ->method3(@args)
+    ->method4({ key => 'value' })
+    ->SUPER::parent_method()
+    ->$method_name(@_);
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (method_call_expression
+        (method_call_expression
+          (method_call_expression
+            (method_call_expression
+              (method_call_expression
+                (method_call_expression
+                  (scalar
+                    (varname))
+                  (method))
+                (method)
+                (scalar
+                  (varname)))
+              (method)
+              (array
+                (varname)))
+            (method)
+            (anonymous_hash_expression
+              (list_expression
+                (autoquoted_bareword)
+                (string_literal
+                  (string_content)))))
+          (method))
+        (method
+          (scalar
+            (varname)))
+        (array
+          (varname))))))
+
+==========================================
+Class inheritance
+==========================================
+
+package MyClass;
+use base qw(Parent1 Parent2);
+use parent -norequire => qw(Local::Parent);
+
+our @ISA = qw(BaseClass);
+push @ISA, 'AnotherBase';
+
+sub new {
+    my $class = shift;
+    my $self = $class->SUPER::new(@_);
+    bless $self, $class;
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname))
+        (string_literal
+          (string_content)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (method_call_expression
+            (scalar
+              (varname))
+            (method)
+            (array
+              (varname)))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname))))))))

@@ -1,0 +1,32 @@
+# Pinned Perl modules that MUST parse cleanly (PR gate)
+# One module name per line. Lines starting with # are comments.
+#
+# These modules are verified to parse without errors on the current parser.
+# Add modules here only after confirming they parse cleanly.
+# Goal: expand this list as parser coverage improves.
+#
+# Core pragmas and utilities
+# XSLoader - temporarily removed: comma-delimited s,,, substitution regression (line 43)
+bytes
+integer
+utf8
+subs
+#
+# Core modules (parse cleanly as of Wave 1 baseline)
+Config
+File::Spec
+MIME::Base64
+I18N::Langinfo
+# PerlIO - temporarily removed: =~ inside eval block regression (see Wave 2 parser fixes)
+# PerlIO::via - temporarily removed: XSLoader call parsing issue
+Encode::Encoding
+Tie::Scalar
+#
+# Targets for expansion after Wave 2 parser fixes:
+# Exporter
+# Carp
+# File::Find
+# Getopt::Long
+# Test::More
+# Data::Dumper
+# ExtUtils::MakeMaker

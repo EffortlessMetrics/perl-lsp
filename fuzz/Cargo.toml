@@ -1,0 +1,108 @@
+[package]
+name = "perl-parser-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.perl-parser]
+path = "../crates/perl-parser"
+features = ["incremental"]
+
+[dependencies.serde_json]
+version = "1.0.149"
+[dependencies.perl-lsp-rs-core]
+path = "../crates/perl-lsp-rs-core"
+
+[[bin]]
+name = "substitution_parsing"
+path = "fuzz_targets/substitution_parsing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "builtin_functions"
+path = "fuzz_targets/builtin_functions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lsp_cancellation_registry"
+path = "fuzz_targets/lsp_cancellation_registry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "unicode_positions"
+path = "fuzz_targets/unicode_positions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "utf16_roundtrip"
+path = "fuzz_targets/utf16_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lsp_navigation"
+path = "fuzz_targets/lsp_navigation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "heredoc_parsing"
+path = "fuzz_targets/heredoc_parsing.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "quote_operators"
+path = "fuzz_targets/quote_operators.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "declaration_parsing"
+path = "fuzz_targets/declaration_parsing.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_integration"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "symbol_query_ranking"
+path = "fuzz_targets/symbol_query_ranking.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "incremental_edit_sequences"
+path = "fuzz_targets/incremental_edit_sequences.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

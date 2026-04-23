@@ -1,0 +1,50 @@
+[package]
+name = "perl-incremental-parsing"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Incremental parsing support for Perl with subtree reuse and LSP integration"
+readme = "README.md"
+documentation = "https://docs.rs/perl-incremental-parsing"
+keywords = ["perl", "incremental", "parser", "lsp", "rope"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-lexer = { workspace = true }
+perl-line-index = { workspace = true }
+anyhow.workspace = true
+lsp-types.workspace = true
+ropey = "1.6.1"
+serde_json.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+criterion.workspace = true
+perl-parser = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+

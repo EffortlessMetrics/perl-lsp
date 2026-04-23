@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 4,
+            "command": "/bin/sh -lc 'BUF=$(cat); L=$(printf %s \"$BUF\" | LC_ALL=C tr \"[:upper:]\" \"[:lower:]\"); SAFE=\"\\\\bgh\\\\s+(pr\\\\s+(comment|review|ready|create|edit|close|reopen|merge)|issue\\\\s+(comment|create|edit|close|reopen)|repo\\\\s+(view|clone|fork)|pr\\\\s+view\\\\s+[0-9]+\\\\b)\"; CI=\"\\\\bgh\\\\s+(workflow|run)\\\\b|\\\\bgh\\\\s+pr\\\\s+(checks?|status)\\\\b|\\\\bgh\\\\s+pr\\\\s+view\\\\b.*\\\\bstatuscheckrollup\\\\b|\\\\bgh\\\\s+api\\\\b.*\\/(actions|workflows|runs|check-(runs|suites)|commits\\/[^\\/]+\\/(status|statuses))|\\\\bgh\\\\s+checks?\\\\b|\\\\bact(?:\\\\s|$)\"; printf %s \"$L\" | grep -Eq \"$SAFE\" && exit 0; printf %s \"$L\" | grep -Eq \"$CI\" && { echo \"CI/Actions are intentionally disabled — validate locally (tests/lint/build) and post results.\" 1>&2; exit 2; } || exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "/bin/sh -lc 'BUF=$(cat); L=$(printf %s \"$BUF\" | LC_ALL=C tr \"[:upper:]\" \"[:lower:]\"); printf %s \"$L\" | grep -Eq \"(^|[[:space:]])(cargo|rustc|rustfmt)([[:space:]]|$)\" || exit 0; printf %s \"$L\" | grep -Eq \"(^|[[:space:]])--edition(=|[[:space:]])2021([[:space:]]|$)\" && { echo \"Drop \\\"--edition 2021\\\"; rely on Cargo.toml. If you must pass it, use \\\"--edition 2024\\\".\" 1>&2; exit 2; }; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 4,
+            "command": "/bin/sh -lc 'BUF=$(cat); L=$(printf %s \"$BUF\" | LC_ALL=C tr \"[:upper:]\" \"[:lower:]\"); printf %s \"$L\" | grep -Eq \"https?://api\\.github\\.com/repos/[^/]+/[^/]+/(actions|workflows|runs|check-(runs|suites)|commits/[^/]+/(status|statuses))\" && { echo \"CI/Actions are disabled — skip Actions/Checks API; validate locally.\" 1>&2; exit 2; } || exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__.*(workflow|actions|check|run|status).*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "/bin/sh -lc 'echo \"CI/Actions are disabled — skip CI via MCP; validate locally.\" 1>&2; exit 2'"
+          }
+        ]
+      }
+    ]
+  }
+}

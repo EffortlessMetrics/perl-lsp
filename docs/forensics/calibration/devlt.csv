@@ -1,0 +1,24 @@
+# DevLT Calibration Store
+#
+# This file records DevLT estimates and reported values for calibration.
+# Append new entries after each PR forensics pass.
+#
+# Fields:
+#   pr           - PR number
+#   date         - ISO 8601 date of analysis
+#   est_lb_min   - Estimated lower bound (minutes)
+#   est_ub_min   - Estimated upper bound (minutes)
+#   reported_min - Reported actual DevLT (minutes, empty if unknown)
+#   coverage     - github_only | github_plus_agent_logs | receipts_included
+#   method_id    - Estimation method identifier
+#   notes        - Brief notes (no commas)
+#
+# Example:
+#   259,2026-01-05,45,90,,github_plus_agent_logs,devlt_est_v1:decision_weighted,baseline PR
+#
+pr,date,est_lb_min,est_ub_min,reported_min,coverage,method_id,notes
+231-232-234,2026-01-07,60,90,,github_only,devlt_est_v1:decision_weighted,Semantic analyzer phase 1; 4 decisions 0 friction
+260-264,2026-01-07,60,90,,github_only,devlt_est_v1:decision_weighted,Mutation hardening; 3 decisions 2 friction
+251-252-253,2026-01-07,90,130,,github_plus_agent_logs,devlt_est_v1:decision_weighted,Harness hardening; 4 decisions 3 friction + wrongness
+259,2026-01-07,45,75,,github_plus_agent_logs,devlt_est_v1:decision_weighted,Name span; 3 decisions 0 friction
+225-226-229,2026-01-07,60,90,,github_only,devlt_est_v1:decision_weighted,Statement tracker; 4 decisions 0 friction

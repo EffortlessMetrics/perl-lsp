@@ -1,0 +1,791 @@
+==================
+Require forms
+==================
+
+require 5.038;
+require v5.38.0;
+require Module;
+require Module::Name;
+require "Module/Name.pm";
+require 'file.pl';
+require $module;
+
+BEGIN { require Module }
+
+---
+
+(source_file
+  (expression_statement
+    (require_version_expression
+      (number)))
+  (expression_statement
+    (require_version_expression
+      (version)))
+  (expression_statement
+    (require_expression
+      (bareword)))
+  (expression_statement
+    (require_expression
+      (bareword)))
+  (expression_statement
+    (require_expression
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (require_expression
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (require_expression
+      (scalar
+        (varname))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (require_expression
+          (bareword))))))
+
+==================
+Do file forms
+==================
+
+do 'config.pl';
+do "lib/setup.pl";
+do $filename;
+do { 
+    my $file = find_config();
+    $file;
+};
+
+my $result = do 'script.pl';
+my $config = do 'config.pl' or die "Cannot load config: $!";
+
+---
+
+(source_file
+  (expression_statement
+    (eval_expression
+      (filename
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (eval_expression
+      (filename
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (eval_expression
+      (filename
+        (scalar
+          (varname)))))
+  (expression_statement
+    (do_expression
+      (block
+        (expression_statement
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (function_call_expression
+              (function))))
+        (expression_statement
+          (scalar
+            (varname))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (eval_expression
+        (filename
+          (string_literal
+            (string_content))))))
+  (expression_statement
+    (lowprec_logical_expression
+      (assignment_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (eval_expression
+          (filename
+            (string_literal
+              (string_content)))))
+      (ambiguous_function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content
+            (scalar
+              (varname))))))))
+
+==================
+Use if conditional loading
+==================
+
+use if $^O eq 'MSWin32', 'Win32::Process';
+use if $] >= 5.010, 'feature', qw(say state);
+use if $ENV{DEBUG}, 'Data::Dumper';
+use if WANT_WARNINGS, warnings => 'all';
+
+no if $production, 'warnings', 'experimental';
+
+use if $] < 5.036, 'experimental', qw(signatures);
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (list_expression
+      (equality_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (relational_expression
+        (scalar
+          (varname))
+        (number))
+      (string_literal
+        (string_content))
+      (quoted_word_list
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (bareword)
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (scalar
+        (varname))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (relational_expression
+        (scalar
+          (varname))
+        (number))
+      (string_literal
+        (string_content))
+      (quoted_word_list
+        (string_content)))))
+
+==================
+Eval require patterns
+==================
+
+eval { require Optional::Module };
+if (!$@) {
+    Optional::Module->import();
+}
+
+eval "require $module_name";
+die $@ if $@;
+
+my $loaded = eval { require Some::Module; 1 };
+
+eval {
+    require Module;
+    Module->import(qw(func1 func2));
+    1;
+} or do {
+    my $error = $@;
+    warn "Module not available: $error";
+};
+
+---
+
+(source_file
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (require_expression
+            (bareword))))))
+  (conditional_statement
+    (unary_expression
+      (scalar
+        (varname)))
+    (block
+      (expression_statement
+        (method_call_expression
+          (bareword)
+          (method)))))
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))))))
+  (expression_statement
+    (postfix_conditional_expression
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))
+      (scalar
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (eval_expression
+        (block
+          (expression_statement
+            (require_expression
+              (bareword)))
+          (expression_statement
+            (number))))))
+  (expression_statement
+    (lowprec_logical_expression
+      (eval_expression
+        (block
+          (expression_statement
+            (require_expression
+              (bareword)))
+          (expression_statement
+            (method_call_expression
+              (bareword)
+              (method)
+              (quoted_word_list
+                (string_content))))
+          (expression_statement
+            (number))))
+      (do_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (scalar
+                (varname))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname)))))))))))
+
+==================
+Module runtime loading
+==================
+
+for my $module (@modules) {
+    eval "require $module";
+    if ($@) {
+        warn "Cannot load $module: $@";
+        next;
+    }
+    $module->import();
+}
+
+my $class = "My::$type";
+eval "require $class";
+my $obj = $class->new() unless $@;
+
+sub load_plugin {
+    my $plugin = shift;
+    my $module = "Plugin::$plugin";
+    eval "require $module";
+    die "Cannot load plugin $plugin: $@" if $@;
+    return $module->new();
+}
+
+---
+
+(source_file
+  (for_statement
+    (scalar
+      (varname))
+    (array
+      (varname))
+    (block
+      (expression_statement
+        (eval_expression
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))
+      (conditional_statement
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))
+                  (scalar
+                    (varname))))))
+          (expression_statement
+            (loopex_expression))))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))))))
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))))))
+  (expression_statement
+    (postfix_conditional_expression
+      (assignment_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (scalar
+        (varname))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))
+      (expression_statement
+        (eval_expression
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))))
+          (scalar
+            (varname))))
+      (expression_statement
+        (return_expression
+          (method_call_expression
+            (scalar
+              (varname))
+            (method)))))))
+
+==================
+Use lib and INC manipulation
+==================
+
+use lib '/path/to/lib';
+use lib "$ENV{HOME}/perl5/lib";
+use lib qw(/path1 /path2 /path3);
+
+no lib '/unwanted/path';
+
+BEGIN {
+    unshift @INC, '/my/lib';
+    push @INC, sub {
+        my ($self, $file) = @_;
+        # Custom loader
+        return undef;
+    };
+}
+
+use local::lib;
+use local::lib '~/perl5';
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (hash_element_expression
+          (container_variable
+            (varname))
+          (autoquoted_bareword)))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname))
+            (string_literal
+              (string_content)))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname))
+            (anonymous_subroutine_expression
+              (block
+                (expression_statement
+                  (assignment_expression
+                    (variable_declaration
+                      (scalar
+                        (varname))
+                      (scalar
+                        (varname)))
+                    (array
+                      (varname))))
+                (comment)
+                (expression_statement
+                  (return_expression
+                    (undef_expression))))))))))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content))))
+
+==================
+FindBin and relative paths
+==================
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::RealBin/../lib";
+
+use FindBin qw($Bin $Script $RealBin $RealScript);
+use lib "$Bin/lib";
+
+BEGIN {
+    require FindBin;
+    FindBin->import;
+    require lib;
+    lib->import("$FindBin::Bin/../lib");
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (require_expression
+          (bareword)))
+      (expression_statement
+        (method_call_expression
+          (bareword)
+          (method)))
+      (expression_statement
+        (require_expression
+          (bareword)))
+      (expression_statement
+        (method_call_expression
+          (bareword)
+          (method)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))))
+
+==================
+Module::Load patterns
+==================
+
+use Module::Load;
+
+load 'Data::Dumper';
+load 'Module::Name', qw(func1 func2);
+
+autoload 'My::Module';
+
+load_remote 'http://example.com/Module.pm';
+
+use Module::Load::Conditional qw(check_install);
+
+my $rv = check_install(module => 'Some::Module');
+if ($rv) {
+    load 'Some::Module';
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (string_literal
+          (string_content))
+        (quoted_word_list
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (list_expression
+          (autoquoted_bareword)
+          (string_literal
+            (string_content))))))
+  (conditional_statement
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (string_literal
+            (string_content)))))))
+
+==================
+Parent and base loading
+==================
+
+use parent 'Parent::Class';
+use parent qw(Parent1 Parent2);
+use parent -norequire, 'Parent::Class';
+
+use base 'Base::Class';
+use base qw(Base1 Base2);
+
+push @ISA, 'Runtime::Parent';
+unshift @ISA, 'Priority::Parent';
+
+@ISA = qw(Parent1 Parent2);
+our @ISA = ('Single::Parent');
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (string_literal
+        (string_content)))))
+
+==================
+Autouse and autoload
+==================
+
+use autouse 'Carp' => qw(carp croak);
+use autouse 'Data::Dumper' => qw(Dumper);
+
+sub AUTOLOAD {
+    my $method = $AUTOLOAD;
+    $method =~ s/.*:://;
+    
+    eval "require Module::$method";
+    die $@ if $@;
+    
+    goto &{"Module::${method}::handler"};
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (quoted_word_list
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (quoted_word_list
+        (string_content))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (substitution_regexp
+            (regexp_content))))
+      (expression_statement
+        (eval_expression
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (goto_expression
+          (function_call_expression
+            (function
+              (varname
+                (block
+                  (expression_statement
+                    (interpolated_string_literal
+                      (string_content
+                        (scalar
+                          (varname))))))))))))))

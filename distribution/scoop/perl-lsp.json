@@ -1,0 +1,33 @@
+{
+  "version": "__RELEASE_VERSION__",
+  "description": "High-performance Perl Language Server with 100% syntax coverage",
+  "homepage": "https://github.com/EffortlessMetrics/perl-lsp",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v__RELEASE_VERSION__/perllsp-__RELEASE_VERSION__-x86_64-pc-windows-msvc.zip",
+      "hash": "__RELEASE_HASH__"
+    }
+  },
+  "bin": ["perllsp.exe", "perl-dap.exe"],
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perllsp-$version-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "hash": {
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/SHA256SUMS",
+      "regex": "(?m)^([a-fA-F0-9]{64})\\s+perllsp-\\$version-x86_64-pc-windows-msvc\\.zip$"
+    }
+  },
+  "notes": [
+    "perl-lsp is a high-performance Language Server Protocol implementation for Perl.",
+    "",
+    "Usage:",
+    "  perllsp --stdio",
+    "",
+    "For more information, visit: https://github.com/EffortlessMetrics/perl-lsp"
+  ]
+}

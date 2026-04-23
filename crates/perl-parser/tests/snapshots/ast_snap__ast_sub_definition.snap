@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"sub greet { return \\\"Hello\\\"; }\")"
+---
+(source_file (sub greet ()(block (return (string_interpolated "\"Hello\"")))))

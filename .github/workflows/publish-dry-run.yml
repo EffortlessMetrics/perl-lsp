@@ -1,0 +1,185 @@
+name: Publish Dry-Run Gate
+
+# Regression-prevention gate: runs cargo package (dry-run packaging) for every
+# crate in the publish allowlist, in topological order, whenever a PR touches
+# Cargo.toml files or the publish workflow/scripts.
+#
+# Two publish-workflow bugs this gate would have caught:
+#  - #3236: perl-corpus → perl-tdd-support dev-dep ordering (fixed by Tarjan SCC)
+#  - #3254: perl-module-import → perl-module-token intra-SCC dev-dep cycle
+#           (fixed by stripping dev-deps before packaging)
+#
+# If this gate fails, the PR would break the publish workflow. Fix before merging.
+# To run locally: just publish-dry-run
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**/Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/publish-crates.yml'
+      - '.github/workflows/publish-dry-run.yml'
+      - 'scripts/cargo-package-workspace-dry-run.sh'
+      - 'scripts/publish-topo.py'
+      - 'xtask/src/tasks/publish_manifest_check.rs'
+  workflow_dispatch: {}
+
+concurrency:
+  group: publish-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish-dry-run:
+    name: Publish dry-run (packaging gate)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+
+      - name: Run publish-topo unit tests
+        run: python3 scripts/tests/test-publish-topo.py -v
+
+      - name: Check allowlist drift (manifest check)
+        run: cargo xtask publish-manifest-check
+
+      - name: Compute topological publish order
+        id: topo
+        run: |
+          cargo metadata --format-version=1 --no-deps \
+            | python3 scripts/publish-topo.py > /tmp/crates.json
+
+          COUNT=$(python3 -c 'import json,sys; print(len(json.load(open("/tmp/crates.json"))))')
+          echo "Dry-run packaging order (${COUNT} crates):"
+          python3 -c '
+          import json
+          for i, c in enumerate(json.load(open("/tmp/crates.json")), 1):
+              print("  {}. {}@{}".format(i, c["name"], c["version"]))
+          '
+          echo "crates=$(cat /tmp/crates.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Package all allowlisted crates (dry-run)
+        env:
+          CRATES_JSON: ${{ steps.topo.outputs.crates }}
+        run: |
+          # Write the dev-dep strip helper (mirrors publish-crates.yml exactly).
+          # Why strip dev-deps? cargo package resolves dev-deps during manifest
+          # preparation even with --no-verify, causing failures when a crate has
+          # a dev-dep on a workspace sibling not yet on crates.io. This is safe:
+          # downstream consumers never use dev-deps.
+          STRIP_SCRIPT="$(mktemp --suffix=.py)"
+          cat > "$STRIP_SCRIPT" << 'STRIP_SCRIPT_EOF'
+          import re, sys, pathlib
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          new_text = re.sub(
+              r"^\[dev-dependencies\].*?(?=^\[|\Z)",
+              "",
+              text,
+              flags=re.MULTILINE | re.DOTALL,
+          )
+          path.write_text(new_text, encoding="utf-8")
+          STRIP_SCRIPT_EOF
+
+          # Build a manifest-path map: crate name -> Cargo.toml path.
+          MANIFEST_MAP="$(mktemp)"
+          cargo metadata --format-version=1 --no-deps | python3 -c '
+          import json, sys
+          meta = json.load(sys.stdin)
+          ws = set(meta["workspace_members"])
+          for pkg in meta["packages"]:
+              if pkg["id"] in ws:
+                  print("{} {}".format(pkg["name"], pkg["manifest_path"]))
+          ' > "$MANIFEST_MAP"
+
+          FAILED=""
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c \
+            'import json,sys; [print("{} {}".format(c["name"],c["version"])) for c in json.load(sys.stdin)]' \
+            > "$CRATES_LIST"
+
+          while read -r CRATE VERSION; do
+            echo ""
+            echo "===> Packaging $CRATE@$VERSION (dry-run)"
+
+            MANIFEST_PATH="$(grep "^${CRATE} " "$MANIFEST_MAP" | awk '{print $2}')"
+            if [ -z "$MANIFEST_PATH" ]; then
+              echo "::error::Could not find manifest path for $CRATE"
+              FAILED="${FAILED} ${CRATE}"
+              continue
+            fi
+
+            # Back up and strip dev-deps (mirrors publish-crates.yml logic).
+            MANIFEST_BACKUP="$(mktemp)"
+            cp "$MANIFEST_PATH" "$MANIFEST_BACKUP"
+            # shellcheck disable=SC2064
+            trap "cp '$MANIFEST_BACKUP' '$MANIFEST_PATH'; rm -f '$MANIFEST_BACKUP'" EXIT
+
+            python3 "$STRIP_SCRIPT" "$MANIFEST_PATH"
+
+            # Use a per-crate target dir to avoid cross-contamination.
+            TARGET_DIR="${RUNNER_TEMP}/cargo-package-${CRATE//\//-}"
+            rm -rf "$TARGET_DIR"
+
+            if CARGO_TARGET_DIR="$TARGET_DIR" CARGO_PACKAGE_NO_VERIFY=1 \
+               bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"; then
+              echo "OK $CRATE@$VERSION"
+            else
+              echo "::error::Failed to package $CRATE@$VERSION"
+              FAILED="${FAILED} ${CRATE}"
+            fi
+
+            # Restore manifest.
+            cp "$MANIFEST_BACKUP" "$MANIFEST_PATH"
+            rm -f "$MANIFEST_BACKUP"
+            trap - EXIT
+          done < "$CRATES_LIST"
+
+          echo ""
+          if [ -n "$FAILED" ]; then
+            echo "::error::Packaging failed for:${FAILED}"
+            echo "These crates would break the publish workflow. Fix before merging."
+            exit 1
+          fi
+          echo "All crates packaged successfully."
+
+      - name: Summary
+        if: always()
+        env:
+          CRATES_JSON: ${{ steps.topo.outputs.crates }}
+        run: |
+          COUNT=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null || echo "?")
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Publish dry-run passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "- ${COUNT} crates packaged in topological order" >> "$GITHUB_STEP_SUMMARY"
+            echo "- dev-deps stripped before packaging (mirrors actual publish)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Publish dry-run FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "One or more crates failed to package. This PR would break the publish workflow." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**How to debug locally:**" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`\`\`bash" >> "$GITHUB_STEP_SUMMARY"
+            echo "just publish-dry-run" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+          fi

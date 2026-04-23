@@ -1,0 +1,20 @@
+# mdBook build output
+book/
+
+# Generated source files (copied from docs/)
+src/getting-started/
+src/user-guides/
+src/architecture/
+src/developer/
+src/lsp/
+src/advanced/
+src/reference/
+src/dap/
+src/ci/
+src/process/
+src/resources/
+
+# Keep hand-written files
+!src/introduction.md
+!src/quick-start.md
+!src/SUMMARY.md

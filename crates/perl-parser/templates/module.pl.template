@@ -1,0 +1,71 @@
+package {{ MODULE_NAME }};
+
+use strict;
+use warnings;
+use v5.10;
+
+our $VERSION = '0.01';
+
+=head1 NAME
+
+{{ MODULE_NAME }} - Brief description of module
+
+=head1 SYNOPSIS
+
+    use {{ MODULE_NAME }};
+    
+    my $obj = {{ MODULE_NAME }}->new();
+    $obj->do_something();
+
+=head1 DESCRIPTION
+
+Detailed description of what this module does.
+
+=head1 METHODS
+
+=head2 new
+
+Constructor for {{ MODULE_NAME }}
+
+    my $obj = {{ MODULE_NAME }}->new(%options);
+
+=cut
+
+sub new {
+    my ($class, %options) = @_;
+    
+    my $self = {
+        %options,
+    };
+    
+    return bless $self, $class;
+}
+
+=head2 do_something
+
+Example method
+
+    $obj->do_something($param);
+
+=cut
+
+sub do_something {
+    my ($self, $param) = @_;
+    
+    # Implementation here
+    
+    return;
+}
+
+1;
+
+=head1 AUTHOR
+
+{{ AUTHOR }} <{{ EMAIL }}>
+
+=head1 LICENSE
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

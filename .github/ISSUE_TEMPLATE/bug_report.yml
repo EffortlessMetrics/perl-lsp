@@ -1,0 +1,127 @@
+name: Bug Report
+description: Report a bug in the LSP server or parser
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the sections below so we can reproduce and fix it.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of the project is affected?
+      options:
+        - LSP server (perl-lsp)
+        - Parser (perl-parser)
+        - Lexer (perl-lexer)
+        - Completion provider
+        - Hover provider
+        - Go-to-definition
+        - Diagnostics
+        - Workspace indexing
+        - DAP / debugger
+        - VSCode extension
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the bug.
+      placeholder: When I open a Perl file with ..., the LSP server ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal steps to reproduce the behavior.
+      value: |
+        1. Create a Perl file with the following content:
+           ```perl
+           # paste minimal Perl code here
+           ```
+        2. Open it in your editor with perl-lsp running
+        3. ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: LSP Logs / Error Output
+      description: |
+        Paste any relevant LSP log output.
+        - **VS Code**: run the `Perl: Show Output Channel` command (Ctrl+Shift+P → "Perl: Show Output Channel") and paste the contents.
+        - **Other editors**: start the server with `perllsp --stdio 2>lsp.log` and paste `lsp.log`.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: perl-lsp Version
+      description: |
+        Run `perllsp --version` in your terminal, or in VS Code run the `Perl: Show Server Version` command (Ctrl+Shift+P → "Perl: Show Server Version").
+      placeholder: "0.12.0"
+    validations:
+      required: true
+
+  - type: input
+    id: perl-version
+    attributes:
+      label: Perl Version
+      description: Output of `perl --version` (the first line, e.g. "This is perl 5, version 38...").
+      placeholder: "perl 5.38.2"
+
+  - type: input
+    id: editor
+    attributes:
+      label: Editor / Client
+      description: Which editor or LSP client are you using?
+      placeholder: "VS Code 1.96, Neovim 0.10, Helix 24.07, etc."
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code Version (if applicable)
+      description: Help > About in VS Code — only needed if using the VS Code extension.
+      placeholder: "1.96.2"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "Ubuntu 24.04, macOS 15, Windows 11 WSL2, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or files that help explain the problem.

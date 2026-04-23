@@ -1,0 +1,41 @@
+[package]
+name = "perl-semantic-analyzer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Semantic analysis and symbol extraction for Perl"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-semantic-analyzer"
+keywords = ["perl", "semantic-analysis", "symbol-table", "type-inference", "lsp"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-module = { workspace = true }
+perl-workspace = { workspace = true }
+perl-symbol = { workspace = true }
+regex.workspace = true
+rustc-hash = "2.1.2"
+tracing.workspace = true
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

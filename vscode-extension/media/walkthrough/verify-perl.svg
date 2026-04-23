@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="40" width="720" height="370" rx="8" fill="#1f2937"/>
+  <text x="60" y="80" font-family="monospace" font-size="14" fill="#6b7280">Terminal</text>
+  <text x="60" y="120" font-family="monospace" font-size="16" fill="#10b981">$ perl -v</text>
+  <text x="60" y="155" font-family="monospace" font-size="13" fill="#d1d5db">This is perl 5, version 38, subversion 0 (v5.38.0)</text>
+  <text x="60" y="178" font-family="monospace" font-size="13" fill="#d1d5db">built for x86_64-linux</text>
+  <text x="60" y="220" font-family="monospace" font-size="16" fill="#10b981">$ which perl</text>
+  <text x="60" y="255" font-family="monospace" font-size="13" fill="#d1d5db">/usr/bin/perl</text>
+  <rect x="40" y="310" width="720" height="80" rx="6" fill="#064e3b"/>
+  <text x="60" y="345" font-family="sans-serif" font-size="14" fill="#34d399">Perl 5.10 or later is required for full LSP support.</text>
+  <text x="60" y="370" font-family="sans-serif" font-size="13" fill="#6ee7b7">Use perlbrew or plenv to manage multiple Perl versions.</text>
+</svg>

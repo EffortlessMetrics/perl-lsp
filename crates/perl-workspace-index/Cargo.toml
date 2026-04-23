@@ -1,0 +1,66 @@
+[package]
+name = "perl-workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Workspace file discovery, indexing, and observability for Perl"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace"
+keywords = ["perl", "workspace", "index", "lsp", "symbol"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+parking_lot.workspace = true
+perl-parser-core = { workspace = true }
+perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-symbol = { workspace = true }
+perl-uri = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+url.workspace = true
+walkdir = { workspace = true }
+lsp-types = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow.workspace = true
+criterion.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
+perl-tdd-support = { workspace = true }
+
+[features]
+default = []
+workspace = []
+lsp-compat = ["lsp-types"]
+memory-profiling = []
+
+[[bench]]
+name = "workspace_index_benchmark"
+harness = false
+required-features = ["workspace"]
+
+[[bin]]
+name = "workspace_memory_profile"
+path = "src/bin/workspace_memory_profile.rs"
+required-features = ["memory-profiling"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

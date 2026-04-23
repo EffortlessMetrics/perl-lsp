@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "receipt_kind": "planning_scaffold",
+  "scorecard": "editor_ux",
+  "harness": {
+    "crate": "crates/perl-lsp-ux-tests",
+    "scenario_count": 17,
+    "scenario_files": [
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_03_missing_perl.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_04_missing_perlcritic.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_05_bad_config.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_06_large_file.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_07_multi_file_workspace.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_08_shebang_detection.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_09_encoding.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_10_goto_definition.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_11_hover.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_13_document_symbols.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_14_inc_conformance.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_15_workspace_symbols.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_16_workspace_folder_removal.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
+    ]
+  },
+  "top_line_metrics": [
+    {
+      "name": "workflow_pass_rate",
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "workflow_stability_rate",
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "p95_time_to_first_useful_result_ms",
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
+    }
+  ],
+  "confidence_signals": [
+    {
+      "name": "manual_editor_smoke",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 16
+    },
+    {
+      "name": "first_five_minutes_harness",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 17
+    },
+    {
+      "name": "issue_burndown_regression_guard",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 7
+    }
+  ],
+  "integration_points": {
+    "ci_lane": "just ux-tests",
+    "release_lane": "just ux-tests-full",
+    "status_update": "cargo xtask update-status --only quality",
+    "quality_surface": "docs/project/status/quality.md"
+  }
+}

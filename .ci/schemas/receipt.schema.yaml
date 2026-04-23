@@ -1,0 +1,164 @@
+# Receipt Schema for perl-lsp Gate Executions
+# Machine-readable format with markdown body
+
+type: object
+required:
+  - receipt_version
+  - gate_id
+  - execution
+  - result
+  - evidence
+  - metadata
+properties:
+  receipt_version:
+    type: string
+    pattern: "^[0-9]+\\.[0-9]+$"
+    description: "Receipt schema version (e.g., '1.0')"
+
+  gate_id:
+    type: string
+    description: "Gate identifier from GATE_REGISTRY.toml"
+    examples: ["format", "clippy-lib", "test-lib", "mutation"]
+
+  gate_name:
+    type: string
+    description: "Human-readable gate name"
+
+  execution:
+    type: object
+    required:
+      - timestamp
+      - duration_ms
+      - exit_code
+      - command
+    properties:
+      timestamp:
+        type: string
+        format: date-time
+        description: "ISO 8601 timestamp of execution start"
+
+      duration_ms:
+        type: integer
+        minimum: 0
+        description: "Gate execution duration in milliseconds"
+
+      exit_code:
+        type: integer
+        description: "Command exit code (0 = success)"
+
+      command:
+        type: string
+        description: "Exact command executed"
+
+      environment:
+        type: object
+        description: "Relevant environment variables"
+        additionalProperties: true
+
+  result:
+    type: object
+    required:
+      - status
+      - conclusion
+    properties:
+      status:
+        type: string
+        enum: ["pass", "fail", "skip", "timeout"]
+
+      conclusion:
+        type: string
+        description: "Human-readable conclusion"
+
+      threshold_met:
+        type: boolean
+        description: "Whether configured threshold was met"
+
+      actual_value:
+        description: "Actual metric value (e.g., mutation score 87.5)"
+        oneOf:
+          - type: number
+          - type: string
+
+      threshold_value:
+        description: "Required threshold value"
+        oneOf:
+          - type: number
+          - type: string
+
+  evidence:
+    type: object
+    description: "Structured evidence from gate execution"
+    properties:
+      stdout:
+        type: string
+        description: "Standard output (truncated if >50KB)"
+
+      stderr:
+        type: string
+        description: "Standard error (truncated if >50KB)"
+
+      artifacts:
+        type: array
+        items:
+          type: object
+          properties:
+            name:
+              type: string
+            path:
+              type: string
+            size_bytes:
+              type: integer
+
+      metrics:
+        type: object
+        description: "Parsed metrics from output"
+        additionalProperties: true
+        examples:
+          - mutation_score: 87.5
+            mutants_caught: 350
+            mutants_missed: 50
+          - tests_passed: 274
+            tests_failed: 0
+            tests_ignored: 1
+
+  metadata:
+    type: object
+    properties:
+      pr_number:
+        type: integer
+        description: "GitHub PR number (if applicable)"
+
+      commit_sha:
+        type: string
+        pattern: "^[a-f0-9]{40}$"
+        description: "Git commit SHA (full 40 chars)"
+
+      branch:
+        type: string
+        description: "Git branch name"
+
+      executor:
+        type: string
+        enum: ["local", "github-actions", "manual"]
+        description: "Where gate was executed"
+
+      agent:
+        type: string
+        description: "Agent that triggered execution"
+        examples: ["tests-runner", "policy-gatekeeper", "human"]
+
+  routing:
+    type: object
+    description: "Next-step routing decision"
+    properties:
+      next_agent:
+        type: string
+        description: "Next agent in workflow"
+
+      action:
+        type: string
+        enum: ["proceed", "block", "manual-review"]
+
+      rationale:
+        type: string
+        description: "Why this routing decision was made"

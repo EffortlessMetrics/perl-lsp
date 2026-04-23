@@ -1,0 +1,738 @@
+==================
+Core try catch
+==================
+
+use feature 'try';
+
+try {
+    dangerous_operation();
+}
+catch ($e) {
+    warn "Error: $e";
+}
+
+try {
+    may_fail();
+} catch ($err) {
+    handle_error($err);
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))))
+
+==================
+Try catch finally
+==================
+
+use feature 'try';
+
+try {
+    risky_operation();
+}
+catch ($e) {
+    log_error($e);
+}
+finally {
+    cleanup();
+}
+
+try {
+    open_resource();
+    process();
+} catch ($error) {
+    rollback();
+} finally {
+    close_resource();
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))))
+
+==================
+Nested try catch
+==================
+
+use feature 'try';
+
+try {
+    try {
+        inner_operation();
+    }
+    catch ($inner) {
+        warn "Inner: $inner";
+        die "Escalated: $inner";
+    }
+}
+catch ($outer) {
+    die "Outer: $outer";
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (try_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname)))))))))
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))))
+
+==================
+Try catch with return
+==================
+
+use feature 'try';
+
+sub safe_divide {
+    my ($a, $b) = @_;
+    
+    try {
+        return $a / $b;
+    }
+    catch ($e) {
+        warn "Division failed: $e";
+        return undef;
+    }
+}
+
+my $result = try {
+    compute();
+} catch ($e) {
+    return $default;
+};
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (statement))
+
+==================
+Defer blocks
+==================
+
+use feature 'defer';
+
+sub process {
+    open my $fh, '<', $file or die $!;
+    
+    defer {
+        close $fh;
+        print "File closed\n";
+    }
+    
+    defer { cleanup() }
+    
+    while (<$fh>) {
+        defer { print "Line processed\n" }
+        process_line($_);
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (lowprec_logical_expression
+          (ambiguous_function_call_expression
+            (function)
+            (list_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (string_literal
+                (string_content))
+              (scalar
+                (varname))))
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))))
+      (defer_statement
+        (block
+          (expression_statement
+            (func1op_call_expression
+              (scalar
+                (varname))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence)))))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)))))
+      (loop_statement
+        (readline_expression
+          (filehandle
+            (varname)))
+        (block
+          (defer_statement
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (interpolated_string_literal
+                    (string_content
+                      (escape_sequence)))))))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))
+
+==================
+Multiple defer blocks
+==================
+
+use feature 'defer';
+
+{
+    defer { print "Third\n" }
+    defer { print "Second\n" }
+    defer { print "First\n" }
+    
+    print "Body\n";
+}
+
+sub with_defer {
+    my $resource = acquire();
+    defer { release($resource) }
+    
+    my $lock = get_lock();
+    defer { unlock($lock) }
+    
+    process($resource);
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (block_statement
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (defer_statement
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))
+    (expression_statement
+      (ambiguous_function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))))
+
+==================
+Defer in try catch
+==================
+
+use feature qw(try defer);
+
+try {
+    my $handle = open_resource();
+    defer { close_resource($handle) }
+    
+    process($handle);
+}
+catch ($e) {
+    # defer still runs
+    log_error($e);
+}
+
+sub safe_operation {
+    defer { cleanup() }
+    
+    try {
+        risky_step();
+    }
+    catch ($e) {
+        recover($e);
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))
+    (scalar
+      (varname))
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)))))
+      (try_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))
+
+==================
+Try without catch
+==================
+
+use feature 'try';
+
+try {
+    operation();
+}
+
+try {
+    another_operation();
+} finally {
+    always_cleanup();
+}
+
+eval {
+    # Traditional eval for comparison
+    old_style();
+};
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (expression_statement
+    (eval_expression
+      (block
+        (comment)
+        (expression_statement
+          (function_call_expression
+            (function)))))))
+
+==================
+Catch with patterns
+==================
+
+use feature 'try';
+
+try {
+    complex_operation();
+}
+catch ($e) {
+    if ($e =~ /timeout/) {
+        retry();
+    } elsif ($e =~ /network/) {
+        fallback();
+    } else {
+        die $e;
+    }
+}
+
+try {
+    api_call();
+} catch ($error) {
+    given ($error) {
+        when (/404/) { return not_found() }
+        when (/500/) { return server_error() }
+        default { die $error }
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (conditional_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (match_regexp
+            (regexp_content)))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (elsif
+          (binary_expression
+            (scalar
+              (varname))
+            (match_regexp
+              (regexp_content)))
+          (block
+            (expression_statement
+              (function_call_expression
+                (function))))
+          (else
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (scalar
+                    (varname))))))))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (scalar
+      (varname))
+    (block
+      (given_statement
+        (scalar
+          (varname))
+        (block
+          (when_statement
+            (match_regexp
+              (regexp_content))
+            (block
+              (expression_statement
+                (return_expression
+                  (function_call_expression
+                    (function))))))
+          (when_statement
+            (match_regexp
+              (regexp_content))
+            (block
+              (expression_statement
+                (return_expression
+                  (function_call_expression
+                    (function))))))
+          (default_statement
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (scalar
+                    (varname)))))))))))
+
+==================
+Try catch finally defer combo
+==================
+
+use feature qw(try defer);
+
+sub complex {
+    my $resource = acquire();
+    defer { release($resource) }
+    
+    try {
+        my $transaction = begin_transaction();
+        defer { $transaction->finalize() }
+        
+        process($resource, $transaction);
+        $transaction->commit();
+    }
+    catch ($e) {
+        $transaction->rollback();
+        die $e;
+    }
+    finally {
+        log_completion();
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (function_call_expression
+            (function))))
+      (defer_statement
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (try_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (function_call_expression
+                (function))))
+          (defer_statement
+            (block
+              (expression_statement
+                (method_call_expression
+                  (scalar
+                    (varname))
+                  (method)))))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (list_expression
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))))
+          (expression_statement
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (method_call_expression
+              (scalar
+                (varname))
+              (method)))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (scalar
+                (varname)))))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))))))

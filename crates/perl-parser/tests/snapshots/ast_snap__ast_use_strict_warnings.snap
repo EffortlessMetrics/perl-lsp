@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"use strict;\\nuse warnings;\")"
+---
+(source_file (use strict) (use warnings))

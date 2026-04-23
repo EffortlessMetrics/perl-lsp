@@ -1,0 +1,500 @@
+==========================================
+Unicode identifiers
+==========================================
+
+use utf8;
+
+my $café = "coffee";
+my $π = 3.14159;
+my $Δ = 0.001;
+my $привет = "hello";
+my $こんにちは = "hello";
+my $🐪 = "camel";
+
+sub Σ {
+    my $sum = 0;
+    $sum += $_ for @_;
+    return $sum;
+}
+
+package Ω::Module;
+
+---
+
+(source_file
+  (use_statement
+    (identifier))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (float))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (float))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (identifier)
+    (block
+      (assignment_expression
+        (variable_declaration
+          (scalar_variable))
+        (assignment_operator)
+        (integer))
+      (postfix_expression
+        (augmented_assignment_expression
+          (scalar_variable)
+          (assignment_operator)
+          (special_scalar_variable))
+        (postfix_operator)
+        (special_array_variable))
+      (return_expression
+        (scalar_variable))))
+  (package_statement
+    (qualified_name)))
+
+==========================================
+Unicode in strings
+==========================================
+
+my $string = "café";
+my $quoted = "She said, "Hello!"";
+my $emoji = "Perl 🐪 is fun! 🎉";
+my $mixed = "ASCII and καλημέρα and 你好";
+my $escaped = "\x{263A} \x{1F42A} \x{2764}";
+my $named = "\N{LATIN SMALL LETTER E WITH ACUTE}";
+my $combining = "e\x{0301}";
+
+---
+
+(source_file
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content))))
+
+==========================================
+Unicode in regex
+==========================================
+
+/café/;
+/\x{263A}/;
+/\p{Greek}/;
+/\p{Script=Arabic}/;
+/[α-ω]/;
+/\N{SNOWMAN}/;
+/[🐪🐫🐭🐹]/;
+
+$text =~ s/café/coffee/g;
+$text =~ /καφέ/i;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (binary_expression
+      (scalar
+        (varname))
+      (substitution_regexp
+        (regexp_content)
+        (replacement)
+        (substitution_regexp_modifiers))))
+  (expression_statement
+    (binary_expression
+      (scalar
+        (varname))
+      (match_regexp
+        (regexp_content)
+        (match_regexp_modifiers)))))
+
+==========================================
+Encoding pragmas
+==========================================
+
+use utf8;
+no utf8;
+use encoding 'utf8';
+use open ':utf8';
+use open IN => ':utf8';
+use open OUT => ':utf8';
+use open ':std', ':utf8';
+use open IO => ':encoding(UTF-8)';
+
+binmode(STDOUT, ":utf8");
+binmode(STDIN, ":encoding(UTF-8)");
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (interpolated_string_literal
+          (string_content))))))
+
+==========================================
+Unicode normalization
+==========================================
+
+use Unicode::Normalize;
+
+my $nfc = NFC($string);
+my $nfd = NFD($string);
+my $nfkc = NFKC($string);
+my $nfkd = NFKD($string);
+
+my $composed = "\x{00E9}";
+my $decomposed = "\x{0065}\x{0301}";
+
+if (NFC($composed) eq NFC($decomposed)) {
+    print "Equivalent\n";
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)
+          (escape_sequence)))))
+  (conditional_statement
+    (equality_expression
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
+
+==========================================
+Unicode properties in identifiers
+==========================================
+
+use utf8;
+
+my $ℵ₀ = "aleph null";
+my $x² = "x squared";
+my $H₂O = "water";
+my $Σⁿ = "sum";
+my $∫ƒ = "integral";
+my $√2 = 1.414;
+my $∞ = "infinity";
+
+sub α_β_γ {
+    return "Greek";
+}
+
+---
+
+(source_file
+  (use_statement
+    (identifier))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (float))
+  (assignment_expression
+    (variable_declaration
+      (scalar_variable))
+    (assignment_operator)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (identifier)
+    (block
+      (return_expression
+        (string_literal
+          (string_content))))))
+
+==========================================
+Unicode case operations
+==========================================
+
+use utf8;
+
+my $lower = lc("CAFÉ");
+my $upper = uc("café");
+my $title = ucfirst("école");
+my $folded = fc("Straße");
+
+my $greek_lower = lc("ΑΒΓΔ");
+my $greek_upper = uc("αβγδ");
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (interpolated_string_literal
+          (string_content))))))

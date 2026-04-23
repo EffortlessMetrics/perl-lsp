@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my @result = sort { $a cmp $b } map { lc $_ } grep { /foo/ } @items;\",)"
+---
+(source_file (my_declaration (variable @ result)(call sort ((block (expression_statement (binary_cmp (variable $ a) (variable $ b)))) (call map ((block (expression_statement (ambiguous_function_call_expression (function) (variable $ _)))) (call grep ((block (expression_statement (regex "/foo/" None ""))) (variable @ items)))))))))

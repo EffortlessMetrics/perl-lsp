@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-09T18:13:43Z",
+  "subsystem": "engineering_health",
+  "commit": "3f7ede36",
+  "floor_metrics": {
+    "strict_clean_subset_pass_rate": 1.0
+  },
+  "improvement_metrics": {
+    "unwrap_count": null,
+    "dead_code_items": null,
+    "doc_coverage_pct": null
+  },
+  "tolerance_pct": 0.0
+}

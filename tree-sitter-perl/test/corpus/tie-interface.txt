@@ -1,0 +1,822 @@
+==================
+Basic tie operations
+==================
+
+tie %hash, 'Tie::StdHash';
+tie @array, 'Tie::Array', @options;
+tie $scalar, 'Tie::Scalar';
+tied %hash;
+untie %hash;
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (hash
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname))
+        (string_literal
+          (string_content))
+        (array
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (func1op_call_expression
+      (hash
+        (varname))))
+  (expression_statement
+    (func1op_call_expression
+      (hash
+        (varname)))))
+
+==================
+Tie with package methods
+==================
+
+package Tie::Example;
+
+sub TIESCALAR {
+    my $class = shift;
+    my $value = shift || 0;
+    bless \$value, $class;
+}
+
+sub FETCH {
+    my $self = shift;
+    return $$self;
+}
+
+sub STORE {
+    my $self = shift;
+    my $value = shift;
+    $$self = $value;
+}
+
+sub DESTROY {
+    my $self = shift;
+    # cleanup
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (binary_expression
+            (func1op_call_expression)
+            (number))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (refgen_expression
+              (scalar
+                (varname)))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (return_expression
+          (scalar
+            (varname
+              (scalar
+                (varname))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (scalar
+            (varname
+              (scalar
+                (varname))))
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (comment))))
+
+==================
+Tie hash interface
+==================
+
+sub TIEHASH {
+    my $class = shift;
+    bless {}, $class;
+}
+
+sub FETCH {
+    my ($self, $key) = @_;
+    return $self->{$key};
+}
+
+sub STORE {
+    my ($self, $key, $value) = @_;
+    $self->{$key} = $value;
+}
+
+sub EXISTS {
+    my ($self, $key) = @_;
+    exists $self->{$key};
+}
+
+sub DELETE {
+    my ($self, $key) = @_;
+    delete $self->{$key};
+}
+
+sub FIRSTKEY {
+    my $self = shift;
+    my $a = keys %$self;
+    each %$self;
+}
+
+sub NEXTKEY {
+    my ($self, $lastkey) = @_;
+    each %$self;
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_hash_expression)
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (return_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (assignment_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (func1op_call_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (func1op_call_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression
+            (hash
+              (varname
+                (scalar
+                  (varname)))))))
+      (expression_statement
+        (func1op_call_expression
+          (hash
+            (varname
+              (scalar
+                (varname))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (func1op_call_expression
+          (hash
+            (varname
+              (scalar
+                (varname)))))))))
+
+==================
+Tie array interface
+==================
+
+sub TIEARRAY {
+    my $class = shift;
+    bless [], $class;
+}
+
+sub FETCHSIZE {
+    scalar @{$_[0]};
+}
+
+sub STORESIZE {
+    $#{$_[0]} = $_[1] - 1;
+}
+
+sub PUSH {
+    my $self = shift;
+    push @$self, @_;
+}
+
+sub POP {
+    pop @{$_[0]};
+}
+
+sub SHIFT {
+    shift @{$_[0]};
+}
+
+sub UNSHIFT {
+    my $self = shift;
+    unshift @$self, @_;
+}
+
+sub SPLICE {
+    my $self = shift;
+    my $offset = shift || 0;
+    my $length = shift;
+    splice @$self, $offset, $length, @_;
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_array_expression)
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (func1op_call_expression
+          (array
+            (varname
+              (block
+                (expression_statement
+                  (array_element_expression
+                    (container_variable
+                      (varname))
+                    (number))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (arraylen
+            (varname
+              (block
+                (expression_statement
+                  (array_element_expression
+                    (container_variable
+                      (varname))
+                    (number))))))
+          (binary_expression
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number))
+            (number))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname
+                (scalar
+                  (varname))))
+            (array
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (func1op_call_expression
+          (array
+            (varname
+              (block
+                (expression_statement
+                  (array_element_expression
+                    (container_variable
+                      (varname))
+                    (number))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (func1op_call_expression
+          (array
+            (varname
+              (block
+                (expression_statement
+                  (array_element_expression
+                    (container_variable
+                      (varname))
+                    (number))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname
+                (scalar
+                  (varname))))
+            (array
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (binary_expression
+            (func1op_call_expression)
+            (number))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname
+                (scalar
+                  (varname))))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (array
+              (varname))))))))
+
+==================
+Tie handle interface
+==================
+
+sub TIEHANDLE {
+    my $class = shift;
+    my $fh = shift;
+    bless \$fh, $class;
+}
+
+sub PRINT {
+    my $self = shift;
+    print {$$self} @_;
+}
+
+sub PRINTF {
+    my $self = shift;
+    my $fmt = shift;
+    printf {$$self} $fmt, @_;
+}
+
+sub READLINE {
+    my $self = shift;
+    readline $$self;
+}
+
+sub GETC {
+    my $self = shift;
+    getc $$self;
+}
+
+sub EOF {
+    my $self = shift;
+    eof $$self;
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (refgen_expression
+              (scalar
+                (varname)))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (indirect_object
+            (block
+              (expression_statement
+                (scalar
+                  (varname
+                    (scalar
+                      (varname)))))))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (indirect_object
+            (block
+              (expression_statement
+                (scalar
+                  (varname
+                    (scalar
+                      (varname)))))))
+          (list_expression
+            (scalar
+              (varname))
+            (array
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (func1op_call_expression
+          (scalar
+            (varname
+              (scalar
+                (varname))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (func1op_call_expression
+          (scalar
+            (varname
+              (scalar
+                (varname))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (func1op_call_expression
+          (scalar
+            (varname
+              (scalar
+                (varname)))))))))
+
+==================
+Complex tie usage
+==================
+
+tie my %cache, 'Tie::Cache', {
+    MaxCount => 100,
+    MaxSize  => 50 * 1024 * 1024,
+};
+
+tie local $/, 'Tie::Scalar', \$custom_rs;
+
+{
+    tie my @array, 'Tie::File', $filename or die "Can't tie: $!";
+    $array[13] = "New line 14\n";
+    untie @array;
+}
+
+my $obj = tie %hash, 'DB_File', $filename, O_RDWR|O_CREAT, 0666, $DB_HASH;
+$obj->put("key", "value");
+$obj->get("key", $value);
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (hash
+            (varname)))
+        (string_literal
+          (string_content))
+        (anonymous_hash_expression
+          (list_expression
+            (autoquoted_bareword)
+            (list_expression
+              (number)
+              (autoquoted_bareword)
+              (binary_expression
+                (binary_expression
+                  (number)
+                  (number))
+                (number))))))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (localization_expression
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (refgen_expression
+          (scalar
+            (varname))))))
+  (block_statement
+    (expression_statement
+      (lowprec_logical_expression
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (variable_declaration
+              (array
+                (varname)))
+            (string_literal
+              (string_content))
+            (scalar
+              (varname))))
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))
+    (expression_statement
+      (assignment_expression
+        (array_element_expression
+          (container_variable
+            (varname))
+          (number))
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence)))))
+    (expression_statement
+      (func1op_call_expression
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (list_expression
+          (hash
+            (varname))
+          (string_literal
+            (string_content))
+          (scalar
+            (varname))
+          (binary_expression
+            (bareword)
+            (bareword))
+          (number)
+          (scalar
+            (varname))))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (list_expression
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (list_expression
+        (interpolated_string_literal
+          (string_content))
+        (scalar
+          (varname))))))

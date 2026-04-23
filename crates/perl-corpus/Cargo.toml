@@ -1,0 +1,52 @@
+[package]
+name = "perl-corpus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Test corpus management and generators for Perl parsers"
+readme = "README.md"
+repository.workspace = true
+documentation = "https://docs.rs/perl-corpus"
+homepage.workspace = true
+keywords = ["perl", "corpus", "proptest", "testing", "parser"]
+categories = ["development-tools", "development-tools::testing"]
+include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
+
+[lib]
+name = "perl_corpus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perl-corpus"
+path = "src/bin/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+regex.workspace = true
+glob = "0.3.3"
+clap = { workspace = true }
+once_cell.workspace = true
+chrono = "0.4.42"
+proptest.workspace = true
+rand = "0.10.1"
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+perl-tdd-support = { workspace = true }
+
+[features]
+default = []
+# Enable fast CI mode that skips slow/flaky property tests
+ci-fast = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

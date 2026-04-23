@@ -1,0 +1,21 @@
+[package]
+name = "perl-line-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Byte-oriented line/column index for incremental parsing"
+readme = "README.md"
+documentation = "https://docs.rs/perl-line-index"
+keywords = ["perl", "line", "index", "incremental", "lsp"]
+categories = ["text-processing", "development-tools", "parsing"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

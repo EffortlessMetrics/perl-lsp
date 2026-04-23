@@ -1,0 +1,37 @@
+title: "[Idea] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share a feature request or design idea. This is the place for open-ended brainstorming before an idea is ready to become a formal issue. If your idea is fully scoped with reproduction steps or acceptance criteria, consider opening an issue instead.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Opportunity
+      description: What pain are you solving, or what opportunity do you see?
+      placeholder: |
+        Currently, when I work with large Perl codebases, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: How do you imagine this working? Sketches, examples, and pseudocode all welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other approaches you've thought about or tried.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Editor, codebase size, Perl version, related issues, or anything else that helps frame this.

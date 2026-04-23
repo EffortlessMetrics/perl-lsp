@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"$obj->method($arg1, $arg2);\")"
+---
+(source_file (method_call (variable $ obj) method ((variable $ arg1) (variable $ arg2))))

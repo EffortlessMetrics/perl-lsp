@@ -1,0 +1,178 @@
+# Test catalog with specific features disabled
+# Used to verify that disabled features don't appear in capabilities
+
+[meta]
+version = "0.8.5-test"
+lsp_version = "3.18.0"
+
+# All the same features but with different advertised states for testing
+[[feature]]
+id = "lsp.completion"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Code completion"
+
+[[feature]]
+id = "lsp.hover"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Hover information"
+
+[[feature]]
+id = "lsp.signature_help"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Function signature help"
+
+[[feature]]
+id = "lsp.diagnostics"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Error diagnostics"
+
+[[feature]]
+id = "lsp.definition"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Go to definition"
+
+[[feature]]
+id = "lsp.references"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Find references"
+
+[[feature]]
+id = "lsp.document_symbols"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Document outline"
+
+[[feature]]
+id = "lsp.formatting"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = true
+description = "Document formatting"
+
+[[feature]]
+id = "lsp.folding_ranges"
+area = "textDocument"
+spec = "3.10"
+maturity = "ga"
+advertised = true
+description = "Code folding"
+
+# Features to test as DISABLED
+[[feature]]
+id = "lsp.rename"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Symbol renaming"
+
+[[feature]]
+id = "lsp.code_actions"
+area = "textDocument"
+spec = "3.8"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Quick fixes and refactorings"
+
+[[feature]]
+id = "lsp.workspace_symbols"
+area = "workspace"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Workspace symbol search"
+
+[[feature]]
+id = "lsp.semantic_tokens"
+area = "textDocument"
+spec = "3.16"
+maturity = "preview"
+advertised = false  # Disabled for testing
+description = "Semantic highlighting"
+
+[[feature]]
+id = "lsp.inlay_hints"
+area = "textDocument"
+spec = "3.16"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Parameter hints"
+
+[[feature]]
+id = "lsp.document_links"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Module links"
+
+[[feature]]
+id = "lsp.selection_ranges"
+area = "textDocument"
+spec = "3.15"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Smart selection"
+
+[[feature]]
+id = "lsp.on_type_formatting"
+area = "textDocument"
+spec = "3.0"
+maturity = "ga"
+advertised = false  # Disabled for testing
+description = "Auto-formatting on type"
+
+[[feature]]
+id = "lsp.pull_diagnostics"
+area = "workspace"
+spec = "3.17"
+maturity = "preview"
+advertised = false  # Disabled for testing
+description = "Pull diagnostics"
+
+# Partial implementations (never advertised)
+[[feature]]
+id = "lsp.code_lens"
+area = "textDocument"
+spec = "3.0"
+maturity = "experimental"
+advertised = false
+description = "Code lens (partial)"
+
+[[feature]]
+id = "lsp.call_hierarchy"
+area = "textDocument"
+spec = "3.16"
+maturity = "experimental"
+advertised = false
+description = "Call hierarchy (partial)"
+
+# Future features
+[[feature]]
+id = "lsp.type_hierarchy"
+area = "textDocument"
+spec = "3.17"
+maturity = "planned"
+advertised = false
+description = "Type hierarchy"

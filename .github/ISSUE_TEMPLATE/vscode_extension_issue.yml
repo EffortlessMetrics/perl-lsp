@@ -1,0 +1,91 @@
+name: VS Code Extension Issue
+description: Report problems with the VS Code extension (activation, UI, debug integration, packaging, or release install flow).
+title: "[VSCode] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for issues that are specific to the `perl-lsp` VS Code extension.
+
+  - type: dropdown
+    id: vscode-area
+    attributes:
+      label: Extension Area
+      description: Which part of the extension is affected?
+      options:
+        - Language server startup / configuration
+        - Debug adapter / launch and attach
+        - UI integration (commands, menus, statuses)
+        - Packaging / installation / updates
+        - Build or compile issues
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: extension-steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact steps that reproduce the issue.
+      value: |
+        1. Open VS Code version:
+        2. Install extension version:
+        3. Open workspace / file:
+        4. Run action / command:
+        5. Observe:
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happened instead?
+    validations:
+      required: true
+
+  - type: input
+    id: vscode-version
+    attributes:
+      label: VS Code Version
+      placeholder: "1.96.2"
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Extension Version
+      placeholder: "0.10.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "macOS 15, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Include Output panel / extension host logs or crash output if available.
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Add any configuration, screenshots, or project details.

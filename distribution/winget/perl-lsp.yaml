@@ -1,0 +1,19 @@
+PackageIdentifier: EffortlessMetrics.perl-lsp
+PackageVersion: __RELEASE_VERSION__
+PackageLocale: en-US
+Publisher: EffortlessMetrics
+PackageName: perl-lsp
+License: MIT
+ShortDescription: High-performance Perl Language Server with 100% syntax coverage.
+PackageUrl: https://github.com/EffortlessMetrics/perl-lsp
+Moniker: perl-lsp
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: __RELEASE_URL__
+    InstallerSha256: __RELEASE_SHA256__
+    Commands:
+      - perllsp
+      - perl-dap
+ManifestType: singleton
+ManifestVersion: 1.6.0

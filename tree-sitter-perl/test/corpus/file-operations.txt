@@ -1,0 +1,833 @@
+==========================================
+File opening modes
+==========================================
+
+open(my $fh, '<', 'file.txt');
+open(my $fh, '>', 'file.txt');
+open(my $fh, '>>', 'file.txt');
+open(my $fh, '+<', 'file.txt');
+open(my $fh, '+>', 'file.txt');
+open(my $fh, '+>>', 'file.txt');
+open(my $fh, '<:encoding(UTF-8)', 'file.txt');
+open(my $fh, '|-', 'command');
+open(my $fh, '-|', 'command');
+
+---
+
+(source_file
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content))))))
+
+==========================================
+Three-argument open
+==========================================
+
+open(FH, "<", "file.txt") or die $!;
+open(my $in, "<", \$scalar) or die;
+open(my $out, ">", \my $output);
+open(my $pipe, "|-", "sort", "-n");
+open(my $read_pipe, "-|", "ls", "-la");
+
+---
+
+(source_file
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (bareword)
+          (interpolated_string_literal
+            (string_content))
+          (interpolated_string_literal
+            (string_content))))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (interpolated_string_literal
+            (string_content))
+          (refgen_expression
+            (scalar
+              (varname)))))
+      (bareword)))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (interpolated_string_literal
+          (string_content))
+        (refgen_expression
+          (variable_declaration
+            (scalar
+              (varname)))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content))))))
+
+==========================================
+File test operators chaining
+==========================================
+
+if (-f $file && -r _ && -w _ && -x _) { }
+if (-d $dir && -w _) { }
+if (-e $path || -l $path) { }
+if (-s $file > 1024) { }
+if (-M $file > 7) { }
+if (-f -r -w -x $file) { }
+
+---
+
+(source_file
+  (conditional_statement
+    (binary_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (ambiguous_function_call_expression
+          (function)
+          (binary_expression
+            (function_call_expression
+              (function
+                (varname)))
+            (ambiguous_function_call_expression
+              (function)
+              (ambiguous_function_call_expression
+                (function)
+                (binary_expression
+                  (function_call_expression
+                    (function
+                      (varname)))
+                  (ambiguous_function_call_expression
+                    (function)
+                    (bareword)))))))))
+    (block))
+  (conditional_statement
+    (binary_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (bareword)))
+    (block))
+  (conditional_statement
+    (binary_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (scalar
+          (varname))))
+    (block))
+  (conditional_statement
+    (relational_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (number))
+    (block))
+  (conditional_statement
+    (relational_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (number))
+    (block))
+  (conditional_statement
+    (func1op_call_expression
+      (func1op_call_expression
+        (func1op_call_expression
+          (func1op_call_expression
+            (scalar
+              (varname))))))
+    (block)))
+
+==========================================
+Directory operations
+==========================================
+
+opendir(my $dh, $dirname) or die $!;
+my @files = readdir($dh);
+closedir($dh);
+
+opendir(DIR, ".") || die;
+while (my $file = readdir(DIR)) {
+    next if $file =~ /^\./;
+    print "$file\n";
+}
+closedir(DIR);
+
+rewinddir($dh);
+telldir($dh);
+seekdir($dh, $pos);
+
+---
+
+(source_file
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (func1op_call_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (binary_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (bareword)
+          (interpolated_string_literal
+            (string_content))))
+      (bareword)))
+  (loop_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (bareword)))
+    (block
+      (expression_statement
+        (postfix_conditional_expression
+          (loopex_expression)
+          (binary_expression
+            (scalar
+              (varname))
+            (match_regexp
+              (regexp_content
+                (escape_sequence))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (expression_statement
+    (func1op_call_expression
+      (bareword)))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (scalar
+          (varname))))))
+
+==========================================
+File globbing
+==========================================
+
+@files = <*.pl>;
+@all = <*>;
+@hidden = <.*>;
+@recursive = <**/*.pm>;
+@braces = <{foo,bar}.txt>;
+
+while (<*.log>) {
+    print "Processing $_\n";
+}
+
+@files = glob("*.pl");
+@paths = glob("/path/to/*.{pm,pl}");
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (fileglob_expression
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (fileglob_expression
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (fileglob_expression
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (fileglob_expression
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (fileglob_expression
+        (string_content))))
+  (loop_statement
+    (fileglob_expression
+      (string_content))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname))
+      (function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content))))))
+
+==========================================
+File handle operations
+==========================================
+
+binmode($fh);
+binmode($fh, ":utf8");
+binmode($fh, ":raw:bytes");
+binmode($fh, ":encoding(UTF-16LE)");
+
+select($fh);
+$old = select(STDERR);
+
+print $fh "content";
+printf $fh "%s: %d\n", $name, $count;
+say $fh "automatic newline";
+
+sysopen(my $fh, $file, O_RDWR|O_CREAT);
+sysread($fh, $buffer, 1024);
+syswrite($fh, $data, length($data));
+sysseek($fh, 0, SEEK_SET);
+
+---
+
+(source_file
+  (expression_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (function_call_expression
+        (function)
+        (bareword))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (scalar
+          (varname)))
+      (list_expression
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence)))
+        (scalar
+          (varname))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (scalar
+          (varname))
+        (binary_expression
+          (bareword)
+          (bareword)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (scalar
+          (varname))
+        (number))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (scalar
+          (varname))
+        (func1op_call_expression
+          (scalar
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (number)
+        (bareword)))))
+
+==========================================
+Path operations
+==========================================
+
+use File::Spec;
+my $path = File::Spec->catfile($dir, $file);
+my $abs = File::Spec->rel2abs($path);
+my ($vol, $dirs, $file) = File::Spec->splitpath($path);
+
+chdir($dir) or die $!;
+mkdir($dir) or die $!;
+mkdir($dir, 0755) or die $!;
+rmdir($dir) or die $!;
+
+unlink($file) or die $!;
+unlink(@files) == @files or die $!;
+
+rename($old, $new) or die $!;
+link($existing, $new) or die $!;
+symlink($target, $link) or die $!;
+readlink($link);
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (method_call_expression
+        (bareword)
+        (method)
+        (list_expression
+          (scalar
+            (varname))
+          (scalar
+            (varname))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (method_call_expression
+        (bareword)
+        (method)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname))
+        (scalar
+          (varname))
+        (scalar
+          (varname)))
+      (method_call_expression
+        (bareword)
+        (method)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (scalar
+            (varname))
+          (number)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (equality_expression
+        (function_call_expression
+          (function)
+          (array
+            (varname)))
+        (array
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (scalar
+            (varname))
+          (scalar
+            (varname))))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (scalar
+            (varname))
+          (scalar
+            (varname))))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (lowprec_logical_expression
+      (function_call_expression
+        (function)
+        (list_expression
+          (scalar
+            (varname))
+          (scalar
+            (varname))))
+      (ambiguous_function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname)))))
+
+==========================================
+Special file handles
+==========================================
+
+open(my $fh, '<', \*DATA);
+open(my $fh, '>&', \*STDOUT);
+open(my $fh, '<&', \*STDIN);
+
+while (<DATA>) {
+    chomp;
+    process($_);
+}
+
+__DATA__
+data line 1
+data line 2
+
+---
+
+(source_file
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (refgen_expression
+          (glob
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (refgen_expression
+          (glob
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (refgen_expression
+          (glob
+            (varname))))))
+  (loop_statement
+    (readline_expression
+      (filehandle))
+    (block
+      (expression_statement
+        (func1op_call_expression))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (eof_marker)
+  (data_section))

@@ -1,0 +1,131 @@
+name: Chocolatey Auto-Bump
+
+# Update Chocolatey package on release
+# Cost: ~$0.02 per bump
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to bump (e.g., v0.10.0)'
+        required: false
+
+concurrency:
+  group: chocolatey-bump-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Get release tag
+        id: tag
+        shell: pwsh
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:RELEASE_TAG_INPUT) {
+            $tag = $env:RELEASE_TAG_INPUT
+          } else {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+          }
+
+          $version = $tag.TrimStart('v')
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Wait for release assets
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 20; $i++) {
+            Write-Host "Checking for release assets (attempt $i/20)..."
+            $assetCount = gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length'
+            if ($assetCount -match '^[1-9]') {
+              Write-Host "Assets found!"
+              break
+            }
+            Start-Sleep -Seconds 30
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Windows binary
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'choco-assets'
+
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          Write-Host "Downloading perllsp-$version-x86_64-pc-windows-msvc.zip..."
+          gh release download $tag `
+            --pattern "perllsp-$version-x86_64-pc-windows-msvc.zip" `
+            --dir $assetDir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA256
+        id: checksum
+        shell: pwsh
+        run: |
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'choco-assets'
+          $assetPath = Join-Path $assetDir "perllsp-$version-x86_64-pc-windows-msvc.zip"
+
+          $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash.ToLowerInvariant()
+          "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "SHA256: $sha"
+
+      - name: Update Chocolatey package
+        shell: pwsh
+        run: |
+          ./distribution/windows/update-manifests.ps1 `
+            -Version "${{ steps.tag.outputs.version }}" `
+            -ReleaseSha256 "${{ steps.checksum.outputs.sha256 }}" `
+            -ChocolateyNuspecPath 'distribution/chocolatey/perl-lsp.nuspec' `
+            -ChocolateyInstallPath 'distribution/chocolatey/tools/chocolateyinstall.ps1'
+
+          if (Select-String -Path 'distribution/chocolatey/perl-lsp.nuspec', 'distribution/chocolatey/tools/chocolateyinstall.ps1' -Pattern '__RELEASE_VERSION__|__RELEASE_SHA256__' -Quiet) {
+            throw 'Chocolatey files still contain unreplaced placeholders after update.'
+          }
+
+      - name: Create PR to Chocolatey
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: distribution/chocolatey
+          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
+          title: "perl-lsp ${{ steps.tag.outputs.version }}"
+          body: |
+            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
+
+            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
+
+            ### Changes
+            - Updated version to ${{ steps.tag.outputs.version }}
+            - Updated SHA256 checksum
+          commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
+          labels: automated-pr
+          repository: chocolatey-community/chocolatey-coreteampackages
+          signoff: false
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Chocolatey Bump Complete :rocket:"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **Version**: ${{ steps.tag.outputs.version }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **SHA256**: ${{ steps.checksum.outputs.sha256 }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **PR**: Created to chocolatey-community/chocolatey-coreteampackages"

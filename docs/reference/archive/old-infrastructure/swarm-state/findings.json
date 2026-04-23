@@ -1,0 +1,182 @@
+{
+  "_comment": "Durable control-plane findings for the tracked swarm surface. Product bugs belong in discovered-issues.md or GitHub issues instead.",
+  "schema_version": 1,
+  "last_updated": "2026-03-17",
+  "findings": [
+    {
+      "id": "SWARM-FINDING-0001",
+      "kind": "runtime_invariant",
+      "status": "landed",
+      "recorded_on": "2026-03-17",
+      "summary": "Anything under .claude/agents/ is part of the active tracked swarm surface.",
+      "decision": "Keep active tracked agents in .claude/agents/ only. Move donor or compatibility material out of that directory, and catalog every live agent there.",
+      "surfaces": [
+        ".claude/agents/",
+        ".claude/agents/AGENT_CATALOG.md",
+        ".claude/agents/README.md",
+        ".claude/agents-compat/"
+      ],
+      "evidence": [
+        {
+          "type": "pr",
+          "ref": "#1734"
+        },
+        {
+          "type": "pr",
+          "ref": "#1736"
+        },
+        {
+          "type": "file",
+          "ref": ".claude/agents/AGENT_CATALOG.md"
+        }
+      ],
+      "follow_up": [
+        "Keep future donor material outside .claude/agents/."
+      ],
+      "notes": "Untracked or ambiguous files in .claude/agents/ are treated as a control-plane bug, not local scratch state."
+    },
+    {
+      "id": "SWARM-FINDING-0002",
+      "kind": "control_plane",
+      "status": "landed",
+      "recorded_on": "2026-03-17",
+      "summary": "Commands and skills are one slash-entrypoint surface unless frontmatter or bundled files change behavior.",
+      "decision": "Document commands and skills as interchangeable slash entrypoints at the call site. Use skills when preloading into agents, using supporting files, or applying frontmatter controls such as disable-model-invocation, user-invocable, allowed-tools, context: fork, or hooks.",
+      "surfaces": [
+        ".claude/commands/",
+        ".claude/skills/",
+        ".claude/README.md",
+        "docs/reference/SKILL_AND_AGENT_DESIGN.md"
+      ],
+      "evidence": [
+        {
+          "type": "pr",
+          "ref": "#1737"
+        },
+        {
+          "type": "pr",
+          "ref": "#1739"
+        },
+        {
+          "type": "doc",
+          "ref": "https://code.claude.com/docs/en/skills"
+        }
+      ],
+      "follow_up": [
+        "Prefer skills for procedures that agents must preload via frontmatter skills:."
+      ]
+    },
+    {
+      "id": "SWARM-FINDING-0003",
+      "kind": "control_plane",
+      "status": "landed",
+      "recorded_on": "2026-03-17",
+      "summary": "The tracked .claude/ tree is canonical; swarm-pack is a derived export.",
+      "decision": "Land runtime and documentation changes in the main repo .claude/ surfaces first. Update docs/handoff/swarm-pack/ as an intentionally derived export, not a peer design source.",
+      "surfaces": [
+        ".claude/",
+        "docs/handoff/swarm-pack/",
+        ".claude/README.md"
+      ],
+      "evidence": [
+        {
+          "type": "pr",
+          "ref": "#1725"
+        },
+        {
+          "type": "pr",
+          "ref": "#1736"
+        },
+        {
+          "type": "file",
+          "ref": ".claude/README.md"
+        }
+      ],
+      "follow_up": [
+        "Mirror structural changes into the pack when the export surface changes."
+      ]
+    },
+    {
+      "id": "SWARM-FINDING-0004",
+      "kind": "runtime_invariant",
+      "status": "landed",
+      "recorded_on": "2026-03-17",
+      "summary": "WorktreeCreate and WorktreeRemove stay unregistered until the repo intentionally owns worktree lifecycle.",
+      "decision": "Do not register WorktreeCreate or WorktreeRemove as passive metrics hooks. In Claude Code those hooks replace default worktree behavior, so reserve them until the hook itself provisions or removes the working copy.",
+      "surfaces": [
+        ".claude/settings.json",
+        "docs/reference/SKILL_AND_AGENT_DESIGN.md",
+        "docs/handoff/SWARM_DESIGN.md"
+      ],
+      "evidence": [
+        {
+          "type": "pr",
+          "ref": "#1726"
+        },
+        {
+          "type": "doc",
+          "ref": "https://code.claude.com/docs/en/hooks"
+        },
+        {
+          "type": "setting",
+          "ref": ".claude/settings.json"
+        }
+      ],
+      "follow_up": [
+        "If worktree lifecycle ownership becomes necessary, add explicit provisioning hooks in a separate PR."
+      ]
+    },
+    {
+      "id": "SWARM-FINDING-0005",
+      "kind": "tracking_gap",
+      "status": "landed",
+      "recorded_on": "2026-03-17",
+      "summary": "Control-plane findings need a machine-readable ledger instead of living only in chat transcripts and prose docs.",
+      "decision": "Track durable swarm findings in .claude/swarm-state/findings.json and keep them valid against findings.schema.json. Use discovered-issues.md for product leads and known-pitfalls.md for repeatable failure lessons.",
+      "surfaces": [
+        ".claude/swarm-state/findings.json",
+        ".claude/swarm-state/findings.schema.json",
+        ".claude/swarm-state/README.md"
+      ],
+      "evidence": [
+        {
+          "type": "file",
+          "ref": ".claude/swarm-state/discovered-issues.md"
+        },
+        {
+          "type": "file",
+          "ref": ".claude/swarm-state/known-pitfalls.md"
+        }
+      ],
+      "follow_up": [
+        "Validate findings.json in control-plane documentation and before export snapshots."
+      ]
+    },
+    {
+      "id": "SWARM-FINDING-0006",
+      "kind": "docs_drift",
+      "status": "active",
+      "recorded_on": "2026-03-17",
+      "summary": "The legacy .claude/commands/swarm-protocol.md mirror still reflects older .ops-perl-lsp paths and workflow language.",
+      "decision": "Either align the command mirror with the live skill-backed protocol or retire it as a clearly marked compatibility surface. Do not let the command file quietly teach older pathing and persistence rules.",
+      "surfaces": [
+        ".claude/commands/swarm-protocol.md",
+        ".claude/skills/swarm-protocol/SKILL.md"
+      ],
+      "evidence": [
+        {
+          "type": "file",
+          "ref": ".claude/commands/swarm-protocol.md"
+        },
+        {
+          "type": "file",
+          "ref": ".claude/skills/swarm-protocol/SKILL.md"
+        }
+      ],
+      "follow_up": [
+        "Open a narrow PR to align or retire the command mirror."
+      ],
+      "notes": "The skill-backed /swarm-protocol surface is current, but the legacy command file still exists in the live repo and should not drift indefinitely."
+    }
+  ]
+}

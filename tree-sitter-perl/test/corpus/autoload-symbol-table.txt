@@ -1,0 +1,882 @@
+==================
+AUTOLOAD subroutine
+==================
+
+sub AUTOLOAD {
+    my $self = shift;
+    my $method = $AUTOLOAD;
+    $method =~ s/.*:://;
+    
+    if ($method eq 'foo') {
+        return $self->_foo(@_);
+    }
+    
+    die "Undefined method: $method";
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (substitution_regexp
+            (regexp_content))))
+      (conditional_statement
+        (equality_expression
+          (scalar
+            (varname))
+          (string_literal
+            (string_content)))
+        (block
+          (expression_statement
+            (return_expression
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method)
+                (array
+                  (varname)))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))))
+
+==================
+Symbol table manipulation
+==================
+
+*foo = *bar;
+*foo = \&bar;
+*foo = \$bar;
+*foo = \@bar;
+*foo = \%bar;
+*{"main::baz"} = \&quux;
+*{$package . "::func"} = sub { print "Dynamic" };
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (hash
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (interpolated_string_literal
+                  (string_content)))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content)))))))))
+
+==================
+Symbol table deletion
+==================
+
+delete $main::{foo};
+delete $::{bar};
+delete ${^GLOBAL_PHASE};
+undef &foo;
+undef *foo;
+
+---
+
+(source_file
+  (expression_statement
+    (func1op_call_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (func1op_call_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (undef_expression
+      (function_call_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (undef_expression
+      (glob
+        (varname)))))
+
+==================
+Dynamic symbol creation
+==================
+
+*{$name} = sub { 
+    print "Dynamic function: $name\n";
+};
+
+*{$pkg . '::VERSION'} = \$version;
+
+for my $method (qw(get set clear)) {
+    *{$method} = sub {
+        my $self = shift;
+        $self->{"_$method"}(@_);
+    };
+}
+
+${$package . '::VAR'} = 42;
+@{$package . '::ARRAY'} = (1, 2, 3);
+%{$package . '::HASH'} = (key => 'value');
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (scalar
+                (varname))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))
+                  (escape_sequence)))))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (refgen_expression
+        (scalar
+          (varname)))))
+  (for_statement
+    (scalar
+      (varname))
+    (quoted_word_list
+      (string_content))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (assignment_expression
+                  (variable_declaration
+                    (scalar
+                      (varname)))
+                  (func1op_call_expression)))
+              (expression_statement
+                (coderef_call_expression
+                  (hash_element_expression
+                    (scalar
+                      (varname))
+                    (interpolated_string_literal
+                      (string_content
+                        (scalar
+                          (varname)))))
+                  (array
+                    (varname))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content))))))
+
+==================
+Symbol inspection
+==================
+
+if (defined &foo) {
+    print "foo is defined\n";
+}
+
+if (exists &{$package . '::bar'}) {
+    print "bar exists in $package\n";
+}
+
+my @symbols = keys %main::;
+my @subs = grep { defined &{"main::$_"} } keys %main::;
+
+can($obj, 'method');
+$obj->can('method');
+UNIVERSAL::can($obj, 'method');
+
+---
+
+(source_file
+  (conditional_statement
+    (func1op_call_expression
+      (function_call_expression
+        (function
+          (varname))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (conditional_statement
+    (func1op_call_expression
+      (function_call_expression
+        (function
+          (varname
+            (block
+              (expression_statement
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (string_literal
+                    (string_content)))))))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (func1op_call_expression
+        (hash
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (map_grep_expression
+        (block
+          (expression_statement
+            (func1op_call_expression
+              (function_call_expression
+                (function
+                  (varname
+                    (block
+                      (expression_statement
+                        (interpolated_string_literal
+                          (string_content
+                            (scalar
+                              (varname))))))))))))
+        (func1op_call_expression
+          (hash
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content))))))
+
+==================
+Import/export manipulation
+==================
+
+sub import {
+    my $class = shift;
+    my $caller = caller;
+    
+    for my $func (@_) {
+        *{$caller . '::' . $func} = \&{$func};
+    }
+}
+
+sub AUTOLOAD {
+    our $AUTOLOAD;
+    (my $method = $AUTOLOAD) =~ s/.*:://;
+    
+    no strict 'refs';
+    *{$AUTOLOAD} = sub { 
+        print "Autoloaded: $method\n";
+        goto &{"real_$method"} if defined &{"real_$method"};
+    };
+    goto &{$AUTOLOAD};
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (for_statement
+        (scalar
+          (varname))
+        (array
+          (varname))
+        (block
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (binary_expression
+                        (binary_expression
+                          (scalar
+                            (varname))
+                          (string_literal
+                            (string_content)))
+                        (scalar
+                          (varname)))))))
+              (refgen_expression
+                (function
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname)))))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (expression_statement
+        (binary_expression
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (scalar
+              (varname)))
+          (substitution_regexp
+            (regexp_content))))
+      (use_statement
+        (package)
+        (string_literal
+          (string_content)))
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (interpolated_string_literal
+                    (string_content
+                      (scalar
+                        (varname))
+                      (escape_sequence)))))
+              (expression_statement
+                (postfix_conditional_expression
+                  (goto_expression
+                    (function_call_expression
+                      (function
+                        (varname
+                          (block
+                            (expression_statement
+                              (interpolated_string_literal
+                                (string_content
+                                  (scalar
+                                    (varname))))))))))
+                  (func1op_call_expression
+                    (function_call_expression
+                      (function
+                        (varname
+                          (block
+                            (expression_statement
+                              (interpolated_string_literal
+                                (string_content
+                                  (scalar
+                                    (varname))))))))))))))))
+      (expression_statement
+        (goto_expression
+          (function_call_expression
+            (function
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))))))))
+
+==================
+Glob slots access
+==================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{NAME};
+*foo{PACKAGE};
+
+my $code = *foo{CODE};
+my $name = *foo{NAME};
+my $pkg = *foo{PACKAGE};
+
+---
+
+(source_file
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))))
+
+==================
+Method generation
+==================
+
+BEGIN {
+    for my $attr (qw(name age email)) {
+        my $method = $attr;
+        no strict 'refs';
+        *{$method} = sub {
+            my $self = shift;
+            $self->{$method} = shift if @_;
+            return $self->{$method};
+        };
+        
+        *{"get_$method"} = sub {
+            my $self = shift;
+            return $self->{$method};
+        };
+        
+        *{"set_$method"} = sub {
+            my $self = shift;
+            $self->{$method} = shift;
+        };
+    }
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (for_statement
+        (scalar
+          (varname))
+        (quoted_word_list
+          (string_content))
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (scalar
+                (varname))))
+          (use_statement
+            (package)
+            (string_literal
+              (string_content)))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (postfix_conditional_expression
+                      (assignment_expression
+                        (hash_element_expression
+                          (scalar
+                            (varname))
+                          (scalar
+                            (varname)))
+                        (func1op_call_expression))
+                      (array
+                        (varname))))
+                  (expression_statement
+                    (return_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))))))))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (interpolated_string_literal
+                        (string_content
+                          (scalar
+                            (varname))))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (return_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))))))))
+          (expression_statement
+            (assignment_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (interpolated_string_literal
+                        (string_content
+                          (scalar
+                            (varname))))))))
+              (anonymous_subroutine_expression
+                (block
+                  (expression_statement
+                    (assignment_expression
+                      (variable_declaration
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression)))
+                  (expression_statement
+                    (assignment_expression
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (scalar
+                          (varname)))
+                      (func1op_call_expression))))))))))))
+
+==================
+Namespace manipulation
+==================
+
+package Foo;
+
+sub new { bless {}, shift }
+
+package Bar;
+use parent -norequire, 'Foo';
+
+*new = \&Foo::new;
+*DESTROY = sub { };
+
+{
+    no warnings 'redefine';
+    *Foo::method = sub { 'overridden' };
+}
+
+local *CORE::GLOBAL::die = sub {
+    my $msg = shift;
+    Carp::confess($msg);
+};
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_hash_expression)
+            (func1op_call_expression))))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (anonymous_subroutine_expression
+        (block))))
+  (block_statement
+    (use_statement
+      (package)
+      (string_literal
+        (string_content)))
+    (expression_statement
+      (assignment_expression
+        (glob
+          (varname))
+        (anonymous_subroutine_expression
+          (block
+            (expression_statement
+              (string_literal
+                (string_content))))))))
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (glob
+          (varname)))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (func1op_call_expression)))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname)))))))))

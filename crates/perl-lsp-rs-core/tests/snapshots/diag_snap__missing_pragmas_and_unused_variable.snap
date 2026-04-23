@@ -1,0 +1,8 @@
+---
+source: crates/perl-lsp-diagnostics/tests/diagnostic_insta_snapshot_tests.rs
+expression: snapshot
+---
+PL100 | Information | (0, 0) | Consider adding 'use strict;' for better error checking | Add 'use strict;' at the top of the file
+PL101 | Information | (0, 0) | Consider adding 'use warnings;' for better error detection | Add 'use warnings;' at the top of the file
+PL102 | Warning | (3, 10) | Variable '$unused' is declared but never used -- prefix with '_' or remove it | Prefix as '_unused'
+PL200 | Warning | (0, 0) | This file has no package declaration. Add 'package MyModule;' to declare the package namespace. | Add 'package MyModule;' at the top of the file

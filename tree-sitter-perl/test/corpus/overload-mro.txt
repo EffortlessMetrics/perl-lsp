@@ -1,0 +1,1137 @@
+==================
+Basic overload
+==================
+
+package MyNumber;
+use overload
+    '+' => sub { $_[0]->{val} + $_[1] },
+    '-' => sub { $_[0]->{val} - $_[1] },
+    '*' => sub { $_[0]->{val} * $_[1] },
+    '/' => sub { $_[0]->{val} / $_[1] },
+    '""' => sub { $_[0]->{val} },
+    '0+' => sub { $_[0]->{val} },
+    fallback => 1;
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (binary_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (binary_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (binary_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (binary_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (autoquoted_bareword)
+      (number))))
+
+==================
+Overload with method names
+==================
+
+package MyClass;
+use overload
+    '+' => 'add',
+    '-' => 'subtract',
+    '*' => \&multiply,
+    '/' => \&divide,
+    '""' => 'stringify',
+    'bool' => 'to_bool',
+    '~~' => 'match',
+    fallback => 0;
+
+sub add { ... }
+sub subtract { ... }
+sub multiply { ... }
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (refgen_expression
+        (function
+          (varname)))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (yadayada))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (yadayada))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (yadayada)))))
+
+==================
+Comparison overloads
+==================
+
+package Comparable;
+use overload
+    '<' => sub { $_[0]{val} < $_[1] },
+    '<=' => sub { $_[0]{val} <= $_[1] },
+    '>' => sub { $_[0]{val} > $_[1] },
+    '>=' => sub { $_[0]{val} >= $_[1] },
+    '==' => sub { $_[0]{val} == $_[1] },
+    '!=' => sub { $_[0]{val} != $_[1] },
+    '<=>' => sub { $_[0]{val} <=> $_[1] },
+    'cmp' => sub { $_[0]{str} cmp $_[1] },
+    fallback => 1;
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (relational_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (relational_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (relational_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (relational_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (equality_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (equality_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (equality_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (equality_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (autoquoted_bareword)
+      (number))))
+
+==================
+Assignment overloads
+==================
+
+package Container;
+use overload
+    '=' => sub { $_[0]->clone },
+    '+=' => sub { $_[0]{val} += $_[1]; $_[0] },
+    '-=' => sub { $_[0]{val} -= $_[1]; $_[0] },
+    '*=' => sub { $_[0]{val} *= $_[1]; $_[0] },
+    '/=' => sub { $_[0]{val} /= $_[1]; $_[0] },
+    '%=' => sub { $_[0]{val} %= $_[1]; $_[0] },
+    '**=' => sub { $_[0]{val} **= $_[1]; $_[0] },
+    '<<=' => sub { $_[0]{val} <<= $_[1]; $_[0] },
+    '>>=' => sub { $_[0]{val} >>= $_[1]; $_[0] },
+    'x=' => sub { $_[0]{val} x= $_[1]; $_[0] },
+    '.=' => sub { $_[0]{val} .= $_[1]; $_[0] };
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (method_call_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (method)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))
+          (expression_statement
+            (array_element_expression
+              (container_variable
+                (varname))
+              (number))))))))
+
+==================
+Dereference overloads
+==================
+
+package SmartRef;
+use overload
+    '@{}' => sub { $_[0]{array} },
+    '%{}' => sub { $_[0]{hash} },
+    '&{}' => sub { $_[0]{code} },
+    '*{}' => sub { $_[0]{glob} },
+    '${}' => sub { \$_[0]{scalar} },
+    '~~' => sub { $_[0]->smart_match($_[1]) },
+    nomethod => sub { die "Invalid operation" };
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (refgen_expression
+              (hash_element_expression
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))
+                (autoquoted_bareword))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (method_call_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (method)
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (autoquoted_bareword)
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content)))))))))
+
+==================
+MRO C3
+==================
+
+package Parent;
+package Child;
+use mro 'c3';
+use parent 'Parent';
+
+package GrandChild;
+use mro 'c3';
+use parent 'Child';
+
+my @isa = mro::get_linear_isa('GrandChild');
+my @methods = mro::get_isarev('Parent');
+
+mro::set_mro('MyClass', 'c3');
+my $mro_type = mro::get_mro('MyClass');
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (function_call_expression
+        (function)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (function_call_expression
+        (function)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (string_literal
+          (string_content))))))
+
+==================
+MRO method resolution
+==================
+
+package Base;
+sub method { 'Base' }
+
+package Left;
+use parent 'Base';
+sub method { 'Left' }
+
+package Right;
+use parent 'Base';
+sub method { 'Right' }
+
+package Diamond;
+use mro 'c3';
+use parent qw(Left Right);
+
+package main;
+Diamond->method();
+mro::method_changed_in('Diamond');
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (string_literal
+          (string_content)))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (string_literal
+          (string_content)))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (string_literal
+          (string_content)))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (package_statement
+    (package))
+  (expression_statement
+    (method_call_expression
+      (bareword)
+      (method)))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (string_literal
+        (string_content)))))
+
+==================
+Next method
+==================
+
+package Parent;
+sub foo { 'Parent::foo' }
+
+package Child;
+use mro 'c3';
+use parent 'Parent';
+
+sub foo {
+    my $self = shift;
+    my $parent = $self->next::method();
+    return "Child::foo calling $parent";
+}
+
+sub bar {
+    my $self = shift;
+    return $self->maybe::next::method() || 'no parent bar';
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (string_literal
+          (string_content)))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (method_call_expression
+            (scalar
+              (varname))
+            (method))))
+      (expression_statement
+        (return_expression
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (return_expression
+          (binary_expression
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))
+            (string_literal
+              (string_content))))))))
+
+==================
+Overload constants
+==================
+
+use overload;
+
+my $obj = shift;
+my $str = overload::StrVal($obj);
+my $num = overload::Overloaded($obj);
+my $method = overload::Method($obj, '+');
+
+package MyClass;
+use overload
+    '""' => sub { overload::StrVal($_[0]) . '[stringified]' },
+    '0+' => sub { overload::NumVal($_[0]) },
+    fallback => 1;
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (func1op_call_expression)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (list_expression
+          (scalar
+            (varname))
+          (string_literal
+            (string_content))))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (binary_expression
+              (function_call_expression
+                (function)
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number)))
+              (string_literal
+                (string_content))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))))))
+      (autoquoted_bareword)
+      (number))))
+
+==================
+Complex overload scenarios
+==================
+
+package Matrix;
+use overload
+    '+' => sub {
+        my ($m1, $m2, $swap) = @_;
+        # Matrix addition
+    },
+    '*' => sub {
+        my ($m1, $m2, $swap) = @_;
+        if (!ref $m2) {
+            # Scalar multiplication
+        } else {
+            # Matrix multiplication
+        }
+    },
+    '**' => sub {
+        my ($m, $n, $swap) = @_;
+        # Matrix power
+    },
+    'neg' => sub {
+        # Negation
+    },
+    '""' => 'to_string',
+    'abs' => 'determinant',
+    fallback => 0;
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname))
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))
+              (array
+                (varname))))
+          (comment)))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname))
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))
+              (array
+                (varname))))
+          (conditional_statement
+            (unary_expression
+              (func1op_call_expression
+                (scalar
+                  (varname))))
+            (block
+              (comment))
+            (else
+              (block
+                (comment))))))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname))
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))
+              (array
+                (varname))))
+          (comment)))
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (comment)))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number))))

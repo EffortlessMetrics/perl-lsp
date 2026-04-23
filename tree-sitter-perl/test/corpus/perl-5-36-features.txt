@@ -1,0 +1,1017 @@
+==================
+Class declaration
+==================
+
+use feature 'class';
+use v5.36;
+
+class Point {
+    field $x :param = 0;
+    field $y :param = 0;
+    
+    method move($dx, $dy) {
+        $x += $dx;
+        $y += $dy;
+    }
+    
+    method describe() {
+        return "Point at ($x, $y)";
+    }
+}
+
+class Point3D :isa(Point) {
+    field $z :param = 0;
+    
+    ADJUST {
+        $z //= 0;
+    }
+    
+    method move($dx, $dy, $dz = 0) {
+        $self->SUPER::move($dx, $dy);
+        $z += $dz;
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_version_statement
+    (version))
+  (class_statement
+    (package)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (attrlist
+              (attribute
+                (attribute_name))))
+          (number)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (attrlist
+              (attribute
+                (attribute_name))))
+          (number)))
+      (method_declaration_statement
+        (bareword)
+        (signature
+          (mandatory_parameter
+            (scalar
+              (varname)))
+          (mandatory_parameter
+            (scalar
+              (varname))))
+        (block
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (scalar
+                (varname))))
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (scalar
+                (varname))))))
+      (method_declaration_statement
+        (bareword)
+        (prototype)
+        (block
+          (expression_statement
+            (return_expression
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))
+                  (scalar
+                    (varname))))))))))
+  (class_statement
+    (package)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (attrlist
+              (attribute
+                (attribute_name))))
+          (number)))
+      (class_phaser_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (number)))))
+      (method_declaration_statement
+        (bareword)
+        (signature
+          (mandatory_parameter
+            (scalar
+              (varname)))
+          (mandatory_parameter
+            (scalar
+              (varname)))
+          (optional_parameter
+            (scalar
+              (varname))
+            (number)))
+        (block
+          (expression_statement
+            (method_call_expression
+              (scalar
+                (varname))
+              (method)
+              (list_expression
+                (scalar
+                  (varname))
+                (scalar
+                  (varname)))))
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (scalar
+                (varname)))))))))
+
+==================
+Defer statement
+==================
+
+use feature 'defer';
+
+sub process_file {
+    my $filename = shift;
+    open my $fh, '<', $filename or die $!;
+    
+    defer {
+        close $fh;
+        print "File closed\n";
+    }
+    
+    defer { unlink $tempfile if $tempfile }
+    
+    while (<$fh>) {
+        process_line($_);
+        defer { print "Line processed\n" }
+    }
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (lowprec_logical_expression
+          (ambiguous_function_call_expression
+            (function)
+            (list_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (string_literal
+                (string_content))
+              (scalar
+                (varname))))
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))))
+      (defer_statement
+        (block
+          (expression_statement
+            (func1op_call_expression
+              (scalar
+                (varname))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence)))))))
+      (defer_statement
+        (block
+          (expression_statement
+            (postfix_conditional_expression
+              (ambiguous_function_call_expression
+                (function)
+                (scalar
+                  (varname)))
+              (scalar
+                (varname))))))
+      (loop_statement
+        (readline_expression
+          (filehandle
+            (varname)))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))
+          (defer_statement
+            (block
+              (expression_statement
+                (ambiguous_function_call_expression
+                  (function)
+                  (interpolated_string_literal
+                    (string_content
+                      (escape_sequence))))))))))))
+
+==================
+Try catch finally
+==================
+
+use feature 'try';
+
+try {
+    dangerous_operation();
+}
+catch ($e) {
+    warn "Error: $e";
+    recover();
+}
+finally {
+    cleanup();
+}
+
+try {
+    $result = may_fail();
+} catch ($e) {
+    $result = default_value();
+}
+
+my $val = try { 
+    compute() 
+} catch ($e) { 
+    0 
+};
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (try_catch_statement)
+  (statement
+    (assignment)))
+
+==================
+Builtin functions
+==================
+
+use builtin qw(true false is_bool weaken unweaken blessed refaddr reftype);
+
+my $yes = true;
+my $no = false;
+
+if (is_bool($value)) {
+    print "It's a boolean\n";
+}
+
+weaken($ref);
+unweaken($ref);
+
+my $addr = refaddr($ref);
+my $type = reftype($ref);
+my $class = blessed($ref);
+
+use builtin 'trim';
+my $clean = trim($string);
+
+use builtin 'ceil', 'floor';
+my $up = ceil(3.14);
+my $down = floor(3.14);
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (boolean)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (boolean)))
+  (conditional_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (number)))))
+
+==================
+Signatures with types
+==================
+
+use feature 'signatures';
+
+sub typed_params(Str $name, Int $age, ArrayRef $data) {
+    return {
+        name => $name,
+        age => $age,
+        data => $data,
+    };
+}
+
+sub optional_typed(Str $required, Maybe[Int] $optional = undef) {
+    # ...
+}
+
+sub slurpy_typed(Str $first, @rest) {
+    # ...
+}
+
+method set_value(Num $val :optional) {
+    $self->{value} = $val // 0;
+}
+
+---
+
+(source_file
+  (use_statement)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (subroutine_declaration)
+  (method_declaration))
+
+==================
+Field declarations with attributes
+==================
+
+class User {
+    field $id :param :reader;
+    field $name :param :reader :writer;
+    field $email :param :reader :writer(set_email);
+    field $password :writer(set_password);
+    field $created = time();
+    field @roles :param = ();
+    field %metadata;
+    
+    ADJUST {
+        $password //= generate_password();
+        push @roles, 'user' unless @roles;
+    }
+    
+    method add_role($role) {
+        push @roles, $role unless grep { $_ eq $role } @roles;
+    }
+}
+
+---
+
+(source_file
+  (class_statement
+    (package)
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))
+          (attrlist
+            (attribute
+              (attribute_name))
+            (attribute
+              (attribute_name)))))
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))
+          (attrlist
+            (attribute
+              (attribute_name))
+            (attribute
+              (attribute_name))
+            (attribute
+              (attribute_name)))))
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))
+          (attrlist
+            (attribute
+              (attribute_name))
+            (attribute
+              (attribute_name))
+            (attribute
+              (attribute_name)
+              (attribute_value)))))
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))
+          (attrlist
+            (attribute
+              (attribute_name)
+              (attribute_value)))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func0op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (array
+              (varname))
+            (attrlist
+              (attribute
+                (attribute_name))))
+          (stub_expression)))
+      (expression_statement
+        (variable_declaration
+          (hash
+            (varname))))
+      (class_phaser_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (function_call_expression
+                (function))))
+          (expression_statement
+            (postfix_conditional_expression
+              (ambiguous_function_call_expression
+                (function)
+                (list_expression
+                  (array
+                    (varname))
+                  (string_literal
+                    (string_content))))
+              (array
+                (varname))))))
+      (method_declaration_statement
+        (bareword)
+        (signature
+          (mandatory_parameter
+            (scalar
+              (varname))))
+        (block
+          (expression_statement
+            (postfix_conditional_expression
+              (ambiguous_function_call_expression
+                (function)
+                (list_expression
+                  (array
+                    (varname))
+                  (scalar
+                    (varname))))
+              (map_grep_expression
+                (block
+                  (expression_statement
+                    (equality_expression
+                      (scalar
+                        (varname))
+                      (scalar
+                        (varname)))))
+                (array
+                  (varname))))))))))
+
+==================
+Multi-phase blocks
+==================
+
+class Complex {
+    field $data;
+    
+    ADJUST {
+        $data = {};
+    }
+    
+    ADJUST {
+        $data->{initialized} = 1;
+    }
+    
+    method BUILD {
+        # Constructor logic
+    }
+    
+    method DEMOLISH {
+        # Destructor logic
+    }
+}
+
+ADJUST {
+    # Package-level ADJUST
+}
+
+---
+
+(source_file
+  (class_statement
+    (package)
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (class_phaser_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (scalar
+                (varname))
+              (anonymous_hash_expression)))))
+      (class_phaser_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (hash_element_expression
+                (scalar
+                  (varname))
+                (autoquoted_bareword))
+              (number)))))
+      (method_declaration_statement
+        (bareword)
+        (block
+          (comment)))
+      (method_declaration_statement
+        (bareword)
+        (block
+          (comment)))))
+  (class_phaser_statement
+    (block
+      (comment))))
+
+==================
+Modern match operator
+==================
+
+use feature 'switch';
+
+given ($value) {
+    when (undef) { say "undefined" }
+    when (true) { say "true value" }
+    when (false) { say "false value" }
+    when (/^\d+$/) { say "number: $_" }
+    when ([1..10]) { say "in range" }
+    when (\@array) { say "in array" }
+    when (\%hash) { say "in hash" }
+    when (\&code) { say "matches code" }
+    default { say "something else" }
+}
+
+my $result = $value ~~ $pattern;
+my $match = $value ~~ [1, 2, 3];
+my $in_hash = $key ~~ %hash;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (given_statement
+    (scalar
+      (varname))
+    (block
+      (when_statement
+        (undef_expression)
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (boolean)
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (boolean)
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (match_regexp
+          (regexp_content
+            (escape_sequence)))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))))
+      (when_statement
+        (anonymous_array_expression
+          (binary_expression
+            (number)
+            (number)))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (refgen_expression
+          (array
+            (varname)))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (refgen_expression
+          (hash
+            (varname)))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (when_statement
+        (refgen_expression
+          (function
+            (varname)))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))
+      (default_statement
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content))))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (equality_expression
+        (scalar
+          (varname))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (equality_expression
+        (scalar
+          (varname))
+        (anonymous_array_expression
+          (list_expression
+            (number)
+            (number)
+            (number))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (equality_expression
+        (scalar
+          (varname))
+        (hash
+          (varname))))))
+
+==================
+Roles and composition
+==================
+
+role Printable {
+    method print() { ... }
+    method format() { "default" }
+}
+
+role Comparable {
+    method compare($other) { ... }
+}
+
+class Document :does(Printable) :does(Comparable) {
+    field $content :param;
+    
+    method print() {
+        print $content;
+    }
+    
+    method compare($other) {
+        $content cmp $other->content;
+    }
+}
+
+---
+
+(source_file
+  (role_statement
+    (package)
+    (block
+      (method_declaration_statement
+        (bareword)
+        (prototype)
+        (block
+          (expression_statement
+            (yadayada))))
+      (method_declaration_statement
+        (bareword)
+        (prototype)
+        (block
+          (expression_statement
+            (interpolated_string_literal
+              (string_content)))))))
+  (role_statement
+    (package)
+    (block
+      (method_declaration_statement
+        (bareword)
+        (signature
+          (mandatory_parameter
+            (scalar
+              (varname))))
+        (block
+          (expression_statement
+            (yadayada))))))
+  (class_statement
+    (package)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value))
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))
+          (attrlist
+            (attribute
+              (attribute_name)))))
+      (method_declaration_statement
+        (bareword)
+        (prototype)
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (method_declaration_statement
+        (bareword)
+        (signature
+          (mandatory_parameter
+            (scalar
+              (varname))))
+        (block
+          (expression_statement
+            (equality_expression
+              (scalar
+                (varname))
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method)))))))))
+
+==================
+Async await syntax
+==================
+
+use Future::AsyncAwait;
+
+async sub fetch_data {
+    my $url = shift;
+    my $response = await fetch($url);
+    my $data = await $response->json;
+    return $data;
+}
+
+async method process {
+    try {
+        my $result = await $self->compute;
+        await $self->save($result);
+    }
+    catch ($e) {
+        await $self->log_error($e);
+    }
+}
+
+my $future = async sub {
+    await sleep(1);
+    return 42;
+}->();
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (await_expression
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (await_expression
+            (method_call_expression
+              (scalar
+                (varname))
+              (method)))))
+      (expression_statement
+        (return_expression
+          (scalar
+            (varname))))))
+  (method_declaration_statement
+    (bareword)
+    (block
+      (try_statement
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (await_expression
+                (method_call_expression
+                  (scalar
+                    (varname))
+                  (method)))))
+          (expression_statement
+            (await_expression
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method)
+                (scalar
+                  (varname))))))
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (await_expression
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method)
+                (scalar
+                  (varname)))))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (coderef_call_expression
+        (anonymous_subroutine_expression
+          (block
+            (expression_statement
+              (await_expression
+                (func1op_call_expression
+                  (number))))
+            (expression_statement
+              (return_expression
+                (number)))))))))

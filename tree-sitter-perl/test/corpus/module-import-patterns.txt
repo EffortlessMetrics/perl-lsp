@@ -1,0 +1,718 @@
+==================
+Exporter patterns
+==================
+
+package MyModule;
+use Exporter 'import';
+
+our @EXPORT = qw(func1 func2 $var1 @array1 %hash1);
+our @EXPORT_OK = qw(func3 func4 $var2 CONSTANT);
+our %EXPORT_TAGS = (
+    all => [@EXPORT, @EXPORT_OK],
+    functions => [qw(func1 func2 func3 func4)],
+    variables => [qw($var1 $var2 @array1 %hash1)],
+    constants => [qw(CONSTANT PI ANSWER)],
+);
+
+use MyModule;  # Imports @EXPORT
+use MyModule ();  # Imports nothing
+use MyModule qw(func3 $var2);  # Selective import
+use MyModule ':all';  # Import tag
+use MyModule ':functions', ':constants';  # Multiple tags
+use MyModule qw(:variables func3);  # Mix tags and names
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (hash
+          (varname)))
+      (list_expression
+        (autoquoted_bareword)
+        (anonymous_array_expression
+          (list_expression
+            (array
+              (varname))
+            (array
+              (varname))))
+        (autoquoted_bareword)
+        (anonymous_array_expression
+          (quoted_word_list
+            (string_content)))
+        (autoquoted_bareword)
+        (anonymous_array_expression
+          (quoted_word_list
+            (string_content)))
+        (autoquoted_bareword)
+        (anonymous_array_expression
+          (quoted_word_list
+            (string_content))))))
+  (use_statement
+    (package))
+  (comment)
+  (use_statement
+    (package)
+    (stub_expression))
+  (comment)
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (comment)
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (comment)
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (comment)
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (comment))
+
+==================
+Parent and base modules
+==================
+
+package Child;
+use parent 'Parent';
+use parent qw(Parent1 Parent2);
+use parent -norequire, 'Parent';
+
+package Old;
+use base 'Base';
+use base qw(Base1 Base2);
+
+package Multi;
+use parent qw(
+    Role::One
+    Role::Two
+    Base::Class
+);
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content))))
+
+==================
+Version requirements
+==================
+
+use Module 1.23;
+use Module v1.2.3;
+use Module 1.23 qw(func);
+use Module '1.23';
+
+use Module 1.00 ();
+use Module '2.34' qw(:all);
+
+require Module;
+require Module 1.23;
+
+use Module 1.23 qw(import1), 2.34 qw(import2);
+
+---
+
+(source_file
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (use_statement)
+  (require_statement)
+  (require_statement)
+  (use_statement))
+
+==================
+Import with parameters
+==================
+
+use Module key => 'value', option => 1;
+use Module { config => 'file.conf' };
+use Module (
+    option1 => 'value1',
+    option2 => 'value2',
+);
+
+use Module -arg1, -arg2 => 'value';
+use Module qw(-feature1 -feature2);
+
+use Module
+    feature => 'enabled',
+    debug   => 1,
+    verbose => 0;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number)))
+  (use_statement
+    (package)
+    (anonymous_hash_expression
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content)))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number)
+      (autoquoted_bareword)
+      (number))))
+
+==================
+Sub::Exporter patterns
+==================
+
+use MyModule {
+    exports => [qw(func1 func2)],
+    groups => {
+        default => [qw(func1)],
+    },
+    collectors => ['INIT'],
+};
+
+use Module::WithSubExporter
+    func1 => { -as => 'my_func1' },
+    func2 => { -as => 'other_func', option => 'value' },
+    ':utils' => { -prefix => 'util_' },
+    ':all' => { -suffix => '_new' };
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (anonymous_hash_expression
+      (list_expression
+        (autoquoted_bareword)
+        (list_expression
+          (anonymous_array_expression
+            (quoted_word_list
+              (string_content)))
+          (autoquoted_bareword)
+          (anonymous_hash_expression
+            (list_expression
+              (autoquoted_bareword)
+              (list_expression
+                (anonymous_array_expression
+                  (quoted_word_list
+                    (string_content))))))
+          (autoquoted_bareword)
+          (anonymous_array_expression
+            (string_literal
+              (string_content)))))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (anonymous_hash_expression
+        (list_expression
+          (unary_expression
+            (autoquoted_bareword))
+          (string_literal
+            (string_content))))
+      (autoquoted_bareword)
+      (anonymous_hash_expression
+        (list_expression
+          (unary_expression
+            (autoquoted_bareword))
+          (string_literal
+            (string_content))
+          (autoquoted_bareword)
+          (string_literal
+            (string_content))))
+      (string_literal
+        (string_content))
+      (anonymous_hash_expression
+        (list_expression
+          (unary_expression
+            (autoquoted_bareword))
+          (string_literal
+            (string_content))))
+      (string_literal
+        (string_content))
+      (anonymous_hash_expression
+        (list_expression
+          (unary_expression
+            (autoquoted_bareword))
+          (string_literal
+            (string_content)))))))
+
+==================
+Conditional imports
+==================
+
+BEGIN {
+    if ($ENV{DEBUG}) {
+        require Data::Dumper;
+        Data::Dumper->import();
+    }
+}
+
+use if $] >= 5.010, 'feature', qw(say state);
+use if $^O eq 'MSWin32', 'Win32::API';
+
+eval { require Optional::Module };
+if (!$@) {
+    Optional::Module->import(qw(feature));
+}
+
+use constant HAVE_MODULE => eval { require Some::Module; 1 };
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (conditional_statement
+        (hash_element_expression
+          (container_variable
+            (varname))
+          (autoquoted_bareword))
+        (block
+          (expression_statement
+            (require_expression
+              (bareword)))
+          (expression_statement
+            (method_call_expression
+              (bareword)
+              (method)))))))
+  (use_statement
+    (package)
+    (list_expression
+      (relational_expression
+        (scalar
+          (varname))
+        (number))
+      (string_literal
+        (string_content))
+      (quoted_word_list
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (equality_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (require_expression
+            (bareword))))))
+  (conditional_statement
+    (unary_expression
+      (scalar
+        (varname)))
+    (block
+      (expression_statement
+        (method_call_expression
+          (bareword)
+          (method)
+          (quoted_word_list
+            (string_content))))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (eval_expression
+        (block
+          (expression_statement
+            (require_expression
+              (bareword)))
+          (expression_statement
+            (number)))))))
+
+==================
+Aliasing imports
+==================
+
+use Module qw(
+    long_function_name
+    another_long_name
+);
+
+BEGIN {
+    *short = \&Module::long_function_name;
+    *alias = \&Module::another_long_name;
+}
+
+use Package::Alias 'Long::Package::Name' => 'Short';
+
+use aliased 'My::Company::Namespace::Customer' => 'Customer';
+use aliased 'My::Company::Namespace::Product';  # Aliased to 'Product'
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (phaser_statement
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname))
+          (refgen_expression
+            (function
+              (varname)))))
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname))
+          (refgen_expression
+            (function
+              (varname)))))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (comment))
+
+==================
+Module loading patterns
+==================
+
+use lib '/path/to/lib';
+use lib "$ENV{HOME}/perl5/lib";
+use lib qw(/path1 /path2);
+
+use local::lib;
+use local::lib '~/perl5';
+
+no lib '/unwanted/path';
+
+BEGIN {
+    unshift @INC, '/my/lib';
+    push @INC, sub {
+        my ($self, $file) = @_;
+        # Custom loader
+    };
+}
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (hash_element_expression
+          (container_variable
+            (varname))
+          (autoquoted_bareword)))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname))
+            (string_literal
+              (string_content)))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname))
+            (anonymous_subroutine_expression
+              (block
+                (expression_statement
+                  (assignment_expression
+                    (variable_declaration
+                      (scalar
+                        (varname))
+                      (scalar
+                        (varname)))
+                    (array
+                      (varname))))
+                (comment))))))))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (interpolated_string_literal
+      (string_content
+        (scalar
+          (varname))))))
+
+==================
+Import levels and scopes
+==================
+
+package Foo;
+use strict;
+use warnings;
+
+{
+    use Module qw(func);
+    func();  # Available here
+}
+# func() not available here
+
+sub function {
+    use Module::OnlyHere;
+    # Module::OnlyHere available in this sub
+}
+
+no Module;  # Unimport
+no Module qw(specific_feature);
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (block_statement
+    (use_statement
+      (package)
+      (quoted_word_list
+        (string_content)))
+    (expression_statement
+      (function_call_expression
+        (function)))
+    (comment))
+  (comment)
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (use_statement
+        (package))
+      (comment)))
+  (use_statement
+    (package))
+  (comment)
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content))))
+
+==================
+Pragma imports
+==================
+
+use strict;
+use strict 'refs';
+use strict qw(refs subs vars);
+
+use warnings;
+use warnings 'all';
+use warnings FATAL => 'all';
+use warnings FATAL => qw(syntax);
+no warnings 'experimental::signatures';
+
+use feature ':5.36';
+use feature qw(say state signatures);
+
+use experimental qw(signatures postderef);
+
+use open ':std', ':encoding(UTF-8)';
+use integer;
+use bigint;
+use constant PI => 3.14159;
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (quoted_word_list
+        (string_content))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (number))))

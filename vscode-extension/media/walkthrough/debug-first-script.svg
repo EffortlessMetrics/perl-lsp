@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+  <rect width="800" height="450" fill="#111827"/>
+  <rect x="40" y="20" width="720" height="300" rx="6" fill="#1e293b"/>
+  <text x="60" y="55" font-family="monospace" font-size="13" fill="#6b7280">script.pl — debugging</text>
+  <circle cx="55" cy="87" r="7" fill="#ef4444"/>
+  <text x="70" y="92" font-family="monospace" font-size="14" fill="#d1d5db">my $x = 10;</text>
+  <text x="70" y="115" font-family="monospace" font-size="14" fill="#d1d5db">my $y = 20;</text>
+  <rect x="40" y="122" width="720" height="25" fill="#1d4ed8" opacity="0.3"/>
+  <text x="70" y="138" font-family="monospace" font-size="14" fill="#fbbf24">my $result = $x + $y;</text>
+  <text x="70" y="161" font-family="monospace" font-size="14" fill="#d1d5db">print "Result: $result\n";</text>
+  <rect x="40" y="330" width="350" height="100" rx="6" fill="#0f172a"/>
+  <text x="60" y="358" font-family="sans-serif" font-size="12" fill="#6b7280">VARIABLES</text>
+  <text x="60" y="382" font-family="monospace" font-size="13" fill="#34d399">$x</text>
+  <text x="90" y="382" font-family="monospace" font-size="13" fill="#d1d5db">= 10</text>
+  <text x="60" y="405" font-family="monospace" font-size="13" fill="#34d399">$y</text>
+  <text x="90" y="405" font-family="monospace" font-size="13" fill="#d1d5db">= 20</text>
+  <rect x="410" y="330" width="350" height="100" rx="6" fill="#0f172a"/>
+  <text x="430" y="358" font-family="sans-serif" font-size="12" fill="#6b7280">DEBUG TOOLBAR</text>
+  <text x="430" y="390" font-family="sans-serif" font-size="13" fill="#94a3b8">F5 Continue  F10 Step Over</text>
+  <text x="430" y="413" font-family="sans-serif" font-size="13" fill="#94a3b8">F11 Step Into  Shift+F5 Stop</text>
+</svg>

@@ -1,0 +1,50 @@
+name: Perl LSP consumer example
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**/*.pl'
+      - '**/*.pm'
+      - 'Makefile.PL'
+      - 'Build.PL'
+      - 'dist.ini'
+      - 'cpanfile'
+
+jobs:
+  lsp-ci:
+    name: Perl LSP consumer example (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            distribution: ExtUtils::MakeMaker
+            test-command: perl Makefile.PL && make test
+          - os: macos-latest
+            distribution: Module::Build
+            test-command: perl Build.PL && ./Build test
+          - os: windows-latest
+            distribution: Dist::Zilla
+            test-command: dzil test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Perl LSP
+        uses: EffortlessMetrics/perl-lsp/.github/actions/setup-perl-lsp@master
+        with:
+          version: latest
+          cache: true
+
+      - name: Confirm the installed binary
+        run: perllsp --health
+
+      - name: Run the project test command
+        shell: bash
+        run: |
+          echo "Run your ${{ matrix.distribution }} command here:"
+          echo "${{ matrix.test-command }}"

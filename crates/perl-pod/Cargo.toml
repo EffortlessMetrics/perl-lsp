@@ -1,0 +1,25 @@
+[package]
+name = "perl-pod"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "POD documentation extractor for Perl .pm files"
+readme = "README.md"
+documentation = "https://docs.rs/perl-pod"
+keywords = ["perl", "pod", "documentation", "parser", "lsp"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

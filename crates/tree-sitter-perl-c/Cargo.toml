@@ -1,0 +1,58 @@
+[package]
+name = "tree-sitter-perl-c"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Tree-sitter Perl grammar binding (C FFI). Conventional C/tree-sitter reference implementation, kept alongside the native v3 parser for compatibility and comparison."
+readme = "README.md"
+documentation = "https://docs.rs/tree-sitter-perl-c"
+keywords = ["perl", "parser", "tree-sitter", "grammar", "ffi"]
+categories = ["development-tools", "parser-implementations", "parsing"]
+include = [
+    "src/**",
+    "c-src/**",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
+
+[dependencies]
+tree-sitter = "0.26.6"
+
+[package.metadata.docs.rs]
+# docs.rs runs on Linux with a C toolchain available, so the build succeeds.
+all-features = true
+default-target = "x86_64-unknown-linux-gnu"
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dev-dependencies]
+
+[features]
+default = ["c-scanner"]
+c-scanner = []
+test-utils = []
+
+[lib]
+name = "tree_sitter_perl_c"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bench_parser_c"
+path = "src/bin/bench_parser.rs"
+required-features = ["test-utils"]
+
+[[bin]]
+name = "parse_c"
+path = "src/bin/parse_c.rs"
+
+[build-dependencies]
+cc = "1.2.60"
+
+[lints]
+workspace = true

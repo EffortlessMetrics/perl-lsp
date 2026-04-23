@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+expression: "parse_sexp(\"print $msg if $enabled; warn $msg unless $quiet;\")"
+---
+(source_file (statement_modifier_if (expression_statement (call print ((variable $ msg)))) (variable $ enabled)) (statement_modifier_unless (expression_statement (call warn ((variable $ msg)))) (variable $ quiet)))

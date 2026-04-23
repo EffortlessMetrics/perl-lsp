@@ -1,0 +1,31 @@
+[package]
+name = "perl-lsp-perltidy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SRP microcrate for perltidy-based Perl formatting integration"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-perltidy"
+keywords = ["perl", "lsp", "perltidy", "formatting"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-subprocess-runtime = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

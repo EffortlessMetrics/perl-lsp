@@ -1,0 +1,41 @@
+[package]
+name = "perl-parser-pest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-parser-pest"
+description = "Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer"
+readme = "README.md"
+keywords = ["perl", "parser", "pest", "peg", "ast"]
+categories = ["parsing", "development-tools"]
+include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+pest = "2.8.6"
+pest_derive = "2.8.6"
+regex.workspace = true
+stacker = "0.1.23"
+thiserror.workspace = true
+serde = { workspace = true }
+
+[features]
+default = []
+# Backward-compatible feature alias; serde support is always enabled.
+serde = []
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lib]
+doctest = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

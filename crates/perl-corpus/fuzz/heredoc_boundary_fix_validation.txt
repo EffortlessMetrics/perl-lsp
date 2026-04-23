@@ -1,0 +1,32 @@
+# Heredoc Boundary Fix Validation Cases (PR #153)
+# Successfully resolved critical off-by-one error in parse_heredoc_delimiter
+
+# Original crash reproducer (now safe)
+xqN<<"
+
+# Empty delimiter edge cases (now safe)
+<<""
+<<''
+
+# Malformed delimiter cases (now safe)
+<<"
+<<'
+<<"a
+<<'a
+
+# Single character delimiters (now safe)
+<<"a"
+<<'a'
+
+# Complex edge cases (now safe)
+<<"\""
+<<'\''
+
+# Integration cases (working correctly)
+my $text = <<"EOF";
+test content
+EOF
+
+my $text = <<'EOF';
+test content
+EOF

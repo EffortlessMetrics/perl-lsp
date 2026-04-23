@@ -1,0 +1,9 @@
+# rustfmt configuration for stable toolchain
+max_width = 100
+use_small_heuristics = "Max"
+# The following options are only available in nightly:
+# group_imports = "StdExternalCrate"
+# imports_granularity = "Crate"  
+# format_macro_bodies = false
+# normalize_doc_attributes = true
+# wrap_comments = true

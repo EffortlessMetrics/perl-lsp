@@ -1,0 +1,303 @@
+name: Release Orchestration
+
+# Master release workflow that orchestrates all release tasks
+# Triggered manually after version bump PR is merged
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.x.y)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        type: boolean
+        default: false
+      skip_crates:
+        description: 'Skip crates.io publishing'
+        required: false
+        type: boolean
+        default: false
+      skip_extension:
+        description: 'Skip VSCode extension publishing'
+        required: false
+        type: boolean
+        default: false
+      skip_docker:
+        description: 'Skip Docker image publishing'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-orchestration-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
+      - name: Resolve and validate version
+        id: resolve
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          TAG="v${VERSION}"
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid version format: ${VERSION}"
+            exit 1
+          fi
+
+          WORKSPACE_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          if [ "$WORKSPACE_VERSION" != "$VERSION" ]; then
+            echo "::error::Workspace version ${WORKSPACE_VERSION} does not match release version ${VERSION}"
+            exit 1
+          fi
+
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "✅ Version validated: ${VERSION}"
+
+      - name: Check default branch and CI status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          DEFAULT_SHA=$(git rev-parse "origin/${DEFAULT_BRANCH}")
+          HEAD_SHA="${GITHUB_SHA}"
+
+          if [ "$HEAD_SHA" != "$DEFAULT_SHA" ]; then
+            echo "::error::Release must run from ${DEFAULT_BRANCH} tip. Workflow is on ${HEAD_SHA}, ${DEFAULT_BRANCH} is ${DEFAULT_SHA}"
+            exit 1
+          fi
+
+          echo "Checking CI status for ${HEAD_SHA}..."
+          CI_STATE="$(gh api repos/${{ github.repository }}/commits/${HEAD_SHA}/status --jq '.state')"
+          if [ -z "$CI_STATE" ]; then
+            echo "::error::Unable to determine CI state for ${HEAD_SHA}"
+            exit 1
+          fi
+
+          if [ "$CI_STATE" != "success" ]; then
+            echo "::error::Commit ${HEAD_SHA} is not in a successful CI state (${CI_STATE})"
+            exit 1
+          fi
+
+          echo "✅ CI state verified: ${CI_STATE}"
+
+      - name: Check for unreleased changes
+        run: |
+          if grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            echo "::warning::CHANGELOG.md has unreleased section"
+          fi
+
+          echo "✅ Changelog checked"
+
+      - name: Verify curated release notes exist
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          NOTE_FILE="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTE_FILE" ]; then
+            echo "::error file=$NOTE_FILE::Release notes file missing: $NOTE_FILE"
+            echo "::error::Every release must ship a curated note at docs/releases/${TAG}.md before tagging."
+            echo "::error::See RELEASE.md \"Release History Updates\" for the template."
+            exit 1
+          fi
+          if ! head -1 "$NOTE_FILE" | grep -q '^---$'; then
+            echo "::error file=$NOTE_FILE::Release notes must open with a YAML frontmatter block (---)."
+            exit 1
+          fi
+          echo "✅ Found curated release notes: $NOTE_FILE"
+
+      - name: Summary
+        run: |
+          echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: ${{ github.event.inputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Prerelease**: ${{ github.event.inputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip crates.io**: ${{ github.event.inputs.skip_crates }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip VSCode**: ${{ github.event.inputs.skip_extension }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip Docker**: ${{ github.event.inputs.skip_docker }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "All checks passed! Proceeding with release." >> "$GITHUB_STEP_SUMMARY"
+
+  create-tag:
+    name: Create Release Tag
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG="${{ needs.validate.outputs.tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Extract changelog section for this version
+          CHANGELOG_SECTION="$(mktemp)"
+          awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { in_section=1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md > "$CHANGELOG_SECTION"
+
+          TAG_MESSAGE="$(mktemp)"
+          {
+            echo "Release ${TAG}"
+            echo
+            if [ -s "$CHANGELOG_SECTION" ]; then
+              cat "$CHANGELOG_SECTION"
+            else
+              echo "Automated release from workspace changelog."
+            fi
+          } > "$TAG_MESSAGE"
+
+          # Create annotated tag with changelog
+          git tag -a "$TAG" -F "$TAG_MESSAGE"
+          rm -f "$CHANGELOG_SECTION" "$TAG_MESSAGE"
+
+          git push origin "$TAG"
+
+          echo "Created tag: $TAG"
+
+      - name: Summary
+        run: |
+          echo "## Tag Created :bookmark:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag**: v${{ github.event.inputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Pushed**: Yes" >> "$GITHUB_STEP_SUMMARY"
+
+  trigger-release:
+    name: Trigger Release Workflows
+    needs: [create-tag, validate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Dispatch release workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.validate.outputs.tag }}"
+          VERSION="${{ needs.validate.outputs.version }}"
+          REF="${TAG}"
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
+
+          echo "Dispatching release workflow for ${TAG}"
+          gh api \
+            -X POST \
+            /repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+            -f ref="${REF}" \
+            -F inputs[tag]="${TAG}" \
+            -F inputs[prerelease]="${PRERELEASE}"
+
+          if [ "${{ github.event.inputs.skip_crates }}" != "true" ]; then
+            echo "Dispatching crates publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/publish-crates.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}" \
+              -F inputs[dry_run]="false"
+          else
+            echo "Skipping crates publish workflow due to skip_crates=true"
+          fi
+
+          if [ "${{ github.event.inputs.skip_extension }}" != "true" ]; then
+            echo "Dispatching VSCode extension publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/publish-extension.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}"
+          else
+            echo "Skipping VSCode publish via orchestration due to skip_extension=true"
+          fi
+
+          if [ "${{ github.event.inputs.skip_docker }}" != "true" ]; then
+            echo "Dispatching Docker publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/docker-publish.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}" \
+              -F inputs[push]="true"
+          else
+            echo "Skipping Docker publish via orchestration due to skip_docker=true"
+          fi
+
+      - name: Summary
+        run: |
+          echo "## Release Triggered :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The following workflows have been triggered:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Build & Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Release](https://github.com/${{ github.repository }}/actions/workflows/release.yml) - Build binaries and create GitHub release" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Publishing" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event.inputs.skip_crates }}" != "true" ]; then
+            echo "- [Publish to crates.io](https://github.com/${{ github.repository }}/actions/workflows/publish-crates.yml)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ~~Publish to crates.io~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ github.event.inputs.skip_extension }}" != "true" ]; then
+            echo "- [Publish VSCode Extension](https://github.com/${{ github.repository }}/actions/workflows/publish-extension.yml)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ~~Publish VSCode Extension~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "${{ github.event.inputs.skip_docker }}" != "true" ]; then
+            echo "- [Publish Docker Images](https://github.com/${{ github.repository }}/actions/workflows/docker-publish.yml)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ~~Publish Docker Images~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Package Manager Updates" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Homebrew Bump](https://github.com/${{ github.repository }}/actions/workflows/brew-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Scoop Bump](https://github.com/${{ github.repository }}/actions/workflows/scoop-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Chocolatey Bump](https://github.com/${{ github.repository }}/actions/workflows/chocolatey-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Winget Manifest Refresh](https://github.com/${{ github.repository }}/actions/workflows/winget-bump.yml)" >> "$GITHUB_STEP_SUMMARY"

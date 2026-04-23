@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_package",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 4,
+      "character": 8,
+      "rationale": "hover on package name must return content"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 4,
+      "character": 8,
+      "needle": "MyApp",
+      "rationale": "hover on package name must mention the package"
+    }
+  ]
+}

@@ -1,0 +1,442 @@
+==================
+Dynamic regex eval
+==================
+
+/(??{ $pattern })/;
+
+my $depth = qr/\( (?: [^()]++ | (??{ $depth }) )* \)/x;
+
+/^(??{ $regex_var })$/;
+
+s/(.)/$replace{$1} || (??{ quotemeta($1) })/ge;
+
+my $balanced = qr{
+    \{
+        (?:
+            [^{}]+
+            |
+            (??{ $balanced })
+        )*
+    \}
+}x;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (quoted_regexp
+        (regexp_content
+          (escape_sequence)
+          (scalar
+            (varname))
+          (escape_sequence))
+        (quoted_regexp_modifiers))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (substitution_regexp
+      (regexp_content)
+      (replacement
+        (hash_element_expression
+          (container_variable
+            (varname))
+          (scalar
+            (varname)))
+        (scalar
+          (varname)))
+      (substitution_regexp_modifiers)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (quoted_regexp
+        (regexp_content
+          (escaped_delimiter)
+          (scalar
+            (varname))
+          (escaped_delimiter))
+        (quoted_regexp_modifiers)))))
+
+==================
+Atomic groups
+==================
+
+/(?>pattern)/;
+/(?>a*)/;
+/(?>a+b+)/;
+
+/\b(?>integer|insert|in)\b/;
+
+/"(?>[^"\\]+|\\.)*"/;
+
+/(?>(?:a|ab|abc)+)/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Branch reset groups
+==================
+
+/(?|foo(\d+)|bar(\w+)|baz(\S+))/;
+
+/(?|(a)(b)|(c)(d))/;
+
+/(?|<(\w+)>|\[(\w+)\]|\{(\w+)\})/;
+
+if (/(?|"([^"]*)"|'([^']*)'|([^"'\s]+))/) {
+    print "Captured: $1\n";
+}
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))))
+  (conditional_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence))))))))
+
+==================
+Control verb SKIP
+==================
+
+/a(*SKIP)b|ab/;
+
+/\w+(*SKIP)(?{ print "Skipping $&\n" })|./;
+
+/foo(*SKIP)bar|foo/;
+
+/(*SKIP:label)pattern/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)
+        (scalar
+          (varname))
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb FAIL
+==================
+
+/pattern(*FAIL)/;
+
+/foo(*FAIL)|bar/;
+
+/\d{3}(*FAIL)|.*/;
+
+/(*FAIL:name)/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence))))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb PRUNE
+==================
+
+/a+(*PRUNE)b/;
+
+/pattern(*PRUNE)/;
+
+/foo(*PRUNE)bar|baz/;
+
+/(*PRUNE:label)/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb COMMIT
+==================
+
+/a+(*COMMIT)b/;
+
+/pattern(*COMMIT)rest/;
+
+/foo(*COMMIT)bar|alternative/;
+
+/(*COMMIT:name)/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb MARK
+==================
+
+/(*MARK:A)foo(*SKIP:A)bar/;
+
+/(*MARK:START)pattern(*MARK:END)/;
+
+/(*:label)pattern/;
+
+/foo(*MARK:X)bar(*SKIP:X)baz/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb ACCEPT
+==================
+
+/pattern(*ACCEPT)/;
+
+/foo(*ACCEPT)never_reached/;
+
+/a+(*ACCEPT)b/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Control verb THEN
+==================
+
+/A(*THEN)B|C/;
+
+/(foo|bar)(*THEN)baz/;
+
+/pattern(*THEN)rest|alternative/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Multiple control verbs
+==================
+
+/foo(*PRUNE)(*SKIP)bar/;
+
+/(*MARK:A)pattern(*SKIP:A)(*FAIL)/;
+
+/a(*COMMIT)b(*PRUNE)c/;
+
+/start(*MARK:X)middle(*SKIP:X)end(*FAIL)/;
+
+---
+
+(source_file
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content))))
+
+==================
+Re pragma with code blocks
+==================
+
+use re 'eval';
+
+/(?{ $x = 1 })/;
+/(??{ $pattern })/;
+
+no re 'eval';
+
+{
+    use re 'eval';
+    /(?{ local $count = 0 })(\w+)(?{ $count++ })/;
+}
+
+use re qw(eval debug);
+/complex(?{ print "here\n" })pattern/;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (scalar
+          (varname)))))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (block_statement
+    (use_statement
+      (package)
+      (string_literal
+        (string_content)))
+    (expression_statement
+      (match_regexp
+        (regexp_content
+          (scalar
+            (varname))
+          (escape_sequence)
+          (scalar
+            (varname))))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (match_regexp
+      (regexp_content
+        (escape_sequence)))))

@@ -1,0 +1,1142 @@
+==================
+Try::Tiny patterns
+==================
+
+use Try::Tiny;
+
+try {
+    dangerous_operation();
+}
+catch {
+    warn "Error: $_";
+}
+finally {
+    cleanup();
+};
+
+my $result = try {
+    compute();
+}
+catch {
+    return default_value();
+};
+
+try {
+    may_fail();
+} catch {
+    my $error = $_;
+    if ($error =~ /timeout/) {
+        retry();
+    } else {
+        die $error;
+    }
+} finally {
+    close_resources();
+};
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname)))))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (ambiguous_function_call_expression
+        (function)
+        (indirect_object
+          (block
+            (expression_statement
+              (function_call_expression
+                (function)))))
+        (ambiguous_function_call_expression
+          (function)
+          (indirect_object
+            (expression_statement
+              (return_expression
+                (function_call_expression
+                  (function)))))))))
+  (try_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (scalar
+            (varname))))
+      (conditional_statement
+        (binary_expression
+          (scalar
+            (varname))
+          (match_regexp
+            (regexp_content)))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))
+        (else
+          (block
+            (expression_statement
+              (ambiguous_function_call_expression
+                (function)
+                (scalar
+                  (varname))))))))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))))
+
+==================
+Native eval error handling
+==================
+
+eval {
+    risky_operation();
+    1;
+} or do {
+    my $error = $@;
+    log_error($error);
+    die $error;
+};
+
+my $result = eval { 
+    parse_json($input) 
+};
+if ($@) {
+    handle_parse_error($@);
+}
+
+eval {
+    local $SIG{__DIE__} = sub {
+        my $msg = shift;
+        die "Wrapped: $msg";
+    };
+    dangerous();
+};
+my $error = $@;
+
+---
+
+(source_file
+  (expression_statement
+    (lowprec_logical_expression
+      (eval_expression
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)))
+          (expression_statement
+            (number))))
+      (do_expression
+        (block
+          (expression_statement
+            (assignment_expression
+              (variable_declaration
+                (scalar
+                  (varname)))
+              (scalar
+                (varname))))
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (scalar
+                (varname))))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (eval_expression
+        (block
+          (expression_statement
+            (function_call_expression
+              (function)
+              (scalar
+                (varname))))))))
+  (conditional_statement
+    (scalar
+      (varname))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (assignment_expression
+            (localization_expression
+              (hash_element_expression
+                (container_variable
+                  (varname))
+                (autoquoted_bareword)))
+            (anonymous_subroutine_expression
+              (block
+                (expression_statement
+                  (assignment_expression
+                    (variable_declaration
+                      (scalar
+                        (varname)))
+                    (func1op_call_expression)))
+                (expression_statement
+                  (ambiguous_function_call_expression
+                    (function)
+                    (interpolated_string_literal
+                      (string_content
+                        (scalar
+                          (varname))))))))))
+        (expression_statement
+          (function_call_expression
+            (function))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (scalar
+        (varname)))))
+
+==================
+Die with objects
+==================
+
+package MyException;
+use overload '""' => sub { $_[0]->{message} };
+
+sub new {
+    my ($class, $message, $code) = @_;
+    bless { message => $message, code => $code }, $class;
+}
+
+package main;
+
+eval {
+    die MyException->new("Custom error", 42);
+};
+if ($@) {
+    if (ref $@ && $@->isa('MyException')) {
+        print "Caught MyException: ", $@->{message}, "\n";
+        print "Error code: ", $@->{code}, "\n";
+    } else {
+        die $@;
+    }
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (hash_element_expression
+              (array_element_expression
+                (container_variable
+                  (varname))
+                (number))
+              (autoquoted_bareword)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_hash_expression
+              (list_expression
+                (autoquoted_bareword)
+                (list_expression
+                  (scalar
+                    (varname))
+                  (autoquoted_bareword)
+                  (scalar
+                    (varname)))))
+            (scalar
+              (varname)))))))
+  (package_statement
+    (package))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (method_call_expression
+              (bareword)
+              (method)
+              (list_expression
+                (interpolated_string_literal
+                  (string_content))
+                (number))))))))
+  (conditional_statement
+    (scalar
+      (varname))
+    (block
+      (conditional_statement
+        (binary_expression
+          (func1op_call_expression
+            (scalar
+              (varname)))
+          (method_call_expression
+            (scalar
+              (varname))
+            (method)
+            (string_literal
+              (string_content))))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (list_expression
+                (interpolated_string_literal
+                  (string_content))
+                (hash_element_expression
+                  (scalar
+                    (varname))
+                  (autoquoted_bareword))
+                (interpolated_string_literal
+                  (string_content
+                    (escape_sequence))))))
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (list_expression
+                (interpolated_string_literal
+                  (string_content))
+                (hash_element_expression
+                  (scalar
+                    (varname))
+                  (autoquoted_bareword))
+                (interpolated_string_literal
+                  (string_content
+                    (escape_sequence)))))))
+        (else
+          (block
+            (expression_statement
+              (ambiguous_function_call_expression
+                (function)
+                (scalar
+                  (varname))))))))))
+
+==================
+Exception::Class usage
+==================
+
+use Exception::Class (
+    'MyException',
+    'AnotherException' => { isa => 'MyException' },
+    'YetAnotherException' => {
+        isa => 'AnotherException',
+        description => 'Something went wrong',
+        fields => [qw(code details)],
+    },
+);
+
+eval {
+    YetAnotherException->throw(
+        error => 'Failed operation',
+        code => 500,
+        details => 'Connection timeout',
+    );
+};
+
+if (my $e = Exception::Class->caught('YetAnotherException')) {
+    print $e->error, "\n";
+    print $e->code, "\n";
+    print $e->details, "\n";
+    print $e->trace->as_string, "\n";
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))
+      (anonymous_hash_expression
+        (list_expression
+          (autoquoted_bareword)
+          (string_literal
+            (string_content))))
+      (string_literal
+        (string_content))
+      (anonymous_hash_expression
+        (list_expression
+          (autoquoted_bareword)
+          (list_expression
+            (string_literal
+              (string_content))
+            (autoquoted_bareword)
+            (string_literal
+              (string_content))
+            (autoquoted_bareword)
+            (anonymous_array_expression
+              (quoted_word_list
+                (string_content))))))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (method_call_expression
+            (bareword)
+            (method)
+            (list_expression
+              (autoquoted_bareword)
+              (string_literal
+                (string_content))
+              (autoquoted_bareword)
+              (number)
+              (autoquoted_bareword)
+              (string_literal
+                (string_content))))))))
+  (conditional_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (method_call_expression
+        (bareword)
+        (method)
+        (string_literal
+          (string_content))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (method_call_expression
+              (scalar
+                (varname))
+              (method))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (method_call_expression
+              (method_call_expression
+                (scalar
+                  (varname))
+                (method))
+              (method))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))))
+
+==================
+Eval forms
+==================
+
+# String eval
+eval "use Module";
+eval "require $module";
+eval "$code";
+
+# Block eval
+eval { use Module };
+eval { require Module };
+eval { $code->() };
+
+# Do block error handling
+do {
+    eval { risky() };
+    if ($@) {
+        handle_error($@);
+    }
+};
+
+# Nested eval
+eval {
+    eval {
+        very_risky();
+    };
+    if ($@) {
+        eval { recover() };
+        die $@ if $@;
+    }
+};
+
+---
+
+(source_file
+  (comment)
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))))))
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))))))
+  (comment)
+  (expression_statement
+    (eval_expression
+      (block
+        (use_statement
+          (package)))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (require_expression
+            (bareword))))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (coderef_call_expression
+            (scalar
+              (varname)))))))
+  (comment)
+  (expression_statement
+    (do_expression
+      (block
+        (expression_statement
+          (eval_expression
+            (block
+              (expression_statement
+                (function_call_expression
+                  (function))))))
+        (conditional_statement
+          (scalar
+            (varname))
+          (block
+            (expression_statement
+              (function_call_expression
+                (function)
+                (scalar
+                  (varname)))))))))
+  (comment)
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (eval_expression
+            (block
+              (expression_statement
+                (function_call_expression
+                  (function))))))
+        (conditional_statement
+          (scalar
+            (varname))
+          (block
+            (expression_statement
+              (eval_expression
+                (block
+                  (expression_statement
+                    (function_call_expression
+                      (function))))))
+            (expression_statement
+              (postfix_conditional_expression
+                (ambiguous_function_call_expression
+                  (function)
+                  (scalar
+                    (varname)))
+                (scalar
+                  (varname))))))))))
+
+==================
+Carp error reporting
+==================
+
+use Carp;
+
+sub function {
+    my $arg = shift or croak "Argument required";
+    
+    carp "Deprecated usage" if $old_style;
+    
+    confess "Internal error" unless $valid_state;
+    
+    cluck "Warning: unusual condition" if $DEBUG;
+}
+
+use Carp qw(longmess shortmess);
+
+$SIG{__DIE__} = sub {
+    die longmess($_[0]);
+};
+
+$SIG{__WARN__} = sub {
+    warn shortmess($_[0]);
+};
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (lowprec_logical_expression
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (func1op_call_expression))
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content)))
+          (scalar
+            (varname))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content)))
+          (scalar
+            (varname))))))
+  (use_statement
+    (package)
+    (quoted_word_list
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (function_call_expression
+                (function)
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number)))))))))
+  (expression_statement
+    (assignment_expression
+      (hash_element_expression
+        (container_variable
+          (varname))
+        (autoquoted_bareword))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (function_call_expression
+                (function)
+                (array_element_expression
+                  (container_variable
+                    (varname))
+                  (number))))))))))
+
+==================
+Error propagation
+==================
+
+sub outer {
+    eval {
+        inner();
+    };
+    if ($@) {
+        die "outer: $@";
+    }
+}
+
+sub inner {
+    eval {
+        deeper();
+    };
+    if ($@) {
+        die "inner: $@";
+    }
+}
+
+sub deeper {
+    die "Original error";
+}
+
+eval {
+    outer();
+};
+print "Final error: $@" if $@;
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (eval_expression
+          (block
+            (expression_statement
+              (function_call_expression
+                (function))))))
+      (conditional_statement
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (eval_expression
+          (block
+            (expression_statement
+              (function_call_expression
+                (function))))))
+      (conditional_statement
+        (scalar
+          (varname))
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content))))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (function_call_expression
+            (function))))))
+  (expression_statement
+    (postfix_conditional_expression
+      (ambiguous_function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content
+            (scalar
+              (varname)))))
+      (scalar
+        (varname)))))
+
+==================
+Custom error handling
+==================
+
+{
+    package Error::Handler;
+    
+    sub new {
+        my $class = shift;
+        bless { errors => [] }, $class;
+    }
+    
+    sub add_error {
+        my ($self, $error) = @_;
+        push @{$self->{errors}}, $error;
+    }
+    
+    sub has_errors {
+        my $self = shift;
+        return @{$self->{errors}} > 0;
+    }
+    
+    sub clear {
+        my $self = shift;
+        $self->{errors} = [];
+    }
+}
+
+my $handler = Error::Handler->new;
+
+eval { operation1() };
+$handler->add_error($@) if $@;
+
+eval { operation2() };
+$handler->add_error($@) if $@;
+
+if ($handler->has_errors) {
+    handle_all_errors($handler);
+}
+
+---
+
+(source_file
+  (block_statement
+    (package_statement
+      (package))
+    (subroutine_declaration_statement
+      (bareword)
+      (block
+        (expression_statement
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (func1op_call_expression)))
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (list_expression
+              (anonymous_hash_expression
+                (list_expression
+                  (autoquoted_bareword)
+                  (anonymous_array_expression)))
+              (scalar
+                (varname)))))))
+    (subroutine_declaration_statement
+      (bareword)
+      (block
+        (expression_statement
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname))
+              (scalar
+                (varname)))
+            (array
+              (varname))))
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (list_expression
+              (array
+                (varname
+                  (block
+                    (expression_statement
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (autoquoted_bareword))))))
+              (scalar
+                (varname)))))))
+    (subroutine_declaration_statement
+      (bareword)
+      (block
+        (expression_statement
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (func1op_call_expression)))
+        (expression_statement
+          (return_expression
+            (relational_expression
+              (array
+                (varname
+                  (block
+                    (expression_statement
+                      (hash_element_expression
+                        (scalar
+                          (varname))
+                        (autoquoted_bareword))))))
+              (number))))))
+    (subroutine_declaration_statement
+      (bareword)
+      (block
+        (expression_statement
+          (assignment_expression
+            (variable_declaration
+              (scalar
+                (varname)))
+            (func1op_call_expression)))
+        (expression_statement
+          (assignment_expression
+            (hash_element_expression
+              (scalar
+                (varname))
+              (autoquoted_bareword))
+            (anonymous_array_expression))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (method_call_expression
+        (bareword)
+        (method))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (function_call_expression
+            (function))))))
+  (expression_statement
+    (postfix_conditional_expression
+      (method_call_expression
+        (scalar
+          (varname))
+        (method)
+        (scalar
+          (varname)))
+      (scalar
+        (varname))))
+  (expression_statement
+    (eval_expression
+      (block
+        (expression_statement
+          (function_call_expression
+            (function))))))
+  (expression_statement
+    (postfix_conditional_expression
+      (method_call_expression
+        (scalar
+          (varname))
+        (method)
+        (scalar
+          (varname)))
+      (scalar
+        (varname))))
+  (conditional_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname)))))))
+
+==================
+Try::Catch alternative
+==================
+
+use Try::Catch;
+
+try {
+    something();
+}
+catch (MyException $e) {
+    handle_my_exception($e);
+}
+catch (OtherException $e where { $_->code == 404 }) {
+    handle_not_found($e);
+}
+catch ($e) {
+    handle_generic($e);
+}
+
+use TryCatch;
+
+try {
+    code();
+}
+catch (Error::Type $e) {
+    handle($e);
+}
+
+---
+
+(source_file
+  (use_statement)
+  (try_catch_statement)
+  (use_statement)
+  (try_catch_statement))
+
+==================
+Scope::Guard for cleanup
+==================
+
+use Scope::Guard;
+
+{
+    my $guard = Scope::Guard->new(sub {
+        cleanup();
+    });
+    
+    risky_operation();
+    
+    # cleanup() called automatically when $guard goes out of scope
+}
+
+sub with_transaction {
+    my $dbh = shift;
+    $dbh->begin_work;
+    
+    my $guard = Scope::Guard->new(sub {
+        $dbh->rollback;
+    });
+    
+    do_database_operations($dbh);
+    
+    $dbh->commit;
+    $guard->dismiss;  # Don't rollback if we got here
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (block_statement
+    (expression_statement
+      (assignment_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (method_call_expression
+          (bareword)
+          (method)
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (function_call_expression
+                  (function))))))))
+    (expression_statement
+      (function_call_expression
+        (function)))
+    (comment))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (method_call_expression
+            (bareword)
+            (method)
+            (anonymous_subroutine_expression
+              (block
+                (expression_statement
+                  (method_call_expression
+                    (scalar
+                      (varname))
+                    (method))))))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (comment))))

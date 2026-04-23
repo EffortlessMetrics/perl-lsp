@@ -1,0 +1,23 @@
+[package]
+name = "perl-token"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Token definitions for Perl parser"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-token"
+keywords = ["perl", "token", "parser", "lexer", "tokenization"]
+categories = ["parsing", "text-processing"]
+
+[dependencies]
+# No external dependencies for now (Arc is std)
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

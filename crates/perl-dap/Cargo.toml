@@ -1,0 +1,373 @@
+[package]
+name = "perl-dap"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Debug Adapter Protocol server for Perl"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap"
+readme = "README.md"
+keywords = ["perl", "dap", "debug", "debugger", "adapter"]
+categories = ["development-tools::debugging", "command-line-utilities"]
+include = [
+  "src/**",
+  "build.rs",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[[bin]]
+name = "perl-dap"
+path = "src/main.rs"
+
+[lib]
+name = "perl_dap"
+path = "src/lib.rs"
+
+[dependencies]
+# JSON serialization
+serde = { workspace = true }
+serde_json.workspace = true
+
+# Error handling
+anyhow.workspace = true
+
+# Regex for parsing debugger output
+regex.workspace = true
+once_cell.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = ["full"] }
+
+# Logging
+tracing.workspace = true
+
+# Command-line argument parsing
+clap = { workspace = true }
+
+# Inlined satellite dependencies (Wave H collapse)
+perl-parser = { workspace = true }
+perl-parser-core = { workspace = true }
+thiserror.workspace = true
+ropey = "1.6.1"
+
+perl-module = { workspace = true }
+# Wave Final PR B: perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing
+perl-lexer = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
+
+# Process management
+# Note: tokio-process not needed (using tokio::process)
+
+[dev-dependencies]
+# Property-based testing (AC13)
+proptest.workspace = true
+
+# Performance benchmarking (AC14, AC15)
+criterion.workspace = true
+
+# Test fixtures
+tempfile.workspace = true
+
+perl-tdd-support = { workspace = true }
+
+[build-dependencies]
+# Wave Final PR B: perl-feature-catalog absorbed; build.rs uses inline catalog via include!()
+serde = { workspace = true, features = ["derive"] }
+toml = "1.1.2"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["processthreadsapi", "wincon"] }  # For Ctrl+C and GenerateConsoleCtrlEvent (AC9, #3028)
+
+[features]
+default = ["dap-phase1", "dap-phase2", "dap-phase3"]
+# DAP implementation phases (TDD scaffold tests)
+dap-phase1 = []  # AC1-AC4: Bridge to Perl::LanguageServer
+dap-phase2 = []  # AC5-AC16: Native adapter, integration tests, performance, security
+dap-phase3 = []  # AC17-AC19: Non-regression, dependency management, packaging
+
+# Test targets with acceptance criteria mapping
+[[test]]
+name = "bridge_adapter_unit_tests"
+path = "tests/bridge_adapter_unit_tests.rs"
+# Unit tests for BridgeAdapter lifecycle (bridge_adapter.rs)
+
+[[test]]
+name = "protocol_edge_case_tests"
+path = "tests/protocol_edge_case_tests.rs"
+# Protocol edge cases: malformed JSON, missing fields, boundary values
+
+[[test]]
+name = "bridge_integration_tests"
+path = "tests/bridge_integration_tests.rs"
+# AC1-AC4: Bridge to Perl::LanguageServer DAP
+
+[[test]]
+name = "dap_adapter_tests"
+path = "tests/dap_adapter_tests.rs"
+# AC5-AC12: Native Rust adapter implementation
+
+[[test]]
+name = "tcp_attach_tests"
+path = "tests/tcp_attach_tests.rs"
+# Phase5: TCP attach functionality tests
+
+[[test]]
+name = "dap_golden_transcript_tests"
+path = "tests/dap_golden_transcript_tests.rs"
+# AC13: Comprehensive integration tests with golden transcripts
+
+[[test]]
+name = "dap_attach_e2e"
+path = "tests/dap_attach_e2e.rs"
+# AC13: TCP attach e2e happy-path coverage
+
+[[test]]
+name = "dap_breakpoint_matrix_tests"
+path = "tests/dap_breakpoint_matrix_tests.rs"
+# AC13, AC14: Breakpoint validation edge cases
+
+[[test]]
+name = "dap_performance_tests"
+path = "tests/dap_performance_tests.rs"
+# AC14, AC15: Performance benchmarks and baselines
+
+[[test]]
+name = "dap_security_tests"
+path = "tests/dap_security_tests.rs"
+# AC16: Security validation (path traversal, safe eval, timeout, Unicode)
+
+[[test]]
+name = "dap_dependency_tests"
+path = "tests/dap_dependency_tests.rs"
+# AC18: Dependency management and installation strategy
+
+[[test]]
+name = "dap_packaging_tests"
+path = "tests/dap_packaging_tests.rs"
+# AC19: Binary packaging and cross-platform distribution
+
+[[test]]
+name = "dap_protocol_message_tests"
+path = "tests/dap_protocol_message_tests.rs"
+# AC:2783: Protocol message tests for 10 previously untested commands
+
+[[test]]
+name = "dap_feature_flag_coverage_tests"
+path = "tests/dap_feature_flag_coverage_tests.rs"
+# AC0-AC9: Feature flag coverage for 10 DAP features (#2784, #2900)
+
+[[test]]
+name = "dap_warn_exception_tests"
+path = "tests/dap_warn_exception_tests.rs"
+# dap.exceptions.warn: warn filter capability and setExceptionBreakpoints acceptance (#2900)
+
+[[test]]
+name = "dap_watchpoints_tests"
+path = "tests/dap_watchpoints_tests.rs"
+# dap.watchpoints: dataBreakpointInfo + setDataBreakpoints functional tests (#2900)
+
+[[test]]
+name = "dap_non_regression_tests"
+path = "tests/dap_non_regression_tests.rs"
+# AC:17 Phase 3 non-regression: protocol shape, seq monotonicity, capabilities consistency (#435)
+
+[[test]]
+name = "dap_step_through_tests"
+path = "tests/dap_step_through_tests.rs"
+# AC:3535 Comprehensive step-through debugging tests: stepIn, stepOut, stepOver, continue, pause, gotoTargets, cancel
+
+[[test]]
+name = "dap_syntax_check_tests"
+path = "tests/dap_syntax_check_tests.rs"
+# AC:3477 Pre-launch syntax check using perl -c, clear error messages before debug start
+
+[[test]]
+name = "dap_e2e_workflow_tests"
+path = "tests/dap_e2e_workflow_tests.rs"
+# AC:3486 End-to-end workflow: launch -> breakpoint -> inspect -> step -> continue -> exit
+
+[[test]]
+name = "dap_scorecard_harness"
+path = "tests/dap_scorecard_harness.rs"
+# AC:4069 DAP launch-success scorecard: 5 fixtures, ≥80% pass rate, p50/p95 latency
+
+[[test]]
+name = "wave_h_collapse_integration"
+path = "tests/wave_h_collapse_integration.rs"
+# Integration tests for Wave H collapse: module accessibility, use-path updates, external consumers
+
+# Wave H collapsed satellite test files (28 tests from 11 satellites)
+[[test]]
+name = "breakpoint_breakpoint_tests"
+path = "tests/breakpoint_breakpoint_tests.rs"
+
+[[test]]
+name = "breakpoint_edge_case_tests"
+path = "tests/breakpoint_edge_case_tests.rs"
+
+[[test]]
+name = "breakpoint_extended_unit_tests"
+path = "tests/breakpoint_extended_unit_tests.rs"
+
+[[test]]
+name = "eval_extended_unit_tests"
+path = "tests/eval_extended_unit_tests.rs"
+
+[[test]]
+name = "eval_safe_evaluator"
+path = "tests/eval_safe_evaluator.rs"
+
+[[test]]
+name = "eval_timeout_and_exception_tests"
+path = "tests/eval_timeout_and_exception_tests.rs"
+
+[[test]]
+name = "config_attach_config_tests"
+path = "tests/config_attach_config_tests.rs"
+
+[[test]]
+name = "config_launch_config_tests"
+path = "tests/config_launch_config_tests.rs"
+
+[[test]]
+name = "config_serde_edge_case_tests"
+path = "tests/config_serde_edge_case_tests.rs"
+
+[[test]]
+name = "platform_comprehensive_unit_tests"
+path = "tests/platform_comprehensive_unit_tests.rs"
+
+[[test]]
+name = "platform_perl_path_edge_cases"
+path = "tests/platform_perl_path_edge_cases.rs"
+
+[[test]]
+name = "command_args_integration_tests"
+path = "tests/command_args_integration_tests.rs"
+
+[[test]]
+name = "shell_integration_tests"
+path = "tests/shell_integration_tests.rs"
+
+[[test]]
+name = "stack_comprehensive_unit_tests"
+path = "tests/stack_comprehensive_unit_tests.rs"
+
+[[test]]
+name = "stack_extended_unit_tests"
+path = "tests/stack_extended_unit_tests.rs"
+
+[[test]]
+name = "stack_malformed_debugger_output_tests"
+path = "tests/stack_malformed_debugger_output_tests.rs"
+
+[[test]]
+name = "types_edge_case_tests"
+path = "tests/types_edge_case_tests.rs"
+
+[[test]]
+name = "types_shared_types"
+path = "tests/types_shared_types.rs"
+
+[[test]]
+name = "value_integration_tests"
+path = "tests/value_integration_tests.rs"
+
+[[test]]
+name = "value_serde_round_trip_tests"
+path = "tests/value_serde_round_trip_tests.rs"
+
+[[test]]
+name = "security_dap_path_traversal_hardened_tests"
+path = "tests/security_dap_path_traversal_hardened_tests.rs"
+
+[[test]]
+name = "security_dap_security_ac16_tests"
+path = "tests/security_dap_security_ac16_tests.rs"
+
+[[test]]
+name = "security_path_traversal_tests"
+path = "tests/security_path_traversal_tests.rs"
+
+[[test]]
+name = "variables_comprehensive"
+path = "tests/variables_comprehensive.rs"
+
+[[test]]
+name = "variables_dap_deep_structure_truncation"
+path = "tests/variables_dap_deep_structure_truncation.rs"
+
+[[test]]
+name = "variables_deep_truncation"
+path = "tests/variables_deep_truncation.rs"
+
+[[test]]
+name = "variables_extended_unit_tests"
+path = "tests/variables_extended_unit_tests.rs"
+
+[[test]]
+name = "variables_variable_inspection"
+path = "tests/variables_variable_inspection.rs"
+
+# Wave H green-TDD edge case and regression tests
+[[test]]
+name = "wave_h_api_stability"
+path = "tests/wave_h_api_stability.rs"
+# Green TDD: verify re-exported symbols from collapsed modules remain stable
+
+[[test]]
+name = "wave_h_external_consumer_integration"
+path = "tests/wave_h_external_consumer_integration.rs"
+# Green TDD: verify external consumers (perl-lsp, perl-lsp-config) can import from new structure
+
+[[test]]
+name = "wave_h_structure_verification"
+path = "tests/wave_h_structure_verification.rs"
+# Green TDD: verify file-to-folder conversion and module structure correctness
+
+[[test]]
+name = "wave_h_workspace_verification"
+path = "tests/wave_h_workspace_verification.rs"
+# Green TDD: verify workspace-level artifacts and build success
+
+[[test]]
+name = "wave_h_platform_edge_cases"
+path = "tests/wave_h_platform_edge_cases.rs"
+# Green TDD: edge cases and boundary conditions for platform module
+
+[[test]]
+name = "wave_h_security_edge_cases"
+path = "tests/wave_h_security_edge_cases.rs"
+# Green TDD: edge cases and boundary conditions for security module
+
+[[test]]
+name = "platform_dedup_verification"
+path = "tests/platform_dedup_verification.rs"
+# Verify perl-dap platform re-exports match perl-lsp-rs-core (#4545)
+
+# Wave H RED external consumer tests
+[[test]]
+name = "wave_h_external_red_tests"
+path = "tests/wave_h_external_red_tests.rs"
+# RED tests: verify external consumers can still function after collapse
+
+[[bench]]
+name = "dap_benchmarks"
+path = "benches/dap_benchmarks.rs"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

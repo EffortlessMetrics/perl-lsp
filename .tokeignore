@@ -1,0 +1,22 @@
+# Build artifacts
+target/
+dist/
+build/
+out/
+coverage/
+
+# Dependency blobs / vendored
+vendor/
+third_party/
+external/
+node_modules/
+
+# Generated code (tune)
+**/generated/**
+**/*.gen.*
+**/*_generated.*
+**/*.pb.rs
+
+# Tree-sitter (common generated / vendored offenders)
+**/tree-sitter*/src/parser.c
+**/tree-sitter*/src/scanner.c

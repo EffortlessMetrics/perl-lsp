@@ -1,0 +1,137 @@
+//! Unit tests for inlay hint anchor logic (public LSP surface only).
+//! We assert that specific labels (e.g., `filehandle:`/`array:`/`hash`)
+//! are placed exactly at the token we expect.
+
+#[cfg(test)]
+mod tests {
+    use parking_lot::Mutex;
+    use perl_lsp::LspServer;
+    use serde_json::json;
+    use std::io::{Cursor, Write};
+    use std::sync::Arc;
+
+    /// Start a server with a writable buffer so we can reuse the harness pattern if needed.
+    fn start_server() -> (LspServer, Arc<Mutex<Cursor<Vec<u8>>>>) {
+        let buf = Arc::new(Mutex::new(Cursor::<Vec<u8>>::new(Vec::new())));
+        let srv = LspServer::with_output(Arc::new(Mutex::new(Box::new(Cursor::<Vec<u8>>::new(
+            Vec::new(),
+        )) as Box<dyn Write + Send>)));
+        (srv, buf)
+    }
+
+    /// Drive initialize + didOpen + inlayHint(range) and return the result array (or empty array).
+    fn get_hints(
+        server: &LspServer,
+        uri: &str,
+        text: &str,
+    ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+        // initialize (min caps; advertise pull diags so server won't publish)
+        let _ = server.handle_request(serde_json::from_value(json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize","params":{
+                "capabilities":{"textDocument":{"diagnostic":{}}}
+            }
+        }))?);
+        let _ = server.handle_request(serde_json::from_value(
+            json!({"jsonrpc":"2.0","method":"initialized","params":{}}),
+        )?);
+
+        // didOpen
+        let _ = server.handle_request(serde_json::from_value(json!({
+          "jsonrpc":"2.0","method":"textDocument/didOpen","params":{
+            "textDocument":{"uri":uri,"languageId":"perl","version":1,"text":text}
+          }
+        }))?);
+
+        // full-file range (0..big)
+        let res = server.handle_request(serde_json::from_value(json!({
+          "jsonrpc":"2.0","id":2,"method":"textDocument/inlayHint","params":{
+            "textDocument":{"uri":uri},
+            "range":{"start":{"line":0,"character":0},"end":{"line":999,"character":0}}
+          }
+        }))?);
+
+        // Extract result array
+        Ok(res.and_then(|r| r.result).and_then(|r| r.as_array().cloned()).unwrap_or_default())
+    }
+
+    /// Assert that a hint with `label` is anchored at (line, char) where `needle`
+    /// first occurs in `text`. We search on the specific `expected_line`.
+    /// Also ensures exactly one hint matches (no duplicates).
+    fn assert_unique_label_at(
+        text: &str,
+        hints: &[serde_json::Value],
+        label: &str,
+        expected_line: usize,
+        needle: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // find column of `needle` in the given line
+        let line_str = text.lines().nth(expected_line).ok_or("line does not exist")?;
+        let col = line_str.find(needle).ok_or("needle not present on expected line")?;
+        let want_line = expected_line as u32;
+        let want_char = col as u32;
+
+        // count matching hints to ensure uniqueness
+        let matches = hints
+            .iter()
+            .filter(|h| {
+                h.get("label").and_then(|l| l.as_str()) == Some(label)
+                    && h.pointer("/position/line").and_then(|v| v.as_u64())
+                        == Some(want_line as u64)
+                    && h.pointer("/position/character").and_then(|v| v.as_u64())
+                        == Some(want_char as u64)
+            })
+            .count();
+
+        assert_eq!(
+            matches, 1,
+            "Expected exactly one `{label}` at {want_line}:{want_char}, got {matches}.\nHints: {hints:#?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn anchor_filehandle_nonparen() -> Result<(), Box<dyn std::error::Error>> {
+        // Tests anchoring behavior for non-parenthesized function calls.
+        // For `open my $fh, ...` we anchor at "my" to precede the variable declaration.
+        // For array/hash operations, we anchor at the sigil position.
+        let (server, _out) = start_server();
+        let uri = "file:///tmp/anchors.pl";
+        let text = r#"
+open my $fh, "<", $file;
+push @arr, "x";
+my %h = ();
+my $r = {};
+"#;
+        let hints = get_hints(&server, uri, text)?;
+        // Lines are 0-based; first non-empty is line 1.
+        // For "open my $fh", the filehandle hint anchors at "my" (column 5)
+        assert_unique_label_at(text, &hints, "filehandle:", 1, "my")?;
+        // For "push @arr", the array hint anchors at "@arr" (column 5)
+        assert_unique_label_at(text, &hints, "array:", 2, "@arr")?;
+        Ok(())
+    }
+
+    #[test]
+    fn anchor_parenthesized_calls() -> Result<(), Box<dyn std::error::Error>> {
+        // Tests anchoring behavior for parenthesized function calls.
+        // For `open(FH, ...)` we anchor at '(' to maintain visual alignment.
+        // For other args, we anchor at the variable/token position.
+        let (server, _out) = start_server();
+        let uri = "file:///tmp/paren.pl";
+        let text = r#"
+push(@arr, "x");
+substr($s, 0, 5);
+open(FH, "<", "file.txt");
+"#;
+        let hints = get_hints(&server, uri, text)?;
+        // For parenthesized calls, the parameter hint anchors at the "(" or first
+        // token position depending on how the parser reports the arg location.
+        // push(@arr  → array: at "(" (column 4)
+        assert_unique_label_at(text, &hints, "array:", 1, "(")?;
+        // substr($s  → expr: at "(" (column 6)
+        assert_unique_label_at(text, &hints, "expr:", 2, "(")?;
+        // open(FH    → filehandle: at "(" (column 4)
+        assert_unique_label_at(text, &hints, "filehandle:", 3, "(")?;
+        Ok(())
+    }
+}

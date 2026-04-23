@@ -1,0 +1,26 @@
+# Nextest partition definitions for test tier selection
+# Usage:
+#   cargo nextest run --workspace --lib --profile ci --partition smoke
+#   cargo nextest run --workspace --lib --profile ci --partition deep
+#
+# See tests/TAXONOMY.md for tier definitions and criteria.
+
+[[partition]]
+# Smoke tier: no I/O, deterministic, <1s per test
+# Covers parser, lexer, and foundational crate unit tests
+filter = 'package(perl-parser) | package(perl-lexer) | package(perl-keywords) | package(perl-token) | package(perl-error)'
+id = 'smoke'
+
+[[partition]]
+# Deep tier: integration tests with fixtures, edge cases
+# Covers LSP integration, DAP, semantic analysis
+# Excludes smoke-tier packages to avoid overlap
+filter = 'package(perl-lsp-rs) | package(perl-dap)'
+id = 'deep'
+
+[[partition]]
+# Slow tier: performance-sensitive, corpus sweeps, stress tests
+# Not directly runnable via partition - triggered by justfile recipes
+# (benchmarks, mutation, fuzz) rather than nextest
+filter = 'test(~slow)'
+id = 'slow'

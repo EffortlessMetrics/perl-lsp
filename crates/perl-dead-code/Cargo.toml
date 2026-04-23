@@ -1,0 +1,37 @@
+[package]
+name = "perl-dead-code"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Dead code detection for Perl codebases"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dead-code"
+keywords = ["perl", "dead-code", "analysis", "lsp"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-workspace = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

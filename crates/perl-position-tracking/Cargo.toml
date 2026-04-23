@@ -1,0 +1,46 @@
+[package]
+name = "perl-position-tracking"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-position-tracking"
+keywords = ["perl", "position", "utf16", "lsp", "utf8"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "tests/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+serde_json.workspace = true
+ropey = "1.6.1"
+serde = { workspace = true }
+
+[features]
+default = []
+lsp-compat = ["lsp-types"]
+
+[dependencies.lsp-types]
+version = "0.97.0"
+optional = true
+
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+perl-test-generators = { path = "../perl-test-generators" }
+proptest.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

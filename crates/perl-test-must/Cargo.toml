@@ -1,0 +1,26 @@
+[package]
+name = "perl-test-must"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Panic-on-failure test helpers: must, must_some, must_err"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-test-must"
+keywords = ["perl", "testing", "test-helpers", "must", "assertions"]
+categories = ["development-tools::testing"]
+
+[lib]
+doctest = false
+
+# Zero dependencies — that is the entire point.
+[dependencies]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

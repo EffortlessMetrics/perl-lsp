@@ -1,0 +1,23 @@
+[package]
+name = "perl-regex"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Regex parsing and validation helpers for Perl syntax"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-regex"
+keywords = ["perl", "regex", "validation", "security", "backtracking"]
+categories = ["parsing", "text-processing"]
+
+[dependencies]
+thiserror.workspace = true
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

@@ -1,0 +1,72 @@
+* text eol=lf
+
+# =============================================================================
+# Image and font files (must not have line endings modified)
+# =============================================================================
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+
+# =============================================================================
+# Tree-sitter vendored/generated code
+# =============================================================================
+# This ensures tokei and GitHub language stats reflect "code we wrote" vs
+# "vendored artifacts" from tree-sitter grammar generation.
+
+# -----------------------------------------------------------------------------
+# tree-sitter-perl/ - upstream grammar (submodule/vendored)
+# -----------------------------------------------------------------------------
+tree-sitter-perl/src/parser.c linguist-generated linguist-vendored
+tree-sitter-perl/src/scanner.c linguist-vendored
+tree-sitter-perl/src/*.h linguist-vendored
+tree-sitter-perl/src/*.json linguist-generated
+tree-sitter-perl/src/tree_sitter/** linguist-vendored
+
+tree-sitter-perl/bindings/** linguist-generated
+tree-sitter-perl/binding.gyp linguist-generated
+tree-sitter-perl/setup.py linguist-generated
+tree-sitter-perl/Makefile linguist-generated
+tree-sitter-perl/Package.swift linguist-generated
+
+# -----------------------------------------------------------------------------
+# archive/crates/tree-sitter-perl-rs/ - archived Rust harness (vendored C)
+# -----------------------------------------------------------------------------
+archive/crates/tree-sitter-perl-rs/src/parser.c linguist-generated linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/scanner.c linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.h linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/tree_sitter/** linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.json linguist-generated
+archive/crates/tree-sitter-perl-rs/src/grammar.js linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.pest linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/lib/*.js linguist-vendored
+
+# -----------------------------------------------------------------------------
+# crates/tree-sitter-perl*/ - other tree-sitter crates (if present)
+# -----------------------------------------------------------------------------
+crates/tree-sitter-perl/** linguist-vendored
+crates/tree-sitter-perl-c/** linguist-vendored
+
+# -----------------------------------------------------------------------------
+# archive/legacy-crates/perl-parser-pest/ - archived legacy parser
+# -----------------------------------------------------------------------------
+archive/legacy-crates/perl-parser-pest/src/parser.c linguist-generated linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/scanner.c linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/*.h linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/tree_sitter/** linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/*.json linguist-generated
+archive/legacy-crates/perl-parser-pest/src/grammar.js linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/*.pest linguist-vendored
+archive/legacy-crates/perl-parser-pest/src/lib/*.js linguist-vendored
+
+# =============================================================================
+# Binary files
+# =============================================================================
+*.tar.gz binary
+*.zip    binary
+*.vsix   binary
+*.ttf    binary
+*.eot    binary
+*.woff   binary
+*.woff2  binary

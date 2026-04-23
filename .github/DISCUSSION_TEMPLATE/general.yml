@@ -1,0 +1,15 @@
+title: ""
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For anything that doesn't fit Q&A, Ideas, Show & Tell, or the issue tracker. Introductions, meta-discussion, links to related projects, feedback on the project direction -- all welcome here.
+
+  - type: textarea
+    id: message
+    attributes:
+      label: What's on your mind?
+      description: No format required -- just write.
+    validations:
+      required: true

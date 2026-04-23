@@ -1,0 +1,20 @@
+[package]
+name = "perl-ci-hygiene"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Native Rust replacements for shell-based CI hygiene scripts"
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[dependencies]
+clap = { workspace = true }
+color-eyre = "0.6.5"
+chrono = "0.4.42"
+regex.workspace = true
+serde_json.workspace = true
+walkdir.workspace = true
+toml = "1.1.2"

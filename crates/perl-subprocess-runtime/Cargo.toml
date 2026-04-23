@@ -1,0 +1,26 @@
+[package]
+name = "perl-subprocess-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared subprocess execution abstraction with OS and mock runtimes"
+readme = "README.md"
+documentation = "https://docs.rs/perl-subprocess-runtime"
+keywords = ["perl", "subprocess", "runtime", "testing"]
+categories = ["development-tools"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

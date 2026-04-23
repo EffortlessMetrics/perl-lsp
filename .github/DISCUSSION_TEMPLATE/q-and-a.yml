@@ -1,0 +1,37 @@
+title: "[Q&A] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about using perllsp -- editor setup, configuration, troubleshooting, or understanding how something works. If you found an answer, please mark it so others can find it quickly.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What do you want to know? Include as much context as helps.
+      placeholder: |
+        I'm trying to set up perl-lsp with Neovim and ...
+    validations:
+      required: true
+
+  - type: input
+    id: editor
+    attributes:
+      label: Editor / LSP Client
+      description: Which editor or LSP client are you using? (Leave blank if not applicable.)
+      placeholder: "VS Code 1.96, Neovim 0.10, Helix 24.07, etc."
+
+  - type: input
+    id: version
+    attributes:
+      label: perl-lsp Version
+      description: Output of `perllsp --version` (Leave blank if you haven't installed it yet.)
+      placeholder: "0.12.0"
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What I've Already Tried
+      description: Saves others from suggesting things you've already ruled out.

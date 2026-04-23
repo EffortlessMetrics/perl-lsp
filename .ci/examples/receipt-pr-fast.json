@@ -1,0 +1,170 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "timestamp": "2026-01-24T09:15:00Z",
+    "git_sha": "def456789012345678901234567890abcdef1234",
+    "git_sha_short": "def4567",
+    "git_branch": "fix/typo-in-docs",
+    "git_dirty": false,
+    "toolchain": {
+      "rustc_version": "rustc 1.89.0 (ab34567890 2026-01-15)",
+      "rustc_channel": "stable",
+      "rustc_semver": "1.89.0",
+      "cargo_version": "cargo 1.89.0 (ab34567890 2026-01-15)",
+      "node_version": null,
+      "nix_version": null
+    },
+    "platform": {
+      "os": "darwin",
+      "os_version": "Darwin 24.1.0",
+      "arch": "aarch64",
+      "cpu_cores": 10,
+      "memory_gb": 32.0,
+      "is_wsl": false
+    },
+    "environment": {
+      "type": "local",
+      "ci_provider": null,
+      "ci_run_id": null,
+      "ci_run_url": null,
+      "pr_number": null,
+      "nix_shell": false
+    },
+    "trigger": "manual"
+  },
+  "gates": [
+    {
+      "gate_name": "workflow-audit",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 620,
+      "command": "python3 scripts/ci-audit-workflows.py",
+      "exit_code": 0,
+      "output_summary": "All 21 workflows validated",
+      "log_path": "logs/workflow-audit.log",
+      "metrics": {
+        "files_checked": 21,
+        "warnings_count": 0
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "check-nested-lock",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 45,
+      "command": "just ci-check-no-nested-lock",
+      "exit_code": 0,
+      "output_summary": "No nested lockfiles",
+      "log_path": "logs/check-nested-lock.log",
+      "metrics": null,
+      "artifacts": []
+    },
+    {
+      "gate_name": "fmt",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 1850,
+      "command": "cargo fmt --check --all",
+      "exit_code": 0,
+      "output_summary": null,
+      "log_path": "logs/fmt.log",
+      "metrics": {
+        "files_checked": 156
+      },
+      "artifacts": []
+    },
+    {
+      "gate_name": "docs-check",
+      "tier": "pr_fast",
+      "status": "pass",
+      "required": true,
+      "duration_ms": 980,
+      "command": "bash ci/check_missing_docs.sh",
+      "exit_code": 0,
+      "output_summary": "Missing docs baseline: 142 (limit: 150)",
+      "log_path": "logs/docs-check.log",
+      "metrics": {
+        "warnings_count": 142
+      },
+      "artifacts": []
+    }
+  ],
+  "summary": {
+    "total_gates": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "timeout": 0,
+    "error": 0,
+    "total_duration_ms": 3495,
+    "tier_results": {
+      "pr_fast": {
+        "total": 4,
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 3495
+      },
+      "merge_gate": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 0
+      },
+      "nightly": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 0
+      },
+      "release": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "duration_ms": 0
+      }
+    },
+    "overall_status": "pass",
+    "blocking_failures": [],
+    "aggregate_metrics": {
+      "total_tests": 0,
+      "total_tests_passed": 0,
+      "total_tests_failed": 0,
+      "total_warnings": 142,
+      "max_memory_mb": 0
+    }
+  },
+  "diff_config": {
+    "comparable_fields": [
+      "gates[*].gate_name",
+      "gates[*].status",
+      "gates[*].metrics",
+      "summary.overall_status",
+      "summary.passed",
+      "summary.failed",
+      "summary.aggregate_metrics"
+    ],
+    "ignored_fields": [
+      "metadata.timestamp",
+      "metadata.git_sha",
+      "metadata.git_sha_short",
+      "metadata.environment.ci_run_id",
+      "metadata.environment.ci_run_url",
+      "gates[*].duration_ms",
+      "gates[*].log_path",
+      "gates[*].output_summary",
+      "summary.total_duration_ms"
+    ],
+    "threshold_fields": {
+      "gates[*].metrics.coverage_percent": 0.5,
+      "gates[*].metrics.memory_peak_mb": 50
+    }
+  }
+}

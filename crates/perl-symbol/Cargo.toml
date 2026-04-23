@@ -1,0 +1,40 @@
+[package]
+name = "perl-symbol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Unified Perl symbol taxonomy, cursor extraction, indexing, and AST surface projection"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-symbol"
+readme = "README.md"
+keywords = ["perl", "lsp", "symbols", "taxonomy", "language-server"]
+categories = ["development-tools", "data-structures", "text-editors"]
+publish = true
+include = [
+    "src/**",
+    "Cargo.toml",
+    "LICENSE*",
+    "README.md",
+    "CLAUDE.md",
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-ast = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+perl-ast = { workspace = true }
+perl-tdd-support = { workspace = true }
+serde_json = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

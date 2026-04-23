@@ -1,0 +1,158 @@
+name: Pipeline Labels
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [opened, ready_for_review, labeled]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  auto-label-issues:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Auto-label scout reports
+        if: contains(github.event.issue.labels.*.name, 'swarm-discovered')
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // Scout-filed issues need plan review before building
+            const labels = context.payload.issue.labels.map(l => l.name);
+            if (!labels.includes('builder-ready') && !labels.includes('needs-plan-review')) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                labels: ['needs-plan-review']
+              });
+            }
+
+  auto-label-prs:
+    if: github.event_name == 'pull_request' && github.event.action == 'ready_for_review'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Label PR as in-review
+        uses: actions/github-script@v9
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: ['in-review']
+            });
+
+  auto-label-approved:
+    # Fires on PR approval OR when the reviewed-deep label is added.
+    # The label path handles the race where reviewer-deep adds the label after
+    # the reviewer has already approved (webhook fired before label was present).
+    if: |
+      (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'reviewed-deep')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Label PR as merge-ready on approval
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // Only add merge-ready if reviewed-deep label is present AND the PR
+            // has been approved. This enforces the two-pass review pipeline.
+            // If reviewed-deep is missing, add needs-deep-review instead and wait.
+            // When triggered by the reviewed-deep label being added, we also need
+            // to verify the PR has an approval — fetch reviews to check.
+            // pull_request_review events carry payload.pull_request;
+            // pull_request labeled events also carry payload.pull_request.
+            const prNumber = context.payload.pull_request
+              ? context.payload.pull_request.number
+              : null;
+            if (!prNumber) return;
+
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+            const prLabels = pr.data.labels.map(l => l.name);
+            const changedFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              per_page: 100,
+            }, response => response.data.map(file => file.filename));
+            const isDocsOnlyPath = (filename) =>
+              filename.startsWith('docs/') || /\.(md|mdx|txt|rst|adoc)$/i.test(filename);
+            const docsOnly = changedFiles.length > 0 && changedFiles.every(isDocsOnlyPath);
+
+            if (!prLabels.includes('reviewed-deep')) {
+              if (docsOnly) {
+                // Docs-only PRs can take the reviewer fast-track path.
+                // Do not manufacture a misleading needs-deep-review label.
+                if (prLabels.includes('needs-deep-review')) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: prNumber,
+                      name: 'needs-deep-review',
+                    });
+                  } catch (e) { /* label might not exist */ }
+                }
+                return;
+              }
+
+              // Flag for deep review - do not merge without reviewer-deep sign-off
+              if (!prLabels.includes('needs-deep-review')) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: ['needs-deep-review'],
+                });
+              }
+              return; // Do not add merge-ready until reviewer-deep has signed off
+            }
+
+            // When triggered by label event, verify at least one approval exists.
+            if (context.eventName === 'pull_request') {
+              const reviews = await github.rest.pulls.listReviews({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              const hasApproval = reviews.data.some(r => r.state === 'APPROVED');
+              if (!hasApproval) return; // Not yet approved — wait for the review event
+            }
+
+            // reviewed-deep is present and PR is approved - proceed to merge-ready
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                name: 'in-review'
+              });
+            } catch (e) { /* label might not exist */ }
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                name: 'needs-deep-review'
+              });
+            } catch (e) { /* label might not exist */ }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: ['merge-ready']
+            });

@@ -1,0 +1,52 @@
+[package]
+name = "perl-lexer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "High-performance Perl lexer with context-aware tokenization"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/perl-lexer"
+keywords = ["perl", "lexer", "tokenizer", "parser", "syntax"]
+categories = ["parsing", "text-processing"]
+include = ["src/**", "tests/**", "examples/**", "benches/**", "README.md", "LICENSE*", "Cargo.toml"]
+
+[dependencies]
+# Core dependencies
+unicode-ident = "1.0.22"
+memchr = "2.7.6"
+phf = { version = "0.13.1", features = ["macros"] }
+tracing.workspace = true
+
+# For better error handling
+thiserror.workspace = true
+perl-position-tracking = { workspace = true }
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+perl-parser-core = { workspace = true }
+perl-tdd-support = { workspace = true }
+perl-token = { workspace = true }
+perl-ast-v2 = { workspace = true }
+
+[features]
+default = []
+# Enable SIMD optimizations for string processing
+simd = []
+# Enable slow stress tests (regex fuzzing, etc.)
+slow_tests = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "lexer_benchmarks"
+harness = false

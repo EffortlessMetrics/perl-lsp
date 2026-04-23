@@ -1,0 +1,378 @@
+{
+  "race_condition_scenarios": [
+    {
+      "description": "Double cancellation race condition",
+      "scenario_id": "double_cancellation_race",
+      "setup": {
+        "original_request": {
+          "jsonrpc": "2.0",
+          "id": "race-double-1",
+          "method": "textDocument/completion",
+          "params": {
+            "textDocument": {"uri": "file:///test/race.pl"},
+            "position": {"line": 5, "character": 10}
+          }
+        },
+        "processing_delay_ms": 100
+      },
+      "race_sequence": [
+        {
+          "timing_ms": 25,
+          "action": "first_cancellation",
+          "message": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "race-double-1"}
+          }
+        },
+        {
+          "timing_ms": 30,
+          "action": "second_cancellation",
+          "message": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "race-double-1"}
+          }
+        }
+      ],
+      "expected_behavior": {
+        "single_error_response": true,
+        "no_duplicate_cleanup": true,
+        "idempotent_cancellation": true
+      }
+    },
+    {
+      "description": "Cancellation during request processing startup",
+      "scenario_id": "startup_cancellation_race",
+      "setup": {
+        "original_request": {
+          "jsonrpc": "2.0",
+          "id": "race-startup-1",
+          "method": "textDocument/hover",
+          "params": {
+            "textDocument": {"uri": "file:///test/startup.pl"},
+            "position": {"line": 12, "character": 8}
+          }
+        },
+        "provider_startup_delay_ms": 50
+      },
+      "race_sequence": [
+        {
+          "timing_ms": 1,
+          "action": "immediate_cancellation",
+          "message": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "race-startup-1"}
+          }
+        }
+      ],
+      "expected_behavior": {
+        "prevent_provider_startup": true,
+        "immediate_cancellation_response": true,
+        "no_resource_allocation": true
+      }
+    },
+    {
+      "description": "Cancellation after completion race condition",
+      "scenario_id": "post_completion_cancellation_race",
+      "setup": {
+        "original_request": {
+          "jsonrpc": "2.0",
+          "id": "race-post-completion-1",
+          "method": "textDocument/definition",
+          "params": {
+            "textDocument": {"uri": "file:///test/fast.pl"},
+            "position": {"line": 3, "character": 15}
+          }
+        },
+        "fast_completion_ms": 10
+      },
+      "race_sequence": [
+        {
+          "timing_ms": 15,
+          "action": "late_cancellation",
+          "message": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "race-post-completion-1"}
+          }
+        }
+      ],
+      "expected_behavior": {
+        "ignore_cancellation": true,
+        "preserve_success_response": true,
+        "no_interference_with_result": true
+      }
+    }
+  ],
+  "concurrent_provider_races": [
+    {
+      "description": "Multiple providers accessing shared state during cancellation",
+      "scenario_id": "shared_state_race",
+      "concurrent_requests": [
+        {
+          "id": "shared-completion-1",
+          "provider": "completion",
+          "shared_resources": ["workspace_index", "parser_cache"]
+        },
+        {
+          "id": "shared-references-2",
+          "provider": "references",
+          "shared_resources": ["workspace_index", "file_system"]
+        },
+        {
+          "id": "shared-symbols-3",
+          "provider": "workspaceSymbols",
+          "shared_resources": ["workspace_index"]
+        }
+      ],
+      "cancellation_sequence": [
+        {
+          "timing_ms": 30,
+          "target": "shared-completion-1"
+        },
+        {
+          "timing_ms": 45,
+          "target": "shared-references-2"
+        },
+        {
+          "timing_ms": 60,
+          "target": "shared-symbols-3"
+        }
+      ],
+      "expected_behavior": {
+        "consistent_shared_state": true,
+        "no_resource_corruption": true,
+        "ordered_cleanup": true
+      }
+    },
+    {
+      "description": "Cross-provider dependency cancellation race",
+      "scenario_id": "dependency_cancellation_race",
+      "dependency_chain": [
+        {
+          "id": "primary-definition-1",
+          "provider": "definition",
+          "triggers": ["secondary-hover-2", "secondary-completion-3"]
+        },
+        {
+          "id": "secondary-hover-2",
+          "provider": "hover",
+          "depends_on": "primary-definition-1"
+        },
+        {
+          "id": "secondary-completion-3",
+          "provider": "completion",
+          "depends_on": "primary-definition-1"
+        }
+      ],
+      "race_scenarios": [
+        {
+          "name": "cancel_primary_before_secondary_start",
+          "cancellation_timing": {
+            "primary-definition-1": 20,
+            "expected_secondary_cancellation": "automatic"
+          }
+        },
+        {
+          "name": "cancel_secondary_during_primary_processing",
+          "cancellation_timing": {
+            "secondary-hover-2": 40,
+            "primary_continues": true
+          }
+        }
+      ]
+    }
+  ],
+  "resource_cleanup_races": [
+    {
+      "description": "Resource cleanup ordering race conditions",
+      "scenario_id": "cleanup_ordering_race",
+      "resources": [
+        {
+          "name": "file_handles",
+          "cleanup_priority": 1,
+          "cleanup_time_ms": 5
+        },
+        {
+          "name": "memory_allocations",
+          "cleanup_priority": 2,
+          "cleanup_time_ms": 10
+        },
+        {
+          "name": "thread_pool_tasks",
+          "cleanup_priority": 3,
+          "cleanup_time_ms": 15
+        }
+      ],
+      "race_conditions": [
+        {
+          "name": "out_of_order_cleanup",
+          "trigger": "rapid_successive_cancellations",
+          "expected_behavior": "maintain_cleanup_order"
+        },
+        {
+          "name": "partial_cleanup_interruption",
+          "trigger": "cancellation_during_cleanup",
+          "expected_behavior": "complete_current_cleanup"
+        }
+      ]
+    },
+    {
+      "description": "Memory leak prevention during races",
+      "scenario_id": "memory_leak_race_prevention",
+      "leak_scenarios": [
+        {
+          "name": "incomplete_cancellation_cleanup",
+          "description": "Cancellation interrupted before resource cleanup",
+          "setup": {
+            "allocated_memory_kb": 500,
+            "cleanup_interruption_timing": "mid_cleanup"
+          },
+          "expected_behavior": {
+            "complete_cleanup_eventually": true,
+            "max_leaked_memory_kb": 0,
+            "cleanup_retry_mechanism": true
+          }
+        },
+        {
+          "name": "concurrent_allocation_cancellation",
+          "description": "Resource allocation happening during cancellation",
+          "setup": {
+            "allocation_thread": 1,
+            "cancellation_thread": 2,
+            "timing_overlap_ms": 50
+          },
+          "expected_behavior": {
+            "prevent_allocation_after_cancellation": true,
+            "cleanup_already_allocated": true
+          }
+        }
+      ]
+    }
+  ],
+  "timing_edge_cases": [
+    {
+      "description": "Sub-millisecond timing edge cases",
+      "scenarios": [
+        {
+          "name": "microsecond_precision_cancellation",
+          "timing_precision": "microsecond",
+          "cancellation_delay_us": 500,
+          "expected_behavior": {
+            "precise_timing_detection": true,
+            "no_timing_drift": true
+          }
+        },
+        {
+          "name": "zero_delay_cancellation",
+          "timing_precision": "nanosecond",
+          "cancellation_delay_ns": 0,
+          "expected_behavior": {
+            "immediate_cancellation": true,
+            "no_processing_start": true
+          }
+        }
+      ]
+    },
+    {
+      "description": "Timeout boundary conditions",
+      "scenarios": [
+        {
+          "name": "cancellation_at_timeout_boundary",
+          "timeout_ms": 5000,
+          "cancellation_timing_ms": 4999,
+          "expected_behavior": "cancellation_takes_precedence"
+        },
+        {
+          "name": "timeout_during_cancellation_processing",
+          "timeout_ms": 100,
+          "cancellation_processing_time_ms": 150,
+          "expected_behavior": "complete_cancellation_despite_timeout"
+        }
+      ]
+    }
+  ],
+  "error_propagation_races": [
+    {
+      "description": "Error propagation race conditions",
+      "scenarios": [
+        {
+          "name": "error_during_cancellation",
+          "setup": {
+            "original_error": "parser_error",
+            "cancellation_timing": "during_error_handling"
+          },
+          "expected_behavior": {
+            "cancellation_error_takes_precedence": true,
+            "original_error_logged": true
+          }
+        },
+        {
+          "name": "cascading_errors_with_cancellation",
+          "setup": {
+            "error_chain": ["file_not_found", "parser_error", "memory_error"],
+            "cancellation_timing": "mid_chain"
+          },
+          "expected_behavior": {
+            "stop_error_propagation": true,
+            "clean_cancellation_response": true
+          }
+        }
+      ]
+    }
+  ],
+  "recovery_scenarios": [
+    {
+      "description": "System recovery after race conditions",
+      "scenarios": [
+        {
+          "name": "recovery_from_partial_cancellation",
+          "description": "System state recovery after incomplete cancellation",
+          "recovery_steps": [
+            "detect_inconsistent_state",
+            "identify_orphaned_resources",
+            "perform_cleanup_recovery",
+            "validate_system_consistency"
+          ],
+          "expected_outcome": "full_system_recovery"
+        },
+        {
+          "name": "graceful_degradation_on_race_detection",
+          "description": "Fallback behavior when race conditions are detected",
+          "fallback_strategy": {
+            "detect_race": "atomic_flag_inconsistency",
+            "fallback_action": "conservative_cleanup",
+            "user_notification": "transparent_recovery"
+          }
+        }
+      ]
+    }
+  ],
+  "stress_testing_configurations": [
+    {
+      "description": "High-stress race condition detection",
+      "configurations": [
+        {
+          "name": "high_frequency_cancellations",
+          "request_rate_per_second": 1000,
+          "cancellation_rate_percentage": 80,
+          "duration_seconds": 60
+        },
+        {
+          "name": "burst_cancellation_stress",
+          "burst_size": 100,
+          "burst_interval_ms": 10,
+          "total_bursts": 50
+        }
+      ],
+      "detection_metrics": [
+        "race_condition_occurrences",
+        "inconsistent_state_detections",
+        "resource_leak_measurements",
+        "response_time_outliers"
+      ]
+    }
+  ]
+}

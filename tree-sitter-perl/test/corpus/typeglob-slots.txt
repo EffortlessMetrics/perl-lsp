@@ -1,0 +1,1178 @@
+==================
+Basic typeglob slot access
+==================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{NAME};
+*foo{PACKAGE};
+
+my $scalar_ref = *foo{SCALAR};
+my $array_ref = *foo{ARRAY};
+my $hash_ref = *foo{HASH};
+my $code_ref = *foo{CODE};
+my $io_ref = *foo{IO};
+
+---
+
+(source_file
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))))
+
+==================
+Typeglob slot assignment
+==================
+
+*foo{SCALAR} = \$scalar;
+*foo{ARRAY} = \@array;
+*foo{HASH} = \%hash;
+*foo{CODE} = \&subroutine;
+*foo{IO} = \*FILEHANDLE;
+
+${*foo{SCALAR}} = 42;
+@{*foo{ARRAY}} = (1, 2, 3);
+%{*foo{HASH}} = (key => 'value');
+
+*bar = *foo{HASH};
+*baz = *foo{CODE};
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (hash
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (glob
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname))
+                (autoquoted_bareword))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname))
+                (autoquoted_bareword))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname))
+                (autoquoted_bareword))))))
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))))
+
+==================
+Checking slot existence
+==================
+
+if (defined *foo{CODE}) {
+    print "foo is a subroutine\n";
+}
+
+if (defined *foo{ARRAY}) {
+    print "foo has an array slot\n";
+}
+
+if (*foo{IO}) {
+    print "foo is a filehandle\n";
+}
+
+unless (*foo{HASH}) {
+    *foo{HASH} = {};
+}
+
+for my $slot (qw(SCALAR ARRAY HASH CODE)) {
+    print "$slot exists\n" if *foo{$slot};
+}
+
+---
+
+(source_file
+  (conditional_statement
+    (func1op_call_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (conditional_statement
+    (func1op_call_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (conditional_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (conditional_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob_slot_expression
+            (glob
+              (varname))
+            (autoquoted_bareword))
+          (anonymous_hash_expression)))))
+  (for_statement
+    (scalar
+      (varname))
+    (quoted_word_list
+      (string_content))
+    (block
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (scalar
+                  (varname))
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname))
+            (scalar
+              (varname))))))))
+
+==================
+NAME and PACKAGE slots
+==================
+
+my $name = *foo{NAME};
+my $package = *foo{PACKAGE};
+
+print "Name: ", *STDOUT{NAME}, "\n";
+print "Package: ", *STDOUT{PACKAGE}, "\n";
+
+*Some::Package::function{NAME};
+*Some::Package::function{PACKAGE};
+
+for my $glob (values %main::) {
+    next unless *{$glob}{CODE};
+    print *{$glob}{NAME}, " is a function\n";
+}
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (interpolated_string_literal
+          (string_content))
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence))))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (interpolated_string_literal
+          (string_content))
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence))))))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (for_statement
+    (scalar
+      (varname))
+    (func1op_call_expression
+      (hash
+        (varname)))
+    (block
+      (expression_statement
+        (postfix_conditional_expression
+          (loopex_expression)
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))))))
+
+==================
+IO slot operations
+==================
+
+open my $fh, '>', 'file.txt';
+*MYFILE = *{$fh}{IO};
+
+my $io = *STDIN{IO};
+my $stderr_io = *STDERR{IO};
+
+*OLDOUT = *STDOUT{IO};
+*STDOUT = *STDERR;
+*STDOUT = *OLDOUT;
+
+if (*$handle{IO}) {
+    print $handle "Data\n";
+}
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname))))))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (conditional_statement
+    (glob_slot_expression
+      (glob
+        (varname
+          (scalar
+            (varname))))
+      (autoquoted_bareword))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (indirect_object
+            (scalar
+              (varname)))
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
+
+==================
+Selective glob copying
+==================
+
+# Copy only the subroutine
+*new_sub = *old_sub{CODE};
+
+# Copy only the array
+*new_array = *old_array{ARRAY};
+
+# Copy multiple slots
+*new{CODE} = *old{CODE};
+*new{SCALAR} = *old{SCALAR};
+
+# Full glob copy
+*complete = *source;
+
+# Partial glob copy
+local *temp = *original;
+*temp{SCALAR} = \$different_scalar;
+
+---
+
+(source_file
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (glob
+          (varname)))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (refgen_expression
+        (scalar
+          (varname))))))
+
+==================
+Glob slots in symbol table
+==================
+
+for my $entry (keys %main::) {
+    my $glob = $main::{$entry};
+    
+    print "$entry:\n";
+    print "  SCALAR\n" if *{$glob}{SCALAR};
+    print "  ARRAY\n" if *{$glob}{ARRAY};
+    print "  HASH\n" if *{$glob}{HASH};
+    print "  CODE\n" if *{$glob}{CODE};
+    print "  IO\n" if *{$glob}{IO};
+}
+
+# Check what slots a glob has
+sub inspect_glob {
+    my $glob = shift;
+    my %slots;
+    
+    $slots{SCALAR} = 1 if defined *{$glob}{SCALAR};
+    $slots{ARRAY} = 1 if defined *{$glob}{ARRAY};
+    $slots{HASH} = 1 if defined *{$glob}{HASH};
+    $slots{CODE} = 1 if defined *{$glob}{CODE};
+    $slots{IO} = 1 if defined *{$glob}{IO};
+    
+    return \%slots;
+}
+
+---
+
+(source_file
+  (for_statement
+    (scalar
+      (varname))
+    (func1op_call_expression
+      (hash
+        (varname)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (hash_element_expression
+            (container_variable
+              (varname))
+            (scalar
+              (varname)))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))))
+  (comment)
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (variable_declaration
+          (hash
+            (varname))))
+      (expression_statement
+        (postfix_conditional_expression
+          (assignment_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))
+            (number))
+          (func1op_call_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (assignment_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))
+            (number))
+          (func1op_call_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (assignment_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))
+            (number))
+          (func1op_call_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (assignment_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))
+            (number))
+          (func1op_call_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (expression_statement
+        (postfix_conditional_expression
+          (assignment_expression
+            (hash_element_expression
+              (container_variable
+                (varname))
+              (autoquoted_bareword))
+            (number))
+          (func1op_call_expression
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (expression_statement
+        (return_expression
+          (refgen_expression
+            (hash
+              (varname))))))))
+
+==================
+FORMAT slot access
+==================
+
+format MYFORMAT =
+@<<<<<<<<< @>>>>>>>>
+$left, $right
+.
+
+if (*MYFORMAT{FORMAT}) {
+    print "MYFORMAT has a format\n";
+}
+
+*NEWFORMAT{FORMAT} = *MYFORMAT{FORMAT};
+
+local *FH = *STDOUT;
+*FH{FORMAT} = *MYFORMAT{FORMAT};
+
+---
+
+(source_file
+  (format_declaration)
+  (if_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Advanced glob slot manipulation
+==================
+
+# Create anonymous glob
+my $glob = \*{"Foo::bar"};
+*{$glob}{CODE} = sub { print "Hello\n" };
+*{$glob}{SCALAR} = \42;
+
+# Swap glob slots
+(*foo{CODE}, *bar{CODE}) = (*bar{CODE}, *foo{CODE});
+
+# Clear specific slot
+*foo{ARRAY} = undef;
+delete *foo{HASH};
+
+# Clone glob with modifications
+{
+    local *clone = *original;
+    *clone{SCALAR} = \$new_value;
+    *clone{CODE} = \&new_sub;
+    # Use clone here
+}
+
+---
+
+(source_file
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (refgen_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (interpolated_string_literal
+                  (string_content)))))))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname))))))
+        (autoquoted_bareword))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence)))))))))
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname))))))
+        (autoquoted_bareword))
+      (refgen_expression
+        (number))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (list_expression
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword)))
+      (list_expression
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword)))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))
+      (undef_expression)))
+  (expression_statement
+    (func1op_call_expression
+      (glob_slot_expression
+        (glob
+          (varname))
+        (autoquoted_bareword))))
+  (comment)
+  (block_statement
+    (expression_statement
+      (assignment_expression
+        (localization_expression
+          (glob
+            (varname)))
+        (glob
+          (varname))))
+    (expression_statement
+      (assignment_expression
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (refgen_expression
+          (scalar
+            (varname)))))
+    (expression_statement
+      (assignment_expression
+        (glob_slot_expression
+          (glob
+            (varname))
+          (autoquoted_bareword))
+        (refgen_expression
+          (function
+            (varname)))))
+    (comment)))
+
+==================
+Glob slots with references
+==================
+
+my $glob_ref = \*foo;
+
+${*{$glob_ref}{SCALAR}} = 42;
+@{*{$glob_ref}{ARRAY}} = (1, 2, 3);
+%{*{$glob_ref}{HASH}} = (a => 1, b => 2);
+
+&{*{$glob_ref}{CODE}}(@args);
+
+print {*{$glob_ref}{IO}} "Output\n";
+
+if (ref $glob_ref eq 'GLOB') {
+    my $name = *{$glob_ref}{NAME};
+    my $package = *{$glob_ref}{PACKAGE};
+}
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (refgen_expression
+        (glob
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname))))))
+                (autoquoted_bareword))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname))))))
+                (autoquoted_bareword))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname))))))
+                (autoquoted_bareword))))))
+      (list_expression
+        (autoquoted_bareword)
+        (number)
+        (autoquoted_bareword)
+        (number))))
+  (expression_statement
+    (function_call_expression
+      (function
+        (varname
+          (block
+            (expression_statement
+              (glob_slot_expression
+                (glob
+                  (varname
+                    (block
+                      (expression_statement
+                        (scalar
+                          (varname))))))
+                (autoquoted_bareword))))))
+      (array
+        (varname))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (block
+          (expression_statement
+            (glob_slot_expression
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))
+              (autoquoted_bareword)))))
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (conditional_statement
+    (equality_expression
+      (func1op_call_expression
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (glob_slot_expression
+            (glob
+              (varname
+                (block
+                  (expression_statement
+                    (scalar
+                      (varname))))))
+            (autoquoted_bareword)))))))

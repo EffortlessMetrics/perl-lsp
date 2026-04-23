@@ -1,0 +1,294 @@
+name: Release
+
+# Build and release perl-lsp binaries for all platforms
+# Cost: ~$0.50 per release (across all platforms)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v<0.x.y>)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark this as a prerelease'
+        required: false
+        type: boolean
+        default: false
+
+# Cancel in-flight runs on concurrent release dispatches
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  release-metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+
+    steps:
+      - name: Resolve and validate tag
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          PRERELEASE_INPUT="${{ github.event.inputs.prerelease }}"
+
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag is missing"
+            exit 1
+          fi
+
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid release tag: $TAG"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PRERELEASE="${PRERELEASE_INPUT}"
+          if [ -z "$PRERELEASE" ]; then
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved release tag: $TAG"
+          echo "Resolved version: $VERSION"
+          echo "Resolved prerelease: $PRERELEASE"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: release-metadata
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux GNU
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: false
+          # Linux aarch64 GNU
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            use_cross: true
+          # Linux musl (static)
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-22.04
+            use_cross: true
+          # macOS
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            use_cross: false
+          - target: aarch64-apple-darwin
+            os: macos-14
+            use_cross: false
+          # Windows
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            use_cross: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.use_cross
+        run: cargo install cross --locked --git https://github.com/cross-rs/cross
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          key: ${{ matrix.target }}
+          cache-on-failure: true
+          cache-all-crates: true
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          BUILD_CMD="cargo"
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            BUILD_CMD="cross"
+          fi
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perllsp --bin perllsp
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-dap --bin perl-dap
+
+      - name: Package binaries
+        shell: bash
+        run: |
+          NAME="perllsp"
+          TARGET="${{ matrix.target }}"
+          VERSION="${{ needs.release-metadata.outputs.version }}"
+
+          if [[ "$TARGET" == *"windows"* ]]; then
+            BIN="${NAME}.exe"
+            DAP_BIN="perl-dap.exe"
+            EXT=".zip"
+          else
+            BIN="${NAME}"
+            DAP_BIN="perl-dap"
+            EXT=".tar.gz"
+          fi
+
+          PKG_NAME="${NAME}-${VERSION}-${TARGET}"
+          mkdir -p "${PKG_NAME}"
+
+          cp "target/${TARGET}/release/${BIN}" "${PKG_NAME}/"
+          cp "target/${TARGET}/release/${DAP_BIN}" "${PKG_NAME}/"
+
+          if [[ "$TARGET" != *"windows"* ]] && [[ "${{ matrix.use_cross }}" != "true" ]]; then
+            strip "${PKG_NAME}/${BIN}" 2>/dev/null || true
+            strip "${PKG_NAME}/${DAP_BIN}" 2>/dev/null || true
+          fi
+
+          # Copy additional files
+          cp README.md LICENSE-APACHE LICENSE-MIT "${PKG_NAME}/" 2>/dev/null || true
+
+          cd "${PKG_NAME}"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${BIN}" "${DAP_BIN}" > SHA256SUMS.txt
+          else
+            shasum -a 256 "${BIN}" "${DAP_BIN}" > SHA256SUMS.txt
+          fi
+          cd ..
+
+          if [[ "$EXT" == ".zip" ]]; then
+            7z a "${PKG_NAME}${EXT}" "${PKG_NAME}"/*
+          else
+            tar czf "${PKG_NAME}${EXT}" "${PKG_NAME}"
+          fi
+
+          echo "ASSET=${PKG_NAME}${EXT}" >> $GITHUB_ENV
+          echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PKG_NAME }}
+          path: ${{ env.ASSET }}
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: [build, release-metadata]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
+      - name: Install cargo-release
+        run: cargo install cargo-release --locked
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Generate consolidated SHA256SUMS
+        run: |
+          cd artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 | \
+            sort -z | \
+            xargs -0 sha256sum | \
+            sed 's|  \./[^/]*/|  |' > ../SHA256SUMS
+          cd ..
+          cat SHA256SUMS
+
+      - name: Verify curated release notes exist
+        id: release_notes_preflight
+        run: |
+          TAG="${{ needs.release-metadata.outputs.tag }}"
+          NOTE_FILE="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTE_FILE" ]; then
+            echo "::error file=$NOTE_FILE::Curated release notes missing for ${TAG}. See RELEASE.md \"Release History Updates\" — every release must ship docs/releases/${TAG}.md before tagging."
+            exit 1
+          fi
+          echo "note_file=$NOTE_FILE" >> "$GITHUB_OUTPUT"
+          echo "✅ Found curated release notes: $NOTE_FILE"
+
+      - name: Generate release notes from docs/releases/<tag>.md
+        id: release_notes
+        run: |
+          TAG="${{ needs.release-metadata.outputs.tag }}"
+          # xtask strips YAML frontmatter and emits the curated body. The
+          # command fails hard if the note file is missing — the earlier
+          # preflight step makes that a clearer error message in the UI.
+          cargo xtask release-notes --tag "$TAG" --output release_notes.md
+          echo "--- release_notes.md ---"
+          cat release_notes.md
+          echo "--- /release_notes.md ---"
+
+      - name: Create GitHub Release
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        with:
+          files: |
+            artifacts/*/*
+            SHA256SUMS
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ needs.release-metadata.outputs.prerelease == 'true' }}
+          tag_name: ${{ needs.release-metadata.outputs.tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate SBOM
+        run: |
+          cargo install cargo-sbom --locked || true
+          cargo sbom --output-format spdx_json_2_3 > sbom-spdx.json
+
+      - name: Upload SBOM as release asset
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        with:
+          files: sbom-spdx.json
+          tag_name: ${{ needs.release-metadata.outputs.tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

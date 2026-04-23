@@ -1,0 +1,53 @@
+{
+  "name": "launch_attach_sequence",
+  "description": "Launch configuration and program start",
+  "fixture": "tests/fixtures/hello.pl",
+  "messages": [
+    {
+      "seq": 3,
+      "type": "request",
+      "command": "launch",
+      "arguments": {
+        "program": "${workspaceFolder}/tests/fixtures/hello.pl",
+        "args": ["arg1", "arg2"],
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PERL5LIB": "${workspaceFolder}/lib:${workspaceFolder}/local/lib/perl5"
+        },
+        "perlPath": "/usr/bin/perl",
+        "includePaths": ["lib", "local/lib/perl5"],
+        "stopOnEntry": true,
+        "console": "integratedTerminal"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "response",
+      "request_seq": 3,
+      "success": true,
+      "command": "launch"
+    },
+    {
+      "seq": 4,
+      "type": "event",
+      "event": "process",
+      "body": {
+        "name": "hello.pl",
+        "systemProcessId": 12345,
+        "isLocalProcess": true,
+        "startMethod": "launch"
+      }
+    },
+    {
+      "seq": 5,
+      "type": "event",
+      "event": "stopped",
+      "body": {
+        "reason": "entry",
+        "description": "Paused on entry",
+        "threadId": 1,
+        "allThreadsStopped": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snap.rs
+expression: "parse_sexp(\"for my $k (keys %h) { print $k; }\")"
+---
+(source_file (foreach (my_declaration (variable $ k)) (call keys ((variable % h))) (block (expression_statement (call print ((variable $ k)))))))

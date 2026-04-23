@@ -1,0 +1,1019 @@
+==================
+Basic symbolic references
+==================
+
+no strict 'refs';
+
+$$name = 42;
+@$name = (1, 2, 3);
+%$name = (key => 'value');
+&$name();
+*$name = \&sub;
+
+${"main::var"} = 100;
+@{"Foo::array"} = qw(a b c);
+%{"Bar::hash"} = (x => 1);
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (scalar
+            (varname))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (scalar
+            (varname))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (scalar
+            (varname))))
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function
+        (varname
+          (scalar
+            (varname))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (scalar
+            (varname))))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (list_expression
+        (autoquoted_bareword)
+        (number)))))
+
+==================
+Complex symbolic references
+==================
+
+no strict 'refs';
+
+${$package . '::VERSION'} = '1.0';
+@{$class . '::ISA'} = qw(Parent);
+%{$module . '::EXPORT_TAGS'} = (all => \@all);
+
+&{$object . '::method'}(@args);
+*{$pkg . '::' . $func} = \&implementation;
+
+push @{$namespace . '::array'}, $value;
+$hashref = \%{$package . '::hash'};
+
+my $var_name = 'foo';
+$$var_name = 'bar';
+print ${$var_name};
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (quoted_word_list
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (list_expression
+        (autoquoted_bareword)
+        (refgen_expression
+          (array
+            (varname))))))
+  (expression_statement
+    (function_call_expression
+      (function
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (scalar
+                  (varname))
+                (string_literal
+                  (string_content)))))))
+      (array
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (binary_expression
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (string_literal
+                    (string_content)))
+                (scalar
+                  (varname)))))))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname
+            (block
+              (expression_statement
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (string_literal
+                    (string_content)))))))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (hash
+          (varname
+            (block
+              (expression_statement
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (string_literal
+                    (string_content))))))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (scalar
+            (varname))))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (scalar
+                (varname)))))))))
+
+==================
+Method calls via symbolic refs
+==================
+
+no strict 'refs';
+
+my $method = 'print';
+$object->$method("Hello");
+
+my $class = 'My::Class';
+$class->new();
+
+my $sub = 'handler';
+$self->$sub(@_);
+
+${"${class}::$method"}->($self, @args);
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (method_call_expression
+      (scalar
+        (varname))
+      (method
+        (scalar
+          (varname)))
+      (array
+        (varname))))
+  (expression_statement
+    (coderef_call_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))
+                  (scalar
+                    (varname))))))))
+      (list_expression
+        (scalar
+          (varname))
+        (array
+          (varname))))))
+
+==================
+Symbolic refs with local
+==================
+
+no strict 'refs';
+
+local ${"Foo::bar"} = 42;
+local @{"main::array"} = (1, 2, 3);
+local %{"Package::hash"};
+
+{
+    local ${$var} = 'temporary';
+    do_something();
+}
+
+local *{$filehandle} = \*STDOUT;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (scalar
+          (varname
+            (block
+              (expression_statement
+                (interpolated_string_literal
+                  (string_content)))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (array
+          (varname
+            (block
+              (expression_statement
+                (interpolated_string_literal
+                  (string_content)))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (localization_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))))
+  (block_statement
+    (expression_statement
+      (assignment_expression
+        (localization_expression
+          (scalar
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname)))))))
+        (string_literal
+          (string_content))))
+    (expression_statement
+      (function_call_expression
+        (function))))
+  (expression_statement
+    (assignment_expression
+      (localization_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname)))))))
+      (refgen_expression
+        (glob
+          (varname))))))
+
+==================
+Building symbol tables
+==================
+
+no strict 'refs';
+
+for my $color (qw(red green blue)) {
+    *{$color} = sub { "<$color>@_</$color>" };
+}
+
+for my $op (qw(add subtract multiply divide)) {
+    *{"calc_$op"} = sub {
+        my ($a, $b) = @_;
+        return $operations{$op}->($a, $b);
+    };
+}
+
+while (my ($name, $value) = each %constants) {
+    *{$name} = sub () { $value };
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (for_statement
+    (scalar
+      (varname))
+    (quoted_word_list
+      (string_content))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (interpolated_string_literal
+                  (string_content
+                    (scalar
+                      (varname))
+                    (array
+                      (varname))
+                    (scalar
+                      (varname)))))))))))
+  (for_statement
+    (scalar
+      (varname))
+    (quoted_word_list
+      (string_content))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (interpolated_string_literal
+                    (string_content
+                      (scalar
+                        (varname))))))))
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (assignment_expression
+                  (variable_declaration
+                    (scalar
+                      (varname))
+                    (scalar
+                      (varname)))
+                  (array
+                    (varname))))
+              (expression_statement
+                (return_expression
+                  (coderef_call_expression
+                    (hash_element_expression
+                      (container_variable
+                        (varname))
+                      (scalar
+                        (varname)))
+                    (list_expression
+                      (scalar
+                        (varname))
+                      (scalar
+                        (varname))))))))))))
+  (loop_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname))
+        (scalar
+          (varname)))
+      (func1op_call_expression
+        (hash
+          (varname))))
+    (block
+      (expression_statement
+        (assignment_expression
+          (glob
+            (varname
+              (block
+                (expression_statement
+                  (scalar
+                    (varname))))))
+          (anonymous_subroutine_expression
+            (prototype)
+            (block
+              (expression_statement
+                (scalar
+                  (varname))))))))))
+
+==================
+Accessing symbol table directly
+==================
+
+no strict 'refs';
+
+my @symbols = keys %{'main::'};
+my @packages = grep { /::$/ } keys %{'main::'};
+
+for my $symbol (keys %{'MyPackage::'}) {
+    print "$symbol\n" if defined &{"MyPackage::$symbol"};
+}
+
+if (exists ${'Foo::'}{bar}) {
+    print "Foo::bar exists\n";
+}
+
+*{'NewPackage::'} = *{'OldPackage::'};
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (func1op_call_expression
+        (hash
+          (varname
+            (block
+              (expression_statement
+                (string_literal
+                  (string_content)))))))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (map_grep_expression
+        (block
+          (expression_statement
+            (match_regexp
+              (regexp_content))))
+        (func1op_call_expression
+          (hash
+            (varname
+              (block
+                (expression_statement
+                  (string_literal
+                    (string_content))))))))))
+  (for_statement
+    (scalar
+      (varname))
+    (func1op_call_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (string_literal
+                (string_content)))))))
+    (block
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (scalar
+                  (varname))
+                (escape_sequence))))
+          (func1op_call_expression
+            (function_call_expression
+              (function
+                (varname
+                  (block
+                    (expression_statement
+                      (interpolated_string_literal
+                        (string_content
+                          (scalar
+                            (varname))))))))))))))
+  (conditional_statement
+    (func1op_call_expression
+      (hash_element_expression
+        (container_variable
+          (varname
+            (block
+              (expression_statement
+                (string_literal
+                  (string_content))))))
+        (autoquoted_bareword)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (string_literal
+                (string_content))))))
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (string_literal
+                (string_content)))))))))
+
+==================
+Symbolic refs for data structures
+==================
+
+no strict 'refs';
+
+push @{$data->{arrayref}}, $item;
+$value = pop @{$struct->{$key}};
+
+keys %{$href->{nested}};
+values %{$complex->{data}{structure}};
+
+${$ref->{scalar}} = 42;
+@{$ref->{array}} = (1, 2, 3);
+%{$ref->{hash}} = (a => 1);
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (array
+          (varname
+            (block
+              (expression_statement
+                (hash_element_expression
+                  (scalar
+                    (varname))
+                  (autoquoted_bareword))))))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (func1op_call_expression
+        (array
+          (varname
+            (block
+              (expression_statement
+                (hash_element_expression
+                  (scalar
+                    (varname))
+                  (scalar
+                    (varname))))))))))
+  (expression_statement
+    (func1op_call_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (hash_element_expression
+                (scalar
+                  (varname))
+                (autoquoted_bareword))))))))
+  (expression_statement
+    (func1op_call_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (hash_element_expression
+                (hash_element_expression
+                  (scalar
+                    (varname))
+                  (autoquoted_bareword))
+                (autoquoted_bareword))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (hash_element_expression
+                (scalar
+                  (varname))
+                (autoquoted_bareword))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (hash_element_expression
+                (scalar
+                  (varname))
+                (autoquoted_bareword))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (hash_element_expression
+                (scalar
+                  (varname))
+                (autoquoted_bareword))))))
+      (list_expression
+        (autoquoted_bareword)
+        (number)))))
+
+==================
+Glob references vs symbolic refs
+==================
+
+no strict 'refs';
+
+# Symbolic reference
+*{"Foo::bar"} = sub { 42 };
+
+# Glob reference
+my $glob = \*Foo::bar;
+*{$glob} = sub { 42 };
+
+# Mixed
+my $name = "Foo::bar";
+my $globref = \*{$name};
+${*{$globref}} = 42;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (number))))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (refgen_expression
+        (glob
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (scalar
+                (varname))))))
+      (anonymous_subroutine_expression
+        (block
+          (expression_statement
+            (number))))))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (refgen_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname)))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (glob
+                (varname
+                  (block
+                    (expression_statement
+                      (scalar
+                        (varname))))))))))
+      (number))))
+
+==================
+Strict refs violations
+==================
+
+use strict;
+
+eval {
+    no strict 'refs';
+    $$var = 42;  # OK here
+};
+
+{
+    no strict 'refs';
+    &{$subname}();  # OK in this block
+}
+
+# Would die under strict
+eval '$$var = 42';
+eval 'push @$arrayname, 1';
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (eval_expression
+      (block
+        (use_statement
+          (package)
+          (string_literal
+            (string_content)))
+        (expression_statement
+          (assignment_expression
+            (scalar
+              (varname
+                (scalar
+                  (varname))))
+            (number)))
+        (comment))))
+  (block_statement
+    (use_statement
+      (package)
+      (string_literal
+        (string_content)))
+    (expression_statement
+      (function_call_expression
+        (function
+          (varname
+            (block
+              (expression_statement
+                (scalar
+                  (varname))))))))
+    (comment))
+  (comment)
+  (expression_statement
+    (eval_expression
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (eval_expression
+      (string_literal
+        (string_content)))))
+
+==================
+Hard references vs symbolic
+==================
+
+no strict 'refs';
+
+# Hard reference
+my $hard_ref = \$scalar;
+$$hard_ref = 42;
+
+# Symbolic reference
+my $sym_ref = 'scalar';
+$$sym_ref = 42;
+
+# Check if hard reference
+if (ref $hard_ref) {
+    print "Hard reference to " . ref($hard_ref) . "\n";
+}
+
+# Symbolic ref doesn't return ref type
+if (!ref $sym_ref) {
+    print "Symbolic reference: $sym_ref\n";
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (refgen_expression
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (scalar
+            (varname))))
+      (number)))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (scalar
+            (varname))))
+      (number)))
+  (comment)
+  (conditional_statement
+    (func1op_call_expression
+      (scalar
+        (varname)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (binary_expression
+            (binary_expression
+              (interpolated_string_literal
+                (string_content))
+              (func1op_call_expression
+                (scalar
+                  (varname))))
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))))))
+  (comment)
+  (conditional_statement
+    (unary_expression
+      (func1op_call_expression
+        (scalar
+          (varname))))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence))))))))

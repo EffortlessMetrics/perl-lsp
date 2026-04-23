@@ -1,0 +1,23 @@
+[package]
+name = "perl-ast-v2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Incremental parsing AST node definitions for the Perl parser ecosystem"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-ast-v2"
+keywords = ["perl", "ast", "incremental", "parser", "syntax-tree"]
+categories = ["parsing", "development-tools"]
+
+[dependencies]
+perl-position-tracking = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

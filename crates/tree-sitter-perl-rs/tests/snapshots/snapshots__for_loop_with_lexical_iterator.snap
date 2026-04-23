@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshots.rs
+expression: sexp
+---
+(source_file (foreach (my_declaration (variable $ item)) (variable @ items) (block (expression_statement (call print ((variable $ item) (string_interpolated "\"\\n\"")))))))

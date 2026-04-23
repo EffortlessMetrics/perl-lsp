@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_errors(\"sub foo {\")"
+---
+Invalid syntax at position 9: Unclosed block: expected '}' but reached end of input

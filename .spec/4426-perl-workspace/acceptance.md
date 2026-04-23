@@ -1,0 +1,22 @@
+# Acceptance Criteria: Wave A Microcrate Collapse
+
+- [ ] All 6 old satellite crate directories deleted: `perl-workspace-discovery`, `perl-workspace-folder`, `perl-workspace-ignore`, `perl-workspace-index-monitoring`, `perl-workspace-index-slo`, `perl-workspace-index-state-machine`
+- [ ] `crates/perl-workspace-index/Cargo.toml` package name changed to `perl-workspace`; description updated; documentation URL updated; directory unchanged
+- [ ] 6 new folder-modules created in `crates/perl-workspace-index/src/`: `discovery/mod.rs`, `folder/mod.rs`, `ignore/mod.rs`, `monitoring/mod.rs`, `slo/mod.rs`, `state_machine/mod.rs`
+- [ ] `crates/perl-workspace-index/src/lib.rs` declares all 6 new modules (no module deletions, only additions)
+- [ ] `crates/perl-workspace-index/src/api.rs` created with explicit `pub use` re-exports (no wildcards for observability satellites)
+- [ ] All 15 test files migrated to `crates/perl-workspace-index/tests/` with updated import paths; discovery comprehensive_unit_tests.rs renamed to avoid collision
+- [ ] Backward compatibility preserved: existing paths like `perl_workspace::workspace::monitoring::*` still resolve via explicit re-exports in `src/workspace/mod.rs`
+- [ ] `crates/perl-workspace-index/Cargo.toml` dependencies updated: remove 3 observability satellites; add runtime deps if missing (perl-source-file, walkdir, tracing, serde_json)
+- [ ] Workspace root `Cargo.toml`: rename `perl-workspace-index` key in `[workspace.dependencies]` to `perl-workspace`; remove 6 satellite keys
+- [ ] Workspace root `Cargo.toml` `[workspace.metadata.publish].allow`: rename `perl-workspace-index` to `perl-workspace`; remove 6 satellite names
+- [ ] All 8 consumer crate `Cargo.toml` files updated: perl-lsp, perl-module, perl-parser, perl-semantic-analyzer, perl-refactoring, perl-dead-code, perl-lsp-completion, perl-lsp-diagnostics (rename/remove old deps, add perl-workspace if needed)
+- [ ] All source file imports updated (131 occurrences): `perl_workspace_index` → `perl_workspace`; `perl_workspace_discovery` → `perl_workspace::discovery`; `perl_workspace_folder` → `perl_workspace::folder`; `perl_workspace_ignore` → `perl_workspace::ignore`; `perl_workspace_index_monitoring` → `perl_workspace::monitoring`; `perl_workspace_index_slo` → `perl_workspace::slo`; `perl_workspace_index_state_machine` → `perl_workspace::state_machine`
+- [ ] Hardcoded crate name strings updated: `crates/perl-ci-hygiene/src/main.rs` line 4505, `crates/perl-parser/tests/missing_docs_ac_tests.rs` lines 607-608
+- [ ] No references to old satellite crate names remain in any source file (verified via grep)
+- [ ] Workspace member count verified: 123 → 117 (6 crates deleted)
+- [ ] Publish allowlist count verified: 120 → 114 (6 removed, 1 renamed)
+- [ ] All tests pass: `cargo test --workspace`
+- [ ] Linter and formatter pass: `cargo xtask fmt && cargo clippy --workspace --lib`
+- [ ] All 8 consumer crates compile: perl-lsp, perl-module, perl-parser, perl-semantic-analyzer, perl-refactoring, perl-dead-code, perl-lsp-completion, perl-lsp-diagnostics
+- [ ] `cargo xtask publish-closure` passes with 114 allowed packages (old 6 satellite names and `perl-workspace-index` not listed)

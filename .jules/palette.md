@@ -1,0 +1,36 @@
+## 2025-02-27 - Startup Notifications vs Logs
+**Learning:** Users perceive extensions that notify on every startup as "spammy". Moving successful startup messages to the Output Channel respects user attention and aligns with the "Good UX is invisible" philosophy.
+**Action:** Audit `activate()` functions for unnecessary `showInformationMessage` calls and replace them with `outputChannel.appendLine`.
+
+## 2026-01-24 - Keyboard Shortcuts for High-Frequency Actions
+**Learning:** High-frequency actions like "Run Tests" often lack default keybindings in extensions, forcing users to break flow and use the mouse or command palette. Adding standard shortcuts (e.g., `Shift+Alt+T`) significantly reduces friction for power users.
+**Action:** Always audit the "commands" list for high-frequency actions and propose consistent keybindings if missing.
+**Added keybindings:**
+- `Shift+Alt+O` - Organize imports
+- `Shift+Alt+T` - Run tests
+- `Shift+Alt+R` - Restart language server
+
+## 2026-01-25 - Snippets for Standard Libraries
+**Learning:** Adding snippets for standard testing libraries (like `Test::More`) significantly reduces boilerplate and encourages best practices (testing) with minimal effort.
+**Action:** When working on language extensions, check for missing snippets for core libraries that users use frequently (tests, logging, common data structures).
+
+## 2026-01-25 - The "Broken Promise" UX Pattern
+**Learning:** UI elements (like commands in the palette or context menus) that exist in `package.json` but lack implementation in code create a "Broken Promise" – users see the option, click it, and nothing happens. This is worse than the feature not existing at all.
+**Action:** When auditing extensions, verify that every command contributed in `package.json` is actually registered in `extension.ts` or the relevant activation script.
+**Fixed:** Implemented `perl-lsp.runTests` which was visible but broken.
+
+## 2026-01-26 - Communicating Unimplemented Features
+**Learning:** When a feature is visible but not yet ready (e.g., in a development build), a polite "Under Development" message is superior to silence. It converts a "bug" (nothing happened) into a "roadmap communication" (this is coming soon).
+**Action:** Register placeholder handlers for planned commands that show a friendly message and link to the project roadmap or repository.
+
+## 2026-01-27 - Transient Status Bar Feedback
+**Learning:** For long-running operations like tests where the "Output" panel is too hidden and "Notifications" are too intrusive, temporarily hijacking the Status Bar Item provides excellent, non-disruptive feedback.
+**Action:** When implementing async commands that have a corresponding Status Bar Item, use a `try...finally` block to temporarily update the item's text (e.g., `$(sync~spin) Processing...`) and restore it afterwards.
+
+## 2026-01-27 - Consistent Status Bar Placement
+**Learning:** Placing temporary status indicators (like downloads) on the opposite side of the main extension indicator creates visual disconnection and confusion.
+**Action:** Always align temporary status items (downloads, initialization) with the main extension status item (usually Right) and provide tooltips/commands for details.
+
+## 2026-01-28 - QuickPick Menu Layout
+**Learning:** Native-feeling menus in VS Code QuickPicks should use `description` for metadata (like keybindings or status) and `detail` for explanatory text. Misusing `description` for long text makes the menu feel "custom" and less scannable.
+**Action:** When designing action menus, check for associated keybindings and display them in the `description` field to aid discovery.

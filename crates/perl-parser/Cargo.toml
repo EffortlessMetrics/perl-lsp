@@ -1,0 +1,128 @@
+[package]
+name = "perl-parser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/perl-parser"
+keywords = ["perl", "parser", "ast", "lsp", "semantic-analysis"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-lexer = { workspace = true }
+perl-parser-core = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
+perl-workspace = { workspace = true }
+perl-module = { workspace = true }
+serde = { workspace = true }
+# Dependencies needed for absorbed incremental module
+perl-line-index = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+# perl-incremental-parsing absorbed into perl-parser::incremental (Wave 4-Completion)
+perl-tdd-support = { workspace = true }
+# Wave D absorbed satellites need these:
+perl-ast = { workspace = true }
+thiserror.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+lsp-types = { workspace = true, optional = true }
+url.workspace = true
+rustc-hash = "2.1.2"
+# Core dependencies for position mapping (unconditional, all targets)
+ropey = "1.6.1"
+
+
+# Optional dependencies for incremental parsing
+anyhow = { workspace = true, optional = true }
+
+[[bin]]
+name = "perl-parse"
+required-features = ["cli"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[features]
+default = ["workspace", "lsp-compat", "workspace_refactor"]  # Enable workspace indexing by default for cross-file features
+cli = []
+incremental = ["anyhow", "perl-line-index", "tracing"]
+lsp-compat = [
+  "lsp-types",
+  "perl-workspace/lsp-compat",
+  "perl-tdd-support/lsp-compat",
+]  # LSP type compatibility shim for migration period
+workspace = ["perl-workspace/workspace"]  # Workspace-wide indexing for cross-file features
+test-performance = []  # Performance optimizations for test environments
+# When enabled, advertise *only* the conservative GA set (for emergency point releases).
+lsp-ga-lock = []
+experimental-features = []  # Experimental LSP features for testing
+
+# Aspirational features for tests that should eventually pass
+constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)
+qw-variants = []  # Support for all qw delimiter variants
+package-qualified = []  # Package-qualified subroutine resolution
+error-classifier-v2 = []  # Next generation error classification
+lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
+expose_lsp_test_api = []  # Expose test helpers for integration tests
+workspace_refactor = []  # Workspace-wide refactoring capabilities (absorbed from perl-refactoring)
+modernize = []  # Code modernization transformations (absorbed from perl-refactoring)
+substitution-advanced = []  # Advanced substitution operator parsing
+utf16-complete = []  # Complete UTF-16 round-trip support
+semantic-phase2 = []  # Semantic analyzer Phase 2+ features
+parser-extras = []  # General aspirational parser tests
+crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
+slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
+doc-coverage = []  # SPEC-149 documentation coverage tests
+
+[dev-dependencies]
+insta = { version = "1.47.2", features = ["yaml"] }
+criterion.workspace = true
+regex.workspace = true
+serial_test = "3.4.0"
+tempfile.workspace = true
+proptest.workspace = true
+rstest = "0.26.1"
+perl-corpus = { workspace = true }
+perl-lsp-rs-core = { workspace = true }
+
+[[bench]]
+name = "parser_benchmark"
+harness = false
+
+[[bench]]
+name = "incremental_benchmark"
+harness = false
+required-features = ["incremental"]
+
+[[bench]]
+name = "scope_benchmark"
+harness = false
+
+[[bench]]
+name = "cpan_patterns_benchmark"
+harness = false
+
+[[example]]
+name = "test_incremental_v2"
+required-features = ["incremental"]
+
+# Edge case test examples

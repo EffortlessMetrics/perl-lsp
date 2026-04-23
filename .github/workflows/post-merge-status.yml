@@ -1,0 +1,81 @@
+name: Post-Merge Status Regeneration
+
+# Automatically regenerates docs/project/status/*.md after every merge to master.
+# This eliminates the #1 merge friction point: PRs no longer need to edit CURRENT_STATUS.md
+# themselves, ending the cascade of merge conflicts on that hot shared file.
+#
+# The status directory contains four generated files (lsp.md, tests.md, parser.md, quality.md)
+# and three human-owned files (index.md, release.md). Only the generated files are committed.
+# CURRENT_STATUS.md is now a stable stub — it is never touched by this workflow.
+#
+# See issue #2801 (split CURRENT_STATUS.md) and issue #2296 (original post-merge regen).
+
+on:
+  push:
+    branches:
+      - master
+
+# Only one regeneration at a time; cancel stale runs if a new push lands.
+concurrency:
+  group: post-merge-status-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-status:
+    name: Regenerate status subsystem files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so git can commit cleanly.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          shared-key: post-merge-status-${{ hashFiles('Cargo.lock') }}
+
+      - name: Regenerate all status subsystem files and ROADMAP.md
+        run: cargo run -p xtask -- update-status --write
+
+      - name: Commit regenerated files if changed
+        # TODO(#follow-up): Switch to creating a PR instead of direct push once a
+        # bot token or GitHub App is configured that can bypass branch protection.
+        # For now, the push is best-effort (git push || echo warning) so CI stays green
+        # even when branch protection blocks the direct-to-master push. The warning
+        # annotation remains visible in the Actions UI so the failure is not silent.
+        run: |
+          CHANGED_FILES=$(git diff --name-only -- \
+            docs/project/status/lsp.md \
+            docs/project/status/tests.md \
+            docs/project/status/parser.md \
+            docs/project/status/quality.md \
+            docs/project/ROADMAP.md)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add \
+              docs/project/status/lsp.md \
+              docs/project/status/tests.md \
+              docs/project/status/parser.md \
+              docs/project/status/quality.md \
+              docs/project/ROADMAP.md
+            git commit -m "chore(docs): regenerate status subsystem files post-merge [skip ci]"
+            git push || echo "::warning::Direct push to master blocked by branch protection rules -- status files not auto-updated. See TODO above for proper fix."
+            echo "::notice::Attempted to push regenerated status files."
+          else
+            echo "::notice::Status files already up to date -- nothing to commit."
+          fi

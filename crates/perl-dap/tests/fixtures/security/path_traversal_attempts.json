@@ -1,0 +1,99 @@
+{
+  "description": "Path traversal security test cases for DAP file operations",
+  "test_cases": [
+    {
+      "name": "parent_directory_traversal",
+      "path": "../../../etc/passwd",
+      "should_reject": true,
+      "reason": "Path traversal attempt outside workspace",
+      "expected_error": "SecurityError::PathTraversalAttempt"
+    },
+    {
+      "name": "absolute_path_outside_workspace",
+      "path": "/etc/passwd",
+      "should_reject": true,
+      "reason": "Absolute path outside workspace",
+      "expected_error": "SecurityError::PathOutsideWorkspace"
+    },
+    {
+      "name": "windows_drive_traversal",
+      "path": "C:\\Windows\\System32\\config\\sam",
+      "should_reject": true,
+      "reason": "Windows system path access attempt",
+      "expected_error": "SecurityError::PathOutsideWorkspace"
+    },
+    {
+      "name": "unc_path_traversal",
+      "path": "\\\\server\\share\\sensitive\\file.pl",
+      "should_reject": true,
+      "reason": "UNC path outside workspace boundary",
+      "expected_error": "SecurityError::PathOutsideWorkspace"
+    },
+    {
+      "name": "encoded_traversal_percent",
+      "path": "..%2F..%2F..%2Fetc%2Fpasswd",
+      "should_reject": true,
+      "reason": "URL-encoded path traversal attempt",
+      "expected_error": "SecurityError::PathTraversalAttempt"
+    },
+    {
+      "name": "encoded_traversal_backslash",
+      "path": "..\\..\\..\\Windows\\System32",
+      "should_reject": true,
+      "reason": "Backslash path traversal attempt",
+      "expected_error": "SecurityError::PathTraversalAttempt"
+    },
+    {
+      "name": "symlink_outside_workspace",
+      "path": "./symlink_to_etc",
+      "should_reject": true,
+      "reason": "Symlink resolving outside workspace",
+      "expected_error": "SecurityError::SymlinkOutsideWorkspace"
+    },
+    {
+      "name": "valid_workspace_relative",
+      "path": "./lib/MyModule.pm",
+      "should_reject": false,
+      "reason": "Valid workspace-relative path"
+    },
+    {
+      "name": "valid_workspace_subdirectory",
+      "path": "./tests/fixtures/hello.pl",
+      "should_reject": false,
+      "reason": "Valid path in workspace subdirectory"
+    },
+    {
+      "name": "valid_workspace_root",
+      "path": "script.pl",
+      "should_reject": false,
+      "reason": "Valid path at workspace root"
+    },
+    {
+      "name": "dot_files_allowed",
+      "path": "./.gitignore",
+      "should_reject": false,
+      "reason": "Dot files within workspace are allowed"
+    },
+    {
+      "name": "null_byte_injection",
+      "path": "valid.pl\u0000../../etc/passwd",
+      "should_reject": true,
+      "reason": "Null byte injection attempt",
+      "expected_error": "SecurityError::InvalidPathCharacters"
+    },
+    {
+      "name": "excessive_parent_references",
+      "path": "../../../../../../../../../../../../etc/passwd",
+      "should_reject": true,
+      "reason": "Excessive parent directory references",
+      "expected_error": "SecurityError::PathTraversalAttempt"
+    },
+    {
+      "name": "mixed_separators",
+      "path": "..\\../etc/passwd",
+      "should_reject": true,
+      "reason": "Mixed path separators for evasion",
+      "expected_error": "SecurityError::PathTraversalAttempt"
+    }
+  ]
+}

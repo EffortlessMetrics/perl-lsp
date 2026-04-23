@@ -1,0 +1,179 @@
+.TH PERLLSP 1 "2026-03-30" "perllsp 0.12.1" "Perl Language Server"
+.SH NAME
+perllsp \- Perl Language Server Protocol implementation
+.SH SYNOPSIS
+.B perllsp
+.RI [ options ]
+.br
+.B perl\-lsp
+.B \-\-check
+.IR file.pl " [" file2.pm " ...]"
+.SH DESCRIPTION
+.B perl\-lsp
+is a Language Server Protocol (LSP) server for Perl, providing IDE features
+such as diagnostics, completions, go-to-definition, hover, formatting,
+code actions, semantic tokens, and more.
+It communicates with editors over stdio (default) or TCP socket transport
+using the JSON-RPC 2.0 protocol.
+.PP
+The server uses
+.B perl\-parser v3
+(a native recursive descent parser) to analyze Perl source code without
+requiring a Perl interpreter at runtime.
+.SH OPTIONS
+.TP
+.B \-\-stdio
+Use stdio for communication.
+This is the default transport mode.
+.TP
+.B \-\-socket
+Use TCP socket for communication.
+.TP
+.BI \-\-port " PORT"
+Port to listen on when using socket transport.
+Default:
+.BR 9257 .
+Implies
+.BR \-\-socket .
+.TP
+.B \-\-log
+Enable logging to stderr.
+Logging is also activated when the
+.B PERL_LSP_LOG
+or
+.B RUST_LOG
+environment variable is set.
+.TP
+.BI \-\-feature\-profile " NAME"
+Set the feature profile, which controls which LSP capabilities are
+advertised to the editor.
+Supported values:
+.BR auto ", " ga\-lock ", " ga ", " ga_lock ", " prod ", " production ", " all .
+.TP
+.B \-\-health
+Perform a quick health check and print
+.RI \(dq ok
+.IR "<version>" \(dq
+to stdout, then exit.
+.TP
+.B \-\-info
+Show server information including version, git tag, feature profile,
+number of advertised features, and LSP coverage percentage.
+.TP
+.B \-\-check
+Validate Perl files and report parse errors in batch mode, then exit.
+Requires one or more file arguments.
+Exits with status 0 if all files parse successfully, 1 otherwise.
+.TP
+.B \-\-features\-json
+Output the features catalog as JSON and exit.
+The output reflects the active feature profile.
+.TP
+.BI \-\-completion " SHELL"
+Generate shell completion script for the given shell and print it to
+stdout, then exit.
+Supported shells:
+.BR bash ", " zsh ", " fish ", " powershell .
+.TP
+.B \-\-version
+Print version information and exit.
+.TP
+.B \-\-help
+Print a help message and exit.
+.SH FILES
+.TP
+.B .perl\-lsp.toml
+Project-level configuration file.
+When present in the workspace root, the server reads settings from this
+file to configure diagnostics, formatting, and other LSP behaviors.
+.SH ENVIRONMENT
+.TP
+.B PERL_LSP_LOG
+When set, enables logging to stderr.
+The value is used as a tracing filter directive
+(e.g.,
+.IR perl_lsp=debug ).
+.TP
+.B RUST_LOG
+Alternative environment variable for configuring the tracing filter.
+.B PERL_LSP_LOG
+takes precedence if both are set.
+.TP
+.B NO_COLOR
+When set, disables colored output in
+.B \-\-health
+and
+.B \-\-info
+output.
+See
+.IR https://no\-color.org/ .
+.SH EXAMPLES
+Run the server in stdio mode (default):
+.PP
+.RS
+.nf
+perl\-lsp \-\-stdio
+.fi
+.RE
+.PP
+Run with the production feature profile:
+.PP
+.RS
+.nf
+perl\-lsp \-\-stdio \-\-feature\-profile=prod
+.fi
+.RE
+.PP
+Run with logging enabled:
+.PP
+.RS
+.nf
+perl\-lsp \-\-stdio \-\-log
+.fi
+.RE
+.PP
+Run in socket mode on a specific port:
+.PP
+.RS
+.nf
+perl\-lsp \-\-socket \-\-port 9257
+.fi
+.RE
+.PP
+Validate Perl files for syntax errors:
+.PP
+.RS
+.nf
+perl\-lsp \-\-check lib/MyModule.pm script.pl
+.fi
+.RE
+.PP
+Install bash completions:
+.PP
+.RS
+.nf
+perl\-lsp \-\-completion bash >> ~/.bashrc
+.fi
+.RE
+.SH EXIT STATUS
+.TP
+.B 0
+Successful execution.
+.TP
+.B 1
+An error occurred (invalid arguments, parse failures in
+.B \-\-check
+mode, etc.).
+.SH SEE ALSO
+.BR perl (1),
+.BR perlcritic (1)
+.PP
+.UR https://microsoft.github.io/language\-server\-protocol/
+Language Server Protocol Specification
+.UE
+.PP
+.UR https://github.com/EffortlessMetrics/perl\-lsp
+Project Repository
+.UE
+.SH AUTHORS
+The perl\-lsp contributors.

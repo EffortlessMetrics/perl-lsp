@@ -1,0 +1,526 @@
+==================
+Source filters
+==================
+
+use Filter::Simple;
+
+FILTER {
+    s/BANG\s+BANG/die 'BANG' if \$BANG/g;
+};
+
+use Filter::Util::Call;
+
+sub import {
+    my ($type) = @_;
+    my ($ref) = [];
+    filter_add(bless $ref);
+}
+
+sub filter {
+    my ($self) = @_;
+    my ($status);
+    
+    s/BANG/die/g if ($status = filter_read()) > 0;
+    return $status;
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (indirect_object
+        (expression_statement
+          (substitution_regexp
+            (regexp_content
+              (escape_sequence))
+            (replacement
+              (escape_sequence))
+            (substitution_regexp_modifiers))))))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (anonymous_array_expression)))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (ambiguous_function_call_expression
+            (function)
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (variable_declaration
+          (scalar
+            (varname))))
+      (expression_statement
+        (postfix_conditional_expression
+          (substitution_regexp
+            (regexp_content)
+            (replacement)
+            (substitution_regexp_modifiers))
+          (relational_expression
+            (assignment_expression
+              (scalar
+                (varname))
+              (function_call_expression
+                (function)))
+            (number))))
+      (expression_statement
+        (return_expression
+          (scalar
+            (varname)))))))
+
+==================
+Encoding pragmas
+==================
+
+use encoding 'utf8';
+use encoding 'iso-8859-1';
+use encoding 'cp1252', Filter => 1;
+
+no encoding;
+
+use utf8;
+no utf8;
+
+use bytes;
+no bytes;
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (number)))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (use_statement
+    (package)))
+
+==================
+Encoding directives
+==================
+
+# -*- coding: utf-8 -*-
+
+#!/usr/bin/perl
+# vim: set fileencoding=utf-8:
+
+=encoding utf8
+
+=encoding iso-8859-1
+
+=cut
+
+__ENCODING__
+
+---
+
+(source_file
+  (comment)
+  (comment)
+  (comment)
+  (pod)
+  (expression_statement
+    (bareword)))
+
+==================
+Source code with encoding
+==================
+
+use encoding 'utf8';
+
+my $café = "coffee shop";
+my $π = 3.14159;
+my $Σ = sum(@values);
+my $日本語 = "Japanese";
+
+sub café_menu {
+    return qw(café latte cappuccino);
+}
+
+---
+
+(source_file
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function)
+        (array
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (interpolated_string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (return_expression
+          (quoted_word_list
+            (string_content)))))))
+
+==================
+Filter::Util::Call usage
+==================
+
+package MyFilter;
+use Filter::Util::Call;
+
+sub import {
+    my ($class, @args) = @_;
+    filter_add(
+        sub {
+            my $status = filter_read();
+            if ($status > 0) {
+                s/OLD/NEW/g;
+                s/\bDEBUG\b/if (DEBUG)/g;
+            }
+            return $status;
+        }
+    );
+}
+
+1;
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (array
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (function_call_expression
+          (function)
+          (anonymous_subroutine_expression
+            (block
+              (expression_statement
+                (assignment_expression
+                  (variable_declaration
+                    (scalar
+                      (varname)))
+                  (function_call_expression
+                    (function))))
+              (conditional_statement
+                (relational_expression
+                  (scalar
+                    (varname))
+                  (number))
+                (block
+                  (expression_statement
+                    (substitution_regexp
+                      (regexp_content)
+                      (replacement)
+                      (substitution_regexp_modifiers)))
+                  (expression_statement
+                    (substitution_regexp
+                      (regexp_content
+                        (escape_sequence)
+                        (escape_sequence))
+                      (replacement)
+                      (substitution_regexp_modifiers)))))
+              (expression_statement
+                (return_expression
+                  (scalar
+                    (varname))))))))))
+  (expression_statement
+    (number)))
+
+==================
+Acme::Bleach style filter
+==================
+
+use Acme::Bleach;
+
+                                        
+
+
+                                
+
+---
+
+(source_file
+  (use_statement
+    (package)))
+
+==================
+Switch filter
+==================
+
+use Switch;
+
+switch ($value) {
+    case 1 { print "one" }
+    case "a" { print "a" }
+    case [1..10,42] { print "in list" }
+    case /\d+/ { print "number" }
+    case (\@array) { print "in array" }
+    case (\%hash) { print "in hash" }
+    else { print "default" }
+}
+
+---
+
+(source_file
+  (use_statement)
+  (switch_statement))
+
+==================
+Smart::Comments filter
+==================
+
+use Smart::Comments;
+
+### Calculating value...
+my $value = complex_calculation();
+
+### $value
+
+### Progress: 0...10
+for my $i (0..10) {
+    ### Progress: $i
+    process($i);
+}
+
+#### DUMP: $data_structure
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (comment)
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname)))
+      (function_call_expression
+        (function))))
+  (comment)
+  (comment)
+  (for_statement
+    (scalar
+      (varname))
+    (binary_expression
+      (number)
+      (number))
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)
+          (scalar
+            (varname))))))
+  (comment))
+
+==================
+Inline::Files filter
+==================
+
+use Inline::Files;
+
+my @data = <DATA>;
+my @more = <MORE>;
+
+while (<STDIN>) {
+    print;
+}
+
+__DATA__
+First data section
+More data
+
+__MORE__
+Second virtual file
+Additional content
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (readline_expression
+        (filehandle))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (array
+          (varname)))
+      (readline_expression
+        (filehandle))))
+  (loop_statement
+    (readline_expression
+      (filehandle))
+    (block
+      (expression_statement
+        (bareword))))
+  (eof_marker)
+  (data_section))
+
+==================
+Encoding layers on handles
+==================
+
+open my $fh, '<:encoding(UTF-8)', $file;
+open my $out, '>:raw:bytes', $output;
+open my $log, '>>:utf8', $logfile;
+
+binmode STDOUT, ':encoding(cp1252)';
+binmode STDERR, ':utf8';
+
+use open ':std', ':encoding(UTF-8)';
+use open IN => ':crlf', OUT => ':bytes';
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (variable_declaration
+          (scalar
+            (varname)))
+        (string_literal
+          (string_content))
+        (scalar
+          (varname)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (string_literal
+          (string_content)))))
+  (use_statement
+    (package)
+    (list_expression
+      (string_literal
+        (string_content))
+      (string_literal
+        (string_content))))
+  (use_statement
+    (package)
+    (list_expression
+      (autoquoted_bareword)
+      (string_literal
+        (string_content))
+      (autoquoted_bareword)
+      (string_literal
+        (string_content)))))

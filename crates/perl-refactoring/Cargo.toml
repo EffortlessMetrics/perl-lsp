@@ -1,0 +1,50 @@
+[package]
+name = "perl-refactoring"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Refactoring and modernization utilities for Perl"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-refactoring"
+keywords = ["perl", "refactoring", "modernization", "lsp", "import"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-workspace = { workspace = true }
+perl-module = { workspace = true }
+regex.workspace = true
+serde = { workspace = true }
+url.workspace = true
+
+[features]
+default = ["workspace_refactor"]
+modernize = []
+workspace_refactor = []
+workspace-rename-tests = []  # Workspace rename integration tests (requires WorkspaceIndex)
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+serial_test = "3.4.0"
+tempfile.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

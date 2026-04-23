@@ -1,0 +1,1032 @@
+==================
+Complex prototypes
+==================
+
+sub mygrep(&@) {
+    my $code = shift;
+    grep { $code->() } @_;
+}
+
+sub mymap(&@) {
+    my $code = shift;
+    map { $code->() } @_;
+}
+
+sub mysort(&@) {
+    my $code = shift;
+    sort { $code->() } @_;
+}
+
+sub first(&@) {
+    my $code = shift;
+    for (@_) {
+        return $_ if $code->();
+    }
+    return;
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (map_grep_expression
+          (block
+            (expression_statement
+              (coderef_call_expression
+                (scalar
+                  (varname)))))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (map_grep_expression
+          (block
+            (expression_statement
+              (coderef_call_expression
+                (scalar
+                  (varname)))))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (sort_expression
+          (block
+            (expression_statement
+              (coderef_call_expression
+                (scalar
+                  (varname)))))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (for_statement
+        (array
+          (varname))
+        (block
+          (expression_statement
+            (postfix_conditional_expression
+              (return_expression
+                (scalar
+                  (varname)))
+              (coderef_call_expression
+                (scalar
+                  (varname)))))))
+      (expression_statement
+        (return_expression)))))
+
+==================
+Underscore prototype
+==================
+
+sub test_underscore(_) {
+    my $val = shift;
+    print "Got: $val\n";
+}
+
+sub test_multiple_underscore(_ _ _) {
+    my ($a, $b, $c) = @_;
+    return $a + $b + $c;
+}
+
+sub test_underscore_optional(_; _) {
+    my ($required, $optional) = @_;
+    return $optional // $required;
+}
+
+test_underscore;  # Uses $_
+test_underscore $var;
+test_underscore $_;
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (return_expression
+          (binary_expression
+            (binary_expression
+              (scalar
+                (varname))
+              (scalar
+                (varname)))
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (return_expression
+          (binary_expression
+            (scalar
+              (varname))
+            (scalar
+              (varname)))))))
+  (expression_statement
+    (bareword))
+  (comment)
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (scalar
+        (varname))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (scalar
+        (varname)))))
+
+==================
+Advanced prototype combinations
+==================
+
+sub complex_proto($@) {
+    my $first = shift;
+    my @rest = @_;
+}
+
+sub optional_proto($;$) {
+    my ($required, $optional) = @_;
+}
+
+sub slurpy_hash($%) {
+    my $scalar = shift;
+    my %hash = @_;
+}
+
+sub reference_proto(\@\%\$) {
+    my ($aref, $href, $sref) = @_;
+}
+
+sub glob_proto(*) {
+    my $glob = shift;
+}
+
+sub code_proto(&;$) {
+    my ($code, $arg) = @_;
+    $code->($arg);
+}
+
+sub special_proto(_;@) {
+    my ($first, @rest) = @_;
+}
+
+sub combo_proto(\[$@%&*];@) {
+    my ($ref, @args) = @_;
+}
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (array
+              (varname)))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (hash
+              (varname)))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (coderef_call_expression
+          (scalar
+            (varname))
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (array
+              (varname)))
+          (array
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (prototype)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (array
+              (varname)))
+          (array
+            (varname)))))))
+
+==================
+Attributes basic
+==================
+
+sub locked :locked {
+    # Thread-safe subroutine
+}
+
+sub memoized :Memoize {
+    # Cached results
+}
+
+sub deprecated :Deprecated {
+    warn "This method is deprecated";
+}
+
+my $shared :shared;
+my @shared_array :shared;
+my %shared_hash :shared;
+
+our $global :unique;
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content))))))
+  (expression_statement
+    (variable_declaration
+      (scalar
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (expression_statement
+    (variable_declaration
+      (array
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (expression_statement
+    (variable_declaration
+      (hash
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (expression_statement
+    (variable_declaration
+      (scalar
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name))))))
+
+==================
+Multi-line and complex attributes
+==================
+
+sub complex_method
+    :Cached(expiry => 300)
+    :Logged(level => 'debug')
+    :Deprecated(since => '2.0', removed => '3.0')
+{
+    # Method implementation
+}
+
+sub multi_attr :
+    ATTR1
+    ATTR2(
+        key1 => 'value1',
+        key2 => 'value2'
+    )
+    ATTR3
+{
+    # Implementation
+}
+
+my $var :
+    Persistent(
+        file => '/tmp/cache',
+        format => 'json'
+    )
+    :Validated(
+        type => 'Int',
+        range => [0, 100]
+    );
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value))
+      (attribute
+        (attribute_name)
+        (attribute_value))
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)
+        (attribute_value))
+      (attribute
+        (attribute_name)))
+    (block
+      (comment)))
+  (expression_statement
+    (variable_declaration
+      (scalar
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)
+          (attribute_value))
+        (attribute
+          (attribute_name)
+          (attribute_value))))))
+
+==================
+Method attributes
+==================
+
+package MyClass;
+
+sub new :Constructor {
+    my $class = shift;
+    bless {}, $class;
+}
+
+sub get_value :Accessor :Public {
+    my $self = shift;
+    return $self->{value};
+}
+
+sub set_value :Mutator :Public :Validated {
+    my ($self, $value) = @_;
+    $self->{value} = $value;
+}
+
+sub _internal :Private {
+    # Private method
+}
+
+sub calculate :Memoized :Profiled {
+    # Expensive calculation
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (anonymous_hash_expression)
+            (scalar
+              (varname)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (return_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (autoquoted_bareword))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (assignment_expression
+          (hash_element_expression
+            (scalar
+              (varname))
+            (autoquoted_bareword))
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block
+      (comment))))
+
+==================
+Lvalue attributes
+==================
+
+sub temperature :lvalue {
+    my $self = shift;
+    $self->{temp};
+}
+
+sub accessor :lvalue :method {
+    my $self = shift;
+    $self->{data};
+}
+
+my $val :lvalue = create_lvalue();
+
+$obj->temperature = 100;
+$obj->accessor = "new value";
+
+sub counter :lvalue {
+    state $count = 0;
+    $count;
+}
+
+counter() = 42;
+counter()++;
+
+---
+
+(source_file
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (hash_element_expression
+          (scalar
+            (varname))
+          (autoquoted_bareword)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (hash_element_expression
+          (scalar
+            (varname))
+          (autoquoted_bareword)))))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname))
+        (attrlist
+          (attribute
+            (attribute_name))))
+      (function_call_expression
+        (function))))
+  (expression_statement
+    (assignment_expression
+      (method_call_expression
+        (scalar
+          (varname))
+        (method))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (method_call_expression
+        (scalar
+          (varname))
+        (method))
+      (interpolated_string_literal
+        (string_content))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (number)))
+      (expression_statement
+        (scalar
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (function_call_expression
+        (function))
+      (number)))
+  (expression_statement
+    (postinc_expression
+      (function_call_expression
+        (function)))))
+
+==================
+Custom attribute handlers
+==================
+
+use Attribute::Handlers;
+
+sub Memoize :ATTR(CODE) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Install memoization wrapper
+}
+
+sub Validate :ATTR(SCALAR,ARRAY,HASH) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Install validation
+}
+
+sub Logged :ATTR(CODE,BEGIN) {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    # Wrap with logging
+}
+
+sub UNIVERSAL::Debug :ATTR {
+    my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+    print "Debug: $package, phase: $phase\n";
+}
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)
+        (attribute_value)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (scalar
+                (varname))
+              (escape_sequence))))))))
+
+==================
+Field attributes
+==================
+
+package Person;
+use fields qw(name age email);
+
+sub new {
+    my $class = shift;
+    my $self = fields::new($class);
+    return $self;
+}
+
+package Employee;
+use base 'Person';
+use fields qw(employee_id department);
+
+my Employee $emp = Employee->new();
+$emp->{name} = "John";
+$emp->{employee_id} = "E123";
+
+---
+
+(source_file
+  (package_declaration)
+  (use_statement)
+  (subroutine_declaration)
+  (package_declaration)
+  (use_statement)
+  (use_statement)
+  (statement)
+  (statement)
+  (statement))
+
+==================
+Thread attributes
+==================
+
+use threads;
+use threads::shared;
+
+my $shared_var :shared;
+my @shared_array :shared;
+my %shared_hash :shared;
+
+sub thread_safe :locked :method {
+    my $self = shift;
+    # Automatically locked
+}
+
+sub unique_sub :unique {
+    # Unique per thread
+}
+
+my $var :shared = 42;
+lock($var);
+$var++;
+unlock($var);
+
+---
+
+(source_file
+  (use_statement
+    (package))
+  (use_statement
+    (package))
+  (expression_statement
+    (variable_declaration
+      (scalar
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (expression_statement
+    (variable_declaration
+      (array
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (expression_statement
+    (variable_declaration
+      (hash
+        (varname))
+      (attrlist
+        (attribute
+          (attribute_name)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name))
+      (attribute
+        (attribute_name)))
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (comment)))
+  (subroutine_declaration_statement
+    (bareword)
+    (attrlist
+      (attribute
+        (attribute_name)))
+    (block
+      (comment)))
+  (expression_statement
+    (assignment_expression
+      (variable_declaration
+        (scalar
+          (varname))
+        (attrlist
+          (attribute
+            (attribute_name))))
+      (number)))
+  (expression_statement
+    (func1op_call_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (postinc_expression
+      (scalar
+        (varname))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (scalar
+        (varname)))))

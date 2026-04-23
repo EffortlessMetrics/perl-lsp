@@ -1,0 +1,264 @@
+# =============================================================================
+# Blocker Ledger
+# =============================================================================
+#
+# Machine-readable list of known active parser/LSP/CI blockers.
+# Agents MUST check this file before starting discovery work to avoid
+# re-investigating known issues.
+#
+# Schema Version: 1
+# Last Verified: 2026-03-21  (counts from .ci/parser-corpus-baseline.json)
+#
+# Usage:
+#   - Scouts: read this before /scout-dedup — if status: filed or partial, stop.
+#   - Builders: pick entries with status: needs_investigation — they need issues.
+#   - Archiving: when an issue closes, move entry to the archived section below.
+#
+# Counts source: .ci/parser-corpus-baseline.json first_error_buckets
+# (system corpus only — CPAN corpus counts will differ).
+#
+# =============================================================================
+
+schema_version: 1
+last_verified: "2026-04-02"
+
+budgets:
+  max_active_blockers: 50  # advisory only — no gate enforcement today
+  note: "Archive entries with status: fixed — do not delete, move to archived section"
+  clean_rate_target: 0.90  # 90% CPAN/system corpus clean rate is the 0.12.x release criterion
+  clean_rate_note: "Baseline stale (2026-03-20 = 85.4%). Post-baseline fixes (#2674, #2723, #2613, #2767, #2897, #2769, #2892, #2787, #2840) estimated +386 CPAN files clean → ~94.3%. CI ratchet via PR #3110 will confirm."
+
+# =============================================================================
+# Parser Error Buckets
+# =============================================================================
+# Entries keyed by first_error_buckets key in parser-corpus-baseline.json.
+# affected_files: count from live baseline at last_verified date.
+# Verify freshness: python3 -c "import json; d=json.load(open('.ci/parser-corpus-baseline.json')); print(d['first_error_buckets'])"
+
+parser_blockers:
+  - id: "unexpected_token_in_expr"
+    category: "expression"
+    affected_files: 206
+    root_cause: "4 sub-patterns: prototypes, complex expressions, chained method calls, ternary in list context"
+    status: "fixed"
+    issue: "#2731"
+    note: "Fixed via PRs #2767, #2897. 57 tests in fix_unexpected_token_in_expr_2731.rs. Counts stale — run corpus ratchet."
+
+  - id: "unexpected_rbrace_expr"
+    category: "expression"
+    affected_files: 105
+    root_cause: "Word operators as hash subscript keys (e.g., $h->{not})"
+    status: "fixed"
+    issue: "#2189"
+    note: "Fixed via PR #2723. System corpus 105→10. Counts stale — run corpus ratchet."
+
+  - id: "unclosed_paren"
+    category: "expression"
+    affected_files: 99
+    root_cause: "5 sub-patterns: complex call args, nested ternary, chained method calls, qw in parens, heredoc in parens"
+    status: "fixed"
+    issue: "#2750"
+    note: "Fixed via PRs #2769, #2892. 17 tests in fix_unclosed_paren_*.rs. Counts stale — run corpus ratchet."
+
+  - id: "unexpected_comma_expr"
+    category: "expression"
+    affected_files: 98
+    root_cause: "Unknown functions with nullary builtins + grep/map file tests"
+    status: "fixed"
+    issue: "#2140"
+    note: "Fixed via PR #2674. System corpus 98→56. Counts stale — run corpus ratchet."
+
+  - id: "unexpected_rparen_expr"
+    category: "expression"
+    affected_files: 84
+    root_cause: "4 sub-patterns: complex list context, nested function calls, regex in call args, ternary expressions"
+    status: "fixed"
+    issue: "#2751"
+    note: "Fixed via PR #2787. 55 tests in fix_unexpected_rparen_expr.rs. Counts stale — run corpus ratchet."
+
+  - id: "unclosed_paren_identifier"
+    category: "identifier"
+    affected_files: 70
+    root_cause: "Qualified function calls lose paren context (e.g., Module::Name::func())"
+    status: "fixed"
+    issue: "#2391"
+    note: "Fixed via commit 4b16e2f3. Counts stale — run corpus ratchet."
+
+  - id: "expected_module_name"
+    category: "module"
+    affected_files: 69
+    root_cause: "VString forms in use statements (e.g., use v5.10)"
+    status: "partial"
+    issue: null
+    note: "Partial fix via commit 5cbda340 (VString support in parse_use). 16 tests pass. CPAN corpus may need ratchet or have remaining edge cases."
+
+  - id: "unclosed_brace_semicolon"
+    category: "block"
+    affected_files: 21
+    root_cause: "Brace not closed before semicolon — block/hash ambiguity (bare function call with block: capture{}, where{}, scope_guard{})"
+    status: "partial"
+    issue: null
+    note: "Partial fix via PR #2261 (2026-03-19). System corpus 21 files remain; CPAN had 58 at 2026-03-20 baseline. Remaining cases need deeper investigation."
+
+  - id: "expected_left_brace"
+    category: "block"
+    affected_files: 19
+    root_cause: "Keyword-named subroutines parsed as block openers"
+    status: "filed"
+    issue: "#2149"
+    note: "Tier 2: 19 files in system corpus."
+
+  - id: "expected_colon"
+    category: "expression"
+    affected_files: 16
+    root_cause: "Ternary operator or label colon in unexpected position"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 16 files. No issue filed."
+
+  - id: "expected_identifier"
+    category: "identifier"
+    affected_files: 10
+    root_cause: "Identifier expected in complex contexts"
+    status: "filed"
+    issue: "#2150"
+    note: "Tier 2: 10 files."
+
+  - id: "substitution_misparse"
+    category: "regex"
+    affected_files: 8
+    root_cause: "s/// with /e modifier mishandled"
+    status: "filed"
+    issue: "#2395"
+    note: "Tier 2: 8 files."
+
+  - id: "unexpected_slash_expr"
+    category: "regex"
+    affected_files: 8
+    root_cause: "Division slash vs regex delimiter ambiguity"
+    status: "needs_investigation"
+    issue: null
+    note: "Tier 2: 8 files. No issue filed."
+
+  - id: "expected_left_paren"
+    category: "expression"
+    affected_files: 6
+    root_cause: "Expected left paren in various call/declaration contexts"
+    status: "filed"
+    issue: "#2187"
+    note: "Tier 2: 6 files. builder-ready."
+
+  - id: "expected_variable"
+    category: "variable"
+    affected_files: 6
+    root_cause: "format/write statement parser expects variable"
+    status: "filed"
+    issue: "#2408"
+    note: "Tier 3: 6 files."
+
+  - id: "expected_semicolon"
+    category: "control_flow"
+    affected_files: 4
+    root_cause: "C-style for loop parser expects semicolon without recovery"
+    status: "filed"
+    issue: "#2573"
+    note: "Tier 3: 4 files in system corpus."
+
+  - id: "unexpected_fat_arrow_expr"
+    category: "expression"
+    affected_files: 2
+    root_cause: "Hash in list context fat-arrow ambiguity"
+    status: "fixed"
+    issue: "#2402"
+    note: "Fixed via PR #2613 (2026-03-21). Issue #2402 closed. System corpus had 2 files; CPAN had 53 at 2026-03-20 baseline. Counts stale — run corpus ratchet."
+
+  - id: "unclosed_bracket"
+    category: "expression"
+    affected_files: 2
+    root_cause: "False positives on unclosed bracket in complex expressions"
+    status: "filed"
+    issue: "#2148"
+    note: "Tier 3: 2 files in system corpus. CPAN count was larger at filing time."
+
+# =============================================================================
+# LSP Limitations
+# =============================================================================
+# Known LSP feature gaps that scouts should be aware of.
+# affected_files: not applicable for LSP limitations.
+
+lsp_limitations:
+  - id: "scoped_rename_workspace"
+    category: "refactoring"
+    status: "partial"
+    issue: "#1663"
+    note: "Single-file rename works; workspace-scoped rename incomplete. OPEN."
+
+  - id: "moose_moo_method_modifiers"
+    category: "semantic"
+    status: "filed"
+    issue: "#2328"
+    note: "Moose/Moo before/after/around modifiers need IDE support."
+
+  - id: "moose_moo_role_composition"
+    category: "semantic"
+    status: "filed"
+    issue: "#2325"
+    note: "Moose/Moo role composition detection and navigation missing."
+
+# =============================================================================
+# CI / Infrastructure Blockers
+# =============================================================================
+
+ci_blockers:
+  - id: "corpus_sweep_no_per_file_breakdown"
+    category: "tooling"
+    status: "filed"
+    issue: "#2554"
+    note: "corpus sweep baseline lacks per-file detail. builder-ready."
+
+# =============================================================================
+# Archived
+# =============================================================================
+# Do NOT delete fixed entries — move them here with closed_date and closed_pr.
+# Format: same schema plus closed_date: "YYYY-MM-DD" and closed_pr: "#NNNN"
+
+archived:
+  - id: "unexpected_word_op_or"
+    category: "operator"
+    affected_files: 43
+    root_cause: "Low-precedence 'or' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-22"
+    closed_pr: "#1922"
+    note: "Fixed by PRs #1922, #2396, #2409, #2626. Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
+  - id: "unexpected_word_op_and"
+    category: "operator"
+    affected_files: 32
+    root_cause: "Low-precedence 'and' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-23"
+    closed_pr: "#2859"
+    note: "Fixed by PRs #1922, #2396, #2409, #2626, #2859 (and+comma). Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
+  - id: "unexpected_word_op_not"
+    category: "operator"
+    affected_files: 20
+    root_cause: "Low-precedence 'not' operator in unexpected position"
+    status: "fixed"
+    issue: "#2753"
+    closed_date: "2026-03-22"
+    closed_pr: "#1922"
+    note: "Fixed by PRs #1922, #2396. Zero errors in 7095-file sweep on 2026-03-23. Issue #2753 closed as already-fixed."
+
+  - id: "unclosed_brace"
+    category: "block"
+    affected_files: 16
+    root_cause: "map/grep block fat-arrow ambiguity"
+    status: "fixed"
+    issue: "#2392"
+    closed_date: "2026-03-21"
+    closed_pr: null
+    note: "Tier 2: 9 files in issue; baseline shows 16. builder-ready. FIXED: moved to archived on 2026-03-21 when issue #2392 closed."

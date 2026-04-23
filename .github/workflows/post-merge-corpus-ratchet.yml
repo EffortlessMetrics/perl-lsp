@@ -1,0 +1,108 @@
+name: Post-Merge Corpus Ratchet
+
+# Automatically refreshes the CPAN full-corpus baseline and ratchets the
+# known-clean CPAN manifest on a nightly schedule.
+# This prevents the stale-baseline problem: parser fixes sit unrecorded,
+# making it look like the corpus clean rate and strict-clean set did not improve.
+#
+# Runs nightly at 08:00 UTC (not on every push). The ratchet is periodic
+# bookkeeping; post-merge-status.yml handles per-merge status regeneration.
+# Nightly cadence avoids the concurrency-cancel storms that killed ~40% of
+# per-merge runs (exit 143, runner shutdown) when rapid parser merges triggered
+# concurrent 18-min cold CPAN installs. Manual runs available via workflow_dispatch.
+#
+# See issue #4186 (corpus ratchet fails intermittently on cold cache).
+
+on:
+  schedule:
+    # Nightly at 08:00 UTC. The ratchet is periodic bookkeeping, not a
+    # per-merge gate (post-merge-status.yml handles per-merge regeneration).
+    # Nightly cadence avoids concurrency-cancel storms from rapid parser merges.
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+# Only one ratchet at a time; cancel stale in-progress runs on re-trigger.
+concurrency:
+  group: post-merge-corpus-ratchet-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  corpus-ratchet:
+    name: Refresh CPAN corpus receipts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch full history so git can commit cleanly.
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          shared-key: post-merge-corpus-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Restore CPAN corpus cache
+        id: cpan-corpus-cache
+        uses: actions/cache@v5
+        with:
+          path: target/cpan-corpus
+          key: cpan-corpus-${{ runner.os }}-${{ hashFiles('.ci/cpan-top-1000-distributions.txt') }}
+          restore-keys: |
+            cpan-corpus-${{ runner.os }}-
+
+      - name: Install CPAN corpus
+        if: steps.cpan-corpus-cache.outputs.cache-hit != 'true'
+        run: cargo xtask cpan-corpus install
+
+      - name: Verify corpus baseline path
+        # Use the workspace-root-absolute path so this check cannot drift
+        # from xtask's workspace-root-anchored resolution (see issue #3189).
+        run: test -d "$GITHUB_WORKSPACE/target/cpan-corpus/lib/perl5"
+
+      - name: Update CPAN baseline receipt
+        run: cargo xtask cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
+
+      - name: Run corpus ratchet
+        run: cargo xtask cpan-corpus ratchet
+
+      - name: Verify CPAN corpus gate
+        run: cargo xtask cpan-corpus sweep --enforce
+
+      - name: Commit updated corpus receipts if changed
+        # TODO(#follow-up): Switch to creating a PR instead of direct push once a
+        # bot token or GitHub App is configured that can bypass branch protection.
+        # For now, the push is best-effort (git push || echo warning) so CI stays green
+        # even when branch protection blocks the direct-to-master push. The warning
+        # annotation remains visible in the Actions UI so the failure is not silent.
+        run: |
+          CHANGED_FILES=$(git diff --name-only -- \
+            .ci/cpan-corpus-baseline.json \
+            .ci/cpan-corpus-manifest.txt)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .ci/cpan-corpus-baseline.json .ci/cpan-corpus-manifest.txt
+            git commit -m "chore(ci): refresh CPAN corpus receipts post-merge [skip ci]"
+            git push || echo "::warning::Direct push to master blocked by branch protection rules -- CPAN corpus receipts not auto-updated. Run 'just cpan-corpus-baseline-update && just cpan-corpus-ratchet' locally and push. See TODO above for proper fix."
+            echo "::notice::Attempted to push updated CPAN corpus receipts."
+          else
+            echo "::notice::CPAN corpus receipts already up to date -- nothing to commit."
+          fi

@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3629f654579fe1ff87a9606d9ee88f5c429a277cfc209d670fc781a9f4d3f7db # shrinks to pattern = " ", modifiers = "im", (open1, close1) = ('#', '#'), (open2, close2) = ('(', ')')
+cc 8f5cbc85b40c865d1c2040fc5649ade799bd36c86ebbd0fc4511b05cb3e5e76c # shrinks to pattern = "a", modifiers = "ia", (open1, close1) = ('#', '#'), (open2, close2) = ('(', ')')
+cc ac10981f95cdacf9a48da799e3937091ce45d34e2fa1a36432fc6405811b5433 # shrinks to payload = "", (open1, close1) = ('(', ')'), (open2, close2) = ('(', ')')
+cc 0e53d0fba4b1110df344b68adb925ac531e8a0141c4b45258629f9206f0ab0e3 # shrinks to payload = "\\", (open1, close1) = ('(', ')'), (open2, close2) = ('(', ')')

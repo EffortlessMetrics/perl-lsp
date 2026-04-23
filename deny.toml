@@ -1,0 +1,114 @@
+# cargo-deny configuration for perl-lsp
+# https://embarkstudios.github.io/cargo-deny/
+#
+# Run: cargo deny check
+# Lint levels: deny | warn | allow
+
+# -- Dependency graph ----------------------------------------------------------
+
+[graph]
+targets = []
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# -- Advisories ----------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+
+[advisories]
+ignore = [
+    # atomic-polyfill is unmaintained (RUSTSEC-2023-0089).
+    # Transitive dep chain: postcard -> heapless -> atomic-polyfill.
+    # postcard is used by tree-sitter-perl. No upgrade path exists until
+    # postcard drops heapless or heapless migrates to portable-atomic.
+    # Risk: Low -- atomic-polyfill is a thin polyfill crate with no known
+    # security vulnerability; the advisory is "unmaintained" only.
+    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained (postcard -> heapless -> atomic-polyfill). No upgrade path. Risk: low (unmaintained, not vulnerable)." },
+]
+
+# -- Licenses ------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+exceptions = []
+
+[licenses.private]
+# Ignore unpublished workspace crates -- they are internal
+ignore = true
+registries = []
+
+# -- Bans ----------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+deny = []
+
+# Known duplicate crates caused by transitive dependency version splits.
+# These are expected and tracked for eventual deduplication when upstreams unify.
+skip = [
+    # bitflags 1.x pulled by fluent-uri (via lsp-types); 2.x used everywhere else
+    { crate = "bitflags@1.3.2", reason = "fluent-uri (lsp-types transitive) pins bitflags 1.x" },
+
+    # windows-sys ecosystem: three-way split across 0.59/0.60/0.61.
+    # 0.59: console, stacker; 0.60: notify, shared_child; 0.61: clap/anstyle.
+    # Platform-specific, only affects Windows. Upstream convergence happens naturally.
+    { crate = "windows-sys@0.59.0", reason = "console/stacker transitives pin 0.59" },
+    { crate = "windows-sys@0.60.2", reason = "notify/shared_child transitives pin 0.60" },
+    { crate = "windows-targets@0.52.6", reason = "older windows-sys 0.59 transitive" },
+
+    # rand ecosystem: 0.9 vs 0.10 split during major version transition
+    { crate = "rand@0.9.2", reason = "transitive dep version split during rand 0.9 -> 0.10 migration" },
+    { crate = "rand_core@0.9.5", reason = "transitive dep version split during rand_core 0.9 -> 0.10 migration" },
+    { crate = "getrandom@0.3.4", reason = "older getrandom pulled by rand 0.9 transitives" },
+
+    # cpufeatures: 0.2 vs 0.3 split
+    { crate = "cpufeatures@0.2.17", reason = "transitive dep version split during cpufeatures 0.2 -> 0.3 migration" },
+
+    # r-efi: 5.x vs 6.x split (platform-specific, UEFI target only)
+    { crate = "r-efi@5.3.0", reason = "transitive dep version split, UEFI platform crate" },
+]
+
+# Windows platform crate duplicates: windows-sys has a 0.59/0.60/0.61 three-way
+# split across transitive deps (console, stacker, notify, shared_child, clap).
+# Skip the older windows-targets tree to suppress all associated windows_*
+# platform crate duplicates (0.52.x).
+skip-tree = [
+    { crate = "windows-targets@0.52.6", reason = "skip all windows_*@0.52.x platform crates under old windows-targets" },
+]
+
+# -- Sources -------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
+
+[sources]
+# All dependencies must come from crates.io. Unknown registries or git sources
+# are denied to prevent supply chain attacks via source confusion.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

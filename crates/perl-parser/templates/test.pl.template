@@ -1,0 +1,76 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Test::More tests => {{ TEST_COUNT }};
+use Test::Exception;
+use Test::Warnings;
+
+# Load the module to test
+BEGIN {
+    use_ok('{{ MODULE_NAME }}') || print "Bail out!\n";
+}
+
+# Test module can be instantiated
+subtest 'Constructor' => sub {
+    plan tests => 3;
+    
+    my $obj;
+    lives_ok { $obj = {{ MODULE_NAME }}->new() } 'Constructor lives';
+    isa_ok($obj, '{{ MODULE_NAME }}', 'Object is correct class');
+    can_ok($obj, qw(new do_something));
+};
+
+# Test basic functionality
+subtest 'Basic Operations' => sub {
+    plan tests => 2;
+    
+    my $obj = {{ MODULE_NAME }}->new();
+    
+    # Test method calls
+    my $result;
+    lives_ok { $result = $obj->do_something('test') } 'Method call lives';
+    
+    # Add assertions for expected behavior
+    # is($result, $expected, 'Method returns expected value');
+    
+    pass('Placeholder test');
+};
+
+# Test error handling
+subtest 'Error Handling' => sub {
+    plan tests => 2;
+    
+    my $obj = {{ MODULE_NAME }}->new();
+    
+    # Test invalid input
+    eval { $obj->do_something(undef) };
+    ok($@, 'Dies on undefined input') or diag("Expected error, got none");
+    
+    # Test boundary conditions
+    pass('Placeholder for boundary test');
+};
+
+# Test edge cases
+subtest 'Edge Cases' => sub {
+    plan tests => 1;
+    
+    # Add edge case tests here
+    
+    pass('Placeholder for edge cases');
+};
+
+# Performance tests (optional)
+SKIP: {
+    skip 'Performance tests not implemented', 1;
+    
+    subtest 'Performance' => sub {
+        plan tests => 1;
+        
+        # Add performance tests here
+        
+        pass('Performance test placeholder');
+    };
+}
+
+done_testing();

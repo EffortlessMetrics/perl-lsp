@@ -1,0 +1,847 @@
+==================
+UNITCHECK blocks
+==================
+
+UNITCHECK {
+    print "Unit check 1\n";
+}
+
+BEGIN {
+    print "Begin\n";
+}
+
+UNITCHECK {
+    print "Unit check 2\n";
+}
+
+sub foo {
+    UNITCHECK {
+        print "Unit check in sub\n";
+    }
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (phaser_statement
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence))))))))))
+
+==================
+CHECK blocks
+==================
+
+CHECK {
+    print "Check block 1\n";
+}
+
+BEGIN {
+    print "Begin\n";
+}
+
+CHECK {
+    print "Check block 2\n";
+}
+
+package Foo;
+CHECK {
+    print "Check in package\n";
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (package_statement
+    (package))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
+
+==================
+INIT blocks
+==================
+
+INIT {
+    print "Init block 1\n";
+}
+
+BEGIN {
+    require Module;
+}
+
+INIT {
+    print "Init block 2\n";
+    initialize_globals();
+}
+
+END {
+    cleanup();
+}
+
+INIT {
+    $| = 1;
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (require_expression
+          (bareword)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (assignment_expression
+          (scalar
+            (varname))
+          (number))))))
+
+==================
+Block execution order
+==================
+
+print "Main code 1\n";
+
+BEGIN { print "BEGIN 1\n" }
+UNITCHECK { print "UNITCHECK 1\n" }
+CHECK { print "CHECK 1\n" }
+INIT { print "INIT 1\n" }
+END { print "END 1\n" }
+
+print "Main code 2\n";
+
+BEGIN { print "BEGIN 2\n" }
+UNITCHECK { print "UNITCHECK 2\n" }
+CHECK { print "CHECK 2\n" }
+INIT { print "INIT 2\n" }
+END { print "END 2\n" }
+
+print "Main code 3\n";
+
+---
+
+(source_file
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (interpolated_string_literal
+        (string_content
+          (escape_sequence))))))
+
+==================
+Nested special blocks
+==================
+
+BEGIN {
+    print "Outer BEGIN\n";
+    
+    BEGIN {
+        print "Inner BEGIN\n";
+    }
+    
+    eval q{
+        BEGIN { print "Eval BEGIN\n" }
+        INIT { print "Eval INIT\n" }
+    };
+}
+
+CHECK {
+    eval {
+        CHECK { print "Should not print\n" }
+    };
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence)))))
+      (phaser_statement
+        (block
+          (expression_statement
+            (ambiguous_function_call_expression
+              (function)
+              (interpolated_string_literal
+                (string_content
+                  (escape_sequence)))))))
+      (expression_statement
+        (eval_expression
+          (string_literal
+            (string_content))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (eval_expression
+          (block
+            (phaser_statement
+              (block
+                (expression_statement
+                  (ambiguous_function_call_expression
+                    (function)
+                    (interpolated_string_literal
+                      (string_content
+                        (escape_sequence)))))))))))))
+
+==================
+Special blocks in modules
+==================
+
+package MyModule;
+
+BEGIN {
+    our $VERSION = '1.0';
+    require Exporter;
+    our @ISA = qw(Exporter);
+    our @EXPORT = qw(func1 func2);
+}
+
+UNITCHECK {
+    # Verify compilation
+    die "Module requirements not met" unless check_requirements();
+}
+
+CHECK {
+    # Finalize compilation
+    seal_namespace();
+}
+
+INIT {
+    # Runtime initialization
+    connect_to_database();
+}
+
+END {
+    # Cleanup
+    disconnect_database();
+}
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (phaser_statement
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (string_literal
+            (string_content))))
+      (expression_statement
+        (require_expression
+          (bareword)))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (array
+              (varname)))
+          (quoted_word_list
+            (string_content))))
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (array
+              (varname)))
+          (quoted_word_list
+            (string_content))))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (postfix_conditional_expression
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content)))
+          (function_call_expression
+            (function))))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function))))))
+
+==================
+Special blocks with require/use
+==================
+
+BEGIN {
+    require Config;
+    import Config;
+}
+
+use lib BEGIN { 
+    $ENV{HOME} . '/perl5/lib' 
+};
+
+BEGIN {
+    unshift @INC, sub {
+        my ($self, $file) = @_;
+        # Custom module loader
+    };
+}
+
+UNITCHECK {
+    # Runs after each compilation unit
+    validate_dependencies();
+}
+
+CHECK {
+    # Runs after all compilation
+    optimize_code();
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (require_expression
+          (bareword)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (bareword)))))
+  (use_statement
+    (package)
+    (ambiguous_function_call_expression
+      (function)
+      (anonymous_hash_expression
+        (binary_expression
+          (hash_element_expression
+            (container_variable
+              (varname))
+            (autoquoted_bareword))
+          (string_literal
+            (string_content))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (list_expression
+            (array
+              (varname))
+            (anonymous_subroutine_expression
+              (block
+                (expression_statement
+                  (assignment_expression
+                    (variable_declaration
+                      (scalar
+                        (varname))
+                      (scalar
+                        (varname)))
+                    (array
+                      (varname))))
+                (comment))))))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function)))))
+  (phaser_statement
+    (block
+      (comment)
+      (expression_statement
+        (function_call_expression
+          (function))))))
+
+==================
+DEMOLISH in Moo/Moose
+==================
+
+package MyClass;
+use Moo;
+
+sub BUILD {
+    my ($self, $args) = @_;
+    $self->initialize($args);
+}
+
+sub DEMOLISH {
+    my $self = shift;
+    $self->cleanup();
+    warn "Object destroyed";
+}
+
+package MyMooseClass;
+use Moose;
+
+sub BUILD {
+    my $self = shift;
+    $self->setup();
+}
+
+sub DEMOLISH {
+    my $self = shift;
+    $self->teardown();
+}
+
+__PACKAGE__->meta->make_immutable;
+
+---
+
+(source_file
+  (package_statement
+    (package))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname))
+            (scalar
+              (varname)))
+          (array
+            (varname))))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)
+          (scalar
+            (varname))))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content))))))
+  (package_statement
+    (package))
+  (use_statement
+    (package))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))))
+  (subroutine_declaration_statement
+    (bareword)
+    (block
+      (expression_statement
+        (assignment_expression
+          (variable_declaration
+            (scalar
+              (varname)))
+          (func1op_call_expression)))
+      (expression_statement
+        (method_call_expression
+          (scalar
+            (varname))
+          (method)))))
+  (expression_statement
+    (method_call_expression
+      (method_call_expression
+        (func0op_call_expression)
+        (method))
+      (method))))
+
+==================
+Special blocks in eval
+==================
+
+eval {
+    BEGIN { print "eval BEGIN\n" }
+    print "eval body\n";
+    END { print "eval END\n" }
+};
+
+eval "
+    BEGIN { print 'string eval BEGIN' }
+    CHECK { print 'string eval CHECK' }
+    INIT { print 'string eval INIT' }
+    END { print 'string eval END' }
+";
+
+do {
+    BEGIN { print "do BEGIN\n" }
+    print "do body\n";
+};
+
+require BEGIN { 
+    determine_module() 
+};
+
+---
+
+(source_file
+  (expression_statement
+    (eval_expression
+      (block
+        (phaser_statement
+          (block
+            (expression_statement
+              (ambiguous_function_call_expression
+                (function)
+                (interpolated_string_literal
+                  (string_content
+                    (escape_sequence)))))))
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence)))))
+        (phaser_statement
+          (block
+            (expression_statement
+              (ambiguous_function_call_expression
+                (function)
+                (interpolated_string_literal
+                  (string_content
+                    (escape_sequence))))))))))
+  (expression_statement
+    (eval_expression
+      (interpolated_string_literal
+        (string_content))))
+  (expression_statement
+    (do_expression
+      (block
+        (phaser_statement
+          (block
+            (expression_statement
+              (ambiguous_function_call_expression
+                (function)
+                (interpolated_string_literal
+                  (string_content
+                    (escape_sequence)))))))
+        (expression_statement
+          (ambiguous_function_call_expression
+            (function)
+            (interpolated_string_literal
+              (string_content
+                (escape_sequence))))))))
+  (expression_statement
+    (require_expression
+      (ambiguous_function_call_expression
+        (function)
+        (anonymous_hash_expression
+          (function_call_expression
+            (function)))))))
+
+==================
+Phase-related variables
+==================
+
+BEGIN {
+    print "Compile phase: ${^GLOBAL_PHASE}\n";
+}
+
+INIT {
+    print "Init phase: ${^GLOBAL_PHASE}\n";
+}
+
+print "Runtime phase: ${^GLOBAL_PHASE}\n";
+
+END {
+    print "End phase: ${^GLOBAL_PHASE}\n";
+}
+
+if (${^GLOBAL_PHASE} eq 'START') {
+    setup_early();
+} elsif (${^GLOBAL_PHASE} eq 'RUN') {
+    normal_operation();
+} elsif (${^GLOBAL_PHASE} eq 'END') {
+    final_cleanup();
+}
+
+---
+
+(source_file
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (interpolated_string_literal
+        (string_content
+          (scalar
+            (varname))
+          (escape_sequence)))))
+  (phaser_statement
+    (block
+      (expression_statement
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (scalar
+                (varname))
+              (escape_sequence)))))))
+  (conditional_statement
+    (equality_expression
+      (scalar
+        (varname))
+      (string_literal
+        (string_content)))
+    (block
+      (expression_statement
+        (function_call_expression
+          (function))))
+    (elsif
+      (equality_expression
+        (scalar
+          (varname))
+        (string_literal
+          (string_content)))
+      (block
+        (expression_statement
+          (function_call_expression
+            (function))))
+      (elsif
+        (equality_expression
+          (scalar
+            (varname))
+          (string_literal
+            (string_content)))
+        (block
+          (expression_statement
+            (function_call_expression
+              (function))))))))

@@ -1,0 +1,25 @@
+[package]
+name = "perl-ast"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "AST node definitions for Perl parsing, providing typed representations of Perl syntax constructs"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-ast"
+keywords = ["perl", "ast", "parser", "syntax-tree"]
+categories = ["parsing", "development-tools"]
+
+[dependencies]
+perl-ast-v2 = { workspace = true }
+perl-position-tracking = { workspace = true }
+perl-token = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

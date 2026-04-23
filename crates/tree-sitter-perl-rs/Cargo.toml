@@ -1,0 +1,44 @@
+[package]
+name = "tree-sitter-perl-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Rust-native Perl parser with tree-sitter-style ergonomics and tree-sitter-compatible output over the native v3 parser."
+readme = "README.md"
+documentation = "https://docs.rs/tree-sitter-perl-rs"
+categories = ["development-tools", "parser-implementations", "parsing"]
+keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
+include = [
+    "src/**",
+    "tests/**",
+    "README.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+    "Cargo.toml",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+name = "tree_sitter_perl_rs"
+doctest = true
+
+[[bin]]
+name = "bench_facade"
+path = "src/bin/bench_facade.rs"
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-ast = { workspace = true }
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+insta = { version = "1.47.2" }
+perl-position-tracking = { workspace = true }

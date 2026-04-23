@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"if ($x > 0) {\")"
+---
+(source_file (if (binary_> (variable $ x) (number 0)) (block )))

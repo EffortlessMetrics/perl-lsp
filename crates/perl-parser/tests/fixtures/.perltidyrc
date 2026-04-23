@@ -1,0 +1,31 @@
+# Deterministic perltidy configuration for tests
+# These settings ensure consistent formatting across platforms
+
+# Indentation
+-i=4      # Use 4 spaces for indentation
+-ci=4     # Continuation indent is also 4 spaces
+
+# Line Length
+-l=0      # No maximum line length (for test predictability)
+
+# Spaces
+-pt=2     # Tight parentheses
+-sbt=2    # Tight square brackets  
+-bt=2     # Tight braces
+-bbt=2    # Tight block braces
+
+# Other formatting
+-noll     # Don't outdent long lines
+-nsyn     # No syntax check (faster for tests)
+-ce       # Cuddled else
+-cti=0    # No extra indentation for closing tokens
+
+# Preserve formatting where possible
+-nbbc     # Don't force blank lines before comments
+-nbbs     # Don't force blank lines before subs
+-nolq     # Don't outdent long quotes
+
+# Make output deterministic
+-st       # Output to stdout
+-se       # Errors to stderr
+-w        # Show warnings

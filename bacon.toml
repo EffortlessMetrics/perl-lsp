@@ -1,0 +1,26 @@
+# Bacon configuration for fast local feedback loops.
+# Install with: cargo install --locked bacon
+
+default_job = "check"
+
+[jobs.check]
+command = ["cargo", "check", "--workspace", "--all-targets", "--locked"]
+need_stdout = false
+
+[jobs.clippy-core]
+command = ["cargo", "clippy", "-p", "perl-parser", "-p", "perl-lexer", "--locked", "--", "-D", "warnings", "-A", "missing_docs"]
+need_stdout = false
+
+[jobs.test-core]
+command = ["cargo", "test", "-p", "perl-parser", "-p", "perl-lexer", "--lib", "--locked"]
+need_stdout = true
+
+[jobs.test-lsp-smoke]
+command = ["cargo", "test", "-p", "perl-lsp", "--test", "cli_smoke", "--locked", "--", "--test-threads=1"]
+need_stdout = true
+
+[keybindings]
+"c" = "job:check"
+"l" = "job:clippy-core"
+"t" = "job:test-core"
+"s" = "job:test-lsp-smoke"

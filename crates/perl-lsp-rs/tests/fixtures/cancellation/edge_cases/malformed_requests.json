@@ -1,0 +1,455 @@
+{
+  "malformed_cancellation_requests": [
+    {
+      "description": "Missing required fields",
+      "category": "missing_fields",
+      "test_cases": [
+        {
+          "name": "missing_jsonrpc_field",
+          "request": {
+            "method": "$/cancelRequest",
+            "params": {"id": "test-1"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "missing_method_field",
+          "request": {
+            "jsonrpc": "2.0",
+            "params": {"id": "test-2"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "missing_params_field",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest"
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "missing_id_in_params",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        }
+      ]
+    },
+    {
+      "description": "Invalid field types",
+      "category": "invalid_types",
+      "test_cases": [
+        {
+          "name": "invalid_jsonrpc_version",
+          "request": {
+            "jsonrpc": "1.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "test-3"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "non_string_jsonrpc",
+          "request": {
+            "jsonrpc": 2.0,
+            "method": "$/cancelRequest",
+            "params": {"id": "test-4"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "invalid_method_name",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "cancel_request",
+            "params": {"id": "test-5"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "non_string_method",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": 123,
+            "params": {"id": "test-6"}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "non_object_params",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": "test-7"
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "null_id_value",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": null}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        }
+      ]
+    },
+    {
+      "description": "Edge case ID values",
+      "category": "edge_case_ids",
+      "test_cases": [
+        {
+          "name": "empty_string_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": ""}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "very_long_string_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "a".repeat(10000)}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true,
+            "security_check": "prevent_resource_exhaustion"
+          }
+        },
+        {
+          "name": "zero_numeric_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": 0}
+          },
+          "expected_behavior": {
+            "action": "process_normally",
+            "valid_id": true,
+            "lookup_expected": true
+          }
+        },
+        {
+          "name": "negative_numeric_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": -1}
+          },
+          "expected_behavior": {
+            "action": "process_normally",
+            "valid_id": true,
+            "lookup_expected": true
+          }
+        },
+        {
+          "name": "floating_point_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": 123.456}
+          },
+          "expected_behavior": {
+            "action": "log_warning_and_ignore",
+            "log_level": "warn",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "special_characters_in_string_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "test-\n\r\t\0-id"}
+          },
+          "expected_behavior": {
+            "action": "process_normally",
+            "valid_id": true,
+            "lookup_expected": true,
+            "sanitization": "preserve_special_chars"
+          }
+        },
+        {
+          "name": "unicode_string_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "测试-🔧-тест"}
+          },
+          "expected_behavior": {
+            "action": "process_normally",
+            "valid_id": true,
+            "lookup_expected": true,
+            "unicode_support": true
+          }
+        }
+      ]
+    },
+    {
+      "description": "JSON parsing edge cases",
+      "category": "json_parsing",
+      "test_cases": [
+        {
+          "name": "truncated_json",
+          "raw_message": "{\"jsonrpc\":\"2.0\",\"method\":\"$/cancelRequest\",\"params\":{\"id\":",
+          "expected_behavior": {
+            "action": "json_parse_error",
+            "log_level": "error",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "invalid_json_structure",
+          "raw_message": "{jsonrpc:2.0,method:$/cancelRequest,params:{id:test}}",
+          "expected_behavior": {
+            "action": "json_parse_error",
+            "log_level": "error",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "extra_commas",
+          "raw_message": "{\"jsonrpc\":\"2.0\",\"method\":\"$/cancelRequest\",\"params\":{\"id\":\"test\",},}",
+          "expected_behavior": {
+            "action": "json_parse_error",
+            "log_level": "error",
+            "continue_processing": true
+          }
+        },
+        {
+          "name": "mixed_quotes",
+          "raw_message": "{\"jsonrpc\":'2.0',\"method\":\"$/cancelRequest\",\"params\":{\"id\":\"test\"}}",
+          "expected_behavior": {
+            "action": "json_parse_error",
+            "log_level": "error",
+            "continue_processing": true
+          }
+        }
+      ]
+    },
+    {
+      "description": "Security-related malformed requests",
+      "category": "security_edge_cases",
+      "test_cases": [
+        {
+          "name": "extremely_large_request",
+          "description": "Request designed to exhaust memory",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {
+              "id": "test",
+              "malicious_field": "x".repeat(1000000)
+            }
+          },
+          "expected_behavior": {
+            "action": "size_limit_exceeded",
+            "log_level": "warn",
+            "security_response": "reject_oversized_request"
+          }
+        },
+        {
+          "name": "deeply_nested_params",
+          "description": "Deeply nested JSON to cause stack overflow",
+          "params_depth": 1000,
+          "expected_behavior": {
+            "action": "nesting_limit_exceeded",
+            "log_level": "warn",
+            "security_response": "reject_deeply_nested"
+          }
+        },
+        {
+          "name": "injection_attempt_in_id",
+          "request": {
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": {"id": "\"; DROP TABLE requests; --"}
+          },
+          "expected_behavior": {
+            "action": "process_normally",
+            "valid_id": true,
+            "injection_prevention": "treat_as_literal_string"
+          }
+        }
+      ]
+    }
+  ],
+  "recovery_testing": [
+    {
+      "description": "System recovery after malformed request handling",
+      "scenarios": [
+        {
+          "name": "continued_operation_after_malformed_batch",
+          "sequence": [
+            {
+              "step": 1,
+              "action": "send_malformed_request",
+              "request": {"invalid": "request"}
+            },
+            {
+              "step": 2,
+              "action": "send_valid_cancellation",
+              "request": {
+                "jsonrpc": "2.0",
+                "method": "$/cancelRequest",
+                "params": {"id": "recovery-test"}
+              }
+            }
+          ],
+          "expected_behavior": {
+            "malformed_ignored": true,
+            "valid_processed": true,
+            "system_stability": "maintained"
+          }
+        },
+        {
+          "name": "memory_stability_after_oversized_requests",
+          "sequence": [
+            {
+              "step": 1,
+              "action": "send_multiple_oversized_requests",
+              "count": 10
+            },
+            {
+              "step": 2,
+              "action": "measure_memory_usage"
+            },
+            {
+              "step": 3,
+              "action": "send_normal_requests",
+              "count": 5
+            }
+          ],
+          "expected_behavior": {
+            "memory_not_exhausted": true,
+            "normal_processing_continues": true,
+            "garbage_collection_triggered": true
+          }
+        }
+      ]
+    }
+  ],
+  "logging_and_monitoring": [
+    {
+      "description": "Logging behavior for malformed requests",
+      "log_requirements": [
+        {
+          "category": "malformed_request_received",
+          "log_level": "warn",
+          "required_fields": [
+            "timestamp",
+            "request_id_if_available",
+            "error_type",
+            "error_description",
+            "raw_request_sample"
+          ],
+          "security_considerations": [
+            "sanitize_log_output",
+            "limit_raw_request_size",
+            "prevent_log_injection"
+          ]
+        },
+        {
+          "category": "security_threshold_exceeded",
+          "log_level": "error",
+          "required_fields": [
+            "timestamp",
+            "client_identifier",
+            "security_violation_type",
+            "threshold_exceeded",
+            "action_taken"
+          ],
+          "alerting": {
+            "immediate_alert": true,
+            "rate_limiting_consideration": true
+          }
+        }
+      ]
+    }
+  ],
+  "edge_case_metrics": [
+    {
+      "description": "Metrics to track for malformed request handling",
+      "metrics": [
+        {
+          "name": "malformed_request_rate",
+          "description": "Rate of malformed cancellation requests per minute",
+          "threshold_warning": 10,
+          "threshold_critical": 100
+        },
+        {
+          "name": "request_size_distribution",
+          "description": "Distribution of cancellation request sizes",
+          "percentiles": [50, 95, 99, 99.9],
+          "size_limit_kb": 1
+        },
+        {
+          "name": "json_parsing_error_rate",
+          "description": "Rate of JSON parsing errors for cancellation requests",
+          "threshold_warning": 1,
+          "threshold_critical": 10
+        },
+        {
+          "name": "security_violation_rate",
+          "description": "Rate of security-related rejections",
+          "threshold_warning": 1,
+          "threshold_critical": 5
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+[alias]
+xtask = "run --package xtask --"
+t2 = "test -- --test-threads=2"
+
+# Build configuration
+[build]
+# Feature flags that should always be enabled
+# This ensures AI tools and bare `cargo build` commands use the right features
+# Tell rustc which cfg(feature=...) values are valid, so clippy stays strict
+rustflags = []
+
+# Default target directory (shared across all crates)
+target-dir = "target"
+
+# Environment-specific settings
+[env]
+# Enable backtrace for better debugging
+RUST_BACKTRACE = "1"
+
+# Profile configurations are now in workspace Cargo.toml to avoid conflicts
+
+# Cargo configuration
+[term]
+# Use color in terminal output
+color = "auto"
+
+[net]
+# Retry failed downloads
+retry = 2
+
+# Registries configuration
+[registries.crates-io]
+protocol = "sparse"  # Use sparse index for faster updates 

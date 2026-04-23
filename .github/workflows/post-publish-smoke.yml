@@ -1,0 +1,152 @@
+name: Post-publish smoke test
+
+# Verifies that published crates are actually installable and functional.
+# "Indexed on crates.io" != "installable and runnable" — this workflow closes
+# that gap by installing each binary crate and exercising library crates in a
+# fresh downstream project.
+#
+# Triggers:
+#   workflow_dispatch   — manual run, supply a version string
+#   workflow_run        — automatic after publish-crates.yml completes
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published version to verify (e.g. 0.12.2)'
+        required: true
+        type: string
+
+  workflow_run:
+    workflows: ["Publish to crates.io"]
+    types: [completed]
+
+concurrency:
+  group: post-publish-smoke-${{ github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Resolve the version to test. For workflow_run triggers the publish workflow
+  # outputs the version it published; for workflow_dispatch the user supplies it.
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_run: ${{ steps.version.outputs.should_run }}
+
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            SHOULD_RUN="true"
+          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # Only run when the upstream publish workflow succeeded
+            if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+              echo "Upstream publish workflow did not succeed (conclusion: ${{ github.event.workflow_run.conclusion }}). Skipping smoke test."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "version=skip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # Extract the version from the workflow_run event name.
+            # The publish workflow is triggered on release events with tag names like "v0.12.2".
+            # Fall back to the head SHA's Cargo.toml workspace version if no tag.
+            HEAD_BRANCH="${{ github.event.workflow_run.head_branch }}"
+            if [[ "$HEAD_BRANCH" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+              VERSION="${BASH_REMATCH[1]}"
+            else
+              # Checkout to read the workspace version
+              echo "could not determine version from branch '$HEAD_BRANCH'; needs manual dispatch"
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "version=unknown" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            SHOULD_RUN="true"
+          else
+            echo "Unrecognised event: ${{ github.event_name }}"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "version=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid version: $VERSION"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "should_run=${SHOULD_RUN}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VERSION}"
+
+  smoke:
+    name: Smoke test v${{ needs.resolve-version.outputs.version }}
+    needs: resolve-version
+    if: needs.resolve-version.outputs.should_run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
+
+      # Warm the registry cache for the exact version we're testing so that
+      # `cargo add` and `cargo install` don't have to fetch the full index.
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+
+      - name: Run post-publish smoke test
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
+        run: |
+          chmod +x scripts/post-publish-smoke.sh
+          bash scripts/post-publish-smoke.sh "$VERSION" 2>&1 | tee /tmp/smoke-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          # Write to step summary (the script also writes a structured summary
+          # via GITHUB_STEP_SUMMARY, but we also append the raw output for
+          # easier debugging).
+          {
+            echo ""
+            echo "### Raw output"
+            echo '```'
+            cat /tmp/smoke-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $EXIT_CODE
+
+      - name: Upload smoke test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-test-results-v${{ needs.resolve-version.outputs.version }}
+          path: /tmp/smoke-output.txt
+          retention-days: 30
+
+      - name: Annotate on failure
+        if: failure()
+        run: |
+          echo "::error::Post-publish smoke test failed for v${{ needs.resolve-version.outputs.version }}. Check the job summary for details."
+          echo ""
+          echo "Common causes:"
+          echo "  - cargo install failure: crate not yet fully propagated through crates.io CDN (wait ~5 min, re-run)"
+          echo "  - Version mismatch: binary reports wrong version (stale cache in CI — clear runner cache)"
+          echo "  - cargo add / cargo test failure: public API changed or a dependency was not published"
+          echo "  - tree-sitter-perl-c parse failure: C grammar FFI broke between versions"

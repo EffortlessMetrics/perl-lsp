@@ -1,0 +1,33 @@
+[package]
+name = "perl-uri"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-uri"
+description = "URI ↔ filesystem path conversion and normalization utilities for Perl LSP"
+readme = "README.md"
+keywords = ["perl", "uri", "path", "lsp", "file-uri"]
+categories = ["development-tools", "encoding"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+percent-encoding = "2.3.2"
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+perl-tdd-support = { workspace = true }
+
+[features]
+default = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

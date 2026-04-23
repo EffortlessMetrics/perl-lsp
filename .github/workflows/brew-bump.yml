@@ -1,0 +1,145 @@
+name: Homebrew Auto-Bump
+
+# Update Homebrew formula on release
+# Cost: ~$0.02 per bump
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to bump (e.g., v0.10.0)'
+        required: false
+
+# Cancel in-flight runs
+concurrency:
+  group: brew-bump-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel brew bumps
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Get release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Wait for release assets
+        run: |
+          # Wait up to 10 minutes for release assets to be available
+          for i in {1..20}; do
+            echo "Checking for release assets (attempt $i/20)..."
+            if gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
+              echo "Assets found!"
+              break
+            fi
+            sleep 30
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and compute SHA256
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.tag.outputs.version }}"
+
+          # Download assets
+          mkdir -p /tmp/brew-assets
+          cd /tmp/brew-assets
+
+          # Download each platform asset
+          # Asset naming follows release.yml: perllsp-${VERSION}-${platform}.tar.gz
+          for platform in "x86_64-apple-darwin" "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"; do
+            echo "Downloading perllsp-${VERSION}-${platform}.tar.gz..."
+            gh release download "${TAG}" --pattern "perllsp-${VERSION}-${platform}.tar.gz" || true
+          done
+
+          # Compute SHA256
+          echo "Computing SHA256 checksums..."
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew formula
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+
+          # Update version
+          sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" Formula/perl-lsp.rb
+
+          # Update SHA256 for each platform
+          cd /tmp/brew-assets
+
+          # macOS Intel
+          if [ -f "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
+            sed -i "/x86_64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
+          fi
+
+          # macOS ARM
+          if [ -f "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
+            sed -i "/aarch64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
+          fi
+
+          # Linux x64
+          if [ -f "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+            sed -i "/x86_64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
+          fi
+
+          # Linux ARM
+          if [ -f "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" ]; then
+            SHA=$(sha256sum "perllsp-${VERSION}-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
+            sed -i "/aarch64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
+          fi
+
+          if grep -q "__RELEASE_VERSION__\|__SHA256_" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"; then
+            echo "::error::Formula still contains unreplaced placeholders after update."
+            exit 1
+          fi
+
+      - name: Show updated formula
+        run: cat Formula/perl-lsp.rb
+
+      - name: Create PR to Homebrew
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: Formula
+          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
+          title: "perl-lsp ${{ steps.tag.outputs.version }}"
+          body: |
+            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
+
+            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
+          commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
+          labels: automated-pr
+          repository: Homebrew/homebrew-core
+          signoff: false

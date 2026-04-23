@@ -1,0 +1,8 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_errors(\"if ($text =~ /abc) { print 1; }\\nmy $ok = 1;\")"
+---
+Recovered from InsertedCloser at ArgList (position 43)
+Recovered from MissingOperand at InfixRhs (position 10)
+expected '{', found end of input at position 43
+expected statement, found end of input at position 43

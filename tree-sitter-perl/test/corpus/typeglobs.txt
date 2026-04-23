@@ -1,0 +1,379 @@
+==========================================
+Basic typeglob assignment
+==========================================
+
+*foo = *bar;
+*NEW = *OLD;
+*alias = \&subroutine;
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname))))))
+
+==========================================
+Typeglob slots
+==========================================
+
+*foo{SCALAR};
+*foo{ARRAY};
+*foo{HASH};
+*foo{CODE};
+*foo{IO};
+*foo{GLOB};
+*foo{FORMAT};
+*foo{PACKAGE};
+
+---
+
+(source_file
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword)))
+  (expression_statement
+    (glob_slot_expression
+      (glob
+        (varname))
+      (autoquoted_bareword))))
+
+==========================================
+Typeglob references
+==========================================
+
+$ref = \*STDOUT;
+$fh = \*STDERR;
+$globref = \*{$package . "::function"};
+$coderef = \&{*foo{CODE}};
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (glob
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (glob
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (binary_expression
+                  (scalar
+                    (varname))
+                  (interpolated_string_literal
+                    (string_content))))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (function
+          (varname
+            (block
+              (expression_statement
+                (glob_slot_expression
+                  (glob
+                    (varname))
+                  (autoquoted_bareword))))))))))
+
+==========================================
+Symbol table manipulation
+==========================================
+
+${"main::var"} = 42;
+@{"Foo::array"} = (1, 2, 3);
+%{"Bar::hash"} = (key => 'value');
+&{"Package::function"}();
+*{"Dynamic::glob"} = \$scalar;
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (number)))
+  (expression_statement
+    (assignment_expression
+      (array
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (list_expression
+        (number)
+        (number)
+        (number))))
+  (expression_statement
+    (assignment_expression
+      (hash
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (list_expression
+        (autoquoted_bareword)
+        (string_literal
+          (string_content)))))
+  (expression_statement
+    (function_call_expression
+      (function
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content))))))
+      (refgen_expression
+        (scalar
+          (varname))))))
+
+==========================================
+Local typeglobs
+==========================================
+
+local *FH;
+local *STDOUT;
+{
+    local *FILE = *STDIN;
+    print FILE "test\n";
+}
+
+---
+
+(source_file
+  (expression_statement
+    (localization_expression
+      (glob
+        (varname))))
+  (expression_statement
+    (localization_expression
+      (glob
+        (varname))))
+  (block_statement
+    (expression_statement
+      (assignment_expression
+        (localization_expression
+          (glob
+            (varname)))
+        (glob
+          (varname))))
+    (expression_statement
+      (ambiguous_function_call_expression
+        (function)
+        (ambiguous_function_call_expression
+          (function)
+          (interpolated_string_literal
+            (string_content
+              (escape_sequence))))))))
+
+==========================================
+Filehandle typeglobs
+==========================================
+
+open(FH, "<", "file.txt");
+*STDOUT = *FH;
+select(FH);
+print FH "output\n";
+close(FH);
+
+---
+
+(source_file
+  (expression_statement
+    (function_call_expression
+      (function)
+      (list_expression
+        (bareword)
+        (interpolated_string_literal
+          (string_content))
+        (interpolated_string_literal
+          (string_content)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (function_call_expression
+      (function)
+      (bareword)))
+  (expression_statement
+    (ambiguous_function_call_expression
+      (function)
+      (ambiguous_function_call_expression
+        (function)
+        (interpolated_string_literal
+          (string_content
+            (escape_sequence))))))
+  (expression_statement
+    (func1op_call_expression
+      (bareword))))
+
+==========================================
+Anonymous typeglobs
+==========================================
+
+$fh = \*{geniosym()};
+$glob = \*{""};
+*{$fh} = \$scalar;
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (function_call_expression
+                  (function)))))))))
+  (expression_statement
+    (assignment_expression
+      (scalar
+        (varname))
+      (refgen_expression
+        (glob
+          (varname
+            (block
+              (expression_statement
+                (interpolated_string_literal))))))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (scalar
+                (varname))))))
+      (refgen_expression
+        (scalar
+          (varname))))))
+
+==========================================
+Package qualified typeglobs
+==========================================
+
+*Some::Package::foo = \&handler;
+*::foo = *main::foo;
+*Other:: = *Another::;
+*{"Some::Deep::Package::$name"} = \$value;
+
+---
+
+(source_file
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (refgen_expression
+        (function
+          (varname)))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname))
+      (glob
+        (varname))))
+  (expression_statement
+    (assignment_expression
+      (glob
+        (varname
+          (block
+            (expression_statement
+              (interpolated_string_literal
+                (string_content
+                  (scalar
+                    (varname))))))))
+      (refgen_expression
+        (scalar
+          (varname))))))

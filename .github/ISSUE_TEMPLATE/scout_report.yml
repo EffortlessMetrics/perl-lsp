@@ -1,0 +1,219 @@
+name: Scout Report
+description: Investigation report filed by a scout agent — includes full analysis, options, and builder spec
+labels: ["swarm-discovered", "needs-plan-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Scout Report
+        This template captures everything a scout found during investigation.
+        Fill every section thoroughly — this becomes the spec a builder implements from.
+        Take your time. Narrate your thinking. The more context you leave, the
+        easier the builder's job becomes.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Problem — What's wrong?"
+      description: |
+        Describe what you found. Include exact file:line references.
+        Show the evidence: error messages, failing corpus files, missing behavior.
+        Be specific enough that someone reading this cold can understand the issue.
+      placeholder: |
+        `parse_phase_block` in `declarations.rs:845` matches the `CHECK` keyword
+        before checking if the next token is `:` (Colon). This means `CHECK:` used
+        as a statement label is misidentified as a phase block, producing the error
+        "CHECK must be followed by a block."
+
+        Affected corpus file: `Mojo/Exception.pm` line 25:
+        ```perl
+        CHECK: for (my $i = 0; $i < 10; $i++) { ... }
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: root_cause
+    attributes:
+      label: "Root Cause — Why does it happen?"
+      description: |
+        Trace the code path. Name the specific function, file, and line.
+        Explain the logic that's wrong or missing. One clear paragraph.
+      placeholder: |
+        In `statements.rs:224`, the `CHECK` token is matched in the keyword dispatch
+        before reaching the `_` arm at line 256 that calls `is_label_start()`.
+        The phase block handler at `declarations.rs:845` then expects `{` but finds
+        `:`, and emits the error. The fix point is either the dispatch order or a
+        peek-before-dispatch in parse_phase_block.
+    validations:
+      required: true
+
+  - type: textarea
+    id: investigation
+    attributes:
+      label: "What I explored — Scout narrative"
+      description: |
+        Walk through your investigation. What did you look at? What did you
+        rule out? What patterns did you notice in the surrounding code?
+        This context helps the plan-reviewer and builder make good decisions.
+      placeholder: |
+        I first checked if `CHECK` had special handling in the lexer — it doesn't,
+        it's tokenized as `TokenKind::Check` like other phase keywords.
+
+        I traced the dispatch in statements.rs and found that all five phase keywords
+        (BEGIN, END, CHECK, INIT, UNITCHECK) are matched before the catch-all arm.
+        The `END:` label would have the same bug but `END` is less commonly used
+        as a label.
+
+        The surrounding code uses a peek-then-dispatch pattern for similar
+        ambiguities (see `parse_if` at line 180 which peeks for `(` vs `{`).
+        The fix should follow that convention.
+    validations:
+      required: true
+
+  - type: textarea
+    id: options
+    attributes:
+      label: "Options — How could we fix it?"
+      description: |
+        List 2-3 approaches. For each: what changes, which files, tradeoffs, effort.
+        Think about risk, simplicity, and whether the approach handles edge cases.
+      placeholder: |
+        ### Option A: Peek for Colon in parse_phase_block (EASY, ~1h)
+        In `declarations.rs:845`, before emitting the error, peek if the next
+        token is `Colon`. If so, return an "it's a label" signal and let the
+        statement parser handle it as `parse_labeled_statement`.
+
+        **Pro:** Minimal change, follows existing peek pattern.
+        **Con:** Fixes CHECK but not END/INIT/UNITCHECK as labels.
+
+        ### Option B: Check all phase keywords for label usage (EASY, ~2h)
+        Same as A but applied to all 5 phase keywords. Add a shared
+        `is_phase_keyword_used_as_label()` helper.
+
+        **Pro:** Comprehensive fix.
+        **Con:** Slightly more code, but handles all cases.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: "Recommendation — Which option and why?"
+      description: |
+        Pick one and explain your reasoning. Consider effort, risk, completeness.
+        If you're unsure, say so — the plan-reviewer will validate.
+      placeholder: |
+        **Option B** — it's only slightly more work than A and prevents the same
+        bug for END/INIT/UNITCHECK labels. The shared helper keeps it clean.
+    validations:
+      required: true
+
+  - type: textarea
+    id: builder_spec
+    attributes:
+      label: "Builder Spec — Implementation details"
+      description: |
+        Everything the builder needs to implement without re-researching.
+        Include: file:line to change, what to change, test code, verify command.
+        The test code should be actual Rust, not a description.
+      placeholder: |
+        **File to change:** `crates/perl-parser-core/src/engine/parser/declarations.rs:845`
+        **What to change:** Add a peek for `TokenKind::Colon` before emitting the
+        "must be followed by a block" error. If Colon found, return control to
+        the statement parser for label handling.
+
+        **Test to add:** `crates/perl-parser-core/tests/phase_block_as_label.rs`
+        ```rust
+        #[test]
+        fn test_check_as_label() -> Result<(), Box<dyn std::error::Error>> {
+            let perl = r#"CHECK: for (my $i = 0; $i < 10; $i++) { print $i }"#;
+            let result = parse_perl_document(perl);
+            assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+            Ok(())
+        }
+
+        #[test]
+        fn test_end_as_label() -> Result<(), Box<dyn std::error::Error>> {
+            let perl = r#"END: { last END }"#;
+            let result = parse_perl_document(perl);
+            assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
+            Ok(())
+        }
+        ```
+
+        **Verify:**
+        ```bash
+        cargo test -p perl-parser-core -- test_check_as_label --exact
+        cargo test -p perl-parser-core -- test_end_as_label --exact
+        cargo xtask fmt && cargo clippy -p perl-parser-core --tests
+        ```
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: related
+    attributes:
+      label: "Related work and what's next"
+      description: |
+        Link related issues, note what should happen after this fix lands.
+        "Not done, but here's what's next" is valuable context.
+      placeholder: |
+        - Related: #2394 (unclosed_brace_semicolon bucket shares typeglob patterns)
+        - After this fix: run `just cpan-corpus-ratchet` to lock in the gain
+        - Next step: address the `expected_colon` bucket (#2393) which has similar
+          dispatch ordering issues with nested ternary
+    validations:
+      required: false
+
+  - type: input
+    id: corpus_impact
+    attributes:
+      label: Corpus Impact
+      description: "How many corpus files would become clean? (parser issues only)"
+      placeholder: "8 files in unclosed_brace_semicolon bucket → ~90.5%"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: difficulty
+    attributes:
+      label: Difficulty
+      options:
+        - EASY (<2h)
+        - MEDIUM (2-8h)
+        - HARD (>8h)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: "Optional — for security-scout findings and critical bugs"
+      options:
+        - "— not applicable —"
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: false
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - parser
+        - lsp
+        - dap
+        - performance
+        - testing
+        - documentation
+        - infrastructure
+        - security
+    validations:
+      required: true

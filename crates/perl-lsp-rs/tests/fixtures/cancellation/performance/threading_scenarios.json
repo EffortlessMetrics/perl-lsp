@@ -1,0 +1,286 @@
+{
+  "threading_configuration_scenarios": [
+    {
+      "description": "RUST_TEST_THREADS=2 optimal configuration validation",
+      "configuration": {
+        "rust_test_threads": 2,
+        "expected_behavior": "adaptive_timeout_scaling",
+        "contention_level": "minimal"
+      },
+      "test_scenarios": [
+        {
+          "name": "low_contention_completion",
+          "concurrent_requests": 2,
+          "provider": "completion",
+          "expected_metrics": {
+            "avg_response_time_ms": 25,
+            "max_response_time_ms": 45,
+            "thread_utilization": 0.75,
+            "context_switches": 4
+          }
+        },
+        {
+          "name": "moderate_contention_mixed_providers",
+          "concurrent_requests": 4,
+          "providers": ["completion", "hover", "definition", "references"],
+          "expected_metrics": {
+            "avg_response_time_ms": 35,
+            "max_response_time_ms": 60,
+            "thread_utilization": 0.85,
+            "context_switches": 12
+          }
+        }
+      ]
+    },
+    {
+      "description": "Thread scaling comparison scenarios",
+      "thread_configurations": [
+        {
+          "threads": 1,
+          "scenario": "single_thread_baseline",
+          "expected_metrics": {
+            "serialization_overhead": 0,
+            "synchronization_overhead": 0,
+            "predictable_performance": true
+          }
+        },
+        {
+          "threads": 2,
+          "scenario": "optimal_threading",
+          "expected_metrics": {
+            "performance_improvement_factor": 1.8,
+            "synchronization_overhead_ms": 2,
+            "scalability_efficiency": 0.9
+          }
+        },
+        {
+          "threads": 4,
+          "scenario": "higher_contention",
+          "expected_metrics": {
+            "performance_improvement_factor": 2.5,
+            "synchronization_overhead_ms": 8,
+            "scalability_efficiency": 0.625
+          }
+        },
+        {
+          "threads": 8,
+          "scenario": "high_contention",
+          "expected_metrics": {
+            "performance_improvement_factor": 3.2,
+            "synchronization_overhead_ms": 20,
+            "scalability_efficiency": 0.4
+          }
+        }
+      ]
+    }
+  ],
+  "adaptive_timeout_scenarios": [
+    {
+      "description": "Multi-tier timeout scaling based on thread count",
+      "timeout_configurations": [
+        {
+          "thread_count": 1,
+          "contention_level": "none",
+          "timeouts": {
+            "lsp_harness_ms": 500,
+            "comprehensive_test_ms": 15000,
+            "idle_detection_ms": 200,
+            "symbol_waiting_ms": 1000
+          }
+        },
+        {
+          "thread_count": 2,
+          "contention_level": "low",
+          "timeouts": {
+            "lsp_harness_ms": 400,
+            "comprehensive_test_ms": 15000,
+            "idle_detection_ms": 200,
+            "symbol_waiting_ms": 1000
+          }
+        },
+        {
+          "thread_count": 4,
+          "contention_level": "medium",
+          "timeouts": {
+            "lsp_harness_ms": 300,
+            "comprehensive_test_ms": 10000,
+            "idle_detection_ms": 300,
+            "symbol_waiting_ms": 1500
+          }
+        },
+        {
+          "thread_count": 8,
+          "contention_level": "high",
+          "timeouts": {
+            "lsp_harness_ms": 200,
+            "comprehensive_test_ms": 7500,
+            "idle_detection_ms": 500,
+            "symbol_waiting_ms": 2000
+          }
+        }
+      ]
+    }
+  ],
+  "cancellation_coordination_scenarios": [
+    {
+      "description": "Thread-safe cancellation token coordination",
+      "scenarios": [
+        {
+          "name": "atomic_cancellation_flag_performance",
+          "threads": 2,
+          "operations_per_thread": 10000,
+          "operation_type": "atomic_flag_check",
+          "expected_metrics": {
+            "avg_check_latency_ns": 50,
+            "max_check_latency_ns": 200,
+            "cache_misses": 0.05
+          }
+        },
+        {
+          "name": "mutex_protected_registry_performance",
+          "threads": 2,
+          "operations_per_thread": 1000,
+          "operation_type": "registry_lookup",
+          "expected_metrics": {
+            "avg_lookup_latency_us": 15,
+            "max_lookup_latency_us": 100,
+            "lock_contention_ratio": 0.1
+          }
+        },
+        {
+          "name": "cross_thread_cancellation_propagation",
+          "source_thread": 1,
+          "target_threads": [2],
+          "propagation_method": "shared_atomic",
+          "expected_metrics": {
+            "propagation_latency_us": 25,
+            "delivery_guarantee": "eventually_consistent"
+          }
+        }
+      ]
+    }
+  ],
+  "resource_sharing_scenarios": [
+    {
+      "description": "Shared resource access patterns with cancellation",
+      "shared_resources": [
+        {
+          "name": "workspace_index",
+          "access_pattern": "read_heavy",
+          "synchronization": "rwlock",
+          "expected_contention": "low"
+        },
+        {
+          "name": "parser_cache",
+          "access_pattern": "mixed_read_write",
+          "synchronization": "mutex",
+          "expected_contention": "medium"
+        },
+        {
+          "name": "file_system",
+          "access_pattern": "sequential_io",
+          "synchronization": "thread_local",
+          "expected_contention": "minimal"
+        }
+      ],
+      "test_cases": [
+        {
+          "name": "concurrent_workspace_index_access",
+          "threads": 2,
+          "operations": [
+            {"thread": 1, "operation": "read", "resource": "workspace_index"},
+            {"thread": 2, "operation": "read", "resource": "workspace_index"}
+          ],
+          "cancellation_timing": "mid_operation",
+          "expected_cleanup": "immediate_release"
+        },
+        {
+          "name": "parser_cache_write_cancellation",
+          "threads": 2,
+          "operations": [
+            {"thread": 1, "operation": "write", "resource": "parser_cache"},
+            {"thread": 2, "operation": "read", "resource": "parser_cache"}
+          ],
+          "cancellation_timing": "during_write",
+          "expected_cleanup": "rollback_write"
+        }
+      ]
+    }
+  ],
+  "deadlock_prevention_scenarios": [
+    {
+      "description": "Deadlock prevention validation in cancellation scenarios",
+      "potential_deadlock_patterns": [
+        {
+          "name": "circular_resource_dependency",
+          "pattern": [
+            {"thread": 1, "locks": ["resource_A", "resource_B"]},
+            {"thread": 2, "locks": ["resource_B", "resource_A"]}
+          ],
+          "cancellation_injection": "between_locks",
+          "expected_outcome": "graceful_cancellation_no_deadlock"
+        },
+        {
+          "name": "nested_provider_calls",
+          "pattern": [
+            {"thread": 1, "calls": ["completion_provider", "definition_provider"]},
+            {"thread": 2, "calls": ["definition_provider", "completion_provider"]}
+          ],
+          "cancellation_injection": "nested_call",
+          "expected_outcome": "call_stack_unwinding"
+        }
+      ]
+    }
+  ],
+  "performance_regression_detection": [
+    {
+      "description": "Performance regression detection for threading changes",
+      "baseline_measurements": {
+        "single_thread_completion_ms": 25,
+        "two_thread_completion_ms": 15,
+        "four_thread_completion_ms": 12,
+        "memory_overhead_kb": 50
+      },
+      "regression_thresholds": {
+        "performance_degradation_max": 1.2,
+        "memory_increase_max": 1.5,
+        "latency_increase_max": 1.3
+      },
+      "measurement_precision": {
+        "time_measurements": "microsecond",
+        "memory_measurements": "kilobyte",
+        "statistical_significance": 0.95
+      }
+    }
+  ],
+  "ci_environment_adaptations": [
+    {
+      "description": "CI environment threading adaptations",
+      "environments": [
+        {
+          "name": "github_actions",
+          "typical_cpu_cores": 2,
+          "recommended_threads": 2,
+          "timeout_multiplier": 1.5
+        },
+        {
+          "name": "local_development",
+          "typical_cpu_cores": 8,
+          "recommended_threads": 4,
+          "timeout_multiplier": 1.0
+        },
+        {
+          "name": "constrained_container",
+          "typical_cpu_cores": 1,
+          "recommended_threads": 1,
+          "timeout_multiplier": 2.0
+        }
+      ],
+      "adaptive_configuration": {
+        "cpu_detection": "runtime_cores_available",
+        "thread_scaling": "min(detected_cores, max_efficient_threads)",
+        "timeout_scaling": "base_timeout * environment_multiplier"
+      }
+    }
+  ]
+}

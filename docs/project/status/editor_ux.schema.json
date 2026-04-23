@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/docs/project/status/editor_ux.schema.json",
+  "title": "Editor UX Scorecard Receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "receipt_kind",
+    "scorecard",
+    "harness",
+    "top_line_metrics",
+    "confidence_signals",
+    "integration_points"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "receipt_kind": {
+      "type": "string",
+      "const": "planning_scaffold"
+    },
+    "scorecard": {
+      "type": "string",
+      "const": "editor_ux"
+    },
+    "harness": {
+      "type": "object",
+      "required": ["crate", "scenario_count", "scenario_files"],
+      "properties": {
+        "crate": {
+          "type": "string",
+          "const": "crates/perl-lsp-ux-tests"
+        },
+        "scenario_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scenario_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "top_line_metrics": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "workflow_pass_rate"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "workflow_stability_rate"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "p95_time_to_first_useful_result_ms"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["name", "state", "owner"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "workflow_pass_rate",
+              "workflow_stability_rate",
+              "p95_time_to_first_useful_result_ms"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["planned", "measured"]
+          },
+          "owner": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "integration_points": {
+      "type": "object",
+      "required": ["ci_lane", "release_lane", "status_update", "quality_surface"],
+      "properties": {
+        "ci_lane": {
+          "type": "string"
+        },
+        "release_lane": {
+          "type": "string"
+        },
+        "status_update": {
+          "type": "string"
+        },
+        "quality_surface": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "manual_editor_smoke"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "first_five_minutes_harness"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "issue_burndown_regression_guard"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["name", "state", "owner", "workflow_count"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "manual_editor_smoke",
+              "first_five_minutes_harness",
+              "issue_burndown_regression_guard"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["tracked"]
+          },
+          "owner": {
+            "type": "string"
+          },
+          "workflow_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

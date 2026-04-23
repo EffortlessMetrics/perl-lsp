@@ -1,0 +1,252 @@
+{
+  "micro_benchmark_scenarios": [
+    {
+      "description": "Cancellation check latency validation - <100μs requirement",
+      "test_type": "cancellation_check_latency",
+      "requirements": {
+        "max_latency_microseconds": 100,
+        "percentile_99_9_target": 50,
+        "sample_size": 10000,
+        "measurement_precision": "nanosecond"
+      },
+      "test_data": {
+        "simple_checks": [
+          {"check_count": 1, "expected_latency_us": 5},
+          {"check_count": 10, "expected_latency_us": 15},
+          {"check_count": 100, "expected_latency_us": 45},
+          {"check_count": 1000, "expected_latency_us": 85}
+        ],
+        "concurrent_checks": [
+          {"thread_count": 1, "checks_per_thread": 1000, "expected_avg_latency_us": 20},
+          {"thread_count": 2, "checks_per_thread": 1000, "expected_avg_latency_us": 35},
+          {"thread_count": 4, "checks_per_thread": 1000, "expected_avg_latency_us": 55},
+          {"thread_count": 8, "checks_per_thread": 1000, "expected_avg_latency_us": 75}
+        ]
+      }
+    },
+    {
+      "description": "Provider-specific cancellation check performance",
+      "test_type": "provider_cancellation_latency",
+      "providers": {
+        "completion": {
+          "baseline_latency_us": 15,
+          "with_cancellation_us": 25,
+          "overhead_percentage": 67,
+          "acceptable_overhead_max": 100
+        },
+        "hover": {
+          "baseline_latency_us": 12,
+          "with_cancellation_us": 20,
+          "overhead_percentage": 67,
+          "acceptable_overhead_max": 100
+        },
+        "definition": {
+          "baseline_latency_us": 35,
+          "with_cancellation_us": 55,
+          "overhead_percentage": 57,
+          "acceptable_overhead_max": 100
+        },
+        "references": {
+          "baseline_latency_us": 85,
+          "with_cancellation_us": 125,
+          "overhead_percentage": 47,
+          "acceptable_overhead_max": 100
+        },
+        "workspaceSymbols": {
+          "baseline_latency_us": 65,
+          "with_cancellation_us": 95,
+          "overhead_percentage": 46,
+          "acceptable_overhead_max": 100
+        }
+      }
+    }
+  ],
+  "end_to_end_performance_scenarios": [
+    {
+      "description": "End-to-end cancellation response time - <50ms requirement",
+      "test_type": "e2e_cancellation_latency",
+      "requirements": {
+        "max_response_time_ms": 50,
+        "percentile_95_target": 25,
+        "measurement_includes": [
+          "request_parsing",
+          "provider_dispatch",
+          "cancellation_processing",
+          "response_serialization"
+        ]
+      },
+      "scenarios": [
+        {
+          "name": "fast_completion_cancellation",
+          "provider": "completion",
+          "request_size_bytes": 256,
+          "processing_complexity": "low",
+          "expected_response_time_ms": 8
+        },
+        {
+          "name": "medium_hover_cancellation",
+          "provider": "hover",
+          "request_size_bytes": 512,
+          "processing_complexity": "medium",
+          "expected_response_time_ms": 15
+        },
+        {
+          "name": "complex_definition_cancellation",
+          "provider": "definition",
+          "request_size_bytes": 1024,
+          "processing_complexity": "high",
+          "expected_response_time_ms": 35
+        },
+        {
+          "name": "workspace_references_cancellation",
+          "provider": "references",
+          "request_size_bytes": 2048,
+          "processing_complexity": "very_high",
+          "expected_response_time_ms": 48
+        }
+      ]
+    }
+  ],
+  "memory_performance_scenarios": [
+    {
+      "description": "Memory overhead validation - <1MB requirement",
+      "test_type": "memory_overhead_validation",
+      "requirements": {
+        "max_memory_overhead_kb": 1024,
+        "baseline_measurement": "before_cancellation_infrastructure",
+        "measurement_precision": "kilobyte",
+        "garbage_collection": "force_before_measurement"
+      },
+      "memory_components": {
+        "cancellation_tokens": {
+          "estimated_size_per_token_bytes": 64,
+          "max_concurrent_tokens": 100,
+          "total_estimated_kb": 6.25
+        },
+        "cancellation_registry": {
+          "base_structure_kb": 8,
+          "per_provider_overhead_kb": 2,
+          "provider_count": 5,
+          "total_estimated_kb": 18
+        },
+        "thread_coordination": {
+          "mutex_overhead_kb": 4,
+          "atomic_counters_kb": 2,
+          "thread_local_storage_kb": 16,
+          "total_estimated_kb": 22
+        },
+        "provider_cleanup_contexts": {
+          "per_provider_context_kb": 12,
+          "provider_count": 5,
+          "total_estimated_kb": 60
+        }
+      },
+      "total_estimated_overhead_kb": 106.25,
+      "safety_margin_multiplier": 2.5,
+      "target_with_margin_kb": 265.625
+    }
+  ],
+  "incremental_parsing_preservation_scenarios": [
+    {
+      "description": "Incremental parsing performance preservation - <1ms updates",
+      "test_type": "incremental_parsing_preservation",
+      "requirements": {
+        "max_update_time_ms": 1,
+        "node_reuse_percentage_min": 70,
+        "measurement_precision": "microsecond"
+      },
+      "test_cases": [
+        {
+          "name": "small_function_edit_with_cancellation",
+          "file_size_lines": 50,
+          "edit_type": "single_character",
+          "expected_update_time_us": 150,
+          "expected_reuse_percentage": 95
+        },
+        {
+          "name": "medium_function_edit_with_cancellation",
+          "file_size_lines": 200,
+          "edit_type": "single_line",
+          "expected_update_time_us": 350,
+          "expected_reuse_percentage": 85
+        },
+        {
+          "name": "large_file_edit_with_cancellation",
+          "file_size_lines": 1000,
+          "edit_type": "multiple_lines",
+          "expected_update_time_us": 750,
+          "expected_reuse_percentage": 75
+        },
+        {
+          "name": "complex_syntax_edit_with_cancellation",
+          "file_size_lines": 500,
+          "edit_type": "function_signature",
+          "expected_update_time_us": 900,
+          "expected_reuse_percentage": 70
+        }
+      ]
+    }
+  ],
+  "threading_efficiency_scenarios": [
+    {
+      "description": "RUST_TEST_THREADS=2 compatibility and efficiency",
+      "test_type": "threading_efficiency_validation",
+      "requirements": {
+        "thread_configuration": "RUST_TEST_THREADS=2",
+        "contention_minimization": true,
+        "deadlock_prevention": true
+      },
+      "scenarios": [
+        {
+          "name": "low_contention_scenario",
+          "concurrent_requests": 4,
+          "expected_thread_utilization": 0.85,
+          "expected_context_switches": 8,
+          "expected_lock_contention_ms": 2
+        },
+        {
+          "name": "medium_contention_scenario",
+          "concurrent_requests": 10,
+          "expected_thread_utilization": 0.90,
+          "expected_context_switches": 20,
+          "expected_lock_contention_ms": 8
+        },
+        {
+          "name": "high_contention_scenario",
+          "concurrent_requests": 20,
+          "expected_thread_utilization": 0.95,
+          "expected_context_switches": 45,
+          "expected_lock_contention_ms": 25
+        }
+      ]
+    }
+  ],
+  "statistical_analysis_configuration": [
+    {
+      "measurement_type": "latency",
+      "statistical_methods": [
+        "mean", "median", "p95", "p99", "p99_9", "max", "stddev"
+      ],
+      "outlier_detection": {
+        "method": "interquartile_range",
+        "threshold_multiplier": 1.5
+      },
+      "confidence_interval": 0.95
+    },
+    {
+      "measurement_type": "memory",
+      "statistical_methods": [
+        "mean", "max", "baseline_delta", "growth_rate"
+      ],
+      "sampling_frequency": "per_operation"
+    }
+  ],
+  "benchmark_infrastructure": {
+    "warmup_iterations": 1000,
+    "measurement_iterations": 10000,
+    "cool_down_ms": 100,
+    "system_stabilization_ms": 5000,
+    "cpu_affinity": "single_core",
+    "gc_control": "manual_trigger_between_tests"
+  }
+}

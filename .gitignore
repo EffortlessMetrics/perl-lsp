@@ -1,0 +1,231 @@
+node_modules
+build
+*.log
+package-lock.json
+
+# Disallow nested lockfiles; keep only the workspace root
+**/Cargo.lock
+!Cargo.lock
+
+# Debug and build artifacts
+/debug_parse/
+/target/
+/target-tests/
+.build/
+*.a
+*.dylib
+*.so
+*.o
+src/*
+tree-sitter-perl.wasm
+log.html
+
+# Release artifacts
+/releases/
+*.tar.gz
+*.zip
+*.vsix
+
+# Supply chain security artifacts (generated locally)
+sbom-*.json
+SHA256SUMS
+
+# Property test regression files
+**/tests/_proptest-regressions/
+
+# Python cache files
+scripts/__pycache__/
+*.pyc
+
+# Claude — agents/ is gitignored to allow swapping the active agents symlink.
+# agents2/, agents3/, agents4/ etc. are version-tracked.
+/.claude/agents/
+# Worktrees used by Claude agent isolation — ephemeral, never committed.
+/.claude/worktrees/
+# Codex worktree metadata — ephemeral agent artifacts, never committed.
+/.codex-worktrees/
+
+# Swarm ops — ignore the entire directory (contains repo mirror artifacts),
+# but force-track the specific knowledge files we need.
+.ops-perl-lsp/
+
+# Mutation testing artifacts
+mutants.out/
+mutants.out.old/
+mutants.out*
+mutants.out.old*
+.cargo/mutants.toml
+mutation_testing_report.md
+**/manual_mutation_test.rs
+**/test_survivor_analysis.rs
+
+# Fuzzing artifacts
+fuzz/
+fuzz_results/
+
+# Generated reports and analysis
+INTEGRATION_COMPLETION_DIGEST.md
+*_analysis.md
+*_report.md
+*report*.md
+*status*.md
+*summary*.md
+*_RECEIPT*.md
+*_CHECK_RUN*.md
+*_PROGRESS_COMMENT*.md
+*_VALIDATION*.md
+*_LEDGER*.md
+ledger_*.md
+ISSUE_*.md
+PR_*.md
+T[0-9]*_*.md
+SPRINT_*.md
+POLICY_*.md
+ROUTING_*.md
+INTEGRATIVE_*.md
+REVIEW_*.md
+GENERATIVE_*.md
+PROMOTION_*.md
+QUALITY_*.md
+SECURITY_*.md
+SCHEMA_*.md
+BENCHMARK_*.md
+DOCUMENTATION_*.md
+TEST_HARDENING_*.md
+TESTS_FINALIZER_*.md
+PHASE*_*.md
+DAY*_*.md
+BRANCH_*.md
+SPEC_*.md
+CONTRACT_*.md
+COVERAGE_*.md
+coverage-*.md
+
+# Docs directory is curated -- never ignore tracked documentation
+!docs/**/*.md
+
+# Slash commands are curated -- never ignore tracked skill definitions
+!.claude/commands/*.md
+
+# Spec manifest files
+SPEC*.manifest.yml
+SPEC-*.manifest.yml
+
+# Mutation testing config
+mutation_*.txt
+
+# JSON artifacts
+*_EVIDENCE.json
+*_METADATA*.json
+
+# Misplaced test files
+test_behavior.rs
+
+# Coverage directories
+coverage-perl-*/
+
+# Temp directories
+tmp/
+gh-issues-to-create/
+
+# Errant shell expansion directories
+\$\(pwd\)/
+
+# Temporary scripts and artifacts
+analyze_survivors.sh
+run_mutation_test.sh
+fix_remaining_tests.sh
+update-state.sh
+**/temp_*.rs
+**/*_temp.rs
+
+# Integration artifacts
+.base_sha
+benchmark_results_*.txt
+
+# Benchmark results (keep baselines, ignore temp results)
+benchmarks/results/
+!benchmarks/results/.gitkeep
+
+# Archive directories (keep organized)
+archive/
+
+# Old root benchmark directory (superseded by benchmarks/ and crates/*/benches/)
+# Anchored so crate-local benches/ remain trackable.
+/benches/
+
+# Large binary executables (should be built, not committed)
+test_perf
+test_day5_heredoc
+test_heredoc_parse
+test_parser_direct
+libast.rlib
+examples/debug_super
+examples/debug_corpus_parser
+benchmarks/bench_lexer_pest
+benches/bench_lexer_pest
+**/debug_super
+**/debug_corpus_parser
+**/bench_lexer_pest
+
+# Legacy test artifacts
+benchmark_tests/
+test_fixtures/
+lsp_test/
+.ci/tmp/
+
+# Local/generated review artifacts
+github_comment_*.md
+github_comments_*.md
+GITHUB_ISSUES_*.md
+temp_issue_work/
+
+/.runs/
+
+# mdbook build output (regenerated with `mdbook build`)
+book/book/
+
+# Old build artifacts
+artifacts/
+Cargo.toml.backup*
+
+# Stale root-level scripts and test files
+/*.rs
+!build.rs
+
+# Agent status files
+.agent/
+agents/
+!.claude/agents/
+!.claude/agents/*.md
+
+# Old review/planning artifacts
+review/
+plans/
+scanner_comparison/
+issue_updates/
+
+# Generated audit data
+corpus_audit_report.json
+
+# Rust ICE crash reports
+rustc-ice-*
+
+# Editor/merge conflict leftovers
+*.orig
+*.bak
+patch.diff
+
+# Raw screen recordings (too large for version control — see docs/assets/recordings/README.md)
+docs/assets/recordings/*.mp4
+docs/assets/recordings/*.mov
+docs/assets/recordings/*.mkv
+docs/assets/recordings/*.webm
+
+# Playwright MCP browser session artifacts (page state dumps)
+.playwright-mcp/
+
+# Workspace scorecard xlarge fixture (generated on demand; see scripts/gen-xlarge-workspace.sh)
+# The README.md in that directory is tracked; the generated Perl files are not.
+test_corpus/workspaces/xlarge/lib/
+test_corpus/workspaces/xlarge/bin/

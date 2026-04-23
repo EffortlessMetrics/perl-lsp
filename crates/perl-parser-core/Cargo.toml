@@ -1,0 +1,58 @@
+[package]
+name = "perl-parser-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Core parser engine for perl-parser"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+documentation = "https://docs.rs/perl-parser-core"
+keywords = ["perl", "parser", "ast", "error-recovery", "lsp"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-lexer = { workspace = true }
+perl-position-tracking = { workspace = true }
+perl-ast = { workspace = true }
+perl-ast-v2 = { workspace = true }
+perl-pragma = { workspace = true }
+perl-regex = { workspace = true }
+perl-token = { workspace = true }
+# Wave D absorbed (internal modules in src/syntax/):
+#   perl-quote → src/syntax/quote.rs
+#   perl-heredoc → src/syntax/heredoc.rs
+#   perl-error → src/syntax/error/
+#   perl-edit → src/syntax/edit.rs
+#   perl-path-normalize → src/syntax/path_normalize.rs
+#   perl-path-security → src/syntax/path_security.rs
+#   perl-text-line → src/syntax/text_line.rs
+thiserror.workspace = true
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }
+tracing-subscriber = "0.3"
+
+[features]
+default = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+

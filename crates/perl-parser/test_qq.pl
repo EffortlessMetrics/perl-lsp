@@ -1,0 +1,1 @@
+my $x = qq{hello};

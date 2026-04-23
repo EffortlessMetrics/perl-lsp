@@ -1,0 +1,43 @@
+[package]
+name = "perl-tdd-support"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Test-driven development helpers and test generation for the Perl LSP ecosystem"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-tdd-support"
+keywords = ["perl", "tdd", "testing", "test-generation", "lsp"]
+categories = ["development-tools::testing", "development-tools"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+perl-test-must = { workspace = true }
+serde = { workspace = true }
+serde_json.workspace = true
+lsp-types = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[features]
+default = []
+lsp-compat = ["lsp-types", "url"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
