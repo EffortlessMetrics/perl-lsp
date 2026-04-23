@@ -1,77 +1,76 @@
 # API Stability and Version Policy
 
-**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha
+**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`v0.12.x`)
 
-This document describes the stability posture for the current public-alpha line. The current release line is `v0.11.x`; stronger compatibility guarantees are still targeted for the `v0.15.0` stability-contract milestone.
+This document is the current public-API stability contract for published artifacts in this
+workspace. It is intentionally concrete so contributors can reason about "what is allowed"
+before changing public types or behavior.
 
-## Current Alpha Stance
+## Scope of the Contract
 
-What public alpha means here:
+- **Published crate set:** 31 crates (the entries in
+  `[workspace.metadata.publish.allow]` in the root `Cargo.toml`).
+- **Current release line:** `v0.12.x` (workspace package version `0.12.4`).
+- **Stricter API ratchet set:** `perl-lsp-rs`, `perl-parser`, `perl-uri`, `perl-dap`, and
+  `perllsp` are guarded by both semver checks and a simplified public API baseline diff.
 
-- APIs and behaviors are usable today but can still change between minor releases
-- Advertised protocol behavior is tracked carefully, but the formal compatibility contract is not locked yet
-- Packaging and distribution surfaces can still change while the alpha line is being hardened
-- Documentation is being aligned with the actual shipped posture rather than treated as frozen
+If this count or crate set changes, update this document in the same PR.
 
-## What We Ship Today
+## Compatibility Rules (What We Promise)
 
-| Distribution | Format | Support level |
-| --- | --- | --- |
-| GitHub Releases | Tagged source and binary artifacts | Alpha |
-| crates.io | Published crates | Alpha |
-| VS Code extension | Marketplace / Open VSX distribution | Alpha |
-| Source builds | Git checkout + Cargo | Alpha |
+### 1) Patch releases (`0.Y.Z`)
 
-Availability can vary by release. Check the release notes and repo documentation for the exact surface shipped in a given version.
+Patch releases are for bug fixes and hardening. They **must not intentionally introduce
+breaking API changes** for published crates.
 
-## Public Crate Line
+### 2) Minor releases (`0.Y.0`, still pre-1.0)
 
-These crates define the user-facing alpha line:
+Because this is still `0.x`, minor releases may contain breaking changes, but they are
+treated as exceptional and must include:
 
-| Crate | Current line | Purpose | Stability posture |
-| --- | --- | --- | --- |
-| `perl-parser` | `0.11.x` | Parser and AST-facing library | Evolving |
-| `perl-lexer` | `0.11.x` | Tokenizer | Evolving |
-| `perl-lsp` | `0.11.x` | LSP server binary | Evolving |
-| `perl-corpus` | `0.11.x` | Corpus and fixtures | Evolving |
-| `perl-dap` | `0.11.x` | Debug adapter | Preview / evolving |
-| `perl-parser-pest` | `0.11.x` | Legacy parser path | Maintenance only |
+1. explicit release-note callouts,
+2. migration guidance when user code is affected,
+3. rationale for why the break is necessary now vs. delayed.
 
-## Versioning Policy
+### 3) Additive evolution preference
 
-### Minor releases (`0.Y.0`)
+For all published crates, prefer additive changes over replacements:
 
-Breaking changes are still allowed in minor public-alpha releases. We aim to document those changes clearly, but full multi-release deprecation cycles are not promised before `v0.15.0`.
+- add new APIs rather than mutating signatures,
+- keep old names as deprecated shims when practical,
+- mark public enums/structs `#[non_exhaustive]` where future growth is expected.
 
-### Patch releases (`0.Y.Z`)
+## Enforcement (How This Is Kept Honest)
 
-Patch releases are intended for fixes, hardening, and documentation updates that do not deliberately reshape the public surface.
+### CI guardrails
 
-## Support Expectations
+- `cargo semver-checks` runs in CI for the current facade set.
+- Public API baseline diff (`just public-api-check`) runs against checked-in simplified
+  baseline files under `.ci/public-api-baselines/`.
 
-During the alpha line, the project aims for:
+### Review-time expectations
 
-1. Stronger parser and workspace correctness on real-world Perl
-2. A stable enough editor experience for early adopters
-3. Clearer receipts and project-health documentation
-4. Continued hardening of security and validation boundaries
+When a PR changes a published crate's public surface, include:
 
-## Toward the Stability Contract (`v0.15.0`)
+- the affected crate(s),
+- whether change is additive or breaking,
+- semver/public-api check results,
+- release-note impact.
 
-The `v0.15.0` milestone is where the project intends to tighten the contract around:
+## Relationship to Other Stability Surfaces
 
-1. Public API compatibility expectations
-2. Advertised protocol behavior
-3. Deprecation policy and migration guidance
-4. Platform support commitments
+- **LSP/DAP behavior stability:** see governance and capability docs in
+  [`docs/project/FEATURE_GOVERNANCE.md`](../project/FEATURE_GOVERNANCE.md).
+- **Release process + publish ordering:** see
+  [`docs/release/RUNBOOK.md`](../release/RUNBOOK.md).
+- **Current project posture and receipts:** see
+  [`docs/project/CURRENT_STATUS.md`](../project/CURRENT_STATUS.md) and
+  [`docs/project/ROADMAP.md`](../project/ROADMAP.md).
 
-## Verification
+## Verification Commands
 
 ```bash
-nix develop -c just ci-gate
+cargo test -p xtask public_api_ratchet_tests
+just public-api-check
+just semver-check
 ```
-
-For current receipts and project posture, see:
-
-- [../project/CURRENT_STATUS.md](../project/CURRENT_STATUS.md)
-- [../project/ROADMAP.md](../project/ROADMAP.md)
