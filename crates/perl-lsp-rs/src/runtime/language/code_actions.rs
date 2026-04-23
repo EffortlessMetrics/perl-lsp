@@ -126,6 +126,44 @@ impl FixAllRange {
 /// The resulting action lists every diagnostic associated with the accepted
 /// source actions so the client can clear them together once the aggregate
 /// is applied.
+
+fn quickfix_text_edits_for_uri<'a>(action: &'a Value, uri: &str) -> Option<Vec<&'a Value>> {
+    if let Some(edits) = action
+        .pointer("/edit/changes")
+        .and_then(Value::as_object)
+        .and_then(|changes| changes.get(uri))
+        .and_then(Value::as_array)
+    {
+        return Some(edits.iter().collect());
+    }
+
+    let document_changes = action.pointer("/edit/documentChanges").and_then(Value::as_array)?;
+    let mut collected: Vec<&Value> = Vec::new();
+
+    for change in document_changes {
+        let Some(text_document_uri) = change.pointer("/textDocument/uri").and_then(Value::as_str)
+        else {
+            continue;
+        };
+
+        if text_document_uri != uri {
+            continue;
+        }
+
+        let Some(edits) = change.get("edits").and_then(Value::as_array) else {
+            continue;
+        };
+
+        collected.extend(edits.iter());
+    }
+
+    if collected.is_empty() {
+        None
+    } else {
+        Some(collected)
+    }
+}
+
 fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
     let mut accepted_ranges: Vec<FixAllRange> = Vec::new();
     let mut merged_edits: Vec<Value> = Vec::new();
@@ -141,10 +179,7 @@ fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {
 
         // Skip command-only quick fixes — they can't be merged into a single
         // WorkspaceEdit.
-        let Some(changes) = action.pointer("/edit/changes").and_then(Value::as_object) else {
-            continue;
-        };
-        let Some(edits) = changes.get(uri).and_then(Value::as_array) else {
+        let Some(edits) = quickfix_text_edits_for_uri(action, uri) else {
             continue;
         };
 
@@ -895,6 +930,45 @@ mod tests {
         action
     }
 
+    fn make_document_changes_quickfix(
+        uri: &str,
+        line: u64,
+        start_char: u64,
+        end_char: u64,
+        new_text: &str,
+        title: &str,
+        include_resource_op: bool,
+    ) -> Value {
+        let mut document_changes = vec![json!({
+            "textDocument": {
+                "uri": uri,
+                "version": Value::Null,
+            },
+            "edits": [{
+                "range": {
+                    "start": {"line": line, "character": start_char},
+                    "end": {"line": line, "character": end_char},
+                },
+                "newText": new_text,
+            }]
+        })];
+
+        if include_resource_op {
+            document_changes.push(json!({
+                "kind": "create",
+                "uri": "file:///tmp/generated.pm"
+            }));
+        }
+
+        json!({
+            "title": title,
+            "kind": "quickfix",
+            "edit": {
+                "documentChanges": document_changes,
+            }
+        })
+    }
+
     #[test]
     fn fix_all_range_overlap_detects_contained_ranges() {
         let outer = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 20 };
@@ -996,6 +1070,32 @@ mod tests {
 
         let diagnostics = aggregate["diagnostics"].as_array().expect("diagnostics array");
         assert_eq!(diagnostics.len(), 3, "one diagnostic per quickfix");
+    }
+
+    #[test]
+    fn build_source_fix_all_supports_document_changes_quickfixes() {
+        let uri = "file:///doc_changes.pl";
+        let actions = vec![
+            make_document_changes_quickfix(uri, 0, 0, 0, "use strict;\n", "Add strict", false),
+            make_document_changes_quickfix(uri, 0, 0, 0, "use warnings;\n", "Add warnings", false),
+        ];
+
+        let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
+        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        assert_eq!(edits.len(), 2, "documentChanges quick fixes should aggregate");
+    }
+
+    #[test]
+    fn build_source_fix_all_ignores_document_changes_resource_operations() {
+        let uri = "file:///doc_changes_resource_ops.pl";
+        let actions = vec![
+            make_document_changes_quickfix(uri, 0, 0, 3, "my", "Fix declaration", true),
+            make_document_changes_quickfix(uri, 1, 0, 3, "our", "Fix scope", false),
+        ];
+
+        let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
+        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        assert_eq!(edits.len(), 2, "resource ops must be ignored during aggregation");
     }
 
     #[test]
