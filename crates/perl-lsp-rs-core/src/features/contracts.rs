@@ -200,6 +200,15 @@ pub fn compliance_percent_for_grid() -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn repo_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf())
+    }
 
     // ── FeatureProfileKind ──────────────────────────────────────────
 
@@ -369,6 +378,47 @@ mod tests {
     #[test]
     fn bdd_feature_rows_count_matches_all_features() {
         assert_eq!(bdd_feature_rows().len(), all_features().len());
+    }
+
+    #[test]
+    fn lsp_features_have_bdd_test_receipts() {
+        for feature in all_features().iter().filter(|feature| feature.id.starts_with("lsp.")) {
+            assert!(
+                !feature.tests.is_empty(),
+                "LSP feature '{}' must include at least one test receipt for BDD grid reporting",
+                feature.id
+            );
+        }
+    }
+
+    #[test]
+    fn lsp_feature_test_receipts_exist_in_repo() {
+        let root = repo_root();
+        for feature in all_features().iter().filter(|feature| feature.id.starts_with("lsp.")) {
+            for test_path in feature.tests {
+                let exists = root.join(test_path).exists();
+                assert!(
+                    exists,
+                    "feature '{}' references missing test receipt path '{}'",
+                    feature.id, test_path
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bdd_rows_preserve_lsp_test_receipts() {
+        for row in bdd_feature_rows().iter().filter(|row| row.id.starts_with("lsp.")) {
+            let source = all_features().iter().find(|feature| feature.id == row.id);
+            assert!(source.is_some(), "BDD row '{}' should map back to a catalog feature", row.id);
+            if let Some(source) = source {
+                assert_eq!(
+                    row.tests, source.tests,
+                    "BDD row '{}' should preserve test receipts from catalog entry",
+                    row.id
+                );
+            }
+        }
     }
 
     #[test]
