@@ -97,6 +97,14 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
             continue;
         }
 
+        if let Some(end_idx) = scan_quote_like_literal(bytes, i) {
+            for byte in mask.iter_mut().take(end_idx).skip(i) {
+                *byte = false;
+            }
+            i = end_idx;
+            continue;
+        }
+
         match b {
             b'#' => {
                 for byte in mask.iter_mut().take(bytes.len()).skip(i) {
@@ -105,6 +113,14 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
+                let prev = i.checked_sub(1).and_then(|idx| bytes.get(idx)).copied();
+                let next = bytes.get(i + 1).copied();
+                let looks_like_legacy_namespace_sep =
+                    prev.is_some_and(is_ident_byte) && next.is_some_and(is_ident_byte);
+                if looks_like_legacy_namespace_sep {
+                    i += 1;
+                    continue;
+                }
                 mask[i] = false;
                 in_single = true;
             }
@@ -119,6 +135,84 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
     }
 
     mask
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn scan_quote_like_literal(bytes: &[u8], start: usize) -> Option<usize> {
+    let op_len = match bytes.get(start)? {
+        b'q' => match bytes.get(start + 1) {
+            Some(b'q' | b'w' | b'r' | b'x') => 2,
+            _ => 1,
+        },
+        _ => return None,
+    };
+
+    if start > 0 {
+        let prev = bytes[start - 1];
+        if is_ident_byte(prev) {
+            return None;
+        }
+    }
+
+    let mut delim_start = start + op_len;
+    while let Some(b) = bytes.get(delim_start) {
+        if b.is_ascii_whitespace() {
+            delim_start += 1;
+        } else {
+            break;
+        }
+    }
+
+    let open = *bytes.get(delim_start)?;
+    if open.is_ascii_alphanumeric() || open.is_ascii_whitespace() {
+        return None;
+    }
+
+    let (close, nested) = match open {
+        b'(' => (b')', true),
+        b'{' => (b'}', true),
+        b'[' => (b']', true),
+        b'<' => (b'>', true),
+        other => (other, false),
+    };
+
+    let mut depth = usize::from(nested);
+    let mut escaped = false;
+    let mut i = delim_start + 1;
+
+    while let Some(&cur) = bytes.get(i) {
+        if escaped {
+            escaped = false;
+            i += 1;
+            continue;
+        }
+
+        if cur == b'\\' {
+            escaped = true;
+            i += 1;
+            continue;
+        }
+
+        if nested {
+            if cur == open {
+                depth += 1;
+            } else if cur == close {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(i + 1);
+                }
+            }
+        } else if cur == close {
+            return Some(i + 1);
+        }
+
+        i += 1;
+    }
+
+    Some(bytes.len())
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -490,5 +584,26 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_quote_like_literals_mask_variable_like_tokens() {
+        let source = "my $real = 1; my $single = q{$fake}; my $double = qq/$also_fake/;";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 3);
+        assert!(values.iter().any(|v| v.text == "$real = ?"));
+        assert!(values.iter().any(|v| v.text == "$single = ?"));
+        assert!(values.iter().any(|v| v.text == "$double = ?"));
+        assert!(!values.iter().any(|v| v.text == "$fake = ?"));
+        assert!(!values.iter().any(|v| v.text == "$also_fake = ?"));
+    }
+
+    #[test]
+    fn test_non_quote_like_identifiers_are_not_masked() {
+        let source = "my $qvar = 1; my $qqsize = 2;";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 2);
+        assert!(values.iter().any(|v| v.text == "$qvar = ?"));
+        assert!(values.iter().any(|v| v.text == "$qqsize = ?"));
     }
 }
