@@ -145,7 +145,7 @@ Find beginner-friendly issues:
 gh issue list --label "good-first-issue" --state open
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules), read [AGENTS.md](AGENTS.md) first.
 
 ## Status
 
