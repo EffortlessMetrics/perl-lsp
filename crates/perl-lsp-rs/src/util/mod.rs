@@ -8,6 +8,9 @@ pub mod uri;
 
 pub use command_timeout::run_command_with_timeout;
 
+use std::io;
+use std::path::Path;
+
 use lsp_types::Position;
 use perl_module::reference::extract_module_reference as extract_module_reference_at_cursor;
 use perl_module::reference::extract_module_reference_extended as extract_module_reference_extended_at_cursor;
@@ -55,6 +58,51 @@ pub fn first_char_is<F: FnOnce(char) -> bool>(s: &str, predicate: F) -> bool {
 #[inline]
 pub fn nth_char_is<F: FnOnce(char) -> bool>(s: &str, n: usize, predicate: F) -> bool {
     s.chars().nth(n).is_some_and(predicate)
+}
+
+/// Decode source text bytes while handling common editor encodings.
+///
+/// Behavior:
+/// - UTF-8 with optional BOM
+/// - UTF-16 LE/BE when BOM is present
+/// - Latin-1 byte-preserving fallback for non-UTF8 legacy files
+pub fn decode_text_bytes(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        if let Ok(utf8) = std::str::from_utf8(&bytes[3..]) {
+            return utf8.to_string();
+        }
+    }
+
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        return decode_utf16_lossy(&bytes[2..], true);
+    }
+
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        return decode_utf16_lossy(&bytes[2..], false);
+    }
+
+    match std::str::from_utf8(bytes) {
+        Ok(utf8) => utf8.to_string(),
+        Err(_) => bytes.iter().map(|byte| char::from(*byte)).collect(),
+    }
+}
+
+/// Read a text file and decode it with [`decode_text_bytes`].
+pub fn read_text_file_with_encoding(path: &Path) -> io::Result<String> {
+    std::fs::read(path).map(|bytes| decode_text_bytes(&bytes))
+}
+
+fn decode_utf16_lossy(bytes: &[u8], little_endian: bool) -> String {
+    let mut words = Vec::with_capacity(bytes.len() / 2);
+    for pair in bytes.chunks_exact(2) {
+        let word = if little_endian {
+            u16::from_le_bytes([pair[0], pair[1]])
+        } else {
+            u16::from_be_bytes([pair[0], pair[1]])
+        };
+        words.push(word);
+    }
+    String::from_utf16_lossy(&words)
 }
 
 /// Convert byte offset to UTF-16 column position
@@ -470,9 +518,9 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 #[cfg(test)]
 mod tests {
     use super::{
-        arg_starts_in_call_body, arg_starts_top_level, byte_to_utf16_col, extract_module_reference,
-        find_matching_paren, offset_to_position, position_to_offset, slice_until_stmt_end,
-        smart_arg_anchor,
+        arg_starts_in_call_body, arg_starts_top_level, byte_to_utf16_col, decode_text_bytes,
+        extract_module_reference, find_matching_paren, offset_to_position, position_to_offset,
+        slice_until_stmt_end, smart_arg_anchor,
     };
     use lsp_types::Position;
 
@@ -532,5 +580,17 @@ mod tests {
         let offset = position_to_offset(content, pos_after_emoji.line, pos_after_emoji.character);
         assert_eq!(offset, Some(7));
         assert_eq!(offset_to_position(content, 7), pos_after_emoji);
+    }
+
+    #[test]
+    fn decode_text_bytes_supports_utf16_le_bom() {
+        let bytes = [0xFF, 0xFE, b'P', 0x00, b'e', 0x00, b'r', 0x00, b'l', 0x00];
+        assert_eq!(decode_text_bytes(&bytes), "Perl");
+    }
+
+    #[test]
+    fn decode_text_bytes_falls_back_to_latin1() {
+        let bytes = [0x63, 0x61, 0x66, 0xE9];
+        assert_eq!(decode_text_bytes(&bytes), "café");
     }
 }
