@@ -18,6 +18,38 @@ use color_eyre::eyre::{Result, bail, eyre};
 use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+
+static VERSION_FORMAT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\d+\.\d+\.\d+$").expect("valid semver regex"));
+
+static PACKAGE_LOCK_ROOT_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#)
+        .expect("valid package-lock root version regex")
+});
+
+static PACKAGE_LOCK_SELF_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#)
+        .expect("valid package-lock self version regex")
+});
+
+static README_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*").expect("valid README release regex")
+});
+
+static CLAUDE_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)").expect("valid CLAUDE release regex")
+});
+
+static ROADMAP_WORKSPACE_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`")
+        .expect("valid ROADMAP workspace version regex")
+});
+
+static ROADMAP_LATEST_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`")
+        .expect("valid ROADMAP latest version regex")
+});
 
 /// A discovered reference to the workspace version somewhere on disk.
 #[derive(Debug, Clone)]
@@ -35,8 +67,7 @@ pub struct VersionSite {
 /// Semantic version X.Y.Z validation regex. Keep in sync with bump's CLI
 /// validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
-    let re = Regex::new(r"^\d+\.\d+\.\d+$")?;
-    if !re.is_match(version) {
+    if !VERSION_FORMAT_RE.is_match(version) {
         bail!("invalid version format: {version:?} (expected X.Y.Z)");
     }
     Ok(())
@@ -492,14 +523,12 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
         // of 2 spaces (top level of the JSON object). The "" package entry
         // is inside `"packages": { "": { ... "version": ... } }` and sits at
         // indent 6. Any deeper indentation is a transitive dep.
-        let two_space = Regex::new(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
-        let six_space = Regex::new(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
         let mut found_root = false;
         let mut found_self = false;
         let mut in_empty_package = false;
         for (idx, line) in raw.lines().enumerate() {
             let line_no = idx + 1;
-            if !found_root && let Some(caps) = two_space.captures(line) {
+            if !found_root && let Some(caps) = PACKAGE_LOCK_ROOT_VERSION_RE.captures(line) {
                 sites.push(VersionSite {
                     path: lock_rel.clone(),
                     line: line_no,
@@ -514,7 +543,8 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
                     in_empty_package = true;
                     continue;
                 }
-                if in_empty_package && let Some(caps) = six_space.captures(line) {
+                if in_empty_package && let Some(caps) = PACKAGE_LOCK_SELF_VERSION_RE.captures(line)
+                {
                     sites.push(VersionSite {
                         path: lock_rel.clone(),
                         line: line_no,
@@ -536,42 +566,38 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
 
 fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<()> {
     // README.md: "**Current release: v<version>**"
-    let readme_pattern = Regex::new(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*")?;
     collect_single_line_doc_site(
         repo_root,
         "README.md",
         "README current release line",
-        &readme_pattern,
+        &README_VERSION_RE,
         sites,
     )?;
 
     // CLAUDE.md: "**Latest Release**: <version>"
-    let claude_pattern = Regex::new(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)")?;
     collect_single_line_doc_site(
         repo_root,
         "CLAUDE.md",
         "CLAUDE.md latest release line",
-        &claude_pattern,
+        &CLAUDE_VERSION_RE,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Workspace version line: `v<version>`"
-    let roadmap_ws_pattern = Regex::new(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP workspace version line",
-        &roadmap_ws_pattern,
+        &ROADMAP_WORKSPACE_VERSION_RE,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Latest published release: `v<version>`"
-    let roadmap_latest_pattern = Regex::new(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP latest published release",
-        &roadmap_latest_pattern,
+        &ROADMAP_LATEST_VERSION_RE,
         sites,
     )?;
 
