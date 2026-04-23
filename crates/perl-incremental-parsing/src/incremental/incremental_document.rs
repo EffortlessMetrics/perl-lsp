@@ -145,7 +145,7 @@ impl IncrementalDocument {
             sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
 
         // Collect reusable subtrees outside affected ranges
-        let reusable = self.find_reusable_for_ranges(&affected_ranges);
+        let reusable = self.find_reusable_for_ranges(&affected_ranges, &sorted_edits);
 
         // Parse with reuse when possible
         let new_root = if !reusable.is_empty() {
@@ -239,7 +239,11 @@ impl IncrementalDocument {
     }
 
     /// Find reusable subtrees for multiple affected ranges
-    fn find_reusable_for_ranges(&mut self, ranges: &[(usize, usize)]) -> Vec<Arc<Node>> {
+    fn find_reusable_for_ranges(
+        &mut self,
+        ranges: &[(usize, usize)],
+        edits: &[IncrementalEdit],
+    ) -> Vec<Arc<Node>> {
         let mut reusable = Vec::new();
 
         for ((start, end), node) in &self.subtree_cache.by_range {
@@ -249,15 +253,32 @@ impl IncrementalDocument {
             });
 
             if !affected {
-                reusable.push(node.clone());
-                self.metrics.cache_hits += 1;
-                self.metrics.nodes_reused += self.count_nodes(node);
+                let delta = Self::cumulative_shift_before(*start, edits);
+                if delta == 0 {
+                    reusable.push(node.clone());
+                    self.metrics.cache_hits += 1;
+                    self.metrics.nodes_reused += self.count_nodes(node);
+                } else if let Some(adjusted) = self.adjust_node_position(node, delta) {
+                    reusable.push(Arc::new(adjusted));
+                    self.metrics.cache_hits += 1;
+                    self.metrics.nodes_reused += self.count_nodes(node);
+                } else {
+                    self.metrics.cache_misses += 1;
+                }
             } else {
                 self.metrics.cache_misses += 1;
             }
         }
 
         reusable
+    }
+
+    fn cumulative_shift_before(pos: usize, edits: &[IncrementalEdit]) -> isize {
+        edits
+            .iter()
+            .filter(|edit| edit.old_end_byte <= pos)
+            .map(IncrementalEdit::byte_shift)
+            .sum()
     }
 
     /// Incrementally parse with subtree reuse.
@@ -1172,6 +1193,27 @@ mod tests {
             doc.metrics.last_parse_time_ms < 10.0,
             "Incremental parse time was {:.2}ms, which exceeds 10.0ms threshold",
             doc.metrics.last_parse_time_ms
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_edits_reuse_shifted_nodes() -> ParseResult<()> {
+        let source = r#"
+            my $x = 1;
+            my $y = $x + 1;
+        "#;
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(0, 0, "# inserted header\n".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert!(
+            doc.metrics.nodes_reused > 0,
+            "Batch edits should reuse nodes even when edit shifts all positions"
         );
 
         Ok(())
