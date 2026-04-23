@@ -3497,8 +3497,19 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
     // qw form: single arg starting with "qw"
     if first.starts_with("qw") {
-        let content = first
-            .trim_start_matches("qw")
+        let (qw_words, remainder) = extract_qw_words(first);
+        if remainder.trim().is_empty() {
+            for word in qw_words {
+                if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    names.push(word);
+                }
+            }
+            return names;
+        }
+
+        // Fallback for odd tokenisation: tolerate `qw` followed by spacing before the opener.
+        let content = first.trim_start_matches("qw").trim_start();
+        let content = content
             .trim_start_matches(|c: char| "([{/<|!".contains(c))
             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
         for word in content.split_whitespace() {
@@ -4881,6 +4892,26 @@ Utils::process_data();
             "'Other::Base')".to_string(),
         ]);
         assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_qw_with_space_before_delimiter() {
+        let names = extract_constant_names_from_use_args(&["qw [FOO BAR]".to_string()]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_index_use_constant_qw_with_space_before_delimiter() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///workspace/lib/My/Config.pm"));
+        let source = "package My::Config;\nuse constant qw [FOO BAR];\n1;\n";
+
+        must(index.index_file(uri, source.to_string()));
+
+        let foo = index.find_definition("My::Config::FOO");
+        let bar = index.find_definition("My::Config::BAR");
+        assert!(foo.is_some(), "Expected My::Config::FOO to be indexed");
+        assert!(bar.is_some(), "Expected My::Config::BAR to be indexed");
     }
 
     #[test]
