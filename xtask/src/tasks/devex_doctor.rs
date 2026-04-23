@@ -56,6 +56,7 @@ pub fn run() -> Result<()> {
     println!();
     println!("== Git hooks ==");
     check_pre_push_hook();
+    check_pre_commit_hook();
 
     println!();
     if Path::new("rust-toolchain.toml").exists() {
@@ -240,6 +241,37 @@ fn check_pre_push_hook() {
     }
 
     pass("pre-push hook installed");
+}
+
+fn check_pre_commit_hook() {
+    if !has_command("git") {
+        return;
+    }
+
+    let git_common_dir = match git_output(&["rev-parse", "--git-common-dir"]) {
+        Some(dir) => dir,
+        None => {
+            warn("not in a git repository; cannot verify pre-commit hook");
+            return;
+        }
+    };
+
+    let hook_path = Path::new(&git_common_dir).join("hooks").join("pre-commit");
+
+    if !hook_path.is_file() {
+        warn("pre-commit hook missing or not executable (run: cargo xtask ci-hygiene install-githooks)");
+        return;
+    }
+
+    if !is_executable(&hook_path) {
+        warn(&format!(
+            "pre-commit hook present but not executable: {} (run: cargo xtask ci-hygiene install-githooks)",
+            hook_path.display()
+        ));
+        return;
+    }
+
+    pass(&format!("git hook installed: {}", hook_path.display()));
 }
 
 fn git_output(args: &[&str]) -> Option<String> {
