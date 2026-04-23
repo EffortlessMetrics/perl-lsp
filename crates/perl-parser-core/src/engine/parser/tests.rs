@@ -127,6 +127,24 @@ fn test_list_declarations() {
 }
 
 #[test]
+fn test_typed_lexical_declaration_parses_without_error_nodes() {
+    let mut parser = Parser::new("sub pump { my IPC::Run $self = shift; return $self; }");
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+
+    assert!(
+        !sexp.contains("ERROR"),
+        "typed lexical declaration should parse without ERROR nodes: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("(my_declaration"),
+        "typed lexical declaration should remain a declaration node: {}",
+        sexp
+    );
+}
+
+#[test]
 fn test_qw_delimiters() {
     // Test qw with parentheses
     let mut parser = Parser::new("qw(one two three)");

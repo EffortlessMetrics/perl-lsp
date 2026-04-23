@@ -1,4 +1,73 @@
 impl<'a> Parser<'a> {
+    /// Consume an optional lexical type annotation in declarations like:
+    /// `my IPC::Run $self = shift;`
+    ///
+    /// This keeps the existing AST shape (type is currently ignored) while
+    /// accepting typed declarations used by modern Perl code.
+    fn consume_optional_lexical_type_annotation(&mut self, declarator: &str) -> ParseResult<()> {
+        if !matches!(declarator, "my" | "our" | "state") {
+            return Ok(());
+        }
+
+        let first = match self.tokens.peek() {
+            Ok(token) => token.clone(),
+            Err(_) => return Ok(()),
+        };
+
+        if first.kind != TokenKind::Identifier
+            || first.text.starts_with('$')
+            || first.text.starts_with('@')
+            || first.text.starts_with('%')
+            || first.text.starts_with('&')
+            || first.text.starts_with('*')
+        {
+            return Ok(());
+        }
+
+        let second = match self.tokens.peek_second() {
+            Ok(token) => token.clone(),
+            Err(_) => return Ok(()),
+        };
+
+        if second.kind != TokenKind::DoubleColon && !Self::token_starts_variable(&second) {
+            return Ok(());
+        }
+
+        // Consume initial type identifier.
+        self.consume_token()?;
+
+        // Consume `::Identifier` segments.
+        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+            self.consume_token()?; // ::
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                self.consume_token()?; // type segment
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn token_starts_variable(token: &Token) -> bool {
+        matches!(
+            token.kind,
+            TokenKind::ScalarSigil
+                | TokenKind::ArraySigil
+                | TokenKind::HashSigil
+                | TokenKind::SubSigil
+                | TokenKind::GlobSigil
+                | TokenKind::Percent
+                | TokenKind::BitwiseAnd
+                | TokenKind::Star
+        ) || (token.kind == TokenKind::Identifier
+            && (token.text.starts_with('$')
+                || token.text.starts_with('@')
+                || token.text.starts_with('%')
+                || token.text.starts_with('&')
+                || token.text.starts_with('*')))
+    }
+
     /// Parse variable declaration (my, our, local, state)
     fn parse_variable_declaration(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -94,6 +163,7 @@ impl<'a> Parser<'a> {
                 self.parse_assignment()?
             } else {
                 // For my/our/state, parse a simple variable
+                self.consume_optional_lexical_type_annotation(&declarator)?;
                 let var = self.parse_variable()?;
                 // If -> follows the declared variable, treat it as an lvalue subscript chain
                 // e.g. my $cache->{key} = expr  or  my $foo->method()
