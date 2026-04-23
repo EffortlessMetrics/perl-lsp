@@ -82,7 +82,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [draft-pr-check, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: [draft-pr-check, pr-smoke, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push and on push to main/master
     # Earlier gating > label-gated gating (see #4675)
     # Frequent commits will queue; preflight skips superseded SHAs.
@@ -261,7 +261,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [draft-pr-check, pr-smoke, preflight-latest-check]
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
     steps:
       - uses: actions/checkout@v6
@@ -300,8 +300,8 @@ jobs:
     name: Compile All Targets (bit-rot guard)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    needs: preflight-latest-check
-    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
