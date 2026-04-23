@@ -362,12 +362,32 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "completion_actionable_suggestions",
+      "scenario_file": "ux_scenario_19_completion_quality.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "type a common Perl prefix in a fresh file and request completion",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "completion returns non-empty suggestions for common prefixes",
+        "suggestions include expected Perl built-ins for high-frequency flows"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
-  ],
-  "confidence_signals": [
-    "manual_editor_smoke",
-    "first_five_minutes_harness",
-    "issue_burndown_regression_guard"
   ]
 }
