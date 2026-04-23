@@ -53,6 +53,72 @@ jobs:
             echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
           fi
 
+
+  # ── Perl Runtime Matrix: prove what actually runs ─────────────────────
+  perl-runtime-matrix:
+    name: Perl Runtime Matrix (${{ matrix.perl }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - perl: '5.8'
+            experimental: true
+          - perl: '5.10'
+            experimental: true
+          - perl: '5.16'
+            experimental: false
+          - perl: '5.26'
+            experimental: false
+          - perl: '5.30'
+            experimental: false
+          - perl: '5.36'
+            experimental: false
+          - perl: '5.40'
+            experimental: false
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Perl ${{ matrix.perl }}
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - name: Runtime smoke probes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Record actual resolved Perl version (useful when setup tool picks patch releases).
+          ACTUAL_PERL="$(perl -e 'print $^V')"
+          echo "Perl requested: ${{ matrix.perl }}"
+          echo "Perl resolved:  ${ACTUAL_PERL}"
+
+          # Baseline script: should run on every supported runtime.
+          perl -we 'my $x = 1; my $y = 2; print $x + $y, "\n";'
+
+          # Version-gated probes (executed only where valid) to validate interpreter behavior.
+          perl -Mfeature=say -we 'say "say_ok"' if perl -e 'exit(($] >= 5.010) ? 0 : 1)'
+          perl -we 'use v5.36; no warnings "experimental::signatures"; sub add($a, $b){$a+$b}; print add(2,3),"\n";'
+            if perl -e 'exit(($] >= 5.036) ? 0 : 1)'
+          perl -we 'use v5.38; class Demo { field $name :param; method greet { return "hi" } }; my $d = Demo->new(name => "x"); print $d->greet, "\n";'
+            if perl -e 'exit(($] >= 5.038) ? 0 : 1)'
+
+      - name: Emit matrix row summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Perl runtime ${{ matrix.perl }}"
+            echo "- Experimental lane: ${{ matrix.experimental }}"
+            echo "- Resolved version: $(perl -e 'print $^V' 2>/dev/null || echo 'unavailable')"
+            echo "- Job status: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
   pr-smoke:
     name: PR Smoke (Fast Feedback)
