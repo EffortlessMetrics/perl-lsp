@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "fixture": "symbols_subs_and_pkg",
+  "assertions": [
+    {
+      "kind": "symbol_non_empty",
+      "rationale": "document symbols should include package and sub entries"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "Demo::Symbols",
+      "rationale": "package symbol should be exposed"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "alpha",
+      "rationale": "sub alpha should be listed"
+    },
+    {
+      "kind": "symbol_present",
+      "name": "beta",
+      "rationale": "sub beta should be listed"
+    },
+    {
+      "kind": "symbol_absent",
+      "name": "gamma",
+      "rationale": "nonexistent symbols must not be reported"
+    }
+  ]
+}

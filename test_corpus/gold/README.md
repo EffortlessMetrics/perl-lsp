@@ -1,6 +1,6 @@
 # Gold Corpus — Diagnostics Validation Fixtures
 
-The gold corpus is a curated set of Perl code fixtures with hand-verified expected diagnostics. Each fixture serves as a test case for the LSP diagnostics pipeline, validating that the parser correctly identifies (or does not identify) diagnostics for Perl code patterns.
+The gold corpus is a curated set of Perl code fixtures with hand-verified expected behavior. Each fixture can carry diagnostics and editor-intelligence expectations used by headless LSP UX scorecard tests.
 
 ## Directory Structure
 
@@ -21,7 +21,8 @@ test_corpus/gold/
 Each fixture is a subdirectory containing:
 
 - **`fixture.pl`** — A Perl source file representing a single semantic pattern
-- **`expected.json`** — A JSON file specifying expected diagnostic assertions
+- **`expected.json`** — Optional JSON file specifying expected diagnostic assertions
+- **`expected_hover.json` / `expected_goto.json` / `expected_completion.json` / `expected_symbols.json`** — Optional editor-intelligence expectations
 
 ## JSON Format Specification
 
@@ -134,12 +135,14 @@ To add a new fixture:
 
 ## Integration with Other Scorecards
 
-The gold corpus directory structure supports sibling assertions for future scorecards:
+The gold corpus directory structure supports sibling assertions for scorecards:
 
-- `expected_diagnostics.json` — Diagnostics expectations (current)
-- `expected_hover.json` — Hover information expectations (future)
-- `expected_module.json` — Module resolution expectations (future)
-- `expected_completion.json` — Completion suggestions (future)
+- `expected.json` — Diagnostics expectations (current)
+- `expected_hover.json` — Hover information expectations
+- `expected_goto.json` — Goto-definition expectations
+- `expected_completion.json` — Completion suggestions
+- `expected_symbols.json` — Document symbol expectations
+- `expected_module.json` — Module resolution expectations
 
 Each fixture can carry multiple assertion files without conflicts.
 
@@ -200,6 +203,12 @@ Each module-resolution fixture carries an `expected_module.json` sidecar:
 
 ```bash
 cargo test -p perl-lsp-ux-tests --test ux_scenario_14_inc_conformance -- --nocapture
+```
+
+### Running the Editor-Intelligence Gold Harness
+
+```bash
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test editor_intelligence_scorecard -- --nocapture
 ```
 
 ## Related Issues

@@ -25,8 +25,10 @@ use common::test_utils::TestServerBuilder;
 use perl_corpus::gold::{
     CompletionAssertionKind, CompletionGoldFixture, GoldAssertion, GoldFixture, GotoAssertionKind,
     GotoGoldFixture, HoverAssertionKind, HoverGoldFixture, load_completion_gold_fixtures,
-    load_gold_fixtures, load_goto_gold_fixtures, load_hover_gold_fixtures,
+    load_document_symbol_gold_fixtures, load_gold_fixtures, load_goto_gold_fixtures,
+    load_hover_gold_fixtures,
 };
+use perl_corpus::{DocumentSymbolAssertionKind, DocumentSymbolGoldFixture};
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -89,6 +91,28 @@ fn diagnostic_codes_from_response(resp: &Value) -> Vec<String> {
             })
             .collect()
     })
+}
+
+fn document_symbol_names(resp: &Value) -> Vec<String> {
+    fn collect_document_symbols(symbols: &Value, out: &mut Vec<String>) {
+        if let Some(array) = symbols.as_array() {
+            for symbol in array {
+                if let Some(name) = symbol.get("name").and_then(Value::as_str) {
+                    out.push(name.to_string());
+                }
+
+                if let Some(children) = symbol.get("children") {
+                    collect_document_symbols(children, out);
+                }
+            }
+        }
+    }
+
+    let mut names = Vec::new();
+    if let Some(result) = resp.get("result") {
+        collect_document_symbols(result, &mut names);
+    }
+    names
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +353,7 @@ fn test_completion_gold_corpus() {
 }
 
 // ---------------------------------------------------------------------------
+<<<<<<< HEAD
 // Diagnostics correctness test
 // ---------------------------------------------------------------------------
 
@@ -343,6 +368,22 @@ fn test_diagnostics_gold_corpus() {
             return;
         }
         Err(e) => panic!("Failed to load diagnostics gold fixtures: {e}"),
+=======
+// Document symbols correctness test
+// ---------------------------------------------------------------------------
+
+/// Run all document-symbol gold fixtures and assert every assertion passes.
+#[test]
+fn test_document_symbols_gold_corpus() {
+    let root = gold_corpus_root();
+    let fixtures: Vec<DocumentSymbolGoldFixture> = match load_document_symbol_gold_fixtures(&root) {
+        Ok(f) if !f.is_empty() => f,
+        Ok(_) => {
+            eprintln!("SKIP: no document-symbol gold fixtures found in {}", root.display());
+            return;
+        }
+        Err(e) => panic!("Failed to load document-symbol gold fixtures: {e}"),
+>>>>>>> 0fe556b31 (test(editor-intelligence): add document-symbol gold fixture lane (#0000))
     };
 
     let server = TestServerBuilder::new().build();
@@ -358,6 +399,7 @@ fn test_diagnostics_gold_corpus() {
 
         let uri = format!("file:///gold/{}.pl", fixture.name);
         server.open_document(&uri, &code);
+<<<<<<< HEAD
 
         let diagnostics = server.get_diagnostics(&uri);
         let diagnostic_codes = diagnostic_codes_from_response(&diagnostics);
@@ -396,21 +438,46 @@ fn test_diagnostics_gold_corpus() {
                 GoldAssertion::DiagnosticCount { code, count } => {
                     diagnostic_codes.iter().filter(|c| *c == code).count() == *count
                 }
+=======
+        let resp = server.get_symbols(&uri);
+        let names = document_symbol_names(&resp);
+
+        for assertion in &fixture.symbol_assertions {
+            total += 1;
+            let ok = match &assertion.kind {
+                DocumentSymbolAssertionKind::SymbolNonEmpty => !names.is_empty(),
+                DocumentSymbolAssertionKind::SymbolPresent { name } => {
+                    names.iter().any(|candidate| candidate == name)
+                }
+                DocumentSymbolAssertionKind::SymbolAbsent { name } => {
+                    names.iter().all(|candidate| candidate != name)
+                }
+                DocumentSymbolAssertionKind::SymbolCount { count } => names.len() == *count,
+>>>>>>> 0fe556b31 (test(editor-intelligence): add document-symbol gold fixture lane (#0000))
             };
 
             if ok {
                 passed += 1;
             } else {
                 failures.push(format!(
+<<<<<<< HEAD
                     "  FAIL [{}] {:?} — diagnostic codes: {:?}",
                     fixture.name, assertion, diagnostic_codes
+=======
+                    "  FAIL [{}] {:?} — symbols: {:?}",
+                    fixture.name, assertion.kind, names
+>>>>>>> 0fe556b31 (test(editor-intelligence): add document-symbol gold fixture lane (#0000))
                 ));
             }
         }
     }
 
     println!(
+<<<<<<< HEAD
         "\nDiagnostics gold corpus: {}/{} assertions passed ({:.0}%)",
+=======
+        "\nDocument symbols gold corpus: {}/{} assertions passed ({:.0}%)",
+>>>>>>> 0fe556b31 (test(editor-intelligence): add document-symbol gold fixture lane (#0000))
         passed,
         total,
         if total > 0 { passed as f64 / total as f64 * 100.0 } else { 100.0 }
@@ -421,7 +488,11 @@ fn test_diagnostics_gold_corpus() {
 
     assert!(
         failures.is_empty(),
+<<<<<<< HEAD
         "Diagnostics gold corpus: {} assertion(s) failed out of {}:\n{}",
+=======
+        "Document symbols gold corpus: {} assertion(s) failed out of {}:\n{}",
+>>>>>>> 0fe556b31 (test(editor-intelligence): add document-symbol gold fixture lane (#0000))
         failures.len(),
         total,
         failures.join("\n")

@@ -258,10 +258,12 @@ pub use glob_expressions::{
 };
 pub use gold::{
     CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
-    GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
-    GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
-    load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
-    load_goto_gold_fixtures, load_hover_gold_fixtures,
+    DocumentSymbolAssertion, DocumentSymbolAssertionKind, DocumentSymbolGoldExpected,
+    DocumentSymbolGoldFixture, GoldAssertion, GoldExpected, GoldFixture, GotoAssertion,
+    GotoAssertionKind, GotoGoldExpected, GotoGoldFixture, HoverAssertion, HoverAssertionKind,
+    HoverGoldExpected, HoverGoldFixture, load_completion_gold_fixtures,
+    load_document_symbol_gold_fixtures, load_gold_fixture, load_gold_fixtures,
+    load_gold_fixtures_from, load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
 use meta::Section;
 use regex::Regex;
