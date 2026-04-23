@@ -113,6 +113,18 @@ fn ast_ternary_operator() {
     assert_snapshot!(parse_sexp("my $x = $cond ? \"yes\" : \"no\";"));
 }
 
+#[test]
+fn ast_postfix_conditionals() {
+    // Postfix conditionals are idiomatic Perl and stress statement/operator precedence.
+    assert_snapshot!(parse_sexp("print $msg if $enabled; warn $msg unless $quiet;"));
+}
+
+#[test]
+fn ast_foreach_keys_iteration() {
+    // Iterating hash keys is a common real-world control-flow/data-access pattern.
+    assert_snapshot!(parse_sexp("for my $k (keys %h) { print $k; }"));
+}
+
 // CPAN edge cases
 #[test]
 fn ast_empty_input() {
@@ -216,6 +228,12 @@ fn recovery_unclosed_quote_then_valid_statement() {
 }
 
 #[test]
+fn recovery_unclosed_hash_subscript_then_followup_statement() {
+    // Missing closing `}` in hash subscript should still allow recovery to next statement.
+    assert_snapshot!(parse_sexp("my $x = $h{foo;\nmy $y = 2;"));
+}
+
+#[test]
 fn recovery_broken_regex_then_followup_statement() {
     // Broken regex delimiters should not prevent parsing later statements.
     assert_snapshot!(parse_sexp("if ($text =~ /abc) { print 1; }\nmy $ok = 1;"));
@@ -248,6 +266,11 @@ fn errors_truncated_hash() {
 #[test]
 fn errors_unterminated_string_and_followup() {
     assert_snapshot!(parse_errors("my $x = \"oops;\nmy $y = 1;"));
+}
+
+#[test]
+fn errors_unclosed_hash_subscript_and_followup() {
+    assert_snapshot!(parse_errors("my $x = $h{foo;\nmy $y = 2;"));
 }
 
 #[test]
