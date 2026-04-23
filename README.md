@@ -18,15 +18,15 @@
 
 ---
 
-Perl has lacked a proper modern LSP implementation. Other languages — Rust, TypeScript, Go, Python — have mature language servers with fast completions, reliable navigation, and full debugger integration. Perl's existing options were slow, incomplete, or required a working Perl runtime just to get basic editor features. `perl-lsp` fills that gap: a native Rust implementation of the Language Server Protocol and Debug Adapter Protocol for Perl 5, with its own parser and lexer, no Perl runtime required for IDE features.
+Perl has lacked a proper modern LSP implementation. Other languages â€” Rust, TypeScript, Go, Python â€” have mature language servers with fast completions, reliable navigation, and full debugger integration. Perl's existing options were slow, incomplete, or required a working Perl runtime just to get basic editor features. `perl-lsp` fills that gap: a native Rust implementation of the Language Server Protocol and Debug Adapter Protocol for Perl 5, with its own parser and lexer, no Perl runtime required for IDE features.
 
 ## What It Is
 
-`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) implementing all 119 capabilities catalogued in `features.toml` (88 LSP + 24 DAP + 7 extension features), a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer — packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
+`perl-lsp` is a workspace of Rust crates delivering a complete Perl 5 tooling stack: an LSP server (`perllsp`) implementing all 119 capabilities catalogued in `features.toml` (88 LSP + 24 DAP + 7 extension features), a DAP debug adapter, a recursive-descent parser, a context-aware lexer, and a semantic analyzer â€” packaged as a single native binary you can drop into any editor. It runs on Windows, macOS, and Linux.
 
 ## Quick Start
 
-**VS Code** — install the extension and you are done:
+**VS Code** â€” install the extension and you are done:
 
 ```bash
 code --install-extension effortlessmetrics.perl-lsp-rs
@@ -34,7 +34,7 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 The extension auto-downloads the matching `perllsp` binary for your platform.
 
-**Other editors** — download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
+**Other editors** â€” download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
 
 ```lua
 -- Neovim (nvim-lspconfig)
@@ -60,38 +60,38 @@ perllsp --health
 
 For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
 
-> **Note:** Do not use `cargo install perl-lsp` — that name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
+> **Note:** Do not use `cargo install perl-lsp` â€” that name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
 
 ## Key Features
 
-- **Full LSP surface** — completions, diagnostics, hover, go-to-definition, find references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, workspace symbols; every capability in `features.toml` has an implementation wired up (see [what the numbers mean](#what-the-numbers-mean-and-dont))
-- **Native debug adapter** — DAP breakpoints, stepping, stack frames, variable inspection, and evaluate; no wrapper script required
-- **Fast native parser** — recursive-descent v3 parser with a context-aware lexer; validated against a curated CPAN corpus
-- **Semantic analysis** — symbol resolution, scope tracking, Moose/Moo method modifiers and role composition
-- **Refactoring** — extract variable, extract subroutine, workspace-scoped rename, subroutine inlining
-- **Diagnostics** — dead code highlighting, strict/warnings diagnostics, perlcritic integration with walk-up discovery and explicit tooling warnings
-- **Zero-Perl dependency** for IDE features — the server is a single native binary
-- **Windows first-class** — install, path handling, and shell interactions are part of the release surface
+- **Full LSP surface** â€” completions, diagnostics, hover, go-to-definition, find references, rename, formatting, semantic tokens, inlay hints, code actions, code lens, workspace symbols; every capability in `features.toml` has an implementation wired up (see [what the numbers mean](#what-the-numbers-mean-and-dont))
+- **Native debug adapter** â€” DAP breakpoints, stepping, stack frames, variable inspection, and evaluate; no wrapper script required
+- **Fast native parser** â€” recursive-descent v3 parser with a context-aware lexer; validated against a curated CPAN corpus
+- **Semantic analysis** â€” symbol resolution, scope tracking, Moose/Moo method modifiers and role composition
+- **Refactoring** â€” extract variable, extract subroutine, workspace-scoped rename, subroutine inlining
+- **Diagnostics** â€” dead code highlighting, strict/warnings diagnostics, perlcritic integration with walk-up discovery and explicit tooling warnings
+- **Zero-Perl dependency** for IDE features â€” the server is a single native binary
+- **Windows first-class** â€” install, path handling, and shell interactions are part of the release surface
 
 ## Architecture
 
-The native Rust parser stack is the architectural center of the workspace — the LSP server, diagnostics, hover, completion, and every other IDE feature read from it directly. Tree-sitter integration is an interop surface layered over that core, not a dependency of it.
+The native Rust parser stack is the architectural center of the workspace â€” the LSP server, diagnostics, hover, completion, and every other IDE feature read from it directly. Tree-sitter integration is an interop surface layered over that core, not a dependency of it.
 
 ### Entry points for external consumers
 
 Different users walk in through different doors. Pick the one that matches your use case:
 
-| You want to… | Use |
+| You want toâ€¦ | Use |
 | --- | --- |
 | Get Perl IDE features in an editor | VS Code extension (`perl-lsp-rs`) or the `perllsp` binary from [Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) |
-| Perl syntax support for tree-sitter consumers (Neovim, Helix, GitHub) | [`tree-sitter-perl-c`](crates/tree-sitter-perl-c) — conventional C grammar binding |
-| Query a Perl AST from Rust with tree-sitter-style ergonomics | [`tree-sitter-perl-rs`](crates/tree-sitter-perl-rs) — Rust-native facade over the v3 parser *(in development)* |
-| Parse Perl from Rust directly with full fidelity | [`perl-parser`](crates/perl-parser) (+ [`perl-lexer`](crates/perl-lexer)) — the recursive-descent v3 parser |
-| Tokenize Perl only | [`perl-lexer`](crates/perl-lexer) — context-aware tokenizer, no parse tree |
-| Resolve symbols and track scopes over a parsed Perl AST (including Moose/Moo method modifiers) | [`perl-semantic-analyzer`](crates/perl-semantic-analyzer) — scope tracking, symbol extraction, role composition |
-| Index and search Perl symbols across a whole project | [`perl-workspace-index`](crates/perl-workspace-index) — cross-file symbol index and refactoring orchestration |
-| Validate Perl regex patterns for ReDoS, catastrophic backtracking, or embedded code execution | [`perl-regex`](crates/perl-regex) — safety/complexity checks (not a regex parser) |
-| Generate Perl fixtures or test against a curated corpus | [`perl-corpus`](crates/perl-corpus) — library plus `perl-corpus` CLI for proptest strategies, edge cases, and deterministic codegen |
+| Perl syntax support for tree-sitter consumers (Neovim, Helix, GitHub) | [`tree-sitter-perl-c`](crates/tree-sitter-perl-c) â€” conventional C grammar binding |
+| Query a Perl AST from Rust with tree-sitter-style ergonomics | [`tree-sitter-perl-rs`](crates/tree-sitter-perl-rs) â€” Rust-native facade over the v3 parser *(in development)* |
+| Parse Perl from Rust directly with full fidelity | [`perl-parser`](crates/perl-parser) (+ [`perl-lexer`](crates/perl-lexer)) â€” the recursive-descent v3 parser |
+| Tokenize Perl only | [`perl-lexer`](crates/perl-lexer) â€” context-aware tokenizer, no parse tree |
+| Resolve symbols and track scopes over a parsed Perl AST (including Moose/Moo method modifiers) | [`perl-semantic-analyzer`](crates/perl-semantic-analyzer) â€” scope tracking, symbol extraction, role composition |
+| Index and search Perl symbols across a whole project | [`perl-workspace-index`](crates/perl-workspace-index) â€” cross-file symbol index and refactoring orchestration |
+| Validate Perl regex patterns for ReDoS, catastrophic backtracking, or embedded code execution | [`perl-regex`](crates/perl-regex) â€” safety/complexity checks (not a regex parser) |
+| Generate Perl fixtures or test against a curated corpus | [`perl-corpus`](crates/perl-corpus) â€” library plus `perl-corpus` CLI for proptest strategies, edge cases, and deterministic codegen |
 | Debug Perl from a DAP-speaking editor | [`perl-dap`](crates/perl-dap) via the `perllsp` binary's DAP server mode |
 
 ### Workspace layers
@@ -100,16 +100,16 @@ Different users walk in through different doors. Pick the one that matches your 
 | --- | --- | --- |
 | LSP server binary | `crates/perllsp`, `crates/perl-lsp-rs` | Protocol loop, request dispatch |
 | Debug adapter | `crates/perl-dap` | DAP server for stepping, breakpoints, evaluate |
-| **Parser stack (center)** | `crates/perl-parser`, `crates/perl-lexer`, `crates/perl-parser-core` | Recursive-descent v3 parser and context-aware lexer — all IDE features read from this |
+| **Parser stack (center)** | `crates/perl-parser`, `crates/perl-lexer`, `crates/perl-parser-core` | Recursive-descent v3 parser and context-aware lexer â€” all IDE features read from this |
 | Semantic analysis | `crates/perl-semantic-analyzer` | Scope tracking, symbol resolution, Moose/Moo handling |
 | Workspace indexing | `crates/perl-workspace-index` | Cross-file symbol index |
-| LSP feature providers | `crates/perl-lsp-*` | Per-feature crates (hover, definition, rename, …) |
+| LSP feature providers | `crates/perl-lsp-*` | Per-feature crates (hover, definition, rename, â€¦) |
 | Tree-sitter interop | `crates/tree-sitter-perl-c`, `crates/tree-sitter-perl-rs` | See split below |
 
 **Tree-sitter split.** Two crates share the family name but play different roles:
 
-- **`tree-sitter-perl-c`** — the conventional C grammar binding, maintained for compatibility with tree-sitter consumers and as a reference point for comparison. Not on the LSP's critical path.
-- **`tree-sitter-perl-rs`** — a Rust-native facade over the v3 parser that exposes tree-sitter-compatible ergonomics without the C grammar. In development.
+- **`tree-sitter-perl-c`** â€” the conventional C grammar binding, maintained for compatibility with tree-sitter consumers and as a reference point for comparison. Not on the LSP's critical path.
+- **`tree-sitter-perl-rs`** â€” a Rust-native facade over the v3 parser that exposes tree-sitter-compatible ergonomics without the C grammar. In development.
 
 See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
@@ -130,7 +130,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
-**New contributor?** Start with [docs/contributing/FIRST_PR.md](docs/contributing/FIRST_PR.md) — clone to PR in five minutes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules, Aider), read [AGENTS.md](AGENTS.md) first. Aider-specific guidance is available in [AIDER.md](AIDER.md).
 
 ```bash
 cargo test --workspace --lib
@@ -149,7 +149,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you
 
 ## Status
 
-**Current release: v0.12.4** — public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
+**Current release: v0.12.4** â€” public alpha. The 0.12.x line is building parser corpus confidence, diagnostic hardening, and distribution coverage toward the v0.13.0 public alpha announcement. See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) for the milestone ladder and [docs/project/status/index.md](docs/project/status/index.md) for live metrics.
 
 ### What the numbers mean (and don't)
 
@@ -158,10 +158,10 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 | Metric | Current | What it measures | What it does **not** measure |
 | --- | --- | --- | --- |
 | LSP/DAP capability coverage | 119 / 119 | Every capability catalogued in `features.toml` has an implementation wired up | Per-capability correctness, completeness on edge cases, or subjective UX quality |
-| Parser corpus — CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
-| Parser corpus — Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
-| Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
-| End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows, the `perl-lsp-ux-tests` first-5-minutes harness, and open-issue burn-down — not a published number | Anything about parser breadth, protocol catalog size, or capability count |
+| Parser corpus â€” CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
+| Parser corpus â€” Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
+| Parser corpus â€” project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
+| End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows, the `perl-lsp-ux-tests` first-5-minutes harness, and open-issue burn-down â€” not a published number | Anything about parser breadth, protocol catalog size, or capability count |
 
 The last row is the important one: *none* of the automated metrics above measure whether a real editing session feels good. That's validated through workflow smoke tests, the `perl-lsp-ux-tests` harness, and the list of known gaps below, not by a dashboard.
 
@@ -173,11 +173,11 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 #### Must land for v0.13.0
 
-- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x ([#3984](https://github.com/EffortlessMetrics/perl-lsp/pull/3984): per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+- **Workspace-wide rename slice** â€” multi-root workspace support shipped in 0.12.x ([#3984](https://github.com/EffortlessMetrics/perl-lsp/pull/3984): per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
 
 #### Nice to land
 
-- **Dynamic require / literal import** — `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
+- **Dynamic require / literal import** â€” `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
 
 #### What shipped this cycle (v0.12.x)
 
@@ -187,10 +187,10 @@ These items were rough edges in the previous list and have since landed:
   reverse-request flow is now implemented and merged over per-folder
   `.perl-lsp.toml` base config ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
 
-- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) � [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
-- Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
-- `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
-- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)
+- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
+- Import list bareword resolution for `use Module qw(...)` and tag imports â€” [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
+- `use constant` symbols tracked in visible symbol table â€” [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
+- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) â€” [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)
 
 ## Security
 

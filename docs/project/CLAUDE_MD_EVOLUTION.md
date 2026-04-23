@@ -255,14 +255,15 @@ Some crate-level files carry crate-specific warnings that reflect hard-won exper
 - **perl-token**: "Changes to `TokenKind` variants propagate to all lexer and parser
   crates" -- warning about blast radius.
 
-## Multi-Agent Instructions: Three Files, One Policy
+## Multi-Agent Instructions: Four Files, One Policy
 
-The repository maintains three agent instruction files:
+The repository maintains four agent instruction files:
 
 | File | Target | Created | Lines |
 |------|--------|---------|-------|
 | `CLAUDE.md` | Claude Code (Anthropic) | Jul 16, 2025 | 282 |
 | `AGENTS.md` | Claude Code (alternate) | Jan 7, 2026 | 213 |
+| `AIDER.md` | Aider | Apr 23, 2026 | 58 |
 | `.github/copilot-instructions.md` | GitHub Copilot | Feb 28, 2026 | 282 |
 
 `CLAUDE.md` and `copilot-instructions.md` are nearly identical -- the copilot file was
@@ -271,7 +272,7 @@ different in structure: it includes installation instructions and is more
 overview-oriented, suggesting it targets agents encountering the project for the first
 time rather than agents in active development sessions.
 
-All three files share the same coding standards section, the same banned constructs,
+All four files share the same coding standards section, the same banned constructs,
 and the same truth-source declarations. The policy is agent-agnostic even though the
 files are agent-specific.
 
