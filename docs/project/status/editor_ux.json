@@ -28,7 +28,7 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
@@ -47,5 +47,54 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "tracked_signals": {
+    "expected_outcome_density": {
+      "average_expected_outcomes_per_workflow": 1.8823529411764706,
+      "total_expected_outcomes": 32
+    },
+    "metric_coverage": [
+      {
+        "coverage_percent": 100.0,
+        "name": "workflow_pass_rate",
+        "total_workflows": 17,
+        "workflows_covering": 17
+      },
+      {
+        "coverage_percent": 100.0,
+        "name": "workflow_stability_rate",
+        "total_workflows": 17,
+        "workflows_covering": 17
+      },
+      {
+        "coverage_percent": 5.882352941176471,
+        "name": "p95_time_to_first_useful_result_ms",
+        "total_workflows": 17,
+        "workflows_covering": 1
+      },
+      {
+        "coverage_percent": 5.882352941176471,
+        "name": "module_resolution_workflow_success_rate",
+        "total_workflows": 17,
+        "workflows_covering": 1
+      },
+      {
+        "coverage_percent": 11.764705882352942,
+        "name": "multi_root_workspace_navigation_success_rate",
+        "total_workflows": 17,
+        "workflows_covering": 2
+      },
+      {
+        "coverage_percent": 5.882352941176471,
+        "name": "cross_file_definition_success_rate",
+        "total_workflows": 17,
+        "workflows_covering": 1
+      }
+    ],
+    "workflow_ci_tier_breakdown": {
+      "nightly": 1,
+      "pr": 16
+    },
+    "workflow_inventory_total": 17
+  }
 }

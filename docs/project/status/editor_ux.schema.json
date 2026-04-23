@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "tracked_signals"
   ],
   "properties": {
     "schema_version": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_scaffold"
     },
     "scorecard": {
       "type": "string",
@@ -122,6 +123,86 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": [
+        "workflow_inventory_total",
+        "workflow_ci_tier_breakdown",
+        "expected_outcome_density",
+        "metric_coverage"
+      ],
+      "properties": {
+        "workflow_inventory_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workflow_ci_tier_breakdown": {
+          "type": "object",
+          "required": ["pr", "nightly"],
+          "properties": {
+            "pr": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nightly": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "expected_outcome_density": {
+          "type": "object",
+          "required": [
+            "total_expected_outcomes",
+            "average_expected_outcomes_per_workflow"
+          ],
+          "properties": {
+            "total_expected_outcomes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "average_expected_outcomes_per_workflow": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "metric_coverage": {
+          "type": "array",
+          "minItems": 6,
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "workflows_covering",
+              "total_workflows",
+              "coverage_percent"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "workflows_covering": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total_workflows": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "coverage_percent": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
