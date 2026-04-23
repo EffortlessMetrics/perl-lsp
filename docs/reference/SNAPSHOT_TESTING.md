@@ -43,6 +43,7 @@ These tests cover:
 |-----------|-------------------|----------|
 | `tests/lsp_features_snapshot_test.rs` | `tests/snapshots/lsp_features_snapshot_test__*.snap` | Advertised feature catalog vs server caps |
 | `tests/lsp_cap_snap.rs` | `tests/snapshots/lsp_cap_snap__*.snap` | Full server capabilities, code action kinds, completion triggers, semantic token legend |
+| `tests/lsp_workspace_symbol_snap.rs` | `tests/snapshots/lsp_workspace_symbol_snap__*.snap` | Workspace symbol query results, native class/method symbol shape, workspace symbol capability shape |
 
 The `lsp_cap_snap.rs` tests cover:
 - **Minimal client capabilities**: Capabilities advertised when the client declares no optional features.
@@ -62,9 +63,13 @@ cargo test -p perl-parser --test ast_snap
 # LSP capability snapshots
 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
 
+# Workspace symbol snapshots
+cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
+
 # All snapshot tests (combined)
 cargo test -p perl-parser --test ast_snap
 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
+cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
 ```
 
 ## Updating Snapshots After Intentional Changes
@@ -75,6 +80,7 @@ When parser output, error messages, or LSP capabilities change intentionally:
 # Accept all pending new/changed snapshots automatically
 INSTA_UPDATE=unseen cargo test -p perl-parser --test ast_snap
 INSTA_UPDATE=unseen RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
+INSTA_UPDATE=unseen cargo test -p perl-lsp-rs --test lsp_workspace_symbol_snap
 
 # Or use cargo-insta for interactive review (recommended for large changes)
 cargo install cargo-insta

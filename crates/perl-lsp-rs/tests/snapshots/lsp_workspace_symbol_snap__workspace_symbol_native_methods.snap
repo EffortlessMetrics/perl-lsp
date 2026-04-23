@@ -1,0 +1,14 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_symbol_snap.rs
+expression: normalized
+---
+- name: ws_snap_get_x
+  kind: 6
+  container_name: MyPoint
+  uri: "file:///ws_native_class.pl"
+  start_line: 1
+- name: ws_snap_get_y
+  kind: 6
+  container_name: MyPoint
+  uri: "file:///ws_native_class.pl"
+  start_line: 2
