@@ -229,6 +229,21 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Ok(cwd) = std::env::current_dir() {
+                if let Ok(cwd_uri) = url::Url::from_directory_path(&cwd) {
+                    let cwd_uri = cwd_uri.to_string();
+                    tracing::debug!(
+                        cwd = %cwd.display(),
+                        cwd_uri,
+                        "Initialized without workspace folders/root URI; falling back to process cwd"
+                    );
+                    let mut folder =
+                        super::super::workspace_folder::WorkspaceFolderState::new(cwd_uri.clone());
+                    folder = folder.with_path(cwd.clone());
+                    let mut folders = self.workspace_folders.lock();
+                    folders.push(folder);
+                    self.set_root_uri(&cwd_uri);
+                }
             }
         }
 
@@ -489,5 +504,27 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_without_workspace_inputs_falls_back_to_cwd() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {}
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "expected cwd fallback workspace folder");
+        assert_eq!(
+            folders[0].path.as_deref(),
+            std::env::current_dir().ok().as_deref(),
+            "cwd fallback should store current_dir path"
+        );
+        assert!(
+            folders[0].uri.starts_with("file://"),
+            "cwd fallback should store file:// URI"
+        );
     }
 }
