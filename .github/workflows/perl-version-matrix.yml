@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Install Perl ${{ matrix.perl }}
-        uses: shogo82148/actions-setup-perl@v1
+        uses: shogo82148/actions-setup-perl@0f12f8929f8062f1f7795f8a89e9f2f88c5f6ce2  # v1.34.0
         with:
           perl-version: ${{ matrix.perl }}
 
@@ -104,7 +104,7 @@ jobs:
               5.036,
               q{use feature q(signatures); no warnings q(experimental::signatures); sub f ($x) { $x }; 1;}
             );
-            check_gate(q{class}, 5.038, q{use feature q(class); class Probe { }; 1;});
+            check_gate(q{class}, 5.038, q{use feature q(class); no warnings q(experimental::class); class Probe { }; 1;});
 
             print qq{version-gated probes passed on $^V\n};
           '
