@@ -94,6 +94,9 @@ struct BaselineWorkflow {
     p95_duration_seconds: u64,
     avg_duration_seconds: u64,
     billable_minutes: u64,
+    unique_catch_count: u64,
+    unique_catch_rate_percent: f64,
+    signal_per_dollar: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -101,6 +104,8 @@ struct BaselineSummary {
     total_runs: u64,
     total_billable_minutes: u64,
     overall_success_rate_percent: f64,
+    total_unique_catches: u64,
+    overall_signal_per_dollar: Option<f64>,
 }
 
 #[derive(Serialize)]
@@ -110,6 +115,12 @@ struct BaselineReport {
     days_analyzed: u64,
     workflows: BTreeMap<String, BaselineWorkflow>,
     summary: BaselineSummary,
+}
+
+#[derive(Clone)]
+struct CompletedRun {
+    workflow_key: String,
+    failed: bool,
 }
 
 pub fn run_cost_monitor(days: u64, json_output: bool) -> Result<()> {
@@ -473,6 +484,7 @@ fn build_baseline_report(
     runs: &[Value],
 ) -> Option<BaselineReport> {
     let mut workflow_counters: BTreeMap<String, BaselineCounters> = BTreeMap::new();
+    let mut runs_by_sha: HashMap<String, Vec<CompletedRun>> = HashMap::new();
 
     for run in runs {
         let created = match read_timestamp(run, &["createdAt", "created_at"]) {
@@ -506,7 +518,7 @@ fn build_baseline_report(
         }
 
         let key = workflow_key(workflow_name);
-        let counters = workflow_counters.entry(key).or_default();
+        let counters = workflow_counters.entry(key.clone()).or_default();
         counters.name = workflow_name.to_string();
         counters.total_runs += 1;
 
@@ -524,10 +536,31 @@ fn build_baseline_report(
             counters.durations.push(duration_seconds);
             counters.billable_minutes += duration_seconds.div_ceil(60);
         }
+
+        if let Some(sha) = run
+            .get("headSha")
+            .and_then(Value::as_str)
+            .or_else(|| run.get("head_sha").and_then(Value::as_str))
+        {
+            runs_by_sha
+                .entry(sha.to_string())
+                .or_default()
+                .push(CompletedRun { workflow_key: key, failed: conclusion != "success" });
+        }
     }
 
     if workflow_counters.is_empty() {
         return None;
+    }
+
+    let mut unique_catches: HashMap<String, u64> = HashMap::new();
+    for completed_runs in runs_by_sha.values() {
+        let mut failed_lanes = completed_runs.iter().filter(|run| run.failed);
+        if let Some(first_failure) = failed_lanes.next()
+            && failed_lanes.next().is_none()
+        {
+            *unique_catches.entry(first_failure.workflow_key.clone()).or_default() += 1;
+        }
     }
 
     let mut workflow_reports = BTreeMap::new();
@@ -551,6 +584,7 @@ fn build_baseline_report(
             0.0
         };
 
+        let unique_catch_count = *unique_catches.get(&key).unwrap_or(&0);
         workflow_reports.insert(
             key,
             BaselineWorkflow {
@@ -565,6 +599,9 @@ fn build_baseline_report(
                 p95_duration_seconds: p95_seconds,
                 avg_duration_seconds: avg_seconds,
                 billable_minutes: counters.billable_minutes,
+                unique_catch_count,
+                unique_catch_rate_percent: percent(unique_catch_count, counters.failure_count),
+                signal_per_dollar: signal_per_dollar(unique_catch_count, counters.billable_minutes),
             },
         );
     }
@@ -585,6 +622,8 @@ fn build_baseline_report(
     } else {
         0.0
     };
+    let total_unique_catches: u64 =
+        workflow_reports.values().map(|workflow| workflow.unique_catch_count).sum();
 
     Some(BaselineReport {
         generated_at: generated_at.to_rfc3339(),
@@ -595,6 +634,8 @@ fn build_baseline_report(
             total_runs,
             total_billable_minutes: total_billable,
             overall_success_rate_percent,
+            total_unique_catches,
+            overall_signal_per_dollar: signal_per_dollar(total_unique_catches, total_billable),
         },
     })
 }
@@ -667,6 +708,13 @@ fn percent(part: u64, total: u64) -> f64 {
     if total == 0 { 0.0 } else { round_one_decimal((part as f64 * 100.0) / (total as f64)) }
 }
 
+fn signal_per_dollar(unique_catches: u64, billable_minutes: u64) -> Option<f64> {
+    if unique_catches == 0 || billable_minutes == 0 {
+        return None;
+    }
+    Some(round_two_decimals(unique_catches as f64 / (billable_minutes as f64 * COST_PER_MINUTE)))
+}
+
 fn percentile(values: &[u64], percentile: f64) -> u64 {
     if values.is_empty() {
         return 0;
@@ -707,20 +755,38 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
         "| Total Billable Minutes | {}m |\n\n",
         report.summary.total_billable_minutes
     ));
+    out.push_str(&format!("| Total Unique Catches | {} |\n", report.summary.total_unique_catches));
+    let overall_signal = report
+        .summary
+        .overall_signal_per_dollar
+        .map(|value| format!("{value:.2} catches/$"))
+        .unwrap_or_else(|| "n/a".to_string());
+    out.push_str(&format!("| Overall Signal per $ | {} |\n\n", overall_signal));
 
     out.push_str("## Workflow Details\n\n");
-    out.push_str("| Workflow | Runs | Success Rate | Median | P95 | Billable |\n");
-    out.push_str("|----------|------|--------------|--------|-----|----------|\n");
+    out.push_str(
+        "| Workflow | Runs | Success Rate | Median | P95 | Billable | Unique Catches | Unique Catch Rate | Signal/$ |\n",
+    );
+    out.push_str(
+        "|----------|------|--------------|--------|-----|----------|----------------|-------------------|----------|\n",
+    );
 
     for workflow in report.workflows.values() {
+        let workflow_signal = workflow
+            .signal_per_dollar
+            .map(|value| format!("{value:.2}"))
+            .unwrap_or_else(|| "n/a".to_string());
         out.push_str(&format!(
-            "| {} | {} | {:.1}% | {}s | {}s | {}m |\n",
+            "| {} | {} | {:.1}% | {}s | {}s | {}m | {} | {:.1}% | {} |\n",
             workflow.name,
             workflow.total_runs,
             workflow.success_rate_percent,
             workflow.median_duration_seconds,
             workflow.p95_duration_seconds,
-            workflow.billable_minutes
+            workflow.billable_minutes,
+            workflow.unique_catch_count,
+            workflow.unique_catch_rate_percent,
+            workflow_signal
         ));
     }
 
@@ -730,6 +796,10 @@ fn build_baseline_markdown(report: &BaselineReport) -> Result<String> {
     out.push_str(
         "- Billable Minutes: Estimated billable time (each run rounded up to nearest minute)\n",
     );
+    out.push_str(
+        "- Unique Catch: A commit where exactly one lane fails (candidate single-lane catch)\n",
+    );
+    out.push_str("- Signal/$: Unique catches divided by estimated run cost\n");
     out.push_str("- Success Rate: Calculated excluding skipped runs\n\n");
 
     out.push_str("## Recommendations\n\n");
@@ -802,13 +872,70 @@ mod tests {
         assert_eq!(workflow.failure_count, 1);
         assert_eq!(workflow.skipped_count, 1);
         assert_eq!(workflow.billable_minutes, 2);
+        assert_eq!(workflow.unique_catch_count, 0);
+        assert_eq!(workflow.unique_catch_rate_percent, 0.0);
+        assert_eq!(workflow.signal_per_dollar, None);
         assert_eq!(report.summary.total_runs, 3);
         assert_eq!(report.summary.total_billable_minutes, 2);
         assert_eq!(report.summary.overall_success_rate_percent, 50.0);
+        assert_eq!(report.summary.total_unique_catches, 0);
+        assert_eq!(report.summary.overall_signal_per_dollar, None);
 
         let markdown = build_baseline_markdown(&report)?;
-        assert!(markdown.contains("| CI | 3 | 50.0% | 90s | 90s | 2m |"));
+        assert!(markdown.contains("| CI | 3 | 50.0% | 90s | 90s | 2m | 0 | 0.0% | n/a |"));
 
+        Ok(())
+    }
+
+    #[test]
+    fn baseline_report_only_counts_single_failure_commits_as_unique_catches() -> Result<()> {
+        let generated_at =
+            DateTime::parse_from_rfc3339("2026-03-25T12:00:00Z")?.with_timezone(&Utc);
+        let cutoff = DateTime::parse_from_rfc3339("2026-03-24T12:00:00Z")?.with_timezone(&Utc);
+        let runs = vec![
+            json!({
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "headSha": "abc123",
+                "createdAt": "2026-03-25T11:00:00Z",
+                "startedAt": "2026-03-25T11:00:00Z",
+                "updatedAt": "2026-03-25T11:01:00Z"
+            }),
+            json!({
+                "workflowName": "Lint",
+                "conclusion": "success",
+                "headSha": "abc123",
+                "createdAt": "2026-03-25T11:00:00Z",
+                "startedAt": "2026-03-25T11:00:00Z",
+                "updatedAt": "2026-03-25T11:01:00Z"
+            }),
+            json!({
+                "workflowName": "CI",
+                "conclusion": "failure",
+                "headSha": "def456",
+                "createdAt": "2026-03-25T10:00:00Z",
+                "startedAt": "2026-03-25T10:00:00Z",
+                "updatedAt": "2026-03-25T10:01:00Z"
+            }),
+            json!({
+                "workflowName": "Lint",
+                "conclusion": "failure",
+                "headSha": "def456",
+                "createdAt": "2026-03-25T10:00:00Z",
+                "startedAt": "2026-03-25T10:00:00Z",
+                "updatedAt": "2026-03-25T10:01:00Z"
+            }),
+        ];
+        let report = build_baseline_report("master", 1, generated_at, cutoff, &runs)
+            .ok_or_else(|| eyre!("expected baseline report"))?;
+        let ci = report.workflows.get("CI").ok_or_else(|| eyre!("missing CI"))?;
+        let lint = report.workflows.get("Lint").ok_or_else(|| eyre!("missing Lint"))?;
+        assert_eq!(ci.failure_count, 2);
+        assert_eq!(ci.unique_catch_count, 1);
+        assert_eq!(ci.unique_catch_rate_percent, 50.0);
+        assert_eq!(lint.failure_count, 1);
+        assert_eq!(lint.unique_catch_count, 0);
+        assert_eq!(report.summary.total_unique_catches, 1);
         Ok(())
     }
 }
