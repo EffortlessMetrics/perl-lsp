@@ -13,13 +13,19 @@ fn binary_available() -> bool {
     perl_lsp_ux_tests::resolve_binary().is_ok()
 }
 
+// NOTE: BROKEN_SOURCE contains a genuine Perl syntax error — the incomplete
+// expression `(1 +` triggers a parse failure under `use strict`.  A missing
+// semicolon at the end of a `print` statement is *not* a syntax error in Perl
+// (the next `}` terminates the statement), so we use an unterminated expression
+// instead to guarantee the server publishes at least one diagnostic.
 const BROKEN_SOURCE: &str = "\
 use strict;\n\
 use warnings;\n\
 \n\
 sub greet {\n\
     my ($name) = @_;\n\
-    print \"hello $name\\n\"\n\
+    my $broken = (1 + ;\n\
+    print \"hello $name\\n\";\n\
 }\n\
 ";
 
@@ -29,6 +35,7 @@ use warnings;\n\
 \n\
 sub greet {\n\
     my ($name) = @_;\n\
+    my $ok = (1 + 2);\n\
     print \"hello $name\\n\";\n\
 }\n\
 ";
@@ -48,7 +55,16 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
 
     harness.open_file("edit_diag.pl", BROKEN_SOURCE).expect("didOpen should succeed");
 
-    let _initial = harness.wait_for_diagnostics("edit_diag.pl", Duration::from_secs(5));
+    // Wait for and then drain the initial diagnostics so the post-edit wait
+    // sees only new events, not the pre-edit ones still in the peek queue.
+    let initial = harness.wait_for_diagnostics("edit_diag.pl", Duration::from_secs(5));
+    assert!(
+        !initial.is_empty(),
+        "Expected at least one diagnostic for BROKEN_SOURCE (unterminated expression); \
+         got none — check the fixture content"
+    );
+    // Drain so the next wait_for_diagnostics sees only the post-edit notification.
+    harness.collect_notifications();
 
     harness
         .change_file_full("edit_diag.pl", FIXED_SOURCE)
@@ -63,6 +79,8 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
         );
     }
 
+    // After draining the open-event and sending didChange, wait for the server
+    // to republish diagnostics.  We expect at least 1 new diagnostics event.
     let uri = harness.workspace.uri("edit_diag.pl");
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut diagnostics_event_count = 0_usize;
@@ -72,15 +90,15 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
             .iter()
             .filter(|event| matches!(event, LspEvent::Diagnostics { uri: event_uri, .. } if event_uri == &uri))
             .count();
-        if diagnostics_event_count >= 2 {
+        if diagnostics_event_count >= 1 {
             break;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
 
     assert!(
-        diagnostics_event_count >= 2,
-        "Expected diagnostics to publish on open and republish after edit; observed {} events",
+        diagnostics_event_count >= 1,
+        "Expected diagnostics to republish after didChange edit; observed {} post-edit events",
         diagnostics_event_count
     );
     harness.assert_no_crash();
