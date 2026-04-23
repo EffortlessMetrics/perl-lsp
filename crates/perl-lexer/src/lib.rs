@@ -954,11 +954,15 @@ impl<'a> PerlLexer<'a> {
                         // Loop naturally continues to next iteration
                     }
                 }
-                b'\t' => {
-                    // Batch skip tabs
+                b'\t' | 0x0B | 0x0C => {
+                    // Batch skip horizontal tab, vertical tab, and form feed.
+                    // Perl treats these as whitespace separators.
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && Self::byte_at(self.input_bytes, self.position) == b'\t'
+                        && matches!(
+                            Self::byte_at(self.input_bytes, self.position),
+                            b'\t' | 0x0B | 0x0C
+                        )
                     {
                         self.position += 1;
                     }
