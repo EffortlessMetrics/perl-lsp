@@ -122,6 +122,30 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_ux_fixture_matrix_stats(root: &Path) -> Option<(usize, usize, usize)> {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let raw = fs::read_to_string(matrix_path).ok()?;
+    let matrix: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let workflows = matrix.get("workflows")?.as_array()?;
+
+    let total = workflows.len();
+    if total == 0 {
+        return Some((0, 0, 0));
+    }
+
+    let mut pr_count = 0usize;
+    let mut nightly_count = 0usize;
+    for workflow in workflows {
+        match workflow.get("ci_tier").and_then(serde_json::Value::as_str) {
+            Some("pr") => pr_count += 1,
+            Some("nightly") => nightly_count += 1,
+            _ => {}
+        }
+    }
+
+    Some((total, pr_count, nightly_count))
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -138,12 +162,15 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "mutation data pending first nightly CI run — run `just mutation-subset` locally to populate"
     };
 
+    let (workflow_total, pr_workflow_count, nightly_workflow_count) =
+        collect_ux_fixture_matrix_stats(root).unwrap_or((ux_scenarios, ux_scenarios, 0));
+
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
-           `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
-           `docs/project/status/editor_ux.json`\n\
+           release-confidence lane tracks {pr_workflow_count}/{workflow_total} fixture-matrix workflows \
+           on every PR (`just ux-tests`) and {nightly_workflow_count}/{workflow_total} additional workflows \
+           in nightly/release lanes (`just ux-tests-full`); tracked receipt at `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,26 +196,41 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let (workflow_total, pr_workflow_count, nightly_workflow_count) =
+        collect_ux_fixture_matrix_stats(root).unwrap_or((scenario_count, scenario_count, 0));
+    let pr_coverage =
+        if workflow_total == 0 { 0.0 } else { pr_workflow_count as f64 / workflow_total as f64 };
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+            "workflow_count": workflow_total,
+            "pr_workflow_count": pr_workflow_count,
+            "nightly_workflow_count": nightly_workflow_count,
         },
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
+                "value": pr_coverage,
+                "numerator": pr_workflow_count,
+                "denominator": workflow_total,
+                "tracking_basis": "fixture_matrix_ci_tier",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
+                "value": pr_coverage,
+                "numerator": pr_workflow_count,
+                "denominator": workflow_total,
+                "tracking_basis": "fixture_matrix_ci_tier",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
@@ -258,13 +300,14 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
         );
+        assert!(receipt["harness"]["workflow_count"].as_u64().is_some());
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
             .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
@@ -279,6 +322,13 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        let tracked_rows = receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
+            .iter()
+            .filter(|row| row["state"] == "tracked")
+            .count();
+        assert_eq!(tracked_rows, 2, "workflow pass/stability rows should now be tracked");
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())
     }

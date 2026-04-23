@@ -1,6 +1,8 @@
 {
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
+    "nightly_workflow_count": 1,
+    "pr_workflow_count": 16,
     "scenario_count": 17,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
@@ -20,7 +22,8 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_15_workspace_symbols.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_16_workspace_folder_removal.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
-    ]
+    ],
+    "workflow_count": 17
   },
   "integration_points": {
     "ci_lane": "just ux-tests",
@@ -28,19 +31,27 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracking_receipt",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
     {
+      "denominator": 17,
       "name": "workflow_pass_rate",
+      "numerator": 16,
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked",
+      "tracking_basis": "fixture_matrix_ci_tier",
+      "value": 0.9411764705882353
     },
     {
+      "denominator": 17,
       "name": "workflow_stability_rate",
+      "numerator": 16,
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked",
+      "tracking_basis": "fixture_matrix_ci_tier",
+      "value": 0.9411764705882353
     },
     {
       "name": "p95_time_to_first_useful_result_ms",

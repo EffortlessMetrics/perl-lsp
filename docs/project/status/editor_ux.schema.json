@@ -18,7 +18,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "tracking_receipt"]
     },
     "scorecard": {
       "type": "string",
@@ -41,6 +41,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pr_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nightly_workflow_count": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -98,9 +110,25 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["planned", "tracked", "measured"]
           },
           "owner": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "numerator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "denominator": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tracking_basis": {
             "type": "string"
           }
         },
