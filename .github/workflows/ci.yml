@@ -106,6 +106,9 @@ jobs:
       - name: Check formatting
         run: cargo xtask fmt --check
 
+      - name: Check release history drift
+        run: bash scripts/check_release_history.sh
+
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
@@ -184,6 +187,16 @@ jobs:
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
 
+      # Compile integration tests for scoped crates to catch tests/* bit-rot.
+      - name: Scoped integration-test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
+
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
       # crates to check (empty crates_args on a non-prose diff — shouldn't
@@ -203,6 +216,11 @@ jobs:
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
+
+      # Note: workspace-wide integration-test compilation is covered by the
+      # parallel check-all-targets job (just check-all-targets), which runs
+      # cargo check --workspace --all-targets --locked independently of pr-smoke.
+      # Adding a redundant fallback here would duplicate that work without gain.
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
@@ -416,3 +434,52 @@ jobs:
 
       - name: Compile all targets (catches integration-test + bench bit-rot)
         run: just check-all-targets
+
+  # ── Windows Guardrails: proactive Windows regression catchers ─────────
+  windows-guardrails:
+    name: Windows Guardrails (${{ matrix.lane.name }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - name: compile
+            command: >-
+              cargo check --locked --all-targets
+              -p perl-module
+              -p perl-lsp-rs
+              -p perl-workspace-index
+          - name: module-separator-regressions
+            command: >-
+              cargo test --locked -p perl-module
+              --test path_comprehensive_unit_tests
+              --test module_resolution_use_require
+          - name: sandbox-fail-closed
+            command: >-
+              cargo test --locked -p perl-lsp-rs
+              security::sandbox::tests::test_windows_sandbox_fails_closed
+              -- --exact
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-windows-guardrails-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
+
+      - name: Run Windows guardrail lane
+        shell: bash
+        run: ${{ matrix.lane.command }}
