@@ -1,77 +1,101 @@
-# API Stability and Version Policy
+# API Stability and SemVer Policy
 
-**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha
+**MSRV:** 1.92 • **Edition:** 2024 • **Status:** Public alpha (`0.12.x` line)
 
-This document describes the stability posture for the current public-alpha line. The current release line is `v0.11.x`; stronger compatibility guarantees are still targeted for the `v0.15.0` stability-contract milestone.
+This document is the project's published compatibility contract for crates released to crates.io.
+It replaces informal wording like "we try" with explicit guarantees, review gates, and expected
+version-bump behavior.
 
-## Current Alpha Stance
+## Scope
 
-What public alpha means here:
+This policy applies to every crate in the workspace publish allowlist at
+`[workspace.metadata.publish.allow]` in the root `Cargo.toml`.
 
-- APIs and behaviors are usable today but can still change between minor releases
-- Advertised protocol behavior is tracked carefully, but the formal compatibility contract is not locked yet
-- Packaging and distribution surfaces can still change while the alpha line is being hardened
-- Documentation is being aligned with the actual shipped posture rather than treated as frozen
+As of workspace version `0.12.4` (2026-04-23), the allowlist contains **31 published crates**.
 
-## What We Ship Today
+Contract tiers:
 
-| Distribution | Format | Support level |
-| --- | --- | --- |
-| GitHub Releases | Tagged source and binary artifacts | Alpha |
-| crates.io | Published crates | Alpha |
-| VS Code extension | Marketplace / Open VSX distribution | Alpha |
-| Source builds | Git checkout + Cargo | Alpha |
+1. **Facade crates (highest stability expectation):** `perl-lsp-rs`, `perllsp`, `perl-parser`,
+   `perl-dap`, `perl-uri`.
+2. **Published support crates (stable but faster-moving):** all other allowlisted crates.
+3. **Non-allowlisted crates:** internal-only; no external SemVer contract until published.
 
-Availability can vary by release. Check the release notes and repo documentation for the exact surface shipped in a given version.
+## Compatibility Guarantees
 
-## Public Crate Line
+### 1) Patch releases (`0.Y.Z`)
 
-These crates define the user-facing alpha line:
+Patch releases MUST NOT intentionally introduce breaking API changes in any published crate.
+Allowed patch changes:
 
-| Crate | Current line | Purpose | Stability posture |
-| --- | --- | --- | --- |
-| `perl-parser` | `0.11.x` | Parser and AST-facing library | Evolving |
-| `perl-lexer` | `0.11.x` | Tokenizer | Evolving |
-| `perl-lsp` | `0.11.x` | LSP server binary | Evolving |
-| `perl-corpus` | `0.11.x` | Corpus and fixtures | Evolving |
-| `perl-dap` | `0.11.x` | Debug adapter | Preview / evolving |
-| `perl-parser-pest` | `0.11.x` | Legacy parser path | Maintenance only |
+- bug fixes
+- performance improvements
+- docs/metadata updates
+- internal refactors that preserve public API and behavior
 
-## Versioning Policy
+### 2) Minor releases (`0.Y.0`)
 
-### Minor releases (`0.Y.0`)
+While pre-1.0, minor releases MAY include breaking changes, but only when all conditions hold:
 
-Breaking changes are still allowed in minor public-alpha releases. We aim to document those changes clearly, but full multi-release deprecation cycles are not promised before `v0.15.0`.
+- the break is intentional and documented in changelog/release notes
+- migration guidance is provided for facade-crate breaks
+- SemVer checks and API baseline checks are reviewed in CI
 
-### Patch releases (`0.Y.Z`)
+### 3) Future 1.0+ policy (intent)
 
-Patch releases are intended for fixes, hardening, and documentation updates that do not deliberately reshape the public surface.
+At `1.0.0`, breaking changes will move to major releases, with explicit deprecation windows.
 
-## Support Expectations
+## Enforcement in CI
 
-During the alpha line, the project aims for:
+Public-API compatibility is enforced by tooling, not memory:
 
-1. Stronger parser and workspace correctness on real-world Perl
-2. A stable enough editor experience for early adopters
-3. Clearer receipts and project-health documentation
-4. Continued hardening of security and validation boundaries
+- `cargo-semver-checks` gates detect public API breaks against the release baseline.
+- facade API baselines are checked and ratcheted intentionally (no silent drift).
+- publish allowlist drift is validated by CI/`just` checks.
 
-## Toward the Stability Contract (`v0.15.0`)
-
-The `v0.15.0` milestone is where the project intends to tighten the contract around:
-
-1. Public API compatibility expectations
-2. Advertised protocol behavior
-3. Deprecation policy and migration guidance
-4. Platform support commitments
-
-## Verification
+Primary commands:
 
 ```bash
-nix develop -c just ci-gate
+just semver-check
+just semver-check-all
+just public-api-check
+just publish-allowlist-check
 ```
 
-For current receipts and project posture, see:
+## Version Bump Rules
 
-- [../project/CURRENT_STATUS.md](../project/CURRENT_STATUS.md)
-- [../project/ROADMAP.md](../project/ROADMAP.md)
+Required bump level for published crates:
+
+| Change type | Required bump (`0.x`) |
+| --- | --- |
+| Remove/rename public item | minor |
+| Signature/type change (incompatible) | minor |
+| Trait impl removal or tighter bounds | minor |
+| Behavioral break in documented contract | minor |
+| Additive API (new function/type/field under compatibility rules) | minor |
+| Bug fix preserving API+contract | patch |
+| Internal-only refactor | patch |
+| Docs/metadata only | patch |
+
+## Contract Notes for Facade Crates
+
+Facade crates are the main downstream integration surface. For these crates:
+
+- breaking changes should be rare and deliberate
+- release notes must include a "Migration" section for every break
+- API movement from satellite crates should preserve facade import paths when feasible
+- if a break is unavoidable, document old path → new path examples
+
+## Contributor Checklist for API Changes
+
+Before merging a PR that touches public items in a published crate:
+
+1. Run SemVer checks (`just semver-check` or package-specific check).
+2. Run facade API checks (`just public-api-check`) when a facade crate is touched.
+3. Confirm version bump matches this policy.
+4. Add/refresh changelog notes and migration guidance for intentional breaks.
+
+## Source of Truth
+
+- Publish allowlist and workspace version: `Cargo.toml`
+- SemVer workflow details: `docs/how-to/SEMVER_WORKFLOW.md`
+- Release process: `docs/release/RUNBOOK.md`
