@@ -650,14 +650,28 @@ _check-tools-basic:
     MISSING=""
     if ! command -v cargo >/dev/null 2>&1; then MISSING="$MISSING cargo"; fi
     if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$MISSING rustfmt"; fi
-    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$MISSING cargo-nextest"; fi
     if [ -n "$MISSING" ]; then
         echo "ERROR: Missing required tools:$MISSING"
         echo "  Install Rust: https://rustup.rs"
-        echo "  Install nextest: cargo install cargo-nextest --locked"
+        echo "  Install rustfmt: rustup component add rustfmt"
         exit 1
     fi
     cargo xtask check-toolchain
+
+# Tool availability check for Nextest-backed recipes
+[private]
+_check-tools-nextest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v cargo-nextest >/dev/null 2>&1; then
+        exit 0
+    fi
+    if cargo nextest --version >/dev/null 2>&1; then
+        exit 0
+    fi
+    echo "ERROR: Missing required tool: cargo-nextest"
+    echo "  Install nextest: cargo install cargo-nextest --locked"
+    exit 1
 
 # ============================================================================
 # CI Validation Commands (Issue #211)
@@ -898,6 +912,7 @@ ci-test-core:
 # Library tests only (fastest, for merge gate)
 ci-test-lib:
     @echo "🧪 Running library tests..."
+    @just _check-tools-nextest
     cargo nextest run --workspace --lib --locked --profile ci
     @echo "✅ Library tests passed"
 
