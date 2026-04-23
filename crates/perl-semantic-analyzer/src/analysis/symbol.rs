@@ -2968,7 +2968,11 @@ impl SymbolExtractor {
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
         let scalar_re = match SCALAR_RE
-            .get_or_init(|| Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})"))
+            .get_or_init(|| {
+                Regex::new(
+                    r"\$((?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)|\{(?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)\})",
+                )
+            })
             .as_ref()
         {
             Ok(re) => re,
