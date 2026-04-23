@@ -49,9 +49,9 @@ fn given_non_git_workspace_when_discovering_then_walk_fallback_finds_perl_source
 
     assert_eq!(result.method, DiscoveryMethod::Walk);
     assert_eq!(result.files.len(), 2);
-    assert!(result.files.iter().any(|path| path.ends_with("app.pl")));
-    assert!(result.files.iter().any(|path| path.ends_with("lib/Foo.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")));
+    assert!(result.files.iter().any(|path| path.ends_with("app.pl")), "walk discovery should find app.pl");
+    assert!(result.files.iter().any(|path| path.ends_with("lib/Foo.pm")), "walk discovery should find lib/Foo.pm");
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")), "walk discovery should exclude node_modules");
 
     Ok(())
 }
@@ -76,9 +76,9 @@ fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore() -
     let result = discover_perl_files(root);
 
     assert_eq!(result.method, DiscoveryMethod::Git);
-    assert!(result.files.iter().any(|path| path.ends_with("script.pl")));
-    assert!(result.files.iter().any(|path| path.ends_with("lib/App/Worker.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")));
+    assert!(result.files.iter().any(|path| path.ends_with("script.pl")), "git discovery should find script.pl");
+    assert!(result.files.iter().any(|path| path.ends_with("lib/App/Worker.pm")), "git discovery should find lib/App/Worker.pm");
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("node_modules")), "git discovery should respect .gitignore for node_modules");
 
     Ok(())
 }
@@ -102,9 +102,9 @@ fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy
     let result = discover_perl_files(root);
 
     assert_eq!(result.method, DiscoveryMethod::Git);
-    assert!(result.files.iter().any(|path| path.ends_with("tracked/Module.pm")));
-    assert!(result.files.iter().any(|path| path.ends_with("untracked/script.pl")));
-    assert!(!result.files.iter().any(|path| path.ends_with("notes.txt")));
+    assert!(result.files.iter().any(|path| path.ends_with("tracked/Module.pm")), "git discovery should find tracked files");
+    assert!(result.files.iter().any(|path| path.ends_with("untracked/script.pl")), "git discovery should include untracked perl files");
+    assert!(!result.files.iter().any(|path| path.ends_with("notes.txt")), "git discovery should exclude non-perl files");
 
     Ok(())
 }
@@ -129,12 +129,13 @@ fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_th
 
     assert_eq!(result.method, DiscoveryMethod::Git);
     assert_eq!(result.files.len(), 1);
-    assert!(result.files.iter().any(|path| path.ends_with("lib/Kept.pm")));
-    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("target/generated")));
+    assert!(result.files.iter().any(|path| path.ends_with("lib/Kept.pm")), "git discovery should find lib/Kept.pm");
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("target/generated")), "git discovery should exclude target/generated directory");
     assert!(
-        !result.files.iter().any(|path| path.to_string_lossy().contains("node_modules/vendor"))
+        !result.files.iter().any(|path| path.to_string_lossy().contains("node_modules/vendor")),
+        "git discovery should exclude node_modules/vendor directory"
     );
-    assert!(result.excluded_count >= 2);
+    assert!(result.excluded_count >= 2, "git discovery should report at least 2 excluded files");
 
     Ok(())
 }
@@ -157,8 +158,8 @@ fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then
     let result = discover_perl_files(root);
 
     assert_eq!(result.method, DiscoveryMethod::Git);
-    assert!(result.files.is_empty());
-    assert!(result.excluded_count >= 1);
+    assert!(result.files.is_empty(), "git discovery should return empty results when no perl files match");
+    assert!(result.excluded_count >= 1, "git discovery should report at least 1 excluded file");
 
     Ok(())
 }
