@@ -253,7 +253,18 @@ impl TestContext {
         method: &str,
         wait: Duration,
     ) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+        // Sleep to allow the server time to finish async work (e.g. diagnostics).
         std::thread::sleep(wait);
+
+        // After sleeping, the server may have sent notifications that are still
+        // sitting in the OS pipe — they won't appear in self.notifications because
+        // the previous send_request pump stopped reading once it received its
+        // response.  Issue a cheap synchronous probe (`workspace/symbol` with an
+        // empty query returns quickly) so that `send_request` drains the pipe,
+        // buffering any trailing notifications into `self.notifications` before
+        // we partition below.
+        let _ = self.send_request("workspace/symbol", Some(json!({ "query": "" })));
+
         let mut matching = Vec::new();
         let mut remaining = Vec::new();
 
