@@ -122,6 +122,87 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, Copy)]
+struct FixtureMatrixSummary {
+    workflows_total: usize,
+    workflows_pr: usize,
+    workflows_nightly: usize,
+    workflow_pass_coverage: f64,
+    workflow_stability_coverage: f64,
+    p95_latency_coverage: f64,
+}
+
+fn load_fixture_matrix_summary(root: &Path) -> Option<FixtureMatrixSummary> {
+    let fixture_path = root
+        .join("crates")
+        .join("perl-lsp-ux-tests")
+        .join("fixtures")
+        .join("editor_ux_fixture_matrix.json");
+    let raw = fs::read_to_string(fixture_path).ok()?;
+    let doc: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let workflows = doc.get("workflows")?.as_array()?;
+    let total = workflows.len();
+    if total == 0 {
+        return None;
+    }
+
+    let mut pr = 0usize;
+    let mut nightly = 0usize;
+    let mut pass = 0usize;
+    let mut stability = 0usize;
+    let mut p95 = 0usize;
+    for workflow in workflows {
+        if workflow.get("ci_tier").and_then(|v| v.as_str()) == Some("pr") {
+            pr += 1;
+        }
+        if workflow.get("ci_tier").and_then(|v| v.as_str()) == Some("nightly") {
+            nightly += 1;
+        }
+        let measures: Vec<&str> = workflow
+            .get("measures")
+            .and_then(|m| m.as_array())
+            .map(|items| items.iter().filter_map(|m| m.as_str()).collect())
+            .unwrap_or_default();
+        if measures.contains(&"workflow_pass_rate") {
+            pass += 1;
+        }
+        if measures.contains(&"workflow_stability_rate") {
+            stability += 1;
+        }
+        if measures.contains(&"p95_time_to_first_useful_result_ms") {
+            p95 += 1;
+        }
+    }
+
+    Some(FixtureMatrixSummary {
+        workflows_total: total,
+        workflows_pr: pr,
+        workflows_nightly: nightly,
+        workflow_pass_coverage: pass as f64 / total as f64,
+        workflow_stability_coverage: stability as f64 / total as f64,
+        p95_latency_coverage: p95 as f64 / total as f64,
+    })
+}
+
+fn load_known_issues_counts(root: &Path) -> (usize, usize) {
+    let path = root.join(".ci").join("debt-ledger.yaml");
+    let Ok(raw) = fs::read_to_string(path) else {
+        return (0, 0);
+    };
+    let Ok(doc) = serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&raw) else {
+        return (0, 0);
+    };
+
+    let known_issues =
+        doc.get("known_issues").and_then(|v| v.as_sequence()).map_or(0, std::vec::Vec::len);
+    let budget = doc
+        .get("budgets")
+        .and_then(|v| v.get("max_known_issues"))
+        .and_then(serde_yaml_ng::Value::as_u64)
+        .map_or(0, |v| v as usize);
+    (known_issues, budget)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +250,25 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let fixture_matrix = load_fixture_matrix_summary(root);
+    let (known_issues_open, known_issues_budget) = load_known_issues_counts(root);
+    let (workflow_pass_coverage, workflow_stability_coverage, p95_coverage, workflows_total) =
+        match fixture_matrix {
+            Some(summary) => (
+                summary.workflow_pass_coverage,
+                summary.workflow_stability_coverage,
+                summary.p95_latency_coverage,
+                summary.workflows_total,
+            ),
+            None => (0.0, 0.0, 0.0, 0),
+        };
+    let mapping_coverage =
+        if workflows_total == 0 { 0.0 } else { scenario_count as f64 / workflows_total as f64 };
+    let known_issue_budget_ratio = if known_issues_budget == 0 {
+        0.0
+    } else {
+        known_issues_open as f64 / known_issues_budget as f64
+    };
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -182,20 +282,47 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "measured",
+                "value": workflow_pass_coverage,
+                "basis": "fixture_matrix_workflow_coverage",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "measured",
+                "value": workflow_stability_coverage,
+                "basis": "fixture_matrix_workflow_coverage",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": "measured",
+                "value": p95_coverage,
+                "basis": "fixture_matrix_latency_coverage",
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "signal_tracking": {
+            "manual_smoke_workflows": {
+                "workflows_total": workflows_total,
+                "workflows_pr_lane": fixture_matrix.map_or(0, |s| s.workflows_pr),
+                "workflows_nightly_lane": fixture_matrix.map_or(0, |s| s.workflows_nightly),
+                "coverage_ratio": workflow_pass_coverage,
+                "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+            },
+            "first_five_minutes_harness": {
+                "scenario_count": scenario_count,
+                "mapped_workflow_count": workflows_total,
+                "mapping_coverage_ratio": mapping_coverage,
+                "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+            },
+            "open_issue_burndown": {
+                "known_issues_open": known_issues_open,
+                "known_issues_budget": known_issues_budget,
+                "budget_utilization_ratio": known_issue_budget_ratio,
+                "source": ".ci/debt-ledger.yaml",
+            },
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -278,6 +405,17 @@ mod tests {
                 "workflow_stability_rate",
                 "p95_time_to_first_useful_result_ms",
             ])
+        );
+        assert_eq!(receipt["top_line_metrics"][0]["state"], "measured");
+        assert!(
+            receipt["signal_tracking"]["manual_smoke_workflows"]["workflows_total"]
+                .as_u64()
+                .is_some()
+        );
+        assert!(
+            receipt["signal_tracking"]["open_issue_burndown"]["known_issues_budget"]
+                .as_u64()
+                .is_some()
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())

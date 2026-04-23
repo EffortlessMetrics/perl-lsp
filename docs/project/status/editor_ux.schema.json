@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "signal_tracking",
     "integration_points"
   ],
   "properties": {
@@ -100,12 +101,80 @@
             "type": "string",
             "enum": ["planned", "measured"]
           },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "basis": {
+            "type": "string"
+          },
           "owner": {
             "type": "string"
           }
         },
         "additionalProperties": false
       }
+    },
+    "signal_tracking": {
+      "type": "object",
+      "required": [
+        "manual_smoke_workflows",
+        "first_five_minutes_harness",
+        "open_issue_burndown"
+      ],
+      "properties": {
+        "manual_smoke_workflows": {
+          "type": "object",
+          "required": [
+            "workflows_total",
+            "workflows_pr_lane",
+            "workflows_nightly_lane",
+            "coverage_ratio",
+            "source"
+          ],
+          "properties": {
+            "workflows_total": { "type": "integer", "minimum": 0 },
+            "workflows_pr_lane": { "type": "integer", "minimum": 0 },
+            "workflows_nightly_lane": { "type": "integer", "minimum": 0 },
+            "coverage_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "first_five_minutes_harness": {
+          "type": "object",
+          "required": [
+            "scenario_count",
+            "mapped_workflow_count",
+            "mapping_coverage_ratio",
+            "source"
+          ],
+          "properties": {
+            "scenario_count": { "type": "integer", "minimum": 0 },
+            "mapped_workflow_count": { "type": "integer", "minimum": 0 },
+            "mapping_coverage_ratio": { "type": "number", "minimum": 0 },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": [
+            "known_issues_open",
+            "known_issues_budget",
+            "budget_utilization_ratio",
+            "source"
+          ],
+          "properties": {
+            "known_issues_open": { "type": "integer", "minimum": 0 },
+            "known_issues_budget": { "type": "integer", "minimum": 0 },
+            "budget_utilization_ratio": { "type": "number", "minimum": 0 },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

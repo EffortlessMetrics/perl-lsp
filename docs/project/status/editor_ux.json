@@ -1,4 +1,7 @@
 {
+  "schema_version": 1,
+  "receipt_kind": "planning_scaffold",
+  "scorecard": "editor_ux",
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
@@ -22,30 +25,54 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
     ]
   },
-  "integration_points": {
-    "ci_lane": "just ux-tests",
-    "quality_surface": "docs/project/status/quality.md",
-    "release_lane": "just ux-tests-full",
-    "status_update": "cargo xtask update-status --only quality"
-  },
-  "receipt_kind": "planning_scaffold",
-  "schema_version": 1,
-  "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 1.0,
+      "basis": "fixture_matrix_workflow_coverage",
+      "owner": "perl-lsp-ux-tests"
     },
     {
       "name": "workflow_stability_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 1.0,
+      "basis": "fixture_matrix_workflow_coverage",
+      "owner": "perl-lsp-ux-tests"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "measured",
+      "value": 0.058823529411764705,
+      "basis": "fixture_matrix_latency_coverage",
+      "owner": "perl-lsp-ux-tests"
     }
-  ]
+  ],
+  "signal_tracking": {
+    "manual_smoke_workflows": {
+      "workflows_total": 17,
+      "workflows_pr_lane": 16,
+      "workflows_nightly_lane": 1,
+      "coverage_ratio": 1.0,
+      "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json"
+    },
+    "first_five_minutes_harness": {
+      "scenario_count": 17,
+      "mapped_workflow_count": 17,
+      "mapping_coverage_ratio": 1.0,
+      "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs"
+    },
+    "open_issue_burndown": {
+      "known_issues_open": 0,
+      "known_issues_budget": 20,
+      "budget_utilization_ratio": 0.0,
+      "source": ".ci/debt-ledger.yaml"
+    }
+  },
+  "integration_points": {
+    "ci_lane": "just ux-tests",
+    "release_lane": "just ux-tests-full",
+    "status_update": "cargo xtask update-status --only quality",
+    "quality_surface": "docs/project/status/quality.md"
+  }
 }
