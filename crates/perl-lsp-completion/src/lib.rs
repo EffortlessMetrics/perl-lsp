@@ -26,6 +26,7 @@ mod completion;
 
 pub use completion::{
     CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,
-    add_xs_api_completions_for_prefix, get_dbi_method_documentation, get_test_more_documentation,
-    get_xs_api_documentation, is_xs_source,
+    add_xs_api_completions_for_prefix, get_dbi_method_documentation,
+    get_sql_abstract_method_documentation, get_test_more_documentation, get_xs_api_documentation,
+    is_xs_source,
 };

@@ -551,6 +551,31 @@ impl LspServer {
                 }
             }
 
+            // Check SQL::Abstract method hover: token preceded by -> in a SQL::Abstract-importing file.
+            // Guard on `use SQL::Abstract` to avoid false positives for common method names like
+            // `select`, `insert`, `update`, `delete` in non-SQL::Abstract code.
+            let is_sql_abstract_source = text.contains("use SQL::Abstract");
+            if is_sql_abstract_source
+                && !bare.is_empty()
+                && !hover_text.starts_with(['$', '@', '%'])
+            {
+                if let Some(receiver) = Self::extract_arrow_receiver(text, offset) {
+                    if let Some((sig, desc)) =
+                        crate::completion::get_sql_abstract_method_documentation(&receiver)
+                    {
+                        return HoverExtracted::Complete(json!({
+                            "contents": {
+                                "kind": "markdown",
+                                "value": format!(
+                                    "**SQL::Abstract Method**\n\n```perl\n{}\n```\n\n{}",
+                                    sig, desc
+                                ),
+                            },
+                        }));
+                    }
+                }
+            }
+
             // Before the bare-token fallback, check if the cursor is on a package name
             // (an identifier that spans `::` separators, e.g. `File::Path`, `DBI`).
             // Defer resolution to Phase 2 via `build_module_hover` so no workspace lock
@@ -1460,6 +1485,60 @@ impl LspServer {
                                     crate::completion::get_dbi_method_documentation(
                                         &receiver,
                                         &function_name,
+                                    )
+                                {
+                                    return Ok(Some(json!({
+                                        "signatures": [json!({
+                                            "label": sig,
+                                            "documentation": desc,
+                                            "parameters": []
+                                        })],
+                                        "activeSignature": 0,
+                                        "activeParameter": active_param
+                                    })));
+                                }
+                            }
+                        }
+                    }
+
+                    // Check SQL::Abstract method signatures — only for files that import SQL::Abstract,
+                    // to avoid false positives for common method names like `select`.
+                    let is_sql_abstract_source = doc.text.contains("use SQL::Abstract");
+                    if is_sql_abstract_source {
+                        let paren_offset = {
+                            let chars: Vec<char> = doc.text.chars().collect();
+                            let mut depth = 0usize;
+                            let mut found = None;
+                            let mut k = if offset > 0 { offset - 1 } else { 0 };
+                            loop {
+                                match chars.get(k) {
+                                    Some(')') | Some(']') | Some('}') => depth += 1,
+                                    Some('(') => {
+                                        if depth == 0 {
+                                            found = Some(k);
+                                            break;
+                                        }
+                                        depth = depth.saturating_sub(1);
+                                    }
+                                    Some('[') | Some('{') => {
+                                        depth = depth.saturating_sub(1);
+                                    }
+                                    _ => {}
+                                }
+                                if k == 0 {
+                                    break;
+                                }
+                                k -= 1;
+                            }
+                            found
+                        };
+                        if let Some(paren_pos) = paren_offset {
+                            if let Some(receiver) =
+                                Self::extract_arrow_receiver(&doc.text, paren_pos)
+                            {
+                                if let Some((sig, desc)) =
+                                    crate::completion::get_sql_abstract_method_documentation(
+                                        &receiver,
                                     )
                                 {
                                     return Ok(Some(json!({

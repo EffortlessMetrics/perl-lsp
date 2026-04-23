@@ -61,6 +61,21 @@ pub const DBI_ST_METHODS: &[(&str, &str)] = &[
     ("rows", "Get the number of rows affected"),
 ];
 
+/// SQL::Abstract methods for completion.
+///
+/// These are offered when the file contains `use SQL::Abstract` and the receiver
+/// variable name matches SQL::Abstract conventions ($sql, $sqla, $sql_abs).
+pub const SQL_ABSTRACT_METHODS: &[(&str, &str)] = &[
+    ("select", "Generate SELECT statement"),
+    ("insert", "Generate INSERT statement"),
+    ("update", "Generate UPDATE statement"),
+    ("delete", "Generate DELETE statement"),
+    ("where", "Generate WHERE clause"),
+    ("generate", "Generate arbitrary SQL"),
+    ("values", "Generate VALUES clause"),
+    ("order_by", "Generate ORDER BY clause"),
+];
+
 /// Parameter signatures for DBI database-handle methods.
 ///
 /// Each entry is `(name, signature, description)`.
@@ -144,6 +159,20 @@ pub const DBI_ST_METHOD_SIGS: &[(&str, &str, &str)] = &[
     ("rows", "rows()", "Return the number of rows affected or returned"),
 ];
 
+/// Parameter signatures for SQL::Abstract methods.
+///
+/// Each entry is `(name, signature, description)`.
+pub const SQL_ABSTRACT_METHOD_SIGS: &[(&str, &str, &str)] = &[
+    ("select", "select($table, $fields?, $where?, $order?)", "Generate a SELECT statement"),
+    ("insert", "insert($table, $values_or_fields, $values?)", "Generate an INSERT statement"),
+    ("update", "update($table, $set, $where?)", "Generate an UPDATE statement"),
+    ("delete", "delete($table, $where?)", "Generate a DELETE statement"),
+    ("where", "where($where)", "Generate a WHERE clause"),
+    ("generate", "generate($stmt, @bind)", "Generate arbitrary SQL from a statement template"),
+    ("values", "values($values)", "Generate a VALUES clause"),
+    ("order_by", "order_by($order)", "Generate an ORDER BY clause"),
+];
+
 /// Look up DBI method documentation by receiver hint and method name.
 ///
 /// `receiver_hint` is the variable name or token before `->` (e.g. `"$dbh"`, `"$sth"`).
@@ -172,6 +201,19 @@ pub fn get_dbi_method_documentation(
     };
 
     table.iter().find(|(n, _, _)| *n == method_name).map(|(_, sig, desc)| (*sig, *desc))
+}
+
+/// Look up SQL::Abstract method documentation by method name.
+///
+/// `method_name` is the method being called (e.g. `"select"`, `"insert"`).
+/// Returns `(signature, description)` or `None` if not a known SQL::Abstract method.
+pub fn get_sql_abstract_method_documentation(
+    method_name: &str,
+) -> Option<(&'static str, &'static str)> {
+    SQL_ABSTRACT_METHOD_SIGS
+        .iter()
+        .find(|(n, _, _)| *n == method_name)
+        .map(|(_, sig, desc)| (*sig, *desc))
 }
 
 /// Infer receiver type from context (for DBI method completion)
@@ -203,6 +245,20 @@ pub fn infer_receiver_type(context: &CompletionContext, source: &str) -> Option<
             if assignment.contains("prepare") {
                 return Some("DBI::st".to_string());
             }
+
+            // Check if this looks like SQL::Abstract->new() result
+            if assignment.contains("SQL::Abstract") && assignment.contains("new") {
+                return Some("SQL::Abstract".to_string());
+            }
+        }
+    }
+
+    // Check for SQL::Abstract variable names with guard pattern
+    // Only trigger on specific names ($sql, $sqla, $sql_abs) that are common conventions.
+    // $s is excluded because it's too common (loop variable, subroutine arg, generic scalar).
+    if source.contains("use SQL::Abstract") {
+        if prefix.ends_with("$sql") || prefix.ends_with("$sqla") || prefix.ends_with("$sql_abs") {
+            return Some("SQL::Abstract".to_string());
         }
     }
 
@@ -412,6 +468,7 @@ pub fn add_method_completions(
     let methods: Vec<(&str, &str)> = match receiver_type.as_deref() {
         Some("DBI::db") => DBI_DB_METHODS.to_vec(),
         Some("DBI::st") => DBI_ST_METHODS.to_vec(),
+        Some("SQL::Abstract") => SQL_ABSTRACT_METHODS.to_vec(),
         _ => {
             // Default common object methods
             vec![
