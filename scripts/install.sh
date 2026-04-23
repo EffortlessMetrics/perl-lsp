@@ -286,7 +286,7 @@ main() {
     say ""
     say "Get started:"
     say "  VS Code:  install the Perl LSP extension from the marketplace"
-    say "  Neovim:   add perllsp to your LSP config"
+    say "  Vim/Neovim: add perllsp to your LSP config"
     say "  Other:    configure to use '${INSTALL_DIR}/${BIN_NAME} --stdio'"
     say ""
     say "Docs: https://github.com/$REPO"
