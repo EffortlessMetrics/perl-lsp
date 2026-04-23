@@ -93,6 +93,15 @@ impl<'a> Parser<'a> {
                 .is_some_and(|t| t.kind == TokenKind::Sub)
     }
 
+    fn is_scoped_sub_start(&mut self) -> bool {
+        matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::State))
+            && self
+                .tokens
+                .peek_second()
+                .ok()
+                .is_some_and(|t| t.kind == TokenKind::Sub)
+    }
+
     fn is_adjust_block_start(&mut self) -> bool {
         self.in_class_body > 0
             && self.peek_kind() == Some(TokenKind::Identifier)
@@ -199,6 +208,17 @@ impl<'a> Parser<'a> {
                 && !attributes.iter().any(|attr| attr == "async")
             {
                 attributes.insert(0, "async".to_string());
+            }
+            self.finish_subroutine_statement(sub_node)
+        } else if self.is_scoped_sub_start() {
+            let scope_token = self.consume_token()?;
+            let mut sub_node = self.parse_subroutine()?;
+            sub_node.location.start = scope_token.start;
+            let scope = scope_token.text.to_string();
+            if let NodeKind::Subroutine { attributes, .. } = &mut sub_node.kind
+                && !attributes.iter().any(|attr| attr == &scope)
+            {
+                attributes.insert(0, scope);
             }
             self.finish_subroutine_statement(sub_node)
         } else {
