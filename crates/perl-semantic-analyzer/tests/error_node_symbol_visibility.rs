@@ -164,6 +164,39 @@ fn second_unclosed_sub_is_visible() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Combined regression for issue #3499:
+/// - parser recovers from an unclosed block when a new `sub` starts
+/// - symbol extraction continues through a partial Error node (`$obj->;`)
+///
+/// This guards the interaction between PR #4079 (unclosed-block recovery) and
+/// PR #4071 (descend into `Error.partial`).
+#[test]
+fn recovers_unclosed_block_and_keeps_symbols_after_partial_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = "sub foo {\n  my $obj = {};\n  my $broken = $obj->;\nsub bar { }\n";
+    let table = parse_and_extract(source);
+
+    assert!(
+        has_symbol(&table, "foo", SymbolKind::Subroutine),
+        "sub foo should be visible despite unclosed block; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+
+    assert!(
+        has_symbol(&table, "broken", SymbolKind::scalar()),
+        "$broken should be visible with Error{{partial}} initializer; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+
+    assert!(
+        has_symbol(&table, "bar", SymbolKind::Subroutine),
+        "sub bar should be visible after recovery from unclosed block; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+
+    Ok(())
+}
+
 /// Variables before and after a missing-RHS error are both visible.
 ///
 /// `my $broken = ;` triggers Phase 2 recovery and produces a
