@@ -20,7 +20,9 @@ PREFER_GNU="${PREFER_GNU:-0}"
 
 # Determine install directory: user-local by default, system-wide if explicitly set
 if [ -z "${INSTALL_DIR:-}" ]; then
-    if [ -w /usr/local/bin ] 2>/dev/null; then
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+        INSTALL_DIR="/data/data/com.termux/files/usr/bin"
+    elif [ -w /usr/local/bin ] 2>/dev/null; then
         INSTALL_DIR="/usr/local/bin"
     else
         INSTALL_DIR="$HOME/.local/bin"
@@ -48,16 +50,24 @@ need_cmd() {
 # ── Platform detection ─────────────────────────────────────────────────────────
 
 detect_platform() {
-    local _os _arch _libc
+    local _os _arch _libc _termux
 
     _os="$(uname -s)"
     _arch="$(uname -m)"
+    _termux=0
+
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+        _termux=1
+    fi
 
     case "$_os" in
         Linux)
             _os="linux"
-            # Prefer musl (static, works everywhere) unless caller overrides.
-            if [ "$PREFER_GNU" = "1" ]; then
+            # Termux uses Android's bionic libc. Prefer static musl binaries there.
+            # For other Linux environments, prefer musl unless caller overrides.
+            if [ "$_termux" = "1" ]; then
+                _libc="musl"
+            elif [ "$PREFER_GNU" = "1" ]; then
                 _libc="gnu"
             else
                 _libc="musl"
@@ -89,6 +99,9 @@ detect_platform() {
     fi
 
     info "platform: $_os $_arch (target: $TARGET)"
+    if [ "$_termux" = "1" ]; then
+        info "termux environment detected; using musl release artifacts for compatibility"
+    fi
 }
 
 # ── Version resolution ─────────────────────────────────────────────────────────

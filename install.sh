@@ -13,7 +13,13 @@ NC='\033[0m' # No Color
 
 # Default values
 VERSION="${1:-latest}"
-INSTALL_DIR="${2:-$HOME/.local/bin}"
+if [ "${2:-}" != "" ]; then
+    INSTALL_DIR="$2"
+elif [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+    INSTALL_DIR="/data/data/com.termux/files/usr/bin"
+else
+    INSTALL_DIR="$HOME/.local/bin"
+fi
 REPO="EffortlessMetrics/perl-lsp"
 NAME="perl-lsp"
 
@@ -39,6 +45,11 @@ write_error() {
 detect_system() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
+    IS_TERMUX=0
+
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
+        IS_TERMUX=1
+    fi
     
     case $OS in
         linux)
@@ -65,11 +76,16 @@ detect_system() {
     esac
     
     TARGET="$ARCH-unknown-$OS-gnu"
-    if [ "$OS" = "darwin" ]; then
+    if [ "$OS" = "linux" ] && [ "$IS_TERMUX" = "1" ]; then
+        TARGET="$ARCH-unknown-linux-musl"
+    elif [ "$OS" = "darwin" ]; then
         TARGET="$ARCH-apple-darwin"
     fi
     
     write_info "Detected system: $OS ($ARCH) - $TARGET"
+    if [ "$IS_TERMUX" = "1" ]; then
+        write_info "Termux environment detected; defaulting install path to $INSTALL_DIR"
+    fi
 }
 
 # Get version information
