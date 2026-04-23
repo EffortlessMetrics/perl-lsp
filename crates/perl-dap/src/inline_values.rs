@@ -45,11 +45,70 @@ fn normalize_line_bounds(
 
     let start_1_based = start_line.max(1) as usize;
     let end_1_based = end_line.max(1) as usize;
+    if start_1_based > line_count {
+        return None;
+    }
 
     let start_idx = start_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
     let end_idx = end_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
 
     (start_idx <= end_idx).then_some((start_idx, end_idx))
+}
+
+/// Mask quoted strings and trailing `#` comments while preserving byte offsets.
+///
+/// This allows regex matching on "code-only" regions while keeping capture indexes
+/// aligned with the original input line for accurate DAP columns.
+fn mask_non_code_regions(line: &str) -> String {
+    let mut masked = String::with_capacity(line.len());
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    let mut iter = line.char_indices();
+    while let Some((idx, ch)) = iter.next() {
+        let is_comment_start = ch == '#' && !in_single && !in_double;
+        if is_comment_start {
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+            let start = idx + ch.len_utf8();
+            for remaining in line[start..].chars() {
+                masked.push_str(&" ".repeat(remaining.len_utf8()));
+            }
+            return masked;
+        }
+
+        if in_single {
+            if ch == '\'' && !escaped {
+                in_single = false;
+            }
+            escaped = ch == '\\' && !escaped;
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+            continue;
+        }
+
+        if in_double {
+            if ch == '"' && !escaped {
+                in_double = false;
+            }
+            escaped = ch == '\\' && !escaped;
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+            continue;
+        }
+
+        if ch == '\'' {
+            in_single = true;
+            escaped = false;
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+        } else if ch == '"' {
+            in_double = true;
+            escaped = false;
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+        } else {
+            escaped = false;
+            masked.push(ch);
+        }
+    }
+
+    masked
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -73,9 +132,10 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
     let mut names = Vec::new();
 
     for line in lines.iter().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked = mask_non_code_regions(line);
+        for cap in re.captures_iter(&masked) {
             if let Some(m) = cap.get(0) {
-                let name = m.as_str();
+                let name = &line[m.start()..m.end()];
                 if !is_special_variable_name(name) && seen.insert(name.to_string()) {
                     names.push(name.to_string());
                 }
@@ -162,9 +222,10 @@ pub fn collect_inline_values_with_runtime(
     let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked = mask_non_code_regions(line);
+        for cap in re.captures_iter(&masked) {
             if let Some(m) = cap.get(0) {
-                let var_name = m.as_str();
+                let var_name = &line[m.start()..m.end()];
                 if is_special_variable_name(var_name) {
                     continue;
                 }
@@ -205,9 +266,10 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
     let mut inline_values = Vec::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
-        for cap in re.captures_iter(line) {
+        let masked = mask_non_code_regions(line);
+        for cap in re.captures_iter(&masked) {
             if let Some(m) = cap.get(0) {
-                let var_text = m.as_str();
+                let var_text = &line[m.start()..m.end()];
                 let column = (m.start() + 1) as i64;
                 inline_values.push(InlineValueText {
                     line: (idx + 1) as i64,
@@ -355,6 +417,14 @@ mod tests {
     }
 
     #[test]
+    fn test_start_line_beyond_source_returns_empty() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        assert!(extract_variable_names(source, 99, 100).is_empty());
+        assert!(collect_inline_values_with_runtime(source, 99, 100, None).is_empty());
+        assert!(collect_inline_values(source, 99, 100).is_empty());
+    }
+
+    #[test]
     fn test_runtime_inline_value_for_namespaced_scalar() {
         let source = "our $Foo::bar = 1;";
         let mut rv = HashMap::new();
@@ -363,5 +433,22 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$Foo::bar = 42");
+    }
+
+    #[test]
+    fn test_inline_values_ignore_comments_and_strings() {
+        let source = r#"my $real = 1; # $commented
+my $quoted = "$fake_in_string";
+my $single = '$fake_single';
+say $real;
+"#;
+
+        let names = extract_variable_names(source, 1, 4);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$quoted".to_string()));
+        assert!(names.contains(&"$single".to_string()));
+        assert!(!names.contains(&"$commented".to_string()));
+        assert!(!names.contains(&"$fake_in_string".to_string()));
+        assert!(!names.contains(&"$fake_single".to_string()));
     }
 }
