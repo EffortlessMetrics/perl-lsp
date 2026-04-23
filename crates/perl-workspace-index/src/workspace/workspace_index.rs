@@ -3378,9 +3378,10 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
                 if stripped.is_empty() {
                     return None;
                 }
-                if stripped.chars().all(|c| {
-                    c.is_alphanumeric() || c == '_' || c == ':' || c == '\''
-                }) {
+                if stripped
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+                {
                     Some(stripped.to_string())
                 } else {
                     None
@@ -3484,6 +3485,18 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         }
     }
 
+    fn normalize_constant_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+
+        stripped.chars().all(|c| c.is_alphanumeric() || c == '_').then_some(stripped)
+    }
+
     let mut names = Vec::new();
     let mut seen = HashSet::new();
 
@@ -3500,8 +3513,8 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         let (qw_words, remainder) = extract_qw_words(first);
         if remainder.trim().is_empty() {
             for word in qw_words {
-                if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    names.push(word);
+                if let Some(candidate) = normalize_constant_name(&word) {
+                    push_unique(&mut names, &mut seen, candidate);
                 }
             }
             return names;
@@ -3513,8 +3526,8 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
             .trim_start_matches(|c: char| "([{/<|!".contains(c))
             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
         for word in content.split_whitespace() {
-            if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                push_unique(&mut names, &mut seen, word);
+            if let Some(candidate) = normalize_constant_name(word) {
+                push_unique(&mut names, &mut seen, candidate);
             }
         }
         return names;
@@ -3527,14 +3540,10 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
             if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
                 continue;
             }
-            // Skip -option flags
-            if arg.starts_with('-') {
-                continue;
-            }
-            let is_plain_ident =
-                !arg.is_empty() && arg.chars().all(|c| c.is_alphanumeric() || c == '_');
-            if is_plain_ident && iter.peek().map(|s| s.as_str()) == Some("=>") {
-                push_unique(&mut names, &mut seen, arg);
+            if let Some(candidate) = normalize_constant_name(arg)
+                && iter.peek().map(|s| s.as_str()) == Some("=>")
+            {
+                push_unique(&mut names, &mut seen, candidate);
             }
         }
         return names;
@@ -3542,12 +3551,8 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
     // Scalar form: first arg is the constant name (if it is a plain identifier)
     // Remaining args are the value and are skipped.
-    // Skip -option flags
-    if !first.starts_with('-')
-        && !first.is_empty()
-        && first.chars().all(|c| c.is_alphanumeric() || c == '_')
-    {
-        push_unique(&mut names, &mut seen, first);
+    if let Some(candidate) = normalize_constant_name(first) {
+        push_unique(&mut names, &mut seen, candidate);
     }
 
     names
@@ -3692,6 +3697,31 @@ use constant {
         assert_eq!(names, vec!["FOO", "BAR"]);
     }
 
+    #[test]
+    fn test_extract_constant_names_accepts_quoted_scalar_form() {
+        let names = extract_constant_names_from_use_args(&[
+            "'HTTP_OK'".to_string(),
+            "=>".to_string(),
+            "200".to_string(),
+        ]);
+        assert_eq!(names, vec!["HTTP_OK"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_quoted_hash_form() {
+        let names = extract_constant_names_from_use_args(&[
+            "{".to_string(),
+            "'FOO'".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "\"BAR\"".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
     #[test]
     fn test_use_constant_duplicate_names_indexed_once() {
         let index = WorkspaceIndex::new();
