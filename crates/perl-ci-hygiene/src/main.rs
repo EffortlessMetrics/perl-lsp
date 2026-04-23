@@ -3863,17 +3863,61 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
+    let Some(idx) = find_hash_comment_start(line) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn find_hash_comment_start(line: &str) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut prev_was_escape = false;
+
+    for (idx, ch) in line.char_indices() {
+        if in_single {
+            if ch == '\'' {
+                in_single = false;
+            }
+            continue;
         }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+        if in_double {
+            if prev_was_escape {
+                prev_was_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape = true;
+                continue;
+            }
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
-    } else {
-        false
+
+        match ch {
+            '\'' => in_single = true,
+            '"' => in_double = true,
+            '#' => {
+                if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
+                    return None;
+                }
+                if idx == 0 {
+                    return Some(idx);
+                }
+                if let Some(prev) = line[..idx].chars().next_back() {
+                    if prev.is_whitespace()
+                        || matches!(prev, ';' | '{' | '}' | '(' | ')' | '[' | ']')
+                    {
+                        return Some(idx);
+                    }
+                }
+            }
+            _ => {}
+        }
     }
+    None
 }
 
 fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
@@ -4172,6 +4216,11 @@ mod tests {
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi;# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"#not-a-comment\" # TODO: follow up",
+            &todo_re,
+        ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
 
