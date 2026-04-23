@@ -48,6 +48,7 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
@@ -61,6 +62,20 @@ pr-fast: _check-tools-basic
     echo "  PR-fast gate complete (total: $((END - START))s)"
     echo "=============================================="
     exit $RC
+
+# Fail if README.md has duplicate level-2 headings. Helps catch accidental
+# copy/paste doc drift that is otherwise easy to miss during review.
+readme-heading-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    duplicates=$(awk '/^## /{counts[$0]++} END{for (heading in counts) if (counts[heading] > 1) printf "%s (%dx)\n", heading, counts[heading]}' README.md)
+    if [ -n "$duplicates" ]; then
+        echo "❌ Duplicate level-2 headings found in README.md:"
+        echo "$duplicates"
+        echo "Hint: run 'grep -n \"^## \" README.md' to inspect heading layout."
+        exit 1
+    fi
+    echo "✅ README heading structure looks good"
 
 # Pre-merge guard: verify a PR is not draft, has merge-ready label, and title has (#NNN)
 # Usage: just pre-merge-check 3291
