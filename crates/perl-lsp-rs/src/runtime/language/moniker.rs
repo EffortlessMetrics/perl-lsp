@@ -307,7 +307,11 @@ impl LspServer {
     ///
     /// Searches `use` statements for the symbol name, handling both bare imports
     /// and `qw<...>` style import lists with all delimiter types.
-    fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
+    pub(crate) fn find_import_source(
+        &self,
+        ast: &crate::ast::Node,
+        symbol_name: &str,
+    ) -> Option<String> {
         use perl_parser::ast::NodeKind;
 
         fn require_module_name(node: &crate::ast::Node) -> Option<String> {

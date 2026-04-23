@@ -1292,6 +1292,51 @@ mod tests {
     }
 
     #[test]
+    fn test_attach_trims_host_for_tcp_target() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": " 192.168.1.100 ",
+            "port": 9000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("192.168.1.100:9000"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_accepts_timeout_ms_alias() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeoutMs": 0
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("Timeout must be greater than 0"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_tcp_session_threads_non_empty() -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
         // Inject a TcpAttachSession so handle_threads sees it
