@@ -93,6 +93,43 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_subroutine_is_declared_then_parser_emits_subroutine_shape() {
+    let sexp = parse_to_sexp("sub greet { return 'hi'; }");
+
+    assert!(sexp.contains("(subroutine"), "expected subroutine node; got: {sexp}");
+    assert!(
+        sexp.contains("(return_statement") && sexp.contains("(string_literal 'hi')"),
+        "expected return statement with string literal; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_regex_match_is_used_then_parser_keeps_match_expression_shape() {
+    let sexp = parse_to_sexp("if ($name =~ /foo/) { print $name; }");
+
+    assert!(sexp.contains("(if_statement"), "expected if_statement; got: {sexp}");
+    assert!(
+        sexp.contains("=~") || sexp.contains("(match_expression"),
+        "expected regex match expression in output; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_hash_slice_assignment_is_used_then_parser_preserves_slice_and_literals() {
+    let sexp = parse_to_sexp("@vals = @hash{'a', 'b'};");
+
+    assert!(sexp.contains("(assignment"), "expected assignment node; got: {sexp}");
+    assert!(
+        sexp.contains("@hash") || sexp.contains("(hash_ref"),
+        "expected hash variable participation in slice expression; got: {sexp}"
+    );
+    assert!(
+        sexp.contains("(string_literal 'a')") && sexp.contains("(string_literal 'b')"),
+        "expected slice keys to be preserved as string literals; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> Result<(), String> {
     let ast = parse_ast("my $ok = 1;\nmy = ;\nprint $ok;\n");
 
@@ -101,6 +138,23 @@ fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> 
     };
 
     assert!(!nodes.is_empty(), "expected recovery parse to preserve at least one statement");
+    Ok(())
+}
+
+#[test]
+fn when_input_has_multiple_invalid_regions_then_recovery_still_keeps_valid_edges()
+-> Result<(), String> {
+    let ast = parse_ast("my $first = 1;\nmy = ;\nmy $second = 2;\n???\nprint $first + $second;\n");
+
+    let AstNode::Program(nodes) = ast else {
+        return Err("expected recovery to return Program".to_string());
+    };
+
+    assert!(
+        nodes.len() >= 2,
+        "expected recovery parse to preserve multiple valid statements, got {}",
+        nodes.len()
+    );
     Ok(())
 }
 
