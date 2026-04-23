@@ -104,6 +104,12 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 }
                 break;
             }
+            b'q' => {
+                if let Some(next_idx) = mask_quote_like_literal(bytes, i, &mut mask) {
+                    i = next_idx;
+                    continue;
+                }
+            }
             b'\'' => {
                 mask[i] = false;
                 in_single = true;
@@ -119,6 +125,98 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
     }
 
     mask
+}
+
+fn mask_quote_like_literal(bytes: &[u8], start: usize, mask: &mut [bool]) -> Option<usize> {
+    if start > 0 && bytes[start - 1].is_ascii_alphanumeric() {
+        return None;
+    }
+    if start > 0 && bytes[start - 1] == b'_' {
+        return None;
+    }
+
+    let (operator_len, mut delim_idx) = if bytes.get(start + 1) == Some(&b'q')
+        || bytes.get(start + 1) == Some(&b'w')
+        || bytes.get(start + 1) == Some(&b'r')
+        || bytes.get(start + 1) == Some(&b'x')
+    {
+        (2, start + 2)
+    } else {
+        (1, start + 1)
+    };
+
+    while delim_idx < bytes.len() && bytes[delim_idx].is_ascii_whitespace() {
+        delim_idx += 1;
+    }
+    if delim_idx >= bytes.len() {
+        return None;
+    }
+
+    let open = bytes[delim_idx];
+    if open.is_ascii_alphanumeric() || open == b'_' {
+        return None;
+    }
+    let close = paired_delimiter(open).unwrap_or(open);
+
+    let mut idx = delim_idx + 1;
+    let mut depth = if open != close { 1 } else { 0 };
+    let mut escaped = false;
+    let mut found_end = false;
+
+    while idx < bytes.len() {
+        let ch = bytes[idx];
+        if escaped {
+            escaped = false;
+            idx += 1;
+            continue;
+        }
+        if ch == b'\\' {
+            escaped = true;
+            idx += 1;
+            continue;
+        }
+        if open == close {
+            if ch == close {
+                found_end = true;
+                idx += 1;
+                break;
+            }
+            idx += 1;
+            continue;
+        }
+        if ch == open {
+            depth += 1;
+        } else if ch == close {
+            depth -= 1;
+            if depth == 0 {
+                found_end = true;
+                idx += 1;
+                break;
+            }
+        }
+        idx += 1;
+    }
+
+    if !found_end {
+        return None;
+    }
+
+    let literal_end = idx;
+    for slot in mask.iter_mut().take(literal_end).skip(start) {
+        *slot = false;
+    }
+
+    Some(start + (literal_end - start).max(operator_len))
+}
+
+fn paired_delimiter(open: u8) -> Option<u8> {
+    match open {
+        b'(' => Some(b')'),
+        b'[' => Some(b']'),
+        b'{' => Some(b'}'),
+        b'<' => Some(b'>'),
+        _ => None,
+    }
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -487,6 +585,25 @@ mod tests {
     #[test]
     fn test_inline_values_ignore_strings_and_comments() {
         let source = "my $real = 1; print \"$ignored\"; # and $commented";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_variable_like_tokens_in_quote_operators_are_ignored() {
+        let source = "my $real = 1; my $s = q{$fake}; my $x = qq/$other/;";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$s".to_string()));
+        assert!(names.contains(&"$x".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$other".to_string()));
+    }
+
+    #[test]
+    fn test_inline_values_ignore_quote_operators() {
+        let source = "my $real = 1; print q{$ignored}; print qq/$also_ignored/;";
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
