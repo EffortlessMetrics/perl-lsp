@@ -14,6 +14,7 @@
 //! - colors: Document color detection and presentation
 //! - virtual_content: Virtual document content for perldoc:// URIs
 //! - misc: Inlay hints, document links, code lens, and other features
+//! - moniker: Symbol identity and import/export provenance
 
 mod code_actions;
 mod colors;
@@ -24,6 +25,7 @@ mod hierarchy;
 mod hover;
 mod mason;
 mod misc;
+mod moniker;
 mod navigation;
 mod references;
 mod rename;
