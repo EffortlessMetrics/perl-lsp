@@ -3366,12 +3366,14 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
         token
             .split(',')
             .filter_map(|piece| {
-                // Strip surrounding punctuation that may be attached without whitespace:
-                // - quotes (`'Foo::Bar'`, `"Foo::Bar"`)
-                // - parentheses (`('Foo::Bar')`)
-                let stripped = piece
-                    .trim_matches(|c| matches!(c, '\'' | '"' | '(' | ')'))
-                    .trim_matches(|c| matches!(c, '\'' | '"'));
+                // Strip common wrapper punctuation from both ends (quotes, parens, commas,
+                // brackets, semicolons). This supports parser/tokenizer variants such as:
+                // - "'Foo::Bar',"   - trailing comma
+                // - "('Foo::Bar',"  - leading paren
+                // - "'Foo::Bar');"  - trailing paren+semicolon
+                let stripped = piece.trim_matches(|c: char| {
+                    matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+                });
                 // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
                 if stripped.is_empty() {
                     return None;
@@ -4859,6 +4861,25 @@ Utils::process_data();
     #[test]
     fn test_extract_module_names_parenthesized_without_spaces() {
         let names = extract_module_names_from_use_args(&["('Foo::Bar','Other::Base')".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_trims_semicolon_suffix() {
+        let names = extract_module_names_from_use_args(&[
+            "'Foo::Bar',".to_string(),
+            "'Other::Base',".to_string(),
+            "'Third::Leaf';".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base", "Third::Leaf"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_trims_wrapped_punctuation() {
+        let names = extract_module_names_from_use_args(&[
+            "('Foo::Bar',".to_string(),
+            "'Other::Base')".to_string(),
+        ]);
         assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
     }
 
