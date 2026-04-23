@@ -12,7 +12,9 @@ use std::cmp::Ordering;
 /// 2. Exact case-insensitive match
 /// 3. Prefix case-insensitive match
 /// 4. Contains case-insensitive match
-/// 5. Subsequence/fuzzy case-insensitive match
+/// 5. Normalized match (ignores separators like `::`, spaces, `_`, `-`)
+/// 6. Single-edit typo tolerance on normalized text
+/// 7. Subsequence/fuzzy case-insensitive match on normalized text
 #[must_use]
 pub fn matches_query(name: &str, query: &str) -> bool {
     if query.is_empty() {
@@ -34,7 +36,22 @@ pub fn matches_query(name: &str, query: &str) -> bool {
         return true;
     }
 
-    is_subsequence(&name_lower, &query_lower)
+    let name_normalized = normalize_for_match(name);
+    let query_normalized = normalize_for_match(query);
+
+    if !query_normalized.is_empty() {
+        if name_normalized == query_normalized
+            || name_normalized.starts_with(&query_normalized)
+            || name_normalized.contains(&query_normalized)
+            || is_single_edit_typo(&name_normalized, &query_normalized)
+        {
+            return true;
+        }
+
+        return is_subsequence(&name_normalized, &query_normalized);
+    }
+
+    false
 }
 
 /// Compares two symbol names by query relevance.
@@ -43,7 +60,8 @@ pub fn matches_query(name: &str, query: &str) -> bool {
 /// 1. Exact match (case-insensitive)
 /// 2. Prefix match
 /// 3. Contains (substring) match
-/// 4. Fuzzy/subsequence match
+/// 4. Single-edit typo match
+/// 5. Fuzzy/subsequence match
 ///
 /// Within the same tier, shorter names rank higher (closer to the query
 /// length), with lexicographic order as the final tiebreaker.
@@ -75,17 +93,74 @@ pub fn compare_names_by_query(a: &str, b: &str, query: &str) -> Ordering {
 /// - 0: exact match
 /// - 1: prefix match
 /// - 2: contains (substring) match
-/// - 3: fuzzy/subsequence or no match (fallback)
+/// - 3: single-edit typo match
+/// - 4: fuzzy/subsequence or no match (fallback)
 fn match_tier(name_lower: &str, query_lower: &str) -> u8 {
-    if name_lower == query_lower {
+    let name_normalized = normalize_for_match(name_lower);
+    let query_normalized = normalize_for_match(query_lower);
+
+    if name_lower == query_lower || name_normalized == query_normalized {
         0
-    } else if name_lower.starts_with(query_lower) {
+    } else if name_lower.starts_with(query_lower)
+        || (!query_normalized.is_empty() && name_normalized.starts_with(&query_normalized))
+    {
         1
-    } else if name_lower.contains(query_lower) {
+    } else if name_lower.contains(query_lower)
+        || (!query_normalized.is_empty() && name_normalized.contains(&query_normalized))
+    {
         2
-    } else {
+    } else if !query_normalized.is_empty()
+        && is_single_edit_typo(&name_normalized, &query_normalized)
+    {
         3
+    } else {
+        4
     }
+}
+
+fn normalize_for_match(value: &str) -> String {
+    value.chars().filter(|ch| ch.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+fn is_single_edit_typo(left: &str, right: &str) -> bool {
+    if left == right {
+        return false;
+    }
+
+    let left_len = left.chars().count();
+    let right_len = right.chars().count();
+    if left_len.abs_diff(right_len) > 1 {
+        return false;
+    }
+
+    if left_len == right_len {
+        return left.chars().zip(right.chars()).filter(|(a, b)| a != b).count() == 1;
+    }
+
+    let (longer, shorter) = if left_len > right_len { (left, right) } else { (right, left) };
+
+    let longer_chars: Vec<char> = longer.chars().collect();
+    let shorter_chars: Vec<char> = shorter.chars().collect();
+    let mut i = 0;
+    let mut j = 0;
+    let mut mismatch_seen = false;
+
+    while i < longer_chars.len() && j < shorter_chars.len() {
+        if longer_chars[i] == shorter_chars[j] {
+            i += 1;
+            j += 1;
+            continue;
+        }
+
+        if mismatch_seen {
+            return false;
+        }
+
+        mismatch_seen = true;
+        i += 1;
+    }
+
+    true
 }
 
 fn is_subsequence(haystack: &str, needle: &str) -> bool {
@@ -160,15 +235,21 @@ mod tests {
     }
 
     #[test]
-    fn four_tier_ranking_order() {
-        // exact=0, prefix=1, contains=2, fuzzy=3
-        // "lxoxg" is a fuzzy match for "log" (l..o..g subsequence)
-        let mut names = ["get_log", "lxoxg", "log", "logger"];
+    fn ranking_places_typo_between_contains_and_fuzzy() {
+        // exact=0, prefix=1, contains=2, typo=3, fuzzy=4
+        let mut names = ["get_log", "lxoxg", "log", "logger", "lgo"];
         names.sort_by(|a, b| compare_names_by_query(a, b, "log"));
 
         assert_eq!(names[0], "log", "tier 0: exact");
         assert_eq!(names[1], "logger", "tier 1: prefix");
         assert_eq!(names[2], "get_log", "tier 2: contains");
-        assert_eq!(names[3], "lxoxg", "tier 3: fuzzy");
+        assert_eq!(names[3], "lgo", "tier 3: single-edit typo");
+        assert_eq!(names[4], "lxoxg", "tier 4: fuzzy");
+    }
+
+    #[test]
+    fn separator_normalization_and_typo_support_droid_factory_queries() {
+        assert!(matches_query("Droid::Factory", "Droid Facxtory"));
+        assert!(matches_query("DroidFactory", "droid facxtory"));
     }
 }
