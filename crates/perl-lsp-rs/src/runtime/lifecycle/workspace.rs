@@ -453,6 +453,37 @@ include_paths = ["other_lib"]
     }
 
     #[test]
+    fn did_change_configuration_accepts_unwrapped_perl_settings() {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder).expect("failed to create folder");
+
+        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri.clone())
+                .with_path(folder),
+        );
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "workspace": {
+                    "includePaths": ["sublime_lib"],
+                    "useSystemInc": true
+                }
+            }
+        })));
+
+        let folders = server.workspace_folders.lock();
+        let folder_state = folders.iter().find(|f| f.uri == uri).expect("missing folder");
+        assert!(
+            folder_state.effective_workspace_config.include_paths.contains(&"sublime_lib".to_string())
+        );
+        assert!(folder_state.effective_workspace_config.use_system_inc);
+    }
+
+    #[test]
     fn perl_not_found_message_without_config_is_actionable() -> Result<(), Box<dyn Error>> {
         let searched = vec!["PATH".to_string(), "/usr/bin/perl".to_string()];
         let msg = perl_not_found_message(None, &searched);

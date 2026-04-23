@@ -163,6 +163,10 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    fn extract_perl_settings<'a>(settings: &'a Value) -> Option<&'a Value> {
+        settings.get("perl").or(Some(settings))
+    }
+
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
         if !self.client_capabilities.lock().workspace_configuration_support {
@@ -707,7 +711,7 @@ impl LspServer {
                 tracing::debug!("Configuration changed, updating server settings");
 
                 // Read perl settings once and update both configs
-                if let Some(perl) = settings.get("perl") {
+                if let Some(perl) = Self::extract_perl_settings(settings) {
                     // Check whether any perlcritic-related setting is changing before
                     // updating config so we can decide whether to reset the shared
                     // CriticAnalyzer.  The analyzer is config-bound (severity, profile)
