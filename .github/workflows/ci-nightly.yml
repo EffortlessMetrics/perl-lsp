@@ -24,6 +24,11 @@ on:
         required: false
         type: boolean
         default: true
+      run_real_repo_latency:
+        description: 'Run real-repo latency suite'
+        required: false
+        type: boolean
+        default: true
       run_coverage:
         description: 'Run test coverage'
         required: false
@@ -207,6 +212,47 @@ jobs:
           benchmark_report.md
           comparison.txt
           alert.md
+        retention-days: 30
+
+  real-repo-latency:
+    name: Real-Repo Latency (Catalyst 5K Diagnostics)
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_real_repo_latency != 'false') ||
+      (github.event_name == 'pull_request' &&
+       (contains(github.event.pull_request.labels.*.name, 'ci:bench') ||
+        contains(github.event.pull_request.labels.*.name, 'ci:real-repo-latency')))
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+      with:
+        toolchain: stable
+
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+      with:
+        key: ${{ runner.os }}-real-repo-latency-${{ hashFiles('Cargo.lock') }}
+        cache-on-failure: true
+
+    - name: Run real project latency suite
+      env:
+        PERL_LSP_FIRST_DIAGNOSTICS_BUDGET_MS: "5000"
+      run: |
+        cargo test -p perl-lsp-rs --test real_project_latency full_suite -- --include-ignored --nocapture
+
+    - name: Upload real-repo latency artifacts
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: real-project-latency-${{ github.sha }}
+        path: |
+          .ci/metrics/real_project_latency.json
         retention-days: 30
 
   test-coverage:
