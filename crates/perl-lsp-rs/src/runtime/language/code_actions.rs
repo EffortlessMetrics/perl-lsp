@@ -126,7 +126,6 @@ impl FixAllRange {
 /// The resulting action lists every diagnostic associated with the accepted
 /// source actions so the client can clear them together once the aggregate
 /// is applied.
-
 fn quickfix_text_edits_for_uri<'a>(action: &'a Value, uri: &str) -> Option<Vec<&'a Value>> {
     if let Some(edits) = action
         .pointer("/edit/changes")
