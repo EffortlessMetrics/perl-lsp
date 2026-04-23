@@ -1345,6 +1345,41 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         export_tag_members(module, import_token).contains(&symbol_name)
     }
 
+    fn qw_list_imports_symbol(import_arg: &str, module: &str, symbol_name: &str) -> bool {
+        let trimmed = import_arg.trim();
+        let Some(rest) = trimmed.strip_prefix("qw") else {
+            return false;
+        };
+        let mut chars = rest.chars();
+        let Some(open) = chars.next() else {
+            return false;
+        };
+        let close = match open {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            '/' => '/',
+            '|' => '|',
+            '!' => '!',
+            _ => return false,
+        };
+        let Some(end_idx) = rest.rfind(close) else {
+            return false;
+        };
+        let content = &rest[open.len_utf8()..end_idx];
+        content
+            .split_whitespace()
+            .any(|tok| tok == symbol_name || tag_imports_symbol(module, tok, symbol_name))
+    }
+
+    fn import_arg_matches_symbol(import_arg: &str, module: &str, symbol_name: &str) -> bool {
+        let bare = import_arg.trim().trim_matches(',').trim_matches('\'').trim_matches('"').trim();
+        bare == symbol_name
+            || tag_imports_symbol(module, bare, symbol_name)
+            || qw_list_imports_symbol(bare, module, symbol_name)
+    }
+
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
         /// Extract the module name from a `require Module;` statement node.
         ///
@@ -1423,29 +1458,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// context).
         fn arg_node_matches_symbol(arg: &Node, module: &str, symbol: &str) -> bool {
             match &arg.kind {
-                NodeKind::String { value, .. } => {
-                    // Strip surrounding single/double quotes that some code
-                    // paths leave in the value (e.g. qw in quotes.rs).
-                    let bare = value.trim_matches('\'').trim_matches('"');
-                    bare == symbol || tag_imports_symbol(module, bare, symbol)
-                }
-                NodeKind::Identifier { name } => {
-                    if name == symbol {
-                        return true;
-                    }
-                    // qw(...) stored as a raw "qw(...)" Identifier string
-                    // (from the Use-node code path that reuses this helper).
-                    if name.starts_with("qw") {
-                        let content = name
-                            .trim_start_matches("qw")
-                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        return content
-                            .split_whitespace()
-                            .any(|tok| tok == symbol || tag_imports_symbol(module, tok, symbol));
-                    }
-                    false
-                }
+                NodeKind::String { value, .. } => import_arg_matches_symbol(value, module, symbol),
+                NodeKind::Identifier { name } => import_arg_matches_symbol(name, module, symbol),
                 NodeKind::ArrayLiteral { elements } => {
                     // qw(...) in expression context → ArrayLiteral of String nodes
                     elements.iter().any(|el| arg_node_matches_symbol(el, module, symbol))
@@ -1548,35 +1562,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                     // Fall through to children
                 } else {
                     for arg in args {
-                        if arg == name {
+                        if import_arg_matches_symbol(arg, module, name) {
                             return Some(module.clone());
-                        }
-                        if tag_imports_symbol(module, arg, name) {
-                            return Some(module.clone());
-                        }
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            for import_token in content.split_whitespace() {
-                                if import_token == name
-                                    || tag_imports_symbol(module, import_token, name)
-                                {
-                                    return Some(module.clone());
-                                }
-                            }
-                        } else {
-                            // Parenthesized import list: use Foo ('bar', 'baz')
-                            // The parser emits each token as a separate arg including commas
-                            // and string literals with their surrounding quotes.
-                            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
-                            if bare == name {
-                                return Some(module.clone());
-                            }
-                            if tag_imports_symbol(module, bare, name) {
-                                return Some(module.clone());
-                            }
                         }
                     }
                 }
