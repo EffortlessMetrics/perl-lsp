@@ -3836,30 +3836,112 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    for (idx, _) in line.match_indices("//") {
-        if is_url_like_hash_comment(line, idx) {
+    let bytes = line.as_bytes();
+    let mut idx = 0;
+
+    while idx + 1 < bytes.len() {
+        if let Some(advance) = consume_rust_literal(line, idx) {
+            idx += advance;
             continue;
         }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
+
+        if bytes[idx] == b'/' && bytes[idx + 1] == b'/' {
+            if is_url_like_hash_comment(line, idx) {
+                idx += 2;
+                continue;
+            }
+            return has_unlinked_token(&line[idx + 2..], token_re);
         }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
+        if bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
+            return has_unlinked_token(&line[idx + 2..], token_re);
         }
+
+        idx += 1;
     }
-    for (idx, _) in line.match_indices("/*") {
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
-    }
+
     let trimmed = line.trim_start();
     if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
         return true;
     }
     false
+}
+
+fn consume_rust_literal(line: &str, start: usize) -> Option<usize> {
+    let bytes = line.as_bytes();
+    if start >= bytes.len() {
+        return None;
+    }
+
+    if let Some((prefix_len, hashes)) = raw_string_prefix(bytes, start) {
+        let content_start = start + prefix_len;
+        let mut idx = content_start;
+        while idx < bytes.len() {
+            if bytes[idx] == b'"' {
+                let hash_start = idx + 1;
+                let hash_end = hash_start + hashes;
+                if hash_end <= bytes.len() && bytes[hash_start..hash_end].iter().all(|b| *b == b'#')
+                {
+                    return Some((hash_end + 1).saturating_sub(start));
+                }
+            }
+            idx += 1;
+        }
+        return Some(bytes.len().saturating_sub(start));
+    }
+
+    if matches!(bytes[start], b'"' | b'\'') {
+        let delimiter = bytes[start];
+        let mut idx = start + 1;
+        let mut escaped = false;
+        while idx < bytes.len() {
+            let byte = bytes[idx];
+            if escaped {
+                escaped = false;
+                idx += 1;
+                continue;
+            }
+            if byte == b'\\' {
+                escaped = true;
+                idx += 1;
+                continue;
+            }
+            if byte == delimiter {
+                return Some(idx + 1 - start);
+            }
+            idx += 1;
+        }
+        return Some(bytes.len().saturating_sub(start));
+    }
+
+    None
+}
+
+fn raw_string_prefix(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    if start >= bytes.len() {
+        return None;
+    }
+
+    let mut idx = start;
+    if bytes[idx] == b'b' {
+        idx += 1;
+    }
+
+    if idx >= bytes.len() || bytes[idx] != b'r' {
+        return None;
+    }
+    idx += 1;
+
+    let mut hashes = 0;
+    while idx < bytes.len() && bytes[idx] == b'#' {
+        hashes += 1;
+        idx += 1;
+    }
+
+    if idx >= bytes.len() || bytes[idx] != b'"' {
+        return None;
+    }
+
+    Some((idx + 1 - start, hashes))
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -3882,13 +3964,6 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
     }
     let before = line.as_bytes()[slash_idx - 1];
     matches!(before, b'/' | b':' | b'"')
-}
-
-fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
-    if comment_idx == 0 {
-        return false;
-    }
-    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4160,6 +4235,18 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO still literal\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = br#\"bytes /* FIXME still literal */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO\"; // FIXME: real comment",
             &todo_re
         ));
 
