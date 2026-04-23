@@ -263,6 +263,39 @@ sub test_function {
 }
 
 #[test]
+fn test_double_initialize_is_rejected_per_lsp_spec() {
+    let server = LspServer::new();
+
+    let first = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "initialize".into(),
+        params: Some(json!({
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    });
+
+    let second = server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "initialize".into(),
+        params: Some(json!({
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    });
+
+    let first_response = first.expect("first initialize should return a response");
+    assert!(first_response.error.is_none(), "first initialize should succeed");
+
+    let second_response = second.expect("second initialize should return an error response");
+    let error = second_response.error.expect("second initialize should error");
+    assert_eq!(error.code, -32600, "second initialize must be InvalidRequest");
+    assert_eq!(error.message, "initialize may only be sent once");
+}
+
+#[test]
 fn test_position_encoding_advertised() -> Result<(), Box<dyn std::error::Error>> {
     // This test verifies that the server advertises UTF-16 position encoding
     let _server = LspServer::new();
