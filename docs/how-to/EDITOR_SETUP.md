@@ -24,6 +24,7 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
+| Cursor | use VS Code-compatible settings with `perllsp --stdio` | [docs/EDITORS/CURSOR_SETUP.md](../EDITORS/CURSOR_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
@@ -36,6 +37,14 @@ perllsp --health
 The repo-maintained extension is the easiest route. If you prefer a manual
 configuration, set the command to `perllsp --stdio` and keep the workspace
 root pointed at the project root.
+
+### Cursor
+
+Cursor uses the same extension model as VS Code. Install the `perl-lsp`
+extension from the marketplace, then configure `perllsp --stdio` in Cursor's
+workspace settings when you want to use a locally installed server binary.
+See [docs/EDITORS/CURSOR_SETUP.md](../EDITORS/CURSOR_SETUP.md) for a complete
+walkthrough.
 
 ### Neovim
 
@@ -68,6 +77,8 @@ Perl source files.
 
 - If the server is not found, re-run `perllsp --version` in a shell and fix
   `PATH` first.
+- If Cursor is launched from a desktop app and cannot find `perllsp`, set the
+  explicit binary path in Cursor settings (`perl-lsp.serverPath`).
 - If the server starts but the editor stays idle, check the editor's LSP log
   and confirm the workspace root is correct.
 - If completions or diagnostics are missing, move to
