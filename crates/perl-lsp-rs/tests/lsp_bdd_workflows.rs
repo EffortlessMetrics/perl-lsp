@@ -1907,9 +1907,13 @@ print $value + $delta;
         before_data, after_data,
         "semantic tokens should change after incremental edit; before={before_data:?} after={after_data:?}"
     );
+    // The after content introduces $delta (appears twice: declaration and use), so the
+    // encoded token stream must be strictly longer — each token is 5 u64 values in
+    // LSP's relative-encoded format. A '>=' allows the degenerate case where tokens
+    // shrink to exactly the same count, so we require strict growth.
     assert!(
-        after_data.len() >= before_data.len(),
-        "adding a local symbol should not shrink semantic token payload; before={} after={}",
+        after_data.len() > before_data.len(),
+        "adding two $delta references must grow the token payload; before={} after={}",
         before_data.len(),
         after_data.len()
     );
