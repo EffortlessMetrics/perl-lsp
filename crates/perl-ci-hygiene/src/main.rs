@@ -3935,14 +3935,14 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
         return false;
     }
     let before = line.as_bytes()[slash_idx - 1];
-    matches!(before, b'/' | b':' | b'"')
+    matches!(before, b'/' | b':')
 }
 
 fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
     if comment_idx == 0 {
         return false;
     }
-    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+    matches!(line.as_bytes()[comment_idx - 1], b'#')
 }
 
 fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
@@ -4324,6 +4324,16 @@ mod tests {
             "let s = \"safe literal\"; // TODO: follow up",
             &todo_re
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_handles_comments_adjacent_to_literals() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line("let s = \"done\"// TODO: investigate", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("let ch = 'x'// FIXME: investigate", &todo_re));
 
         Ok(())
     }
