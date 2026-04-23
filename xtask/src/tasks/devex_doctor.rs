@@ -36,13 +36,15 @@ pub fn run() -> Result<()> {
     println!();
     println!("== Rust components ==");
     if has_command("rustup") {
-        if is_component_installed("rustfmt") {
+        let installed_components = get_installed_rustup_components();
+
+        if is_component_installed("rustfmt", installed_components.as_deref()) {
             pass("rustup component installed: rustfmt");
         } else {
             warn("rustup component missing: rustfmt (install: rustup component add rustfmt)");
         }
 
-        if is_component_installed("clippy") {
+        if is_component_installed("clippy", installed_components.as_deref()) {
             pass("rustup component installed: clippy");
         } else {
             warn("rustup component missing: clippy (install: rustup component add clippy)");
@@ -94,7 +96,7 @@ fn check_command(program: &str, label: &str, missing_required: &mut bool) {
     if has_command(program) {
         pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program.to_string())));
     } else {
-        warn(&format!("{label}: not found"));
+        warn(&format!("{label}: not found{}", install_hint(program)));
         *missing_required = true;
     }
 }
@@ -103,7 +105,18 @@ fn check_command_optional(program: &str, label: &str) {
     if has_command(program) {
         pass(&format!("{label}: found ({})", command_path(program).unwrap_or(program.to_string())));
     } else {
-        warn(&format!("{label}: not found"));
+        warn(&format!("{label}: not found{}", install_hint(program)));
+    }
+}
+
+fn install_hint(program: &str) -> &'static str {
+    match program {
+        "cargo" | "rustfmt" | "rustup" => " (install via https://rustup.rs)",
+        "just" => " (install: cargo install just)",
+        "cargo-audit" => " (install: cargo install cargo-audit)",
+        "rg" => " (install ripgrep via your package manager)",
+        "nix" => " (install from https://nixos.org/download/)",
+        _ => "",
     }
 }
 
@@ -147,12 +160,18 @@ fn command_path(program: &str) -> Option<String> {
     })
 }
 
-fn is_component_installed(component: &str) -> bool {
-    let output = match Command::new("rustup").args(["component", "list", "--installed"]).output() {
-        Ok(output) if output.status.success() => output,
-        _ => return false,
+fn get_installed_rustup_components() -> Option<String> {
+    let output = Command::new("rustup").args(["component", "list", "--installed"]).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn is_component_installed(component: &str, installed_components: Option<&str>) -> bool {
+    let Some(lines) = installed_components else {
+        return false;
     };
-    let lines = String::from_utf8_lossy(&output.stdout);
     lines.lines().any(|line| {
         let value = line.split_whitespace().next().unwrap_or("");
         value == component || value.starts_with(&(format!("{component}-")))
