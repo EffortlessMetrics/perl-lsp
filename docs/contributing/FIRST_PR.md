@@ -9,8 +9,10 @@ git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
 ```
 
-No submodules to init. The `tree-sitter-perl/` directory is legacy C code excluded from the
-default build — you can ignore it.
+No Git submodules to initialize — this repository does not use a `.gitmodules` file.
+
+The `tree-sitter-perl/` directory is vendored legacy C code and is excluded from the
+default Rust build, so you can ignore it for normal contributor workflows.
 
 ## 2. Set up the dev environment
 
