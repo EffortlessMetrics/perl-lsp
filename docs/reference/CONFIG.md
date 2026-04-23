@@ -864,6 +864,37 @@ inlayHints.enabled = true
       (useSystemInc . :json-false)))))
 ```
 
+#### Zed (`settings.json`)
+
+```json
+{
+  "languages": {
+    "Perl": {
+      "language_servers": ["perllsp"]
+    }
+  },
+  "lsp": {
+    "perllsp": {
+      "binary": {
+        "path": "perllsp",
+        "arguments": ["--stdio"]
+      },
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false
+          },
+          "inlayHints": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 #### Sublime Text (LSP package)
 
 ```json
