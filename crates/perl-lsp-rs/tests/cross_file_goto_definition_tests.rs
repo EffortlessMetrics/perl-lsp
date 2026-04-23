@@ -2572,3 +2572,69 @@ print My::Config::MAX_RETRIES;
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Test: issue #3476 — require Module; Module->import('sym') bareword goto-def
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_require_manual_import_bareword_navigates_to_exporter_sub() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Exporter.pm",
+        r#"package My::Exporter;
+use strict;
+use warnings;
+
+sub greet {
+    return "hello";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Exporter.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Exporter.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+
+require My::Exporter;
+My::Exporter->import('greet');
+my $value = greet();
+"#;
+    let caller_uri = workspace.uri("main.pl");
+    harness.open(&caller_uri, caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "greet()")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": caller_uri},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for require/manual import bareword");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Exporter.pm") || uri.contains("My%2FExporter.pm"),
+        "Definition should point to My/Exporter.pm, got: {uri}"
+    );
+
+    Ok(())
+}
