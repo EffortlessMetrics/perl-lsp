@@ -24,6 +24,7 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
+| PearAI | use the VS Code flow; install extension from Open VSX/VSIX and set `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
@@ -36,6 +37,13 @@ perllsp --health
 The repo-maintained extension is the easiest route. If you prefer a manual
 configuration, set the command to `perllsp --stdio` and keep the workspace
 root pointed at the project root.
+
+### PearAI
+
+PearAI is VS Code-compatible, so the same `perllsp --stdio` configuration and
+settings schema apply. In environments where the VS Code Marketplace is not
+available, install the extension from Open VSX or a `.vsix`, then reuse the VS
+Code settings examples unchanged.
 
 ### Neovim
 
