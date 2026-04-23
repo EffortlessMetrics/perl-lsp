@@ -88,7 +88,8 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         content: &str,
         options: &FormattingOptions,
     ) -> Result<FormattedDocument, FormattingError> {
-        let formatted = self.apply_lsp_whitespace_options(self.run_perltidy(content, options)?, options, true);
+        let formatted =
+            self.apply_lsp_whitespace_options(self.run_perltidy(content, options)?, options, true);
 
         if formatted == content {
             return Ok(FormattedDocument { text: formatted, edits: vec![] });
@@ -123,8 +124,11 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         let text_to_format = lines[start_line..=end_line].join("\n");
-        let formatted =
-            self.apply_lsp_whitespace_options(self.run_perltidy(&text_to_format, options)?, options, false);
+        let formatted = self.apply_lsp_whitespace_options(
+            self.run_perltidy(&text_to_format, options)?,
+            options,
+            false,
+        );
 
         if formatted == text_to_format {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
@@ -226,7 +230,7 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
             let had_terminal_newline = formatted.ends_with('\n');
             let trimmed_lines = formatted
                 .lines()
-                .map(|line| line.trim_end_matches([' ', '\t']))
+                .map(|line| line.trim_end_matches([' ', '\t', '\r']))
                 .collect::<Vec<_>>();
             formatted = trimmed_lines.join("\n");
             if had_terminal_newline {
@@ -236,12 +240,19 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
 
         if full_document {
             if options.trim_final_newlines.unwrap_or(false) {
-                while formatted.ends_with("\n\n") {
+                // LSP spec: "Trim all newlines after the final non-newline character."
+                // Pop every trailing '\n' (and a preceding '\r' if CRLF) so zero remain.
+                while formatted.ends_with('\n') {
                     formatted.pop();
+                    if formatted.ends_with('\r') {
+                        formatted.pop();
+                    }
                 }
             }
 
-            if options.insert_final_newline.unwrap_or(false) && !formatted.is_empty() && !formatted.ends_with('\n')
+            if options.insert_final_newline.unwrap_or(false)
+                && !formatted.is_empty()
+                && !formatted.ends_with('\n')
             {
                 formatted.push('\n');
             }
@@ -278,8 +289,8 @@ mod tests {
     }
 
     #[test]
-    fn format_range_trims_trailing_whitespace_when_requested() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn format_range_trims_trailing_whitespace_when_requested()
+    -> Result<(), Box<dyn std::error::Error>> {
         let runtime = MockSubprocessRuntime::new();
         runtime.add_response(MockResponse::success("sub test {\n    return $x;   \n}\n"));
         let provider = FormattingProvider::new(runtime);
@@ -298,6 +309,112 @@ mod tests {
 
         assert_eq!(result.edits.len(), 1);
         assert_eq!(result.edits[0].new_text, "sub test {\n    return $x;\n}\n");
+        Ok(())
+    }
+
+    // Regression: `trim_final_newlines` previously stopped when a single trailing
+    // `\n` remained (used `ends_with("\n\n")`), producing output that still had one
+    // trailing newline even when the caller asked for zero. Per the LSP spec
+    // (`trimFinalNewlines`): "Trim all newlines after the final non-newline
+    // character." With `insert_final_newline=false` this must remove every
+    // trailing newline.
+    #[test]
+    fn trim_final_newlines_removes_all_trailing_newlines() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("foo;\n\n\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(false),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("foo;", &options)?;
+
+        assert_eq!(result.text, "foo;", "expected zero trailing newlines");
+        Ok(())
+    }
+
+    // Regression: CRLF inputs. `trim_trailing_whitespace` should strip `\r`
+    // (not just spaces/tabs) so the line doesn't retain a bare carriage return
+    // after perltidy emits CRLF-normalized output.
+    #[test]
+    fn trim_trailing_whitespace_handles_crlf_inputs() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("foo;   \r\nbar;\t\r\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(false),
+        };
+
+        let result = provider.format_document("foo;\nbar;", &options)?;
+
+        assert!(
+            !result.text.contains('\r'),
+            "expected no carriage returns in trimmed output, got {:?}",
+            result.text
+        );
+        assert_eq!(result.text, "foo;\nbar;\n");
+        Ok(())
+    }
+
+    // Empty-document path: all flags set must no-op without panicking and
+    // without inserting a spurious trailing newline (the `insert_final_newline`
+    // branch is gated on `!formatted.is_empty()`).
+    #[test]
+    fn empty_document_is_noop_with_all_flags_set() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success(""));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("", &options)?;
+
+        assert_eq!(result.text, "", "empty document must stay empty");
+        assert!(result.edits.is_empty(), "no edits expected for empty document");
+        Ok(())
+    }
+
+    // Idempotence: applying the LSP whitespace pass twice must yield the same
+    // output as applying it once. Catches accumulator-style bugs where repeated
+    // application corrupts the text.
+    #[test]
+    fn lsp_whitespace_options_are_idempotent() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        // Same perltidy output for both passes.
+        runtime.add_response(MockResponse::success("my $x = 1;   \nmy $y = 2;\n\n\n"));
+        runtime.add_response(MockResponse::success("my $x = 1;\nmy $y = 2;\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let first = provider.format_document("my $x = 1;\nmy $y = 2;", &options)?;
+        let second = provider.format_document(&first.text, &options)?;
+
+        assert_eq!(first.text, "my $x = 1;\nmy $y = 2;\n");
+        assert_eq!(second.text, first.text, "second pass must match first");
         Ok(())
     }
 }
