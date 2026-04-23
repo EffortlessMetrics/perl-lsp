@@ -66,8 +66,8 @@ fn runtime_completion_lookup_is_case_sensitive() {
 fn field_keyword_cross_list_membership() {
     assert!(is_keyword("field"));
     assert!(is_lexer_keyword("field"));
-    // field is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("field"));
+    // field is offered in editor completion but not the runtime/rename/parser buckets.
+    assert!(is_lsp_completion_keyword("field"));
     assert!(!is_dap_completion_keyword("field"));
     assert!(!is_lsp_runtime_completion_keyword("field"));
     assert!(!is_rename_keyword("field"));
@@ -78,8 +78,8 @@ fn field_keyword_cross_list_membership() {
 fn class_keyword_cross_list_membership() {
     assert!(is_keyword("class"));
     assert!(is_lexer_keyword("class"));
-    // class is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("class"));
+    // class is offered in editor completion but not the runtime/rename/parser buckets.
+    assert!(is_lsp_completion_keyword("class"));
     assert!(!is_dap_completion_keyword("class"));
     assert!(!is_lsp_runtime_completion_keyword("class"));
     assert!(!is_rename_keyword("class"));
@@ -90,8 +90,8 @@ fn class_keyword_cross_list_membership() {
 fn method_keyword_cross_list_membership() {
     assert!(is_keyword("method"));
     assert!(is_lexer_keyword("method"));
-    // method is not in completion/rename/parser lists
-    assert!(!is_lsp_completion_keyword("method"));
+    // method is offered in editor completion but not the runtime/rename/parser buckets.
+    assert!(is_lsp_completion_keyword("method"));
     assert!(!is_dap_completion_keyword("method"));
     assert!(!is_lsp_runtime_completion_keyword("method"));
     assert!(!is_rename_keyword("method"));
@@ -167,9 +167,12 @@ fn try_catch_finally_cross_list_membership() {
         assert!(is_keyword(kw), "{kw} should be in KEYWORDS");
         assert!(is_lexer_keyword(kw), "{kw} should be in LEXER_KEYWORDS");
     }
-    // But not in completion or rename lists
+    // These are offered in editor completion, but not runtime or rename lists.
     for kw in ["try", "catch", "finally"] {
-        assert!(!is_lsp_completion_keyword(kw), "{kw} should not be in LSP_COMPLETION_KEYWORDS");
+        assert!(is_lsp_completion_keyword(kw), "{kw} should be in LSP_COMPLETION_KEYWORDS");
+    }
+    // Not in DAP/runtime/rename lists.
+    for kw in ["try", "catch", "finally"] {
         assert!(!is_dap_completion_keyword(kw), "{kw} should not be in DAP_COMPLETION_KEYWORDS");
         assert!(
             !is_lsp_runtime_completion_keyword(kw),
