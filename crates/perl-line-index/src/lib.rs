@@ -13,7 +13,7 @@
 pub struct LineIndex {
     /// Byte offset of each line start.
     line_starts: Vec<usize>,
-    /// Total byte length of the indexed text.
+    /// Total UTF-8 byte length of the indexed text.
     text_len: usize,
 }
 
@@ -39,6 +39,10 @@ impl LineIndex {
     }
 
     /// Convert `(line, column)` back to byte offset.
+    ///
+    /// Returns `None` when the line is out of range or when the column extends
+    /// past the start of the next line (or the end of the document for the
+    /// final line).
     #[must_use]
     pub fn position_to_byte(&self, line: usize, column: usize) -> Option<usize> {
         let start = *self.line_starts.get(line)?;

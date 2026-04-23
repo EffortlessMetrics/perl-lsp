@@ -15,6 +15,13 @@ fn out_of_bounds_line_returns_none() {
 }
 
 #[test]
+fn out_of_bounds_column_returns_none() {
+    let index = LineIndex::new("one\ntwo");
+    assert_eq!(index.position_to_byte(0, 5), None);
+    assert_eq!(index.position_to_byte(1, 4), None);
+}
+
+#[test]
 fn checked_position_rejects_columns_past_line_end() {
     // "abc\ndef": line 0 = "abc\n" (bytes 0-3), line 1 = "def" (bytes 4-6)
     let index = LineIndex::new("abc\ndef");
