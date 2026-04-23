@@ -83,3 +83,68 @@ use Lib::Thing;\n\
 
     assert_eq!(include_paths, vec!["second".to_string()]);
 }
+
+#[test]
+fn short_findbin_exports_are_treated_as_findbin_paths() {
+    // Both double-quoted (interpolating) and single-quoted (literal in real Perl)
+    // forms are recognised; the extractor is intentionally quote-type-agnostic.
+    let source = "\
+use lib '$Bin/../lib';\n\
+use lib \"$RealBin/../vendor\";\n\
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![UseLibPath { path: "../lib".to_string(), from_findbin: true }]),
+            UseLibAction::Add(vec![UseLibPath {
+                path: "../vendor".to_string(),
+                from_findbin: true,
+            }]),
+        ]
+    );
+}
+
+#[test]
+fn short_findbin_prefix_does_not_match_longer_variable_name() {
+    // `$BinDir` and `$RealBinPath` look like they start with `$Bin`/`$RealBin`
+    // but are different variables — word-boundary check must reject them.
+    let source = "\
+use lib \"$BinDir/lib\";\n\
+use lib \"$RealBinPath/vendor\";\n\
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    // Both paths should be treated as plain (non-FindBin) string paths.
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![UseLibPath {
+                path: "$BinDir/lib".to_string(),
+                from_findbin: false,
+            }]),
+            UseLibAction::Add(vec![UseLibPath {
+                path: "$RealBinPath/vendor".to_string(),
+                from_findbin: false,
+            }]),
+        ]
+    );
+}
+
+#[test]
+fn braced_short_findbin_exports_are_treated_as_findbin_paths() {
+    let source = "use lib \"${Bin}/../lib\";\n";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![UseLibAction::Add(vec![UseLibPath {
+            path: "../lib".to_string(),
+            from_findbin: true,
+        }]),]
+    );
+}
