@@ -1987,4 +1987,89 @@ if ($condition) {
 
         Ok(())
     }
+
+    /// Test whitespace before operator reuses tree
+    #[test]
+    fn test_whitespace_before_operator_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(6, 6, 9, Position::new(6, 1, 7), Position::new(6, 1, 7), Position::new(9, 1, 10)));
+        let source2 = "my $x   = 42;";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_comment_insertion_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(10, 11, 24, Position::new(10, 1, 11), Position::new(11, 1, 12), Position::new(24, 1, 25)));
+        let source2 = "my $x = 42; # comment";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_trailing_whitespace_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(11, 11, 16, Position::new(11, 1, 12), Position::new(11, 1, 12), Position::new(16, 1, 17)));
+        let source2 = "my $x = 42;     ";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_newline_insertion_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(11, 11, 12, Position::new(11, 1, 12), Position::new(11, 1, 12), Position::new(12, 2, 1)));
+        let source2 = "my $x = 42;\n";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_whitespace_deletion_reuses_tree() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my  $x  =  42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(3, 5, 4, Position::new(3, 1, 4), Position::new(5, 1, 6), Position::new(4, 1, 5)));
+        let source2 = "my $x  =  42;";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_whitespace_at_statement_boundary() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "print 'hello';my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(14, 14, 15, Position::new(14, 1, 15), Position::new(14, 1, 15), Position::new(15, 1, 16)));
+        let source2 = "print 'hello'; my $x = 42;";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_whitespace_edit_checks_both_old_and_new() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;";
+        parser.parse(source1)?;
+        parser.edit(Edit::new(6, 7, 8, Position::new(6, 1, 7), Position::new(7, 1, 8), Position::new(8, 1, 9)));
+        let source2 = "my $x=  42;";
+        parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
 }
