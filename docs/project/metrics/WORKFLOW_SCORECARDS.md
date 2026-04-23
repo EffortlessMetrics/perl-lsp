@@ -56,7 +56,16 @@ workflow layer exists to answer the narrower product question:
 
 ## Current Scope
 
-The schema and fixture matrix land before a full measured emitter. That keeps
-the contract honest: the workflow inventory is executable today, the current
-component rows are backed by exact scenario assertions today, and the broader
-UX scorecard can expand only when those stronger assertions exist.
+The status receipt now tracks three concrete confidence signals:
+
+- Tier C manual editor smoke workflow count (from
+  `docs/project/protocols/verification.md`)
+- first-5-minutes harness scenario inventory (from
+  `crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs`)
+- UX P0 issue burndown counts (from
+  `docs/project/PRE_ANNOUNCEMENT_CHECKLIST.md`)
+
+This keeps the contract honest: the workflow inventory is executable today, the
+current component rows are backed by exact scenario assertions today, and the
+confidence scaffolding is now tracked as explicit machine-readable counts rather
+than a prose-only qualitative note.

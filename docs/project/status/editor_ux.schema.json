@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "confidence_signals",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_signals"
     },
     "scorecard": {
       "type": "string",
@@ -106,6 +107,49 @@
         },
         "additionalProperties": false
       }
+    },
+    "confidence_signals": {
+      "type": "object",
+      "required": [
+        "manual_editor_smoke",
+        "first_5_minutes_harness",
+        "ux_p0_issue_burndown"
+      ],
+      "properties": {
+        "manual_editor_smoke": {
+          "type": "object",
+          "required": ["workflow_count", "source", "tracking"],
+          "properties": {
+            "workflow_count": { "type": "integer", "minimum": 0 },
+            "source": { "type": "string" },
+            "tracking": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "first_5_minutes_harness": {
+          "type": "object",
+          "required": ["scenario_count", "source", "tracking"],
+          "properties": {
+            "scenario_count": { "type": "integer", "minimum": 0 },
+            "source": { "type": "string" },
+            "tracking": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "ux_p0_issue_burndown": {
+          "type": "object",
+          "required": ["tracked_total", "merged", "open", "source", "tracking"],
+          "properties": {
+            "tracked_total": { "type": ["integer", "null"], "minimum": 0 },
+            "merged": { "type": ["integer", "null"], "minimum": 0 },
+            "open": { "type": ["integer", "null"], "minimum": 0 },
+            "source": { "type": "string" },
+            "tracking": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

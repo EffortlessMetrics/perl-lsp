@@ -5,9 +5,11 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
 
@@ -122,6 +124,64 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct UxP0Burndown {
+    total: usize,
+    merged: usize,
+    open: usize,
+}
+
+fn manual_smoke_workflow_count(root: &Path) -> usize {
+    let verification = root.join("docs/project/protocols/verification.md");
+    let Ok(raw) = fs::read_to_string(verification) else {
+        return 0;
+    };
+
+    static MANUAL_SMOKE_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"Manual editor smoke test:\s*(?P<steps>[^\n]+)")
+            .expect("manual smoke regex must compile")
+    });
+
+    let Some(caps) = MANUAL_SMOKE_RE.captures(&raw) else {
+        return 0;
+    };
+
+    let Some(steps) = caps.name("steps").map(|m| m.as_str()) else {
+        return 0;
+    };
+
+    steps.split(',').map(str::trim).filter(|step| !step.is_empty()).count()
+}
+
+fn ux_p0_burndown(root: &Path) -> Option<UxP0Burndown> {
+    let checklist = root.join("docs/project/PRE_ANNOUNCEMENT_CHECKLIST.md");
+    let raw = fs::read_to_string(checklist).ok()?;
+
+    static UX_P0_TOTAL_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"Current status:\s*⚠\s*—\s*(\d+)\s+UX P0 items tracked")
+            .expect("ux p0 total regex must compile")
+    });
+    static UX_P0_MERGED_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^\s*-\s*✓\s*#\d+").expect("ux p0 merged regex must compile"));
+    static UX_P0_OPEN_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^\s*-\s*⚠\s*#\d+").expect("ux p0 open regex must compile"));
+
+    let total = UX_P0_TOTAL_RE.captures(&raw)?.get(1)?.as_str().parse::<usize>().ok()?;
+
+    let mut merged = 0;
+    let mut open = 0;
+    for line in raw.lines() {
+        if UX_P0_MERGED_RE.is_match(line) {
+            merged += 1;
+        }
+        if UX_P0_OPEN_RE.is_match(line) {
+            open += 1;
+        }
+    }
+
+    Some(UxP0Burndown { total, merged, open })
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,10 +229,12 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let manual_smoke_steps = manual_smoke_workflow_count(root);
+    let ux_p0 = ux_p0_burndown(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_signals",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -196,6 +258,25 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "confidence_signals": {
+            "manual_editor_smoke": {
+                "workflow_count": manual_smoke_steps,
+                "source": "docs/project/protocols/verification.md",
+                "tracking": "counted from Tier C workflow list",
+            },
+            "first_5_minutes_harness": {
+                "scenario_count": scenario_count,
+                "source": "crates/perl-lsp-ux-tests/tests",
+                "tracking": "counted from ux_scenario_*.rs files",
+            },
+            "ux_p0_issue_burndown": {
+                "tracked_total": ux_p0.as_ref().map(|v| v.total),
+                "merged": ux_p0.as_ref().map(|v| v.merged),
+                "open": ux_p0.as_ref().map(|v| v.open),
+                "source": "docs/project/PRE_ANNOUNCEMENT_CHECKLIST.md",
+                "tracking": "counted from UX P0 status bullets",
+            },
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -258,7 +339,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_signals");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -280,6 +361,39 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["confidence_signals"]["manual_editor_smoke"]["workflow_count"].as_u64(),
+            Some(manual_smoke_workflow_count(&root) as u64)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_manual_smoke_workflow_count_parses_tier_c_list() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let protocol_path = dir.path().join("docs/project/protocols");
+        fs::create_dir_all(&protocol_path)?;
+        fs::write(
+            protocol_path.join("verification.md"),
+            "## Tier C\nManual editor smoke test: diagnostics, completion, hover, go-to-definition, rename\n",
+        )?;
+        assert_eq!(manual_smoke_workflow_count(dir.path()), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_ux_p0_burndown_extracts_counts() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let docs_path = dir.path().join("docs/project");
+        fs::create_dir_all(&docs_path)?;
+        fs::write(
+            docs_path.join("PRE_ANNOUNCEMENT_CHECKLIST.md"),
+            "Current status: ⚠ — 7 UX P0 items tracked; status as of 2026-04-08:\n- ✓ #1 merged\n- ⚠ #2 open\n- ⚠ #3 open\n",
+        )?;
+        let parsed = ux_p0_burndown(dir.path()).ok_or_else(|| eyre!("expected ux p0 parse"))?;
+        assert_eq!(parsed.total, 7);
+        assert_eq!(parsed.merged, 1);
+        assert_eq!(parsed.open, 2);
         Ok(())
     }
 }

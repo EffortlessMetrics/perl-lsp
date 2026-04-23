@@ -1,4 +1,23 @@
 {
+  "confidence_signals": {
+    "first_5_minutes_harness": {
+      "scenario_count": 17,
+      "source": "crates/perl-lsp-ux-tests/tests",
+      "tracking": "counted from ux_scenario_*.rs files"
+    },
+    "manual_editor_smoke": {
+      "source": "docs/project/protocols/verification.md",
+      "tracking": "counted from Tier C workflow list",
+      "workflow_count": 5
+    },
+    "ux_p0_issue_burndown": {
+      "merged": 3,
+      "open": 4,
+      "source": "docs/project/PRE_ANNOUNCEMENT_CHECKLIST.md",
+      "tracked_total": 7,
+      "tracking": "counted from UX P0 status bullets"
+    }
+  },
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
@@ -28,7 +47,7 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_signals",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
