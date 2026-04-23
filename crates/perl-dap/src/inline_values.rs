@@ -45,6 +45,9 @@ fn normalize_line_bounds(
 
     let start_1_based = start_line.max(1) as usize;
     let end_1_based = end_line.max(1) as usize;
+    if start_1_based > line_count {
+        return None;
+    }
 
     let start_idx = start_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
     let end_idx = end_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
@@ -203,11 +206,18 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         return Vec::new();
     };
     let mut inline_values = Vec::new();
+    let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
                 let var_text = m.as_str();
+                if is_special_variable_name(var_text) {
+                    continue;
+                }
+                if !seen_on_line.insert((idx, var_text.to_string())) {
+                    continue;
+                }
                 let column = (m.start() + 1) as i64;
                 inline_values.push(InlineValueText {
                     line: (idx + 1) as i64,
@@ -355,6 +365,14 @@ mod tests {
     }
 
     #[test]
+    fn test_out_of_range_start_line_returns_empty() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        assert!(extract_variable_names(source, 100, 200).is_empty());
+        assert!(collect_inline_values_with_runtime(source, 100, 200, None).is_empty());
+        assert!(collect_inline_values(source, 100, 200).is_empty());
+    }
+
+    #[test]
     fn test_runtime_inline_value_for_namespaced_scalar() {
         let source = "our $Foo::bar = 1;";
         let mut rv = HashMap::new();
@@ -363,5 +381,21 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$Foo::bar = 42");
+    }
+
+    #[test]
+    fn test_collect_inline_values_legacy_deduplicates_per_line() {
+        let source = "$x = $x + $x;";
+        let values = collect_inline_values(source, 1, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$x = ?");
+    }
+
+    #[test]
+    fn test_collect_inline_values_legacy_excludes_special_scalars() {
+        let source = "warn $!; my $value = $_;";
+        let values = collect_inline_values(source, 1, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$value = ?");
     }
 }
