@@ -46,11 +46,16 @@
 
 pub mod client;
 pub mod env;
+pub mod navigation;
 pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
+pub use navigation::{
+    NavigationTarget, all_locations_or_links, collect_navigation_targets, has_target_in_file,
+    has_target_start_line,
+};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
@@ -403,29 +408,13 @@ impl UxHarness {
 
     /// Request go-to-definition.
     pub fn definition(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
-        let uri = self.workspace.uri(relative_path);
-        let resp = self.client.request(
+        self.request_locations(
             "textDocument/definition",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character }
-            }),
-            self.config.timeout,
-        )?;
-        if resp.get("error").is_some() {
-            return Err(anyhow!("definition returned error: {}", resp["error"]));
-        }
-        match resp["result"].as_array() {
-            Some(locs) => Ok(locs.clone()),
-            None => {
-                if resp["result"].is_null() {
-                    Ok(Vec::new())
-                } else {
-                    // Single location object
-                    Ok(vec![resp["result"].clone()])
-                }
-            }
-        }
+            "definition",
+            relative_path,
+            line,
+            character,
+        )
     }
 
     /// Request go-to-declaration.
@@ -435,29 +424,28 @@ impl UxHarness {
         line: u32,
         character: u32,
     ) -> Result<Vec<Value>> {
+        self.request_locations(
+            "textDocument/declaration",
+            "declaration",
+            relative_path,
+            line,
+            character,
+        )
+    }
+
+    /// Request find-references.
+    pub fn references(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
-            "textDocument/declaration",
+            "textDocument/references",
             json!({
                 "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character }
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": true }
             }),
             self.config.timeout,
         )?;
-        if resp.get("error").is_some() {
-            return Err(anyhow!("declaration returned error: {}", resp["error"]));
-        }
-        match resp["result"].as_array() {
-            Some(locs) => Ok(locs.clone()),
-            None => {
-                if resp["result"].is_null() {
-                    Ok(Vec::new())
-                } else {
-                    // Single location object
-                    Ok(vec![resp["result"].clone()])
-                }
-            }
-        }
+        normalize_location_response(&resp, "references")
     }
 
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
@@ -468,6 +456,26 @@ impl UxHarness {
     /// subsequent `assert_no_crash` / `assert_message_contains` calls.
     pub fn collect_notifications(&self) -> Vec<LspEvent> {
         self.client.drain_events()
+    }
+
+    fn request_locations(
+        &self,
+        method: &str,
+        label: &str,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            method,
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+            self.config.timeout,
+        )?;
+        normalize_location_response(&resp, label)
     }
 
     /// Clone pending server-initiated messages **without** removing them from
@@ -551,6 +559,22 @@ impl UxHarness {
     /// Returns the root URI of the workspace (useful for the `rootUri` initialize param).
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
+    }
+}
+
+fn normalize_location_response(resp: &Value, label: &str) -> Result<Vec<Value>> {
+    if resp.get("error").is_some() {
+        return Err(anyhow!("{label} returned error: {}", resp["error"]));
+    }
+    match resp["result"].as_array() {
+        Some(locs) => Ok(locs.clone()),
+        None => {
+            if resp["result"].is_null() {
+                Ok(Vec::new())
+            } else {
+                Ok(vec![resp["result"].clone()])
+            }
+        }
     }
 }
 
