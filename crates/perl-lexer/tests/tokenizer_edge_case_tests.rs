@@ -171,6 +171,13 @@ fn ts_substitution_with_modifiers() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn ts_substitution_colon_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+    let kind = first_kind("s:old:new:");
+    assert_eq!(kind, TokenKind::Substitution, "s:...:...: should be Substitution");
+    Ok(())
+}
+
+#[test]
 fn ts_transliteration_pipe() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("tr|a-z|A-Z|");
     assert_eq!(kind, TokenKind::Transliteration, "tr|...|...| should be Transliteration");
@@ -178,9 +185,23 @@ fn ts_transliteration_pipe() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn ts_transliteration_semicolon_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+    let kind = first_kind("tr;a-z;A-Z;");
+    assert_eq!(kind, TokenKind::Transliteration, "tr;...;...; should be Transliteration");
+    Ok(())
+}
+
+#[test]
 fn ts_transliteration_y_alias() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("y/a-z/A-Z/");
     assert_eq!(kind, TokenKind::Transliteration, "y/.../.../ should be Transliteration");
+    Ok(())
+}
+
+#[test]
+fn ts_fat_arrow_autoquote_not_substitution() -> Result<(), Box<dyn std::error::Error>> {
+    let kind = first_kind("s=>1");
+    assert_eq!(kind, TokenKind::Identifier, "s=> should remain fat-arrow autoquote identifier");
     Ok(())
 }
 

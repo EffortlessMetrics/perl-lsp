@@ -2046,30 +2046,17 @@ impl<'a> PerlLexer<'a> {
             // Check for substitution/transliteration operators
             // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if !self.after_arrow && matches!(text, "s" | "tr" | "y") {
+            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y")
+            {
                 if let Some(next) = self.current_char() {
-                    // Check if followed by a delimiter
-                    if matches!(
-                        next,
-                        '/' | '|'
-                            | '\''
-                            | '{'
-                            | '['
-                            | '('
-                            | '<'
-                            | '!'
-                            | '#'
-                            | '@'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '+'
-                            | '='
-                            | '~'
-                            | '`'
-                    ) {
+                    // Check if followed by a valid delimiter while preserving fat-arrow
+                    // autoquoting (`s=>1`, `tr=>2`, `y=>3`).
+                    let following = self
+                        .input
+                        .get(self.position + next.len_utf8()..)
+                        .and_then(|s| s.chars().next());
+                    let is_fat_arrow = next == '=' && following == Some('>');
+                    if Self::is_quote_delim(next) && !is_fat_arrow {
                         match text {
                             "s" => {
                                 return self.parse_substitution(start);
