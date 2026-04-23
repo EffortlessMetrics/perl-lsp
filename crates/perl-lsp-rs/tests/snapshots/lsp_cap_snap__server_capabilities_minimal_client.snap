@@ -1,5 +1,6 @@
 ---
-source: crates/perl-lsp-rs/tests/lsp_capability_snapshot_test.rs
+source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
+assertion_line: 34
 expression: caps
 ---
 callHierarchyProvider: true
@@ -28,7 +29,6 @@ diagnosticProvider:
   identifier: perl-lsp
   interFileDependencies: false
   workspaceDiagnostics: true
-documentFormattingProvider: true
 documentHighlightProvider: true
 documentLinkProvider:
   resolveProvider: true
@@ -37,7 +37,6 @@ documentOnTypeFormattingProvider:
   moreTriggerCharacter:
     - ;
     - "\n"
-documentRangeFormattingProvider: true
 documentSymbolProvider: true
 executeCommandProvider:
   commands:
@@ -74,7 +73,8 @@ renameProvider:
   prepareProvider: true
 selectionRangeProvider: true
 semanticTokensProvider:
-  full: true
+  full:
+    delta: true
   legend:
     tokenModifiers:
       - declaration

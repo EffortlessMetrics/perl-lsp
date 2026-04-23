@@ -95,6 +95,26 @@ fn snapshot_completion_trigger_characters() -> Result<(), Box<dyn std::error::Er
 }
 
 // ---------------------------------------------------------------------------
+// Signature help trigger/retrigger characters: these affect argument hints
+// ---------------------------------------------------------------------------
+
+#[test]
+fn snapshot_signature_help_triggers() -> Result<(), Box<dyn std::error::Error>> {
+    let client_caps = support::client_caps::full();
+    let mut harness = LspHarness::new();
+    let init_result = harness.initialize(Some(client_caps))?;
+
+    let caps = &init_result["capabilities"];
+    let signature_help = caps.get("signatureHelpProvider");
+    assert!(
+        signature_help.is_some(),
+        "signatureHelpProvider must be present in server capabilities"
+    );
+    assert_yaml_snapshot!("signature_help_triggers", &signature_help);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Semantic tokens legend as advertised in the initialize response.
 // Any reordering of token types or modifiers is a breaking change for clients.
 // ---------------------------------------------------------------------------
@@ -139,5 +159,25 @@ fn snapshot_server_info() -> Result<(), Box<dyn std::error::Error>> {
     // Snapshot name only; version may update with releases
     let name = server_info.get("name");
     assert_yaml_snapshot!("server_info_name", &name);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Execute command list: command IDs are part of editor/task-runner contracts.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn snapshot_execute_command_provider_commands() -> Result<(), Box<dyn std::error::Error>> {
+    let client_caps = support::client_caps::full();
+    let mut harness = LspHarness::new();
+    let init_result = harness.initialize(Some(client_caps))?;
+
+    let caps = &init_result["capabilities"];
+    let commands = caps.get("executeCommandProvider").and_then(|provider| provider.get("commands"));
+    assert!(
+        commands.is_some(),
+        "executeCommandProvider.commands must be present in server capabilities"
+    );
+    assert_yaml_snapshot!("execute_command_provider_commands", &commands);
     Ok(())
 }

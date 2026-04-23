@@ -1,0 +1,14 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_cap_snap.rs
+assertion_line: 113
+expression: "&signature_help"
+---
+retriggerCharacters:
+  - ","
+  - "@"
+  - "%"
+  - "{"
+  - "["
+triggerCharacters:
+  - (
+  - ","
