@@ -140,40 +140,47 @@ pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
     if line.is_empty() || module_name.is_empty() {
         return false;
     }
-    if line.trim_start().starts_with("package ") {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+        || trimmed.starts_with("no ")
+    {
         return false;
     }
-    let needle = format!("{}::", module_name);
-    let needle_bytes = needle.as_bytes();
-    let line_bytes = line.as_bytes();
-    let needle_len = needle_bytes.len();
+    for separator in ["::", "'"] {
+        let needle = format!("{module_name}{separator}");
+        let needle_bytes = needle.as_bytes();
+        let line_bytes = line.as_bytes();
+        let needle_len = needle_bytes.len();
 
-    if line_bytes.len() < needle_len {
-        return false;
-    }
-
-    let mut start = 0usize;
-    while start + needle_len <= line_bytes.len() {
-        let Some(rel) = line[start..].find(needle.as_str()) else {
-            break;
-        };
-        let abs = start + rel;
-        let after = abs + needle_len;
-
-        let before_ok = abs == 0 || {
-            let ch = line_bytes[abs - 1] as char;
-            !ch.is_alphanumeric() && ch != '_' && ch != ':'
-        };
-
-        let after_ok = after < line_bytes.len() && {
-            let ch = line_bytes[after] as char;
-            ch.is_alphabetic() || ch == '_'
-        };
-
-        if before_ok && after_ok && !index_is_in_quote_or_comment(line, abs) {
-            return true;
+        if line_bytes.len() < needle_len {
+            continue;
         }
-        start = abs + 1;
+
+        let mut start = 0usize;
+        while start + needle_len <= line_bytes.len() {
+            let Some(rel) = line[start..].find(needle.as_str()) else {
+                break;
+            };
+            let abs = start + rel;
+            let after = abs + needle_len;
+
+            let before_ok = abs == 0 || {
+                let ch = line_bytes[abs - 1] as char;
+                !ch.is_alphanumeric() && ch != '_' && ch != ':'
+            };
+
+            let after_ok = after < line_bytes.len() && {
+                let ch = line_bytes[after] as char;
+                ch.is_alphabetic() || ch == '_'
+            };
+
+            if before_ok && after_ok && !index_is_in_quote_or_comment(line, abs) {
+                return true;
+            }
+            start = abs + 1;
+        }
     }
 
     false
@@ -198,51 +205,62 @@ pub fn replace_module_name_prefix(line: &str, old_module: &str, new_module: &str
     if old_module.is_empty() || new_module.is_empty() || line.is_empty() {
         return line.to_string();
     }
-    if line.trim_start().starts_with("package ") {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+        || trimmed.starts_with("no ")
+    {
         return line.to_string();
     }
 
-    let needle = format!("{}::", old_module);
-    let replacement = format!("{}::", new_module);
-    let needle_bytes = needle.as_bytes();
-    let needle_len = needle_bytes.len();
-    let line_bytes = line.as_bytes();
+    let mut out = line.to_string();
 
-    if line_bytes.len() < needle_len {
-        return line.to_string();
-    }
+    for separator in ["::", "'"] {
+        let needle = format!("{old_module}{separator}");
+        let replacement = format!("{new_module}{separator}");
+        let needle_bytes = needle.as_bytes();
+        let needle_len = needle_bytes.len();
+        let line_bytes = out.as_bytes();
 
-    let mut out = String::with_capacity(line.len());
-    let mut cursor = 0usize;
-
-    while cursor + needle_len <= line_bytes.len() {
-        let Some(rel) = line[cursor..].find(needle.as_str()) else {
-            break;
-        };
-        let abs = cursor + rel;
-        let after = abs + needle_len;
-
-        let before_ok = abs == 0 || {
-            let ch = line_bytes[abs - 1] as char;
-            !ch.is_alphanumeric() && ch != '_' && ch != ':'
-        };
-
-        let after_ok = after < line_bytes.len() && {
-            let ch = line_bytes[after] as char;
-            ch.is_alphabetic() || ch == '_'
-        };
-
-        if before_ok && after_ok && !index_is_in_quote_or_comment(line, abs) {
-            out.push_str(&line[cursor..abs]);
-            out.push_str(&replacement);
-            cursor = after;
-        } else {
-            out.push_str(&line[cursor..abs + 1]);
-            cursor = abs + 1;
+        if line_bytes.len() < needle_len {
+            continue;
         }
+
+        let mut replaced = String::with_capacity(out.len());
+        let mut cursor = 0usize;
+
+        while cursor + needle_len <= line_bytes.len() {
+            let Some(rel) = out[cursor..].find(needle.as_str()) else {
+                break;
+            };
+            let abs = cursor + rel;
+            let after = abs + needle_len;
+
+            let before_ok = abs == 0 || {
+                let ch = line_bytes[abs - 1] as char;
+                !ch.is_alphanumeric() && ch != '_' && ch != ':'
+            };
+
+            let after_ok = after < line_bytes.len() && {
+                let ch = line_bytes[after] as char;
+                ch.is_alphabetic() || ch == '_'
+            };
+
+            if before_ok && after_ok && !index_is_in_quote_or_comment(&out, abs) {
+                replaced.push_str(&out[cursor..abs]);
+                replaced.push_str(&replacement);
+                cursor = after;
+            } else {
+                replaced.push_str(&out[cursor..abs + 1]);
+                cursor = abs + 1;
+            }
+        }
+
+        replaced.push_str(&out[cursor..]);
+        out = replaced;
     }
 
-    out.push_str(&line[cursor..]);
     out
 }
 
