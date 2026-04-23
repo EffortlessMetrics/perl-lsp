@@ -152,7 +152,7 @@ jobs:
           cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
 
       # ── Scoped test (scope-aware path) ───────────────────────────────────
-      - name: Scoped test
+      - name: Scoped lib tests
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
@@ -160,6 +160,17 @@ jobs:
           steps.scope.outputs.crates_args != ''
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
+
+      # Compile integration tests for selected crates to catch bit-rot that
+      # --lib cannot see (crates/*/tests/*.rs).
+      - name: Scoped integration test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
 
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
@@ -352,14 +363,78 @@ jobs:
           cache-all-crates: true
           shared-key: ci-ux-tests-${{ hashFiles('Cargo.lock') }}
 
+      - name: Compute UX lane scope
+        id: ux_scope
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "run_smoke=true" >> "$GITHUB_OUTPUT"
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Push event: running UX smoke lane"
+            exit 0
+          fi
+
+          SCOPE_JSON=$(cargo xtask ci-scope --base origin/master --format json 2>/dev/null || true)
+          if [ -z "$SCOPE_JSON" ]; then
+            echo "::warning::ci-scope unavailable for UX gating — defaulting to smoke lane"
+            echo "run_smoke=true" >> "$GITHUB_OUTPUT"
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          RELEVANT=$(echo "$SCOPE_JSON" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          lanes={entry.get('lane','') for entry in d.get('selected_lanes',[])}
+          direct={entry.get('name','') for entry in d.get('direct_crates',[])}
+          prefixes=('perl-lsp-','perl-dap')
+          relevant = bool(
+              {'ux_regression','lsp_smoke','lsp_providers'} & lanes
+              or 'perl-lsp-rs' in direct
+              or any(name.startswith(prefixes) for name in direct)
+              or 'features.toml' in d.get('changed_files',[])
+          )
+          print('true' if relevant else 'false')
+          ")
+
+          if [ "$RELEVANT" != "true" ]; then
+            echo "run_smoke=false" >> "$GITHUB_OUTPUT"
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No editor-facing scope selected by ci-scope — skipping UX lanes"
+            exit 0
+          fi
+
+          if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "run_smoke=true" >> "$GITHUB_OUTPUT"
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Draft PR with editor-facing changes: running UX smoke lane"
+          else
+            echo "run_smoke=false" >> "$GITHUB_OUTPUT"
+            echo "run_full=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Ready-for-review PR with editor-facing changes: running full UX lane"
+          fi
+
       - name: Build perl-lsp binary
+        if: steps.ux_scope.outputs.run_smoke == 'true' || steps.ux_scope.outputs.run_full == 'true'
         run: cargo build -p perl-lsp-rs
 
-      - name: Run UX regression tests
+      - name: Run UX smoke regression tests
+        if: steps.ux_scope.outputs.run_smoke == 'true'
         env:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
         run: just ux-tests
+
+      - name: Run full UX regression tests
+        if: steps.ux_scope.outputs.run_full == 'true'
+        env:
+          PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
+          RUST_TEST_THREADS: "1"
+        run: just ux-tests-full
+
+      - name: UX scope skip notice
+        if: steps.ux_scope.outputs.run_smoke != 'true' && steps.ux_scope.outputs.run_full != 'true'
+        run: |
+          echo "::notice::UX tests skipped by ci-scope (no editor-facing impact)"
 
   # ── Compile All Targets: catch integration-test + bench bit-rot ───────
   check-all-targets:
