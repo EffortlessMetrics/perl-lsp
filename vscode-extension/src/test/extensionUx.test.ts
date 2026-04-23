@@ -150,6 +150,43 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('offers only settings for missing absolute include paths and opens settings when selected', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-absolute-'));
+    const absoluteInclude = path.join(os.tmpdir(), 'perl-lsp-ux-does-not-exist');
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.workspace.getConfiguration as jest.Mock).mockImplementation(() => ({
+      get: jest.fn(() => [absoluteInclude]),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Open Settings');
+
+    await validateIncludePaths(context);
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining(absoluteInclude),
+      'Open Settings'
+    );
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      'workbench.action.openSettings',
+      '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
+    );
+  });
+
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
     const context = makeContext('0.12.3');
     let warnedMajor: string | undefined;
@@ -193,6 +230,67 @@ describe('extension UX warnings', () => {
     showWarningMessage.mockClear();
     await warnAboutPerlExtensionConflicts(context);
     expect(showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  test('shows summarized conflict list and opens coexistence guide when requested', async () => {
+    const context = makeContext('2.0.1');
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    (vscode.extensions as any).all = [
+      {
+        id: 'EffortlessMetrics.perl-lsp-rs',
+        packageJSON: {
+          publisher: 'EffortlessMetrics',
+          name: 'perl-lsp-rs',
+          version: '2.0.1',
+        },
+      },
+      {
+        id: 'example.perl-navigator',
+        packageJSON: {
+          displayName: 'Perl Navigator',
+          contributes: { languages: [{ id: 'perl' }] },
+        },
+      },
+      {
+        id: 'example.perl-critic-tools',
+        packageJSON: {
+          displayName: 'Perl Critic Tools',
+          keywords: ['perl'],
+        },
+      },
+      {
+        id: 'example.perl-helper',
+        packageJSON: {
+          displayName: 'Perl Helper',
+          description: 'perl workflows',
+        },
+      },
+      {
+        id: 'example.perl-kit',
+        packageJSON: {
+          displayName: 'Perl Kit',
+          name: 'perl-kit',
+        },
+      },
+    ];
+
+    (vscode.window.showWarningMessage as jest.Mock).mockResolvedValue('Open Coexistence Guide');
+
+    await warnAboutPerlExtensionConflicts(context);
+
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('(+1 more)'),
+      'Open Coexistence Guide'
+    );
+    expect(vscode.env.openExternal).toHaveBeenCalledTimes(1);
+    expect(context.globalState.update).toHaveBeenCalledWith(
+      'perl-lsp.conflictWarningMajorVersion',
+      '2'
+    );
   });
 
   test('syncs perlcritic settings to the server', async () => {
