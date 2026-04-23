@@ -235,6 +235,35 @@ impl LspServer {
         // Load .perl-lsp.toml from workspace root (base layer; LSP config overrides later)
         self.load_and_apply_project_config();
 
+        // Apply initializationOptions.perl as an editor-provided override layer.
+        // This is especially important for clients that do not support
+        // workspace/configuration pulls (for example, some Sublime setups).
+        if let Some(perl) = params
+            .as_ref()
+            .and_then(|p| p.get("initializationOptions"))
+            .and_then(|o| o.get("perl"))
+        {
+            {
+                let mut config = self.config.lock();
+                config.update_from_value(perl);
+            }
+            {
+                let mut workspace_config = self.workspace_config.lock();
+                workspace_config.update_from_value(perl);
+            }
+            {
+                let mut folders = self.workspace_folders.lock();
+                for folder in folders.iter_mut() {
+                    let mut effective_config = perl_lsp_rs_core::config::WorkspaceConfig::default();
+                    if let Some(project_config) = &folder.project_config {
+                        project_config.apply_to_workspace_config(&mut effective_config);
+                    }
+                    effective_config.update_from_value(perl);
+                    folder.effective_workspace_config = effective_config;
+                }
+            }
+        }
+
         // Detect Perl interpreter and surface an actionable error if not found.
         // Runs after config load so that perl-lsp.perl.path is already applied.
         self.check_perl_interpreter();
@@ -489,5 +518,37 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_applies_perl_initialization_options() {
+        let server = LspServer::new();
+        let params = json!({
+            "workspaceFolders": [
+                { "uri": "file:///tmp", "name": "tmp" }
+            ],
+            "initializationOptions": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": ["lib"],
+                        "perlPath": "/custom/perl"
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert_eq!(server.workspace_config.lock().include_paths, vec!["lib".to_string()]);
+        assert_eq!(
+            server.workspace_config.lock().perl_path.as_deref(),
+            Some("/custom/perl")
+        );
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders[0].effective_workspace_config.include_paths,
+            vec!["lib".to_string()]
+        );
     }
 }
