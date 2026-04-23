@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "tracked_signals",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_signals"
     },
     "scorecard": {
       "type": "string",
@@ -86,7 +87,7 @@
       ],
       "items": {
         "type": "object",
-        "required": ["name", "state", "owner"],
+        "required": ["name", "state", "owner", "tracking_basis"],
         "properties": {
           "name": {
             "type": "string",
@@ -102,10 +103,44 @@
           },
           "owner": {
             "type": "string"
+          },
+          "tracking_basis": {
+            "type": "string",
+            "enum": ["fixture_matrix_coverage", "integration_lane_only"]
           }
         },
         "additionalProperties": false
       }
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": [
+        "first_five_minutes_scenario_count",
+        "known_gap_issue_refs",
+        "known_gap_issue_count",
+        "notes"
+      ],
+      "properties": {
+        "first_five_minutes_scenario_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "known_gap_issue_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^#[0-9]+$"
+          }
+        },
+        "known_gap_issue_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

@@ -2,9 +2,10 @@
 //!
 //! Owns per-crate mutation and test counts, UX scenario receipt, and quality.md generation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
@@ -45,23 +46,25 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
+    static RUNNING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(
+            r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
+        )
+        .expect("running unit test regex must compile")
+    });
+    static TEST_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r":\s*test\s*$").expect("test regex must compile"));
 
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
+        if let Some(caps) = RUNNING_RE.captures(line) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
+        if TEST_RE.is_match(line)
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -122,6 +125,40 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_known_gap_issue_refs(root: &Path) -> Vec<String> {
+    static ISSUE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"https://github.com/EffortlessMetrics/perl-lsp/issues/(\d+)")
+            .expect("known gap issue regex must compile")
+    });
+
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let mut in_section = false;
+    let mut issue_ids: BTreeSet<u32> = BTreeSet::new();
+
+    for line in readme.lines() {
+        if line.starts_with("### Known gaps toward solid UX") {
+            in_section = true;
+            continue;
+        }
+        if in_section && line.starts_with("## ") {
+            break;
+        }
+        if in_section {
+            for caps in ISSUE_RE.captures_iter(line) {
+                if let Ok(issue_id) = caps[1].parse::<u32>() {
+                    issue_ids.insert(issue_id);
+                }
+            }
+        }
+    }
+
+    issue_ids.into_iter().map(|id| format!("#{id}")).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +179,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked signal receipt at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -170,9 +207,12 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
 
+    let known_gap_issue_refs = collect_known_gap_issue_refs(root);
+    let known_gap_issue_count = known_gap_issue_refs.len();
+
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_signals",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +222,29 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "measured",
                 "owner": "perl-lsp-ux-tests",
+                "tracking_basis": "fixture_matrix_coverage",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "measured",
                 "owner": "perl-lsp-ux-tests",
+                "tracking_basis": "fixture_matrix_coverage",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
                 "state": "planned",
                 "owner": "perl-lsp-ux-tests",
+                "tracking_basis": "integration_lane_only",
             },
         ],
+        "tracked_signals": {
+            "first_five_minutes_scenario_count": scenario_count,
+            "known_gap_issue_refs": known_gap_issue_refs,
+            "known_gap_issue_count": known_gap_issue_count,
+            "notes": "Known-gap issue refs are tracked from README.md; open/closed state is verified during issue burn-down.",
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -258,7 +307,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_signals");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -279,7 +328,24 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert_eq!(
+            receipt["tracked_signals"]["first_five_minutes_scenario_count"],
+            receipt["harness"]["scenario_count"]
+        );
+        assert!(
+            receipt["tracked_signals"]["known_gap_issue_count"].as_u64().unwrap_or_default() > 0
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_known_gap_issue_refs_from_readme() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let refs = collect_known_gap_issue_refs(&root);
+        assert!(refs.contains(&"#3522".to_string()));
+        assert!(refs.contains(&"#3476".to_string()));
+        assert!(refs.contains(&"#3515".to_string()));
         Ok(())
     }
 }
