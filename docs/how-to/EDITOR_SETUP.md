@@ -24,6 +24,7 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
+| Cursor | install the VS Code-compatible extension or point it at `perllsp --stdio` | [docs/EDITORS/CURSOR_SETUP.md](../EDITORS/CURSOR_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
@@ -36,6 +37,12 @@ perllsp --health
 The repo-maintained extension is the easiest route. If you prefer a manual
 configuration, set the command to `perllsp --stdio` and keep the workspace
 root pointed at the project root.
+
+### Cursor
+
+Cursor is VS Code-compatible, so you can install the same
+`EffortlessMetrics.perl-lsp-rs` extension. If your environment blocks extension
+installs, use a generic LSP config with `perllsp --stdio`.
 
 ### Neovim
 
