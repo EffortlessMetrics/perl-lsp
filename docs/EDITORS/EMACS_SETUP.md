@@ -33,11 +33,15 @@ Copy this into your Emacs config:
 (use-package eglot
   :hook ((perl-mode . eglot-ensure)
          (cperl-mode . eglot-ensure)
-         (perl-ts-mode . eglot-ensure))
+         (perl-ts-mode . eglot-ensure))  ; remove if perl-ts-mode is not installed
   :config
   (add-to-list 'eglot-server-programs
                '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio"))))
 ```
+
+> **Note:** `perl-mode` and `cperl-mode` are built into Emacs. `perl-ts-mode` is a
+> third-party package (not included in Emacs core); remove it from the hook and mode list
+> if you have not installed it separately.
 
 Then:
 
@@ -87,7 +91,7 @@ If you prefer `lsp-mode`, use this minimal config:
 (use-package lsp-mode
   :hook ((perl-mode . lsp-deferred)
          (cperl-mode . lsp-deferred)
-         (perl-ts-mode . lsp-deferred))
+         (perl-ts-mode . lsp-deferred))  ; remove if perl-ts-mode is not installed
   :commands lsp
   :config
   (lsp-register-client
@@ -96,6 +100,9 @@ If you prefer `lsp-mode`, use this minimal config:
     :major-modes '(perl-mode cperl-mode perl-ts-mode)
     :server-id 'perllsp)))
 ```
+
+> **Note:** `perl-ts-mode` is a third-party package (not built into Emacs); remove it
+> from `:hook` and `:major-modes` if you have not installed it separately.
 
 Keep optional packages (`lsp-ui`, custom completion stacks, extra modeline integrations) layered on only after base connectivity works.
 
