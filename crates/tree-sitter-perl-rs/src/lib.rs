@@ -60,6 +60,18 @@ use perl_parser_core::Parser as CoreParser;
 /// Mirrors `tree_sitter::InputEdit` field layout for drop-in compatibility.
 pub use perl_parser_core::edit::Edit as InputEdit;
 
+/// A tree-sitter-compatible source position.
+///
+/// `row` and `column` are both zero-based and `column` is measured in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Point {
+    /// Zero-based row number.
+    pub row: usize,
+    /// Zero-based byte column within `row`.
+    pub column: usize,
+}
+
 /// A Perl parser with tree-sitter-style ergonomics.
 ///
 /// Wraps the v3 recursive-descent Perl parser. Create one parser instance and call
@@ -220,6 +232,14 @@ impl Tree {
     pub fn edit(&mut self, edit: &InputEdit) {
         self.pending_edits.push(edit.clone());
     }
+
+    /// Returns a cursor positioned at the root node for stateful tree traversal.
+    ///
+    /// This mirrors `tree_sitter::Tree::walk()` and is equivalent to
+    /// `tree.root_node().walk()`.
+    pub fn walk(&self) -> TreeCursor<'_> {
+        self.root_node().walk()
+    }
 }
 
 /// A borrowed reference to a node in the syntax tree.
@@ -299,22 +319,13 @@ impl<'tree> Node<'tree> {
 
     /// Returns the number of direct children.
     pub fn child_count(&self) -> usize {
-        let mut count = 0usize;
-        self.inner.for_each_child(|_| count += 1);
-        count
+        ast_child_count(self.inner)
     }
 
     /// Returns the `i`-th direct child, or `None` if out of range.
     pub fn child(&self, i: usize) -> Option<Node<'tree>> {
-        let mut idx = 0usize;
-        let mut found: Option<&'tree AstNode> = None;
-        self.inner.for_each_child(|child| {
-            if found.is_none() && idx == i {
-                found = Some(child);
-            }
-            idx += 1;
-        });
-        found.map(|child| Node { inner: child, tree_source: self.tree_source })
+        ast_child_at(self.inner, i)
+            .map(|child| Node { inner: child, tree_source: self.tree_source })
     }
 
     /// Returns an iterator over direct children.
@@ -335,6 +346,20 @@ impl<'tree> Node<'tree> {
     /// Returns the end byte offset in the source text (exclusive).
     pub fn end_byte(&self) -> usize {
         self.inner.location.end.min(self.tree_source.len())
+    }
+
+    /// Returns the start position as a tree-sitter-compatible [`Point`].
+    ///
+    /// `row`/`column` are zero-based and `column` is measured in bytes.
+    pub fn start_position(&self) -> Point {
+        byte_to_point(self.tree_source, self.start_byte())
+    }
+
+    /// Returns the end position as a tree-sitter-compatible [`Point`].
+    ///
+    /// `row`/`column` are zero-based and `column` is measured in bytes.
+    pub fn end_position(&self) -> Point {
+        byte_to_point(self.tree_source, self.end_byte())
     }
 
     /// Extracts the source text slice covered by this node.
@@ -421,7 +446,7 @@ impl<'tree> TreeCursor<'tree> {
         }
 
         let parent = self.current_parent_ast_node();
-        let sibling_count = parent.children().len();
+        let sibling_count = ast_child_count(parent);
         let current_index = self.path[self.path.len() - 1];
         let next = current_index + 1;
         if next >= sibling_count {
@@ -469,11 +494,34 @@ fn ast_children(node: &AstNode) -> Vec<&AstNode> {
     node.children()
 }
 
+#[inline]
+fn ast_child_count(node: &AstNode) -> usize {
+    let mut count = 0usize;
+    node.for_each_child(|_| count += 1);
+    count
+}
+
+#[inline]
+fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
+    let mut idx = 0usize;
+    let mut found = None;
+    node.for_each_child(|child| {
+        if found.is_none() && idx == index {
+            found = Some(child);
+        }
+        idx += 1;
+    });
+    found
+}
+
+// Invariant: TreeCursor path is constructed by the traversal that just yielded this
+// index, so child_at is guaranteed valid.
+#[allow(clippy::expect_used)]
 fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     let mut current = root;
     for &index in path {
-        let children = current.children();
-        current = children[index];
+        current = ast_child_at(current, index)
+            .expect("TreeCursor path must always reference a valid child");
     }
     current
 }
@@ -490,6 +538,23 @@ fn pascal_to_snake(s: &str) -> String {
         out.extend(c.to_lowercase());
     }
     out
+}
+
+fn byte_to_point(source: &str, byte: usize) -> Point {
+    let clamped = byte.min(source.len());
+    let mut row = 0usize;
+    let mut column = 0usize;
+
+    for b in source.as_bytes().iter().take(clamped) {
+        if *b == b'\n' {
+            row += 1;
+            column = 0;
+        } else {
+            column += 1;
+        }
+    }
+
+    Point { row, column }
 }
 
 // ---------------------------------------------------------------------------
@@ -543,6 +608,28 @@ mod tests {
         let root = tree.root_node();
         assert_eq!(root.start_byte(), 0);
         assert_eq!(root.end_byte(), source.len(), "root end_byte should clamp to source length");
+    }
+
+    #[test]
+    fn test_start_and_end_position_are_tree_sitter_compatible() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+
+        assert_eq!(root.start_position(), Point { row: 0, column: 0 });
+        assert_eq!(root.end_position(), Point { row: 1, column: 10 });
+    }
+
+    #[test]
+    fn test_end_position_column_uses_bytes_not_chars() {
+        let source = "my $emoji = \"😀\";";
+        let mut p = Parser::new();
+        let tree = must_some(p.parse(source));
+        let root = tree.root_node();
+
+        assert_eq!(root.end_byte(), source.len());
+        assert_eq!(root.end_position(), Point { row: 0, column: source.len() });
     }
 
     /// Verify the end_byte clamp invariant: for every node in the tree,
@@ -819,6 +906,17 @@ mod tests {
     }
 
     #[test]
+    fn test_tree_walk_starts_cursor_at_root() {
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let mut cursor = tree.walk();
+
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+    }
+
+    #[test]
     fn test_tree_cursor_parent_and_reset_behavior() {
         let mut parser = Parser::new();
         let tree = must_some(parser.parse("my $x = 1;"));
@@ -850,5 +948,270 @@ mod tests {
         // The leaf must refuse another goto_first_child.
         let at_leaf = !cursor.goto_first_child();
         assert!(at_leaf, "goto_first_child must return false on a leaf node");
+    }
+
+    #[test]
+    fn test_tree_cursor_multiple_goto_next_sibling_exhausts() {
+        // When repeatedly calling goto_next_sibling, the cursor must eventually
+        // return false and stay positioned at the last sibling.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("1; 2; 3;"));
+        let mut cursor = tree.walk();
+
+        // Navigate to first statement
+        assert!(cursor.goto_first_child());
+        let mut count = 1;
+        // Keep advancing siblings until we can't
+        while cursor.goto_next_sibling() {
+            count += 1;
+        }
+        // After last goto_next_sibling returns false, cursor should still be valid
+        // and still have a node (the last sibling).
+        let node = cursor.node();
+        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+    }
+
+    #[test]
+    fn test_tree_cursor_goto_parent_at_root_repeatedly() {
+        // Calling goto_parent at root should return false every time, keeping cursor at root.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let mut cursor = tree.walk();
+
+        // We should always be at root initially
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+
+        // Try to go up multiple times — must stay at root
+        for _ in 0..3 {
+            let result = cursor.goto_parent();
+            assert!(!result, "goto_parent at root must return false");
+            assert_eq!(
+                cursor.node().grammar_kind(),
+                "source_file",
+                "cursor must remain at root after failed goto_parent"
+            );
+        }
+    }
+
+    #[test]
+    fn test_tree_cursor_reset_from_deep_nesting() {
+        // reset() must return cursor to root regardless of depth.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("sub foo { my $x = 1; }"));
+        let mut cursor = tree.walk();
+
+        // Navigate deep into the tree
+        let mut depth = 0;
+        while cursor.goto_first_child() && depth < 10 {
+            depth += 1;
+        }
+        assert!(depth > 0, "should have navigated at least one level deep");
+
+        // reset() should bring us back to root
+        cursor.reset();
+        assert_eq!(
+            cursor.node().grammar_kind(),
+            "source_file",
+            "reset must return cursor to root"
+        );
+    }
+
+    #[test]
+    fn test_tree_cursor_empty_source_root_is_valid() {
+        // Empty source still produces a (minimal) tree; cursor at root should be valid.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(""));
+        let cursor = tree.walk();
+
+        let node = cursor.node();
+        assert_eq!(node.grammar_kind(), "source_file");
+        assert!(node.child_count() == 0, "empty source tree should have no statements");
+    }
+
+    #[test]
+    fn test_tree_cursor_empty_source_goto_first_child_returns_false() {
+        // Empty source root has no children; goto_first_child must return false.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(""));
+        let mut cursor = tree.walk();
+
+        let result = cursor.goto_first_child();
+        assert!(!result, "empty tree root should have no first child");
+    }
+
+    #[test]
+    fn test_tree_cursor_single_statement_navigation() {
+        // Single statement: root -> statement -> (children or leaf).
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("42;"));
+        let mut cursor = tree.walk();
+
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert!(cursor.goto_first_child(), "root should have exactly one statement");
+
+        // The single statement should have no next sibling
+        assert!(!cursor.goto_next_sibling(), "single statement should be the only child");
+
+        // Going back up should land at root
+        assert!(cursor.goto_parent(), "should be able to return to root");
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+    }
+
+    #[test]
+    fn test_tree_cursor_sibling_navigation_exact_count() {
+        // Navigate through all siblings and verify the count matches child_count.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("1; 2; 3; 4;"));
+        let root = tree.root_node();
+        let child_count = root.child_count();
+
+        let mut cursor = tree.walk();
+        assert!(cursor.goto_first_child());
+
+        let mut sibling_count = 1;
+        while cursor.goto_next_sibling() {
+            sibling_count += 1;
+        }
+
+        assert_eq!(
+            sibling_count, child_count,
+            "sibling count should match root.child_count()"
+        );
+    }
+
+    #[test]
+    fn test_tree_cursor_alternating_parent_child_navigation() {
+        // Test mixed navigation: down, up, down again at different indices.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("sub a { 1; } sub b { 2; }"));
+        let mut cursor = tree.walk();
+
+        // Down to first sub
+        assert!(cursor.goto_first_child());
+        let first_kind = cursor.node().grammar_kind().to_string();
+
+        // Back to root
+        assert!(cursor.goto_parent());
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+
+        // Down again to first sub (should be the same)
+        assert!(cursor.goto_first_child());
+        assert_eq!(
+            cursor.node().grammar_kind(),
+            first_kind,
+            "re-navigating should reach the same node"
+        );
+    }
+
+    #[test]
+    fn test_tree_cursor_complex_traversal_sequence() {
+        // Complex sequence: down, sibling, sibling, up, down, sibling.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $a = 1; my $b = 2; my $c = 3;"));
+        let mut cursor = tree.walk();
+
+        // Down to first statement
+        assert!(cursor.goto_first_child(), "down to first stmt");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+
+        // Move to second statement
+        assert!(cursor.goto_next_sibling(), "sibling to second stmt");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+
+        // Move to third statement
+        assert!(cursor.goto_next_sibling(), "sibling to third stmt");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+
+        // No fourth statement
+        assert!(!cursor.goto_next_sibling(), "no fourth statement");
+
+        // Back to root
+        assert!(cursor.goto_parent(), "back to root");
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+
+        // Down to first again
+        assert!(cursor.goto_first_child(), "down to first again");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
+    }
+
+    #[test]
+    fn test_tree_cursor_node_identity_after_traversal() {
+        // A node retrieved at the same path should be equal across separate traversals.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let mut cursor = tree.walk();
+
+        // First traversal: get to first child and extract its kind
+        assert!(cursor.goto_first_child());
+        let first_kind = cursor.node().grammar_kind().to_string();
+
+        // Reset and repeat
+        cursor.reset();
+        assert!(cursor.goto_first_child());
+        let second_kind = cursor.node().grammar_kind().to_string();
+
+        assert_eq!(
+            first_kind, second_kind,
+            "node at the same path should have the same kind in both traversals"
+        );
+    }
+
+    #[test]
+    fn test_tree_cursor_sibling_with_unicode_identifiers() {
+        // Cursor must correctly navigate siblings even when source contains Unicode.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $café = 1; my $naïve = 2;"));
+        let mut cursor = tree.walk();
+
+        let root = tree.root_node();
+        let expected_count = root.child_count();
+
+        // Count siblings via cursor
+        assert!(cursor.goto_first_child());
+        let mut count = 1;
+        while cursor.goto_next_sibling() {
+            count += 1;
+        }
+
+        assert_eq!(
+            count, expected_count,
+            "sibling count should match even with Unicode identifiers"
+        );
+    }
+
+    #[test]
+    fn test_tree_cursor_deeply_nested_structure() {
+        // Verify cursor can navigate a deeply nested structure without stack overflow.
+        let mut parser = Parser::new();
+        // Create nested blocks: { { { ... } } }
+        let mut code = String::new();
+        for i in 0..5 {
+            code.push_str(&format!("sub level_{} {{ ", i));
+        }
+        code.push_str("1;");
+        for _ in 0..5 {
+            code.push_str(" }");
+        }
+
+        let tree = must_some(parser.parse(&code));
+        let mut cursor = tree.walk();
+
+        // Navigate down as far as possible
+        let mut depth = 0;
+        while cursor.goto_first_child() && depth < 50 {
+            depth += 1;
+        }
+
+        // Should have navigated several levels
+        assert!(depth > 2, "should navigate multiple levels in nested structure");
+
+        // Navigate back up
+        while cursor.goto_parent() {
+            depth -= 1;
+        }
+
+        // Should be back at root
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert_eq!(depth, 0, "should have gone back up to root (depth 0)");
     }
 }
