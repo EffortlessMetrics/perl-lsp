@@ -182,4 +182,73 @@ Per-PR amortized agent cost at 1051 PRs MTD = **~$0.38/PR** ($400/1051). Decreas
 
 ---
 
+## Window 3 — Agent Saturation Experiment
+
+**Session window:** 2026-04-23 ~14:00 UTC → evening, third 5h Claude window riding on top of Windows 1 and 2. **Meter deltas:** weekly Claude 20× Max 87% → ~92-93%, current 5h session 52% → ~75-80%. This is the most aggressive saturation of the day: by the end of the window the orchestrator was holding 20+ concurrent children in flight across three overlapping waves rather than sequentially draining a pipeline.
+
+### Scale
+
+- **~55+ agents dispatched in parallel** across three roughly 20-agent waves that overlapped rather than blocked on each other
+- Each wave mixed 5-8 distinct agent roles rather than a homogeneous cohort
+- Peak simultaneity measured by agent-id worktrees open: **22 live** at the apex, with older waves still streaming returns while the next wave was already dispatching
+- Wall-clock: three wave cycles compressed into ~4h (would have taken a full session each at sequential pacing)
+
+### Mix of roles across the three waves
+
+| Role | Count (approx) | Pattern |
+|---|---|---|
+| **Ops drain** | 6-8 | Merge-ready queue sweeps — one per batch of 3 PRs; several simultaneous ops children, each with its own PR triplet, never touching the same branch |
+| **Rebase** | 4-5 | Draining PRs stuck behind master-moves from Windows 1/2 bit-rot fixes; each takes one PR, rebases onto current master, pushes; no cross-talk |
+| **Haiku review** | 8-10 | Standards-check sweeps across PRs that had `in-review` but missing `review-reviewed`; parallel is free because each reads its own diff |
+| **Deep-review** | 6-8 | Sonnet correctness gate on feature PRs; one per PR; the expensive tier, dispatched sparingly |
+| **Diff-audit** | 4-5 | Final coherence check before ops; dispatched after ci-green receipt appeared on each PR |
+| **Research-verify** | 3-4 | External fact-check on new scout issues from the day's filings; parallel because each reads a different issue |
+| **Refactor-plan** | 2-3 | Haiku analysis of simplification opportunities on post-deep-review PRs |
+| **Maintainer-PR** | 3-4 | Project-fit check on feature-flavored PRs |
+| **Scout** | 2-3 | New issue-filing from fresh gap analyses and master breakage observations |
+| **Docs-review** | 2 | Pass over `docs/articles/` additions from Windows 1/2 for consistency |
+| **CI flake-investigate** | 1-2 | Targeted agents on specific lanes that had shown intermittent red on master |
+| **RC1 punch list** | 2-3 | 0.13.0 release-candidate checklist sweeps — changelog coverage, STABILITY.md verification, feature-toml drift |
+
+**Total distinct agent archetypes dispatched this window:** 12. Every one of them is a skill whose full protocol lives in `.claude/agents/` and `.claude/commands/` — the orchestrator dispatched a role + target PR/issue; the skill supplied the rest.
+
+### Observation: orchestrator-as-pure-router, at meter-saturation
+
+At 20+ agents in flight, essentially the entire orchestrator-side context cost was **agent-dispatch metadata + return summaries**, not code reading. A typical window-3 minute broke down roughly as:
+
+- ~5% reading a single `gh pr list` or `gh issue list` snapshot to decide the next dispatch
+- ~85% drafting agent prompts and reading agent return summaries (each 500-2000 tokens)
+- ~10% synthesizing multi-agent returns into the next dispatch decision
+
+**The orchestrator did not open a single source file in this window.** It did not `cat` a test, did not read a diff, did not trace a failure. Every code-touching thought was inside a child agent. This is the limit the pipeline has been converging toward since session 5, and window 3 is the first time it sustained for a full saturation period.
+
+**Concrete evidence:** the orchestrator's Bash tool was used ~4× in the entire window (all for `gh pr list`, `gh issue list`, `gh run list`). Every Edit, Read, Write, Grep, Glob call came from child agents via the `Agent(isolation: "worktree", ...)` spawn.
+
+### Patterns that emerged
+
+**(a) Dupe consolidation scales roughly linearly with parallel Haiku reviewers.** Seven parallel Haiku review agents closed duplicate-work PRs at ~3× the rate of the sequential-Haiku pattern from Window 2. Closing a dupe takes the same fixed cost whether the dupe is found by agent 1 or agent 14; parallelizing the *discovery* scales near-linearly until the queue runs out.
+
+**(b) Rebase cascade from Windows 1/2 bit-rot fixes was a forcing function for parallelism.** The tier-wiring and Guardrails fixes from earlier in the day moved master ~15 times during Window 3 alone. Every master move invalidated 20-40 draft PRs' CI receipts. Sequential rebase would have been strictly slower than master was moving; parallel rebase-agents (one per PR) was the only pattern that kept up. **The pipeline needs parallelism not as an optimization but as a correctness condition when master moves faster than sequential rebase.**
+
+**(c) Three-wave overlap beats three sequential waves.** Wave 1's deep-reviewers were still returning when wave 2's Haiku reviewers were dispatching; wave 2's diff-auditors were streaming in while wave 3's ops drains were already merging. No wave blocked on the prior wave's full completion. The orchestrator's job reduced to "dispatch the next ready work unit, no matter which wave it belongs to."
+
+**(d) Return-summary format matters more with 20 agents than with 5.** Noisy agent returns (wrapup-bullet-dump style) consumed far more orchestrator-context budget at 20× than at 5×. Agent definitions that enforce a tight final summary (one-line verdict + optional file paths) outperformed verbose wrapups by a 3-5× factor in orchestrator-context efficiency. **Expect follow-up to tighten wrapup prompts across the agent catalog.**
+
+**(e) Orchestrator-is-never-the-worker is a structural claim, not aspirational.** The moment an orchestrator opens a source file at 20-agent scale, it has stolen tokens from 3-5 dispatches worth of downstream work. The cost of orchestrator-does-work is not O(1) — it is O(dispatches-skipped) because context is the bottleneck, and orchestrator-context is the rarest resource in the system.
+
+**(f) Meter saturation signal is blunt but useful.** Hitting weekly ~92-93% in window 3 (up from 87% start) meant the session was approaching a hard cap. The orchestrator correctly began preferring Haiku-tier dispatches over Sonnet as meter drew down, re-tiering deep-review to only the most architecturally significant PRs. **Meter pressure is a natural routing signal; encode it into the dispatch policy rather than treating it as an external emergency.**
+
+### Substrate produced (Window 3 only)
+
+- 1 retrospective section (this one)
+- RC1 punch list sweeps contributed to the 0.13.0 readiness assessment
+- ~3 new scout issues filed from gap analyses during the window
+- No new memory files in this window — the saturation itself is the finding; memory lessons already captured in `feedback_labels_as_state_machine.md`, `feedback_dont_kill_agents.md`, `feedback_verification_is_sequential.md`, `feedback_orchestrator_follows_pipeline.md` are what made the saturation pattern possible
+
+### One-line takeaway
+
+**At 20+ agents in flight, the orchestrator's only job is routing. Every other activity is a token leak.**
+
+---
+
 _Companions: the referenced memory files + docs articles + forensic. See `docs/articles/ARTICLE_INDEX.md` for the broader articles catalog._
