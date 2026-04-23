@@ -55,7 +55,11 @@ editor-specific guide has the full snippets for both.
 ### Helix
 
 ```toml
-[[language-server.perl-lsp]]
+[[language]]
+name = "perl"
+language-servers = ["perllsp"]
+
+[language-server.perllsp]
 command = "perllsp"
 args = ["--stdio"]
 ```
