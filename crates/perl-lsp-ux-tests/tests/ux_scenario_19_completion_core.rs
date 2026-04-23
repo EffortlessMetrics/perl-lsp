@@ -41,12 +41,17 @@ fn scenario_19_completion_request_does_not_error() -> Result<()> {
     harness.open_file("completion.pl", COMPLETION_FIXTURE)?;
 
     // When requesting completion for an in-progress builtin (`pri`).
-    let completion_result = harness.completion("completion.pl", 3, 3);
+    let items = harness
+        .completion("completion.pl", 3, 3)
+        .map_err(|e| anyhow::anyhow!("textDocument/completion returned JSON-RPC error: {e}"))?;
 
-    // Then the request succeeds without JSON-RPC errors.
+    // Then the request succeeds and returns a non-empty payload — `pri` is a
+    // prefix of the `print`/`printf` builtins so at least one completion item
+    // must be surfaced. An empty list here is a real regression, not a
+    // degraded-mode pass.
     assert!(
-        completion_result.is_ok(),
-        "textDocument/completion must not return a JSON-RPC error: {completion_result:?}"
+        !items.is_empty(),
+        "expected at least one completion item for `pri` prefix, got empty list"
     );
     harness.assert_no_crash();
     Ok(())
@@ -66,16 +71,32 @@ fn scenario_19_completion_items_have_label_or_insert_text_shape() -> Result<()> 
     // When requesting completion near a scalar variable prefix (`$val`).
     let items = harness.completion("completion.pl", 6, 18)?;
 
-    // Then each item has a user-visible completion field.
+    // Then the server returns at least one item — `$value` was declared on the
+    // previous line so a completion-driven editor must surface something.
+    // (Vacuously passing on an empty list defeats the purpose of the test.)
+    assert!(
+        !items.is_empty(),
+        "expected at least one completion item for `$val` prefix with `$value` in scope"
+    );
+
+    // And every returned item has a user-visible completion field.
     for item in &items {
-        let has_label = item.get("label").is_some();
-        let has_insert_text = item.get("insertText").is_some();
-        let has_filter_text = item.get("filterText").is_some();
+        let has_label = item.get("label").and_then(serde_json::Value::as_str).is_some();
+        let has_insert_text = item.get("insertText").and_then(serde_json::Value::as_str).is_some();
+        let has_filter_text = item.get("filterText").and_then(serde_json::Value::as_str).is_some();
         assert!(
             has_label || has_insert_text || has_filter_text,
-            "completion item must include label, insertText, or filterText: {item:?}"
+            "completion item must include a string label, insertText, or filterText: {item:?}"
         );
     }
+
+    // And at least one item surfaces the `$value` identifier the user started
+    // typing — this is the behaviour the UX depends on.
+    let labels = harness.completion_labels("completion.pl", 6, 18)?;
+    assert!(
+        labels.iter().any(|label| label.contains("value")),
+        "expected completion label containing `value` for `$val` prefix, got: {labels:?}"
+    );
 
     harness.assert_no_crash();
     Ok(())
