@@ -3533,10 +3533,24 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         return names;
     }
 
-    // Hash form: args start with "{"
-    if first == "{" {
+    // Hash form: args start with "{", "+{", or "+" followed by "{"
+    let starts_hash_form = first == "{"
+        || first == "+{"
+        || (first == "+" && args.get(1).map(String::as_str) == Some("{"));
+    if starts_hash_form {
+        let mut skipped_leading_plus = false;
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.next() {
+            // Some parser/tokenizer variants can emit "+{" as a single token for
+            // `use constant +{ ... }`. Treat it as structural punctuation.
+            if arg == "+{" {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "+" && !skipped_leading_plus {
+                skipped_leading_plus = true;
+                continue;
+            }
             if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
                 continue;
             }
@@ -3722,6 +3736,39 @@ use constant {
         ]);
         assert_eq!(names, vec!["FOO", "BAR"]);
     }
+
+    #[test]
+    fn test_extract_constant_names_accepts_plus_hash_form_split_tokens() {
+        let names = extract_constant_names_from_use_args(&[
+            "+".to_string(),
+            "{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_plus_hash_form_combined_token() {
+        let names = extract_constant_names_from_use_args(&[
+            "+{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
     #[test]
     fn test_use_constant_duplicate_names_indexed_once() {
         let index = WorkspaceIndex::new();
@@ -3741,6 +3788,23 @@ use constant {
             retry_count_symbols, 1,
             "RETRY_COUNT should be indexed once even when repeated in use constant hash form"
         );
+    }
+
+    #[test]
+    fn test_use_constant_plus_hash_form_indexes_keys() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/PlusHash.pm";
+        let code = r#"package My::PlusHash;
+use constant +{
+    FOO => 1,
+    BAR => 2,
+};
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        assert!(index.find_definition("My::PlusHash::FOO").is_some());
+        assert!(index.find_definition("My::PlusHash::BAR").is_some());
     }
 
     #[test]
