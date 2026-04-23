@@ -3313,40 +3313,98 @@ impl IndexVisitor {
 fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     let joined = args.join(" ");
 
-    // Strip qw(...) wrapper and collect the inner tokens
-    let inner = if let Some(start) = joined.find("qw(") {
-        if let Some(end) = joined[start..].find(')') {
-            joined[start + 3..start + end].to_string()
-        } else {
-            joined.clone()
-        }
-    } else {
-        joined.clone()
-    };
+    let (qw_words, remainder) = extract_qw_words(&joined);
+    let mut modules = Vec::new();
+    modules.extend(qw_words);
 
-    inner
-        .split_whitespace()
-        .filter_map(|token| {
-            // Skip flags like -norequire and bare punctuation from qw() or parens
-            if token.starts_with('-') {
-                return None;
+    modules.extend(remainder.split_whitespace().filter_map(|token| {
+        // Skip flags like -norequire and bare punctuation from qw() or parens
+        if token.starts_with('-') {
+            return None;
+        }
+        // Strip surrounding single or double quotes
+        let stripped = token.trim_matches('\'').trim_matches('"');
+        // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
+        let stripped = stripped.trim_matches('(').trim_matches(')');
+        let stripped = stripped.trim_matches('\'').trim_matches('"');
+        // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
+        if stripped.is_empty() {
+            return None;
+        }
+        if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
+            Some(stripped.to_string())
+        } else {
+            None
+        }
+    }));
+
+    modules
+}
+
+fn extract_qw_words(input: &str) -> (Vec<String>, String) {
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+    let mut words = Vec::new();
+    let mut remainder = String::new();
+
+    while i < chars.len() {
+        if chars[i] == 'q'
+            && i + 1 < chars.len()
+            && chars[i + 1] == 'w'
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
             }
-            // Strip surrounding single or double quotes
-            let stripped = token.trim_matches('\'').trim_matches('"');
-            // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
-            let stripped = stripped.trim_matches('(').trim_matches(')');
-            let stripped = stripped.trim_matches('\'').trim_matches('"');
-            // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
-            if stripped.is_empty() {
-                return None;
+            if j >= chars.len() {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
             }
-            if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
-                Some(stripped.to_string())
-            } else {
-                None
+
+            let open = chars[j];
+            let close = match open {
+                '(' => ')',
+                '[' => ']',
+                '{' => '}',
+                '<' => '>',
+                _ => open,
+            };
+            if open.is_alphanumeric() || open == '_' || open == '\'' || open == '"' {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
             }
-        })
-        .collect()
+
+            let mut k = j + 1;
+            while k < chars.len() && chars[k] != close {
+                k += 1;
+            }
+            if k >= chars.len() {
+                remainder.extend(chars[i..].iter());
+                break;
+            }
+
+            let content: String = chars[j + 1..k].iter().collect();
+            for word in content.split_whitespace() {
+                if !word.is_empty()
+                    && word
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+                {
+                    words.push(word.to_string());
+                }
+            }
+            i = k + 1;
+            continue;
+        }
+
+        remainder.push(chars[i]);
+        i += 1;
+    }
+
+    (words, remainder)
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -4615,6 +4673,18 @@ Utils::process_data();
     #[test]
     fn test_extract_module_names_qw_list() {
         let names = extract_module_names_from_use_args(&["qw(Foo::Bar Other::Base)".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_slash_delimiter() {
+        let names = extract_module_names_from_use_args(&["qw/Foo::Bar Other::Base/".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_with_space_before_delimiter() {
+        let names = extract_module_names_from_use_args(&["qw [Foo::Bar Other::Base]".to_string()]);
         assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
     }
 
