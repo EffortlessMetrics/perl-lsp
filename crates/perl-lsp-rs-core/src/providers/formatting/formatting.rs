@@ -88,7 +88,7 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         content: &str,
         options: &FormattingOptions,
     ) -> Result<FormattedDocument, FormattingError> {
-        let formatted = self.run_perltidy(content, options)?;
+        let formatted = self.apply_lsp_whitespace_options(self.run_perltidy(content, options)?, options, true);
 
         if formatted == content {
             return Ok(FormattedDocument { text: formatted, edits: vec![] });
@@ -123,7 +123,8 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         let text_to_format = lines[start_line..=end_line].join("\n");
-        let formatted = self.run_perltidy(&text_to_format, options)?;
+        let formatted =
+            self.apply_lsp_whitespace_options(self.run_perltidy(&text_to_format, options)?, options, false);
 
         if formatted == text_to_format {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
@@ -213,5 +214,90 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
+    fn apply_lsp_whitespace_options(
+        &self,
+        mut formatted: String,
+        options: &FormattingOptions,
+        full_document: bool,
+    ) -> String {
+        if options.trim_trailing_whitespace.unwrap_or(false) {
+            let had_terminal_newline = formatted.ends_with('\n');
+            let trimmed_lines = formatted
+                .lines()
+                .map(|line| line.trim_end_matches([' ', '\t']))
+                .collect::<Vec<_>>();
+            formatted = trimmed_lines.join("\n");
+            if had_terminal_newline {
+                formatted.push('\n');
+            }
+        }
+
+        if full_document {
+            if options.trim_final_newlines.unwrap_or(false) {
+                while formatted.ends_with("\n\n") {
+                    formatted.pop();
+                }
+            }
+
+            if options.insert_final_newline.unwrap_or(false) && !formatted.is_empty() && !formatted.ends_with('\n')
+            {
+                formatted.push('\n');
+            }
+        }
+
+        formatted
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+
+    #[test]
+    fn format_document_honors_lsp_whitespace_options() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("my $x = 1;   \nmy $y = 2;\t\t\n\n\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(true),
+        };
+
+        let result = provider.format_document("my $x = 1;\nmy $y = 2;", &options)?;
+
+        assert_eq!(result.edits.len(), 1);
+        assert_eq!(result.text, "my $x = 1;\nmy $y = 2;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn format_range_trims_trailing_whitespace_when_requested() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let runtime = MockSubprocessRuntime::new();
+        runtime.add_response(MockResponse::success("sub test {\n    return $x;   \n}\n"));
+        let provider = FormattingProvider::new(runtime);
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(true),
+        };
+
+        let content = "my $x = 1;\nsub test{return$x;}\nmy $y = 2;";
+        let range = FormatRange::new(FormatPosition::new(1, 0), FormatPosition::new(1, 20));
+        let result = provider.format_range(content, &range, &options)?;
+
+        assert_eq!(result.edits.len(), 1);
+        assert_eq!(result.edits[0].new_text, "sub test {\n    return $x;\n}\n");
+        Ok(())
     }
 }
