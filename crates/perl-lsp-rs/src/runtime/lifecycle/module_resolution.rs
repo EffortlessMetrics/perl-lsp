@@ -1172,6 +1172,18 @@ use Overlay::Live;
 
     #[test]
     fn test_resolve_module_path_with_uri_honors_system_inc_opt_in() -> TestResult {
+        // This test shells out to `perl -I <path> -e 'print join("\n", @INC)'`.
+        // Skip gracefully on machines where perl is not installed.
+        let perl_available = std::process::Command::new("perl")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !perl_available {
+            eprintln!("SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH");
+            return Ok(());
+        }
+
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
