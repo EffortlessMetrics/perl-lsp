@@ -11,6 +11,13 @@ use color_eyre::eyre::{Context, Result};
 
 use super::{replace_block, run_cmd};
 
+#[derive(Debug, Clone, Copy, Default)]
+struct EditorUxTopLineMetricAvailability {
+    workflow_pass_rate: bool,
+    workflow_stability_rate: bool,
+    p95_time_to_first_useful_result_ms: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Metric collectors
 // ---------------------------------------------------------------------------
@@ -122,6 +129,29 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_editor_ux_metric_availability(root: &Path) -> EditorUxTopLineMetricAvailability {
+    let metrics_path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let Ok(raw) = fs::read_to_string(metrics_path) else {
+        return EditorUxTopLineMetricAvailability::default();
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return EditorUxTopLineMetricAvailability::default();
+    };
+    let metrics =
+        doc.get("metrics").and_then(serde_json::Value::as_object).cloned().unwrap_or_default();
+    EditorUxTopLineMetricAvailability {
+        workflow_pass_rate: metrics
+            .get("workflow_pass_rate")
+            .is_some_and(serde_json::Value::is_number),
+        workflow_stability_rate: metrics
+            .get("workflow_stability_rate")
+            .is_some_and(serde_json::Value::is_number),
+        p95_time_to_first_useful_result_ms: metrics
+            .get("p95_time_to_first_useful_result_ms")
+            .is_some_and(serde_json::Value::is_number),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +160,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_metric_availability = collect_editor_ux_metric_availability(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -137,13 +168,21 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     } else {
         "mutation data pending first nightly CI run — run `just mutation-subset` locally to populate"
     };
+    let ux_tracking_note = if ux_metric_availability.workflow_pass_rate
+        || ux_metric_availability.workflow_stability_rate
+        || ux_metric_availability.p95_time_to_first_useful_result_ms
+    {
+        "top-line UX metrics now tracked in `.ci/metrics/editor_ux.json` (refresh with `cargo xtask metrics lsp-stats --json`)"
+    } else {
+        "top-line UX metrics planned; run `cargo xtask metrics lsp-stats --json` to start publishing measured values"
+    };
 
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
-           `docs/project/status/editor_ux.json`\n\
+           the integration-only 10k-line large-file case; editor UX receipt at \
+           `docs/project/status/editor_ux.json`; {ux_tracking_note}\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,6 +208,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let ux_metric_availability = collect_editor_ux_metric_availability(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -182,17 +222,17 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": if ux_metric_availability.workflow_pass_rate { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": if ux_metric_availability.workflow_stability_rate { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": if ux_metric_availability.p95_time_to_first_useful_result_ms { "measured" } else { "planned" },
                 "owner": "perl-lsp-ux-tests",
             },
         ],
@@ -280,6 +320,61 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_editor_ux_receipt_marks_tracked_metrics_as_measured() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let root = dir.path();
+        let ux_tests_dir = root.join("crates/perl-lsp-ux-tests/tests");
+        fs::create_dir_all(&ux_tests_dir)?;
+        fs::write(ux_tests_dir.join("ux_scenario_01_simple_file.rs"), "// fixture marker")?;
+
+        let metrics_dir = root.join(".ci/metrics");
+        fs::create_dir_all(&metrics_dir)?;
+        fs::write(
+            metrics_dir.join("editor_ux.json"),
+            r#"{
+                "schema_version": 1,
+                "subsystem": "editor_ux",
+                "metrics": {
+                    "workflow_pass_rate": 0.95,
+                    "workflow_stability_rate": null,
+                    "p95_time_to_first_useful_result_ms": 37
+                }
+            }"#,
+        )?;
+
+        let receipt_raw = generate_editor_ux_receipt(root)?;
+        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        let top_line_rows = receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?;
+
+        let pass_state = top_line_rows
+            .iter()
+            .find(|row| row["name"] == "workflow_pass_rate")
+            .ok_or_else(|| eyre!("workflow_pass_rate row missing"))?["state"]
+            .as_str()
+            .ok_or_else(|| eyre!("workflow_pass_rate state missing"))?;
+        assert_eq!(pass_state, "measured");
+
+        let stability_state = top_line_rows
+            .iter()
+            .find(|row| row["name"] == "workflow_stability_rate")
+            .ok_or_else(|| eyre!("workflow_stability_rate row missing"))?["state"]
+            .as_str()
+            .ok_or_else(|| eyre!("workflow_stability_rate state missing"))?;
+        assert_eq!(stability_state, "planned");
+
+        let p95_state = top_line_rows
+            .iter()
+            .find(|row| row["name"] == "p95_time_to_first_useful_result_ms")
+            .ok_or_else(|| eyre!("p95_time_to_first_useful_result_ms row missing"))?["state"]
+            .as_str()
+            .ok_or_else(|| eyre!("p95_time_to_first_useful_result_ms state missing"))?;
+        assert_eq!(p95_state, "measured");
         Ok(())
     }
 }
