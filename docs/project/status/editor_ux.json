@@ -1,4 +1,7 @@
 {
+  "schema_version": 1,
+  "receipt_kind": "tracking_receipt",
+  "scorecard": "editor_ux",
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
@@ -22,30 +25,46 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
     ]
   },
+  "top_line_metrics": [
+    {
+      "name": "workflow_pass_rate",
+      "state": "planned",
+      "value": null,
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "workflow_stability_rate",
+      "state": "planned",
+      "value": null,
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "p95_time_to_first_useful_result_ms",
+      "state": "planned",
+      "value": null,
+      "owner": "perl-lsp-ux-tests"
+    }
+  ],
+  "tracking_signals": {
+    "first_five_minutes_harness": {
+      "tracked": true,
+      "scenario_count": 17,
+      "asserted_expected_outcomes": 32,
+      "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json"
+    },
+    "manual_editor_smoke_workflow": {
+      "tracked": true,
+      "source": "docs/project/protocols/verification.md"
+    },
+    "open_issue_burndown": {
+      "tracked": false,
+      "source": "external issue tracker"
+    }
+  },
   "integration_points": {
     "ci_lane": "just ux-tests",
     "quality_surface": "docs/project/status/quality.md",
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
-  },
-  "receipt_kind": "planning_scaffold",
-  "schema_version": 1,
-  "scorecard": "editor_ux",
-  "top_line_metrics": [
-    {
-      "name": "workflow_pass_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
-    },
-    {
-      "name": "workflow_stability_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
-    },
-    {
-      "name": "p95_time_to_first_useful_result_ms",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
-    }
-  ]
+  }
 }

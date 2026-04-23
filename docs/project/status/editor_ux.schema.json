@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "tracking_signals",
     "integration_points"
   ],
   "properties": {
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracking_receipt"
     },
     "scorecard": {
       "type": "string",
@@ -86,7 +87,7 @@
       ],
       "items": {
         "type": "object",
-        "required": ["name", "state", "owner"],
+        "required": ["name", "state", "owner", "value"],
         "properties": {
           "name": {
             "type": "string",
@@ -100,12 +101,55 @@
             "type": "string",
             "enum": ["planned", "measured"]
           },
+          "value": {
+            "type": ["number", "integer", "null"]
+          },
           "owner": {
             "type": "string"
           }
         },
         "additionalProperties": false
       }
+    },
+    "tracking_signals": {
+      "type": "object",
+      "required": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke_workflow",
+        "open_issue_burndown"
+      ],
+      "properties": {
+        "first_five_minutes_harness": {
+          "type": "object",
+          "required": ["tracked", "scenario_count", "asserted_expected_outcomes", "source"],
+          "properties": {
+            "tracked": { "type": "boolean" },
+            "scenario_count": { "type": "integer", "minimum": 0 },
+            "asserted_expected_outcomes": { "type": "integer", "minimum": 0 },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "manual_editor_smoke_workflow": {
+          "type": "object",
+          "required": ["tracked", "source"],
+          "properties": {
+            "tracked": { "type": "boolean" },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": ["tracked", "source"],
+          "properties": {
+            "tracked": { "type": "boolean" },
+            "source": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

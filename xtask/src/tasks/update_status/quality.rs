@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, ContextCompat, Result};
 
 use super::{replace_block, run_cmd};
 
@@ -169,10 +169,12 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracked_harness_outcomes = collect_fixture_matrix_expected_outcomes(root).unwrap_or(0);
+    let ux_metrics = load_editor_ux_metrics(root).unwrap_or_default();
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_receipt",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
@@ -182,20 +184,39 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": metric_state(ux_metrics.workflow_pass_rate),
+                "value": ux_metrics.workflow_pass_rate,
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": metric_state(ux_metrics.workflow_stability_rate),
+                "value": ux_metrics.workflow_stability_rate,
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": metric_state(ux_metrics.p95_time_to_first_useful_result_ms),
+                "value": ux_metrics.p95_time_to_first_useful_result_ms,
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "tracking_signals": {
+            "first_five_minutes_harness": {
+                "tracked": true,
+                "scenario_count": scenario_count,
+                "asserted_expected_outcomes": tracked_harness_outcomes,
+                "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+            },
+            "manual_editor_smoke_workflow": {
+                "tracked": true,
+                "source": "docs/project/protocols/verification.md",
+            },
+            "open_issue_burndown": {
+                "tracked": false,
+                "source": "external issue tracker",
+            },
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -205,6 +226,58 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+}
+
+#[derive(Default)]
+struct EditorUxTopLineMetrics {
+    workflow_pass_rate: Option<f64>,
+    workflow_stability_rate: Option<f64>,
+    p95_time_to_first_useful_result_ms: Option<u64>,
+}
+
+fn metric_state<T>(value: Option<T>) -> &'static str {
+    if value.is_some() { "measured" } else { "planned" }
+}
+
+fn load_editor_ux_metrics(root: &Path) -> Result<EditorUxTopLineMetrics> {
+    let path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let raw = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let payload: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    let metrics = payload.get("metrics").context("editor_ux metrics key missing")?;
+    Ok(EditorUxTopLineMetrics {
+        workflow_pass_rate: metrics.get("workflow_pass_rate").and_then(serde_json::Value::as_f64),
+        workflow_stability_rate: metrics
+            .get("workflow_stability_rate")
+            .and_then(serde_json::Value::as_f64),
+        p95_time_to_first_useful_result_ms: metrics
+            .get("p95_time_to_first_useful_result_ms")
+            .and_then(serde_json::Value::as_u64),
+    })
+}
+
+fn collect_fixture_matrix_expected_outcomes(root: &Path) -> Result<usize> {
+    let path = root
+        .join("crates")
+        .join("perl-lsp-ux-tests")
+        .join("fixtures")
+        .join("editor_ux_fixture_matrix.json");
+    let raw = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+    let payload: serde_json::Value =
+        serde_json::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    let workflows = payload
+        .get("workflows")
+        .and_then(serde_json::Value::as_array)
+        .context("editor_ux fixture matrix workflows missing")?;
+    let mut total = 0usize;
+    for workflow in workflows {
+        if let Some(expected_outcomes) =
+            workflow.get("expected_outcomes").and_then(|v| v.as_array())
+        {
+            total += expected_outcomes.len();
+        }
+    }
+    Ok(total)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +331,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_receipt");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -280,6 +353,13 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(receipt["tracking_signals"]["first_five_minutes_harness"]["tracked"], true);
+        assert!(
+            receipt["tracking_signals"]["first_five_minutes_harness"]["asserted_expected_outcomes"]
+                .as_u64()
+                .unwrap_or_default()
+                > 0
+        );
         Ok(())
     }
 }
