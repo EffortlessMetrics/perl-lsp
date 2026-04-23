@@ -37,8 +37,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             extract_paths_from_args(rest, &mut paths);
         }
@@ -52,8 +52,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
@@ -312,4 +312,48 @@ fn normalize_findbin_path(base: &Path, relative: &str) -> Option<PathBuf> {
         }
     }
     Some(normalized)
+}
+
+fn perl_statements(source: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut start = 0;
+    let mut quote: Option<u8> = None;
+    let bytes = source.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+
+        match quote {
+            Some(q) => {
+                if b == b'\\' {
+                    i = i.saturating_add(2);
+                    continue;
+                }
+                if b == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if b == b'\'' || b == b'"' {
+                    quote = Some(b);
+                } else if b == b';' {
+                    if let Some(stmt) = source.get(start..=i) {
+                        statements.push(stmt);
+                    }
+                    start = i + 1;
+                }
+            }
+        }
+
+        i += 1;
+    }
+
+    if start < source.len()
+        && let Some(stmt) = source.get(start..)
+    {
+        statements.push(stmt);
+    }
+
+    statements
 }

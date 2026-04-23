@@ -83,3 +83,43 @@ use Lib::Thing;\n\
 
     assert_eq!(include_paths, vec!["second".to_string()]);
 }
+
+#[test]
+fn multiline_use_lib_is_extracted() {
+    let source = "\
+use lib (\n\
+    'first',\n\
+    'second'\n\
+);\n\
+";
+
+    let ops = extract_use_lib_operations(source);
+    assert_eq!(
+        ops,
+        vec![UseLibAction::Add(vec![
+            UseLibPath { path: "first".to_string(), from_findbin: false },
+            UseLibPath { path: "second".to_string(), from_findbin: false },
+        ])]
+    );
+}
+
+#[test]
+fn multiline_use_and_no_lib_are_ordered() {
+    let source = "\
+use lib (\n\
+    'first'\n\
+);\n\
+no lib (\n\
+    'first'\n\
+);\n\
+";
+
+    let include_paths = resolve_use_lib_paths_from_source_at_offset(
+        source,
+        source.len(),
+        Path::new("/workspace"),
+        None,
+    );
+
+    assert!(include_paths.is_empty(), "no lib should cancel multiline use lib");
+}
