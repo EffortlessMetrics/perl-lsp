@@ -47,6 +47,8 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
              '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
+For Zed, see [docs/EDITORS/ZED_SETUP.md](docs/EDITORS/ZED_SETUP.md).
+
 ```text
 # Any generic LSP client
 perllsp --stdio
