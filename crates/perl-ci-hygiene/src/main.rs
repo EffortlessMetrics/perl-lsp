@@ -3848,19 +3848,34 @@ fn collect_todo_hits(
     Ok(hits)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut None)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line_with_block_context(
     line: &str,
     token_re: &Regex,
     in_block_comment: &mut bool,
 ) -> bool {
-    let mut state: Option<usize> = if *in_block_comment { Some(0) } else { None };
-    let result = has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut state);
-    *in_block_comment = state.is_some();
-    result
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            let mut found = has_unlinked_token(&line[..end_idx], token_re);
+            *in_block_comment = false;
+            found |= has_unlinked_todo_in_rust_line_with_state(
+                &line[end_idx + 2..],
+                token_re,
+                &mut None,
+            );
+            return found;
+        }
+        return has_unlinked_token(line, token_re);
+    }
+
+    let found = has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut None);
+    *in_block_comment = rust_block_comment_depth_after_line(line) > 0;
+    found
 }
 
 fn has_unlinked_todo_in_rust_line_with_state(
@@ -3901,6 +3916,41 @@ fn has_unlinked_todo_in_rust_line_with_state(
     }
     *raw_string_state = rust_raw_string_state_after_line(line, *raw_string_state);
     false
+}
+
+#[cfg(test)]
+fn rust_block_comment_depth_after_line(line: &str) -> usize {
+    let mut depth = 0usize;
+    let mut cursor = 0usize;
+
+    while cursor < line.len() {
+        let next_open = line[cursor..]
+            .match_indices("/*")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+        let next_close = line[cursor..]
+            .match_indices("*/")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+
+        match (next_open, next_close) {
+            (None, None) => break,
+            (Some(open_idx), Some(close_idx)) if open_idx < close_idx => {
+                depth += 1;
+                cursor = open_idx + 2;
+            }
+            (_, Some(close_idx)) => {
+                depth = depth.saturating_sub(1);
+                cursor = close_idx + 2;
+            }
+            (Some(open_idx), None) => {
+                depth += 1;
+                cursor = open_idx + 2;
+            }
+        }
+    }
+
+    depth
 }
 
 fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
@@ -4014,17 +4064,16 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             }
             continue;
         }
-        if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
+        if in_single_ansi_c {
+            if prev_was_escape_single {
+                prev_was_escape_single = false;
                 continue;
             }
             if ch == '\\' {
-                prev_was_escape = true;
+                prev_was_escape_single = true;
                 continue;
             }
             if ch == '\'' {
-                in_single = false;
                 in_single_ansi_c = false;
             }
             continue;
@@ -4065,8 +4114,8 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
 
         match ch {
             '\'' => {
-                in_single = true;
                 in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
+                in_single = !in_single_ansi_c;
                 prev_was_escape_single = false;
                 prev_single_was_escape = false;
             }
@@ -4093,7 +4142,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                     if prev.is_whitespace()
                         || matches!(
                             prev,
-                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
+                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>' | ','
                         )
                     {
                         return Some(idx);
