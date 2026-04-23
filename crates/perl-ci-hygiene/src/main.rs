@@ -4196,7 +4196,8 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         || reason.contains("pending")
         || reason.contains("when.implemented")
         || reason.contains("remove.when")
-        || reason.contains("ac")
+        || reason.contains("ac:")
+        || reason.contains("ac ")
         || reason.contains("not.yet")
         || reason.contains("tdd.scaffold")
         || reason.contains("scaffold")
@@ -4384,7 +4385,9 @@ mod tests {
         assert_eq!(categorize_ignore("TODO(#123): tracked follow-up", ""), "infra");
         assert_eq!(categorize_ignore("TODO (#123): tracked follow-up", ""), "infra");
         assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
+        assert_eq!(categorize_ignore("AC: parser behavior", ""), "feature");
         assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
+        assert_eq!(categorize_ignore("cache invalidation follow-up", ""), "other");
         assert_eq!(categorize_ignore("ignore", ""), "bare");
         assert_eq!(categorize_ignore("some new reason", ""), "other");
     }
