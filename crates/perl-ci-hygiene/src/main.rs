@@ -3827,7 +3827,7 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
-        let mut in_rust_block_comment = false;
+        let mut in_rust_block_comment = 0;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
                 has_unlinked_todo_in_rust_line_with_block_context(
@@ -3853,80 +3853,135 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut in_block_comment = false;
-    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut in_block_comment)
+    let mut block_comment_depth = 0;
+    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut block_comment_depth)
 }
 
 fn has_unlinked_todo_in_rust_line_with_block_context(
     line: &str,
     token_re: &Regex,
-    in_block_comment: &mut bool,
+    block_comment_depth: &mut usize,
 ) -> bool {
-    if *in_block_comment {
-        if let Some(end_idx) = find_block_comment_end(line, 0) {
-            if has_unlinked_token(&line[..end_idx], token_re) {
-                *in_block_comment = false;
-                return true;
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes: Option<usize> = None;
+    let mut comment_text = String::new();
+
+    while i < bytes.len() {
+        if *block_comment_depth > 0 {
+            if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+                if has_unlinked_token(&comment_text, token_re) {
+                    return true;
+                }
+                comment_text.clear();
+                *block_comment_depth += 1;
+                i += 2;
+                continue;
             }
-            *in_block_comment = false;
-            return has_unlinked_todo_in_rust_line_with_block_context(
-                &line[end_idx + 2..],
-                token_re,
-                in_block_comment,
-            );
+            if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                if has_unlinked_token(&comment_text, token_re) {
+                    return true;
+                }
+                comment_text.clear();
+                *block_comment_depth = block_comment_depth.saturating_sub(1);
+                i += 2;
+                continue;
+            }
+            comment_text.push(bytes[i] as char);
+            i += 1;
+            continue;
         }
-        return has_unlinked_token(line, token_re);
+
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'/' {
+            return has_unlinked_token(&line[i + 2..], token_re);
+        }
+        if i + 1 < bytes.len() && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            *block_comment_depth = 1;
+            i += 2;
+            continue;
+        }
+
+        if (bytes[i] == b'b' || bytes[i] == b'c') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+        if bytes[i] == b'r'
+            || ((bytes[i] == b'b' || bytes[i] == b'c')
+                && i + 1 < bytes.len()
+                && bytes[i + 1] == b'r')
+        {
+            let mut j = i + 1;
+            if bytes[i] == b'b' || bytes[i] == b'c' {
+                j += 1;
+            }
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(
+                    j.saturating_sub(i + if bytes[i] == b'b' || bytes[i] == b'c' { 2 } else { 1 }),
+                );
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
     }
 
-    for (idx, _) in line.match_indices("//") {
-        if is_index_in_rust_literal(line, idx) {
-            continue;
-        }
-        if is_url_like_hash_comment(line, idx) {
-            continue;
-        }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            return true;
-        }
-    }
-    for (idx, _) in line.match_indices("/*") {
-        if is_index_in_rust_literal(line, idx) {
-            continue;
-        }
-        if is_likely_string_literal_comment_start(line, idx) {
-            continue;
-        }
-        if let Some(end_idx) = find_block_comment_end(line, idx + 2) {
-            if has_unlinked_token(&line[idx + 2..end_idx], token_re) {
-                return true;
-            }
-            continue;
-        }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            *in_block_comment = true;
-            return true;
-        }
-        *in_block_comment = true;
-    }
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        return true;
-    }
-    false
-}
-
-fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
-    for (rel_idx, _) in line[start_idx..].match_indices("*/") {
-        let idx = start_idx + rel_idx;
-        if is_index_in_rust_literal(line, idx) {
-            continue;
-        }
-        return Some(idx);
-    }
-    None
+    has_unlinked_token(&comment_text, token_re)
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -4025,112 +4080,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         }
     }
     None
-}
-
-fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
-    if slash_idx == 0 {
-        return false;
-    }
-    let before = line.as_bytes()[slash_idx - 1];
-    matches!(before, b'/' | b':' | b'"')
-}
-
-fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
-    if comment_idx == 0 {
-        return false;
-    }
-    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
-}
-
-fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
-    let bytes = line.as_bytes();
-    let mut i = 0;
-    let mut in_string = false;
-    let mut in_char = false;
-    let mut escape = false;
-    let mut raw_hashes: Option<usize> = None;
-
-    while i < bytes.len() && i < target_idx {
-        if let Some(hash_count) = raw_hashes {
-            if bytes[i] == b'"'
-                && i + 1 + hash_count <= bytes.len()
-                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
-            {
-                raw_hashes = None;
-                i += 1 + hash_count;
-                continue;
-            }
-            i += 1;
-            continue;
-        }
-
-        if in_string {
-            if escape {
-                escape = false;
-            } else if bytes[i] == b'\\' {
-                escape = true;
-            } else if bytes[i] == b'"' {
-                in_string = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        if in_char {
-            if escape {
-                escape = false;
-            } else if bytes[i] == b'\\' {
-                escape = true;
-            } else if bytes[i] == b'\'' {
-                in_char = false;
-            }
-            i += 1;
-            continue;
-        }
-
-        if (bytes[i] == b'b' || bytes[i] == b'c') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
-            in_string = true;
-            i += 2;
-            continue;
-        }
-
-        if bytes[i] == b'r'
-            || ((bytes[i] == b'b' || bytes[i] == b'c')
-                && i + 1 < bytes.len()
-                && bytes[i + 1] == b'r')
-        {
-            let mut j = i + 1;
-            if bytes[i] == b'b' || bytes[i] == b'c' {
-                j += 1;
-            }
-            while j < bytes.len() && bytes[j] == b'#' {
-                j += 1;
-            }
-            if j < bytes.len() && bytes[j] == b'"' {
-                raw_hashes = Some(
-                    j.saturating_sub(i + if bytes[i] == b'b' || bytes[i] == b'c' { 2 } else { 1 }),
-                );
-                i = j + 1;
-                continue;
-            }
-        }
-
-        if bytes[i] == b'"' {
-            in_string = true;
-            i += 1;
-            continue;
-        }
-
-        if bytes[i] == b'\'' {
-            in_char = true;
-            i += 1;
-            continue;
-        }
-
-        i += 1;
-    }
-
-    in_string || in_char || raw_hashes.is_some()
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4481,26 +4430,26 @@ mod tests {
     #[test]
     fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
-        let mut in_block_comment = false;
+        let mut in_block_comment = 0;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "/* context",
             &todo_re,
             &mut in_block_comment,
         ));
-        assert!(in_block_comment);
+        assert_eq!(in_block_comment, 1);
         assert!(has_unlinked_todo_in_rust_line_with_block_context(
             "  TODO: capture this follow-up",
             &todo_re,
             &mut in_block_comment,
         ));
-        assert!(in_block_comment);
+        assert_eq!(in_block_comment, 1);
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "*/ let x = 1;",
             &todo_re,
             &mut in_block_comment,
         ));
-        assert!(!in_block_comment);
+        assert_eq!(in_block_comment, 0);
 
         Ok(())
     }
@@ -4508,7 +4457,7 @@ mod tests {
     #[test]
     fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
-        let mut in_block_comment = false;
+        let mut in_block_comment = 0;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
             "/* header",
@@ -4525,7 +4474,59 @@ mod tests {
             &todo_re,
             &mut in_block_comment,
         ));
-        assert!(!in_block_comment);
+        assert_eq!(in_block_comment, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_tracks_nested_multiline_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = 0;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* outer /* inner */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert_eq!(in_block_comment, 1);
+        assert!(has_unlinked_todo_in_rust_line_with_block_context(
+            " * TODO: nested reminder in outer block",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert_eq!(in_block_comment, 1);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " */ let x = 1;",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert_eq!(in_block_comment, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_allows_nested_linked_todos_inside_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = 0;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* outer /* inner */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " * TODO(#777): tracked from nested comment context",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert_eq!(in_block_comment, 0);
 
         Ok(())
     }
