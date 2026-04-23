@@ -266,6 +266,70 @@ my $result = calculate_sum(1, 2, 3);
 }
 
 #[test]
+fn go_to_definition_on_require_imported_bareword_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Runtime.pm",
+        r#"package My::Runtime;
+use strict;
+use warnings;
+
+sub runtime_sum {
+    my (@nums) = @_;
+    my $total = 0;
+    $total += $_ for @nums;
+    return $total;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Runtime.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Runtime.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+require My::Runtime;
+My::Runtime->import('runtime_sum');
+
+my $result = runtime_sum(1, 2, 3);
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "runtime_sum(1, 2, 3)")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for runtime require+import symbol");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Runtime.pm") || uri.contains("My%2FRuntime.pm"),
+        "Definition should point to My/Runtime.pm, got: {}",
+        uri
+    );
+
+    Ok(())
+}
+
+#[test]
 fn go_to_definition_on_tag_imported_symbol_navigates_to_source_module() -> TestResult {
     let mut harness = LspHarness::new();
     let workspace = support::lsp_harness::TempWorkspace::new()?;

@@ -1352,6 +1352,22 @@ impl LspServer {
                                         return Ok(Some(json!([lsp_location])));
                                     }
                                 }
+
+                                // Resolve bareword calls imported via runtime
+                                // `require Module; Module->import('symbol')`.
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && symbol_key.sigil.is_none()
+                                    && let Some(import_source_pkg) =
+                                        self.find_import_source(ast, &symbol_key.name)
+                                    && let Some(result) = lookup_workspace_definition(
+                                        self.coordinator(),
+                                        &import_source_pkg,
+                                        &symbol_key.name,
+                                        Some(uri),
+                                    )
+                                {
+                                    return Ok(Some(result));
+                                }
                             }
                         }
                         // No coordinator: fall through to same-file semantic model
