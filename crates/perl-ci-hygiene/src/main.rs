@@ -3788,6 +3788,12 @@ struct IgnoredDetail {
     test_name: String,
 }
 
+#[derive(Clone, Copy)]
+enum HashCommentStyle {
+    ShellLike,
+    PerlLike,
+}
+
 fn collect_todo_hits(
     root: &Path,
     exclude_dirs: &[&str],
@@ -3820,6 +3826,10 @@ fn collect_todo_hits(
         let is_hash_file = file_name == "Justfile"
             || file_name == "justfile"
             || hash_ext.iter().any(|ext| path.extension().is_some_and(|e| e == *ext));
+        let hash_comment_style = match path.extension().and_then(|ext| ext.to_str()) {
+            Some("pl" | "pm" | "t") => HashCommentStyle::PerlLike,
+            _ => HashCommentStyle::ShellLike,
+        };
         if !is_rust && !is_hash_file {
             continue;
         }
@@ -3828,7 +3838,7 @@ fn collect_todo_hits(
             let match_line = if is_rust {
                 has_unlinked_todo_in_rust_line(line, todo_re)
             } else {
-                has_unlinked_todo_in_hash_line(line, todo_re)
+                has_unlinked_todo_in_hash_line(line, todo_re, hash_comment_style)
             };
             if !match_line {
                 continue;
@@ -3872,14 +3882,14 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     false
 }
 
-fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    let Some(idx) = find_hash_comment_start(line) else {
+fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex, style: HashCommentStyle) -> bool {
+    let Some(idx) = find_hash_comment_start(line, style) else {
         return false;
     };
     has_unlinked_token(&line[idx + 1..], token_re)
 }
 
-fn find_hash_comment_start(line: &str) -> Option<usize> {
+fn find_hash_comment_start(line: &str, style: HashCommentStyle) -> Option<usize> {
     let mut in_single = false;
     let mut in_double = false;
     let mut prev_was_escape = false;
@@ -3913,7 +3923,7 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
                     return None;
                 }
-                if idx == 0 {
+                if idx == 0 || matches!(style, HashCommentStyle::PerlLike) {
                     return Some(idx);
                 }
                 if let Some(prev) = line[..idx].chars().next_back() {
@@ -4332,20 +4342,64 @@ mod tests {
     fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
 
-        assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
-        assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
-        assert!(has_unlinked_todo_in_hash_line("echo hi;# TODO: follow up", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "#!/usr/bin/env bash",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo# TODO not a comment",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo hi;# TODO: follow up",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
         assert!(has_unlinked_todo_in_hash_line(
             "echo \"#not-a-comment\" # TODO: follow up",
             &todo_re,
+            HashCommentStyle::ShellLike,
         ));
-        assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo '# TODO in string' && true",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
         assert!(has_unlinked_todo_in_hash_line(
             "echo '# TODO in string' # TODO: follow up",
-            &todo_re
+            &todo_re,
+            HashCommentStyle::ShellLike,
         ));
-        assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
-        assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo hi # TODO: follow up",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo hi # TODO(#77): tracked",
+            &todo_re,
+            HashCommentStyle::ShellLike,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_hash_comment_todo_detection_allows_no_whitespace_before_hash() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_hash_line(
+            "my $x = 1# TODO: tighten this assertion",
+            &todo_re,
+            HashCommentStyle::PerlLike,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "my $x = 1# TODO(#77): tracked",
+            &todo_re,
+            HashCommentStyle::PerlLike,
+        ));
 
         Ok(())
     }
