@@ -318,6 +318,10 @@ impl CancellationRegistry {
             tokens.remove(&key);
         }
 
+        if let Ok(mut cache) = self.token_cache.write() {
+            cache.remove(&key);
+        }
+
         if let Ok(mut contexts) = self.cleanup_contexts.lock() {
             contexts.remove(&key);
         }
