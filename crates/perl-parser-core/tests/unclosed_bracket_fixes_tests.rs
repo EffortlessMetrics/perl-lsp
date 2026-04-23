@@ -91,7 +91,6 @@ fn dotted_numbers_in_arrayref() {
 // ==========================================================================
 
 #[test]
-#[ignore] // separate issue: package names (::) inside @{} block derefs
 fn deref_method_call_in_arrayref() {
     assert_clean_parse(
         "return [@{Mojo::Cookie::Response->parse($headers->set_cookie)}] unless @_;",
@@ -103,7 +102,6 @@ fn deref_method_call_in_arrayref() {
 // ==========================================================================
 
 #[test]
-#[ignore] // separate issue: x repetition operator not recognized after )
 fn x_repetition_in_arrayref() {
     assert_clean_parse("my @x = [ (undef) x scalar(@ordered_values) ];");
 }
