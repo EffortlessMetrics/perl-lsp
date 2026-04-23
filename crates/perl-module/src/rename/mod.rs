@@ -31,6 +31,7 @@ pub struct ModuleLineEdit {
 /// - `use base qw(Module::Name Other);`
 ///
 /// Also rewrites:
+/// - Package declarations: `package Module::Name;` → `package NewName;`
 /// - Qualified function calls: `Module::Name::func()` → `NewName::func()`
 /// - Static method calls: `Module::Name->method()` → `NewName->method()`
 /// - `@ISA` array assignments
@@ -88,6 +89,18 @@ pub fn plan_module_rename_edits(
                     let candidate =
                         replace_module_name_prefix(current_line, old_variant, new_variant);
                     if candidate != current_line {
+                        rewritten = Some(candidate);
+                    }
+                }
+            }
+
+            // Check package declarations
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_package_declaration(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
                         rewritten = Some(candidate);
                     }
                 }

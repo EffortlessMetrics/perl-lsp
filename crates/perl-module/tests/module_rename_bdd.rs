@@ -22,14 +22,17 @@ fn given_parent_and_base_statements_when_module_is_renamed_then_all_references_a
 }
 
 #[test]
-fn given_non_import_lines_when_module_is_renamed_then_source_is_unchanged() {
+fn given_package_declaration_when_module_is_renamed_then_declaration_is_rewritten() {
+    // package declarations in the target file are rewritten (restored in #4594)
     let source = "package My::Module;\nmy $s = 'My::Module';\n";
 
     let edits = plan_module_rename_edits(source, "My::Module", "My::Renamed");
     let rewritten = apply_module_rename_edits(source, &edits);
 
-    assert!(edits.is_empty());
-    assert_eq!(rewritten, source);
+    // The package declaration line should be rewritten; the string literal line should not
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].line, 0);
+    assert_eq!(rewritten, "package My::Renamed;\nmy $s = 'My::Module';\n");
 }
 
 #[test]

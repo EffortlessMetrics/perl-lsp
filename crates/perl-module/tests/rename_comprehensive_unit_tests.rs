@@ -565,3 +565,23 @@ fn plan_rename_deep_to_shallow() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(edits[0].new_text, "use Foo;");
     Ok(())
 }
+
+// ──────────────────────────────────────────────────────────────
+// Regression: package declaration rewrite (restored in #4594, broken by #4554)
+// ──────────────────────────────────────────────────────────────
+
+#[test]
+fn test_rename_rewrites_package_declaration_in_target_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    // The target file's own `package` declaration must be rewritten when renaming.
+    let source = "package Old::Name;\n\nsub new { bless {}, shift }\n";
+    let edits = plan_module_rename_edits(source, "Old::Name", "New::Name");
+    assert_eq!(edits.len(), 1, "expected exactly one edit for the package declaration line");
+    assert_eq!(edits[0].line, 0, "edit should be on line 0 (the package declaration)");
+    assert_eq!(edits[0].new_text, "package New::Name;");
+
+    // Also verify roundtrip via apply
+    let result = apply_module_rename_edits(source, &edits);
+    assert!(result.starts_with("package New::Name;"));
+    Ok(())
+}
