@@ -93,6 +93,8 @@ pub struct Color {
 /// Scans the text for hex color codes, ANSI escape sequences, named CSS colors
 /// inside quoted strings, and Term::ANSIColor calls.
 pub fn detect_colors(text: &str) -> Vec<ColorInformation> {
+    use std::collections::HashSet;
+
     let mut colors = Vec::new();
 
     // Detect hex color codes in comments: # color: #RRGGBB or #RRGGBBAA
@@ -106,6 +108,24 @@ pub fn detect_colors(text: &str) -> Vec<ColorInformation> {
 
     // Detect Term::ANSIColor calls: color('red'), colored($text, 'blue')
     colors.extend(detect_term_ansicolor(text));
+
+    // Multiple detectors can legitimately discover the same literal (e.g. "red" in
+    // color('red') is found by both named-string and Term::ANSIColor detectors).
+    // Deduplicate by exact range + RGBA payload to avoid duplicate LSP diagnostics.
+    let mut seen = HashSet::new();
+    colors.retain(|entry| {
+        let key = (
+            entry.range.start.line,
+            entry.range.start.character,
+            entry.range.end.line,
+            entry.range.end.character,
+            entry.color.red.to_bits(),
+            entry.color.green.to_bits(),
+            entry.color.blue.to_bits(),
+            entry.color.alpha.to_bits(),
+        );
+        seen.insert(key)
+    });
 
     colors
 }
@@ -753,6 +773,18 @@ mod tests {
             .collect();
         // Should include a named color label "red"
         assert!(labels.iter().any(|l| l == "red"), "Expected 'red' in labels: {:?}", labels);
+    }
+
+    #[test]
+    fn test_detect_colors_deduplicates_term_ansicolor_named_string_overlap() {
+        let text = "print color('red'), 'ok';";
+        let colors = detect_colors(text);
+        assert_eq!(
+            colors.len(),
+            1,
+            "detect_colors should deduplicate overlapping detectors, got {:?}",
+            colors
+        );
     }
 }
 
