@@ -56,3 +56,22 @@ fn incremental_parser_given_zero_width_change_when_marked_then_no_nodes_require_
 
     assert!(!parser.needs_reparse(0, 100));
 }
+
+#[test]
+fn process_files_parallel_given_zero_workers_when_processing_then_falls_back_to_sequential() {
+    let files = vec!["a.pm".to_string(), "b.pm".to_string(), "c.pm".to_string()];
+
+    let processed = parallel::process_files_parallel(files, 0, |file| format!("ok:{file}"));
+
+    assert_eq!(processed, vec!["ok:a.pm", "ok:b.pm", "ok:c.pm"]);
+}
+
+#[test]
+fn process_files_parallel_given_workers_when_processing_then_returns_all_files() {
+    let files = vec!["a.pm".to_string(), "b.pm".to_string(), "c.pm".to_string()];
+
+    let mut processed = parallel::process_files_parallel(files, 2, |file| format!("ok:{file}"));
+    processed.sort();
+
+    assert_eq!(processed, vec!["ok:a.pm", "ok:b.pm", "ok:c.pm"]);
+}

@@ -197,6 +197,10 @@ pub mod parallel {
         T: Send + 'static,
         F: Fn(String) -> T + Send + Sync + 'static,
     {
+        if num_workers == 0 {
+            return files.into_iter().map(processor).collect();
+        }
+
         let (tx, rx) = mpsc::channel();
         let work_queue = Arc::new(Mutex::new(files));
         let processor = Arc::new(processor);
