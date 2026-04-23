@@ -77,7 +77,7 @@ pub fn extract_workspace_folder_change(event: &Value) -> WorkspaceFolderChange {
 /// This keeps behavior deterministic across absolute POSIX and Windows-style paths.
 #[must_use]
 pub fn root_path_to_file_uri(root_path: &str) -> String {
-    if root_path.starts_with("file://") {
+    if root_path.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://")) {
         return root_path.to_string();
     }
 
@@ -156,5 +156,11 @@ mod tests {
     fn preserves_file_uri_root_path_input() {
         let uri = root_path_to_file_uri("file:///already/uri");
         assert_eq!(uri, "file:///already/uri");
+    }
+
+    #[test]
+    fn preserves_file_uri_root_path_input_case_insensitively() {
+        let uri = root_path_to_file_uri("FILE:///already/uri");
+        assert_eq!(uri, "FILE:///already/uri");
     }
 }
