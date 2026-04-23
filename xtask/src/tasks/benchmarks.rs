@@ -625,6 +625,50 @@ mod tests {
     }
 
     #[test]
+    fn parse_criterion_identity_rejects_too_few_parts() {
+        assert_eq!(parse_criterion_identity(&[]), None);
+        assert_eq!(parse_criterion_identity(&["estimates.json".to_string()]), None);
+        assert_eq!(
+            parse_criterion_identity(&["group".to_string(), "estimates.json".to_string()]),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_criterion_identity_rejects_base_runs() {
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "base".to_string(),
+            "estimates.json".to_string(),
+        ];
+        assert_eq!(parse_criterion_identity(&parts), None);
+    }
+
+    #[test]
+    fn parse_criterion_identity_rejects_change_dirs() {
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "change".to_string(),
+            "estimates.json".to_string(),
+        ];
+        assert_eq!(parse_criterion_identity(&parts), None);
+    }
+
+    #[test]
+    fn parse_criterion_identity_handles_plain_layout_without_new_subdir() {
+        // Older Criterion versions write estimates.json directly under bench_name/
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "estimates.json".to_string(),
+        ];
+        let result = parse_criterion_identity(&parts);
+        assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
+    }
+
+    #[test]
     fn parse_criterion_results_excludes_base_and_change_results() -> Result<()> {
         let dir = TempDir::new()?;
         let root = dir.path();
