@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use perl_module::resolution::use_lib::{
-    UseLibAction, UseLibPath, extract_use_lib_operations, resolve_use_lib_paths,
-    resolve_use_lib_paths_from_source_at_offset,
+    UseLibAction, UseLibPath, extract_use_lib_operations, extract_use_lib_paths,
+    resolve_use_lib_paths, resolve_use_lib_paths_from_source_at_offset,
 };
 
 #[test]
@@ -77,6 +77,39 @@ use Lib::Thing;\n\
     let include_paths = resolve_use_lib_paths_from_source_at_offset(
         source,
         offset_at_use,
+        Path::new("/workspace"),
+        None,
+    );
+
+    assert_eq!(include_paths, vec!["second".to_string()]);
+}
+
+#[test]
+fn multiline_use_lib_arguments_are_extracted() {
+    let source = "\
+use lib (\n\
+    'lib',\n\
+    'vendor/lib',\n\
+);\n\
+";
+
+    let paths = extract_use_lib_paths(source);
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "lib".to_string(), from_findbin: false },
+            UseLibPath { path: "vendor/lib".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn same_line_use_and_no_lib_statements_preserve_order() {
+    let source = "use lib 'first'; no lib 'first'; use lib 'second';";
+
+    let include_paths = resolve_use_lib_paths_from_source_at_offset(
+        source,
+        source.len(),
         Path::new("/workspace"),
         None,
     );

@@ -37,8 +37,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             extract_paths_from_args(rest, &mut paths);
         }
@@ -52,8 +52,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
@@ -73,6 +73,48 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     }
 
     ops
+}
+
+fn split_perl_statements(source: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut start = 0usize;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (idx, ch) in source.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_single || in_double => {
+                escaped = true;
+            }
+            '\'' if !in_double => {
+                in_single = !in_single;
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+            }
+            ';' if !in_single && !in_double => {
+                let statement = &source[start..idx];
+                if !statement.trim().is_empty() {
+                    statements.push(statement);
+                }
+                start = idx + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    let trailing = &source[start..];
+    if !trailing.trim().is_empty() {
+        statements.push(trailing);
+    }
+
+    statements
 }
 
 /// Resolve `use lib` paths against a workspace root and optional file directory.
