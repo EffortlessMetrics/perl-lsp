@@ -1205,13 +1205,14 @@ impl WorkspaceIndex {
     /// symbols with the same name exist from different files.
     fn remove_symbol_from_global_index(
         symbol: &WorkspaceSymbol,
-        uri: &str,
         global_index: &mut HashMap<String, Vec<WorkspaceSymbol>>,
     ) {
+        let symbol_uri = &symbol.uri;
+
         // Remove from bare name entry
         let bare_name_lower = symbol.name.to_lowercase();
         if let Some(entry) = global_index.get_mut(&bare_name_lower) {
-            entry.retain(|s| s.uri != uri);
+            entry.retain(|s| &s.uri != symbol_uri);
             if entry.is_empty() {
                 global_index.remove(&bare_name_lower);
             }
@@ -1221,7 +1222,7 @@ impl WorkspaceIndex {
         if let Some(ref qname) = symbol.qualified_name {
             let qname_lower = qname.to_lowercase();
             if let Some(entry) = global_index.get_mut(&qname_lower) {
-                entry.retain(|s| s.uri != uri);
+                entry.retain(|s| &s.uri != symbol_uri);
                 if entry.is_empty() {
                     global_index.remove(&qname_lower);
                 }
@@ -1238,7 +1239,7 @@ impl WorkspaceIndex {
         file_index: &FileIndex,
     ) {
         for symbol in &file_index.symbols {
-            Self::remove_symbol_from_global_index(symbol, &symbol.uri, global_name_index);
+            Self::remove_symbol_from_global_index(symbol, global_name_index);
         }
     }
 
@@ -2352,16 +2353,13 @@ impl WorkspaceIndex {
         let global_name_index = self.global_name_index.read();
 
         // Phase 1: Collect candidate symbols from global_name_index
-        // Iterate over keys that contain the query (prefix or substring match on key)
-        // This bounds iteration to symbols whose names contain the query,
-        // rather than iterating over ALL files and ALL symbols.
+        // Iterate over key-value pairs and collect symbols from keys that contain the query.
+        // Using iter() avoids redundant HashMap lookup compared to keys() + get().
         let mut candidates: Vec<WorkspaceSymbol> = Vec::new();
 
-        for key in global_name_index.keys() {
+        for (key, symbols) in global_name_index.iter() {
             if key.contains(&query_lower) {
-                if let Some(symbols) = global_name_index.get(key) {
-                    candidates.extend(symbols.iter().cloned());
-                }
+                candidates.extend(symbols.iter().cloned());
             }
         }
 
@@ -2374,8 +2372,7 @@ impl WorkspaceIndex {
                     || symbol
                         .qualified_name
                         .as_ref()
-                        .map(|qn| qn.to_lowercase().contains(&query_lower))
-                        .unwrap_or(false)
+                        .is_some_and(|qn| qn.to_lowercase().contains(&query_lower))
             })
             .collect();
 
