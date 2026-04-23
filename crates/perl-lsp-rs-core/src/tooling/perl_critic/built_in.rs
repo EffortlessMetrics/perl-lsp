@@ -172,7 +172,9 @@ fn open_statement_violations(
         .into_iter()
         .filter(|(_, statement)| predicate(statement))
         .map(|(start, _)| {
-            let start_u32 = u32::try_from(start).unwrap_or(u32::MAX);
+            let (line_num, col_num) = byte_offset_to_line_col(content, start);
+            let line_u32 = u32::try_from(line_num).unwrap_or(u32::MAX);
+            let col_u32 = u32::try_from(col_num).unwrap_or(u32::MAX);
             Violation {
                 policy: policy.name().to_string(),
                 description: description.to_string(),
@@ -180,13 +182,13 @@ fn open_statement_violations(
                 severity: policy.severity(),
                 range: perl_parser_core::position::Range {
                     start: perl_parser_core::position::Position {
-                        line: 1,
-                        column: start_u32.saturating_add(1),
+                        line: line_u32,
+                        column: col_u32,
                         byte: start,
                     },
                     end: perl_parser_core::position::Position {
-                        line: 1,
-                        column: start_u32.saturating_add(5),
+                        line: line_u32,
+                        column: col_u32.saturating_add(4),
                         byte: start.saturating_add(4),
                     },
                 },
@@ -196,8 +198,19 @@ fn open_statement_violations(
         .collect()
 }
 
+/// Convert a byte offset into (line, column) — both zero-indexed.
+/// Works correctly with both LF and CRLF line endings.
+fn byte_offset_to_line_col(content: &str, offset: usize) -> (usize, usize) {
+    let prefix = &content[..offset.min(content.len())];
+    let line = prefix.bytes().filter(|&b| b == b'\n').count();
+    let line_start = prefix.rfind('\n').map_or(0, |idx| idx + 1);
+    let col = content[line_start..offset.min(content.len())].chars().count();
+    (line, col)
+}
+
 fn extract_open_statements(content: &str) -> Vec<(usize, &str)> {
     let mut statements = Vec::new();
+    // Use byte-level scanning to correctly track offsets regardless of line ending style.
     let mut offset = 0usize;
 
     for line in content.lines() {
@@ -216,7 +229,18 @@ fn extract_open_statements(content: &str) -> Vec<(usize, &str)> {
                 statements.push((absolute_open, statement));
             }
         }
-        offset += line.len() + 1;
+        // `str::lines()` strips the line ending from each line, but `line.len()` does not
+        // include the newline bytes. We must advance offset by the raw byte length of the
+        // line *including* any line-ending character(s). To avoid CRLF over-counting we
+        // find the next newline in content starting from offset + line.len().
+        let after_line = offset + line.len();
+        if content.as_bytes().get(after_line) == Some(&b'\r') {
+            offset = after_line + 2; // CRLF
+        } else if content.as_bytes().get(after_line) == Some(&b'\n') {
+            offset = after_line + 1; // LF
+        } else {
+            offset = after_line; // EOF — no trailing newline
+        }
     }
 
     statements
