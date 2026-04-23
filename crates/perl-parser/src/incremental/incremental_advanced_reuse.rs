@@ -288,8 +288,8 @@ impl AdvancedReuseAnalyzer {
 
     /// Identify nodes affected by edits
     fn identify_affected_nodes(&mut self, tree: &Node, edits: &EditSet) {
-        for edit in edits.edits() {
-            self.mark_affected_nodes_in_range(tree, edit.start_byte, edit.old_end_byte);
+        for range in edits.coalesced_affected_ranges() {
+            self.mark_affected_nodes_in_range(tree, range.start.byte, range.end.byte);
         }
     }
 
@@ -298,9 +298,10 @@ impl AdvancedReuseAnalyzer {
         let node_range = Range::from(node.location);
         let edit_range = Range::new(Position::new(start, 0, 0), Position::new(end, 0, 0));
 
-        if node_range.overlaps(&edit_range) {
-            self.affected_nodes.insert(node.location.start);
+        if !node_range.overlaps(&edit_range) {
+            return;
         }
+        self.affected_nodes.insert(node.location.start);
 
         // Recurse into children
         match &node.kind {
@@ -933,5 +934,40 @@ mod tests {
 
         // Different type nodes should not be compatible
         assert!(!analyzer.are_compatible_for_content_update(&num1, &str1));
+    }
+
+    #[test]
+    fn test_identify_affected_nodes_marks_only_overlapping_regions() {
+        let mut analyzer = AdvancedReuseAnalyzer::new();
+        let tree = Node::new(
+            NodeKind::Program {
+                statements: vec![
+                    Node::new(
+                        NodeKind::Number { value: "1".to_string() },
+                        SourceLocation { start: 0, end: 1 },
+                    ),
+                    Node::new(
+                        NodeKind::Number { value: "2".to_string() },
+                        SourceLocation { start: 20, end: 21 },
+                    ),
+                ],
+            },
+            SourceLocation { start: 0, end: 21 },
+        );
+
+        let mut edits = EditSet::new();
+        edits.add(perl_parser_core::edit::Edit::new(
+            0,
+            2,
+            2,
+            Position::new(0, 0, 0),
+            Position::new(2, 0, 2),
+            Position::new(2, 0, 2),
+        ));
+
+        analyzer.identify_affected_nodes(&tree, &edits);
+
+        assert!(analyzer.affected_nodes.contains(&0));
+        assert!(!analyzer.affected_nodes.contains(&20));
     }
 }

@@ -171,6 +171,34 @@ impl EditSet {
             .map(|edit| Range::new(edit.start_position, edit.old_end_position))
             .collect()
     }
+
+    /// Get affected ranges with overlapping and adjacent regions coalesced.
+    ///
+    /// This is useful for incremental parsing workflows that only need the
+    /// minimal set of invalidation windows.
+    pub fn coalesced_affected_ranges(&self) -> Vec<Range> {
+        let mut ranges = self.affected_ranges();
+        if ranges.len() <= 1 {
+            return ranges;
+        }
+
+        ranges.sort_by_key(|range| range.start.byte);
+
+        let mut merged = Vec::with_capacity(ranges.len());
+        let mut current = ranges[0];
+        for range in ranges.into_iter().skip(1) {
+            if range.start.byte <= current.end.byte {
+                if range.end.byte > current.end.byte {
+                    current.end = range.end;
+                }
+            } else {
+                merged.push(current);
+                current = range;
+            }
+        }
+        merged.push(current);
+        merged
+    }
 }
 
 #[cfg(test)]
@@ -252,5 +280,41 @@ mod tests {
 
         // Check cumulative shift
         assert_eq!(edits.byte_shift_at(50), 7); // +2 from first, +5 from second
+    }
+
+    #[test]
+    fn test_coalesced_affected_ranges() {
+        let mut edits = EditSet::new();
+        edits.add(Edit::new(
+            10,
+            15,
+            17,
+            Position::new(10, 1, 0),
+            Position::new(15, 1, 5),
+            Position::new(17, 1, 7),
+        ));
+        edits.add(Edit::new(
+            14,
+            20,
+            21,
+            Position::new(14, 1, 4),
+            Position::new(20, 1, 10),
+            Position::new(21, 1, 11),
+        ));
+        edits.add(Edit::new(
+            30,
+            35,
+            36,
+            Position::new(30, 2, 0),
+            Position::new(35, 2, 5),
+            Position::new(36, 2, 6),
+        ));
+
+        let ranges = edits.coalesced_affected_ranges();
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges[0].start.byte, 10);
+        assert_eq!(ranges[0].end.byte, 20);
+        assert_eq!(ranges[1].start.byte, 30);
+        assert_eq!(ranges[1].end.byte, 35);
     }
 }
