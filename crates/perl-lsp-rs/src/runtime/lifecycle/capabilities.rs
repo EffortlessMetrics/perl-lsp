@@ -27,6 +27,13 @@ impl LspServer {
 
         // Parse client capabilities
         if let Some(params) = &params {
+            let is_claude_code_client = params
+                .get("clientInfo")
+                .and_then(|info| info.get("name"))
+                .and_then(|name| name.as_str())
+                .map(|name| name.to_ascii_lowercase().contains("claude"))
+                .unwrap_or(false);
+
             // Take lock once to write all capabilities
             {
                 let mut caps = self.client_capabilities.lock();
@@ -229,6 +236,21 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if is_claude_code_client {
+                // Claude Code can start servers without workspaceFolders/rootUri in some modes.
+                // Fall back to the process working directory so workspace-scoped features
+                // (module resolution, project config loading) still behave predictably.
+                if let Ok(root_path) = std::env::current_dir() {
+                    if let Some(path_str) = root_path.to_str() {
+                        let root_uri = root_path_to_file_uri(path_str);
+                        tracing::debug!(root_uri, "Initialized Claude Code fallback workspace");
+                        let mut folders = self.workspace_folders.lock();
+                        folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                            root_uri.clone(),
+                        ));
+                        self.set_root_uri(&root_uri);
+                    }
+                }
             }
         }
 
@@ -489,5 +511,20 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_claude_code_falls_back_to_cwd_workspace() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "Claude Code"
+            },
+            "capabilities": {}
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert_eq!(server.workspace_folders.lock().len(), 1);
     }
 }
