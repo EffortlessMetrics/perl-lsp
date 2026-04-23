@@ -3322,11 +3322,14 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
         if token.starts_with('-') {
             return None;
         }
-        // Strip surrounding single or double quotes
-        let stripped = token.trim_matches('\'').trim_matches('"');
-        // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
-        let stripped = stripped.trim_matches('(').trim_matches(')');
-        let stripped = stripped.trim_matches('\'').trim_matches('"');
+        // Strip common boundary punctuation around module tokens.
+        // This handles forms like:
+        // - use parent 'Foo::Bar', 'Other::Base';
+        // - use parent ('Foo::Bar');
+        // - use base "Foo::Bar";
+        let stripped = token.trim_matches(|c| {
+            matches!(c, '\'' | '"' | '(' | ')' | ',' | ';' | '[' | ']' | '{' | '}')
+        });
         // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
         if stripped.is_empty() {
             return None;
@@ -4709,6 +4712,16 @@ Utils::process_data();
         let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
         // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
         assert_eq!(names, vec!["Foo'Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_comma_separated_and_terminated() {
+        let names = extract_module_names_from_use_args(&[
+            "-norequire".to_string(),
+            "'Foo::Bar',".to_string(),
+            "\"Other::Base\";".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
     }
 
     #[test]
