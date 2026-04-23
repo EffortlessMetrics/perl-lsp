@@ -3827,6 +3827,11 @@ fn collect_todo_hits(
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
                 has_unlinked_todo_in_rust_line(line, todo_re)
+            } else if path
+                .extension()
+                .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
+            {
+                has_unlinked_todo_in_perl_line(line, todo_re)
             } else {
                 has_unlinked_todo_in_hash_line(line, todo_re)
             };
@@ -3879,13 +3884,20 @@ fn block_comment_text_from(line: &str, comment_start: usize) -> &str {
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    let Some(idx) = find_hash_comment_start(line) else {
+    let Some(idx) = find_hash_comment_start(line, false) else {
         return false;
     };
     has_unlinked_token(&line[idx + 1..], token_re)
 }
 
-fn find_hash_comment_start(line: &str) -> Option<usize> {
+fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
+    let Some(idx) = find_hash_comment_start(line, true) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
     let mut in_double = false;
     let mut in_backtick = false;
@@ -3936,6 +3948,9 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
                     return None;
                 }
                 if idx == 0 {
+                    return Some(idx);
+                }
+                if perl_mode {
                     return Some(idx);
                 }
                 if let Some(prev) = line[..idx].chars().next_back() {
@@ -4404,6 +4419,16 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn perl_todo_detection_allows_comment_start_without_whitespace() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_perl_line("print# TODO: perl comment", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = '# TODO in string';", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("print# TODO(#123): tracked", &todo_re));
+
+        Ok(())
+    }
     #[test]
     fn home_path_detection_only_allows_generic_user_examples() -> Result<()> {
         let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
