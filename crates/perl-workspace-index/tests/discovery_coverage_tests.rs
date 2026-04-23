@@ -530,6 +530,7 @@ fn hidden_directories_in_skip_list_are_skipped() -> TestResult {
     // These hidden dirs are in the skip list
     create_file(root, ".git/hooks/hook.pm")?;
     create_file(root, ".cache/fast.pm")?;
+    create_file(root, ".hermes/conveyor/work-1234/session.pm")?;
 
     // Visible file for comparison
     create_file(root, "lib/Visible.pm")?;
@@ -578,11 +579,11 @@ fn hidden_perl_files_at_root_are_discovered() -> TestResult {
 }
 
 #[test]
-fn all_six_skipped_directories_are_excluded_from_walk() -> TestResult {
+fn all_core_skipped_directories_are_excluded_from_walk() -> TestResult {
     let tmp = TempDir::new()?;
     let root = tmp.path();
 
-    let skipped = [".git", ".hg", ".svn", "target", "node_modules", ".cache"];
+    let skipped = [".git", ".hg", ".svn", "target", "node_modules", ".cache", ".hermes"];
     for dir in skipped {
         create_file(root, &format!("{dir}/nested/Module.pm"))?;
     }

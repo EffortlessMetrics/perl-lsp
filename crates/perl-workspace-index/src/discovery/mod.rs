@@ -5,7 +5,8 @@
 //! 2. Fall back to filesystem walking with `WalkDir` when git is unavailable.
 //!
 //! The resulting behavior is intentionally conservative: common non-source directories
-//! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
+//! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`,
+//! `.hermes`).
 
 use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use perl_parser_core::source_file::is_perl_source_path;
