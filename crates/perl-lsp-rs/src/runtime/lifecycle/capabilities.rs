@@ -245,6 +245,54 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Some(init_options) = params.get("initializationOptions") {
+                // Compatibility fallback for clients that place workspace roots in
+                // initializationOptions instead of top-level initialize params.
+                if let Some(workspace_folders) =
+                    init_options.get("workspaceFolders").and_then(|f| f.as_array())
+                {
+                    let mut folders = self.workspace_folders.lock();
+                    for uri in extract_workspace_folder_uris(workspace_folders) {
+                        tracing::debug!(
+                            uri,
+                            "Initialized with workspace folder from initializationOptions"
+                        );
+                        let mut folder =
+                            super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
+                        if let Some(path) = super::super::source_path_from_uri(&uri) {
+                            folder = folder.with_path(path);
+                        }
+                        folders.push(folder);
+                    }
+                } else if let Some(root_uri) = init_options.get("rootUri").and_then(|u| u.as_str())
+                {
+                    let mut folders = self.workspace_folders.lock();
+                    tracing::debug!(
+                        root_uri,
+                        "Initialized with root URI from initializationOptions"
+                    );
+                    let mut folder = super::super::workspace_folder::WorkspaceFolderState::new(
+                        root_uri.to_string(),
+                    );
+                    if let Some(path) = super::super::source_path_from_uri(root_uri) {
+                        folder = folder.with_path(path);
+                    }
+                    folders.push(folder);
+                    self.set_root_uri(root_uri);
+                } else if let Some(root_path) =
+                    init_options.get("rootPath").and_then(|p| p.as_str())
+                {
+                    tracing::debug!(
+                        root_path,
+                        "Initialized with legacy rootPath from initializationOptions"
+                    );
+                    let root_uri = root_path_to_file_uri(root_path);
+                    let mut folders = self.workspace_folders.lock();
+                    folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                        root_uri.clone(),
+                    ));
+                    self.set_root_uri(&root_uri);
+                }
             }
         }
 
@@ -570,5 +618,25 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_reads_root_uri_from_initialization_options() {
+        let server = LspServer::new();
+        let params = json!({
+            "initializationOptions": {
+                "rootUri": "file:///tmp/claude-workspace"
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders.len(),
+            1,
+            "must create one workspace folder from initializationOptions.rootUri"
+        );
+        assert_eq!(folders[0].uri, "file:///tmp/claude-workspace");
     }
 }
