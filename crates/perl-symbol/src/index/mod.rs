@@ -191,4 +191,53 @@ mod tests {
         let fuzzy_results = index.search_fuzzy("user name");
         assert!(fuzzy_results.contains(&"get_user_name".to_string()));
     }
+
+    #[test]
+    fn duplicate_symbols_are_deduplicated_for_prefix_and_fuzzy_search() {
+        let mut index = SymbolIndex::new();
+
+        index.add_symbol("My::Service::Client".to_string());
+        index.add_symbol("My::Service::Client".to_string());
+        index.add_symbol("My::Service::Client".to_string());
+
+        let prefix_results = index.search_prefix("My::Service");
+        assert_eq!(prefix_results, vec!["My::Service::Client".to_string()]);
+
+        let fuzzy_results = index.search_fuzzy("service client");
+        assert_eq!(fuzzy_results, vec!["My::Service::Client".to_string()]);
+    }
+
+    #[test]
+    fn fuzzy_ranking_prefers_symbols_matching_more_tokens() {
+        let mut index = SymbolIndex::new();
+
+        index.add_symbol("UserAccountService".to_string());
+        index.add_symbol("UserAccount".to_string());
+        index.add_symbol("ServiceOnly".to_string());
+
+        let fuzzy_results = index.search_fuzzy("user account service");
+        assert_eq!(fuzzy_results.first(), Some(&"UserAccountService".to_string()));
+    }
+
+    #[test]
+    fn tokenization_supports_mixed_case_and_non_alphanumeric_delimiters() {
+        let mut index = SymbolIndex::new();
+
+        index.add_symbol("HTTP::RequestParser_v2".to_string());
+
+        let version_match = index.search_fuzzy("v2");
+        assert_eq!(version_match, vec!["HTTP::RequestParser_v2".to_string()]);
+
+        let parser_match = index.search_fuzzy("request parser");
+        assert_eq!(parser_match, vec!["HTTP::RequestParser_v2".to_string()]);
+    }
+
+    #[test]
+    fn unknown_prefix_and_fuzzy_queries_return_empty_results() {
+        let mut index = SymbolIndex::new();
+        index.add_symbol("KnownSymbol".to_string());
+
+        assert!(index.search_prefix("Missing").is_empty());
+        assert!(index.search_fuzzy("totally absent query").is_empty());
+    }
 }
