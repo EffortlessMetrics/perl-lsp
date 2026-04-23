@@ -1094,6 +1094,8 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
 /// File-level index data
 #[derive(Default, Clone)]
 pub struct FileIndex {
+    /// Canonical file URI for this index entry.
+    source_uri: String,
     /// Symbols defined in this file
     symbols: Vec<WorkspaceSymbol>,
     /// References in this file (symbol name -> references)
@@ -1457,8 +1459,12 @@ impl WorkspaceIndex {
         let folder_uri = self.determine_folder_uri(&uri_str);
 
         // Extract symbols and references
-        let mut file_index =
-            FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+        let mut file_index = FileIndex {
+            source_uri: uri_str.clone(),
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
@@ -1645,29 +1651,21 @@ impl WorkspaceIndex {
     /// index.remove_folder("file:///project1");
     /// ```
     pub fn remove_folder(&self, folder_uri: &str) {
-        let mut files_to_remove = Vec::new();
+        let mut uris_to_remove = Vec::new();
         let files = self.files.read();
 
         // Collect all files that belong to this folder
-        for (key, file_index) in files.iter() {
+        for file_index in files.values() {
             if file_index.folder_uri.as_deref() == Some(folder_uri) {
-                files_to_remove.push(key.clone());
+                uris_to_remove.push(file_index.source_uri.clone());
             }
         }
         drop(files);
 
-        // Remove each file
-        for key in files_to_remove {
-            let mut files = self.files.write();
-            if let Some(file_index) = files.remove(&key) {
-                // Incrementally remove symbols
-                let mut symbols = self.symbols.write();
-                Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
-
-                // Remove from global reference index
-                let mut global_refs = self.global_references.write();
-                Self::remove_file_global_refs(&mut global_refs, &file_index, &key);
-            }
+        // Remove each file through the full removal path to keep
+        // symbol/reference caches and document store in sync.
+        for uri in uris_to_remove {
+            self.remove_file(&uri);
         }
     }
 
@@ -1778,8 +1776,12 @@ impl WorkspaceIndex {
             // Determine workspace folder URI from the file URI
             let folder_uri = self.determine_folder_uri(&uri_str);
 
-            let mut file_index =
-                FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+            let mut file_index = FileIndex {
+                source_uri: uri_str.clone(),
+                content_hash,
+                folder_uri: folder_uri.clone(),
+                ..Default::default()
+            };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
 
@@ -4882,17 +4884,42 @@ sub other_sub {
 
         // Verify both files are indexed
         assert_eq!(index.file_count(), 2, "Should have 2 files indexed");
+        assert_eq!(index.document_store().count(), 2, "Document store should track both files");
 
         // Remove project1 folder
         index.remove_folder("file:///project1");
 
         // Verify only project2 file remains
         assert_eq!(index.file_count(), 1, "Should have 1 file after removing folder");
+        assert_eq!(
+            index.document_store().count(),
+            1,
+            "Document store should drop files removed via folder deletion"
+        );
         assert!(index.file_symbols(uri1).is_empty(), "File from removed folder should be gone");
         assert_eq!(
             index.file_symbols(uri2).len(),
             2,
             "File from remaining folder should still be present"
+        );
+    }
+
+    #[test]
+    fn test_remove_folder_removes_symbol_free_files() {
+        let index = WorkspaceIndex::new();
+        index.set_workspace_folders(vec!["file:///project1".to_string()]);
+
+        let uri = "file:///project1/empty.pl";
+        must(index.index_file(must(url::Url::parse(uri)), "# comments only".to_string()));
+        assert_eq!(index.file_count(), 1, "Expected file to be indexed");
+
+        index.remove_folder("file:///project1");
+
+        assert_eq!(index.file_count(), 0, "Folder removal should delete symbol-free files");
+        assert_eq!(
+            index.document_store().count(),
+            0,
+            "Document store should stay in sync for symbol-free files"
         );
     }
 }
