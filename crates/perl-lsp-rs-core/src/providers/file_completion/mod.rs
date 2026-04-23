@@ -170,14 +170,9 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
             _ if matches!(
                 file_name.to_ascii_lowercase().as_str(),
                 "readme"
-                    | "readme.md"
-                    | "readme.rst"
                     | "changelog"
-                    | "changelog.md"
                     | "contributing"
-                    | "contributing.md"
                     | "license"
-                    | "license.md"
             ) =>
             {
                 "Project documentation file"
