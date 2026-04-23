@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -18,7 +19,53 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_signals"
+    },
+    "signals": {
+      "type": "object",
+      "required": [
+        "manual_editor_smoke_workflow",
+        "first_five_minutes_harness",
+        "open_issue_burndown"
+      ],
+      "properties": {
+        "manual_editor_smoke_workflow": {
+          "type": "object",
+          "required": ["state", "source", "verification_command"],
+          "properties": {
+            "state": { "type": "string", "const": "tracked" },
+            "source": { "type": "string" },
+            "verification_command": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "first_five_minutes_harness": {
+          "type": "object",
+          "required": ["state", "default_lane", "release_lane", "fixture_matrix"],
+          "properties": {
+            "state": { "type": "string", "const": "tracked" },
+            "default_lane": { "type": "string" },
+            "release_lane": { "type": "string" },
+            "fixture_matrix": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": ["state", "verification_command", "labels"],
+          "properties": {
+            "state": { "type": "string", "const": "tracked" },
+            "verification_command": { "type": "string" },
+            "labels": {
+              "type": "array",
+              "minItems": 4,
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "scorecard": {
       "type": "string",
@@ -98,7 +145,7 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": ["planned", "tracked", "measured"]
           },
           "owner": {
             "type": "string"

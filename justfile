@@ -1049,6 +1049,25 @@ ux-tests-full:
         cargo test -p perl-lsp-ux-tests --features integration-test -- --test-threads=1
     @echo "UX tests (full) passed"
 
+# UX issue burn-down snapshot for first-time-user confidence tracking.
+# Uses GitHub issue labels as the source of truth:
+# - `ux` (all UX issues)
+# - `ux:p0-blocker`, `ux:p1-friction`, `ux:p2-polish` (priority buckets)
+ux-issue-burndown:
+    @echo "UX issue burn-down snapshot (open issues):"
+    @if ! command -v gh >/dev/null 2>&1; then \
+        echo "GitHub CLI (gh) not found. Install gh to query open UX issues."; \
+        exit 1; \
+    fi
+    @echo "  Total ux:* open issues"
+    @gh issue list --label "ux" --state open --limit 500 --json number --jq 'length'
+    @echo "  ux:p0-blocker open issues"
+    @gh issue list --label "ux,ux:p0-blocker" --state open --limit 500 --json number --jq 'length'
+    @echo "  ux:p1-friction open issues"
+    @gh issue list --label "ux,ux:p1-friction" --state open --limit 500 --json number --jq 'length'
+    @echo "  ux:p2-polish open issues"
+    @gh issue list --label "ux,ux:p2-polish" --state open --limit 500 --json number --jq 'length'
+
 # @INC consumer-consistency conformance harness.
 # Verifies that goto-definition, hover, and PL701 diagnostic agree on module resolution
 # across 5 resolution modes: relative includePaths, lexical use lib, no lib cancellation,

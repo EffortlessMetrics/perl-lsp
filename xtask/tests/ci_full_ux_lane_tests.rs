@@ -66,3 +66,37 @@ fn test_ux_tests_recipe_builds_and_exports_binary() -> Result<(), Box<dyn std::e
 
     Ok(())
 }
+
+#[test]
+fn test_ux_issue_burndown_recipe_tracks_open_priority_buckets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = project_root();
+    let justfile = fs::read_to_string(root.join("justfile"))?;
+
+    let recipe_start = justfile
+        .find("\nux-issue-burndown:\n")
+        .ok_or("ux-issue-burndown recipe must exist in justfile")?;
+    let recipe_body = &justfile[recipe_start..];
+    let next_recipe = recipe_body
+        .find("\n# @INC consumer-consistency conformance harness.")
+        .ok_or("ux-issue-burndown recipe terminator marker must exist in justfile")?;
+    let recipe_body = &recipe_body[..next_recipe];
+
+    assert!(
+        recipe_body.contains("gh issue list --label \"ux\" --state open"),
+        "ux-issue-burndown must track open ux issues as the burn-down numerator.\n\
+         Current recipe:\n{}",
+        recipe_body
+    );
+    for label in ["ux:p0-blocker", "ux:p1-friction", "ux:p2-polish"] {
+        let query = format!("gh issue list --label \"ux,{label}\" --state open");
+        assert!(
+            recipe_body.contains(&query),
+            "ux-issue-burndown must track `{label}` open issue counts.\n\
+             Current recipe:\n{}",
+            recipe_body
+        );
+    }
+
+    Ok(())
+}

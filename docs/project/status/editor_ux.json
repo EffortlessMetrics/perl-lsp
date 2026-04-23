@@ -28,24 +28,47 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_signals",
   "schema_version": 1,
   "scorecard": "editor_ux",
+  "signals": {
+    "first_five_minutes_harness": {
+      "default_lane": "just ux-tests",
+      "fixture_matrix": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+      "release_lane": "just ux-tests-full",
+      "state": "tracked"
+    },
+    "manual_editor_smoke_workflow": {
+      "source": "docs/project/protocols/verification.md#tier-c-real-user-confirmation",
+      "state": "tracked",
+      "verification_command": "just ci-full"
+    },
+    "open_issue_burndown": {
+      "labels": [
+        "ux",
+        "ux:p0-blocker",
+        "ux:p1-friction",
+        "ux:p2-polish"
+      ],
+      "state": "tracked",
+      "verification_command": "just ux-issue-burndown"
+    }
+  },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     },
     {
       "name": "workflow_stability_rate",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
       "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "tracked"
     }
   ]
 }

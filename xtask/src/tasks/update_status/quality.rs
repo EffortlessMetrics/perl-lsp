@@ -172,27 +172,45 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_signals",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
+        "signals": {
+            "manual_editor_smoke_workflow": {
+                "state": "tracked",
+                "source": "docs/project/protocols/verification.md#tier-c-real-user-confirmation",
+                "verification_command": "just ci-full"
+            },
+            "first_five_minutes_harness": {
+                "state": "tracked",
+                "default_lane": "just ux-tests",
+                "release_lane": "just ux-tests-full",
+                "fixture_matrix": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json"
+            },
+            "open_issue_burndown": {
+                "state": "tracked",
+                "verification_command": "just ux-issue-burndown",
+                "labels": ["ux", "ux:p0-blocker", "ux:p1-friction", "ux:p2-polish"]
+            }
+        },
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": "tracked",
                 "owner": "perl-lsp-ux-tests",
             },
         ],
@@ -258,9 +276,13 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_signals");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
+        assert_eq!(
+            receipt["signals"]["open_issue_burndown"]["verification_command"],
+            "just ux-issue-burndown"
+        );
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
