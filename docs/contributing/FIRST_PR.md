@@ -12,6 +12,15 @@ cd perl-lsp
 No submodules to init. The `tree-sitter-perl/` directory is legacy C code excluded from the
 default build — you can ignore it.
 
+If you are used to projects that vendor parser grammars as Git submodules, this repo is simpler:
+`git submodule update --init --recursive` is **not** required here. For confirmation, run:
+
+```bash
+git submodule status
+```
+
+No output means there are no configured submodules (expected for this project).
+
 ## 2. Set up the dev environment
 
 **With Nix (recommended — fully reproducible):**
