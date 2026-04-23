@@ -71,6 +71,8 @@
         ],
         "extensions": [
           ".pl",
+          ".cgi",
+          ".fcgi",
           ".pm",
           ".xs",
           ".xsi",
