@@ -405,6 +405,11 @@ fn inlay_labels(response: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn resolve_link_target(harness: &mut LspHarness, link: &Value) -> Result<Option<String>, String> {
+    let resolved = harness.request("documentLink/resolve", link.clone())?;
+    Ok(resolved.get("target").and_then(Value::as_str).map(ToOwned::to_owned))
+}
+
 fn line_span(range: &Value) -> Option<(u64, u64)> {
     let start = range.pointer("/range/start/line").and_then(Value::as_u64)?;
     let end = range.pointer("/range/end/line").and_then(Value::as_u64)?;
@@ -2483,6 +2488,141 @@ my $value = combine("a", "b");
     assert!(
         entries.iter().all(|entry| selection_range_depth(entry) >= 2),
         "each entry should include nested parent expansion; got {entries:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_document_links_cover_module_and_relative_file_targets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document links surface module and relative file targets");
+
+    let script = r#"use strict;
+use warnings;
+use Data::Dumper;
+require "lib/Local/Helper.pm";
+
+print Dumper({ ok => 1 });
+"#;
+    let helper = r#"package Local::Helper;
+use strict;
+use warnings;
+1;
+"#;
+
+    scenario.given("a script that links both a CPAN module and a relative local file");
+    let (mut harness, workspace) =
+        setup_workspace(&[("script/main.pl", script), ("script/lib/Local/Helper.pm", helper)])?;
+    let script_uri = workspace.uri("script/main.pl");
+    let helper_uri = workspace.uri("script/lib/Local/Helper.pm");
+    harness.open(&script_uri, script)?;
+    harness.barrier();
+
+    scenario.when("requesting document links for the script");
+    let links = harness.request(
+        "textDocument/documentLink",
+        json!({
+            "textDocument": { "uri": script_uri }
+        }),
+    )?;
+
+    scenario.then("the editor can resolve module and file links into clickable targets");
+    let links_array = links.as_array().ok_or("documentLink response should be an array")?;
+    let mut targets = Vec::new();
+    for link in links_array {
+        if let Some(target) = resolve_link_target(&mut harness, link)? {
+            targets.push(target);
+        }
+    }
+    assert!(
+        targets.iter().any(|target| target == "https://metacpan.org/pod/Data::Dumper"),
+        "expected MetaCPAN link for Data::Dumper; got {targets:?}"
+    );
+    assert!(
+        targets.iter().any(|target| uri_matches(target, &helper_uri)),
+        "expected local helper file URI in document links; helper_uri={helper_uri}, got {targets:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_document_links_refresh_after_did_change() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document links refresh after didChange");
+
+    let before = r#"use strict;
+use warnings;
+use Data::Dumper;
+require "lib/Local/Helper.pm";
+"#;
+
+    let after = r#"use strict;
+use warnings;
+use Data::Dumper;
+use JSON::PP;
+"#;
+
+    let helper = r#"package Local::Helper;
+use strict;
+use warnings;
+1;
+"#;
+
+    scenario.given("a file that initially contains both module and local require links");
+    let (mut harness, workspace) =
+        setup_workspace(&[("script/main.pl", before), ("script/lib/Local/Helper.pm", helper)])?;
+    let script_uri = workspace.uri("script/main.pl");
+    let helper_uri = workspace.uri("script/lib/Local/Helper.pm");
+    harness.open(&script_uri, before)?;
+    harness.barrier();
+
+    scenario.when("capturing links before and after replacing require with a new use statement");
+    let before_links = harness.request(
+        "textDocument/documentLink",
+        json!({
+            "textDocument": { "uri": script_uri }
+        }),
+    )?;
+    harness.change_full(&script_uri, 2, after)?;
+    harness.barrier();
+    let after_links = harness.request(
+        "textDocument/documentLink",
+        json!({
+            "textDocument": { "uri": script_uri }
+        }),
+    )?;
+
+    scenario.then("stale links are removed and new module links are added");
+    let before_links_array =
+        before_links.as_array().ok_or("documentLink before should be an array")?;
+    let after_links_array =
+        after_links.as_array().ok_or("documentLink after should be an array")?;
+    let mut before_targets = Vec::new();
+    for link in before_links_array {
+        if let Some(target) = resolve_link_target(&mut harness, link)? {
+            before_targets.push(target);
+        }
+    }
+    let mut after_targets = Vec::new();
+    for link in after_links_array {
+        if let Some(target) = resolve_link_target(&mut harness, link)? {
+            after_targets.push(target);
+        }
+    }
+    assert!(
+        before_targets.iter().any(|target| uri_matches(target, &helper_uri)),
+        "expected helper file URI before change; helper_uri={helper_uri}, got {before_targets:?}"
+    );
+    assert!(
+        !after_targets.iter().any(|target| uri_matches(target, &helper_uri)),
+        "helper file link should be removed after change; got {after_targets:?}"
+    );
+    assert!(
+        after_targets.iter().any(|target| target == "https://metacpan.org/pod/JSON::PP"),
+        "expected JSON::PP module link after change; got {after_targets:?}"
     );
 
     Ok(())
