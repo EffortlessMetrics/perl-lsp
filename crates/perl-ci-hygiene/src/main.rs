@@ -3861,7 +3861,8 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
-        if has_unlinked_token(&line[idx + 2..], token_re) {
+        let comment_tail = block_comment_text_from(line, idx + 2);
+        if has_unlinked_token(comment_tail, token_re) {
             return true;
         }
     }
@@ -3870,6 +3871,11 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         return true;
     }
     false
+}
+
+fn block_comment_text_from(line: &str, comment_start: usize) -> &str {
+    let remainder = &line[comment_start..];
+    if let Some(end) = remainder.find("*/") { &remainder[..end] } else { remainder }
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -4322,6 +4328,26 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_rust_line(
             "let s = \"safe literal\"; // TODO: follow up",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_scans_only_block_comment_text() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* tracked */ let s = \"TODO in code string\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "/* TODO: follow up */ let s = \"safe\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* TODO(#123): tracked */ let s = \"safe\";",
             &todo_re
         ));
 
