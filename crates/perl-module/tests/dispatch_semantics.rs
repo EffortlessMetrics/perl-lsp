@@ -163,6 +163,18 @@ fn test_require_file_path_single_quote_without_closing_quote_is_rejected() -> Re
 }
 
 #[test]
+fn test_require_empty_double_quoted_path_is_accepted() -> Result<(), String> {
+    // `require ""` is syntactically valid (though semantically dubious);
+    // the parser should return Some with an empty token, not None.
+    let head = parse_module_import_head(r#"require "";"#)
+        .ok_or("expected Some for empty double-quoted require")?;
+    if head.token != "" {
+        return Err(format!("expected empty token, got {:?}", head.token));
+    }
+    Ok(())
+}
+
+#[test]
 fn test_require_file_path_is_file_form() -> Result<(), String> {
     let head = parse_module_import_head(r#"require "Module/File.pm";"#)
         .ok_or("expected Some for quoted require")?;
