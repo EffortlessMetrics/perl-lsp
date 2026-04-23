@@ -156,11 +156,9 @@ pub(super) fn collect_editor_ux_confidence_counts(root: &Path) -> Result<BTreeMa
     }
     // Ensure all three canonical signal keys are always present (even if zero),
     // so callers can unwrap_or(0) without worrying about missing keys.
-    for signal in &[
-        "first_five_minutes_harness",
-        "manual_editor_smoke",
-        "issue_burndown_regression_guard",
-    ] {
+    for signal in
+        &["first_five_minutes_harness", "manual_editor_smoke", "issue_burndown_regression_guard"]
+    {
         counts.entry((*signal).to_string()).or_insert(0);
     }
     Ok(counts)
