@@ -350,12 +350,12 @@ fn comparison_operators_are_disjoint_from_control_flow() {
 }
 
 // ---------------------------------------------------------------------------
-// All KEYWORDS entries that start with uppercase are phase blocks or dunders
+// All KEYWORDS entries that start with uppercase are reserved uppercase tokens or dunders
 // ---------------------------------------------------------------------------
 
 #[test]
 fn uppercase_keywords_are_phase_blocks_or_dunders() {
-    let phase_blocks = ["AUTOLOAD", "BEGIN", "CHECK", "DESTROY", "END", "INIT", "UNITCHECK"];
+    let uppercase_reserved = ["ADJUST", "AUTOLOAD", "BEGIN", "CHECK", "DESTROY", "END", "INIT", "UNITCHECK"];
     for &kw in KEYWORDS {
         if kw.starts_with("__") {
             continue; // dunder tokens handled separately
@@ -363,8 +363,8 @@ fn uppercase_keywords_are_phase_blocks_or_dunders() {
         let first_char = kw.chars().next();
         if first_char.is_some_and(|c| c.is_ascii_uppercase()) {
             assert!(
-                phase_blocks.contains(&kw),
-                "uppercase keyword {kw:?} should be a known phase block"
+                uppercase_reserved.contains(&kw),
+                "uppercase keyword {kw:?} should be a known reserved uppercase token"
             );
         }
     }

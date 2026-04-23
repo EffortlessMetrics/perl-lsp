@@ -289,7 +289,7 @@ fn oop_keywords_present() {
 
 #[test]
 fn modern_perl_keywords_present() {
-    for kw in ["try", "catch", "finally", "class", "method"] {
+    for kw in ["try", "catch", "finally", "class", "method", "ADJUST", "isa"] {
         assert!(is_keyword(kw), "modern Perl keyword {kw:?} missing from KEYWORDS");
     }
 }
@@ -463,7 +463,7 @@ fn autoload_and_destroy_not_in_dap_keywords() {
 
 #[test]
 fn modern_perl_not_in_rename_keywords() {
-    for kw in ["try", "catch", "finally", "class", "method"] {
+    for kw in ["try", "catch", "finally", "class", "method", "ADJUST", "isa"] {
         assert!(!is_rename_keyword(kw), "{kw:?} should not be a rename keyword");
     }
 }
