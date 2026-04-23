@@ -176,7 +176,8 @@ fn plan_no_false_positive_with_in_non_moose_context() -> Result<(), Box<dyn std:
     // "with" appears as a statement modifier in non-Moose code.
     // Because line_references_moose_moo_dsl checks trim_start starts_with("with "),
     // a line like `open($fh, "<", $f) or die "err"` does not trigger.
-    let edits = plan_module_rename_edits("open($fh, '<', $f) or die 'err';", "Foo::Bar", "New::Mod");
+    let source = "open($fh, '<', $f) or die 'err';";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
     assert!(edits.is_empty());
     Ok(())
 }
