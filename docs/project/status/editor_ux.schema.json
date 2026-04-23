@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "measurement_input",
     "integration_points"
   ],
   "properties": {
@@ -96,6 +97,9 @@
               "p95_time_to_first_useful_result_ms"
             ]
           },
+          "value": {
+            "type": ["number", "integer", "null"]
+          },
           "state": {
             "type": "string",
             "enum": ["planned", "measured"]
@@ -106,6 +110,19 @@
         },
         "additionalProperties": false
       }
+    },
+    "measurement_input": {
+      "type": "object",
+      "required": ["source", "measured_at"],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "measured_at": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",
