@@ -39,6 +39,10 @@ fn line_col(source: &str, target_line: usize, needle: &str) -> Result<(u32, u32)
     Ok((target_line as u32, col as u32))
 }
 
+fn completion_labels(items: &[Value]) -> Vec<&str> {
+    items.iter().filter_map(|item| item.get("label").and_then(Value::as_str)).collect()
+}
+
 #[test]
 fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
@@ -134,6 +138,11 @@ my $value = gre
         .or_else(|| completion_response["result"].as_array())
         .ok_or("completion result missing items array")?;
     assert!(!completion_items.is_empty(), "completion items should not be empty");
+    let initial_labels = completion_labels(completion_items);
+    assert!(
+        initial_labels.contains(&"greet"),
+        "completion near `gre` should include `greet`, found labels: {initial_labels:?}"
+    );
 
     let (hover_line, hover_col) = line_col(fixture, 4, "$greeting")?;
     let hover_response = send_request_with_timeout(
@@ -227,6 +236,15 @@ my $value = gre
         .or_else(|| v2_completion_response["result"].as_array())
         .ok_or("re-completion result missing items array")?;
     assert!(!v2_items.is_empty(), "re-completion items should not be empty after didChange");
+    let v2_labels = completion_labels(v2_items);
+    assert!(
+        v2_labels.contains(&"greet"),
+        "re-completion should retain `greet`, found labels: {v2_labels:?}"
+    );
+    assert!(
+        v2_labels.contains(&"greetings"),
+        "re-completion should include newly added `greetings`, found labels: {v2_labels:?}"
+    );
 
     // ── Step 6: textDocument/references ─────────────────────────────────
     let (ref_line, ref_col) = line_col(fixture_v2, 4, "$greeting")?;
