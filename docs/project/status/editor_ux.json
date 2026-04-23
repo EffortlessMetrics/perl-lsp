@@ -28,7 +28,7 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "tracked_inventory",
   "schema_version": 1,
   "scorecard": "editor_ux",
   "top_line_metrics": [
@@ -47,5 +47,27 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "tracked_signals": {
+    "component_measure_coverage_count": {
+      "cross_file_definition_success_rate": 1,
+      "module_resolution_workflow_success_rate": 1,
+      "multi_root_workspace_navigation_success_rate": 2
+    },
+    "nightly_tier_workflow_count": 1,
+    "pr_tier_workflow_count": 16,
+    "subsystem_owner_workflow_count": {
+      "diagnostics": 1,
+      "editor_intelligence": 4,
+      "engineering_health": 6,
+      "module_resolution": 1,
+      "workspace_indexing": 5
+    },
+    "top_line_measure_coverage_count": {
+      "p95_time_to_first_useful_result_ms": 1,
+      "workflow_pass_rate": 17,
+      "workflow_stability_rate": 17
+    },
+    "workflow_inventory_count": 17
+  }
 }

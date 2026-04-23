@@ -2,12 +2,13 @@
 //!
 //! Owns per-crate mutation and test counts, UX scenario receipt, and quality.md generation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
 
@@ -122,6 +123,81 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Deserialize)]
+struct EditorUxFixtureMatrix {
+    workflows: Vec<EditorUxWorkflow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EditorUxWorkflow {
+    ci_tier: String,
+    subsystem_owner: String,
+    measures: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TrackedUxSignals {
+    workflow_inventory_count: usize,
+    pr_tier_workflow_count: usize,
+    nightly_tier_workflow_count: usize,
+    top_line_measure_coverage_count: BTreeMap<String, usize>,
+    component_measure_coverage_count: BTreeMap<String, usize>,
+    subsystem_owner_workflow_count: BTreeMap<String, usize>,
+}
+
+fn collect_tracked_ux_signals(root: &Path) -> Option<TrackedUxSignals> {
+    let matrix_path = root
+        .join("crates")
+        .join("perl-lsp-ux-tests")
+        .join("fixtures")
+        .join("editor_ux_fixture_matrix.json");
+    let raw = fs::read_to_string(matrix_path).ok()?;
+    let matrix: EditorUxFixtureMatrix = serde_json::from_str(&raw).ok()?;
+
+    let workflow_inventory_count = matrix.workflows.len();
+    let pr_tier_workflow_count =
+        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "pr").count();
+    let nightly_tier_workflow_count =
+        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "nightly").count();
+
+    let top_line_metrics: BTreeSet<&str> = BTreeSet::from([
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms",
+    ]);
+    let component_metrics: BTreeSet<&str> = BTreeSet::from([
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate",
+        "multi_root_workspace_navigation_success_rate",
+    ]);
+
+    let mut top_line_measure_coverage_count = BTreeMap::new();
+    let mut component_measure_coverage_count = BTreeMap::new();
+    let mut subsystem_owner_workflow_count = BTreeMap::new();
+
+    for workflow in &matrix.workflows {
+        *subsystem_owner_workflow_count.entry(workflow.subsystem_owner.clone()).or_default() += 1;
+
+        for measure in &workflow.measures {
+            if top_line_metrics.contains(measure.as_str()) {
+                *top_line_measure_coverage_count.entry(measure.clone()).or_default() += 1;
+            }
+            if component_metrics.contains(measure.as_str()) {
+                *component_measure_coverage_count.entry(measure.clone()).or_default() += 1;
+            }
+        }
+    }
+
+    Some(TrackedUxSignals {
+        workflow_inventory_count,
+        pr_tier_workflow_count,
+        nightly_tier_workflow_count,
+        top_line_measure_coverage_count,
+        component_measure_coverage_count,
+        subsystem_owner_workflow_count,
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +218,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; published tracked signal inventory at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -169,15 +245,31 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracked_signals = collect_tracked_ux_signals(root).unwrap_or(TrackedUxSignals {
+        workflow_inventory_count: 0,
+        pr_tier_workflow_count: 0,
+        nightly_tier_workflow_count: 0,
+        top_line_measure_coverage_count: BTreeMap::new(),
+        component_measure_coverage_count: BTreeMap::new(),
+        subsystem_owner_workflow_count: BTreeMap::new(),
+    });
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracked_inventory",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "tracked_signals": {
+            "workflow_inventory_count": tracked_signals.workflow_inventory_count,
+            "pr_tier_workflow_count": tracked_signals.pr_tier_workflow_count,
+            "nightly_tier_workflow_count": tracked_signals.nightly_tier_workflow_count,
+            "top_line_measure_coverage_count": tracked_signals.top_line_measure_coverage_count,
+            "component_measure_coverage_count": tracked_signals.component_measure_coverage_count,
+            "subsystem_owner_workflow_count": tracked_signals.subsystem_owner_workflow_count,
         },
         "top_line_metrics": [
             {
@@ -258,7 +350,7 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracked_inventory");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -278,6 +370,17 @@ mod tests {
                 "workflow_stability_rate",
                 "p95_time_to_first_useful_result_ms",
             ])
+        );
+        assert_eq!(
+            receipt["tracked_signals"]["workflow_inventory_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(receipt["tracked_signals"]["pr_tier_workflow_count"].as_u64(), Some(16));
+        assert_eq!(receipt["tracked_signals"]["nightly_tier_workflow_count"].as_u64(), Some(1));
+        assert_eq!(
+            receipt["tracked_signals"]["top_line_measure_coverage_count"]["workflow_pass_rate"]
+                .as_u64(),
+            Some(17)
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())

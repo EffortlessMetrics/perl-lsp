@@ -8,6 +8,7 @@
     "receipt_kind",
     "scorecard",
     "harness",
+    "tracked_signals",
     "top_line_metrics",
     "integration_points"
   ],
@@ -18,7 +19,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "const": "tracked_inventory"
     },
     "scorecard": {
       "type": "string",
@@ -26,7 +27,11 @@
     },
     "harness": {
       "type": "object",
-      "required": ["crate", "scenario_count", "scenario_files"],
+      "required": [
+        "crate",
+        "scenario_count",
+        "scenario_files"
+      ],
       "properties": {
         "crate": {
           "type": "string",
@@ -58,7 +63,9 @@
                 "const": "workflow_pass_rate"
               }
             },
-            "required": ["name"]
+            "required": [
+              "name"
+            ]
           }
         },
         {
@@ -69,7 +76,9 @@
                 "const": "workflow_stability_rate"
               }
             },
-            "required": ["name"]
+            "required": [
+              "name"
+            ]
           }
         },
         {
@@ -80,13 +89,19 @@
                 "const": "p95_time_to_first_useful_result_ms"
               }
             },
-            "required": ["name"]
+            "required": [
+              "name"
+            ]
           }
         }
       ],
       "items": {
         "type": "object",
-        "required": ["name", "state", "owner"],
+        "required": [
+          "name",
+          "state",
+          "owner"
+        ],
         "properties": {
           "name": {
             "type": "string",
@@ -98,7 +113,10 @@
           },
           "state": {
             "type": "string",
-            "enum": ["planned", "measured"]
+            "enum": [
+              "planned",
+              "measured"
+            ]
           },
           "owner": {
             "type": "string"
@@ -109,7 +127,12 @@
     },
     "integration_points": {
       "type": "object",
-      "required": ["ci_lane", "release_lane", "status_update", "quality_surface"],
+      "required": [
+        "ci_lane",
+        "release_lane",
+        "status_update",
+        "quality_surface"
+      ],
       "properties": {
         "ci_lane": {
           "type": "string"
@@ -122,6 +145,53 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": [
+        "workflow_inventory_count",
+        "pr_tier_workflow_count",
+        "nightly_tier_workflow_count",
+        "top_line_measure_coverage_count",
+        "component_measure_coverage_count",
+        "subsystem_owner_workflow_count"
+      ],
+      "properties": {
+        "workflow_inventory_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pr_tier_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nightly_tier_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "top_line_measure_coverage_count": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "component_measure_coverage_count": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "subsystem_owner_workflow_count": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       },
       "additionalProperties": false
