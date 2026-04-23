@@ -161,6 +161,17 @@ jobs:
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
 
+      # Compile integration tests for scoped crates so crates/*/tests/*.rs
+      # cannot silently bit-rot behind --lib-only test lanes.
+      - name: Scoped integration compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
+
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
       # crates to check (empty crates_args on a non-prose diff — shouldn't
@@ -180,6 +191,16 @@ jobs:
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
+
+      # When scoping is unavailable, still compile integration tests to
+      # prevent crates/*/tests/*.rs regressions from being missed in CI.
+      - name: Fallback integration compile
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: cargo check --workspace --tests --locked
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
