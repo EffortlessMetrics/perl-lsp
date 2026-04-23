@@ -37,6 +37,16 @@ impl OpenAiProvider {
     fn build_request_body(&self, req: &BackendRequest) -> serde_json::Value {
         let (system, user) = build_fim_prompt(&req.context);
 
+        if self.uses_responses_api() {
+            return serde_json::json!({
+                "model": self.config.model,
+                "max_output_tokens": req.max_output_tokens,
+                "stream": true,
+                "instructions": system,
+                "input": user,
+            });
+        }
+
         serde_json::json!({
             "model": self.config.model,
             "max_tokens": req.max_output_tokens,
@@ -48,17 +58,96 @@ impl OpenAiProvider {
         })
     }
 
+    fn uses_responses_api(&self) -> bool {
+        self.config.endpoint.contains("/responses")
+    }
+
     fn extract_content_delta(data: &str) -> Option<String> {
         let parsed: serde_json::Value = serde_json::from_str(data).ok()?;
-        let choices = parsed.get("choices")?.as_array()?;
-        let delta = choices.first()?.get("delta")?.get("content")?.as_str()?;
-        Some(delta.to_string())
+
+        if let Some(delta) = parsed
+            .get("choices")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(|choice| choice.get("delta"))
+            .and_then(|delta| delta.get("content"))
+            .and_then(serde_json::Value::as_str)
+        {
+            return Some(delta.to_string());
+        }
+
+        let event_type = parsed.get("type").and_then(serde_json::Value::as_str)?;
+        if event_type != "response.output_text.delta" {
+            return None;
+        }
+
+        parsed.get("delta").and_then(serde_json::Value::as_str).map(str::to_string)
     }
 
     fn extract_finish_reason(data: &str) -> Option<String> {
         let parsed: serde_json::Value = serde_json::from_str(data).ok()?;
-        let choices = parsed.get("choices")?.as_array()?;
-        choices.first()?.get("finish_reason")?.as_str().map(|s| s.to_string())
+
+        if let Some(reason) = parsed
+            .get("choices")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(|choice| choice.get("finish_reason"))
+            .and_then(serde_json::Value::as_str)
+        {
+            return Some(reason.to_string());
+        }
+
+        match parsed.get("type").and_then(serde_json::Value::as_str) {
+            Some("response.completed") => Some("stop".to_string()),
+            Some("response.failed") | Some("response.incomplete") => Some("error".to_string()),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OpenAiConfig, OpenAiProvider};
+    use crate::providers::ai::rate_limiter::RateLimiter;
+    use std::sync::Arc;
+
+    fn provider_with_endpoint(endpoint: &str) -> OpenAiProvider {
+        OpenAiProvider::new(
+            OpenAiConfig {
+                endpoint: endpoint.to_string(),
+                model: "gpt-4o-mini".to_string(),
+                api_key: "test-key".to_string(),
+                timeout_ms: 1000,
+            },
+            Arc::new(RateLimiter::new(1.0, 1)),
+        )
+    }
+
+    #[test]
+    fn detects_responses_api_endpoint() {
+        let provider = provider_with_endpoint("https://api.openai.com/v1/responses");
+        assert!(provider.uses_responses_api());
+
+        let provider = provider_with_endpoint("https://api.openai.com/v1/chat/completions");
+        assert!(!provider.uses_responses_api());
+    }
+
+    #[test]
+    fn extracts_chat_completions_delta() {
+        let data = r#"{"choices":[{"delta":{"content":"my $"},"finish_reason":null}]}"#;
+        assert_eq!(OpenAiProvider::extract_content_delta(data), Some("my $".to_string()));
+    }
+
+    #[test]
+    fn extracts_responses_delta() {
+        let data = r#"{"type":"response.output_text.delta","delta":"my $"}"#;
+        assert_eq!(OpenAiProvider::extract_content_delta(data), Some("my $".to_string()));
+    }
+
+    #[test]
+    fn detects_responses_completion_event() {
+        let data = r#"{"type":"response.completed"}"#;
+        assert_eq!(OpenAiProvider::extract_finish_reason(data), Some("stop".to_string()));
     }
 }
 
