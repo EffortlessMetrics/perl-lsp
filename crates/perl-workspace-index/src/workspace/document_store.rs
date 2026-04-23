@@ -71,6 +71,9 @@ impl DocumentStore {
             return false;
         };
         if let Some(doc) = docs.get_mut(&key) {
+            if version < doc.version {
+                return false;
+            }
             doc.update(version, text);
             true
         } else {
@@ -224,5 +227,18 @@ mod tests {
 
         let doc = must_some(store.get(&uri));
         assert_eq!(doc.text, "# test");
+    }
+
+    #[test]
+    fn test_update_rejects_stale_version() {
+        let store = DocumentStore::new();
+        let uri = "file:///versioned.pl".to_string();
+
+        store.open(uri.clone(), 3, "current".to_string());
+        assert!(!store.update(&uri, 2, "stale".to_string()));
+
+        let doc = must_some(store.get(&uri));
+        assert_eq!(doc.version, 3);
+        assert_eq!(doc.text, "current");
     }
 }
