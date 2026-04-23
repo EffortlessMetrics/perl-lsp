@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Eclipse | configure an LSP plugin to run `perllsp --stdio` | [docs/EDITORS/ECLIPSE_SETUP.md](../EDITORS/ECLIPSE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,11 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Eclipse
+
+Use any Eclipse LSP-capable plugin and register `perllsp --stdio` for Perl file
+patterns (`*.pl`, `*.pm`, `*.t`, `*.psgi`).
 
 ## When Setup Fails
 
