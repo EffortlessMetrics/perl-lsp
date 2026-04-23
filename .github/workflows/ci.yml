@@ -2,8 +2,8 @@ name: CI
 
 # Tiered CI for perl-lsp (see tests/TAXONOMY.md)
 # - PR smoke: fast feedback on every push (~1-2 min)
-# - Merge gate: full validation on merge-ready label or merge (~5-10 min)
-# Cost: ~$0.03 per PR (smoke), ~$0.05 on merge gate
+# - Merge gate: full validation on every PR push and push to main (~5-10 min)
+# Cost: ~$0.05 per PR (smoke + merge gate; see #4675 for rationale)
 
 on:
   pull_request:
@@ -75,17 +75,15 @@ jobs:
           just clippy-core
           just test-core
 
-  # ── Merge Gate: full validation (label-gated or push to main) ────────
+  # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: pr-smoke
-    # Run on: merge-ready label, push to main/master, or workflow_dispatch
-    if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'merge-ready'))
+    # Run on every PR push and on push to main/master
+    # Earlier gating > label-gated gating (see #4675)
+    # Frequent commits will churn CI; concurrency group cancels in-flight runs.
     steps:
       - uses: actions/checkout@v6
         with:
