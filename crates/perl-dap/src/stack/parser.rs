@@ -30,7 +30,7 @@ pub enum StackParseError {
 /// - `main::(script.pl):42:`
 static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)",
+        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\((?P<file2_paren>[^)]+)\)|(?P<file2>[^:)\s]+)):(?P<line2>\d+):?)",
     )
 });
 
@@ -231,7 +231,11 @@ impl PerlStackParser {
         let func = caps.name("func").map_or("main", |m| m.as_str());
 
         // Get file from either capture group
-        let file = caps.name("file").or_else(|| caps.name("file2"))?.as_str();
+        let file = caps
+            .name("file")
+            .or_else(|| caps.name("file2_paren"))
+            .or_else(|| caps.name("file2"))?
+            .as_str();
 
         // Get line from either capture group
         let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
@@ -321,9 +325,15 @@ impl PerlStackParser {
     ///
     /// A tuple of (function, file, line) if parsed successfully.
     pub fn parse_context(&self, line: &str) -> Option<(String, String, i64)> {
+        let line = line.trim();
         if let Some(caps) = context_re().and_then(|re| re.captures(line)) {
             let func = caps.name("func").map_or("main", |m| m.as_str()).to_string();
-            let file = caps.name("file").or_else(|| caps.name("file2"))?.as_str().to_string();
+            let file = caps
+                .name("file")
+                .or_else(|| caps.name("file2_paren"))
+                .or_else(|| caps.name("file2"))?
+                .as_str()
+                .to_string();
             let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
             let line: i64 = line_str.parse().ok()?;
 
@@ -412,6 +422,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_context_main_with_spaces_in_file() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new();
+        let line = "main::(script with space.pl):42:";
+        let frame = must_some(parser.parse_frame(line, 0));
+        assert_eq!(frame.name, "main");
+        assert_eq!(frame.line, 42);
+        assert_eq!(frame.file_path(), Some("script with space.pl"));
+    }
+
+    #[test]
     fn test_parse_eval_context() {
         use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
@@ -454,6 +475,16 @@ $ = main::run() called from file `script.pl' line 5
         let result = must_some(parser.parse_context("main::(file.pm):100:"));
 
         let (func, file, line) = result;
+        assert_eq!(func, "main");
+        assert_eq!(file, "file.pm");
+        assert_eq!(line, 100);
+    }
+
+    #[test]
+    fn test_parse_context_trims_surrounding_whitespace() {
+        use perl_tdd_support::must_some;
+        let parser = PerlStackParser::new();
+        let (func, file, line) = must_some(parser.parse_context("  main::(file.pm):100:  "));
         assert_eq!(func, "main");
         assert_eq!(file, "file.pm");
         assert_eq!(line, 100);
