@@ -184,3 +184,59 @@ fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panick
         }
     }
 }
+
+#[test]
+fn bdd_given_package_and_constructor_pattern_when_parsed_then_namespace_and_bless_flow_are_preserved()
+-> TestResult {
+    // Given: a developer writes a package with a constructor that blesses a hashref.
+    let code = r#"
+        package My::Service;
+        use strict;
+        use warnings;
+
+        sub new {
+            my ($class, %args) = @_;
+            my $self = bless { %args }, $class;
+            return $self;
+        }
+    "#;
+
+    // When: the parser processes this object-construction pattern.
+    let sexp = parse_sexp(code)?;
+
+    // Then: namespace + constructor flow is represented without recovery artifacts.
+    assert!(sexp.contains("My::Service"), "Expected package name in AST output: {sexp}");
+    assert!(sexp.contains("bless"), "Expected bless call in AST output: {sexp}");
+    assert!(sexp.contains("(return"), "Expected Return node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_partial_hashref_literal_when_parsed_then_parser_recovers_without_panicking() {
+    // Given: a developer is typing a hashref literal and stops mid-expression.
+    let code = r#"
+        my $cfg = {
+            host => "localhost",
+            port =>
+    "#;
+
+    // When: the parser attempts to process incomplete input.
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    // Then: parser should recover (ERROR node) or return a descriptive parse failure.
+    match result {
+        Ok(ast) => {
+            let sexp = ast.to_sexp();
+            assert!(
+                sexp.contains("ERROR") || sexp.contains("unknown"),
+                "Expected recovery marker for incomplete hashref literal: {sexp}"
+            );
+        }
+        Err(err) => {
+            assert!(!err.to_string().is_empty(), "Expected non-empty parse failure message");
+        }
+    }
+}
