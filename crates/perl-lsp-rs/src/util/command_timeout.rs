@@ -1,10 +1,8 @@
 //! Timeout-safe command execution wrapper.
 //!
 //! Provides a helper to run `std::process::Command` with a wall-clock
-//! timeout enforced via a background thread.  When the timeout expires
-//! the function returns an `Err`; the spawned process is left to the OS
-//! to clean up (it will be reaped when the thread eventually finishes or
-//! the LSP process exits).
+//! timeout enforced by polling child process state. When the timeout
+//! expires, the child process is terminated.
 
 use std::process::{Command, Output};
 use std::thread;
@@ -15,30 +13,26 @@ use std::time::{Duration, Instant};
 /// Returns `Ok(Output)` if the command finishes within the timeout, or
 /// `Err(String)` with a human-readable message if it times out or fails
 /// to spawn.
-pub fn run_command_with_timeout(cmd: Command, timeout_secs: u64) -> Result<Output, String> {
+pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<Output, String> {
     let timeout = Duration::from_secs(timeout_secs);
     let start = Instant::now();
-
-    // Move the command into a thread so we can poll without blocking.
-    let join_handle = thread::spawn(move || {
-        // cmd is moved here; the binding must be mut for .output()
-        let mut cmd = cmd;
-        cmd.output()
-    });
+    let mut child = cmd.spawn().map_err(|error| format!("command failed to start: {error}"))?;
 
     loop {
         // Check completion before the deadline so a process that finishes
         // exactly at the deadline boundary is never reported as timed out.
-        if join_handle.is_finished() {
-            return join_handle
-                .join()
-                .map_err(|_| "command thread panicked".to_string())?
-                .map_err(|e| format!("command failed to start: {}", e));
+        match child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))? {
+            Some(_status) => {
+                return child
+                    .wait_with_output()
+                    .map_err(|error| format!("failed collecting command output: {error}"));
+            }
+            None => {}
         }
 
         if start.elapsed() >= timeout {
-            // The background thread may still be running; we deliberately
-            // do not join it — the process will be reaped by the OS.
+            let _ = child.kill();
+            let _ = child.wait();
             return Err(format!("command timed out after {} seconds", timeout_secs));
         }
 
@@ -83,6 +77,22 @@ mod tests {
         }
     }
 
+    fn guaranteed_nonzero_exit_command() -> Command {
+        #[cfg(windows)]
+        {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", "exit", "7"]);
+            cmd
+        }
+
+        #[cfg(not(windows))]
+        {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", "exit 7"]);
+            cmd
+        }
+    }
+
     #[test]
     fn unit_timeout_fires_for_slow_command() {
         let start = Instant::now();
@@ -101,6 +111,17 @@ mod tests {
         assert!(result.is_ok(), "expected success, got: {:?}", result.err());
         if let Ok(output) = result {
             assert!(output.status.success());
+        }
+    }
+
+    #[test]
+    fn unit_nonzero_exit_is_returned_as_output() {
+        let result = run_command_with_timeout(guaranteed_nonzero_exit_command(), 10);
+
+        assert!(result.is_ok(), "process should run and exit");
+        if let Ok(output) = result {
+            assert_eq!(output.status.code(), Some(7));
+            assert!(!output.status.success());
         }
     }
 }
