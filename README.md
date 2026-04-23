@@ -161,9 +161,9 @@ The project tracks a few distinct metrics that are easy to conflate. Each one sc
 | Parser corpus — CPAN top 1000 | 95.3% (8931 / 9372) | File-level clean parse rate: share of files the parser processes without recording errors | Semantic fidelity of the AST, cross-file analysis, or any LSP-level correctness |
 | Parser corpus — Ubuntu system Perl | 97.1% (6890 / 7095) | Same, against the Ubuntu system-installed Perl compatibility baseline | Same |
 | Parser corpus — project corpus | 100.0% (91 / 91) | Deterministic regression baseline that must stay clean | Same |
-| End-to-end UX confidence | *qualitative* | Currently covered by manual editor smoke workflows, the `perl-lsp-ux-tests` first-5-minutes harness, and open-issue burn-down — not a published number | Anything about parser breadth, protocol catalog size, or capability count |
+| End-to-end UX confidence | Fixture-backed tracking signals + manual review | Workflow coverage is now published in `docs/project/status/editor_ux.json` (workflow inventory, CI-tier distribution, and top-line/component metric mapping coverage), and still complemented by manual editor smoke workflows plus open-issue burn-down | Anything about parser breadth, protocol catalog size, or capability count |
 
-The last row is the important one: *none* of the automated metrics above measure whether a real editing session feels good. That's validated through workflow smoke tests, the `perl-lsp-ux-tests` harness, and the list of known gaps below, not by a dashboard.
+The last row is the important one: *none* of the automated metrics above fully capture whether a real editing session feels good. Use the published workflow tracking signals and harness coverage in `docs/project/status/editor_ux.json`, then corroborate with manual smoke workflows and the known-gaps list below.
 
 Live numbers live in [docs/project/status/parser.md](docs/project/status/parser.md); this table may lag a merge cycle.
 

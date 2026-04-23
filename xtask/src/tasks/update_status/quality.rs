@@ -122,6 +122,87 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Default)]
+struct EditorUxTrackingSignals {
+    workflow_count: usize,
+    pr_tier_workflow_count: usize,
+    nightly_tier_workflow_count: usize,
+    release_tier_workflow_count: usize,
+    mapped_top_line_metric_count: usize,
+    mapped_component_metric_count: usize,
+}
+
+fn collect_editor_ux_tracking_signals(root: &Path) -> EditorUxTrackingSignals {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return EditorUxTrackingSignals::default();
+    };
+    let Ok(matrix) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return EditorUxTrackingSignals::default();
+    };
+
+    let workflows = matrix.get("workflows").and_then(serde_json::Value::as_array);
+    let top_line_metrics = matrix
+        .get("top_line_metrics")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let component_metrics = matrix
+        .get("component_metrics")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut pr_tier_workflow_count = 0usize;
+    let mut nightly_tier_workflow_count = 0usize;
+    let mut release_tier_workflow_count = 0usize;
+
+    let top_line_set = top_line_metrics
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let component_set = component_metrics
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut mapped_top_line = std::collections::BTreeSet::new();
+    let mut mapped_component = std::collections::BTreeSet::new();
+
+    let workflow_count = workflows.map_or(0, |workflow_rows| {
+        for workflow in workflow_rows {
+            if let Some(ci_tier) = workflow.get("ci_tier").and_then(serde_json::Value::as_str) {
+                match ci_tier {
+                    "pr" => pr_tier_workflow_count += 1,
+                    "nightly" => nightly_tier_workflow_count += 1,
+                    "release" => release_tier_workflow_count += 1,
+                    _ => {}
+                }
+            }
+
+            if let Some(measures) = workflow.get("measures").and_then(serde_json::Value::as_array) {
+                for metric in measures.iter().filter_map(serde_json::Value::as_str) {
+                    if top_line_set.contains(metric) {
+                        mapped_top_line.insert(metric.to_string());
+                    }
+                    if component_set.contains(metric) {
+                        mapped_component.insert(metric.to_string());
+                    }
+                }
+            }
+        }
+        workflow_rows.len()
+    });
+
+    EditorUxTrackingSignals {
+        workflow_count,
+        pr_tier_workflow_count,
+        nightly_tier_workflow_count,
+        release_tier_workflow_count,
+        mapped_top_line_metric_count: mapped_top_line.len(),
+        mapped_component_metric_count: mapped_component.len(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +250,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracking_signals = collect_editor_ux_tracking_signals(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -201,6 +283,14 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+        },
+        "tracking_signals": {
+            "workflow_count": tracking_signals.workflow_count,
+            "pr_tier_workflow_count": tracking_signals.pr_tier_workflow_count,
+            "nightly_tier_workflow_count": tracking_signals.nightly_tier_workflow_count,
+            "release_tier_workflow_count": tracking_signals.release_tier_workflow_count,
+            "mapped_top_line_metric_count": tracking_signals.mapped_top_line_metric_count,
+            "mapped_component_metric_count": tracking_signals.mapped_component_metric_count,
         },
     });
 
@@ -280,6 +370,12 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(receipt["tracking_signals"]["workflow_count"], 17);
+        assert_eq!(receipt["tracking_signals"]["pr_tier_workflow_count"], 16);
+        assert_eq!(receipt["tracking_signals"]["nightly_tier_workflow_count"], 1);
+        assert_eq!(receipt["tracking_signals"]["release_tier_workflow_count"], 0);
+        assert_eq!(receipt["tracking_signals"]["mapped_top_line_metric_count"], 3);
+        assert_eq!(receipt["tracking_signals"]["mapped_component_metric_count"], 3);
         Ok(())
     }
 }

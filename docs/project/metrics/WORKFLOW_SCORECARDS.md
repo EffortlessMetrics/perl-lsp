@@ -26,6 +26,15 @@ the subsystem scorecards. It is intentionally narrow:
 - `workflow_stability_rate`
 - `p95_time_to_first_useful_result_ms`
 
+## Published Tracking Signals
+
+The status receipt now publishes concrete workflow-inventory signals in
+[`docs/project/status/editor_ux.json`](../status/editor_ux.json):
+
+- total workflow count in the fixture matrix;
+- PR/nightly/release tier workflow counts; and
+- mapped top-line/component metric coverage counts.
+
 ## Current Component Rows
 
 - `cross_file_definition_success_rate`

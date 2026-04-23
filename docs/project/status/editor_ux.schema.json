@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "tracking_signals"
   ],
   "properties": {
     "schema_version": {
@@ -122,6 +123,44 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracking_signals": {
+      "type": "object",
+      "required": [
+        "workflow_count",
+        "pr_tier_workflow_count",
+        "nightly_tier_workflow_count",
+        "release_tier_workflow_count",
+        "mapped_top_line_metric_count",
+        "mapped_component_metric_count"
+      ],
+      "properties": {
+        "workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pr_tier_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nightly_tier_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "release_tier_workflow_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mapped_top_line_metric_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mapped_component_metric_count": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false

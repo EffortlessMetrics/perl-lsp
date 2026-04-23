@@ -28,6 +28,14 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "tracking_signals": {
+    "mapped_component_metric_count": 3,
+    "mapped_top_line_metric_count": 3,
+    "nightly_tier_workflow_count": 1,
+    "pr_tier_workflow_count": 16,
+    "release_tier_workflow_count": 0,
+    "workflow_count": 17
+  },
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
