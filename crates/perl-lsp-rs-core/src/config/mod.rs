@@ -997,4 +997,55 @@ perltidy_extra_args = ["-noll"]
         let paths = config.effective_include_paths(&[]);
         assert_eq!(paths, vec!["lib"]);
     }
+
+    #[test]
+    fn update_from_value_keeps_existing_perl5lib_precedence_on_unknown_value() {
+        let mut config = WorkspaceConfig {
+            perl5lib_precedence: Perl5LibPrecedence::Append,
+            ..WorkspaceConfig::default()
+        };
+
+        let settings = serde_json::json!({
+            "workspace": {
+                "perl5libPrecedence": "sideways"
+            }
+        });
+
+        config.update_from_value(&settings);
+
+        assert!(matches!(config.perl5lib_precedence, Perl5LibPrecedence::Append));
+    }
+
+    #[test]
+    fn update_from_value_clears_system_inc_cache_when_perl_runtime_inputs_change() {
+        let mut config = WorkspaceConfig::default();
+        config.use_system_inc = true;
+        config.system_inc_cache = Some(vec![PathBuf::from("/cached/inc")]);
+
+        let perl_path_change = serde_json::json!({
+            "workspace": {
+                "perlPath": "/usr/bin/perl"
+            }
+        });
+        config.update_from_value(&perl_path_change);
+        assert!(config.system_inc_cache.is_none());
+
+        config.system_inc_cache = Some(vec![PathBuf::from("/cached/inc")]);
+        let perl_args_change = serde_json::json!({
+            "workspace": {
+                "perlArgs": ["-Ilib"]
+            }
+        });
+        config.update_from_value(&perl_args_change);
+        assert!(config.system_inc_cache.is_none());
+
+        config.system_inc_cache = Some(vec![PathBuf::from("/cached/inc")]);
+        let use_system_inc_change = serde_json::json!({
+            "workspace": {
+                "useSystemInc": false
+            }
+        });
+        config.update_from_value(&use_system_inc_change);
+        assert!(config.system_inc_cache.is_none());
+    }
 }
