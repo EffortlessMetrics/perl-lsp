@@ -355,6 +355,24 @@ fn test_recursion_detection_ignores_sub_name_in_string() {
     );
 }
 
+#[test]
+fn test_inline_sub_with_signature_parens() {
+    // Perl signatures can appear between the sub name and body braces.
+    // The inliner should still locate and inline this sub.
+    let source = r#"sub combine ($left, $right) {
+    my ($left, $right) = @_;
+    return $left . $right;
+}
+"#;
+    let inliner = SubInliner::new(source);
+    let result = inliner.inline_call("combine", r#"combine("a", "b")"#);
+    let inlined = must(result);
+    assert!(
+        inlined.contains("\"a\" . \"b\"") || inlined.contains("(\"a\" . \"b\")"),
+        "signature-style sub should inline normally; got: {inlined}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Edge case: call argument containing a closing paren inside a string
 // ---------------------------------------------------------------------------
