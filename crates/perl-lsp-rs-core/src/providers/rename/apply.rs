@@ -110,3 +110,90 @@ pub fn apply_rename_edits(source: &str, edits: &[TextEdit]) -> String {
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use perl_parser_core::SourceLocation;
+    use perl_semantic_analyzer::symbol::{SymbolKind, VarKind};
+
+    use super::{
+        RenameOptions, TextEdit, adjust_location_for_sigil, apply_rename_edits,
+        find_occurrences_in_text, is_in_comment, is_in_string,
+    };
+
+    #[test]
+    fn adjust_location_for_sigil_skips_sigils_for_variables() -> Result<(), Box<dyn Error>> {
+        let location = SourceLocation { start: 10, end: 14 };
+        let adjusted = adjust_location_for_sigil(location, SymbolKind::Variable(VarKind::Scalar));
+        assert_eq!(adjusted.start, 11);
+        assert_eq!(adjusted.end, 14);
+        Ok(())
+    }
+
+    #[test]
+    fn comment_and_string_detection_respects_line_and_quote_boundaries()
+    -> Result<(), Box<dyn Error>> {
+        let source = "my $x = 1;\n# comment with $x\nmy $s = \"$x\";\n";
+        let declaration_pos = source.find("$x =").ok_or("missing declaration")?;
+        let comment_pos = source.find("# comment with $x").ok_or("missing comment")? + 15;
+        let string_pos = source.rfind("$x\"").ok_or("missing string use")?;
+
+        assert!(!is_in_comment(declaration_pos, source));
+        assert!(is_in_comment(comment_pos, source));
+        assert!(!is_in_string(declaration_pos, source));
+        assert!(is_in_string(string_pos, source));
+        Ok(())
+    }
+
+    #[test]
+    fn find_occurrences_honors_comment_and_string_options() -> Result<(), Box<dyn Error>> {
+        let source = "my $x = 1;\n# rename $x in comment\nmy $s = \"$x\";\n";
+        let options = RenameOptions {
+            rename_in_comments: true,
+            rename_in_strings: true,
+            validate_new_name: true,
+        };
+
+        let edits =
+            find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        assert_eq!(edits.len(), 2, "expected one comment and one string occurrence");
+        assert!(edits.iter().all(|edit| edit.new_text == "x"));
+        Ok(())
+    }
+
+    #[test]
+    fn find_occurrences_matches_whole_words_only() -> Result<(), Box<dyn Error>> {
+        let source = "# $x $xy $x2\n\"$x and $xy\"\n";
+        let options = RenameOptions {
+            rename_in_comments: true,
+            rename_in_strings: true,
+            validate_new_name: true,
+        };
+
+        let edits =
+            find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        assert_eq!(edits.len(), 2, "only standalone $x should match");
+        Ok(())
+    }
+
+    #[test]
+    fn apply_rename_edits_applies_in_reverse_order() -> Result<(), Box<dyn Error>> {
+        let source = "my $x = $x + 1;";
+        let edits = vec![
+            TextEdit {
+                location: SourceLocation { start: 4, end: 5 },
+                new_text: "value".to_string(),
+            },
+            TextEdit {
+                location: SourceLocation { start: 9, end: 10 },
+                new_text: "value".to_string(),
+            },
+        ];
+
+        let renamed = apply_rename_edits(source, &edits);
+        assert_eq!(renamed, "my $value = $value + 1;");
+        Ok(())
+    }
+}
