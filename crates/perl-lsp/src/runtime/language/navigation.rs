@@ -36,6 +36,10 @@ static MOJO_STRING_ROUTE_RE: OnceLock<Result<regex::Regex, regex::Error>> = Once
 static MOJO_KV_ROUTE_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
+static MOJO_KV_ROUTE_RE_ACTION_FIRST: OnceLock<Result<regex::Regex, regex::Error>> =
+    OnceLock::new();
+
+#[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     FQN_RE
         .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
@@ -445,7 +449,9 @@ pub(super) fn workspace_document_text(
 fn get_mojo_string_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     MOJO_STRING_ROUTE_RE
         .get_or_init(|| {
-            regex::Regex::new(r"->\s*to\s*\(\s*'(?P<controller>[^'#]+)#(?P<action>[^']+)'\s*\)")
+            regex::Regex::new(
+                r##"->\s*to\s*\(\s*['"](?P<controller>[^'"#]+)#(?P<action>[^'"]+)['"]\s*\)"##,
+            )
         })
         .as_ref()
         .map_err(|err| {
@@ -461,6 +467,22 @@ fn get_mojo_kv_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
         .get_or_init(|| {
             regex::Regex::new(
                 r"->\s*to\s*\(\s*controller\s*=>\s*'(?P<controller>[^']+)'\s*,\s*action\s*=>\s*'(?P<action>[^']+)'\s*\)",
+            )
+        })
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize Mojolicious route regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn get_mojo_kv_route_regex_action_first() -> Result<&'static regex::Regex, JsonRpcError> {
+    MOJO_KV_ROUTE_RE_ACTION_FIRST
+        .get_or_init(|| {
+            regex::Regex::new(
+                r#"->\s*to\s*\(\s*action\s*=>\s*['"](?P<action>[^'"]+)['"]\s*,\s*controller\s*=>\s*['"](?P<controller>[^'"]+)['"]\s*\)"#,
             )
         })
         .as_ref()
@@ -544,27 +566,30 @@ fn resolve_mojolicious_route_definition(
         }
     }
 
-    let kv_re = get_mojo_kv_route_regex().ok()?;
-    for cap in kv_re.captures_iter(text_around) {
-        let Some(full_match) = cap.get(0) else {
-            continue;
-        };
-        if cursor_in_text < full_match.start() || cursor_in_text >= full_match.end() {
-            continue;
-        }
+    for kv_re in [get_mojo_kv_route_regex().ok()?, get_mojo_kv_route_regex_action_first().ok()?] {
+        for cap in kv_re.captures_iter(text_around) {
+            let Some(full_match) = cap.get(0) else {
+                continue;
+            };
+            if cursor_in_text < full_match.start() || cursor_in_text >= full_match.end() {
+                continue;
+            }
 
-        let Some(controller_match) = cap.name("controller") else {
-            continue;
-        };
-        let Some(action_match) = cap.name("action") else {
-            continue;
-        };
+            let Some(controller_match) = cap.name("controller") else {
+                continue;
+            };
+            let Some(action_match) = cap.name("action") else {
+                continue;
+            };
 
-        if (cursor_in_text >= controller_match.start() && cursor_in_text < controller_match.end())
-            || (cursor_in_text >= action_match.start() && cursor_in_text < action_match.end())
-        {
-            if let Some(location) = try_route(controller_match.as_str(), action_match.as_str()) {
-                return Some(location);
+            if (cursor_in_text >= controller_match.start()
+                && cursor_in_text < controller_match.end())
+                || (cursor_in_text >= action_match.start() && cursor_in_text < action_match.end())
+            {
+                if let Some(location) = try_route(controller_match.as_str(), action_match.as_str())
+                {
+                    return Some(location);
+                }
             }
         }
     }
