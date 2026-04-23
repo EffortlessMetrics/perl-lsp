@@ -2983,6 +2983,63 @@ if ("hello" =~ /ell/) {
     Ok(())
 }
 
+#[test]
+fn builtin_percent_plus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("alpha-beta" =~ /(?<lhs>alpha)-(?<rhs>beta)/) {
+    my %named_caps = %+;
+    print $named_caps{lhs}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
+        "%+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_percent_minus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("alpha-beta" =~ /(?<lhs>alpha)-(?<rhs>beta)/) {
+    my %named_cap_hist = %-;
+    print $named_cap_hist{lhs}[0], "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
+        "%- should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_percent_bang_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+my $errno_name = $!{ENOENT};
+my %errno_table = %!;
+print $errno_name, "\n";
+print scalar(keys %errno_table), "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "!"),
+        "%! should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // Builtin globals — ${^MATCH}, ${^PREMATCH}, ${^POSTMATCH} (#3351)
 // ===========================================================================
