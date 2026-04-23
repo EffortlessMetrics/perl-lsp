@@ -2175,18 +2175,33 @@ impl WorkspaceIndex {
         let mut results = Vec::new();
         for file_index in files.values() {
             for symbol in &file_index.symbols {
-                if symbol.name.to_lowercase().contains(&query_lower)
-                    || symbol
-                        .qualified_name
-                        .as_ref()
-                        .map(|qn| qn.to_lowercase().contains(&query_lower))
-                        .unwrap_or(false)
-                {
+                if Self::symbol_name_matches_query(symbol, &query_lower) {
                     results.push(symbol.clone());
                 }
             }
         }
         results
+    }
+
+    /// Check if a symbol's name or qualified name matches a lowercase query.
+    ///
+    /// Performs case-insensitive substring matching on both the bare symbol name
+    /// and its fully qualified name (if present).
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - The symbol to check
+    /// * `query_lower` - The lowercase query string to match against
+    ///
+    /// # Returns
+    ///
+    /// `true` if the symbol's name or qualified name contains the query
+    fn symbol_name_matches_query(symbol: &WorkspaceSymbol, query_lower: &str) -> bool {
+        symbol.name.to_lowercase().contains(query_lower)
+            || symbol
+                .qualified_name
+                .as_ref()
+                .is_some_and(|qn| qn.to_lowercase().contains(query_lower))
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)
