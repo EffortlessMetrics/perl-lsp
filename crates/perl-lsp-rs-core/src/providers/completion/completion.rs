@@ -1333,9 +1333,13 @@ impl CompletionProvider {
             return false;
         }
 
-        segment
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch.is_ascii_whitespace())
+        segment.chars().all(|ch| {
+            ch.is_ascii_alphanumeric()
+                || ch == '_'
+                || ch == '\''
+                || ch == '"'
+                || ch.is_ascii_whitespace()
+        })
     }
 
     /// Check whether the cursor is inside the value position of a Moo/Moose `isa => ...`
@@ -1738,7 +1742,8 @@ impl CompletionProvider {
         completions: &mut Vec<CompletionItem>,
         context: &CompletionContext,
     ) {
-        let prefix = context.prefix.trim();
+        let raw_prefix = context.prefix.trim();
+        let prefix = raw_prefix.trim_start_matches(['\'', '"']);
         let mut seen: HashSet<String> = completions.iter().map(|item| item.label.clone()).collect();
 
         let mut push_completion =
@@ -1830,7 +1835,8 @@ impl CompletionProvider {
         completions: &mut Vec<CompletionItem>,
         context: &CompletionContext,
     ) {
-        let prefix = context.prefix.trim();
+        let raw_prefix = context.prefix.trim();
+        let prefix = raw_prefix.trim_start_matches(['\'', '"']);
         let options = [
             ("is", "Accessor mode (`ro`, `rw`, or `rwp`)"),
             ("isa", "Type constraint for this attribute"),
@@ -2461,6 +2467,25 @@ has 'name' => (re
     }
 
     #[test]
+    fn test_moo_has_option_key_completion_with_quoted_prefix() {
+        let code = r#"
+use Moo;
+has 'name' => ('re
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "required"),
+            "expected `required` option completion for quoted key prefix"
+        );
+    }
+
+    #[test]
     fn test_object_pad_constructor_param_completion() {
         let code = r#"
 use Object::Pad;
@@ -2615,6 +2640,28 @@ has 'id' => (
         assert!(
             completions.iter().any(|item| item.label == "UserID"),
             "expected imported custom type `UserID` in isa completion"
+        );
+    }
+
+    #[test]
+    fn test_moo_isa_type_completion_with_quoted_prefix() {
+        let code = r#"
+use Moose;
+
+has 'id' => (
+    is => 'ro',
+    isa => 'St
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "Str"),
+            "expected built-in Moose type `Str` for quoted isa prefix"
         );
     }
 
