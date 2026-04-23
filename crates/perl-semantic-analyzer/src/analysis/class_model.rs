@@ -525,7 +525,7 @@ impl ClassModelBuilder {
     fn detect_framework(&mut self, module: &str, args: &[String]) {
         let framework = match module {
             "Moose" | "Moose::Role" => Framework::Moose,
-            "Moo" | "Moo::Role" => Framework::Moo,
+            "Moo" | "Moo::Role" | "OpenClaw" | "OpenClaw::Role" => Framework::Moo,
             "Mouse" | "Mouse::Role" => Framework::Mouse,
             "Class::Accessor" => Framework::ClassAccessor,
             "Object::Pad" => Framework::ObjectPad,
@@ -1363,6 +1363,23 @@ sub greet { }
         assert!(age_attr.required);
 
         assert!(model.methods.iter().any(|m| m.name == "greet"));
+    }
+
+    #[test]
+    fn openclaw_class_is_treated_as_moo_framework() {
+        let models = build_models(
+            r#"
+package MyApp::OpenClawUser;
+use OpenClaw;
+
+has 'name' => (is => 'ro', isa => 'Str');
+"#,
+        );
+
+        let model = find_model(&models, "MyApp::OpenClawUser")
+            .expect("expected ClassModel for OpenClaw class");
+        assert_eq!(model.framework, Framework::Moo);
+        assert_eq!(model.attributes.len(), 1);
     }
 
     #[test]

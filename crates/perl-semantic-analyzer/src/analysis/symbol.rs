@@ -2120,8 +2120,8 @@ impl SymbolExtractor {
         let pkg = self.table.current_package.clone();
 
         let framework_kind = match module {
-            "Moo" | "Mouse" => Some(FrameworkKind::Moo),
-            "Moo::Role" | "Mouse::Role" => Some(FrameworkKind::MooRole),
+            "Moo" | "Mouse" | "OpenClaw" => Some(FrameworkKind::Moo),
+            "Moo::Role" | "Mouse::Role" | "OpenClaw::Role" => Some(FrameworkKind::MooRole),
             "Moose" => Some(FrameworkKind::Moose),
             "Moose::Role" => Some(FrameworkKind::MooseRole),
             _ => None,

@@ -249,6 +249,45 @@ use Moo::Role;
 }
 
 #[test]
+fn openclaw_package_emits_class_symbol_kind() {
+    let code = r#"
+package MyApp::OpenClawUser;
+use OpenClaw;
+has 'name' => (is => 'ro');
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "MyApp::OpenClawUser", SymbolKind::Class),
+        "expected SymbolKind::Class for OpenClaw package"
+    );
+    assert!(
+        !has_symbol(&table, "MyApp::OpenClawUser", SymbolKind::Package),
+        "OpenClaw package should be upgraded from Package to Class"
+    );
+}
+
+#[test]
+fn openclaw_role_package_emits_role_symbol_kind() {
+    let code = r#"
+package MyApp::OpenClawRole;
+use OpenClaw::Role;
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "MyApp::OpenClawRole", SymbolKind::Role),
+        "expected SymbolKind::Role for OpenClaw::Role package"
+    );
+    assert!(
+        !has_symbol(&table, "MyApp::OpenClawRole", SymbolKind::Package),
+        "OpenClaw::Role package should be upgraded from Package to Role"
+    );
+}
+
+#[test]
 fn plain_package_keeps_package_symbol_kind() {
     let code = r#"
 package MyApp::Utils;
