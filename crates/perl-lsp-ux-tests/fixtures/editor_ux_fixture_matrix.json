@@ -363,6 +363,22 @@
         "declaration request returns a location or clean empty result",
         "request does not error"
       ]
+    },
+    {
+      "id": "diagnostics_after_edit_refresh",
+      "scenario_file": "ux_scenario_18_diagnostics_after_edit.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "open a file, edit it, and verify diagnostics republish for the updated content",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "didChange full-document edit succeeds",
+        "publishDiagnostics republish occurs after edit",
+        "updated diagnostic payload remains valid"
+      ]
     }
   ],
   "confidence_signals": [
