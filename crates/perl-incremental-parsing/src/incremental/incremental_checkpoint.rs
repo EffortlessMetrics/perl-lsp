@@ -486,6 +486,8 @@ impl CheckpointedIncrementalParser {
 
         let mut lexer = PerlLexer::new(&self.source);
         let mut raw_tokens = Vec::new();
+        let mut relexed_tokens = 0usize;
+        let mut relexed_bytes = 0usize;
         let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
 
         // Collect raw lexer tokens and save checkpoints at specific positions
@@ -505,8 +507,13 @@ impl CheckpointedIncrementalParser {
                 break;
             }
 
+            relexed_tokens += 1;
+            relexed_bytes += token.end.saturating_sub(token.start);
             raw_tokens.push(token);
         }
+
+        self.stats.tokens_relexed += relexed_tokens;
+        self.stats.bytes_relexed += relexed_bytes;
 
         // Convert raw lexer tokens to parser tokens (trivia-filtered + kind-mapped)
         // and cache them for reuse in incremental reparses.

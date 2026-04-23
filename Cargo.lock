@@ -1575,9 +1575,11 @@ name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
  "anyhow",
+ "criterion",
  "lsp-types",
  "perl-lexer",
  "perl-line-index",
+ "perl-parser",
  "perl-parser-core",
  "perl-tdd-support",
  "ropey",
