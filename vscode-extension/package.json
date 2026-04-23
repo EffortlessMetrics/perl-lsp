@@ -71,6 +71,8 @@
         ],
         "extensions": [
           ".pl",
+          ".cgi",
+          ".fcgi",
           ".pm",
           ".xs",
           ".xsi",
@@ -841,6 +843,11 @@
         "command": "perl-lsp.restart",
         "key": "shift+alt+r",
         "when": "editorTextFocus && editorLangId == perl"
+      },
+      {
+        "command": "editor.action.formatDocument",
+        "key": "shift+alt+f",
+        "when": "editorHasDocumentFormattingProvider && editorTextFocus && !editorReadonly && editorLangId == perl"
       },
       {
         "command": "perl-lsp.extractVariable",
