@@ -126,12 +126,20 @@ mod tests {
     }
 
     #[test]
+    fn identifier_start_rejects_punctuation() {
+        assert!(!is_perl_identifier_start('-'));
+    }
+
+    #[test]
     fn identifier_continue_accepts_joiners_selectors_and_modifiers() {
         assert!(is_perl_identifier_continue('\''));
+        assert!(is_perl_identifier_continue('\u{200C}'));
         assert!(is_perl_identifier_continue('\u{200D}'));
         assert!(is_perl_identifier_continue('\u{FE0F}'));
         assert!(is_perl_identifier_continue('\u{1F3FB}'));
+        assert!(is_perl_identifier_continue('\u{1F3FD}'));
         assert!(!is_perl_identifier_continue(' '));
+        assert!(!is_perl_identifier_continue('-'));
     }
 
     #[test]
