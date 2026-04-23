@@ -162,6 +162,11 @@ fn is_perl_array_length_marker(bytes: &[u8], idx: usize) -> bool {
 ///
 /// Returns the end index (exclusive) of the full quote-like segment when found.
 fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
+    let prev_is_sigil = start > 0 && matches!(bytes[start - 1], b'$' | b'@' | b'%');
+    if prev_is_sigil {
+        return None;
+    }
+
     let prev_is_ident =
         start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
     if prev_is_ident {
@@ -181,8 +186,14 @@ fn parse_quote_like_operator(bytes: &[u8], start: usize) -> Option<usize> {
     ];
 
     for (op, kind) in operators {
-        let op_end = start + op.len();
-        if op_end > bytes.len() || &bytes[start..op_end] != op {
+        let Some(op_end) = start.checked_add(op.len()) else {
+            continue;
+        };
+        if op_end > bytes.len() || bytes.get(start..op_end) != Some(op) {
+            continue;
+        }
+
+        if !is_operator_boundary(bytes, op_end) {
             continue;
         }
 
@@ -270,6 +281,20 @@ fn consume_delimited_segment(bytes: &[u8], start: usize) -> Option<usize> {
     }
 
     Some(bytes.len())
+}
+
+fn is_identifier_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn is_operator_boundary(bytes: &[u8], op_end: usize) -> bool {
+    // Require a non-identifier boundary after multi-character operators so
+    // identifiers like `qqx` aren't mistaken for `qq`.
+    if op_end < bytes.len() && is_identifier_byte(bytes[op_end]) {
+        return false;
+    }
+
+    true
 }
 
 fn matching_delimiter(open: u8) -> (u8, bool) {
@@ -737,6 +762,28 @@ mod tests {
         assert!(values.iter().any(|v| v.text == "$lit = ?"));
         assert!(!values.iter().any(|v| v.text.contains("$fake")));
         assert!(!values.iter().any(|v| v.text.contains("$ghost")));
+    }
+
+    #[test]
+    fn test_regex_and_translation_operators_are_ignored() {
+        let source =
+            "my $real = 1; $text =~ m/$ghost/; $text =~ s/$from/$to/; $text =~ tr/$src/$dst/;";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(!names.contains(&"$ghost".to_string()));
+        assert!(!names.contains(&"$from".to_string()));
+        assert!(!names.contains(&"$to".to_string()));
+        assert!(!names.contains(&"$src".to_string()));
+        assert!(!names.contains(&"$dst".to_string()));
+    }
+
+    #[test]
+    fn test_quote_like_parser_requires_identifier_boundary() {
+        let source = "my $keep = 1; my $weird = qqx$also_keep;";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$keep".to_string()));
+        assert!(names.contains(&"$weird".to_string()));
+        assert!(names.contains(&"$also_keep".to_string()));
     }
 
     #[test]
