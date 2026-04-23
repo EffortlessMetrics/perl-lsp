@@ -6,14 +6,19 @@ use perl_lsp_rs_core::uri::*;
 fn uri_module_exposes_parse_uri_function() {
     // Verify that parse_uri() is accessible post-absorption
     let uri = parse_uri("file:///tmp/test.pl");
-    assert!(uri.as_str().contains("test.pl"), "parse_uri should preserve valid URIs");
+    assert_eq!(
+        uri.as_str(),
+        "file:///tmp/test.pl",
+        "parse_uri should preserve valid URIs verbatim"
+    );
 }
 
 #[test]
 fn uri_module_parse_uri_handles_windows_paths() {
     // Verify that parse_uri handles Windows paths correctly post-absorption
-    let uri = parse_uri("file:///C:/Users/dev/test.pm");
-    assert!(uri.as_str().contains("test.pm"), "parse_uri should handle Windows paths");
+    let input = "file:///C:/Users/dev/test.pm";
+    let uri = parse_uri(input);
+    assert_eq!(uri.as_str(), input, "parse_uri should preserve Windows paths verbatim");
 }
 
 #[test]
@@ -21,6 +26,11 @@ fn uri_module_parse_uri_handles_invalid_input() {
     // Verify that parse_uri gracefully handles invalid input post-absorption
     let uri = parse_uri("not a uri");
     assert!(!uri.as_str().is_empty(), "parse_uri should never panic on invalid input");
+    // Fallback must itself be a valid URI — round-trip proves that.
+    assert!(
+        uri.as_str().parse::<lsp_types::Uri>().is_ok(),
+        "fallback URI must itself round-trip parse"
+    );
 }
 
 #[test]
@@ -51,4 +61,61 @@ fn uri_module_parse_uri_preserves_encoded_utf8_path() {
     let input = "file:///tmp/na%C3%AFve/%E6%A8%A1%E5%9D%97.pm";
     let uri = parse_uri(input);
     assert_eq!(uri.as_str(), input, "parse_uri should preserve valid UTF-8 percent encoding");
+}
+
+#[test]
+fn uri_module_parse_uri_handles_utf8_bom_prefix() {
+    // A UTF-8 BOM (U+FEFF, encoded as 0xEF 0xBB 0xBF) at the front of the input
+    // is not a legal URI character. Even when encoded as %EF%BB%BF, the path
+    // segment must remain intact rather than drop the bytes.
+    let input = "file:///tmp/%EF%BB%BFmodule.pm";
+    let uri = parse_uri(input);
+    assert_eq!(
+        uri.as_str(),
+        input,
+        "parse_uri should preserve percent-encoded BOM bytes within a path"
+    );
+
+    // A raw BOM prefix on the URI itself must not panic. The exact fallback
+    // behaviour doesn't matter, but the result must be a valid URI.
+    let raw_bom_input = "\u{feff}file:///tmp/module.pm";
+    let uri = parse_uri(raw_bom_input);
+    assert!(!uri.as_str().is_empty(), "parse_uri must tolerate a raw BOM prefix");
+    assert!(
+        uri.as_str().parse::<lsp_types::Uri>().is_ok(),
+        "fallback URI must itself round-trip parse"
+    );
+}
+
+#[test]
+fn uri_module_parse_uri_tolerates_invalid_percent_escape() {
+    // An invalid percent-escape sequence (e.g. `%ZZ`, or a lone `%` at EOL)
+    // must not panic. The result must be a valid URI — either the input
+    // re-parsed by `url::Url` or the canonical fallback.
+    for bad in [
+        "file:///tmp/%ZZ.pm",
+        "file:///tmp/half%",
+        "file:///tmp/%C3%28.pm", // 0xC3 0x28 is an invalid UTF-8 byte sequence.
+    ] {
+        let uri = parse_uri(bad);
+        assert!(!uri.as_str().is_empty(), "parse_uri({bad}) should not produce empty URI");
+        assert!(
+            uri.as_str().parse::<lsp_types::Uri>().is_ok(),
+            "parse_uri({bad}) output must itself be a valid URI"
+        );
+    }
+}
+
+#[test]
+fn uri_module_parse_uri_handles_supplementary_plane_codepoints() {
+    // Emoji sit in the supplementary plane (surrogate-pair territory for UTF-16)
+    // and encode to 4-byte UTF-8 sequences. A naive byte-at-a-time decoder that
+    // slices mid-codepoint would corrupt these.
+    let input = "file:///tmp/emoji_\u{1F600}/mod.pm"; // U+1F600 grinning face
+    let uri = parse_uri(input);
+    assert_eq!(
+        uri.as_str(),
+        "file:///tmp/emoji_%F0%9F%98%80/mod.pm",
+        "parse_uri must encode 4-byte UTF-8 codepoints intact"
+    );
 }
