@@ -422,6 +422,9 @@ gh workflow run version-bump.yml \
 
 This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
 
+For release-scoped PRs, use the dedicated checklist template at
+`.github/pull_request_template_release.md`.
+
 ---
 
 ## Release History Updates
