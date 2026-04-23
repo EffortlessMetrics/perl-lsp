@@ -13,6 +13,8 @@
 pub struct LineIndex {
     /// Byte offset of each line start.
     line_starts: Vec<usize>,
+    /// Total number of bytes in the indexed text.
+    text_len: usize,
 }
 
 impl LineIndex {
@@ -25,7 +27,7 @@ impl LineIndex {
                 line_starts.push(idx + 1);
             }
         }
-        Self { line_starts }
+        Self { line_starts, text_len: text.len() }
     }
 
     /// Convert a byte offset to `(line, column)` using byte columns.
@@ -40,5 +42,22 @@ impl LineIndex {
     #[must_use]
     pub fn position_to_byte(&self, line: usize, column: usize) -> Option<usize> {
         self.line_starts.get(line).map(|&start| start + column)
+    }
+
+    /// Convert `(line, column)` to byte offset, returning `None` for out-of-range columns.
+    ///
+    /// This variant validates that the computed byte offset falls within the line's byte range.
+    /// In contrast, [`Self::position_to_byte`] only validates the line number.
+    #[must_use]
+    pub fn position_to_byte_checked(&self, line: usize, column: usize) -> Option<usize> {
+        let start = *self.line_starts.get(line)?;
+        let end = self.line_starts.get(line + 1).copied().unwrap_or(self.text_len);
+        let max_column = end - start;
+
+        if column > max_column {
+            return None;
+        }
+
+        Some(start + column)
     }
 }
