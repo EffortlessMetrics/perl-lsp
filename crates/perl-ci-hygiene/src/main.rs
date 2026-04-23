@@ -3387,7 +3387,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+    let todo_re = Regex::new(r"(?i)\b(?:TODO|FIXME)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -4391,7 +4391,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = Regex::new(r"(?i)\b(?:TODO|FIXME)\b")?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
         assert!(has_unlinked_todo_in_rust_line("// todo: investigate", &todo_re));
