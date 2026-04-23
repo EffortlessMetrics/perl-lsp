@@ -2,15 +2,13 @@
 
 ## Prerequisites
 
-> **⚠️ Deprecation Notice:** The Visual Studio Marketplace listing is deprecated. Please use the [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs) for publishing.
-
 1. **Node.js and npm** installed
 2. **Visual Studio Code** installed
 3. **vsce** (Visual Studio Code Extension manager) and **ovsx** (Open VSX CLI) installed:
    ```bash
    npm install -g @vscode/vsce ovsx
    ```
-4. **Publisher account** on Visual Studio Marketplace (deprecated)
+4. **Publisher account** on Visual Studio Marketplace
 5. **Open VSX access token** for `EffortlessMetrics` publisher
 
 ## Build Process
