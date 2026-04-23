@@ -316,7 +316,6 @@ fn collect_line_variables(line: &str, include_non_scalars: bool) -> Vec<(usize, 
     matches
 }
 
-
 /// Extract unique variable names from source code within a line range.
 ///
 /// Lines are 1-based. Returns deduplicated variable names with their sigils.
