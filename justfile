@@ -54,7 +54,8 @@ pr-fast: _check-tools-basic
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history" "just ci-release-history"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -960,6 +961,11 @@ ci-published-crate-count:
     @echo "✅ Published-crate count ratchet passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
+ci-release-history:
+    @echo "Checking release history surface for drift..."
+    ./scripts/check_release_history.sh
+    @echo "Release history surface check passed"
+
 ci-publish-manifest-check:
     @echo "Checking publish manifest (allowlist drift + LICENSE)..."
     @cargo xtask publish-manifest-check

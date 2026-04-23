@@ -142,6 +142,9 @@ jobs:
           fi
           echo "✅ Found curated release notes: $NOTE_FILE"
 
+      - name: Verify release-history surface consistency
+        run: ./scripts/check_release_history.sh
+
       - name: Summary
         run: |
           echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
