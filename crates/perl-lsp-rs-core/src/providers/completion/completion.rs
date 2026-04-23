@@ -3538,6 +3538,42 @@ sub helper { }
     }
 
     #[test]
+    fn test_use_statement_prioritizes_google_antigravity() -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/Google/Antigravity.pm")?,
+            "package Google::Antigravity;\n1;\n".to_string(),
+        )?;
+        index.index_file(
+            Url::parse("file:///lib/Google/Search.pm")?,
+            "package Google::Search;\n1;\n".to_string(),
+        )?;
+
+        let code = "use Google::";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let antigravity = completions
+            .iter()
+            .find(|c| c.label == "Google::Antigravity")
+            .ok_or("missing Google::Antigravity completion")?;
+        let search = completions
+            .iter()
+            .find(|c| c.label == "Google::Search")
+            .ok_or("missing Google::Search completion")?;
+
+        assert_eq!(antigravity.sort_text.as_deref(), Some("11_Google::Antigravity"));
+        assert!(
+            antigravity.sort_text < search.sort_text,
+            "Google::Antigravity should sort ahead of other Google modules"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_use_module_deduplication() -> Result<(), Box<dyn std::error::Error>> {
         // Two files declaring the same package should produce one completion, not two
         let index = Arc::new(WorkspaceIndex::new());

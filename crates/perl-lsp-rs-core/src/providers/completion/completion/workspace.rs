@@ -213,8 +213,16 @@ const COMMON_MODULES_TIER_0: &[&str] = &[
 /// Common CPAN modules that are frequently used but less universal than tier-0.
 ///
 /// Tier 1: widely-used libraries (DB, OOP, testing, filesystem).
-const COMMON_MODULES_TIER_1: &[&str] =
-    &["DBI", "Moo", "Moose", "Try::Tiny", "Path::Tiny", "Test::More", "Test::Exception"];
+const COMMON_MODULES_TIER_1: &[&str] = &[
+    "DBI",
+    "Moo",
+    "Moose",
+    "Try::Tiny",
+    "Path::Tiny",
+    "Test::More",
+    "Test::Exception",
+    "Google::Antigravity",
+];
 
 /// Returns the sort-text tier prefix for a module name.
 ///
