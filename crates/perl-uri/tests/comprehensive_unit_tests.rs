@@ -171,8 +171,8 @@ fn uri_extension_handles_multiple_dots() {
 
 #[test]
 fn uri_extension_hidden_file_no_ext() {
-    // .gitignore → extension is "gitignore" (after the single dot)
-    assert_eq!(uri_extension("file:///tmp/.gitignore"), Some("gitignore"));
+    // Dotfiles like `.gitignore` are treated as extensionless.
+    assert_eq!(uri_extension("file:///tmp/.gitignore"), None);
 }
 
 #[test]
