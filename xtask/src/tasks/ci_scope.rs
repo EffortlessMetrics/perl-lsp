@@ -715,7 +715,7 @@ pub fn apply_wideners_v2(
 
 /// Configuration for the `ci-scope` subcommand.
 pub struct CiScopeConfig {
-    /// Base git ref to diff against (e.g. "origin/master").
+    /// Base git ref to diff against (e.g. "origin/main" or "auto").
     pub base: String,
     /// Output format: "json" or "text".
     pub format: String,
@@ -731,7 +731,7 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
     let workspace_root = root.to_string_lossy().replace('\\', "/");
 
     let mut output = classify_files(&changed_files, &metadata, &workspace_root)?;
-    output.base = config.base.clone();
+    output.base = base_ref.clone();
     output.head_sha = head_sha;
     output.changed_files = changed_files;
 
@@ -754,20 +754,43 @@ pub fn run(config: CiScopeConfig) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
-    let verify = cmd("git", &["rev-parse", "--verify", base])
+    let mut candidates = Vec::new();
+    if base != "auto" {
+        candidates.push(base.to_string());
+    }
+    candidates.extend(
+        ["origin/main", "origin/master", "main", "master", "HEAD~1", "HEAD"]
+            .into_iter()
+            .map(str::to_string),
+    );
+
+    for candidate in candidates {
+        if git_ref_exists(&candidate, root)? {
+            if base != "auto" && candidate != base {
+                eprintln!(
+                    "Warning: base ref '{}' not found; using fallback '{}'",
+                    base, candidate
+                );
+            }
+            return Ok(candidate);
+        }
+    }
+
+    Err(color_eyre::eyre::eyre!(
+        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, HEAD~1, or HEAD",
+        base
+    ))
+}
+
+fn git_ref_exists(candidate: &str, root: &Path) -> Result<bool> {
+    let verify = cmd("git", &["rev-parse", "--verify", candidate])
         .dir(root)
         .stdout_null()
         .stderr_null()
         .unchecked()
         .run()
         .context("Failed to run git rev-parse")?;
-
-    if verify.status.success() {
-        return Ok(base.to_string());
-    }
-
-    eprintln!("Warning: base ref '{}' not found; falling back to HEAD~1", base);
-    Ok("HEAD~1".to_string())
+    Ok(verify.status.success())
 }
 
 fn get_head_sha(root: &Path) -> Result<String> {

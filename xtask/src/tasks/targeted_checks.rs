@@ -24,34 +24,40 @@ pub enum CheckMode {
     All,
 }
 
-/// Resolve a git ref, falling back to HEAD~1 if the primary ref is not valid.
+/// Resolve a git ref, using fallbacks when the primary ref is not valid.
 fn resolve_base_ref(base: &str) -> Result<String> {
-    let verify = cmd("git", &["rev-parse", "--verify", base])
-        .stdout_null()
-        .stderr_null()
-        .unchecked()
-        .run()
-        .context("Failed to run git rev-parse")?;
+    let mut candidates = Vec::new();
+    if base != "auto" {
+        candidates.push(base.to_string());
+    }
+    candidates.extend(
+        ["origin/main", "origin/master", "main", "master", "HEAD~1", "HEAD"]
+            .into_iter()
+            .map(str::to_string),
+    );
 
-    if verify.status.success() {
-        return Ok(base.to_string());
+    for candidate in candidates {
+        let verify = cmd("git", &["rev-parse", "--verify", &candidate])
+            .stdout_null()
+            .stderr_null()
+            .unchecked()
+            .run()
+            .context("Failed to run git rev-parse")?;
+        if verify.status.success() {
+            if base != "auto" && candidate != base {
+                eprintln!(
+                    "Warning: Base ref '{}' not found; using fallback '{}'",
+                    base, candidate
+                );
+            }
+            return Ok(candidate);
+        }
     }
 
-    eprintln!("Warning: Base ref '{}' not found; falling back to HEAD~1", base);
-
-    let fallback = "HEAD~1";
-    let verify_fallback = cmd("git", &["rev-parse", "--verify", fallback])
-        .stdout_null()
-        .stderr_null()
-        .unchecked()
-        .run()
-        .context("Failed to run git rev-parse for fallback")?;
-
-    if verify_fallback.status.success() {
-        return Ok(fallback.to_string());
-    }
-
-    Err(eyre!("Could not resolve a valid base ref (tried '{}' and '{}')", base, fallback,))
+    Err(eyre!(
+        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, HEAD~1, or HEAD",
+        base
+    ))
 }
 
 /// Get the list of files changed between base_ref and HEAD.

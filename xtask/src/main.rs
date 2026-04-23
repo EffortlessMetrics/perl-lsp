@@ -388,10 +388,10 @@ enum Commands {
     /// selected CI lanes with reasons. Deterministic given the same diff and
     /// `cargo metadata` output.
     ///
-    /// Example: `cargo xtask ci-scope --base origin/master --format json`
+    /// Example: `cargo xtask ci-scope --base auto --format json`
     CiScope {
-        /// Base git reference to diff against (default: origin/master).
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference to diff against (default: auto-detect).
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Output format: `json` or `text` (default: json).
@@ -1054,8 +1054,8 @@ enum Commands {
     /// and runs clippy and/or tests only for those crates. This gives
     /// fast feedback during active development.
     TargetedChecks {
-        /// Base git reference for diff (default: origin/master)
-        #[arg(long, default_value = "origin/master")]
+        /// Base git reference for diff (default: auto-detect)
+        #[arg(long, default_value = "auto")]
         base: String,
 
         /// Check mode: clippy, test, or all (default: all)
