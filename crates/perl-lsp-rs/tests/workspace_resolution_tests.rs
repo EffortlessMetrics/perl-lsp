@@ -11,7 +11,7 @@
 use parking_lot::Mutex;
 use perl_lsp::state::WorkspaceConfig;
 use perl_lsp::{JsonRpcRequest, LspServer};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::io::Write;
 use std::sync::Arc;
 
@@ -205,6 +205,34 @@ fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error:
 
     let caps = result.ok_or("Expected initialize result")?;
     assert!(caps.get("capabilities").is_some());
+    Ok(())
+}
+
+#[test]
+fn initialize_with_legacy_root_path_sets_workspace_folder_path(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (server, _buffer) = create_test_server();
+
+    let result = send_request(
+        &server,
+        "initialize",
+        Some(json!(1)),
+        json!({
+            "rootPath": "/legacy/workspace",
+            "capabilities": {}
+        }),
+    );
+
+    result.ok_or("Expected initialize result")?;
+
+    let folders = server.all_workspace_folders();
+    assert_eq!(folders.len(), 1, "expected one workspace folder from rootPath");
+    assert_eq!(
+        folders.first().and_then(|f| f.path.as_ref()).map(|p| p.to_string_lossy().to_string()),
+        Some("/legacy/workspace".to_string()),
+        "legacy rootPath should populate folder.path for downstream workspace features"
+    );
+
     Ok(())
 }
 

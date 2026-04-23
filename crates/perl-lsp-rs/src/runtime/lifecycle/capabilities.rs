@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -222,12 +222,16 @@ impl LspServer {
                 self.set_root_uri(root_uri);
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
+                // (including older JetBrains LSP clients).
                 tracing::debug!(root_path, "Initialized with legacy rootPath");
                 let root_uri = root_path_to_file_uri(root_path);
+                let mut folder =
+                    super::super::workspace_folder::WorkspaceFolderState::new(root_uri.clone());
+                // Preserve filesystem path metadata so project-config loading and other
+                // path-based workflows behave the same as rootUri/workspaceFolders initialization.
+                folder = folder.with_path(std::path::PathBuf::from(root_path));
                 let mut folders = self.workspace_folders.lock();
-                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
-                    root_uri.clone(),
-                ));
+                folders.push(folder);
                 self.set_root_uri(&root_uri);
             }
         }
@@ -412,8 +416,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
     use serde_json::json;
 
     #[test]
