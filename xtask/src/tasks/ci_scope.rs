@@ -5,7 +5,8 @@
 //! 2. Maps files to crates via cargo metadata
 //! 3. Computes reverse-dependency closure from the dep graph
 //! 4. Applies architectural wideners (parser → LSP/DAP, etc.)
-//! 5. Emits JSON or text describing selected lanes
+//! 5. Detects risk tags via path-prefix + keyword scan
+//! 6. Emits a schema_version=2 JSON feedback plan with selected lanes
 //!
 //! Output is deterministic given the same diff + cargo metadata.
 
@@ -17,41 +18,243 @@ use duct::cmd;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
-// Public output types
+// Public output types (schema_version 2)
 // ---------------------------------------------------------------------------
 
-/// A directly-changed crate (reason = "direct").
+/// A directly-changed crate.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CrateEntry {
+pub struct DirectCrate {
+    pub name: String,
+    pub reason: String,
+}
+
+/// A crate in the reverse-dependency closure.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RevDepCrate {
     pub name: String,
     pub reason: String,
 }
 
 /// A crate pulled in by an architectural widener.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct WidenedCrateEntry {
+pub struct ArchWidener {
     pub name: String,
-    pub reason: String,
+    pub rule: String,
 }
 
-/// A selected CI lane with its reason and scope.
+/// A selected standard CI lane with its reason and scope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneEntry {
     pub lane: String,
-    pub reason: String,
     pub scope: Vec<String>,
+    pub reason: String,
 }
 
-/// The full scope classifier output.
+/// A selected heavy CI lane (mutation, fuzz) promoted by risk tags.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeavyLaneEntry {
+    pub lane: String,
+    pub reason: String,
+}
+
+/// Platform override flags.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PlatformOverrides {
+    pub windows_runner: bool,
+}
+
+/// The full scope classifier output (schema_version 2).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScopeOutput {
     pub schema_version: u32,
     pub base: String,
     pub head_sha: String,
     pub changed_files: Vec<String>,
-    pub changed_crates: Vec<CrateEntry>,
-    pub widened_crates: Vec<WidenedCrateEntry>,
+    pub diff_class: String,
+    pub direct_crates: Vec<DirectCrate>,
+    pub reverse_dep_closure: Vec<RevDepCrate>,
+    pub architecture_wideners: Vec<ArchWidener>,
+    pub risk_tags: Vec<String>,
+    pub platform_overrides: PlatformOverrides,
     pub selected_lanes: Vec<LaneEntry>,
+    pub selected_heavy_lanes: Vec<HeavyLaneEntry>,
+    pub explanations: BTreeMap<String, String>,
+}
+
+// ---------------------------------------------------------------------------
+// Diff classification
+// ---------------------------------------------------------------------------
+
+/// Prose-only extensions (never trigger CI lanes).
+const PROSE_EXTENSIONS: &[&str] = &[".md", ".txt", ".rst", ".adoc", ".org"];
+
+/// Docs-as-code extensions (may trigger validate-title / doc-build only).
+const DOCS_AS_CODE_EXTENSIONS: &[&str] =
+    &[".toml", ".yaml", ".yml", ".json", ".kdl", ".ron", ".jsonc"];
+
+/// CI config paths/prefixes.
+const CI_CONFIG_PATHS: &[&str] = &[".github/workflows/", ".ci/", "justfile", "Makefile"];
+
+/// Classify a list of changed file paths into a diff_class string.
+///
+/// Classes: `prose_only`, `docs_as_code`, `ci_config`, `code`, `mixed`.
+pub fn classify_diff(files: &[String]) -> String {
+    if files.is_empty() {
+        return "prose_only".to_string();
+    }
+
+    let mut has_prose = false;
+    let mut has_docs_as_code = false;
+    let mut has_ci_config = false;
+    let mut has_code = false;
+
+    for file in files {
+        if is_prose_file(file) {
+            has_prose = true;
+        } else if is_ci_config_file(file) {
+            has_ci_config = true;
+        } else if is_docs_as_code_file(file) {
+            has_docs_as_code = true;
+        } else {
+            // Assume Rust source / other code
+            has_code = true;
+        }
+    }
+
+    let class_count =
+        [has_prose, has_docs_as_code, has_ci_config, has_code].iter().filter(|&&b| b).count();
+
+    if class_count > 1 {
+        return "mixed".to_string();
+    }
+    if has_ci_config {
+        return "ci_config".to_string();
+    }
+    if has_docs_as_code {
+        return "docs_as_code".to_string();
+    }
+    if has_prose {
+        return "prose_only".to_string();
+    }
+    "code".to_string()
+}
+
+fn is_prose_file(file: &str) -> bool {
+    PROSE_EXTENSIONS.iter().any(|ext| file.ends_with(ext))
+        || file.starts_with("docs/")
+        || file.starts_with(".github/ISSUE_TEMPLATE/")
+        || file == "LICENSE"
+        || file == "CHANGELOG"
+}
+
+fn is_ci_config_file(file: &str) -> bool {
+    CI_CONFIG_PATHS.iter().any(|prefix| file.starts_with(prefix) || file == *prefix)
+        || file.ends_with(".sh")
+        || file.starts_with("scripts/")
+        || file.starts_with("hooks/")
+}
+
+fn is_docs_as_code_file(file: &str) -> bool {
+    DOCS_AS_CODE_EXTENSIONS.iter().any(|ext| file.ends_with(ext))
+        && !is_prose_file(file)
+        && !is_ci_config_file(file)
+}
+
+// ---------------------------------------------------------------------------
+// Risk tag detection
+// ---------------------------------------------------------------------------
+
+/// Risk tag constants.
+pub const RISK_TAG_CONCURRENCY: &str = "concurrency";
+pub const RISK_TAG_PARSER_RECOVERY: &str = "parser_recovery";
+pub const RISK_TAG_OFFSET_MATH: &str = "offset_math";
+pub const RISK_TAG_PATH_NORMALIZATION: &str = "path_normalization";
+pub const RISK_TAG_PERF_HOT_PATH: &str = "perf_hot_path";
+pub const RISK_TAG_PUBLIC_API: &str = "public_api";
+pub const RISK_TAG_DEP_CHANGE: &str = "dep_change";
+pub const RISK_TAG_SECURITY_SURFACE: &str = "security_surface";
+
+/// Public API facade crates (changing these → public_api risk tag).
+const PUBLIC_API_CRATES: &[&str] =
+    &["perl-parser", "perl-lsp-rs", "perl-dap", "perl-uri", "perl-lsp"];
+
+/// Benchmarks directory (files referenced by benchmarks → perf_hot_path).
+const BENCH_PATH_PREFIXES: &[&str] = &["benchmarks/", "benches/", "criterion/"];
+
+/// Detect risk tags from a list of changed file paths and optionally their content.
+///
+/// This uses path-prefix heuristics only (no file reading), which is fast and
+/// deterministic. Content-based keyword scanning can be added later.
+pub fn detect_risk_tags(files: &[String], direct_crate_names: &[&str]) -> Vec<String> {
+    let mut tags: BTreeSet<String> = BTreeSet::new();
+
+    for file in files {
+        // dep_change — Cargo manifests / lock file
+        if file == "Cargo.toml"
+            || file == "Cargo.lock"
+            || file.ends_with("/Cargo.toml")
+            || file.ends_with("/Cargo.lock")
+        {
+            tags.insert(RISK_TAG_DEP_CHANGE.to_string());
+        }
+
+        // parser_recovery — recovery/ dir or expressions/ dir under parser
+        if file.contains("/recovery/")
+            || file.contains("/expressions/")
+            || (file.contains("perl-parser") && file.contains("recovery"))
+        {
+            tags.insert(RISK_TAG_PARSER_RECOVERY.to_string());
+        }
+
+        // offset_math — UTF-8 / column / line conversion files
+        if file.contains("position")
+            || file.contains("offset")
+            || file.contains("utf")
+            || file.contains("column")
+        {
+            tags.insert(RISK_TAG_OFFSET_MATH.to_string());
+        }
+
+        // path_normalization — URI / workspace-folder / file-URI parsing
+        if file.contains("uri") || file.contains("workspace-folder") || file.contains("file_uri") {
+            tags.insert(RISK_TAG_PATH_NORMALIZATION.to_string());
+        }
+
+        // perf_hot_path — files in benchmark directories
+        if BENCH_PATH_PREFIXES.iter().any(|prefix| file.starts_with(prefix)) {
+            tags.insert(RISK_TAG_PERF_HOT_PATH.to_string());
+        }
+
+        // security_surface — auth, eval, shell exec, deserialization
+        if file.contains("auth")
+            || file.contains("eval")
+            || file.contains("exec")
+            || file.contains("deserializ")
+            || file.contains("shell")
+        {
+            tags.insert(RISK_TAG_SECURITY_SURFACE.to_string());
+        }
+
+        // concurrency — files with async/Arc/Mutex/RwLock (heuristic: just check path tokens)
+        if file.contains("async")
+            || file.contains("concurrent")
+            || file.contains("thread")
+            || file.contains("mutex")
+            || file.contains("rwlock")
+            || file.contains("arc")
+        {
+            tags.insert(RISK_TAG_CONCURRENCY.to_string());
+        }
+    }
+
+    // public_api — direct changes to facade crates
+    for crate_name in direct_crate_names {
+        if PUBLIC_API_CRATES.iter().any(|facade| crate_name == facade) {
+            tags.insert(RISK_TAG_PUBLIC_API.to_string());
+        }
+    }
+
+    tags.into_iter().collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -59,28 +262,28 @@ pub struct ScopeOutput {
 // ---------------------------------------------------------------------------
 
 /// A single widener rule: when any of the `trigger_prefixes` crates change,
-/// add `targets` to the widened set with the given `reason`.
-struct WidenerRule {
+/// add `targets` to the widened set with the given `rule` description.
+pub struct WidenerRule {
     /// Crate name prefixes that trigger this rule (exact match or prefix match).
-    trigger_prefixes: &'static [&'static str],
+    pub trigger_prefixes: &'static [&'static str],
     /// Crates to add to the widened set.
-    targets: &'static [&'static str],
-    /// Human-readable reason explaining the widening.
-    reason: &'static str,
+    pub targets: &'static [&'static str],
+    /// Human-readable rule description (appears in architecture_wideners[].rule).
+    pub rule: &'static str,
     /// Lane to select when this rule fires.
-    lanes: &'static [&'static str],
+    pub lanes: &'static [&'static str],
     /// Lane reason tag.
-    lane_reason: &'static str,
+    pub lane_reason: &'static str,
 }
 
-/// All architectural widener rules.  The order matters for lane generation
+/// All architectural widener rules. The order matters for lane generation
 /// (earlier rules fire first), but deduplication ensures idempotent output.
-static WIDENER_RULES: &[WidenerRule] = &[
+pub static WIDENER_RULES: &[WidenerRule] = &[
     // Rule 1: parser / lexer / parser-core → semantic, workspace-index, LSP, DAP
     WidenerRule {
         trigger_prefixes: &["perl-parser", "perl-lexer", "perl-parser-core"],
         targets: &["perl-semantic-analyzer", "perl-workspace-index", "perl-lsp-rs", "perl-dap"],
-        reason: "architectural: parser → LSP/DAP downstream",
+        rule: "parser → DAP downstream smoke",
         lanes: &["lsp_smoke"],
         lane_reason: "architectural_widener",
     },
@@ -94,7 +297,7 @@ static WIDENER_RULES: &[WidenerRule] = &[
             "perl-lsp-workspace",
             "perl-lsp-rs",
         ],
-        reason: "architectural: semantic → LSP provider downstream",
+        rule: "semantic → LSP definition/references/rename",
         lanes: &["lsp_providers"],
         lane_reason: "architectural_widener",
     },
@@ -102,26 +305,63 @@ static WIDENER_RULES: &[WidenerRule] = &[
     WidenerRule {
         trigger_prefixes: &["perl-lsp-", "perl-dap"],
         targets: &["perl-lsp-rs"],
-        reason: "architectural: lsp/dap change → UX regression",
+        rule: "lsp/dap change → UX regression",
         lanes: &["ux_regression"],
         lane_reason: "architectural_widener",
     },
 ];
 
 // ---------------------------------------------------------------------------
-// File classification helpers
+// Heavy-lane promotion from risk tags
 // ---------------------------------------------------------------------------
 
-/// Returns true if all changed files are documentation-only (docs/, *.md,
-/// .github/ISSUE_TEMPLATE/) and therefore skip heavy CI lanes.
-fn is_docs_only(files: &[String]) -> bool {
-    if files.is_empty() {
-        return false;
+/// Returns heavy lanes promoted by the given set of risk tags.
+pub fn heavy_lanes_from_risk_tags(
+    risk_tags: &[String],
+    direct_crates: &[DirectCrate],
+) -> Vec<HeavyLaneEntry> {
+    let mut heavy: Vec<HeavyLaneEntry> = Vec::new();
+
+    if risk_tags.contains(&RISK_TAG_PARSER_RECOVERY.to_string()) {
+        heavy.push(HeavyLaneEntry {
+            lane: "bounded_parser_fuzz".to_string(),
+            reason: format!("risk_tag: {RISK_TAG_PARSER_RECOVERY}"),
+        });
     }
-    files.iter().all(|f| {
-        f.starts_with("docs/") || f.ends_with(".md") || f.starts_with(".github/ISSUE_TEMPLATE/")
-    })
+    if risk_tags.contains(&RISK_TAG_CONCURRENCY.to_string()) {
+        heavy.push(HeavyLaneEntry {
+            lane: "thread_sanitizer".to_string(),
+            reason: format!("risk_tag: {RISK_TAG_CONCURRENCY}"),
+        });
+    }
+    if risk_tags.contains(&RISK_TAG_PERF_HOT_PATH.to_string()) {
+        heavy.push(HeavyLaneEntry {
+            lane: "perf_regression".to_string(),
+            reason: format!("risk_tag: {RISK_TAG_PERF_HOT_PATH}"),
+        });
+    }
+    if risk_tags.contains(&RISK_TAG_SECURITY_SURFACE.to_string()) {
+        heavy.push(HeavyLaneEntry {
+            lane: "security_audit".to_string(),
+            reason: format!("risk_tag: {RISK_TAG_SECURITY_SURFACE}"),
+        });
+    }
+
+    // mutation_diff: default lane for any code diff (direct crate changes)
+    if !direct_crates.is_empty() {
+        let scope: Vec<String> = direct_crates.iter().map(|c| c.name.clone()).collect();
+        heavy.push(HeavyLaneEntry {
+            lane: "mutation_diff".to_string(),
+            reason: format!("code_diff_default (crates: {})", scope.join(", ")),
+        });
+    }
+
+    heavy
 }
+
+// ---------------------------------------------------------------------------
+// File-to-crate resolution helpers
+// ---------------------------------------------------------------------------
 
 /// Returns true if the changed files include workspace root files that trigger
 /// the full-workspace scope (Cargo.toml, Cargo.lock, workflow files, hooks, justfile).
@@ -133,22 +373,17 @@ fn is_workspace_root_change(files: &[String]) -> bool {
     })
 }
 
-/// Returns true if the changed files include `features.toml`, which triggers
-/// UX regression widening per #4706.
+/// Returns true if the changed files include `features.toml`.
 fn has_features_toml_change(files: &[String]) -> bool {
     files.iter().any(|f| f == "features.toml")
 }
 
-/// Extract unique crate names from the cargo metadata JSON for crate dirs
-/// seen in the changed files list.
-///
-/// Returns (crate_name → canonical_crate_name) for all changed crates.
+/// Extract unique crate names from cargo metadata JSON for crate dirs in the changed files.
 fn crates_from_files(
     files: &[String],
     metadata: &serde_json::Value,
     workspace_root: &str,
 ) -> Result<BTreeSet<String>> {
-    // Collect changed crate directories like "crates/perl-parser"
     let mut crate_dirs = BTreeSet::new();
     for file in files {
         let parts: Vec<&str> = file.splitn(3, '/').collect();
@@ -200,22 +435,17 @@ fn crates_from_files(
 // ---------------------------------------------------------------------------
 
 /// Build a reverse-dependency map: package_name → set of packages that depend on it.
-///
-/// Uses the `resolve.nodes` array from cargo metadata.
 fn build_reverse_dep_map(metadata: &serde_json::Value) -> BTreeMap<String, BTreeSet<String>> {
     let mut rev_deps: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
-    let nodes = metadata.pointer("/resolve/nodes").and_then(|n| n.as_array());
-
-    let nodes = match nodes {
+    let nodes = match metadata.pointer("/resolve/nodes").and_then(|n| n.as_array()) {
         Some(n) => n,
         None => return rev_deps,
     };
 
     // Build id → name map first
-    let packages = metadata.get("packages").and_then(|p| p.as_array());
     let mut id_to_name: BTreeMap<String, String> = BTreeMap::new();
-    if let Some(pkgs) = packages {
+    if let Some(pkgs) = metadata.get("packages").and_then(|p| p.as_array()) {
         for pkg in pkgs {
             let id = pkg.get("id").and_then(|v| v.as_str()).unwrap_or("");
             let name = pkg.get("name").and_then(|v| v.as_str()).unwrap_or("");
@@ -225,19 +455,14 @@ fn build_reverse_dep_map(metadata: &serde_json::Value) -> BTreeMap<String, BTree
         }
     }
 
-    // For each node, record that its deps have this node as a reverse dep
     for node in nodes {
         let node_id = node.get("id").and_then(|v| v.as_str()).unwrap_or("");
         let node_name = match id_to_name.get(node_id) {
             Some(n) => n.clone(),
-            None => {
-                // Fall back: try to extract name from id "name version (registry)"
-                node_id.split(':').next().unwrap_or(node_id).to_string()
-            }
+            None => node_id.split(':').next().unwrap_or(node_id).to_string(),
         };
 
-        let deps = node.get("deps").and_then(|d| d.as_array());
-        if let Some(deps) = deps {
+        if let Some(deps) = node.get("deps").and_then(|d| d.as_array()) {
             for dep in deps {
                 let dep_pkg_id = dep.get("pkg").and_then(|v| v.as_str()).unwrap_or("");
                 let dep_name = match id_to_name.get(dep_pkg_id) {
@@ -284,69 +509,37 @@ fn reverse_dep_closure(
 
 /// Classify a list of changed files against cargo metadata JSON.
 ///
-/// `workspace_root` is the absolute path prefix used in manifest_path fields
-/// (e.g. `"/path/to/project"`). In tests, pass a fake root like `"/workspace"`.
+/// Returns a schema_version 2 `ScopeOutput`. `workspace_root` is the absolute
+/// path prefix used in manifest_path fields (e.g. `"/path/to/project"`).
+/// In tests, pass a fake root like `"/workspace"`.
 pub fn classify_files(
     files: &[String],
     metadata: &serde_json::Value,
     workspace_root: &str,
 ) -> Result<ScopeOutput> {
-    // Empty diff → empty output
-    if files.is_empty() {
-        return Ok(ScopeOutput {
-            schema_version: 1,
-            base: String::new(),
-            head_sha: String::new(),
-            changed_files: vec![],
-            changed_crates: vec![],
-            widened_crates: vec![],
-            selected_lanes: vec![],
-        });
-    }
+    let diff_class = classify_diff(files);
 
-    // Docs-only → skip heavy lanes
-    if is_docs_only(files) {
+    // Empty diff or prose-only → empty output (no lanes)
+    if files.is_empty() || diff_class == "prose_only" {
         return Ok(ScopeOutput {
-            schema_version: 1,
+            schema_version: 2,
             base: String::new(),
             head_sha: String::new(),
             changed_files: files.to_vec(),
-            changed_crates: vec![],
-            widened_crates: vec![],
+            diff_class,
+            direct_crates: vec![],
+            reverse_dep_closure: vec![],
+            architecture_wideners: vec![],
+            risk_tags: vec![],
+            platform_overrides: PlatformOverrides::default(),
             selected_lanes: vec![],
+            selected_heavy_lanes: vec![],
+            explanations: BTreeMap::new(),
         });
     }
 
     let mut lanes: Vec<LaneEntry> = vec![];
-    let mut changed_crates: Vec<CrateEntry> = vec![];
-
-    // Workspace-root changes: trigger infra lanes
-    if is_workspace_root_change(files) {
-        lanes.push(LaneEntry {
-            lane: "publish".to_string(),
-            reason: "workspace_root".to_string(),
-            scope: vec![],
-        });
-        lanes.push(LaneEntry {
-            lane: "security".to_string(),
-            reason: "workspace_root".to_string(),
-            scope: vec![],
-        });
-        lanes.push(LaneEntry {
-            lane: "ci_policy".to_string(),
-            reason: "workspace_root".to_string(),
-            scope: vec![],
-        });
-    }
-
-    // features.toml change: UX regression lane (per #4706)
-    if has_features_toml_change(files) {
-        lanes.push(LaneEntry {
-            lane: "ux_regression".to_string(),
-            reason: "features_toml".to_string(),
-            scope: vec!["perl-lsp-rs".to_string()],
-        });
-    }
+    let mut explanations: BTreeMap<String, String> = BTreeMap::new();
 
     // Collect all package names for reverse-dep filtering
     let all_package_names: BTreeSet<String> = metadata
@@ -359,85 +552,129 @@ pub fn classify_files(
         })
         .unwrap_or_default();
 
-    // Map changed files → crate names
-    let directly_changed = crates_from_files(files, metadata, workspace_root)?;
+    // Map changed files → direct crate names
+    let directly_changed_set = crates_from_files(files, metadata, workspace_root)?;
+    let direct_crates: Vec<DirectCrate> = directly_changed_set
+        .iter()
+        .map(|name| DirectCrate { name: name.clone(), reason: "direct".to_string() })
+        .collect();
 
     // Build reverse-dep map and compute closure
     let rev_deps = build_reverse_dep_map(metadata);
-    let rev_dep_crates = reverse_dep_closure(&directly_changed, &rev_deps, &all_package_names);
+    let rev_dep_set = reverse_dep_closure(&directly_changed_set, &rev_deps, &all_package_names);
+    let reverse_dep_closure_vec: Vec<RevDepCrate> = rev_dep_set
+        .iter()
+        .filter(|name| !directly_changed_set.contains(*name))
+        .map(|name| RevDepCrate {
+            name: name.clone(),
+            reason: format!(
+                "reverse-dep of {}",
+                directly_changed_set.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        })
+        .collect();
 
-    // Populate changed_crates (direct + reverse-dep)
-    for name in &directly_changed {
-        changed_crates.push(CrateEntry { name: name.clone(), reason: "direct".to_string() });
-    }
-    for name in &rev_dep_crates {
-        if !directly_changed.contains(name) {
-            changed_crates
-                .push(CrateEntry { name: name.clone(), reason: "reverse-dep".to_string() });
+    // Risk tag detection
+    let direct_names: Vec<&str> = direct_crates.iter().map(|c| c.name.as_str()).collect();
+    let risk_tags = detect_risk_tags(files, &direct_names);
+
+    // Apply architectural wideners
+    let (arch_wideners, widener_lanes, widener_explanations) = apply_wideners_v2(&direct_crates)?;
+    lanes.extend(widener_lanes);
+    explanations.extend(widener_explanations);
+
+    // Workspace-root changes: trigger infra lanes
+    if is_workspace_root_change(files) {
+        for lane_name in &["publish", "security", "ci_policy"] {
+            lanes.push(LaneEntry {
+                lane: lane_name.to_string(),
+                reason: "workspace_root".to_string(),
+                scope: vec![],
+            });
         }
+        explanations.insert(
+            "publish".to_string(),
+            "Workspace root files (Cargo.toml/Lock, workflows, hooks) trigger publish + security + CI-policy checks".to_string(),
+        );
     }
-    changed_crates.sort();
 
-    // Add scoped lanes for directly changed + reverse-dep crates
-    if !changed_crates.is_empty() {
-        let scope: Vec<String> = changed_crates.iter().map(|c| c.name.clone()).collect();
+    // features.toml change: UX regression lane
+    if has_features_toml_change(files) {
+        let already = lanes.iter().any(|l| l.lane == "ux_regression");
+        if !already {
+            lanes.push(LaneEntry {
+                lane: "ux_regression".to_string(),
+                reason: "features_toml".to_string(),
+                scope: vec!["perl-lsp-rs".to_string()],
+            });
+        }
+        explanations.insert(
+            "ux_regression".to_string(),
+            "features.toml change triggers UX regression check (per #4706)".to_string(),
+        );
+    }
+
+    // Scoped lanes for all changed crates (direct + rev-dep)
+    let all_scope: Vec<String> = {
+        let mut s: Vec<String> = direct_crates.iter().map(|c| c.name.clone()).collect();
+        for c in &reverse_dep_closure_vec {
+            if !s.contains(&c.name) {
+                s.push(c.name.clone());
+            }
+        }
+        s.sort();
+        s
+    };
+
+    if !all_scope.is_empty() {
         lanes.push(LaneEntry {
             lane: "clippy_scoped".to_string(),
-            reason: "changed_crates".to_string(),
-            scope: scope.clone(),
+            scope: all_scope.clone(),
+            reason: "direct".to_string(),
         });
         lanes.push(LaneEntry {
             lane: "test_scoped".to_string(),
-            reason: "changed_crates".to_string(),
-            scope,
+            scope: all_scope.clone(),
+            reason: "direct".to_string(),
         });
     }
 
-    // Apply architectural wideners
-    let widened = apply_wideners(&changed_crates)?;
+    // mutation_diff default lane for code changes
+    let heavy_lanes = heavy_lanes_from_risk_tags(&risk_tags, &direct_crates);
 
-    // Derive widener lanes from the widener rules that fired
-    for rule in WIDENER_RULES {
-        let triggered = changed_crates.iter().any(|c| {
-            rule.trigger_prefixes
-                .iter()
-                .any(|prefix| c.name == *prefix || c.name.starts_with(prefix))
-        });
-        if triggered {
-            for lane_name in rule.lanes {
-                let scope: Vec<String> = rule.targets.iter().map(|s| s.to_string()).collect();
-                // Avoid duplicate lane entries
-                let already_present = lanes.iter().any(|l| l.lane == *lane_name);
-                if !already_present {
-                    lanes.push(LaneEntry {
-                        lane: lane_name.to_string(),
-                        reason: rule.lane_reason.to_string(),
-                        scope,
-                    });
-                }
-            }
-        }
-    }
+    // Platform overrides (currently static — can be extended)
+    let platform_overrides = PlatformOverrides { windows_runner: false };
 
     Ok(ScopeOutput {
-        schema_version: 1,
+        schema_version: 2,
         base: String::new(),
         head_sha: String::new(),
         changed_files: files.to_vec(),
-        changed_crates,
-        widened_crates: widened,
+        diff_class,
+        direct_crates,
+        reverse_dep_closure: reverse_dep_closure_vec,
+        architecture_wideners: arch_wideners,
+        risk_tags,
+        platform_overrides,
         selected_lanes: lanes,
+        selected_heavy_lanes: heavy_lanes,
+        explanations,
     })
 }
 
-/// Apply architectural widening rules to a set of changed crates.
+/// Apply architectural widening rules to a set of directly-changed crates.
 ///
-/// Returns the list of widened crates (deduplicated, sorted).
-pub fn apply_wideners(changed: &[CrateEntry]) -> Result<Vec<WidenedCrateEntry>> {
+/// Returns (wideners, lanes, explanations) for insertion into the output.
+pub fn apply_wideners_v2(
+    direct_crates: &[DirectCrate],
+) -> Result<(Vec<ArchWidener>, Vec<LaneEntry>, BTreeMap<String, String>)> {
     let mut widened: BTreeMap<String, String> = BTreeMap::new();
+    let mut lanes: Vec<LaneEntry> = Vec::new();
+    let mut explanations: BTreeMap<String, String> = BTreeMap::new();
+    let mut seen_lanes: BTreeSet<String> = BTreeSet::new();
 
     for rule in WIDENER_RULES {
-        let triggered = changed.iter().any(|c| {
+        let triggered = direct_crates.iter().any(|c| {
             rule.trigger_prefixes
                 .iter()
                 .any(|prefix| c.name == *prefix || c.name.starts_with(prefix))
@@ -445,13 +682,31 @@ pub fn apply_wideners(changed: &[CrateEntry]) -> Result<Vec<WidenedCrateEntry>> 
 
         if triggered {
             for target in rule.targets {
-                // First-write wins for the reason; if already present keep original
-                widened.entry(target.to_string()).or_insert_with(|| rule.reason.to_string());
+                widened.entry(target.to_string()).or_insert_with(|| rule.rule.to_string());
+            }
+
+            for lane_name in rule.lanes {
+                if !seen_lanes.contains(*lane_name) {
+                    seen_lanes.insert(lane_name.to_string());
+                    let scope: Vec<String> = rule.targets.iter().map(|s| s.to_string()).collect();
+                    lanes.push(LaneEntry {
+                        lane: lane_name.to_string(),
+                        scope,
+                        reason: rule.lane_reason.to_string(),
+                    });
+                    explanations.insert(
+                        lane_name.to_string(),
+                        format!("Architectural rule: {}", rule.rule),
+                    );
+                }
             }
         }
     }
 
-    Ok(widened.into_iter().map(|(name, reason)| WidenedCrateEntry { name, reason }).collect())
+    let arch_wideners: Vec<ArchWidener> =
+        widened.into_iter().map(|(name, rule)| ArchWidener { name, rule }).collect();
+
+    Ok((arch_wideners, lanes, explanations))
 }
 
 // ---------------------------------------------------------------------------
@@ -511,7 +766,6 @@ fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
         return Ok(base.to_string());
     }
 
-    // Fallback: HEAD~1 (useful when origin/master is not available locally)
     eprintln!("Warning: base ref '{}' not found; falling back to HEAD~1", base);
     Ok("HEAD~1".to_string())
 }
@@ -572,25 +826,37 @@ fn load_metadata(root: &Path) -> Result<serde_json::Value> {
 // ---------------------------------------------------------------------------
 
 fn print_text_summary(output: &ScopeOutput) {
-    println!("=== CI Scope Classifier ===");
-    println!("Base:     {}", output.base);
-    println!("HEAD SHA: {}", output.head_sha);
+    println!("=== CI Scope Classifier (schema v{}) ===", output.schema_version);
+    println!("Base:       {}", output.base);
+    println!("HEAD SHA:   {}", output.head_sha);
+    println!("Diff class: {}", output.diff_class);
     println!("Changed files: {}", output.changed_files.len());
 
-    if output.changed_crates.is_empty() {
-        println!("Changed crates: (none)");
+    if output.direct_crates.is_empty() {
+        println!("Direct crates: (none)");
     } else {
-        println!("Changed crates:");
-        for c in &output.changed_crates {
+        println!("Direct crates:");
+        for c in &output.direct_crates {
             println!("  [{}] {}", c.reason, c.name);
         }
     }
 
-    if !output.widened_crates.is_empty() {
-        println!("Widened crates:");
-        for w in &output.widened_crates {
-            println!("  {} — {}", w.name, w.reason);
+    if !output.reverse_dep_closure.is_empty() {
+        println!("Reverse-dep closure:");
+        for c in &output.reverse_dep_closure {
+            println!("  {}", c.name);
         }
+    }
+
+    if !output.architecture_wideners.is_empty() {
+        println!("Architecture wideners:");
+        for w in &output.architecture_wideners {
+            println!("  {} — {}", w.name, w.rule);
+        }
+    }
+
+    if !output.risk_tags.is_empty() {
+        println!("Risk tags: {}", output.risk_tags.join(", "));
     }
 
     if output.selected_lanes.is_empty() {
@@ -599,6 +865,13 @@ fn print_text_summary(output: &ScopeOutput) {
         println!("Selected lanes:");
         for l in &output.selected_lanes {
             println!("  [{}] {} — {:?}", l.reason, l.lane, l.scope);
+        }
+    }
+
+    if !output.selected_heavy_lanes.is_empty() {
+        println!("Heavy lanes:");
+        for l in &output.selected_heavy_lanes {
+            println!("  {} — {}", l.lane, l.reason);
         }
     }
 }
@@ -638,46 +911,76 @@ mod tests {
         })
     }
 
+    // --- diff_class tests ---
+
     #[test]
-    fn test_is_docs_only_true() {
-        assert!(is_docs_only(&[
-            "docs/reference/STABILITY.md".to_string(),
-            "README.md".to_string(),
-        ]));
+    fn test_classify_diff_prose_only() {
+        let files = vec!["docs/reference/STABILITY.md".to_string(), "README.md".to_string()];
+        assert_eq!(classify_diff(&files), "prose_only");
     }
 
     #[test]
-    fn test_is_docs_only_false_when_code_present() {
-        assert!(!is_docs_only(&[
+    fn test_classify_diff_empty_is_prose_only() {
+        assert_eq!(classify_diff(&[]), "prose_only");
+    }
+
+    #[test]
+    fn test_classify_diff_code() {
+        let files = vec!["crates/perl-parser/src/lib.rs".to_string()];
+        assert_eq!(classify_diff(&files), "code");
+    }
+
+    #[test]
+    fn test_classify_diff_ci_config() {
+        let files = vec![".github/workflows/ci.yml".to_string()];
+        assert_eq!(classify_diff(&files), "ci_config");
+    }
+
+    #[test]
+    fn test_classify_diff_mixed_code_and_docs() {
+        let files = vec![
             "crates/perl-parser/src/lib.rs".to_string(),
-            "docs/foo.md".to_string(),
-        ]));
+            "docs/reference/STABILITY.md".to_string(),
+        ];
+        assert_eq!(classify_diff(&files), "mixed");
+    }
+
+    // --- risk tag tests ---
+
+    #[test]
+    fn test_risk_tag_parser_recovery() {
+        let files = vec!["crates/perl-parser/src/expressions/recovery.rs".to_string()];
+        let tags = detect_risk_tags(&files, &[]);
+        assert!(
+            tags.contains(&RISK_TAG_PARSER_RECOVERY.to_string()),
+            "should detect parser_recovery"
+        );
     }
 
     #[test]
-    fn test_is_docs_only_false_for_empty() {
-        assert!(!is_docs_only(&[]));
+    fn test_risk_tag_dep_change_cargo_toml() {
+        let files = vec!["Cargo.toml".to_string()];
+        let tags = detect_risk_tags(&files, &[]);
+        assert!(tags.contains(&RISK_TAG_DEP_CHANGE.to_string()));
     }
 
     #[test]
-    fn test_is_workspace_root_change_cargo_toml() {
-        assert!(is_workspace_root_change(&["Cargo.toml".to_string()]));
+    fn test_risk_tag_public_api() {
+        let tags = detect_risk_tags(&[], &["perl-parser"]);
+        assert!(tags.contains(&RISK_TAG_PUBLIC_API.to_string()));
     }
 
     #[test]
-    fn test_is_workspace_root_change_cargo_lock() {
-        assert!(is_workspace_root_change(&["Cargo.lock".to_string()]));
+    fn test_risk_tag_none_for_unrelated() {
+        let files = vec!["crates/perl-parser/src/stmt.rs".to_string()];
+        let tags = detect_risk_tags(&files, &["perl-parser"]);
+        // public_api will be set, but no other tags
+        assert!(tags.contains(&RISK_TAG_PUBLIC_API.to_string()));
+        assert!(!tags.contains(&RISK_TAG_PARSER_RECOVERY.to_string()));
+        assert!(!tags.contains(&RISK_TAG_DEP_CHANGE.to_string()));
     }
 
-    #[test]
-    fn test_is_workspace_root_change_workflow() {
-        assert!(is_workspace_root_change(&[".github/workflows/ci.yml".to_string()]));
-    }
-
-    #[test]
-    fn test_is_workspace_root_change_not_triggered_by_crate() {
-        assert!(!is_workspace_root_change(&["crates/perl-parser/src/lib.rs".to_string()]));
-    }
+    // --- crates_from_files tests ---
 
     #[test]
     fn test_crates_from_files_basic() -> Result<()> {
@@ -698,9 +1001,10 @@ mod tests {
         Ok(())
     }
 
+    // --- reverse dep tests ---
+
     #[test]
     fn test_build_reverse_dep_map_basic() {
-        // perl-lsp-rs depends on perl-parser
         let metadata = serde_json::json!({
             "packages": [
                 {"id": "perl-parser 0.1.0", "name": "perl-parser", "manifest_path": "/w/crates/perl-parser/Cargo.toml"},
@@ -708,10 +1012,7 @@ mod tests {
             ],
             "resolve": {
                 "nodes": [
-                    {
-                        "id": "perl-parser 0.1.0",
-                        "deps": []
-                    },
+                    {"id": "perl-parser 0.1.0", "deps": []},
                     {
                         "id": "perl-lsp-rs 0.1.0",
                         "deps": [{"pkg": "perl-parser 0.1.0", "name": "perl_parser", "dep_kinds": []}]
@@ -730,7 +1031,6 @@ mod tests {
 
     #[test]
     fn test_reverse_dep_closure_transitive() {
-        // A → B → C: changing A should close over B and C
         let metadata = serde_json::json!({
             "packages": [
                 {"id": "A 0.1.0", "name": "A", "manifest_path": "/w/crates/a/Cargo.toml"},
@@ -754,27 +1054,127 @@ mod tests {
         assert!(!closure.contains("A"), "A itself should not be in the rev-dep closure");
     }
 
+    // --- widener tests ---
+
     #[test]
-    fn test_apply_wideners_no_match() -> Result<()> {
-        let changed = vec![CrateEntry {
+    fn test_apply_wideners_v2_no_match() -> Result<()> {
+        let changed = vec![DirectCrate {
             name: "some-unrelated-crate".to_string(),
             reason: "direct".to_string(),
         }];
-        let widened = apply_wideners(&changed)?;
-        assert!(widened.is_empty());
+        let (wideners, lanes, _) = apply_wideners_v2(&changed)?;
+        assert!(wideners.is_empty());
+        assert!(lanes.is_empty());
         Ok(())
     }
 
     #[test]
-    fn test_apply_wideners_dedup() -> Result<()> {
-        // Both parser and lexer target perl-lsp-rs; should appear once
+    fn test_apply_wideners_v2_dedup() -> Result<()> {
         let changed = vec![
-            CrateEntry { name: "perl-parser".to_string(), reason: "direct".to_string() },
-            CrateEntry { name: "perl-lexer".to_string(), reason: "direct".to_string() },
+            DirectCrate { name: "perl-parser".to_string(), reason: "direct".to_string() },
+            DirectCrate { name: "perl-lexer".to_string(), reason: "direct".to_string() },
         ];
-        let widened = apply_wideners(&changed)?;
-        let count = widened.iter().filter(|w| w.name == "perl-lsp-rs").count();
+        let (wideners, _, _) = apply_wideners_v2(&changed)?;
+        let count = wideners.iter().filter(|w| w.name == "perl-lsp-rs").count();
         assert_eq!(count, 1, "perl-lsp-rs should appear exactly once");
         Ok(())
+    }
+
+    #[test]
+    fn test_apply_wideners_v2_parser_triggers_lsp_smoke() -> Result<()> {
+        let changed =
+            vec![DirectCrate { name: "perl-parser".to_string(), reason: "direct".to_string() }];
+        let (_, lanes, explanations) = apply_wideners_v2(&changed)?;
+        assert!(
+            lanes.iter().any(|l| l.lane == "lsp_smoke"),
+            "parser change should add lsp_smoke lane"
+        );
+        assert!(explanations.contains_key("lsp_smoke"), "lsp_smoke should have an explanation");
+        Ok(())
+    }
+
+    // --- classify_files integration tests ---
+
+    #[test]
+    fn test_classify_files_empty_diff() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let output = classify_files(&[], &metadata, "/workspace")?;
+        assert_eq!(output.schema_version, 2);
+        assert_eq!(output.diff_class, "prose_only");
+        assert!(output.selected_lanes.is_empty());
+        assert!(output.selected_heavy_lanes.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_docs_only() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["docs/reference/STABILITY.md".to_string(), "README.md".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert_eq!(output.diff_class, "prose_only");
+        assert!(output.selected_lanes.is_empty(), "docs-only should have no lanes");
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_code_diff_has_mutation_diff() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["crates/perl-parser/src/lib.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert_eq!(output.diff_class, "code");
+        assert!(
+            output.selected_heavy_lanes.iter().any(|l| l.lane == "mutation_diff"),
+            "code diff should include mutation_diff heavy lane"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_parser_recovery_file_triggers_fuzz() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["crates/perl-parser/src/expressions/recovery.rs".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert!(
+            output.risk_tags.contains(&RISK_TAG_PARSER_RECOVERY.to_string()),
+            "recovery file should trigger parser_recovery tag"
+        );
+        assert!(
+            output.selected_heavy_lanes.iter().any(|l| l.lane == "bounded_parser_fuzz"),
+            "parser_recovery tag should promote bounded_parser_fuzz"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_classify_files_cargo_toml_triggers_dep_change() -> Result<()> {
+        let metadata = fake_metadata(&[("perl-parser", "crates/perl-parser")]);
+        let files = vec!["Cargo.toml".to_string()];
+        let output = classify_files(&files, &metadata, "/workspace")?;
+        assert!(output.risk_tags.contains(&RISK_TAG_DEP_CHANGE.to_string()));
+        assert!(output.selected_lanes.iter().any(|l| l.lane == "publish"));
+        assert!(output.selected_lanes.iter().any(|l| l.lane == "security"));
+        Ok(())
+    }
+
+    // --- heavy_lanes_from_risk_tags tests ---
+
+    #[test]
+    fn test_heavy_lanes_mutation_diff_default() {
+        let direct =
+            vec![DirectCrate { name: "perl-parser".to_string(), reason: "direct".to_string() }];
+        let heavy = heavy_lanes_from_risk_tags(&[], &direct);
+        assert!(
+            heavy.iter().any(|l| l.lane == "mutation_diff"),
+            "should include mutation_diff by default"
+        );
+    }
+
+    #[test]
+    fn test_heavy_lanes_empty_when_no_direct_crates() {
+        let heavy = heavy_lanes_from_risk_tags(&[], &[]);
+        assert!(
+            !heavy.iter().any(|l| l.lane == "mutation_diff"),
+            "no direct crates = no mutation_diff"
+        );
     }
 }
