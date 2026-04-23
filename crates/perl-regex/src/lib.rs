@@ -561,17 +561,11 @@ impl RegexAnalyzer {
         }
 
         // Modifier explanations.
-        let modifier_notes: Vec<&str> = modifiers
-            .chars()
-            .filter_map(|m| match m {
-                'i' => Some("case-insensitive matching"),
-                'm' => Some("multiline mode: ^ and $ match line boundaries"),
-                's' => Some("single-line mode: dot matches newline"),
-                'x' => Some("extended mode: whitespace and comments allowed"),
-                'g' => Some("global: match all occurrences"),
-                _ => None,
-            })
-            .collect();
+        // Deduplicate modifiers while preserving first-seen order
+        // so repeated flags (e.g. /iim/) don't duplicate hover lines.
+        let mut seen = std::collections::BTreeSet::new();
+        let modifier_notes: Vec<&str> =
+            modifiers.chars().filter(|m| seen.insert(*m)).filter_map(modifier_note).collect();
 
         if !modifier_notes.is_empty() {
             parts.push("Modifiers:".to_string());
@@ -584,6 +578,24 @@ impl RegexAnalyzer {
     }
 }
 
+fn modifier_note(modifier: char) -> Option<&'static str> {
+    match modifier {
+        'i' => Some("case-insensitive matching"),
+        'm' => Some("multiline mode: ^ and $ match line boundaries"),
+        's' => Some("single-line mode: dot matches newline"),
+        'x' => Some("extended mode: whitespace and comments allowed"),
+        'g' => Some("global: match all occurrences"),
+        'a' => Some("ASCII-safe mode for character classes and case folding"),
+        'u' => Some("Unicode mode for character classes and case folding"),
+        'l' => Some("locale-based character class and case behavior"),
+        'n' => Some("non-capturing mode by default for unnamed groups"),
+        'p' => Some("preserve matched string for special match variables"),
+        'c' => Some("keep current match position on failed /g match"),
+        'e' => Some("evaluate replacement as Perl code (substitution operator)"),
+        'r' => Some("non-destructive substitution: return replaced copy"),
+        _ => None,
+    }
+}
 fn parse_named_capture_name(
     chars: &[char],
     pos: usize,

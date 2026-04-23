@@ -285,3 +285,22 @@ fn test_hover_text_unknown_modifier_ignored_gracefully() -> Result<(), Box<dyn s
     let _ = text;
     Ok(())
 }
+
+#[test]
+fn test_hover_text_deduplicates_repeated_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("hello", "iiig");
+    let case_mentions = text.matches("case-insensitive matching").count();
+    let global_mentions = text.matches("global: match all occurrences").count();
+    assert_eq!(case_mentions, 1);
+    assert_eq!(global_mentions, 1);
+    Ok(())
+}
+
+#[test]
+fn test_hover_text_additional_perl_modifiers_explained() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("(?<name>foo)", "aun");
+    assert!(text.contains("ASCII-safe mode"));
+    assert!(text.contains("Unicode mode"));
+    assert!(text.contains("non-capturing mode by default"));
+    Ok(())
+}
