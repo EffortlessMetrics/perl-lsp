@@ -229,6 +229,20 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Ok(current_dir) = std::env::current_dir() {
+                // Some CLI-hosted LSP clients (for example agentic coding CLIs) do not provide
+                // workspaceFolders/rootUri during initialize. Fall back to process CWD so
+                // module resolution and workspace config still have a stable root.
+                let current_dir_str = current_dir.to_string_lossy();
+                let root_uri = root_path_to_file_uri(current_dir_str.as_ref());
+                tracing::debug!(root_uri, "Initialized with process current directory fallback");
+                let mut folders = self.workspace_folders.lock();
+                let folder = super::super::workspace_folder::WorkspaceFolderState::new(
+                    root_uri.clone(),
+                )
+                .with_path(current_dir);
+                folders.push(folder);
+                self.set_root_uri(&root_uri);
             }
         }
 
@@ -489,5 +503,22 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_falls_back_to_current_dir_when_client_omits_workspace_root() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {}
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.workspace_folders.lock().is_empty(),
+            "initialize should populate a workspace folder from process current_dir fallback"
+        );
     }
 }
