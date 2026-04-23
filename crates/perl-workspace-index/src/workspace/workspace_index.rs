@@ -3358,25 +3358,33 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     let mut modules = Vec::new();
     modules.extend(qw_words);
 
-    modules.extend(remainder.split_whitespace().filter_map(|token| {
+    modules.extend(remainder.split_whitespace().flat_map(|token| {
         // Skip flags like -norequire and bare punctuation from qw() or parens
         if token.starts_with('-') {
-            return None;
+            return Vec::new();
         }
-        // Strip surrounding single or double quotes
-        let stripped = token.trim_matches('\'').trim_matches('"');
-        // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
-        let stripped = stripped.trim_matches('(').trim_matches(')');
-        let stripped = stripped.trim_matches('\'').trim_matches('"');
-        // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
-        if stripped.is_empty() {
-            return None;
-        }
-        if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
-            Some(stripped.to_string())
-        } else {
-            None
-        }
+        token
+            .split(',')
+            .filter_map(|piece| {
+                // Strip surrounding punctuation that may be attached without whitespace:
+                // - quotes (`'Foo::Bar'`, `"Foo::Bar"`)
+                // - parentheses (`('Foo::Bar')`)
+                let stripped = piece
+                    .trim_matches(|c| matches!(c, '\'' | '"' | '(' | ')'))
+                    .trim_matches(|c| matches!(c, '\'' | '"'));
+                // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
+                if stripped.is_empty() {
+                    return None;
+                }
+                if stripped.chars().all(|c| {
+                    c.is_alphanumeric() || c == '_' || c == ':' || c == '\''
+                }) {
+                    Some(stripped.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
     }));
 
     modules
@@ -4800,6 +4808,22 @@ Utils::process_data();
         let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
         // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
         assert_eq!(names, vec!["Foo'Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_comma_adjacent_tokens() {
+        let names = extract_module_names_from_use_args(&[
+            "'Foo::Bar',".to_string(),
+            "\"Other::Base\",".to_string(),
+            "'Last::One'".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base", "Last::One"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_parenthesized_without_spaces() {
+        let names = extract_module_names_from_use_args(&["('Foo::Bar','Other::Base')".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
     }
 
     #[test]
