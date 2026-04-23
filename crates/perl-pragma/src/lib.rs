@@ -371,7 +371,24 @@ fn normalized_pragma_token(arg: &str) -> &str {
 }
 
 fn is_tracked_pragma_module(module: &str) -> bool {
-    matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
+    matches!(
+        module,
+        "strict"
+            | "warnings"
+            | "utf8"
+            | "encoding"
+            | "locale"
+            | "feature"
+            | "builtin"
+            | "Moo"
+            | "Moose"
+            | "MooseX::StrictConstructor"
+            | "Modern::Perl"
+            | "Dancer2"
+            | "Catalyst"
+            | "Mojolicious"
+            | "Mojo::Base"
+    )
 }
 
 fn valid_strict_args(args: &[String]) -> bool {
@@ -639,6 +656,21 @@ impl PragmaTracker {
                     }
                     "builtin" => {
                         apply_builtin_imports(current_state, args);
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
+                    }
+                    "Moo"
+                    | "Moose"
+                    | "MooseX::StrictConstructor"
+                    | "Modern::Perl"
+                    | "Dancer2"
+                    | "Catalyst"
+                    | "Mojolicious"
+                    | "Mojo::Base" => {
+                        current_state.strict_vars = true;
+                        current_state.strict_subs = true;
+                        current_state.strict_refs = true;
+                        current_state.warnings = true;
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }

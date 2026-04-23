@@ -523,7 +523,7 @@ fn no_feature_without_args_clears_bundle_features() -> Result<(), Box<dyn std::e
 
 #[test]
 fn unknown_use_module_ignored() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = program(vec![use_node("Moose", &[], 0, 10)]);
+    let ast = program(vec![use_node("Some::Module", &[], 0, 16)]);
     let map = PragmaTracker::build(&ast);
     assert!(map.is_empty());
     Ok(())
@@ -1505,5 +1505,38 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    Ok(())
+}
+
+#[test]
+fn implicit_strict_module_enables_strict_and_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("Moose", &[], 0, 10)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, usize::MAX);
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    assert!(state.warnings);
+    Ok(())
+}
+
+#[test]
+fn implicit_strict_module_in_eval_does_not_leak_out() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        eval_node(block(vec![use_node("Moose", &[], 8, 18)], 6, 20), 0, 22),
+        use_node("strict", &["vars"], 23, 42),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let inside_eval = PragmaTracker::state_for_offset(&map, 12);
+    assert!(inside_eval.strict_vars);
+    assert!(inside_eval.warnings);
+
+    let after_eval = PragmaTracker::state_for_offset(&map, 24);
+    assert!(after_eval.strict_vars);
+    assert!(!after_eval.strict_subs);
+    assert!(!after_eval.strict_refs);
+    assert!(!after_eval.warnings);
     Ok(())
 }

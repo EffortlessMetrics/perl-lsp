@@ -65,25 +65,13 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     // This avoids the false-negative from .any() which sees eval-interior ranges.
     // signatures_strict is included to honour `use feature 'signatures'` (#4038).
     let top_level_state = PragmaTracker::state_for_offset(&pragma_map, usize::MAX);
-    let mut has_strict = top_level_state.strict_vars
+    let has_strict = top_level_state.strict_vars
         || top_level_state.strict_subs
         || top_level_state.strict_refs
         || top_level_state.signatures_strict;
-    let mut has_warnings = top_level_state.warnings;
+    let has_warnings = top_level_state.warnings;
 
-    // OO frameworks that implicitly provide strict+warnings
-    const IMPLICIT_STRICT_MODULES: &[&str] = &[
-        "Moo",
-        "Moose",
-        "MooseX::StrictConstructor",
-        "Modern::Perl",
-        "Dancer2",
-        "Catalyst",
-        "Mojolicious",
-        "Mojo::Base",
-    ];
-
-    // Detect OO implicit strict modules and misspelled pragmas.
+    // Detect misspelled pragmas.
     // The strict/warnings arms are intentionally absent: state_for_offset above
     // is the authoritative source of truth. Walking the full AST for strict/warnings
     // would bypass lexical scoping (finding eval-block or sub-scoped pragmas).
@@ -92,9 +80,6 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
             if module.starts_with('v') || module.chars().next().is_some_and(|c| c.is_ascii_digit())
             {
                 // Version pragmas are already reflected in the shared pragma map.
-            } else if IMPLICIT_STRICT_MODULES.contains(&module.as_str()) {
-                has_strict = true;
-                has_warnings = true;
             } else if module != "strict" && module != "warnings" {
                 // Check for misspelled pragmas (strict/warnings are in pragma_map)
                 check_misspelled_pragma(module, n, diagnostics);
@@ -566,20 +551,17 @@ mod tests {
     }
 
     #[test]
-    fn implicit_strict_module_inside_eval_suppresses_diagnostic_known_limitation() {
-        // use Moose inside eval { } — walk_node visits it scope-unaware and sets
-        // has_strict=true even though Moose is only in eval scope.  This is a
-        // pre-existing limitation (walk_node does not model lexical scoping for
-        // implicit-strict OO modules).  The fix in this PR restores correct
-        // behaviour for `use strict` / `use warnings` via PragmaTracker, but
-        // IMPLICIT_STRICT_MODULES remain scope-unaware in walk_node.
-        //
-        // Asserting the current (known-limited) behaviour so any future change is
-        // deliberate: PL100 currently does NOT fire even though Moose is eval-scoped.
+    fn implicit_strict_module_inside_eval_does_not_suppress_diagnostic() {
+        // use Moose inside eval { } is lexically scoped; it must not suppress
+        // missing file-scope strict/warnings diagnostics.
         let diags = strict_warnings_diags("eval { use Moose; };\nmy $x = 1;\n");
         assert!(
-            diags.iter().all(|d| d.code.as_deref() != Some("PL100")),
-            "known limitation: Moose in eval suppresses PL100 (walk_node is scope-unaware for OO modules)"
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "eval-scoped implicit strict module must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "eval-scoped implicit strict module must not suppress missing-warnings (PL101)"
         );
     }
 }
