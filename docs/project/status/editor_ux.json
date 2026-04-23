@@ -47,5 +47,28 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
-  ]
+  ],
+  "tracked_signals": {
+    "first_five_minutes_harness": {
+      "scenario_count": 17,
+      "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+      "state": "tracked"
+    },
+    "open_issue_burndown": {
+      "open_issue_count": 4,
+      "open_issue_refs": [
+        "#3476",
+        "#3515",
+        "#3522",
+        "#4246"
+      ],
+      "source": "README.md#known-gaps-toward-solid-ux",
+      "state": "tracked"
+    },
+    "workflow_scorecard_contract": {
+      "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+      "state": "tracked",
+      "workflow_count": 17
+    }
+  }
 }

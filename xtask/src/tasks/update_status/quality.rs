@@ -122,6 +122,30 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn collect_readme_ux_gap_issue_refs(root: &Path) -> Vec<String> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let Some(known_gaps_start) = readme.find("### Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let known_gaps = &readme[known_gaps_start..];
+    let end_offset = known_gaps.find("### What shipped this cycle").unwrap_or(known_gaps.len());
+    let known_gaps = &known_gaps[..end_offset];
+
+    let mut issues = std::collections::BTreeSet::new();
+    for segment in known_gaps.split("https://github.com/EffortlessMetrics/perl-lsp/issues/").skip(1)
+    {
+        let issue_number: String = segment.chars().take_while(|ch| ch.is_ascii_digit()).collect();
+        if !issue_number.is_empty() {
+            issues.insert(format!("#{issue_number}"));
+        }
+    }
+    issues.into_iter().collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +193,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let tracked_gap_issues = collect_readme_ux_gap_issue_refs(root);
+    let tracked_gap_issue_count = tracked_gap_issues.len();
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -201,6 +227,24 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+        },
+        "tracked_signals": {
+            "first_five_minutes_harness": {
+                "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+                "state": "tracked",
+                "scenario_count": scenario_count,
+            },
+            "workflow_scorecard_contract": {
+                "source": "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json",
+                "state": "tracked",
+                "workflow_count": scenario_count,
+            },
+            "open_issue_burndown": {
+                "source": "README.md#known-gaps-toward-solid-ux",
+                "state": "tracked",
+                "open_issue_count": tracked_gap_issue_count,
+                "open_issue_refs": tracked_gap_issues,
+            },
         },
     });
 
@@ -280,6 +324,32 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["tracked_signals"]["first_five_minutes_harness"]["scenario_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        let open_issue_refs = receipt["tracked_signals"]["open_issue_burndown"]["open_issue_refs"]
+            .as_array()
+            .ok_or_else(|| eyre!("open_issue_refs must be an array"))?;
+        assert!(
+            !open_issue_refs.is_empty(),
+            "Known gaps section should have at least one issue reference"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_readme_ux_gap_issue_refs_extracts_known_gaps() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let issues = collect_readme_ux_gap_issue_refs(&root);
+        assert!(
+            issues.contains(&"#3522".to_string()),
+            "Known gaps should include workspace-wide rename issue"
+        );
+        assert!(
+            issues.iter().all(|issue| issue.starts_with('#')),
+            "Issue refs should be normalized as #NNNN"
+        );
         Ok(())
     }
 }

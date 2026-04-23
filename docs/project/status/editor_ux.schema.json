@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "tracked_signals"
   ],
   "properties": {
     "schema_version": {
@@ -122,6 +123,51 @@
         },
         "quality_surface": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "tracked_signals": {
+      "type": "object",
+      "required": [
+        "first_five_minutes_harness",
+        "workflow_scorecard_contract",
+        "open_issue_burndown"
+      ],
+      "properties": {
+        "first_five_minutes_harness": {
+          "type": "object",
+          "required": ["source", "state", "scenario_count"],
+          "properties": {
+            "source": { "type": "string" },
+            "state": { "type": "string", "const": "tracked" },
+            "scenario_count": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "workflow_scorecard_contract": {
+          "type": "object",
+          "required": ["source", "state", "workflow_count"],
+          "properties": {
+            "source": { "type": "string" },
+            "state": { "type": "string", "const": "tracked" },
+            "workflow_count": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "open_issue_burndown": {
+          "type": "object",
+          "required": ["source", "state", "open_issue_count", "open_issue_refs"],
+          "properties": {
+            "source": { "type": "string" },
+            "state": { "type": "string", "const": "tracked" },
+            "open_issue_count": { "type": "integer", "minimum": 0 },
+            "open_issue_refs": {
+              "type": "array",
+              "items": { "type": "string", "pattern": "^#[0-9]+$" }
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
