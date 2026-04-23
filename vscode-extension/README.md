@@ -75,7 +75,7 @@ media assets and recording notes live in:
 
 ## Installation
 
-Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs).
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX Registry](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs). Open VSX packages also work in VS Code derivatives like PearAI.
 
 ```bash
 # VS Code
@@ -83,6 +83,10 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # VSCodium / Open VSX
 codium --install-extension EffortlessMetrics.perl-lsp-rs
+
+# PearAI (uses Open VSX-compatible extension IDs)
+# Install via PearAI's Extensions UI, then search for:
+#   EffortlessMetrics.perl-lsp-rs
 ```
 
 The extension automatically downloads the correct `perllsp` binary for your platform on first activation:

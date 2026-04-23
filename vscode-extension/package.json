@@ -26,7 +26,8 @@
     "code-completion",
     "diagnostics",
     "vscodium",
-    "open-vsx"
+    "open-vsx",
+    "pearai"
   ],
   "extensionKind": [
     "workspace"
