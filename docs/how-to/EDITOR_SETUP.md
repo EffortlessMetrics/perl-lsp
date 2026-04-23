@@ -27,7 +27,7 @@ perllsp --health
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
-| Zed | register `perllsp --stdio` in `settings.json` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
+| Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 
 ## Minimal Configurations
@@ -62,23 +62,24 @@ args = ["--stdio"]
 
 ### Zed
 
+Zed requires a Perl extension that registers `perllsp`. Once installed, you
+can override the binary path via `settings.json`:
+
 ```json
 {
   "lsp": {
     "perl-lsp": {
-      "command": {
-        "path": "perllsp",
-        "args": ["--stdio"]
+      "binary": {
+        "path": "/usr/local/bin/perllsp",
+        "arguments": ["--stdio"]
       }
-    }
-  },
-  "languages": {
-    "Perl": {
-      "language_servers": ["perl-lsp"]
     }
   }
 }
 ```
+
+See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
+
 
 ### Sublime Text
 
