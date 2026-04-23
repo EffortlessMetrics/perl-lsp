@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Codex Desktop | add an LSP tool that launches `perllsp --stdio` | [Codex Desktop quick setup](#codex-desktop) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,22 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Codex Desktop
+
+Codex Desktop can drive LSP-backed editor tasks as long as the language server
+is available on `PATH` and launched over stdio. Configure the Perl LSP command
+as:
+
+```json
+{
+  "command": "perllsp",
+  "args": ["--stdio"]
+}
+```
+
+After saving, restart the Codex Desktop workspace/session and verify startup by
+checking its tool log for a successful `initialize` request/response exchange.
 
 ## When Setup Fails
 
