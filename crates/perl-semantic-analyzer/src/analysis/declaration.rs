@@ -1371,6 +1371,23 @@ fn symbol_at_cursor_internal(
         export_tag_members(module, import_token).contains(&symbol_name)
     }
 
+    /// Pragmas and structural modules whose qw/string arguments are NOT
+    /// imported symbol names. Cursor-on-arg for these should not resolve
+    /// to a bogus `SymbolKey` — they carry inheritance lists, feature names,
+    /// or other non-import semantics.
+    const NON_IMPORT_PRAGMAS: &[&str] = &[
+        "constant", // constant definitions, not imports
+        "parent",   // inheritance: qw/string args are class names
+        "base",     // legacy inheritance
+        "vars",     // variable declarations, not imports
+        "Exporter", // 'import' arg is a proxy method, not an imported symbol
+        "mro",      // method resolution order pragma
+        "if",       // conditional module load
+        "lib",      // adds directories to @INC
+        "feature",  // enables Perl feature flags
+        "utf8",     // encoding pragma
+    ];
+
     fn use_args_import_symbol(module: &str, args: &[String], symbol_name: &str) -> bool {
         args.iter().any(|arg| {
             if arg == symbol_name || tag_imports_symbol(module, arg, symbol_name) {
@@ -1590,8 +1607,8 @@ fn symbol_at_cursor_internal(
 
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
-                // Skip `use constant` — constants are not import-list symbols
-                if module == "constant" {
+                // Skip structural pragmas — their args are not import-list symbols
+                if NON_IMPORT_PRAGMAS.contains(&module.as_str()) {
                     // Fall through to children
                 } else {
                     for arg in args {
@@ -1848,7 +1865,7 @@ fn symbol_at_cursor_internal(
             })
         }
         NodeKind::Use { module, args, .. } => {
-            if module != "constant"
+            if !NON_IMPORT_PRAGMAS.contains(&module.as_str())
                 && !source_text.is_empty()
                 && offset >= node.location.start
                 && offset <= node.location.end
