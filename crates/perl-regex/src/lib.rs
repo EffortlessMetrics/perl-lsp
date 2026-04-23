@@ -1,7 +1,44 @@
-//! Perl regex validation and analysis
+//! Perl regex validation and security-focused heuristics.
 //!
-//! This module provides tools to validate Perl regular expressions
-//! and detect potential security or performance issues like catastrophic backtracking.
+//! `perl-regex` provides a lightweight validator used by editor and analysis
+//! features that need to reason about regular expressions without executing
+//! user code.
+//!
+//! The crate intentionally favors:
+//!
+//! - **Fast checks** suitable for real-time diagnostics.
+//! - **Conservative safety limits** for potentially dangerous constructs.
+//! - **Actionable errors** with byte offsets for LSP-range mapping.
+//!
+//! # What is validated
+//!
+//! [`RegexValidator::validate`] checks structural complexity constraints that are
+//! commonly associated with runaway resource usage, such as excessive nesting
+//! and Unicode property overuse.
+//!
+//! It also exposes focused advisory checks:
+//!
+//! - [`RegexValidator::detects_code_execution`] for embedded code execution
+//!   forms like `(?{ ... })` and `(??{ ... })`.
+//! - [`RegexValidator::detect_nested_quantifiers`] for high-risk nesting
+//!   patterns (heuristic, caller-facing advisory).
+//!
+//! # Usage
+//!
+//! ```rust
+//! use perl_regex::RegexValidator;
+//!
+//! let validator = RegexValidator::new();
+//! assert!(validator.validate(r"(?:foo|bar)+", 0).is_ok());
+//! assert!(validator.detects_code_execution(r"(?{ system('rm -rf /') })"));
+//! ```
+//!
+//! # Notes on accuracy
+//!
+//! Some checks are intentionally heuristic. In particular,
+//! [`RegexValidator::detect_nested_quantifiers`] is **not** treated as a hard
+//! validation failure by [`RegexValidator::validate`] to avoid false positives
+//! on valid Perl patterns.
 
 use thiserror::Error;
 
@@ -25,14 +62,24 @@ impl RegexError {
     }
 }
 
-/// Validator for Perl regular expressions to prevent security and performance issues
+/// Validator for Perl regular expressions with security-aware complexity guards.
+///
+/// This type is intended for static analysis contexts (for example, IDE
+/// diagnostics) where checks need to be deterministic, fast, and side-effect
+/// free.
 pub struct RegexValidator {
     max_nesting: usize,
     max_unicode_properties: usize,
 }
 
 impl RegexValidator {
-    /// Create a new validator with default safety limits
+    /// Creates a validator with default safety limits.
+    ///
+    /// Current defaults are intentionally conservative and tuned for interactive
+    /// tooling:
+    ///
+    /// - Max nested lookbehinds: `10`
+    /// - Max Unicode properties (`\p{...}` / `\P{...}`): `50`
     pub fn new() -> Self {
         Self {
             // Default limits from issue #461
@@ -42,12 +89,19 @@ impl RegexValidator {
         }
     }
 
-    /// Validate a regex pattern for potential performance or security risks
+    /// Validates a regex pattern for complexity and structural safety limits.
+    ///
+    /// `start_pos` is added to any reported error offset, allowing callers to
+    /// map diagnostics to a larger source document.
     pub fn validate(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
         self.check_complexity(pattern, start_pos)
     }
 
-    /// Check if the pattern contains embedded code constructs (?{...}) or (??{...})
+    /// Returns `true` when the pattern appears to contain embedded code
+    /// execution constructs.
+    ///
+    /// Specifically detects `(?{ ... })` and `(??{ ... })` forms while
+    /// respecting escaped characters.
     pub fn detects_code_execution(&self, pattern: &str) -> bool {
         let mut chars = pattern.char_indices().peekable();
         while let Some((_, ch)) = chars.next() {
@@ -75,8 +129,13 @@ impl RegexValidator {
         false
     }
 
-    /// Check for nested quantifiers that can cause catastrophic backtracking
-    /// e.g. (a+)+, (a*)*, (a?)*
+    /// Heuristically detects nested quantifiers associated with catastrophic
+    /// backtracking.
+    ///
+    /// Examples include `(a+)+`, `(a*)*`, and `(a?)*`.
+    ///
+    /// This check is intentionally advisory and may report false positives in
+    /// valid Perl regexes.
     pub fn detect_nested_quantifiers(&self, pattern: &str) -> bool {
         // This is a heuristic check for nested quantifiers
         // It looks for a quantifier character following a group that ends with a quantifier
