@@ -25,6 +25,7 @@ perllsp --health
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
+| Roo Code | install the VS Code-compatible extension or use `perllsp --stdio` | [docs/EDITORS/ROO_CODE_SETUP.md](../EDITORS/ROO_CODE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
@@ -45,6 +46,12 @@ root pointed at the project root.
 Trae is VS Code-compatible, so the same extension and settings model applies.
 Install the `EffortlessMetrics.perl-lsp-rs` extension from Trae's Extensions
 panel, or configure a generic language server command as `perllsp --stdio`.
+
+### Roo Code
+
+Roo Code uses the same extension/runtime model as VS Code. Install the
+`perl-lsp-rs` extension or configure `perllsp --stdio` manually, then keep the
+workspace root pointed at the project root.
 
 ### Neovim
 
