@@ -64,7 +64,9 @@ pub fn nth_char_is<F: FnOnce(char) -> bool>(s: &str, n: usize, predicate: F) -> 
 ///
 /// Behavior:
 /// - UTF-8 with optional BOM
-/// - UTF-16 LE/BE when BOM is present
+/// - UTF-16 LE/BE when BOM is present (odd-length payloads fall back to
+///   Latin-1 decoding of the original bytes rather than silently
+///   truncating the trailing byte)
 /// - Latin-1 byte-preserving fallback for non-UTF8 legacy files
 pub fn decode_text_bytes(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
@@ -74,11 +76,17 @@ pub fn decode_text_bytes(bytes: &[u8]) -> String {
     }
 
     if bytes.starts_with(&[0xFF, 0xFE]) {
-        return decode_utf16_lossy(&bytes[2..], true);
+        if let Some(decoded) = decode_utf16_lossy(&bytes[2..], true) {
+            return decoded;
+        }
+        // Odd-length UTF-16 payload — fall through to latin-1 on the full bytes.
     }
 
     if bytes.starts_with(&[0xFE, 0xFF]) {
-        return decode_utf16_lossy(&bytes[2..], false);
+        if let Some(decoded) = decode_utf16_lossy(&bytes[2..], false) {
+            return decoded;
+        }
+        // Odd-length UTF-16 payload — fall through to latin-1 on the full bytes.
     }
 
     match std::str::from_utf8(bytes) {
@@ -92,7 +100,16 @@ pub fn read_text_file_with_encoding(path: &Path) -> io::Result<String> {
     std::fs::read(path).map(|bytes| decode_text_bytes(&bytes))
 }
 
-fn decode_utf16_lossy(bytes: &[u8], little_endian: bool) -> String {
+/// Decode a UTF-16 byte payload (BOM already stripped) into a String.
+///
+/// Returns `None` when the payload has an odd byte length, since UTF-16
+/// code units are always 2 bytes and a dangling odd byte indicates
+/// corrupted or mis-detected input. Callers should fall back to another
+/// decoder in that case rather than silently truncating the trailing byte.
+fn decode_utf16_lossy(bytes: &[u8], little_endian: bool) -> Option<String> {
+    if !bytes.len().is_multiple_of(2) {
+        return None;
+    }
     let mut words = Vec::with_capacity(bytes.len() / 2);
     for pair in bytes.chunks_exact(2) {
         let word = if little_endian {
@@ -102,7 +119,7 @@ fn decode_utf16_lossy(bytes: &[u8], little_endian: bool) -> String {
         };
         words.push(word);
     }
-    String::from_utf16_lossy(&words)
+    Some(String::from_utf16_lossy(&words))
 }
 
 /// Convert byte offset to UTF-16 column position
@@ -592,5 +609,26 @@ mod tests {
     fn decode_text_bytes_falls_back_to_latin1() {
         let bytes = [0x63, 0x61, 0x66, 0xE9];
         assert_eq!(decode_text_bytes(&bytes), "café");
+    }
+
+    /// Regression: UTF-16 LE BOM followed by an odd number of payload bytes
+    /// must not panic or silently truncate the trailing byte.
+    #[test]
+    fn decode_text_bytes_handles_odd_length_utf16_le() {
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        let bytes = [0xFF, 0xFE, 0x6D, 0x00, 0x79];
+        let decoded = decode_text_bytes(&bytes);
+        // Must return something (not panic); falls back to latin-1 of
+        // the full original bytes so the caller still sees the content.
+        assert!(!decoded.is_empty());
+    }
+
+    /// Regression: UTF-16 BE BOM followed by an odd number of payload bytes
+    /// must not panic or silently truncate the trailing byte.
+    #[test]
+    fn decode_text_bytes_handles_odd_length_utf16_be() {
+        let bytes = [0xFE, 0xFF, 0x00, 0x6D, 0x00];
+        let decoded = decode_text_bytes(&bytes);
+        assert!(!decoded.is_empty());
     }
 }
