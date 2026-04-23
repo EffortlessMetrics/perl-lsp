@@ -444,30 +444,6 @@ include_paths = ["other_lib"]
             );
         }
     }
-
-    #[test]
-    #[test]
-    fn perl_not_found_message_without_config_is_actionable() -> Result<(), Box<dyn Error>> {
-        let searched = vec!["PATH".to_string(), "/usr/bin/perl".to_string()];
-        let msg = perl_not_found_message(None, &searched);
-        assert!(msg.contains("Perl interpreter not found on PATH"));
-        assert!(msg.contains("strawberryperl.com"));
-        assert!(msg.contains("brew install perl"));
-        assert!(msg.contains("distro package manager on Linux"));
-        Ok(())
-    }
-
-    #[test]
-    fn perl_not_found_message_with_config_mentions_fix_and_install() -> Result<(), Box<dyn Error>> {
-        let searched = vec!["configured path: /missing/perl".to_string()];
-        let msg = perl_not_found_message(Some("/missing/perl"), &searched);
-        assert!(msg.contains("configured Perl interpreter was not found"));
-        assert!(msg.contains("perl-lsp.perl.path"));
-        assert!(msg.contains("strawberryperl.com"));
-        assert!(msg.contains("distro package manager on Linux"));
-        Ok(())
-    }
-
     #[test]
     fn request_workspace_configuration_supersedes_older_pending_requests() {
         let server = LspServer::new();

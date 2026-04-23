@@ -192,6 +192,22 @@ impl LspServer {
         }
 
         let mut pending = self.pending_workspace_configuration_requests.lock();
+
+        // Count cap backstop: keep at most 10 pending requests to prevent unbounded growth
+        // even if client responses are slow or missing.
+        if pending.len() >= 10 {
+            let to_remove = pending.len() - 9;
+            let mut entries: Vec<_> = pending.iter().map(|(id, req)| (*id, req.created_at)).collect();
+            entries.sort_by_key(|(_, created_at)| *created_at);
+            for (id, _) in entries.iter().take(to_remove) {
+                tracing::debug!(
+                    request_id = *id,
+                    "Dropping excess workspace/configuration request (count cap)"
+                );
+                pending.remove(id);
+            }
+        }
+
         if !pending.is_empty() {
             tracing::debug!(
                 superseded_requests = pending.len(),
