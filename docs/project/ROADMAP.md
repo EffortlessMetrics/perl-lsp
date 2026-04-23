@@ -109,6 +109,7 @@ Released 2026-03-30. Cleanup completed 2026-04-02.
 - Test coverage gaps and broken integration tests
 - VSCode extension lint/quality audit (eslint v10 landed in #3179)
 - AI inline completion (#3018) shipped in the live 0.12.x line — feature wired end-to-end via #3157–#3168, awaiting E2E user validation
+- Workspace-wide rename slice: multi-root support shipped in 0.12.x (#3984); workspace-wide rename/module-move remains roughly 30% complete and only conditionally in scope pending #3522 verification
 - Coroutine support issue #3539 is re-scoped: defer hypothetical core syntax, split upstream-tracking from CPAN-library IDE support planning
 
 ### Next (v0.13.0 — public alpha announcement)
