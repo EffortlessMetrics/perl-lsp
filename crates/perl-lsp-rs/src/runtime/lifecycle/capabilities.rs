@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -259,12 +259,18 @@ impl LspServer {
         let profile = self.feature_profile();
         let mut build_flags = profile.runtime_flags(has_perltidy);
 
-        // Read user-disabled features from initializationOptions
+        // Read user-disabled features from initializationOptions.
+        //
+        // Supported shapes:
+        //   1) { "disabledFeatures": [...] }
+        //   2) { "perl-lsp": { "disabledFeatures": [...] } }
+        //   3) { "perl_lsp": { "disabledFeatures": [...] } }
+        //
+        // Some generic LSP clients namespace server settings under the server id,
+        // while others pass options at the top level.
         if let Some(init_opts) = params.as_ref().and_then(|p| p.get("initializationOptions")) {
-            if let Some(disabled) = init_opts.get("disabledFeatures").and_then(|v| v.as_array()) {
-                for id in disabled.iter().filter_map(|v| v.as_str()) {
-                    apply_disabled_feature_id(&mut build_flags, id);
-                }
+            for id in disabled_feature_ids_from_init_options(init_opts) {
+                apply_disabled_feature_id(&mut build_flags, id);
             }
         }
 
@@ -409,11 +415,49 @@ pub(crate) fn apply_disabled_feature_id(
     }
 }
 
+fn disabled_feature_ids_from_init_options(init_opts: &Value) -> Vec<&str> {
+    let top_level = init_opts.get("disabledFeatures").and_then(Value::as_array);
+    let namespaced_hyphen =
+        init_opts.get("perl-lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+    let namespaced_underscore =
+        init_opts.get("perl_lsp").and_then(|v| v.get("disabledFeatures")).and_then(Value::as_array);
+
+    top_level
+        .into_iter()
+        .chain(namespaced_hyphen)
+        .chain(namespaced_underscore)
+        .flat_map(|entries| entries.iter())
+        .filter_map(Value::as_str)
+        .collect()
+}
+
+#[cfg(test)]
+mod init_options_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn disabled_feature_ids_reads_top_level_and_namespaced_options() {
+        let init_opts = json!({
+            "disabledFeatures": ["lsp.hover", true, 42],
+            "perl-lsp": {
+                "disabledFeatures": ["lsp.completion", null]
+            },
+            "perl_lsp": {
+                "disabledFeatures": ["lsp.semantic_tokens"]
+            }
+        });
+
+        let ids = disabled_feature_ids_from_init_options(&init_opts);
+        assert_eq!(ids, vec!["lsp.hover", "lsp.completion", "lsp.semantic_tokens"]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
     use serde_json::json;
 
     #[test]

@@ -166,3 +166,29 @@ fn test_disabled_features_multiple_features_all_suppressed() -> TestResult {
     );
     Ok(())
 }
+
+/// Some generic LSP clients namespace server settings in initializationOptions
+/// under `perl-lsp` (or `perl_lsp`) instead of placing keys at top-level.
+/// The server should honor these namespaced forms for easier integration.
+#[test]
+fn test_disabled_features_namespaced_initialization_options() -> TestResult {
+    let mut harness = LspHarness::new_raw();
+    let result = harness.initialize_with_init_options(
+        Some(json!({})),
+        json!({
+            "perl-lsp": { "disabledFeatures": ["lsp.hover"] },
+            "perl_lsp": { "disabledFeatures": ["lsp.completion"] }
+        }),
+    )?;
+    let caps = &result["capabilities"];
+
+    assert!(
+        caps.get("hoverProvider").is_none() || caps["hoverProvider"].is_null(),
+        "hoverProvider must be absent when disabled via initializationOptions.perl-lsp.disabledFeatures"
+    );
+    assert!(
+        caps.get("completionProvider").is_none() || caps["completionProvider"].is_null(),
+        "completionProvider must be absent when disabled via initializationOptions.perl_lsp.disabledFeatures"
+    );
+    Ok(())
+}
