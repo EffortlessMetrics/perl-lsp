@@ -51,11 +51,13 @@ pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
-pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
+pub use scorecard::{aggregate_editor_ux_scorecard, EditorUxScorecard, ScenarioScore};
 pub use workspace::FakeWorkspace;
 
-use anyhow::{Context, Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{anyhow, Context, Result};
+use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -152,6 +154,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -173,7 +176,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -182,7 +185,20 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.set_document_version(relative_path, 1);
+        Ok(())
+    }
+
+    /// Apply an in-editor full-document text change (`textDocument/didChange`).
+    ///
+    /// The harness tracks and increments the LSP version for each file so
+    /// scenarios can focus on user intent instead of protocol bookkeeping.
+    pub fn change_file(&self, relative_path: &str, content: &str) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        let next_version = self.bump_document_version(relative_path);
+        self.client.did_change(&uri, content, next_version)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -372,7 +388,7 @@ impl UxHarness {
     }
 
     /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
-    /// for the given file, then return all diagnostics collected for it.
+    /// for the given file, then return the latest diagnostics payload observed.
     ///
     /// Returns an empty vec if the deadline expires with no diagnostics published.
     pub fn wait_for_diagnostics(
@@ -385,12 +401,16 @@ impl UxHarness {
         loop {
             {
                 let events = self.client.peek_events();
+                let mut latest = None;
                 for ev in &events {
                     if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
                         if diag_uri == &uri {
-                            return diagnostics.clone();
+                            latest = Some(diagnostics.clone());
                         }
                     }
+                }
+                if let Some(diagnostics) = latest {
+                    return diagnostics;
                 }
             }
             if std::time::Instant::now() >= deadline {
@@ -552,6 +572,18 @@ impl UxHarness {
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
     }
+
+    fn set_document_version(&self, relative_path: &str, version: i32) {
+        let mut versions = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
+        versions.insert(relative_path.to_string(), version);
+    }
+
+    fn bump_document_version(&self, relative_path: &str) -> i32 {
+        let mut versions = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
+        let next_version = versions.get(relative_path).copied().unwrap_or(0) + 1;
+        versions.insert(relative_path.to_string(), next_version);
+        next_version
+    }
 }
 
 /// Outcome of a formatting request.
@@ -573,7 +605,11 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self { v["message"].as_str() } else { None }
+        if let Self::Error(v) = self {
+            v["message"].as_str()
+        } else {
+            None
+        }
     }
 
     /// True if there are text edits.

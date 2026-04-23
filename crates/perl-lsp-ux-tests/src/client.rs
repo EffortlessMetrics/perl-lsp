@@ -7,8 +7,8 @@
 //! assert on user-visible messages after the fact.
 
 use crate::{FakeWorkspace, ScenarioConfig};
-use anyhow::{Context, Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{anyhow, Context, Result};
+use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -241,6 +241,24 @@ impl UxClient {
                     "version": 1,
                     "text": text
                 }
+            }),
+        )
+    }
+
+    /// Send `textDocument/didChange` using full-document sync.
+    pub fn did_change(&self, uri: &str, text: &str, version: i32) -> Result<()> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [
+                    {
+                        "text": text
+                    }
+                ]
             }),
         )
     }

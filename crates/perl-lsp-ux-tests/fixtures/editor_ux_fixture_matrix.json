@@ -362,6 +362,32 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "incremental_edit_diagnostics_feedback_loop",
+      "scenario_file": "ux_scenario_19_incremental_diagnostics.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "fix a strict-mode error via didChange and verify diagnostics reflect the edit",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "initial diagnostic appears for undeclared variable",
+        "diagnostics clear after the fix is sent",
+        "hover remains responsive after incremental edits"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
   ],
