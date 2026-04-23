@@ -31,8 +31,22 @@ pub fn check_common_mistakes(
     walk_node(node, &mut |n| {
         match &n.kind {
             // Check for assignment in condition
-            NodeKind::If { condition, .. } | NodeKind::While { condition, .. } => {
+            NodeKind::If { condition, elsif_branches, .. } => {
                 check_assignment_in_condition(condition, diagnostics);
+                for (elsif_condition, _) in elsif_branches {
+                    check_assignment_in_condition(elsif_condition, diagnostics);
+                }
+            }
+            NodeKind::While { condition, .. } => {
+                check_assignment_in_condition(condition, diagnostics);
+            }
+            NodeKind::For { condition: Some(condition), .. } => {
+                check_assignment_in_condition(condition, diagnostics);
+            }
+            NodeKind::StatementModifier { modifier, condition, .. } => {
+                if matches!(modifier.as_str(), "if" | "unless" | "while" | "until") {
+                    check_assignment_in_condition(condition, diagnostics);
+                }
             }
 
             // Check for == or != with undef
