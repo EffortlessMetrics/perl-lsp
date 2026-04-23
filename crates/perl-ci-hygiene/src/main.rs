@@ -3840,6 +3840,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         if is_url_like_hash_comment(line, idx) {
             continue;
         }
+        if is_within_rust_string_literal(line, idx) {
+            continue;
+        }
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
@@ -3848,6 +3851,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         }
     }
     for (idx, _) in line.match_indices("/*") {
+        if is_within_rust_string_literal(line, idx) {
+            continue;
+        }
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
@@ -3889,6 +3895,79 @@ fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> boo
         return false;
     }
     matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+}
+
+fn is_within_rust_string_literal(line: &str, idx: usize) -> bool {
+    let mut i = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    let bytes = line.as_bytes();
+
+    while i < idx && i < bytes.len() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if bytes[i] == b'\\' {
+                escaped = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'r'
+            && let Some((span_start, span_end)) = raw_string_span_at(line, i)
+        {
+            if idx >= span_start && idx < span_end {
+                return true;
+            }
+            i = span_end;
+            continue;
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+        }
+        i += 1;
+    }
+
+    in_string
+}
+
+fn raw_string_span_at(line: &str, start: usize) -> Option<(usize, usize)> {
+    let bytes = line.as_bytes();
+    if bytes.get(start).is_none_or(|b| *b != b'r') {
+        return None;
+    }
+
+    let mut i = start + 1;
+    let mut hashes = 0;
+    while bytes.get(i).is_some_and(|b| *b == b'#') {
+        hashes += 1;
+        i += 1;
+    }
+    if bytes.get(i).is_none_or(|b| *b != b'"') {
+        return None;
+    }
+
+    i += 1;
+    while i < bytes.len() {
+        if bytes[i] == b'"' {
+            let mut j = i + 1;
+            let mut matched = 0;
+            while matched < hashes && j < bytes.len() && bytes[j] == b'#' {
+                matched += 1;
+                j += 1;
+            }
+            if matched == hashes {
+                return Some((start, j));
+            }
+        }
+        i += 1;
+    }
+
+    Some((start, bytes.len()))
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4161,6 +4240,26 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
             &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_embedded_comment_markers_in_string_literals() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let msg = \"not a comment // TODO inside payload\";",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let msg = r#\"payload has /* FIXME marker */ text\"#;",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let msg = \"// TODO in string\"; // TODO: actual follow-up",
+            &todo_re,
         ));
 
         Ok(())
