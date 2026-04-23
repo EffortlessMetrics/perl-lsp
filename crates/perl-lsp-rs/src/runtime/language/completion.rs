@@ -610,6 +610,10 @@ impl LspServer {
                     completion_cap(),
                 );
 
+                // Snapshot capability flag once before the loop to avoid
+                // acquiring client_capabilities lock per completion item.
+                let snippet_support = self.client_capabilities.lock().snippet_support;
+
                 // Convert to JSON format with highly optimized cancellation checks
                 let items: Vec<Value> = completions
                     .into_iter()
@@ -619,6 +623,9 @@ impl LspServer {
                         if idx % 250 == 0 && idx > 0 && token.is_cancelled_relaxed() {
                             return None;
                         }
+
+                        let is_snippet = c.kind == CompletionItemKind::Snippet;
+                        let insert_text_format = if is_snippet && snippet_support { 2 } else { 1 };
 
                         let mut item = json!({
                             "label": c.label,
@@ -632,12 +639,17 @@ impl LspServer {
                                 CompletionItemKind::Constant => 14,
                                 CompletionItemKind::Property => 7,
                             },
+                            "insertTextFormat": insert_text_format,
                         });
 
                         if let Some(detail) = c.detail {
                             item["detail"] = json!(detail);
                         }
-                        if let Some(insert_text) = c.insert_text {
+                        if let Some(mut insert_text) = c.insert_text {
+                            // Degrade snippets to plaintext if client doesn't support snippets.
+                            if is_snippet && !snippet_support {
+                                insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
+                            }
                             item["insertText"] = json!(insert_text);
                         }
                         if let Some(documentation) = c.documentation {
