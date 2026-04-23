@@ -614,6 +614,10 @@ impl<'a> Parser<'a> {
     /// `;`, `}`, `)`, `]`, or EOF.  Encountering one after consuming an infix
     /// operator is a clear sign that the operand is missing.
     fn is_infix_rhs_absent(&mut self) -> bool {
+        if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
+            return false;
+        }
+
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
@@ -625,7 +629,6 @@ impl<'a> Parser<'a> {
                 // to recover cleanly and resume at the next statement boundary.
                 | Some(TokenKind::My)
                 | Some(TokenKind::Our)
-                | Some(TokenKind::Local)
                 | Some(TokenKind::State)
                 | Some(TokenKind::Sub)
                 | Some(TokenKind::Package)
@@ -641,6 +644,15 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Foreach)
                 | Some(TokenKind::Eof)
                 | None
+        )
+    }
+
+    /// Returns true when `sub` is followed by tokens that start an anonymous
+    /// subroutine expression (`sub {}`, `sub (...) {}`, or `sub :attr {}`).
+    fn next_token_starts_anonymous_sub(&mut self) -> bool {
+        matches!(
+            self.tokens.peek_second().ok().map(|token| token.kind),
+            Some(TokenKind::LeftBrace | TokenKind::LeftParen | TokenKind::Colon)
         )
     }
 
