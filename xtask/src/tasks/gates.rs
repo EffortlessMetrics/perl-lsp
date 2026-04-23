@@ -1625,9 +1625,8 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, ReceiptMetadata,
-        ReceiptSummary, blocking_failure_gate_names, compare_receipts, determine_overall_status,
-        failure_guidance, is_blocking_gate_status,
+        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, blocking_failure_gate_names,
+        compare_receipts, determine_overall_status, failure_guidance, is_blocking_gate_status,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1695,47 +1694,61 @@ mod tests {
     }
 
     fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
-        Receipt {
-            metadata: ReceiptMetadata {
-                timestamp: "2026-04-23T00:00:00Z".to_string(),
-                git_sha: "abc123".to_string(),
-                git_branch: "work".to_string(),
-                repository: "perl-lsp".to_string(),
-                trigger: "manual".to_string(),
-                actor: None,
-                workflow_name: None,
-                ci_run_url: None,
-                pr_number: None,
-                nix_shell: Some(false),
+        // Deserialize from a minimal JSON skeleton so we don't have to
+        // construct every required nested struct (ToolchainInfo, PlatformInfo,
+        // EnvironmentInfo, AgentReceipt, …) by hand.  compare_receipts only
+        // reads receipt.gates and receipt.metadata.timestamp, so the rest can
+        // be placeholder values.
+        let mut receipt: Receipt = serde_json::from_str(r#"{
+            "schema_version": "1",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
             },
-            summary: ReceiptSummary {
-                total_gates: 1,
-                passed: 1,
-                failed: 0,
-                skipped: 0,
-                timeout: None,
-                error: None,
-                total_duration_ms: 10,
-                tier_results: None,
-                overall_status: "pass".to_string(),
-                blocking_failures: None,
-                aggregate_metrics: None,
+            "gates": [],
+            "summary": {
+                "total_gates": 1,
+                "passed": 1,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
             },
-            results: vec![GateResult {
-                gate_name: "tests".to_string(),
-                tier: "pr_fast".to_string(),
-                status: "pass".to_string(),
-                required: Some(true),
-                duration_ms: 10,
-                command: "cargo test".to_string(),
-                exit_code: Some(0),
-                output_summary: None,
-                log_path: None,
-                metrics: Some(metrics),
-                artifacts: None,
-            }],
-            trigger: None,
-        }
+            "agent_receipt": {
+                "scope": {
+                    "base": "",
+                    "diff_class": "",
+                    "changed_files": [],
+                    "direct_crates": [],
+                    "reverse_dep_closure": []
+                },
+                "selected_lanes": [],
+                "reasons": {},
+                "failures": {"blocking": [], "repro": []},
+                "baselines": [],
+                "next_actions": []
+            }
+        }"#).expect("minimal receipt JSON is valid");
+        receipt.gates.push(GateResult {
+            gate_name: "tests".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "pass".to_string(),
+            required: Some(true),
+            duration_ms: 10,
+            command: "cargo test".to_string(),
+            exit_code: Some(0),
+            output_summary: None,
+            log_path: None,
+            metrics: Some(metrics),
+            artifacts: None,
+        });
+        receipt
     }
 
     fn metric_change_for<'a>(diff: &'a DiffResult, name: &str) -> Option<&'a MetricChange> {
