@@ -2346,3 +2346,144 @@ my $y = helper();
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_document_symbols_refresh_after_incremental_edit() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Document symbols refresh after incremental edit");
+
+    let before = r#"package Symbol::Refresh;
+use strict;
+use warnings;
+
+sub alpha {
+    return 1;
+}
+
+1;
+"#;
+
+    let after = r#"package Symbol::Refresh;
+use strict;
+use warnings;
+
+sub alpha {
+    return 1;
+}
+
+sub beta {
+    return alpha();
+}
+
+1;
+"#;
+
+    scenario.given("a module that initially exposes a single subroutine");
+    let (mut harness, workspace) = setup_workspace(&[("lib/Symbol/Refresh.pm", before)])?;
+    let uri = workspace.uri("lib/Symbol/Refresh.pm");
+    harness.open(&uri, before)?;
+    harness.barrier();
+
+    scenario.when("requesting document symbols before the edit");
+    let symbols_before = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let names_before = symbol_names(&symbols_before);
+
+    scenario.then("only the original subroutine is present");
+    assert!(
+        names_before.iter().any(|name| name == "alpha"),
+        "expected alpha before edit; got {names_before:?}"
+    );
+    assert!(
+        !names_before.iter().any(|name| name == "beta"),
+        "beta should not exist before edit; got {names_before:?}"
+    );
+
+    scenario.when("applying a didChange that introduces a second subroutine");
+    harness.change_full(&uri, 2, after)?;
+    harness.barrier();
+    harness.wait_for_symbol("beta", Some(&uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    let symbols_after = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("document symbols include both original and new subroutines");
+    let names_after = symbol_names(&symbols_after);
+    assert!(
+        names_after.iter().any(|name| name == "alpha"),
+        "alpha should remain after edit; got {names_after:?}"
+    );
+    assert!(
+        names_after.iter().any(|name| name == "beta"),
+        "beta should appear after edit; got {names_after:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_selection_range_multi_cursor_returns_matching_entries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Selection range supports multi-cursor requests");
+
+    let code = r#"use strict;
+use warnings;
+
+sub combine {
+    my ($left, $right) = @_;
+    return $left . $right;
+}
+
+my $value = combine("a", "b");
+"#;
+
+    scenario.given("a Perl file with multiple symbols suitable for expand-selection");
+    let (mut harness, workspace) = setup_workspace(&[("multi_cursor.pl", code)])?;
+    let uri = workspace.uri("multi_cursor.pl");
+    harness.open(&uri, code)?;
+    harness.barrier();
+
+    let (left_line, left_col) = find_position(code, "$left");
+    let (right_line, right_col) = find_position(code, "$right;");
+
+    scenario.when("requesting selection ranges for two cursor positions in one call");
+    let response = harness.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [
+                { "line": left_line, "character": left_col + 1 },
+                { "line": right_line, "character": right_col + 1 }
+            ]
+        }),
+    )?;
+
+    scenario.then("the server returns one nested selection tree per requested cursor");
+    let entries =
+        response.as_array().ok_or("selectionRange multi-cursor response should be an array")?;
+    assert_eq!(
+        entries.len(),
+        2,
+        "expected two selection range results for two positions; got {entries:?}"
+    );
+    assert!(
+        entries.iter().all(has_lsp_range),
+        "each selection range entry should include a valid range; got {entries:?}"
+    );
+    assert!(
+        entries.iter().all(|entry| selection_range_depth(entry) >= 2),
+        "each entry should include nested parent expansion; got {entries:?}"
+    );
+
+    Ok(())
+}
