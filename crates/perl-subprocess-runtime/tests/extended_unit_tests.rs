@@ -1000,3 +1000,36 @@ fn os_runtime_completion_before_deadline_always_succeeds() -> Result<(), Box<dyn
     assert_eq!(output.stdout_lossy().trim(), "boundary");
     Ok(())
 }
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+#[test]
+fn os_runtime_timeout_kills_slow_process() -> Result<(), Box<dyn std::error::Error>> {
+    use perl_subprocess_runtime::OsSubprocessRuntime;
+    use std::fs;
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let runtime = OsSubprocessRuntime::with_timeout(1);
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let pid_file =
+        std::env::temp_dir().join(format!("perl_subprocess_runtime_timeout_{unique}.pid"));
+    let pid_file_string = pid_file.to_string_lossy().into_owned();
+
+    let script = format!("echo $$ > \"{pid_file_string}\"; sleep 30");
+    let timeout_result = runtime.run_command("sh", &["-c", &script], None);
+    assert!(timeout_result.is_err(), "slow process should time out");
+
+    let pid_contents = fs::read_to_string(&pid_file)?;
+    let pid = pid_contents.trim();
+    assert!(!pid.is_empty(), "child shell should record a pid");
+
+    let alive_status =
+        Command::new("kill").args(["-0", pid]).stderr(std::process::Stdio::null()).status()?;
+    assert!(
+        !alive_status.success(),
+        "timed out process should be terminated (pid still alive: {pid})"
+    );
+
+    let _ = fs::remove_file(pid_file);
+    Ok(())
+}
