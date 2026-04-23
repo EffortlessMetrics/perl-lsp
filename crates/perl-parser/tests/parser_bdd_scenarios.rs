@@ -139,3 +139,48 @@ fn bdd_given_multiple_realistic_statements_when_parsed_then_program_shape_is_sta
         "Did not expect recovery ERROR nodes for valid script: {sexp}"
     );
 }
+
+#[test]
+fn bdd_given_postfix_flow_and_ternary_when_parsed_then_control_flow_nodes_are_retained()
+-> TestResult {
+    // Given: a developer writes concise Perl with postfix conditionals and ternary expressions.
+    let code = r#"
+        my $count = 2;
+        print "nonzero" if $count;
+        my $label = $count > 1 ? "many" : "one";
+    "#;
+
+    // When: the parser processes the snippet.
+    let sexp = parse_sexp(code)?;
+
+    // Then: compact control-flow structure remains visible in AST output.
+    assert!(sexp.contains("statement_modifier"), "Expected statement modifier node in: {sexp}");
+    assert!(sexp.contains("ternary"), "Expected ternary node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panicking() {
+    // Given: a developer is typing and leaves a quoted string unfinished.
+    let code = r#"my $name = "perl; print $name;"#;
+
+    // When: the parser attempts to build an AST.
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    // Then: parser should return an error or emit recovery nodes, but never panic.
+    match result {
+        Ok(ast) => {
+            let sexp = ast.to_sexp();
+            assert!(
+                sexp.contains("ERROR") || sexp.contains("unknown"),
+                "Expected recovery marker for malformed quoted string: {sexp}"
+            );
+        }
+        Err(err) => {
+            assert!(!err.to_string().is_empty(), "Expected non-empty parse failure message");
+        }
+    }
+}
