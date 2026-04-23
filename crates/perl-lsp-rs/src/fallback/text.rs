@@ -5,20 +5,93 @@
 
 use crate::convert::{WirePosition, WireRange};
 use crate::util::byte_to_utf16_col;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::json;
+use std::sync::LazyLock;
 
 /// Matches package declarations: `package Foo::Bar`
-static PACKAGE_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
+static PACKAGE_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
 /// Matches subroutine definitions: `sub foo`
-static SUB_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*sub\s+(\w+)").ok());
+static SUB_RE: LazyLock<Option<Regex>> = LazyLock::new(|| Regex::new(r"^\s*sub\s+(\w+)").ok());
 /// Matches lexical/package variable declarations: `my $x`, `our @items`, `state %cache`
-static VAR_DECL_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"^\s*(?:my|our|state)\s+([\$\@\%]\w+)").ok());
+static VAR_DECL_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^\s*(?:my|our|state)\s+([\$\@\%]\w+)").ok());
 /// Matches constant declarations: `use constant NAME => ...`
-static CONSTANT_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"^\s*use\s+constant\s+([A-Z_]\w*)\b").ok());
+static CONSTANT_RE: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^\s*use\s+constant\s+([A-Z_]\w*)\b").ok());
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum TextSymbolKind {
+    Package,
+    Subroutine,
+    Variable,
+    Constant,
+}
+
+struct TextMatch {
+    name: String,
+    line: usize,
+    start_byte: usize,
+    end_byte: usize,
+    kind: TextSymbolKind,
+}
+
+fn collect_text_matches(text: &str) -> Vec<TextMatch> {
+    let mut matches = Vec::new();
+
+    for (line_num, line) in text.lines().enumerate() {
+        if let Some(captures) = PACKAGE_RE.as_ref().and_then(|re| re.captures(line))
+            && let Some(package_name) = captures.get(1)
+        {
+            matches.push(TextMatch {
+                name: package_name.as_str().to_string(),
+                line: line_num,
+                start_byte: package_name.start(),
+                end_byte: package_name.end(),
+                kind: TextSymbolKind::Package,
+            });
+        }
+
+        if let Some(captures) = SUB_RE.as_ref().and_then(|re| re.captures(line))
+            && let Some(sub_name) = captures.get(1)
+        {
+            matches.push(TextMatch {
+                name: sub_name.as_str().to_string(),
+                line: line_num,
+                start_byte: sub_name.start(),
+                end_byte: sub_name.end(),
+                kind: TextSymbolKind::Subroutine,
+            });
+        }
+
+        if let Some(captures) = VAR_DECL_RE.as_ref().and_then(|re| re.captures(line))
+            && let Some(variable_name) = captures.get(1)
+        {
+            matches.push(TextMatch {
+                name: variable_name.as_str().to_string(),
+                line: line_num,
+                start_byte: variable_name.start(),
+                end_byte: variable_name.end(),
+                kind: TextSymbolKind::Variable,
+            });
+        }
+
+        if let Some(captures) = CONSTANT_RE.as_ref().and_then(|re| re.captures(line))
+            && let Some(constant_name) = captures.get(1)
+        {
+            matches.push(TextMatch {
+                name: constant_name.as_str().to_string(),
+                line: line_num,
+                start_byte: constant_name.start(),
+                end_byte: constant_name.end(),
+                kind: TextSymbolKind::Constant,
+            });
+        }
+    }
+
+    matches
+}
 
 /// Extract code lenses from text when AST parsing fails
 pub fn extract_text_based_code_lenses(
@@ -26,62 +99,78 @@ pub fn extract_text_based_code_lenses(
     _uri: &str,
 ) -> Vec<crate::code_lens_provider::CodeLens> {
     let mut lenses = Vec::new();
+    let lines: Vec<&str> = text.lines().collect();
 
-    // Find package declarations
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = PACKAGE_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(pkg_name) = captures.get(1) {
-                let name = pkg_name.as_str().to_string();
+    for text_match in collect_text_matches(text) {
+        let kind = match text_match.kind {
+            TextSymbolKind::Package => "package",
+            TextSymbolKind::Subroutine => "subroutine",
+            TextSymbolKind::Variable | TextSymbolKind::Constant => continue,
+        };
+        let Some(line) = lines.get(text_match.line) else {
+            continue;
+        };
 
-                lenses.push(crate::code_lens_provider::CodeLens {
-                    range: WireRange::new(
-                        WirePosition::new(
-                            line_num as u32,
-                            byte_to_utf16_col(line, pkg_name.start()) as u32,
-                        ),
-                        WirePosition::new(
-                            line_num as u32,
-                            byte_to_utf16_col(line, pkg_name.end()) as u32,
-                        ),
-                    ),
-                    command: None, // Will be resolved later
-                    data: Some(json!({
-                        "name": name,
-                        "kind": "package"
-                    })),
-                });
-            }
-        }
-    }
-
-    // Find subroutine declarations
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = SUB_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(sub_name) = captures.get(1) {
-                let name = sub_name.as_str().to_string();
-
-                lenses.push(crate::code_lens_provider::CodeLens {
-                    range: WireRange::new(
-                        WirePosition::new(
-                            line_num as u32,
-                            byte_to_utf16_col(line, sub_name.start()) as u32,
-                        ),
-                        WirePosition::new(
-                            line_num as u32,
-                            byte_to_utf16_col(line, sub_name.end()) as u32,
-                        ),
-                    ),
-                    command: None, // Will be resolved later
-                    data: Some(json!({
-                        "name": name,
-                        "kind": "subroutine"
-                    })),
-                });
-            }
-        }
+        lenses.push(crate::code_lens_provider::CodeLens {
+            range: WireRange::new(
+                WirePosition::new(
+                    text_match.line as u32,
+                    byte_to_utf16_col(line, text_match.start_byte) as u32,
+                ),
+                WirePosition::new(
+                    text_match.line as u32,
+                    byte_to_utf16_col(line, text_match.end_byte) as u32,
+                ),
+            ),
+            command: None, // Will be resolved later
+            data: Some(json!({
+                "name": text_match.name,
+                "kind": kind
+            })),
+        });
     }
 
     lenses
+}
+
+#[cfg(feature = "workspace")]
+fn kind_to_symbol_code(kind: TextSymbolKind) -> u32 {
+    match kind {
+        TextSymbolKind::Package => 4,
+        TextSymbolKind::Subroutine => 12,
+        TextSymbolKind::Variable => 13,
+        TextSymbolKind::Constant => 14,
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn workspace_symbol_from_text_match(
+    uri: &str,
+    line_text: &str,
+    text_match: TextMatch,
+) -> crate::workspace_index::LspWorkspaceSymbol {
+    use crate::workspace_index::LspWorkspaceSymbol;
+    use perl_position_tracking::{WireLocation, WirePosition, WireRange};
+
+    LspWorkspaceSymbol {
+        name: text_match.name,
+        kind: kind_to_symbol_code(text_match.kind),
+        location: WireLocation::new(
+            uri.to_string(),
+            WireRange::new(
+                WirePosition::new(
+                    text_match.line as u32,
+                    byte_to_utf16_col(line_text, text_match.start_byte) as u32,
+                ),
+                WirePosition::new(
+                    text_match.line as u32,
+                    byte_to_utf16_col(line_text, text_match.end_byte) as u32,
+                ),
+            ),
+        ),
+        container_name: None,
+        workspace_folder_uri: None,
+    }
 }
 
 /// Extract symbols from text when AST parsing fails
@@ -91,130 +180,19 @@ pub fn extract_text_based_symbols(
     uri: &str,
     query: &str,
 ) -> Vec<crate::workspace_index::LspWorkspaceSymbol> {
-    use crate::workspace_index::LspWorkspaceSymbol;
-    use perl_position_tracking::{WireLocation, WirePosition, WireRange};
-
     let mut symbols = Vec::new();
+    let lines: Vec<&str> = text.lines().collect();
     let query_lower = query.to_lowercase();
 
-    // Find subroutine definitions
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = SUB_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(sub_name) = captures.get(1) {
-                let name = sub_name.as_str().to_string();
-                if name.to_lowercase().contains(&query_lower) {
-                    symbols.push(LspWorkspaceSymbol {
-                        name,
-                        kind: 12, // Function
-                        location: WireLocation::new(
-                            uri.to_string(),
-                            WireRange::new(
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, sub_name.start()) as u32,
-                                ),
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, sub_name.end()) as u32,
-                                ),
-                            ),
-                        ),
-                        container_name: None,
-                        workspace_folder_uri: None,
-                    });
-                }
-            }
+    for text_match in collect_text_matches(text) {
+        if !text_match.name.to_lowercase().contains(&query_lower) {
+            continue;
         }
-    }
+        let Some(line_text) = lines.get(text_match.line) else {
+            continue;
+        };
 
-    // Find package declarations
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = PACKAGE_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(pkg_name) = captures.get(1) {
-                let name = pkg_name.as_str().to_string();
-                if name.to_lowercase().contains(&query_lower) {
-                    symbols.push(LspWorkspaceSymbol {
-                        name,
-                        kind: 4, // Namespace
-                        location: WireLocation::new(
-                            uri.to_string(),
-                            WireRange::new(
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, pkg_name.start()) as u32,
-                                ),
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, pkg_name.end()) as u32,
-                                ),
-                            ),
-                        ),
-                        container_name: None,
-                        workspace_folder_uri: None,
-                    });
-                }
-            }
-        }
-    }
-
-    // Find variable declarations
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = VAR_DECL_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(var_name) = captures.get(1) {
-                let name = var_name.as_str().to_string();
-                if name.to_lowercase().contains(&query_lower) {
-                    symbols.push(LspWorkspaceSymbol {
-                        name,
-                        kind: 13, // Variable
-                        location: WireLocation::new(
-                            uri.to_string(),
-                            WireRange::new(
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, var_name.start()) as u32,
-                                ),
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, var_name.end()) as u32,
-                                ),
-                            ),
-                        ),
-                        container_name: None,
-                        workspace_folder_uri: None,
-                    });
-                }
-            }
-        }
-    }
-
-    // Find constant declarations
-    for (line_num, line) in text.lines().enumerate() {
-        if let Some(captures) = CONSTANT_RE.as_ref().and_then(|re| re.captures(line)) {
-            if let Some(const_name) = captures.get(1) {
-                let name = const_name.as_str().to_string();
-                if name.to_lowercase().contains(&query_lower) {
-                    symbols.push(LspWorkspaceSymbol {
-                        name,
-                        kind: 14, // Constant
-                        location: WireLocation::new(
-                            uri.to_string(),
-                            WireRange::new(
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, const_name.start()) as u32,
-                                ),
-                                WirePosition::new(
-                                    line_num as u32,
-                                    byte_to_utf16_col(line, const_name.end()) as u32,
-                                ),
-                            ),
-                        ),
-                        container_name: None,
-                        workspace_folder_uri: None,
-                    });
-                }
-            }
-        }
+        symbols.push(workspace_symbol_from_text_match(uri, line_text, text_match));
     }
 
     symbols
@@ -341,6 +319,23 @@ fn count_braces_in_line(line: &str) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_code_lens_fallback_extracts_only_package_and_subroutines() {
+        let src = r#"
+package My::Pkg;
+my $local_var = 1;
+use constant MAX_RETRY => 3;
+sub helper {}
+"#;
+        let lenses = extract_text_based_code_lenses(src, "file:///test.pl");
+        assert_eq!(lenses.len(), 2);
+
+        let lens_data: Vec<serde_json::Value> =
+            lenses.iter().map(|lens| lens.data.clone().unwrap_or_default()).collect();
+        assert!(lens_data.iter().any(|data| data["kind"] == "package"));
+        assert!(lens_data.iter().any(|data| data["kind"] == "subroutine"));
+    }
 
     #[cfg(feature = "workspace")]
     #[test]
