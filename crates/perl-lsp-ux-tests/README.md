@@ -22,7 +22,9 @@ Scenarios currently include:
 - hover, goto-definition, strict diagnostics, and document symbols flows, and
 - multi-root `workspace/symbol` disambiguation via `workspaceFolderUri`, and
 - workspace-folder removal evicting stale symbols from search results, and
-- deleted-file churn evicting stale search results and definition targets.
+- deleted-file churn evicting stale search results and definition targets, and
+- live-edit diagnostics lifecycle coverage (diagnostics appear for broken files
+  and clear after `didChange` fixes syntax).
 
 The harness is now also the source of truth for the workflow UX scorecard
 inventory:

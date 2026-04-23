@@ -185,6 +185,15 @@ impl UxHarness {
         self.client.did_open(&uri, content)
     }
 
+    /// Replace a file's full contents via `textDocument/didChange`.
+    ///
+    /// The caller provides the next monotonically increasing document version.
+    pub fn replace_file(&self, relative_path: &str, new_content: &str, version: i32) -> Result<()> {
+        self.workspace.write(relative_path, new_content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_change(&uri, new_content, version)
+    }
+
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
     ///
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).
@@ -399,6 +408,61 @@ impl UxHarness {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         Vec::new()
+    }
+
+    /// Return the latest diagnostics payload currently buffered for `relative_path`.
+    pub fn latest_diagnostics(&self, relative_path: &str) -> Option<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let events = self.client.peek_events();
+        events.into_iter().rev().find_map(|event| match event {
+            LspEvent::Diagnostics { uri: diag_uri, diagnostics } if diag_uri == uri => {
+                Some(diagnostics)
+            }
+            _ => None,
+        })
+    }
+
+    /// Wait up to `timeout` for diagnostics with at least `minimum` entries.
+    ///
+    /// Returns `None` if no matching diagnostics are observed before timeout.
+    pub fn wait_for_diagnostics_minimum(
+        &self,
+        relative_path: &str,
+        minimum: usize,
+        timeout: std::time::Duration,
+    ) -> Option<Vec<Value>> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some(diagnostics) = self.latest_diagnostics(relative_path) {
+                if diagnostics.len() >= minimum {
+                    return Some(diagnostics);
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// Wait up to `timeout` for a diagnostics publication that is explicitly empty.
+    pub fn wait_for_empty_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some(diagnostics) = self.latest_diagnostics(relative_path) {
+                if diagnostics.is_empty() {
+                    return true;
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 
     /// Request go-to-definition.
