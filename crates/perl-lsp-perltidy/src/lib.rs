@@ -340,23 +340,74 @@ impl BuiltInFormatter {
 
         for line in code.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with('}') || trimmed.starts_with(')') || trimmed.starts_with(']') {
-                indent_level = indent_level.saturating_sub(1);
+            if trimmed.is_empty() {
+                result.push('\n');
+                continue;
             }
 
-            if !trimmed.is_empty() {
-                for _ in 0..indent_level {
-                    result.push_str(&indent_str);
-                }
-                result.push_str(trimmed);
+            let leading_closers = Self::count_leading_closers(trimmed);
+            let current_indent = (indent_level - leading_closers).max(0);
+
+            for _ in 0..current_indent {
+                result.push_str(&indent_str);
             }
+            result.push_str(trimmed);
             result.push('\n');
 
-            if trimmed.ends_with('{') || trimmed.ends_with('(') || trimmed.ends_with('[') {
-                indent_level += 1;
-            }
+            indent_level = (indent_level + Self::delimiter_delta(trimmed)).max(0);
         }
 
         result
+    }
+
+    fn count_leading_closers(line: &str) -> i32 {
+        let mut closers = 0_i32;
+        for ch in line.chars() {
+            match ch {
+                ')' | '}' | ']' => {
+                    closers += 1;
+                }
+                _ => break,
+            }
+        }
+        closers
+    }
+
+    fn delimiter_delta(line: &str) -> i32 {
+        let mut delta = 0_i32;
+        let mut in_single = false;
+        let mut in_double = false;
+        let mut escaped = false;
+
+        for ch in line.chars() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            match ch {
+                '\\' if in_single || in_double => {
+                    escaped = true;
+                }
+                '\'' if !in_double => {
+                    in_single = !in_single;
+                }
+                '"' if !in_single => {
+                    in_double = !in_double;
+                }
+                '#' if !in_single && !in_double => {
+                    break;
+                }
+                '{' | '(' | '[' if !in_single && !in_double => {
+                    delta += 1;
+                }
+                '}' | ')' | ']' if !in_single && !in_double => {
+                    delta -= 1;
+                }
+                _ => {}
+            }
+        }
+
+        delta
     }
 }

@@ -237,3 +237,26 @@ fn builtin_formatter_handles_empty_input() {
     let formatted = formatter.format("");
     assert_eq!(formatted, "");
 }
+
+#[test]
+fn builtin_formatter_indents_after_opening_delimiter_before_comment() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) { # comment\nprint $x;\n}\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($x) { # comment");
+    assert_eq!(lines[1], "    print $x;");
+    assert_eq!(lines[2], "}");
+}
+
+#[test]
+fn builtin_formatter_does_not_count_delimiters_inside_strings_or_comments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($x) {\nprint \"}\"; # {\nprint q{literal};\n}\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($x) {");
+    assert_eq!(lines[1], "    print \"}\"; # {");
+    assert_eq!(lines[2], "    print q{literal};");
+    assert_eq!(lines[3], "}");
+}
