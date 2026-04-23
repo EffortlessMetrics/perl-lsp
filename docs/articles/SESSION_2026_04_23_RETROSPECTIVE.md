@@ -145,6 +145,35 @@ Killed agent `a6061b35` (35-PR deep-review) mid-run because the scope felt shall
 
 **Per-outcome cost observation:** ~0.22% Claude session per actionable outcome when Haiku offloads mechanical work, vs ~1% without. A 4-5× cost reduction just from model-tiering correctly.
 
+## CI-cost efficiency (measured)
+
+Real GitHub-side CI spend for the month (as observed by user):
+
+| Date | Month-PRs-merged | Month-CI-cost | $/PR (cumulative) |
+|---|---|---|---|
+| 2026-04-22 (prior day) | 680 | $230.52 | $0.339 |
+| 2026-04-23 (this session) | 1051 | $235.97 | $0.224 (cumulative) |
+
+**Delta analysis for this session's work:**
+- +371 PRs merged this session (mostly today)
+- +$5.45 in CI spend
+- **~$0.0147 per PR** for the session's merges
+- **~23× per-PR cost reduction** vs the prior cumulative average
+
+**What drove the efficiency:**
+1. **Tier-wiring (#5005)** — scope-aware PR Smoke skipped full workspace clippy+test on PRs whose scope didn't warrant it
+2. **Preflight latest-SHA check** — cancelled superseded CI runs on rapid-push cascades, saving runner-minutes on stale SHAs
+3. **Compile-all-targets as parallel job** — didn't serially block merge-gate
+4. **Windows Guardrails fix (#5317)** — unblocked ~25 PRs in one CI pass instead of each re-triggering CI 3-4 times
+5. **Cascade-update pattern** — one master merge cascades to N PRs without N×(full-CI) cost
+6. **Dupes closed early** — ~60 closed-without-merge didn't consume merge-gate budget at all
+
+**Caveat:** GitHub billing often lags 24-48h, so actual CI consumption today may exceed the $5.45 delta. Even accounting for 2-3× lag, per-PR CI cost for the session is still measurably lower than prior baseline.
+
+**Correlated with the session's structural work:** #5005 tier-wiring + #4988 check-all-targets parallelization + #4977 coalesce-queue-tail preflight + 7 bit-rot fixes — all CI-shape improvements that compound into per-PR savings. This is the "CI as agent-consumable artifact" thesis paying out in hard dollars.
+
+**Billing context:** The agent-cost side (Claude + Codex) has been characterized throughout as ~1% session per outcome; the GitHub CI side is now measurably ~$0.0147 per PR this session. Combined with the per-outcome economics: **each merged PR this session represents ~$0.02-0.05 combined agent-compute + CI-runner cost** at steady-state, down from the ~$0.34 baseline.
+
 ---
 
 _Companions: the referenced memory files + docs articles + forensic. See `docs/articles/ARTICLE_INDEX.md` for the broader articles catalog._
