@@ -565,6 +565,100 @@ my $also = process_data();
 
 #[test]
 #[serial]
+fn bdd_rename_is_scoped_to_target_package_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Rename stays scoped to the selected package symbol");
+
+    let foo_module = r#"package Foo;
+use strict;
+use warnings;
+
+sub process_data {
+    return "foo";
+}
+
+1;
+"#;
+
+    let bar_module = r#"package Bar;
+use strict;
+use warnings;
+
+sub process_data {
+    return "bar";
+}
+
+1;
+"#;
+
+    let main = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+use Bar;
+
+my $foo = Foo::process_data();
+my $bar = Bar::process_data();
+"#;
+
+    scenario.given("a workspace where two packages expose subroutines with the same name");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/Foo.pm", foo_module),
+        ("lib/Bar.pm", bar_module),
+        ("main.pl", main),
+    ])?;
+
+    let foo_uri = workspace.uri("lib/Foo.pm");
+    let bar_uri = workspace.uri("lib/Bar.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&foo_uri, foo_module)?;
+    harness.open(&bar_uri, bar_module)?;
+    harness.open(&main_uri, main)?;
+
+    harness.wait_for_symbol("process_data", Some(&foo_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("process_data", Some(&bar_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("renaming Foo::process_data from the declaration in Foo.pm");
+    let (def_line, def_char) = find_position(foo_module, "process_data");
+    let edit = wait_for_rename_edit_uris(
+        &mut harness,
+        &foo_uri,
+        def_line,
+        def_char,
+        "process_records",
+        &[&foo_uri, &main_uri],
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("rename edits target Foo.pm and main.pl only");
+    let touched_uris = workspace_edit_uris(&edit);
+    assert!(touched_uris.contains(&foo_uri), "rename should edit Foo.pm");
+    assert!(touched_uris.contains(&main_uri), "rename should edit main.pl");
+    assert!(!touched_uris.contains(&bar_uri), "rename should not edit Bar.pm");
+
+    scenario.then("the edit payload rewrites Foo call sites but not Bar call sites");
+    let foo_texts = workspace_edit_new_texts_for_uri(&edit, &foo_uri);
+    let main_texts = workspace_edit_new_texts_for_uri(&edit, &main_uri);
+
+    assert!(
+        foo_texts.iter().any(|text| text.contains("process_records")),
+        "Foo edits should include the renamed symbol; got {foo_texts:?}"
+    );
+    assert!(
+        main_texts.iter().any(|text| text.contains("process_records")),
+        "main edits should include the renamed Foo call; got {main_texts:?}"
+    );
+    assert!(
+        !main_texts.iter().any(|text| text.contains("Bar::process_records")),
+        "main edits should not rename Bar::process_data call sites; got {main_texts:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_workspace_symbols_expose_module_api() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Workspace symbol search surfaces module APIs");
 
