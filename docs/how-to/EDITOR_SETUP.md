@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -72,3 +73,9 @@ Perl source files.
   and confirm the workspace root is correct.
 - If completions or diagnostics are missing, move to
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the next steps.
+
+
+### Codex Desktop
+
+Configure a custom Perl language server process that runs `perllsp --stdio`.
+See the dedicated guide for the exact fields and verification steps.
