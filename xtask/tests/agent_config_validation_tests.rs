@@ -26,6 +26,12 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+const STANDARD_MODELS: [&str; 3] = ["sonnet", "opus", "haiku"];
+
+fn is_supported_model(model: &str) -> bool {
+    STANDARD_MODELS.contains(&model) || model.starts_with("claude-")
+}
+
 /// Agent configuration front matter schema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
@@ -243,12 +249,11 @@ impl AgentConfigValidator {
         }
 
         // Validate model field
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
         if config.model.is_empty() {
             result.errors.push("model field is empty".to_string());
-        } else if !valid_models.contains(&config.model.as_str()) {
+        } else if !is_supported_model(&config.model) {
             result.warnings.push(format!(
-                "model '{}' is not a standard value (expected: sonnet, opus, haiku)",
+                "model '{}' is not a supported value (expected: sonnet, opus, haiku, or claude-*)",
                 config.model
             ));
         }
@@ -497,10 +502,9 @@ mod tests {
         }
 
         // All agents should use valid model names
-        let valid_models = ["sonnet", "opus", "haiku", "claude-sonnet", "claude-opus"];
         for (model, count) in &model_counts {
             assert!(
-                valid_models.contains(&model.as_str()) || model.starts_with("claude-"),
+                is_supported_model(model),
                 "Invalid model name '{}' used by {} agents",
                 model,
                 count
@@ -679,5 +683,12 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_versioned_claude_models_are_supported() {
+        assert!(is_supported_model("claude-sonnet-4-5"));
+        assert!(is_supported_model("claude-opus-4-1"));
+        assert!(!is_supported_model("gpt-4o"));
     }
 }
