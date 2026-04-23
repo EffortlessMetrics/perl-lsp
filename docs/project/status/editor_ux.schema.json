@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "supporting_signals",
     "integration_points"
   ],
   "properties": {
@@ -102,10 +103,27 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": ["number", "integer", "null"]
           }
         },
         "additionalProperties": false
       }
+    },
+    "supporting_signals": {
+      "type": "object",
+      "required": ["known_gap_issue_refs", "tracked_from"],
+      "properties": {
+        "known_gap_issue_refs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tracked_from": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "integration_points": {
       "type": "object",

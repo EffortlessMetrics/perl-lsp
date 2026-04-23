@@ -122,6 +122,66 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn parse_editor_ux_metric_values(root: &Path) -> BTreeMap<String, serde_json::Value> {
+    let receipt_path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let Ok(raw) = fs::read_to_string(receipt_path) else {
+        return BTreeMap::new();
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return BTreeMap::new();
+    };
+    let Some(metrics) = doc.get("metrics").and_then(serde_json::Value::as_object) else {
+        return BTreeMap::new();
+    };
+
+    metrics.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+}
+
+fn count_known_gap_issue_refs(root: &Path) -> usize {
+    static ISSUE_LINK_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"https://github\.com/[^)\s]+/issues/\d+")
+            .expect("issue link regex must compile")
+    });
+
+    let readme = root.join("README.md");
+    let Ok(content) = fs::read_to_string(readme) else {
+        return 0;
+    };
+
+    let mut in_known_gaps = false;
+    let mut in_shipped = false;
+    let mut count = 0usize;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        if trimmed == "### Known gaps toward solid UX" {
+            in_known_gaps = true;
+            continue;
+        }
+        if in_known_gaps && trimmed == "#### What shipped this cycle (v0.12.x)" {
+            in_shipped = true;
+        }
+        if in_shipped {
+            break;
+        }
+        if in_known_gaps {
+            count += ISSUE_LINK_RE.find_iter(line).count();
+        }
+    }
+    count
+}
+
+fn measured_top_line_metric_count(metric_values: &BTreeMap<String, serde_json::Value>) -> usize {
+    [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms",
+    ]
+    .into_iter()
+    .filter(|name| metric_values.get(*name).is_some_and(|v| !v.is_null()))
+    .count()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +190,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_metric_values = parse_editor_ux_metric_values(root);
+    let measured_top_line = measured_top_line_metric_count(&ux_metric_values);
+    let known_gap_issue_refs = count_known_gap_issue_refs(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,6 +207,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX confidence tracking**: top-line scorecard metrics measured {measured_top_line}/3 \
+           from `.ci/metrics/editor_ux.json`; known-gap burn-down currently tracks \
+           {known_gap_issue_refs} linked issue references in README's UX gaps section\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
@@ -169,6 +235,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let metric_values = parse_editor_ux_metric_values(root);
+    let known_gap_issue_refs = count_known_gap_issue_refs(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -182,20 +250,27 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
         "top_line_metrics": [
             {
                 "name": "workflow_pass_rate",
-                "state": "planned",
+                "state": if metric_values.get("workflow_pass_rate").is_some_and(|v| !v.is_null()) { "measured" } else { "planned" },
+                "value": metric_values.get("workflow_pass_rate").cloned().unwrap_or(serde_json::Value::Null),
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "workflow_stability_rate",
-                "state": "planned",
+                "state": if metric_values.get("workflow_stability_rate").is_some_and(|v| !v.is_null()) { "measured" } else { "planned" },
+                "value": metric_values.get("workflow_stability_rate").cloned().unwrap_or(serde_json::Value::Null),
                 "owner": "perl-lsp-ux-tests",
             },
             {
                 "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
+                "state": if metric_values.get("p95_time_to_first_useful_result_ms").is_some_and(|v| !v.is_null()) { "measured" } else { "planned" },
+                "value": metric_values.get("p95_time_to_first_useful_result_ms").cloned().unwrap_or(serde_json::Value::Null),
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "supporting_signals": {
+            "known_gap_issue_refs": known_gap_issue_refs,
+            "tracked_from": "README.md#known-gaps-toward-solid-ux",
+        },
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -279,7 +354,28 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert!(
+            receipt["supporting_signals"]["known_gap_issue_refs"].as_u64().is_some(),
+            "known gap issue refs should be tracked as an integer"
+        );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_count_known_gap_issue_refs_from_readme_excerpt() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        fs::write(
+            dir.path().join("README.md"),
+            "\
+### Known gaps toward solid UX
+- First ([#1](https://github.com/org/repo/issues/1))
+- Second ([#2](https://github.com/org/repo/issues/2))
+#### What shipped this cycle (v0.12.x)
+- historical ([#3](https://github.com/org/repo/issues/3))
+",
+        )?;
+        assert_eq!(count_known_gap_issue_refs(dir.path()), 2);
         Ok(())
     }
 }
