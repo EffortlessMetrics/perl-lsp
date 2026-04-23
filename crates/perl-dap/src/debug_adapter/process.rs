@@ -1004,6 +1004,7 @@ impl DebugAdapter {
             } else {
                 // Extract host and port for TCP attachment.
                 let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
+                let normalized_host = host.trim();
                 let raw_port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603);
                 if raw_port > 65535 {
                     return DapMessage::Response {
@@ -1016,12 +1017,16 @@ impl DebugAdapter {
                     };
                 }
                 let port = raw_port as u16;
-                let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+                let timeout = args
+                    .get("timeout")
+                    .or_else(|| args.get("timeoutMs"))
+                    .and_then(|t| t.as_u64())
+                    .map(|t| t as u32);
                 let stop_on_entry =
                     args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
                 // Validate arguments.
-                if host.trim().is_empty() {
+                if normalized_host.is_empty() {
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -1071,7 +1076,7 @@ impl DebugAdapter {
                 }
 
                 // TCP attachment mode (IMPLEMENTED)
-                let mut config = TcpAttachConfig::new(host.to_string(), port);
+                let mut config = TcpAttachConfig::new(normalized_host.to_string(), port);
                 if let Some(t) = timeout {
                     config = config.with_timeout(t);
                 }
