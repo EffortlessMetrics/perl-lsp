@@ -348,7 +348,7 @@ fn test_recursion_detection_ignores_sub_name_in_string() {
         "sub name in a string literal must not trigger Recursive rejection; got: {:?}",
         result
     );
-    let inlined = result.unwrap();
+    let inlined = must(result);
     assert!(
         inlined.contains("1 + 2") || inlined.contains("(1 + 2)"),
         "inlined result should contain the substituted expression; got: {inlined}"
