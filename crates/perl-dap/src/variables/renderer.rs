@@ -625,6 +625,24 @@ mod tests {
     }
 
     #[test]
+    fn test_string_truncation_zero_max_length() {
+        let renderer = PerlVariableRenderer::new().with_max_string_length(0);
+        let value = PerlValue::Scalar("non-empty".to_string());
+        let rendered = renderer.render("$s", &value);
+
+        assert_eq!(rendered.value, "\"...\"");
+    }
+
+    #[test]
+    fn test_string_truncation_utf8_boundary_safety() {
+        let renderer = PerlVariableRenderer::new().with_max_string_length(1);
+        let value = PerlValue::Scalar("éclair".to_string());
+        let rendered = renderer.render("$s", &value);
+
+        assert_eq!(rendered.value, "\"...\"");
+    }
+
+    #[test]
     fn test_string_escaping() {
         let renderer = PerlVariableRenderer::new();
         let value = PerlValue::Scalar("line1\nline2\ttab".to_string());
