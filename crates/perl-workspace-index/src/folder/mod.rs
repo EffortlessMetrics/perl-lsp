@@ -10,6 +10,7 @@ use perl_uri::uri_to_fs_path;
 use serde_json::Value;
 
 /// URI lists extracted from an LSP workspace folder change event.
+#[non_exhaustive]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorkspaceFolderChange {
     /// Added workspace folder URIs.
@@ -26,10 +27,7 @@ pub struct WorkspaceFolderChange {
 /// interpreted as a path fallback.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
-    let is_file_uri =
-        workspace_folder.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"));
-
-    if is_file_uri {
+    if has_file_uri_prefix(workspace_folder) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = uri_to_fs_path(workspace_folder) {
             return path;
@@ -43,6 +41,10 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
     }
 
     PathBuf::from(workspace_folder)
+}
+
+fn has_file_uri_prefix(value: &str) -> bool {
+    value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
 }
 
 fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
@@ -102,7 +104,7 @@ pub fn extract_workspace_folder_change(event: &Value) -> WorkspaceFolderChange {
 /// This keeps behavior deterministic across absolute POSIX and Windows-style paths.
 #[must_use]
 pub fn root_path_to_file_uri(root_path: &str) -> String {
-    if root_path.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://")) {
+    if has_file_uri_prefix(root_path) {
         return root_path.to_string();
     }
 
