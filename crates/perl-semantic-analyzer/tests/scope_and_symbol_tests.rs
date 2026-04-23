@@ -1831,6 +1831,42 @@ print PL_sv_undef;
 }
 
 #[test]
+fn strict_subs_allows_qw_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use List::Util qw(sum);
+print sum(1, 2, 3);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "sum"
+        }),
+        "strict 'subs' should not flag qw-imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_tag_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use POSIX qw(:sys_wait_h);
+print WIFEXITED(0);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "WIFEXITED"
+        }),
+        "strict 'subs' should not flag symbols imported through known export tags"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;
