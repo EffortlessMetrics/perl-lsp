@@ -4,7 +4,7 @@
   "title": "CI Gate Receipt",
   "description": "Machine-readable receipt for CI gate runs, supporting diffing, merge-blocking decisions, and historical tracking",
   "type": "object",
-  "required": ["schema_version", "metadata", "gates", "summary", "agent_receipt"],
+  "required": ["schema_version", "metadata", "gates", "summary"],
   "additionalProperties": false,
   "properties": {
     "schema_version": {
