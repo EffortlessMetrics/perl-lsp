@@ -162,8 +162,13 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?; // consume 'local'
         let declarator = declarator_token.text.to_string();
 
-        // Parse the lvalue expression that's being localized
-        let variable = Box::new(self.parse_expression()?);
+        // Parse the lvalue expression that's being localized.
+        // Use parse_ternary() instead of parse_expression()/parse_assignment()
+        // so we stop before `=` in constructs like:
+        //   local $SIG{__WARN__} = sub { ... };
+        // If we parse assignment here, the RHS is consumed too early and can
+        // degrade into a missing-expression recovery node.
+        let variable = Box::new(self.parse_ternary()?);
 
         let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
