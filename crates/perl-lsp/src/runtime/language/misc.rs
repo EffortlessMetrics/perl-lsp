@@ -672,10 +672,15 @@ impl LspServer {
             let provider = InlineCompletionProvider::new();
 
             // Try AI backend if enabled
-            let ai_config = self.config.lock().ai_completion.clone();
-            if ai_config.enabled {
+            let (ai_enabled, ai_fallback, max_output_tokens, timeout_ms) = {
+                let guard = self.config.lock();
+                let ai = &guard.ai_completion;
+                (ai.enabled, ai.fallback, ai.max_output_tokens, ai.timeout_ms)
+            };
+            if ai_enabled {
                 if let Some(context) = provider.prepare_context(&text, line, character) {
-                    let backend_result = self.try_ai_inline_completion(&context, &ai_config);
+                    let backend_result =
+                        self.try_ai_inline_completion(&context, max_output_tokens, timeout_ms);
                     match backend_result {
                         Ok(ref items) if !items.is_empty() => {
                             let list = perl_lsp_inline_completion::InlineCompletionList {
@@ -690,14 +695,14 @@ impl LspServer {
                         }
                         Err(ref e) => {
                             tracing::debug!("AI inline completion failed: {}", e);
-                            if !ai_config.fallback {
+                            if !ai_fallback {
                                 return Ok(Some(json!({ "items": [] })));
                             }
                             // Fall through to deterministic
                         }
                         _ => {
                             // Ok(empty) — fall through to deterministic if fallback enabled
-                            if !ai_config.fallback {
+                            if !ai_fallback {
                                 return Ok(Some(json!({ "items": [] })));
                             }
                         }
@@ -724,7 +729,8 @@ impl LspServer {
     fn try_ai_inline_completion(
         &self,
         context: &perl_lsp_inline_completion::PreparedInlineCompletionContext,
-        ai_config: &perl_lsp_config::AiCompletionConfig,
+        max_output_tokens: u32,
+        timeout_ms: u64,
     ) -> Result<
         Vec<perl_lsp_inline_completion::InlineCompletionItem>,
         perl_lsp_inline_completion::BackendError,
@@ -738,8 +744,8 @@ impl LspServer {
 
         let req = perl_lsp_inline_completion::BackendRequest {
             context: context.clone(),
-            max_output_tokens: ai_config.max_output_tokens,
-            timeout_ms: ai_config.timeout_ms,
+            max_output_tokens,
+            timeout_ms,
         };
 
         let texts = backend.complete(&req)?;

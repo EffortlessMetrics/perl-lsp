@@ -37,12 +37,9 @@ fn load_gate_policy_yaml() -> Value {
 }
 
 fn find_gate<'a>(gates: &'a Vec<Value>, name: &str) -> Option<&'a Value> {
-    gates.iter().find(|g| {
-        g.get("name")
-            .and_then(|n| n.as_str())
-            .map(|n| n == name)
-            .unwrap_or(false)
-    })
+    gates
+        .iter()
+        .find(|g| g.get("name").and_then(|n| n.as_str()).map(|n| n == name).unwrap_or(false))
 }
 
 /// Test that `published_crate_count` gate exists in gate-policy.yaml.
@@ -53,7 +50,8 @@ fn find_gate<'a>(gates: &'a Vec<Value>, name: &str) -> Option<&'a Value> {
 fn published_crate_count_gate_exists_in_policy() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found in gate-policy.yaml")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -76,7 +74,8 @@ fn published_crate_count_gate_exists_in_policy() {
 fn published_crate_count_gate_is_in_merge_gate_tier() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -84,9 +83,7 @@ fn published_crate_count_gate_is_in_merge_gate_tier() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let tier = gate.get("tier")
-        .and_then(|t| t.as_str())
-        .expect("gate must have tier field");
+    let tier = gate.get("tier").and_then(|t| t.as_str()).expect("gate must have tier field");
 
     assert_eq!(
         tier, EXPECTED_TIER,
@@ -102,7 +99,8 @@ fn published_crate_count_gate_is_in_merge_gate_tier() {
 fn published_crate_count_gate_has_correct_command() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -110,9 +108,8 @@ fn published_crate_count_gate_has_correct_command() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let command = gate.get("command")
-        .and_then(|c| c.as_str())
-        .expect("gate must have command field");
+    let command =
+        gate.get("command").and_then(|c| c.as_str()).expect("gate must have command field");
 
     assert_eq!(
         command, EXPECTED_COMMAND,
@@ -131,7 +128,8 @@ fn published_crate_count_gate_has_correct_command() {
 fn published_crate_count_gate_has_quarantine_enabled() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -139,9 +137,7 @@ fn published_crate_count_gate_has_quarantine_enabled() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let quarantine = gate.get("quarantine")
-        .and_then(|q| q.as_bool())
-        .unwrap_or(false); // defaults to false if not present
+    let quarantine = gate.get("quarantine").and_then(|q| q.as_bool()).unwrap_or(false); // defaults to false if not present
 
     assert!(
         quarantine,
@@ -157,7 +153,8 @@ fn published_crate_count_gate_has_quarantine_enabled() {
 fn published_crate_count_gate_has_appropriate_timeout() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -165,7 +162,8 @@ fn published_crate_count_gate_has_appropriate_timeout() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let timeout = gate.get("timeout_seconds")
+    let timeout = gate
+        .get("timeout_seconds")
         .and_then(|t| t.as_i64())
         .expect("gate must have timeout_seconds field");
 
@@ -182,7 +180,8 @@ fn published_crate_count_gate_has_appropriate_timeout() {
 fn published_crate_count_gate_is_required() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -190,9 +189,7 @@ fn published_crate_count_gate_is_required() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let required = gate.get("required")
-        .and_then(|r| r.as_bool())
-        .unwrap_or(true); // defaults to true
+    let required = gate.get("required").and_then(|r| r.as_bool()).unwrap_or(true); // defaults to true
 
     assert!(
         required,
@@ -206,7 +203,8 @@ fn published_crate_count_gate_is_required() {
 fn published_crate_count_gate_has_ratchet_tags() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
@@ -214,13 +212,9 @@ fn published_crate_count_gate_has_ratchet_tags() {
     let gate = find_gate(gates, GATE_NAME)
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
-    let tags = gate.get("tags")
-        .and_then(|t| t.as_sequence())
-        .expect("gate must have tags field");
+    let tags = gate.get("tags").and_then(|t| t.as_sequence()).expect("gate must have tags field");
 
-    let tag_names: Vec<&str> = tags.iter()
-        .filter_map(|t| t.as_str())
-        .collect();
+    let tag_names: Vec<&str> = tags.iter().filter_map(|t| t.as_str()).collect();
 
     assert!(
         tag_names.contains(&"ratchet"),
@@ -256,24 +250,23 @@ fn published_crate_count_gate_has_ratchet_tags() {
 fn published_crate_count_gate_is_in_ci_gate_job_mapping() {
     let policy = load_gate_policy_yaml();
 
-    let workflow_integration = policy.get("workflow_integration")
+    let workflow_integration = policy
+        .get("workflow_integration")
         .expect("workflow_integration section not found in gate-policy.yaml");
 
-    let job_mapping = workflow_integration.get("job_mapping")
+    let job_mapping = workflow_integration
+        .get("job_mapping")
         .expect("job_mapping not found in workflow_integration section");
 
-    let ci_gate = job_mapping.get("ci-gate")
-        .expect("ci-gate job not found in job_mapping");
+    let ci_gate = job_mapping.get("ci-gate").expect("ci-gate job not found in job_mapping");
 
-    let gates = ci_gate.get("gates")
+    let gates = ci_gate
+        .get("gates")
         .expect("gates list not found in ci-gate job")
         .as_sequence()
         .expect("ci-gate.gates must be a sequence");
 
-    let gate_names: Vec<&str> = gates
-        .iter()
-        .filter_map(|v| v.as_str())
-        .collect();
+    let gate_names: Vec<&str> = gates.iter().filter_map(|v| v.as_str()).collect();
 
     assert!(
         gate_names.contains(&GATE_NAME),
@@ -289,12 +282,14 @@ fn published_crate_count_gate_is_in_ci_gate_job_mapping() {
 fn published_crate_count_gate_placement_in_merge_gate_tier() {
     let policy = load_gate_policy_yaml();
 
-    let gates = policy.get("gates")
+    let gates = policy
+        .get("gates")
         .expect("gates section not found")
         .as_sequence()
         .expect("gates must be a sequence");
 
-    let nested_lock_idx = gates.iter()
+    let nested_lock_idx = gates
+        .iter()
         .position(|g| {
             g.get("name")
                 .and_then(|n| n.as_str())
@@ -303,12 +298,10 @@ fn published_crate_count_gate_placement_in_merge_gate_tier() {
         })
         .expect("nested_lock_check gate must exist");
 
-    let published_crate_idx = gates.iter()
+    let published_crate_idx = gates
+        .iter()
         .position(|g| {
-            g.get("name")
-                .and_then(|n| n.as_str())
-                .map(|n| n == GATE_NAME)
-                .unwrap_or(false)
+            g.get("name").and_then(|n| n.as_str()).map(|n| n == GATE_NAME).unwrap_or(false)
         })
         .expect("published_crate_count gate must exist - see test_gate_exists_in_policy");
 
@@ -318,6 +311,7 @@ fn published_crate_count_gate_placement_in_merge_gate_tier() {
         "published_crate_count gate should be placed after nested_lock_check gate.\n\
          Expected: nested_lock_check (index {}) < published_crate_count (index {})\n\
          Gate order in the policy should match tier organization.",
-        nested_lock_idx, published_crate_idx
+        nested_lock_idx,
+        published_crate_idx
     );
 }
