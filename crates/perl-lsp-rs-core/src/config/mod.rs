@@ -444,7 +444,7 @@ impl WorkspaceConfig {
         const SEP: char = ';';
         #[cfg(not(windows))]
         const SEP: char = ':';
-        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+        value.split(SEP).map(str::trim).filter(|s| !s.is_empty()).map(ToString::to_string).collect()
     }
 
     /// Return the effective module-search-path, merging `PERL5LIB` paths with
@@ -453,21 +453,34 @@ impl WorkspaceConfig {
     /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
     /// returned list is identical to `self.include_paths`.
     pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
-        if !self.use_perl5lib || perl5lib_paths.is_empty() {
-            return self.include_paths.clone();
-        }
-        match self.perl5lib_precedence {
-            Perl5LibPrecedence::Prepend => {
-                let mut result = perl5lib_paths.to_vec();
-                result.extend_from_slice(&self.include_paths);
-                result
+        let mut combined = if !self.use_perl5lib || perl5lib_paths.is_empty() {
+            self.include_paths.clone()
+        } else {
+            match self.perl5lib_precedence {
+                Perl5LibPrecedence::Prepend => {
+                    let mut result = perl5lib_paths.to_vec();
+                    result.extend_from_slice(&self.include_paths);
+                    result
+                }
+                Perl5LibPrecedence::Append => {
+                    let mut result = self.include_paths.clone();
+                    result.extend_from_slice(perl5lib_paths);
+                    result
+                }
             }
-            Perl5LibPrecedence::Append => {
-                let mut result = self.include_paths.clone();
-                result.extend_from_slice(perl5lib_paths);
-                result
+        };
+
+        // Normalize by dropping empty/whitespace-only entries and de-duplicating while
+        // preserving the first occurrence. This keeps @INC search order deterministic while
+        // avoiding redundant filesystem probes and duplicate diagnostics context.
+        combined.retain(|entry| !entry.trim().is_empty());
+        let mut deduped = Vec::with_capacity(combined.len());
+        for path in combined {
+            if !deduped.contains(&path) {
+                deduped.push(path);
             }
         }
+        deduped
     }
 
     /// Refresh workspace-native build hints from the selected workspace root.
@@ -785,5 +798,33 @@ impl ProjectConfig {
         if let Some(ref prec) = self.perl.perl5lib_precedence {
             config.perl5lib_precedence = prec.clone();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Perl5LibPrecedence, WorkspaceConfig};
+
+    #[test]
+    fn parse_perl5lib_trims_and_drops_empty_entries() {
+        let parsed = WorkspaceConfig::parse_perl5lib(" lib ::vendor/lib:  :local/lib/perl5 ");
+        assert_eq!(parsed, vec!["lib", "vendor/lib", "local/lib/perl5"]);
+    }
+
+    #[test]
+    fn effective_include_paths_dedupes_preserving_first_precedence() {
+        let config = WorkspaceConfig {
+            include_paths: vec!["lib".to_string(), "vendor/lib".to_string(), "lib".to_string()],
+            use_perl5lib: true,
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+        let effective = config.effective_include_paths(&[
+            "vendor/lib".to_string(),
+            "custom/lib".to_string(),
+            "lib".to_string(),
+        ]);
+
+        assert_eq!(effective, vec!["vendor/lib", "custom/lib", "lib"]);
     }
 }
