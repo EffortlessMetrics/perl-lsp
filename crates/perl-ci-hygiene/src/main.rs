@@ -3387,7 +3387,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+    let todo_re = todo_token_regex()?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -3855,6 +3855,10 @@ fn collect_todo_hits(
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     let mut in_block_comment = false;
     has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut in_block_comment)
+}
+
+fn todo_token_regex() -> Result<Regex> {
+    Regex::new(r"(?i)\b(?:todo|fixme)\b").map_err(Into::into)
 }
 
 fn has_unlinked_todo_in_rust_line_with_block_context(
@@ -4391,7 +4395,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
         assert!(has_unlinked_todo_in_rust_line("// todo: investigate", &todo_re));
@@ -4410,7 +4414,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
@@ -4423,7 +4427,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_c_string_comment_markers() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in literal\";", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
@@ -4440,7 +4444,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_non_raw_string_comment_markers() -> Result<()> {
-        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = \"not a comment // TODO in literal\";",
@@ -4460,7 +4464,7 @@ mod tests {
 
     #[test]
     fn todo_detection_uses_word_boundaries() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_rust_line("// METHODOLOGY notes", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("// PREFIXME suffix", &todo_re));
@@ -4472,7 +4476,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_scans_only_block_comment_text() -> Result<()> {
-        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_rust_line(
             "/* tracked */ let s = \"TODO in code string\";",
@@ -4492,7 +4496,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = todo_token_regex()?;
         let mut in_block_comment = false;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
@@ -4519,7 +4523,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = todo_token_regex()?;
         let mut in_block_comment = false;
 
         assert!(!has_unlinked_todo_in_rust_line_with_block_context(
@@ -4544,7 +4548,7 @@ mod tests {
 
     #[test]
     fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
-        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
@@ -4581,7 +4585,7 @@ mod tests {
 
     #[test]
     fn perl_todo_detection_allows_comment_start_without_whitespace() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = todo_token_regex()?;
 
         assert!(has_unlinked_todo_in_perl_line("print# TODO: perl comment", &todo_re));
         assert!(!has_unlinked_todo_in_perl_line("my $s = '# TODO in string';", &todo_re));
