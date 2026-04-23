@@ -14,6 +14,74 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
+use std::path::Path;
+
+const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
+
+fn is_embedded_template_uri(uri: &str) -> bool {
+    let extension = url::Url::parse(uri)
+        .ok()
+        .and_then(|url| url.to_file_path().ok())
+        .and_then(|path| path.extension().and_then(|ext| ext.to_str()).map(str::to_owned))
+        .or_else(|| Path::new(uri).extension().and_then(|ext| ext.to_str()).map(str::to_owned));
+
+    extension.is_some_and(|ext| {
+        TEMPLATE_EXTENSIONS.iter().any(|candidate| candidate.eq_ignore_ascii_case(&ext))
+    })
+}
+
+fn is_perl_language_id(language_id: &str) -> bool {
+    matches!(language_id.to_ascii_lowercase().as_str(), "perl" | "perl5" | "perl-cpanfile")
+}
+
+#[cfg(feature = "incremental")]
+fn build_incremental_edit_set(
+    original_rope: &ropey::Rope,
+    lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
+) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
+    use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
+    use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
+
+    let mut working_rope = original_rope.clone();
+    let mut edit_set = IncrementalEditSet::new();
+    // Track the cumulative byte shift introduced by all prior edits so we can
+    // map evolving-document byte offsets back to original-document space.
+    //
+    // `apply_edits` / `apply_to_string` sort edits in *reverse* `start_byte`
+    // order and apply them against the *original* source string.  All byte
+    // offsets stored in `IncrementalEditSet` must therefore be in
+    // original-document space, not in the space of the progressively-mutated
+    // working rope.
+    let mut cumulative_shift: isize = 0;
+
+    for change in lsp_changes {
+        let range = change.range.as_ref()?;
+        // Measure byte positions against the evolving rope so that the
+        // character-to-byte mapping for this edit is correct (the working rope
+        // already reflects all preceding edits in this notification batch).
+        let (evolving_start, evolving_end) = range_to_bytes(&working_rope, range, PosEnc::Utf16);
+
+        // Map back to original-document space by undoing the byte shift that
+        // prior edits introduced into the working rope.
+        let orig_start = (evolving_start as isize - cumulative_shift) as usize;
+        let orig_end = (evolving_end as isize - cumulative_shift) as usize;
+        edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
+
+        // Apply this edit to the working rope so the next iteration's
+        // `range_to_bytes` / `range_to_chars` calls see the correct document.
+        let (start_char, end_char) = range_to_chars(&working_rope, range, PosEnc::Utf16);
+        if start_char <= end_char {
+            working_rope.remove(start_char..end_char);
+            working_rope.insert(start_char, &change.text);
+        }
+
+        // Accumulate the byte delta: positive for insertions, negative for deletions.
+        cumulative_shift +=
+            change.text.len() as isize - (evolving_end as isize - evolving_start as isize);
+    }
+
+    if edit_set.is_empty() { None } else { Some(edit_set) }
+}
 
 impl LspServer {
     /// Handle textDocument/didOpen notification.
@@ -46,8 +114,55 @@ impl LspServer {
             let version_i64 =
                 params.pointer("/textDocument/version").and_then(|v| v.as_i64()).unwrap_or(0);
             let version = i32::try_from(version_i64).unwrap_or(0);
+            let language_id =
+                params.pointer("/textDocument/languageId").and_then(|v| v.as_str()).unwrap_or("");
 
             tracing::debug!("Document opened: {}", uri);
+
+            // Template guard: Mojolicious/TT template files are frequently opened
+            // with an HTML/template language mode. Parsing those as plain Perl
+            // creates noisy diagnostics and poor startup UX.
+            if is_embedded_template_uri(uri) && !is_perl_language_id(language_id) {
+                tracing::debug!(
+                    "Skipping parse for template-like document {} (languageId={})",
+                    uri,
+                    language_id
+                );
+
+                let rope = ropey::Rope::from_str(text);
+                let line_starts = LineStartsCache::new_rope(&rope);
+                let normalized_uri = self.normalize_uri_key(uri);
+                self.documents.lock().insert(
+                    normalized_uri.clone(),
+                    DocumentState {
+                        rope,
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: Arc::new(AtomicU32::new(0)),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
+                    },
+                );
+
+                if let Err(e) = self.notify(
+                    "textDocument/publishDiagnostics",
+                    json!({
+                        "uri": uri,
+                        "diagnostics": []
+                    }),
+                ) {
+                    tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
+                }
+
+                return Ok(());
+            }
 
             // Large file guard: skip parsing for oversized files
             let file_size = text.len();
@@ -466,6 +581,8 @@ impl LspServer {
                 // handling of non-conforming clients in tests/custom integrations.
                 let version =
                     incoming_version.unwrap_or_else(|| doc_state.version.saturating_add(1));
+                let skip_template_parse = is_embedded_template_uri(uri)
+                    && doc_state.degradation_tier == DegradationTier::Minimal;
 
                 // Increment generation counter for this change
                 let next_gen = doc_state.generation.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
@@ -502,49 +619,49 @@ impl LspServer {
                 #[cfg(feature = "incremental")]
                 let incremental_edits_opt: Option<
                     perl_parser::incremental::incremental_edit::IncrementalEditSet,
-                > = {
-                    use perl_parser::incremental::incremental_edit::{
-                        IncrementalEdit, IncrementalEditSet,
-                    };
-                    let mut edit_set = IncrementalEditSet::new();
-                    let mut all_ranged = true;
-                    for change in &lsp_changes {
-                        if let Some(range) = change.range {
-                            // Convert UTF-16 line/char to byte offsets using the pre-change
-                            // line_starts (populated from the rope before apply_changes runs).
-                            let start_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.start.line,
-                                range.start.character,
-                            );
-                            let old_end_byte = doc_state.line_starts.position_to_offset_rope(
-                                &doc_state.rope,
-                                range.end.line,
-                                range.end.character,
-                            );
-                            edit_set.add(IncrementalEdit::new(
-                                start_byte,
-                                old_end_byte,
-                                change.text.clone(),
-                            ));
-                        } else {
-                            // Full-document replace — not a ranged edit; reset below
-                            tracing::trace!(
-                                "Full-document replace detected for {} — incremental edits not supported",
-                                uri
-                            );
-                            all_ranged = false;
-                            break;
-                        }
-                    }
-                    if all_ranged && !edit_set.is_empty() { Some(edit_set) } else { None }
-                };
+                > = build_incremental_edit_set(&doc_state.rope, &lsp_changes);
 
                 // Apply changes with UTF-16 encoding (as advertised in initialize)
                 apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
 
                 let text = doc.rope.to_string();
                 tracing::debug!("Document changed: {} (version {})", uri, version);
+
+                // Keep template documents that were intentionally skipped on didOpen
+                // in no-parse mode across subsequent didChange notifications.
+                if skip_template_parse {
+                    let line_starts = LineStartsCache::new_rope(&doc.rope);
+                    let normalized_uri = self.normalize_uri_key(uri);
+                    doc_state = DocumentState {
+                        rope: doc.rope.clone(),
+                        text: text.to_string(),
+                        version,
+                        ast: None,
+                        parse_errors: vec![],
+                        parent_map: ParentMap::default(),
+                        line_starts,
+                        generation: doc_state.generation.clone(),
+                        degradation_tier: DegradationTier::Minimal,
+                        #[cfg(feature = "incremental")]
+                        incremental_doc: None,
+                        #[cfg(feature = "incremental")]
+                        incremental_state: None,
+                    };
+                    documents.insert(normalized_uri.clone(), doc_state);
+                    drop(documents);
+
+                    if let Err(e) = self.notify(
+                        "textDocument/publishDiagnostics",
+                        json!({
+                            "uri": uri,
+                            "diagnostics": []
+                        }),
+                    ) {
+                        tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
+                    }
+
+                    return Ok(());
+                }
 
                 // Large file guard: skip parsing for oversized files
                 let file_size = text.len();
@@ -1174,6 +1291,73 @@ mod tests {
         let server =
             LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
         (server, buf)
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_uses_evolving_document_ranges() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        // Original text: "abcde" (all ASCII — one byte per character)
+        let original_str = "abcde";
+        let original = ropey::Rope::from_str(original_str);
+        let changes = vec![
+            // Edit 0: insert "X" at char 1 (between 'a' and 'b').
+            // After this edit the working document becomes "aXbcde".
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 1 },
+                }),
+                range_length: None,
+                text: "X".to_string(),
+            },
+            // Edit 1: replace chars 4..6 on the *post-insert* document "aXbcde".
+            // Characters 4..6 of "aXbcde" are "de".  In original-doc space that
+            // maps to bytes 3..5 (we subtract the +1 shift from the prior insert).
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 4 },
+                    end: Position { line: 0, character: 6 },
+                }),
+                range_length: None,
+                text: "YZ".to_string(),
+            },
+        ];
+
+        let edit_set =
+            build_incremental_edit_set(&original, &changes).expect("expected ranged edit set");
+        assert_eq!(edit_set.edits.len(), 2);
+
+        // Edit 0 is a pure insertion — original-space offsets are 1..1.
+        assert_eq!(edit_set.edits[0].start_byte, 1, "edit[0] start_byte must be in original space");
+        assert_eq!(
+            edit_set.edits[0].old_end_byte, 1,
+            "edit[0] old_end_byte must be in original space (insertion)"
+        );
+
+        // Edit 1 in evolving space was 4..6, but the prior insert added 1 byte,
+        // so in original-document space the range is 3..5 (the "de" suffix).
+        assert_eq!(
+            edit_set.edits[1].start_byte, 3,
+            "edit[1] start_byte must be mapped back to original-doc space"
+        );
+        assert_eq!(
+            edit_set.edits[1].old_end_byte, 5,
+            "edit[1] old_end_byte must be mapped back to original-doc space"
+        );
+
+        // Crucially, applying the edit set to the original source must produce
+        // the same document that the LSP client intended.  `apply_to_string`
+        // sorts edits in reverse start_byte order and applies them against the
+        // original string — this only works when all offsets are in
+        // original-document space.
+        //
+        // Expected sequence:
+        //   1. apply edit[1] (highest start_byte=3): "abcde"[3..5] → "YZ"  ⟹ "abcYZ"
+        //   2. apply edit[0] (start_byte=1):         "abcYZ"[1..1] ← "X"   ⟹ "aXbcYZ"
+        let result = edit_set.apply_to_string(original_str);
+        assert_eq!(result, "aXbcYZ", "apply_to_string must reproduce the client-intended document");
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
@@ -1848,6 +2032,63 @@ mod tests {
             "binary content via didChange should result in Minimal degradation tier"
         );
         assert!(doc.ast.is_none(), "parser must not be called on binary content via didChange");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_skips_parse_for_non_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "html",
+                "version": 1,
+                "text": "<div><%= $name %></div>"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "template with non-Perl language mode should stay in no-parse mode"
+        );
+        assert!(doc.ast.is_none(), "template with non-Perl languageId must skip parse");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_persists_across_did_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "html",
+                "version": 1,
+                "text": "<div><%= $name %></div>"
+            }
+        }))?;
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "<div><%= $title %></div>" }]
+        })))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didChange")?;
+        assert_eq!(
+            doc.degradation_tier,
+            DegradationTier::Minimal,
+            "template should remain in no-parse mode after didChange"
+        );
+        assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
         Ok(())
     }
 

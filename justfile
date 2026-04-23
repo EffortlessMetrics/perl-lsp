@@ -48,6 +48,7 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "release-history" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
@@ -63,13 +64,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
-# Compile-only gate: catches integration-test and benchmark bit-rot without
-# incurring full test runtime (~30-45 s). Matches the workspace excludes used
-# by the rest of the CI gates (tree-sitter-perl, fuzz, archive are excluded
-# from the workspace Cargo.toml so --workspace picks only the 134 crates).
+# Compile-only gate: catches integration-test/benchmark bit-rot and also
+# validates feature-gated code paths without incurring full test runtime.
+# Matches the workspace excludes used by the rest of the CI gates
+# (tree-sitter-perl, fuzz, archive are excluded from Cargo.toml workspace).
 check-all-targets:
-    @echo "Compiling all targets (lib, bins, tests, benches) — bit-rot check..."
+    @echo "Compiling all targets (default features) — bit-rot check..."
     cargo check --workspace --all-targets --locked
+    @echo "Compiling all targets (all features) — deep verification check..."
+    cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
 # Fail if README.md has duplicate level-2 headings. Helps catch accidental
@@ -820,6 +823,7 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just ci-release-history && \
     just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
@@ -852,6 +856,10 @@ ci-gate:
 gates tier='merge-gate' *args='':
     @echo "🧾 Running gate runner (tier: {{tier}})..."
     cargo xtask gates --tier {{tier}} --receipt {{args}}
+
+# Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
+ci-release-history:
+    bash scripts/check_release_history.sh
 
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':

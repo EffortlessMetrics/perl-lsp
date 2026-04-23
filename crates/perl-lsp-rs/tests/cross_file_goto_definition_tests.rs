@@ -327,6 +327,71 @@ if (WIFEXITED(0)) {
     Ok(())
 }
 
+#[test]
+fn go_to_definition_on_require_imported_function_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Runtime.pm",
+        r#"package My::Runtime;
+use strict;
+use warnings;
+
+sub runtime_sum {
+    my (@nums) = @_;
+    my $total = 0;
+    $total += $_ for @nums;
+    return $total;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Runtime.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Runtime.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+require My::Runtime;
+My::Runtime->import('runtime_sum');
+
+my $result = runtime_sum(1, 2, 3);
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "runtime_sum(1, 2, 3)")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for require-imported function");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Runtime.pm") || uri.contains("My%2FRuntime.pm"),
+        "Definition should point to My/Runtime.pm, got: {}",
+        uri
+    );
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Test 3: XS bootstrap calls navigate to native `.xs` entry points
 // ---------------------------------------------------------------------------
@@ -2228,6 +2293,128 @@ $gc->base_method();
     Ok(())
 }
 
+/// Test D2: Deep CPAN-style module chain — 5-deep inheritance with
+/// `Catalyst::Plugin::Session::Store::DBIC::Encrypted` should resolve inherited
+/// methods from the root base class.
+#[test]
+fn go_to_definition_cross_file_deep_cpan_style_inheritance_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Catalyst/Component.pm",
+        r#"package Catalyst::Component;
+
+sub component_method {
+    my ($self) = @_;
+    return "from Catalyst::Component";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin.pm",
+        r#"package Catalyst::Plugin;
+use parent 'Catalyst::Component';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session.pm",
+        r#"package Catalyst::Plugin::Session;
+use parent 'Catalyst::Plugin';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store.pm",
+        r#"package Catalyst::Plugin::Session::Store;
+use parent 'Catalyst::Plugin::Session';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC;
+use parent 'Catalyst::Plugin::Session::Store';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+use parent 'Catalyst::Plugin::Session::Store::DBIC';
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in [
+        "lib/Catalyst/Component.pm",
+        "lib/Catalyst/Plugin.pm",
+        "lib/Catalyst/Plugin/Session.pm",
+        "lib/Catalyst/Plugin/Session/Store.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+    ] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+
+my $store = Catalyst::Plugin::Session::Store::DBIC::Encrypted->new();
+$store->component_method();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for deep CPAN-style inheritance goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected deep CPAN-style inheritance goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("Catalyst/Component.pm"),
+        "Deep CPAN-style inheritance: definition should point to Catalyst/Component.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
 /// Test E: `use parent -norequire` variant — method resolves correctly
 #[test]
 fn go_to_definition_cross_file_use_parent_norequire() -> TestResult {
@@ -2446,6 +2633,72 @@ print My::Config::MAX_RETRIES;
     assert!(
         uri.contains("My/Config.pm") || uri.contains("My%2FConfig.pm"),
         "Definition for My::Config::PI should point to My/Config.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test: issue #3476 — require Module; Module->import('sym') bareword goto-def
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_require_manual_import_bareword_navigates_to_exporter_sub() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Exporter.pm",
+        r#"package My::Exporter;
+use strict;
+use warnings;
+
+sub greet {
+    return "hello";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Exporter.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Exporter.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+
+require My::Exporter;
+My::Exporter->import('greet');
+my $value = greet();
+"#;
+    let caller_uri = workspace.uri("main.pl");
+    harness.open(&caller_uri, caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "greet()")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": caller_uri},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for require/manual import bareword");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Exporter.pm") || uri.contains("My%2FExporter.pm"),
+        "Definition should point to My/Exporter.pm, got: {uri}"
     );
 
     Ok(())
