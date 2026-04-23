@@ -3355,7 +3355,9 @@ fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
 
 fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
     users_name_path.captures_iter(line).any(|captures| {
-        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("name"))
+        captures.get(1).is_some_and(|name| {
+            !matches!(name.as_str().to_ascii_lowercase().as_str(), "name" | "user" | "shared")
+        })
     })
 }
 
@@ -4373,6 +4375,14 @@ mod tests {
 
         assert!(!has_machine_specific_users_path(
             "Template: /Users/Name/project",
+            &users_name_path,
+        ));
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/user/project",
+            &users_name_path,
+        ));
+        assert!(!has_machine_specific_users_path(
+            "Shared storage: /Users/Shared/build-cache",
             &users_name_path,
         ));
         assert!(has_machine_specific_users_path(
