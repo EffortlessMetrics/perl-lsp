@@ -118,7 +118,18 @@ impl IncrementalEditSet {
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            result.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+            let start = edit.start_byte.min(result.len());
+            let end = edit.old_end_byte.min(result.len());
+
+            if start > end {
+                continue;
+            }
+
+            if !result.is_char_boundary(start) || !result.is_char_boundary(end) {
+                continue;
+            }
+
+            result.replace_range(start..end, &edit.new_text);
         }
 
         result
