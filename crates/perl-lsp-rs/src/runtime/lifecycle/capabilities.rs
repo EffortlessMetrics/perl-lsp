@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -198,15 +198,22 @@ impl LspServer {
             if let Some(workspace_folders) =
                 params.get("workspaceFolders").and_then(|f| f.as_array())
             {
+                let folder_uris = extract_workspace_folder_uris(workspace_folders);
                 let mut folders = self.workspace_folders.lock();
-                for uri in extract_workspace_folder_uris(workspace_folders) {
+                for uri in &folder_uris {
                     tracing::debug!(uri, "Initialized with workspace folder");
                     let mut folder =
                         super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
-                    if let Some(path) = super::super::source_path_from_uri(&uri) {
+                    if let Some(path) = super::super::source_path_from_uri(uri) {
                         folder = folder.with_path(path);
                     }
                     folders.push(folder);
+                }
+                if let Some(first_uri) = folder_uris.first() {
+                    // Some clients only send workspaceFolders (no rootUri/rootPath).
+                    // Seed root_path from the first folder so module resolution behaves
+                    // consistently in those integrations.
+                    self.set_root_uri(first_uri);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
@@ -412,8 +419,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
     use serde_json::json;
 
     #[test]
@@ -489,5 +496,27 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_sets_root_from_workspace_folders_when_root_uri_absent(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let uri = url::Url::from_directory_path(temp.path())
+            .map_err(|()| std::io::Error::other("failed to build folder URI"))?
+            .to_string();
+
+        let params = json!({
+            "workspaceFolders": [{ "uri": uri, "name": "tmp" }]
+        });
+
+        server.handle_initialize(Some(params))?;
+
+        assert!(
+            server.root_path.lock().is_some(),
+            "workspaceFolders-only initialize should still set root path"
+        );
+        Ok(())
     }
 }
