@@ -74,6 +74,10 @@ pub fn extract_workspace_folder_change(event: &Value) -> WorkspaceFolderChange {
 /// This keeps behavior deterministic across absolute POSIX and Windows-style paths.
 #[must_use]
 pub fn root_path_to_file_uri(root_path: &str) -> String {
+    if root_path.starts_with("file://") {
+        return root_path.to_string();
+    }
+
     let path = std::path::Path::new(root_path);
     url::Url::from_file_path(path).map_or_else(
         |_| {
@@ -135,5 +139,11 @@ mod tests {
     fn converts_legacy_root_path_to_file_uri() {
         let uri = root_path_to_file_uri("/legacy/workspace");
         assert_eq!(uri, "file:///legacy/workspace");
+    }
+
+    #[test]
+    fn preserves_file_uri_root_path_input() {
+        let uri = root_path_to_file_uri("file:///already/uri");
+        assert_eq!(uri, "file:///already/uri");
     }
 }
