@@ -22,6 +22,7 @@ Choose the path that matches what you are trying to do:
 | Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
+| Decide where a doc belongs in Diataxis | [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md) |
 
 ## Documentation Map
 
@@ -57,6 +58,7 @@ Authoritative descriptions of configuration, architecture, commands, and feature
 - [LSP Features](reference/LSP_FEATURES.md)
 - [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md)
 - [API Documentation Standards](reference/API_DOCUMENTATION_STANDARDS.md)
+- [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md)
 - [FAQ](reference/FAQ.md)
 - [Parser Feature Matrix](reference/PARSER_FEATURE_MATRIX.md)
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md)
