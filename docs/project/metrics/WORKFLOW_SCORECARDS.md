@@ -56,7 +56,8 @@ workflow layer exists to answer the narrower product question:
 
 ## Current Scope
 
-The schema and fixture matrix land before a full measured emitter. That keeps
-the contract honest: the workflow inventory is executable today, the current
-component rows are backed by exact scenario assertions today, and the broader
-UX scorecard can expand only when those stronger assertions exist.
+`docs/project/status/editor_ux.json` now upgrades itself from a planning
+scaffold to a measured snapshot whenever `.ci/metrics/editor_ux.json` is
+available (for example after `cargo xtask metrics lsp-stats --json`). Missing
+values still remain `planned`, so the receipt reflects exactly what has
+instrumentation coverage versus what is still qualitative.

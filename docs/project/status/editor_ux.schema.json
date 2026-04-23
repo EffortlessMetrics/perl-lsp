@@ -18,7 +18,7 @@
     },
     "receipt_kind": {
       "type": "string",
-      "const": "planning_scaffold"
+      "enum": ["planning_scaffold", "measured_snapshot"]
     },
     "scorecard": {
       "type": "string",
@@ -102,6 +102,14 @@
           },
           "owner": {
             "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "minimum": 0
+          },
+          "measured_at": {
+            "type": ["string", "null"],
+            "format": "date-time"
           }
         },
         "additionalProperties": false
