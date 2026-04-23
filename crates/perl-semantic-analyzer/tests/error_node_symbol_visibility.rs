@@ -195,8 +195,8 @@ fn variables_around_missing_rhs_are_visible() -> Result<(), Box<dyn std::error::
 /// plus a truncated postfix chain should still allow downstream symbol
 /// extraction to proceed.
 #[test]
-fn mixed_unclosed_block_and_partial_error_still_extracts_symbols(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn mixed_unclosed_block_and_partial_error_still_extracts_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub foo {
     my $inside = 1;
