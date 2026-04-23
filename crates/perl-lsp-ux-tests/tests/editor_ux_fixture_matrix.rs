@@ -65,10 +65,37 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
 
     let workflows =
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
+    assert!(!workflows.is_empty(), "workflows must contain at least one scenario");
 
     let mut scenarios_in_matrix = BTreeSet::new();
     let mut component_metrics_exercised = BTreeSet::new();
+    let mut workflow_ids = BTreeSet::new();
     for workflow in workflows {
+        let workflow_id =
+            workflow.get("id").and_then(Value::as_str).context("workflow missing id")?;
+        assert!(
+            !workflow_id.trim().is_empty(),
+            "workflow id must not be blank for scenario entry: {workflow:?}"
+        );
+        assert!(
+            workflow_ids.insert(workflow_id.to_string()),
+            "workflow id `{workflow_id}` must be unique"
+        );
+        workflow
+            .get("subsystem_owner")
+            .and_then(Value::as_str)
+            .filter(|owner| !owner.trim().is_empty())
+            .with_context(|| format!("workflow `{workflow_id}` missing subsystem_owner"))?;
+        workflow
+            .get("ci_tier")
+            .and_then(Value::as_str)
+            .filter(|tier| !tier.trim().is_empty())
+            .with_context(|| format!("workflow `{workflow_id}` missing ci_tier"))?;
+        workflow
+            .get("user_journey")
+            .and_then(Value::as_str)
+            .filter(|journey| !journey.trim().is_empty())
+            .with_context(|| format!("workflow `{workflow_id}` missing user_journey"))?;
         let scenario_file = workflow
             .get("scenario_file")
             .and_then(Value::as_str)
