@@ -2,9 +2,11 @@
 
 **Date:** 2026-04-23
 
-Sonnet (and Opus) are expensive. Haiku 4.5 is close enough to Sonnet 4 on the kind of work that dominates agent throughput — mechanical, well-specified, pattern-matching tasks — that defaulting to Sonnet is leaving money on the table.
+Sonnet (and Opus) are expensive. Haiku 4.5 is close enough to **Sonnet 4** (the prior generation, which did trustable work across this project) in performance on the kind of work that dominates agent throughput — mechanical, well-specified, pattern-matching tasks — that defaulting to the current Sonnet for all work is leaving money on the table.
 
-Empirically: Haiku 4.5 ≈ Sonnet 4 for mechanical work and is easily better than Sonnet 3.5.
+Empirically: Haiku 4.5 performs close to Sonnet 4 (the prior-gen model that shipped reliable work) and is easily better than Sonnet 3.5. It is NOT the same as current Sonnet 4.6 on hard reasoning, and that's the point — Haiku is the right tool for the large class of work that was already adequately served by Sonnet 4.
+
+**Critical boundary: this assumes the work is properly pointed and scoped.** Haiku succeeds on mechanical work when the prompt is narrow, the rules are explicit, and the escape hatch to Sonnet is clean. A Haiku agent given an open-ended "go fix this bug" will underperform. A Haiku agent given "apply the `if let` refactor per clippy::single_match guidance at file:line" will match Sonnet 4's output at a fraction of the cost.
 
 ## When Haiku is the right model
 
@@ -62,7 +64,9 @@ Gap analyses, forensics, policy writing (like this doc) — Sonnet for divergent
 
 ## The policy
 
-**Default to Haiku. Escalate to Sonnet when the task involves novel reasoning, cross-file judgment, or semantic claims about external systems (Perl, LSP spec, etc.).**
+**Default to Haiku for narrowly-scoped mechanical work. Escalate to Sonnet when the task involves novel reasoning, cross-file judgment, or semantic claims about external systems (Perl, LSP spec, etc.).**
+
+**Scope tightly.** Haiku's performance advantage comes from a specific, well-bounded prompt. "Fix the clippy error on line 24" succeeds; "review this PR for issues" requires Sonnet. The right test before dispatching Haiku: can the task be described as a 2-3 sentence rule the agent applies? If yes, Haiku. If the task requires judgment about what rule to apply, that's Sonnet work.
 
 **Compile successful Sonnet reasoning into Haiku policies.** Every time Sonnet solves a failure mode, extract the pattern into a compiled rule. Future occurrences run through Haiku at a fraction of the cost.
 
@@ -101,6 +105,8 @@ Reserve `sonnet` for:
 ## The broader point
 
 Haiku 4.5 is good enough that the design question changes from "can Haiku handle this?" to "what pattern am I escalating to Sonnet for, and why?" Most agent work is mechanical. Most mechanical work is Haiku work.
+
+Sonnet and Opus are still useful — irreplaceable on novel reasoning, multi-file architecture judgment, synthesis across divergent inputs, and the kind of cross-check that catches a wrong Perl-semantics claim or an off-by-one coordinate bug. But **if we're doing basic documentation edits, formatting, mechanical refactors, label management, status rollups — Haiku handles it like it's nothing.** Reserve the expensive models for the work that genuinely needs their reasoning surface.
 
 ---
 
