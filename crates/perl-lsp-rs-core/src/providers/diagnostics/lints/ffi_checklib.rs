@@ -123,6 +123,20 @@ fn collect_checklib_arguments(args: &[Node]) -> (Vec<String>, Vec<String>) {
         index += 1;
     }
 
+    for arg in args {
+        if let NodeKind::HashLiteral { pairs } = &arg.kind {
+            for (key, value) in pairs {
+                if let Some(key) = literal_text(key) {
+                    match key.as_str() {
+                        "lib" => libs.extend(extract_literal_strings(value)),
+                        "libpath" => libpaths.extend(extract_literal_strings(value)),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
     dedup_strings(&mut libs);
     dedup_strings(&mut libpaths);
     (libs, libpaths)
@@ -374,6 +388,34 @@ mod tests {
         assert!(
             diags[0].message.contains("ffi_checklib_missing_3574"),
             "expected the missing library to be named in the diagnostic"
+        );
+    }
+
+    #[test]
+    fn hash_literal_arguments_are_checked_for_missing_libraries() {
+        let source = "use FFI::CheckLib;\nfind_lib({ lib => 'ffi_checklib_missing_3574_hash' });\n";
+
+        let diags = diagnostics_for(source);
+        assert!(
+            diags.iter().any(|d| d.message.contains("ffi_checklib_missing_3574_hash")),
+            "expected missing-library diagnostic for hash-literal arguments, got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn hash_literal_libpath_array_suppresses_missing_library() {
+        let tempdir = tempdir().unwrap();
+        write_library(tempdir.path(), "ffi_checklib_present_3574_hash");
+
+        let source = format!(
+            "use FFI::CheckLib;\nfind_lib({{ lib => 'ffi_checklib_present_3574_hash', libpath => ['{}'] }});\n",
+            tempdir.path().display()
+        );
+
+        let diags = diagnostics_for(&source);
+        assert!(
+            diags.is_empty(),
+            "expected no diagnostics for hash-literal libpath, got: {diags:?}"
         );
     }
 
