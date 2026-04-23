@@ -26,6 +26,7 @@ perllsp --health
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
+| Eclipse | configure `perllsp --stdio` in Wild Web Developer/LSP4E | [docs/EDITORS/ECLIPSE_SETUP.md](../EDITORS/ECLIPSE_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 
@@ -50,6 +51,11 @@ require('lspconfig').perl_lsp.setup({
 
 Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
 editor-specific guide has the full snippets for both.
+
+### Eclipse
+
+Use Wild Web Developer or LSP4E and register `perllsp` with the `--stdio`
+argument, then map it to Perl file types.
 
 ### Helix
 
