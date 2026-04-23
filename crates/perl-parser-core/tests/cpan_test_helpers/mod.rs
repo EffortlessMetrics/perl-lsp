@@ -10,6 +10,15 @@ pub fn parse(source: &str) -> perl_parser_core::Node {
     must(parser.parse())
 }
 
+/// Parse the given source and return both the AST and any parser diagnostics.
+fn parse_with_diagnostics(source: &str) -> (Node, String, bool) {
+    let mut parser = Parser::new(source);
+    let ast = must(parser.parse());
+    let diagnostics = format!("{:?}", parser.get_errors());
+    let has_diagnostics = !parser.get_errors().is_empty();
+    (ast, diagnostics, has_diagnostics)
+}
+
 /// Walk the AST recursively and return the kind_name of the first error or
 /// missing node found, or `None` if the tree is clean.
 fn find_first_error(node: &Node) -> Option<&'static str> {
@@ -51,22 +60,32 @@ pub fn assert_clean_parse(source: &str) {
 /// This is the inverse of `assert_clean_parse` — it verifies that the parser
 /// correctly reports an error for malformed input.
 pub fn assert_has_error(source: &str, needle: &str) {
-    let ast = parse(source);
+    let (ast, diagnostics, has_diagnostics) = parse_with_diagnostics(source);
     let sexp = ast.to_sexp();
     let sexp_lower = sexp.to_lowercase();
     let needle_lower = needle.to_lowercase();
+    let diagnostics_lower = diagnostics.to_lowercase();
 
-    // First verify there IS an error node somewhere using AST walk.
+    // First verify there IS an error signal either in AST error nodes or
+    // parser diagnostics from recovery paths (e.g., inserted closers).
     let has_any_error = find_first_error(&ast).is_some();
-    assert!(has_any_error, "Expected an error node for source:\n{}\n\nsexp:\n{}", source, sexp,);
-
-    // Then verify the needle appears (case-insensitive) in the sexp.
     assert!(
-        sexp_lower.contains(&needle_lower),
-        "Expected error containing '{}' for source:\n{}\n\nsexp:\n{}",
+        has_any_error || has_diagnostics,
+        "Expected an error signal for source:\n{}\n\nsexp:\n{}\n\ndiagnostics:\n{}",
+        source,
+        sexp,
+        diagnostics,
+    );
+
+    // Then verify the needle appears (case-insensitive) in either AST output
+    // or parser diagnostics.
+    assert!(
+        sexp_lower.contains(&needle_lower) || diagnostics_lower.contains(&needle_lower),
+        "Expected error containing '{}' for source:\n{}\n\nsexp:\n{}\n\ndiagnostics:\n{}",
         needle,
         source,
         sexp,
+        diagnostics,
     );
 }
 
