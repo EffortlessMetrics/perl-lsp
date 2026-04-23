@@ -211,7 +211,7 @@ fn test_restart_frame_always_fails_with_message() -> Result<(), Box<dyn std::err
     let response = adapter.handle_request(1, "restartFrame", None);
     let msg = assert_response_message(response, "restartFrame");
     assert!(msg.is_some(), "restartFrame must include an error message");
-    let msg = msg.unwrap();
+    let msg = msg.ok_or("restartFrame must include an error message")?;
     assert!(
         msg.contains("Perl") || msg.contains("stack frame"),
         "message should explain why restartFrame is unsupported: {msg}"
@@ -284,7 +284,7 @@ fn test_terminate_threads_always_fails_with_message() -> Result<(), Box<dyn std:
     let response = adapter.handle_request(1, "terminateThreads", None);
     let msg = assert_response_message(response, "terminateThreads");
     assert!(msg.is_some(), "terminateThreads must include an error message");
-    let msg = msg.unwrap();
+    let msg = msg.ok_or("terminateThreads must include an error message")?;
     assert!(
         msg.contains("thread") || msg.contains("Perl"),
         "message should explain threading limitation: {msg}"
