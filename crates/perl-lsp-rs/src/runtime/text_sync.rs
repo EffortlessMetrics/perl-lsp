@@ -2119,6 +2119,30 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_template_file_guard_parses_mojolicious_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/index.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "mojolicious",
+                "version": 1,
+                "text": "% my $title = 'Hello';"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(
+            doc.ast.is_some(),
+            "template with mojolicious languageId should be parsed as Perl"
+        );
+        Ok(())
+    }
+
     /// Semantic analyzer cache must accumulate at most one entry per document
     /// version across multiple hover calls at different offsets.
     ///
