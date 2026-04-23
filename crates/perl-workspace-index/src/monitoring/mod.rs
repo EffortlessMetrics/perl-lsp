@@ -1,8 +1,24 @@
-//! Monitoring, limits, and lifecycle instrumentation primitives for workspace index coordination.
+//! Monitoring, limits, and lifecycle instrumentation primitives.
 //!
-//! This microcrate extracts coordinator support types from the main workspace index
-//! implementation so the indexing engine can stay focused on symbol extraction and
-//! query behavior.
+//! This module is the observability/control-plane side of workspace indexing:
+//! it tracks state/phase transitions, budgets, and degradation signals while the
+//! core [`workspace`](crate::workspace) module focuses on symbol extraction.
+//!
+//! # Design split
+//!
+//! - **`workspace`** owns indexing data structures and query behavior.
+//! - **`monitoring`** owns metrics, limits, and lifecycle telemetry.
+//!
+//! Keeping these concerns separate avoids mixing mutation-heavy indexing logic
+//! with metrics/reporting code and gives downstream crates a small, doc-friendly
+//! surface for operations dashboards.
+//!
+//! # Main building blocks
+//!
+//! - [`IndexResourceLimits`] and [`IndexPerformanceCaps`] define hard/soft budgets.
+//! - [`IndexMetrics`] provides lock-free counters for parse storm detection.
+//! - [`IndexInstrumentation`] tracks aggregate state durations and transitions.
+//! - [`DegradationReason`] and [`ResourceKind`] classify graceful-degradation paths.
 
 use parking_lot::Mutex;
 use std::collections::HashMap;
