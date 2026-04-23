@@ -2487,3 +2487,115 @@ my $value = combine("a", "b");
 
     Ok(())
 }
+
+#[test]
+#[serial]
+fn bdd_mojolicious_embedded_template_reports_no_parse_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious embedded templates avoid Perl parse errors");
+
+    let app = r#"use Mojolicious::Lite;
+
+get '/' => sub {
+    my $c = shift;
+    $c->stash(title => 'BDD');
+    $c->render(template => 'index');
+};
+
+app->start;
+
+__DATA__
+@@ index.html.ep
+% my $name = 'Perl';
+<h1><%= $title %> <%= $name %></h1>
+"#;
+
+    scenario.given("a Mojolicious::Lite app with an __DATA__ template section");
+    let (mut harness, workspace) = setup_workspace(&[("app.pl", app)])?;
+    let uri = workspace.uri("app.pl");
+    harness.open(&uri, app)?;
+    harness.barrier();
+
+    scenario.when("requesting pull diagnostics for the app file");
+    let report = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the embedded template does not produce parse-error diagnostics");
+    let parse_errors = diagnostic_items(&report)
+        .iter()
+        .filter(|diag| diag.get("code").and_then(Value::as_str) == Some("PL001"))
+        .count();
+    assert_eq!(
+        parse_errors, 0,
+        "Mojolicious __DATA__ templates should not be parsed as Perl code; report={report:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_mojolicious_dashed_route_resolves_to_nested_controller_definition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious dashed routes resolve to nested controllers");
+
+    let app = r##"package MyApp;
+use Mojo::Base 'Mojolicious';
+
+sub startup {
+    my $self = shift;
+    my $r = $self->routes;
+    $r->get('/admin/users')->to('admin-user#list');
+}
+
+1;
+"##;
+
+    let controller = r#"package MyApp::Controller::Admin::User;
+use Mojo::Base 'Mojolicious::Controller';
+
+sub list {
+    return 'ok';
+}
+
+1;
+"#;
+
+    scenario.given("a nested controller and a Mojolicious route using a dashed target");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/MyApp.pm", app),
+        ("lib/MyApp/Controller/Admin/User.pm", controller),
+    ])?;
+
+    let app_uri = workspace.uri("lib/MyApp.pm");
+    let controller_uri = workspace.uri("lib/MyApp/Controller/Admin/User.pm");
+
+    harness.open(&controller_uri, controller)?;
+    harness.open(&app_uri, app)?;
+    harness.wait_for_symbol("list", Some(&controller_uri), Duration::from_secs(10)).ok();
+
+    let (line, character) = find_position(app, "admin-user#list");
+
+    scenario.when("requesting go-to-definition on the dashed route target");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &app_uri,
+        line,
+        character,
+        &controller_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the nested controller file");
+    assert_eq!(
+        first_location_uri(&definition).as_deref(),
+        Some(controller_uri.as_str()),
+        "expected dashed route target to resolve to nested controller; got {definition:?}"
+    );
+
+    Ok(())
+}
