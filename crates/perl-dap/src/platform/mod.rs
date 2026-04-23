@@ -1,9 +1,18 @@
 //! Cross-platform utilities for Perl path resolution and environment setup.
+//!
+//! Shared toolchain detection functions (`resolve_perl_path_with_toolchain`,
+//! `detect_perlbrew_perl`, `detect_plenv_perl`, `resolve_perl_path`) are
+//! canonical in `perl_lsp_rs_core::platform` and re-exported here for
+//! backward compatibility.
 
 // Re-export format_command_args for backward compatibility (was in old platform re-export module)
 pub use crate::command_args::format_command_args;
 
-use anyhow::{Context, Result};
+// Re-export canonical toolchain detection from perl-lsp-rs-core (#4545)
+pub use perl_lsp_rs_core::platform::{
+    detect_perlbrew_perl, detect_plenv_perl, resolve_perl_path, resolve_perl_path_with_toolchain,
+};
+
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -119,17 +128,6 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
 /// 3. Walk PATH; on Windows, prefer Strawberry/ActiveState over msys/Git Bash perls.
 /// 4. If not on PATH, probe canonical OS install locations as a last resort.
 /// 5. If still not found, return [`PerlInterpreterResult::NotFound`] with searched paths.
-///
-/// # Examples
-///
-/// ```rust
-/// use perl_dap_platform::{find_perl_interpreter, PerlInterpreterResult};
-/// match find_perl_interpreter(None) {
-///     PerlInterpreterResult::FoundOnPath(p) => println!("Perl: {}", p.display()),
-///     PerlInterpreterResult::NotFound { searched } => eprintln!("Not found. Searched: {:?}", searched),
-///     _ => {}
-/// }
-/// ```
 pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterResult {
     // 1. Honour explicit config path — validate it exists, never silently fall back.
     if let Some(cfg) = configured_path.filter(|s| !s.is_empty()) {
@@ -172,16 +170,8 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     PerlInterpreterResult::NotFound { searched }
 }
 
-/// Resolve the perl binary path on the current platform.
-///
-/// Searches only the system `PATH`. For toolchain-aware resolution that
-/// also checks perlbrew and plenv, use [`resolve_perl_path_with_toolchain`].
-pub fn resolve_perl_path() -> Result<PathBuf> {
-    let path_env = env::var("PATH").context("PATH environment variable not set")?;
-    resolve_perl_path_from_path_env(&path_env)
-}
-
-pub(crate) fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf> {
+#[cfg(test)]
+fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
     for path_dir in path_env.split(PATH_SEPARATOR) {
         let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
         if perl_path.exists() && perl_path.is_file() {
@@ -190,97 +180,6 @@ pub(crate) fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf>
     }
 
     anyhow::bail!("perl binary not found on PATH. Please install Perl or add it to PATH.")
-}
-
-/// Resolve the Perl interpreter path, checking perlbrew and plenv before PATH.
-///
-/// Detection order:
-/// 1. perlbrew -- check PERLBREW_PERL + PERLBREW_ROOT env vars.
-/// 2. plenv -- check PLENV_VERSION + PLENV_ROOT env vars.
-/// 3. System PATH -- delegate to resolve_perl_path().
-///
-/// # Errors
-///
-/// Returns an error only when all strategies fail to find a Perl binary.
-pub fn resolve_perl_path_with_toolchain() -> Result<PathBuf> {
-    if let Some(path) = detect_perlbrew_perl() {
-        return Ok(path);
-    }
-    if let Some(path) = detect_plenv_perl() {
-        return Ok(path);
-    }
-    resolve_perl_path()
-}
-
-/// Detect the active Perl interpreter managed by perlbrew.
-///
-/// Reads `PERLBREW_PERL` for the version name and `PERLBREW_ROOT` (or
-/// `~/perl5/perlbrew` by default) for the installation root.
-///
-/// Returns `None` when env vars are absent or the binary path does not exist.
-pub fn detect_perlbrew_perl() -> Option<PathBuf> {
-    let version = env::var("PERLBREW_PERL").ok()?;
-    if version.is_empty() {
-        return None;
-    }
-    let root = perlbrew_root();
-    let perl_bin = root.join("perls").join(&version).join("bin").join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
-}
-
-/// Detect the active Perl interpreter managed by plenv.
-///
-/// Reads `PLENV_VERSION` for the version name and `PLENV_ROOT` (or
-/// `~/.plenv` by default) for the installation root.
-///
-/// Returns `None` when env vars are absent or the binary path does not exist.
-pub fn detect_plenv_perl() -> Option<PathBuf> {
-    let version = env::var("PLENV_VERSION").ok()?;
-    if version.is_empty() {
-        return None;
-    }
-    let root = plenv_root();
-    let perl_bin = root.join("versions").join(&version).join("bin").join(PERL_EXECUTABLE);
-    if perl_bin.exists() && perl_bin.is_file() { Some(perl_bin) } else { None }
-}
-
-/// Return the perlbrew root directory (`PERLBREW_ROOT` or `~/perl5/perlbrew`).
-fn perlbrew_root() -> PathBuf {
-    if let Ok(root) = env::var("PERLBREW_ROOT") {
-        if !root.is_empty() {
-            return PathBuf::from(root);
-        }
-    }
-    home_dir().join("perl5").join("perlbrew")
-}
-
-/// Return the plenv root directory (`PLENV_ROOT` or `~/.plenv`).
-fn plenv_root() -> PathBuf {
-    if let Ok(root) = env::var("PLENV_ROOT") {
-        if !root.is_empty() {
-            return PathBuf::from(root);
-        }
-    }
-    home_dir().join(".plenv")
-}
-
-/// Return the user home directory, falling back to the OS temp directory.
-///
-/// Checks `HOME` (Unix) then `USERPROFILE` (Windows) before falling back to
-/// [`std::env::temp_dir`]. The old fallback of `PathBuf::from("/tmp")` broke
-/// on Windows where `/tmp` does not exist.
-fn home_dir() -> PathBuf {
-    if let Ok(home) = env::var("HOME") {
-        if !home.is_empty() {
-            return PathBuf::from(home);
-        }
-    }
-    if let Ok(profile) = env::var("USERPROFILE") {
-        if !profile.is_empty() {
-            return PathBuf::from(profile);
-        }
-    }
-    std::env::temp_dir()
 }
 
 /// Normalize a file path for cross-platform compatibility.
@@ -476,9 +375,7 @@ mod tests {
 
     #[test]
     fn find_perl_interpreter_empty_config_falls_back_to_path_detection() {
-        // Empty string should be treated as "not configured"
         let result = find_perl_interpreter(Some(""));
-        // Should not return ConfiguredPath for empty string
         assert!(
             !matches!(result, PerlInterpreterResult::ConfiguredPath(_)),
             "empty config should fall back to path detection"
@@ -487,7 +384,6 @@ mod tests {
 
     #[test]
     fn find_perl_interpreter_none_config_performs_detection() {
-        // With no config, should return Found* or NotFound (never ConfiguredPath)
         let result = find_perl_interpreter(None);
         assert!(
             !matches!(result, PerlInterpreterResult::ConfiguredPath(_)),
@@ -497,12 +393,10 @@ mod tests {
 
     #[test]
     fn find_perl_interpreter_not_found_includes_searched_paths() {
-        // When configured path is broken, NotFound should list what was searched
         let result = find_perl_interpreter(Some("/absolutely/not/a/real/path/perl"));
         if let PerlInterpreterResult::NotFound { searched } = result {
             assert!(!searched.is_empty(), "searched list should not be empty");
         }
-        // If Perl is found on the system, the above test doesn't apply — that's fine
     }
 
     #[test]
@@ -525,40 +419,5 @@ mod tests {
             windows_perl_rank(active) < windows_perl_rank(msys),
             "ActiveState should rank better than msys perl"
         );
-    }
-
-    #[test]
-    fn home_dir_fallback_uses_temp_dir() {
-        // When both HOME and USERPROFILE are absent, home_dir() must return
-        // std::env::temp_dir() — not a hardcoded PathBuf::from("/tmp") which
-        // does not exist on Windows.
-        let original_home = std::env::var("HOME").ok();
-        let original_userprofile = std::env::var("USERPROFILE").ok();
-
-        // SAFETY: single-threaded test; no other threads reading these vars.
-        unsafe {
-            std::env::remove_var("HOME");
-            std::env::remove_var("USERPROFILE");
-        }
-
-        let result = home_dir();
-        let expected = std::env::temp_dir();
-
-        // Restore env vars.
-        unsafe {
-            if let Some(val) = original_home {
-                std::env::set_var("HOME", val);
-            }
-            if let Some(val) = original_userprofile {
-                std::env::set_var("USERPROFILE", val);
-            }
-        }
-
-        // The fallback must match std::env::temp_dir(), not a hardcoded path.
-        assert_eq!(
-            result, expected,
-            "home_dir() fallback should be std::env::temp_dir(), got {result:?}"
-        );
-        assert!(!result.as_os_str().is_empty(), "home_dir() must return a non-empty path");
     }
 }

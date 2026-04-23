@@ -74,7 +74,7 @@ pub fn detect_plenv_perl() -> Option<PathBuf> {
 /// # Errors
 ///
 /// Returns an error when perl cannot be found on PATH.
-fn resolve_perl_path() -> Result<PathBuf> {
+pub fn resolve_perl_path() -> Result<PathBuf> {
     let path_env = env::var("PATH").context("PATH environment variable not set")?;
     for path_dir in path_env.split(PATH_SEPARATOR) {
         let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
@@ -121,4 +121,57 @@ fn home_dir() -> PathBuf {
         }
     }
     std::env::temp_dir()
+}
+
+#[cfg(test)]
+#[allow(clippy::panic, unsafe_code)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn home_dir_fallback_uses_temp_dir() {
+        let original_home = std::env::var("HOME").ok();
+        let original_userprofile = std::env::var("USERPROFILE").ok();
+
+        // SAFETY: single-threaded test; no other threads reading these vars.
+        unsafe {
+            std::env::remove_var("HOME");
+            std::env::remove_var("USERPROFILE");
+        }
+
+        let result = home_dir();
+        let expected = std::env::temp_dir();
+
+        unsafe {
+            if let Some(val) = original_home {
+                std::env::set_var("HOME", val);
+            }
+            if let Some(val) = original_userprofile {
+                std::env::set_var("USERPROFILE", val);
+            }
+        }
+
+        assert_eq!(
+            result, expected,
+            "home_dir() fallback should be std::env::temp_dir(), got {result:?}"
+        );
+        assert!(!result.as_os_str().is_empty(), "home_dir() must return a non-empty path");
+    }
+
+    #[test]
+    fn resolve_perl_path_returns_existing_binary_or_error() {
+        match resolve_perl_path() {
+            Ok(path) => {
+                assert!(path.exists());
+                assert!(path.is_file());
+            }
+            Err(e) => {
+                let msg = format!("{e}");
+                assert!(
+                    msg.contains("perl") || msg.contains("PATH"),
+                    "error should mention perl/PATH: {msg}"
+                );
+            }
+        }
+    }
 }
