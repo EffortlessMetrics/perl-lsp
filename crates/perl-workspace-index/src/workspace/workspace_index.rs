@@ -3311,16 +3311,9 @@ impl IndexVisitor {
 fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     let joined = args.join(" ");
 
-    // Strip qw(...) wrapper and collect the inner tokens
-    let inner = if let Some(start) = joined.find("qw(") {
-        if let Some(end) = joined[start..].find(')') {
-            joined[start + 3..start + end].to_string()
-        } else {
-            joined.clone()
-        }
-    } else {
-        joined.clone()
-    };
+    // Strip qw(...) / qw/.../ / qw{...} wrappers and collect the inner tokens.
+    // Perl `qw` accepts paired delimiters () [] {} <> and arbitrary single-char delimiters.
+    let inner = extract_qw_inner_list(&joined).unwrap_or(joined);
 
     inner
         .split_whitespace()
@@ -3345,6 +3338,22 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
             }
         })
         .collect()
+}
+
+fn extract_qw_inner_list(input: &str) -> Option<String> {
+    let qw_pos = input.find("qw")?;
+    let rest = input[qw_pos + 2..].trim_start();
+    let open = rest.chars().next()?;
+    let close = match open {
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '<' => '>',
+        _ => open,
+    };
+    let body = &rest[open.len_utf8()..];
+    let end = body.find(close)?;
+    Some(body[..end].to_string())
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -4560,6 +4569,29 @@ Utils::process_data();
     }
 
     #[test]
+    fn test_index_dependency_via_use_parent_qw_slash_end_to_end() {
+        // Ensure alternate qw delimiters are recognized when indexing parent/base dependencies.
+        let index = WorkspaceIndex::new();
+
+        let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
+        index
+            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
+            .expect("indexing MyBase.pm");
+
+        let child_url = url::Url::parse("file:///test/workspace/child_qw.pl").unwrap();
+        index
+            .index_file(child_url, "package Child;\nuse parent qw/MyBase/;\n1;\n".to_string())
+            .expect("indexing child_qw.pl");
+
+        let dependents = index.find_dependents("MyBase");
+        assert!(
+            dependents.contains(&"file:///test/workspace/child_qw.pl".to_string()),
+            "child_qw.pl should be in dependents for MyBase, got: {:?}",
+            dependents
+        );
+    }
+
+    #[test]
     fn test_parser_produces_correct_args_for_use_parent() {
         // Regression for #2747: verify that the parser produces args=["'MyBase'"]
         // for `use parent 'MyBase'`, so extract_module_names_from_use_args strips
@@ -4613,6 +4645,21 @@ Utils::process_data();
     #[test]
     fn test_extract_module_names_qw_list() {
         let names = extract_module_names_from_use_args(&["qw(Foo::Bar Other::Base)".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_slash_delimiter() {
+        let names = extract_module_names_from_use_args(&["qw/Foo::Bar Other::Base/".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_brace_delimiter_with_flag() {
+        let names = extract_module_names_from_use_args(&[
+            "-norequire".to_string(),
+            "qw{Foo::Bar Other::Base}".to_string(),
+        ]);
         assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
     }
 
