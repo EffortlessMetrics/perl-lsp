@@ -228,7 +228,7 @@ fn format_range_preserves_lines_after_range() {
     let result = must(formatter.format_range(code, 1, 1));
 
     let lines: Vec<&str> = result.lines().collect();
-    assert_eq!(*lines.last().unwrap(), "line3");
+    assert_eq!(perl_tdd_support::must_some(lines.last().copied()), "line3");
 }
 
 #[test]
