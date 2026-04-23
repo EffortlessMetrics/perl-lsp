@@ -411,7 +411,7 @@ pub(super) fn collect_subsystem_test_counts(
     for (crate_name, test_count) in &per_crate_tests {
         // Find the subsystem for this crate
         let subsystem_str = crate_to_subsystem
-            .get(&serde_yaml_ng::Value::String(crate_name.clone()))
+            .get(serde_yaml_ng::Value::String(crate_name.clone()))
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
