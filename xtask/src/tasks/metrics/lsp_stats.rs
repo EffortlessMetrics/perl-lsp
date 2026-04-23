@@ -29,7 +29,8 @@ use crate::utils::project_root;
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
 use perl_corpus::gold::{
-    load_completion_gold_fixtures, load_goto_gold_fixtures, load_hover_gold_fixtures,
+    load_completion_gold_fixtures, load_gold_fixtures, load_goto_gold_fixtures,
+    load_hover_gold_fixtures,
 };
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -142,11 +143,14 @@ pub fn run_with_json(json: bool) -> Result<()> {
     let hover_fixtures = load_hover_gold_fixtures(&gold_root).unwrap_or_default();
     let goto_fixtures = load_goto_gold_fixtures(&gold_root).unwrap_or_default();
     let completion_fixtures = load_completion_gold_fixtures(&gold_root).unwrap_or_default();
+    let diagnostics_fixtures = load_gold_fixtures(&gold_root).unwrap_or_default();
 
     let hover_assertions: usize = hover_fixtures.iter().map(|f| f.hover_assertions.len()).sum();
     let goto_assertions: usize = goto_fixtures.iter().map(|f| f.goto_assertions.len()).sum();
     let completion_assertions: usize =
         completion_fixtures.iter().map(|f| f.completion_assertions.len()).sum();
+    let diagnostics_assertions: usize =
+        diagnostics_fixtures.iter().map(|f| f.expected.diagnostics.len()).sum();
 
     // Try to load a previous run receipt for pass-rate data
     let receipt_path = root.join(".ci").join("metrics").join("editor_ux.json");
@@ -159,6 +163,8 @@ pub fn run_with_json(json: bool) -> Result<()> {
         goto_assertions,
         completion_fixtures.len(),
         completion_assertions,
+        diagnostics_fixtures.len(),
+        diagnostics_assertions,
         last_run.as_ref(),
     );
 
@@ -236,6 +242,8 @@ fn print_table(
     goto_assertions: usize,
     completion_fixtures: usize,
     completion_assertions: usize,
+    diagnostics_fixtures: usize,
+    diagnostics_assertions: usize,
     last_run: Option<&LastRunMetrics>,
 ) {
     println!("\nEditor UX Scorecard (Phase 1)");
@@ -245,9 +253,11 @@ fn print_table(
     println!("{:<20} {:>10} {:>12}", "Hover", hover_fixtures, hover_assertions);
     println!("{:<20} {:>10} {:>12}", "Goto-Definition", goto_fixtures, goto_assertions);
     println!("{:<20} {:>10} {:>12}", "Completion", completion_fixtures, completion_assertions);
+    println!("{:<20} {:>10} {:>12}", "Diagnostics", diagnostics_fixtures, diagnostics_assertions);
     println!("{}", "-".repeat(44));
-    let total_f = hover_fixtures + goto_fixtures + completion_fixtures;
-    let total_a = hover_assertions + goto_assertions + completion_assertions;
+    let total_f = hover_fixtures + goto_fixtures + completion_fixtures + diagnostics_fixtures;
+    let total_a =
+        hover_assertions + goto_assertions + completion_assertions + diagnostics_assertions;
     println!("{:<20} {:>10} {:>12}", "TOTAL", total_f, total_a);
 
     if let Some(run) = last_run {
