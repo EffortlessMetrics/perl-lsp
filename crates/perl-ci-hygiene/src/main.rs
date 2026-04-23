@@ -4324,22 +4324,20 @@ fn rust_raw_string_state_after_line(
             continue;
         }
 
-        if bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
             in_string = true;
             i += 2;
             continue;
         }
 
-        if bytes[i] == b'r' || (bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'r') {
-            let mut j = i + 1;
-            if bytes[i] == b'b' {
-                j += 1;
-            }
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
             while j < bytes.len() && bytes[j] == b'#' {
                 j += 1;
             }
             if j < bytes.len() && bytes[j] == b'"' {
-                raw_hashes = Some(j.saturating_sub(i + if bytes[i] == b'b' { 2 } else { 1 }));
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
                 i = j + 1;
                 continue;
             }
@@ -4680,6 +4678,31 @@ mod tests {
         ));
         assert!(!has_unlinked_todo_in_rust_line_with_state(
             "// TODO in multiline raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_c_raw_string_content() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = cr#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline C raw literal",
             &todo_re,
             &mut raw_state,
         ));
