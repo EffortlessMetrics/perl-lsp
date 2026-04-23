@@ -362,12 +362,32 @@
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "diagnostics_lifecycle_editing",
+      "scenario_file": "ux_scenario_19_diagnostics_lifecycle.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "introduce a syntax error then fix it and verify publishDiagnostics clears",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "broken content yields diagnostics",
+        "fixed content clears diagnostics for the same document"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
-  ],
-  "confidence_signals": [
-    "manual_editor_smoke",
-    "first_five_minutes_harness",
-    "issue_burndown_regression_guard"
   ]
 }

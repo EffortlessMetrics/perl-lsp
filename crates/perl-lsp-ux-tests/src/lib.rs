@@ -45,11 +45,13 @@
 )]
 
 pub mod client;
+pub mod diagnostics;
 pub mod env;
 pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
+pub use diagnostics::DiagnosticsTracker;
 pub use env::{PathGuard, RestrictedPath};
 pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
@@ -183,6 +185,13 @@ impl UxHarness {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
         self.client.did_open(&uri, content)
+    }
+
+    /// Apply a full-document change and update the workspace copy.
+    pub fn change_file_full(&self, relative_path: &str, content: &str, version: i32) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_change_full(&uri, content, version)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -381,24 +390,29 @@ impl UxHarness {
         timeout: std::time::Duration,
     ) -> Vec<Value> {
         let uri = self.workspace.uri(relative_path);
-        let deadline = std::time::Instant::now() + timeout;
-        loop {
-            {
-                let events = self.client.peek_events();
-                for ev in &events {
-                    if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
-                        if diag_uri == &uri {
-                            return diagnostics.clone();
-                        }
-                    }
-                }
-            }
-            if std::time::Instant::now() >= deadline {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        Vec::new()
+        DiagnosticsTracker::wait_for_uri_matching(
+            || self.client.peek_events(),
+            &uri,
+            timeout,
+            |_| true,
+        )
+        .unwrap_or_default()
+    }
+
+    /// Wait for diagnostics to become empty for a file (debt-cleared UX state).
+    pub fn wait_for_no_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> bool {
+        let uri = self.workspace.uri(relative_path);
+        DiagnosticsTracker::wait_for_uri_matching(
+            || self.client.peek_events(),
+            &uri,
+            timeout,
+            |diagnostics| diagnostics.is_empty(),
+        )
+        .is_some()
     }
 
     /// Request go-to-definition.
