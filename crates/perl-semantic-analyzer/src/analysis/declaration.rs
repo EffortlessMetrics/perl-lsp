@@ -1289,6 +1289,7 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 matches!(
                     node.kind,
                     NodeKind::Variable { .. }
+                        | NodeKind::Identifier { .. }
                         | NodeKind::FunctionCall { .. }
                         | NodeKind::Subroutine { .. }
                         | NodeKind::MethodCall { .. }
@@ -1770,6 +1771,17 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             })
         }
         NodeKind::FunctionCall { name, .. } => {
+            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
+                (name[..idx].to_string(), name[idx + 2..].to_string())
+            } else {
+                (
+                    find_import_source(ast, name).unwrap_or_else(|| current_pkg.to_string()),
+                    name.clone(),
+                )
+            };
+            Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
+        }
+        NodeKind::Identifier { name } => {
             let (pkg, bare) = if let Some(idx) = name.rfind("::") {
                 (name[..idx].to_string(), name[idx + 2..].to_string())
             } else {

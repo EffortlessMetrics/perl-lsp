@@ -55,6 +55,32 @@ croak("error");
 }
 
 #[test]
+fn use_import_qw_bareword_resolves_pkg() {
+    let code = r#"use Carp qw(croak);
+my $err = croak;
+"#;
+    let pkg = parse_and_symbol_at(code, "croak;");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("Carp"),
+        "bareword croak should resolve to Carp via use+qw import, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn use_import_tag_bareword_resolves_pkg() {
+    let code = r#"use POSIX qw(:sys_wait_h);
+my $ok = WIFEXITED;
+"#;
+    let pkg = parse_and_symbol_at(code, "WIFEXITED;");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("POSIX"),
+        "bareword WIFEXITED should resolve to POSIX via tag import, got: {pkg:?}"
+    );
+}
+
+#[test]
 fn require_import_multiple_symbols_both_resolve() {
     let code = r#"require My::Utils;
 My::Utils->import('alpha', 'beta');
