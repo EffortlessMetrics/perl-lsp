@@ -115,8 +115,7 @@ impl IncrementalParser {
         // half-open range so overlap checks still detect impacted nodes.
         let normalized_end = if start == end { end.saturating_add(1) } else { end };
 
-        self.changed_regions.push((start, normalized_end));
-        self.merge_overlapping_regions();
+        self.insert_and_merge_region(start, normalized_end);
     }
 
     /// Check if a node needs reparsing based on changed regions.
@@ -127,13 +126,24 @@ impl IncrementalParser {
             if node_start <= node_end { (node_start, node_end) } else { (node_end, node_start) };
 
         if node_start == node_end {
+            let idx = self.changed_regions.partition_point(|(start, _)| *start <= node_start);
             return self
                 .changed_regions
-                .iter()
-                .any(|(start, end)| node_start >= *start && node_start < *end);
+                .get(idx.saturating_sub(1))
+                .is_some_and(|(start, end)| node_start >= *start && node_start < *end);
         }
 
-        self.changed_regions.iter().any(|(start, end)| node_start < *end && node_end > *start)
+        let mut idx = self.changed_regions.partition_point(|(_, end)| *end <= node_start);
+        while let Some((start, end)) = self.changed_regions.get(idx) {
+            if *start >= node_end {
+                return false;
+            }
+            if node_start < *end && node_end > *start {
+                return true;
+            }
+            idx += 1;
+        }
+        false
     }
 
     /// Clear all changed regions.
@@ -143,27 +153,37 @@ impl IncrementalParser {
         self.changed_regions.clear();
     }
 
-    fn merge_overlapping_regions(&mut self) {
-        if self.changed_regions.len() < 2 {
-            return;
-        }
+    fn insert_and_merge_region(&mut self, start: usize, end: usize) {
+        let insert_at =
+            self.changed_regions.partition_point(|(existing_start, _)| *existing_start < start);
+        self.changed_regions.insert(insert_at, (start, end));
 
-        self.changed_regions.sort_by_key(|(start, _)| *start);
-
-        let mut merged = Vec::new();
-        let mut current = self.changed_regions[0];
-
-        for &(start, end) in &self.changed_regions[1..] {
-            if start <= current.1 {
-                current.1 = current.1.max(end);
-            } else {
-                merged.push(current);
-                current = (start, end);
+        let mut merge_from = insert_at.saturating_sub(1);
+        while merge_from > 0 {
+            let (_, prev_end) = self.changed_regions[merge_from - 1];
+            let (current_start, _) = self.changed_regions[merge_from];
+            if prev_end < current_start {
+                break;
             }
+            merge_from -= 1;
         }
-        merged.push(current);
 
-        self.changed_regions = merged;
+        let mut merged_start = self.changed_regions[merge_from].0;
+        let mut merged_end = self.changed_regions[merge_from].1;
+        let mut scan = merge_from + 1;
+        while let Some((scan_start, scan_end)) = self.changed_regions.get(scan).copied() {
+            if scan_start > merged_end {
+                break;
+            }
+            merged_start = merged_start.min(scan_start);
+            merged_end = merged_end.max(scan_end);
+            scan += 1;
+        }
+
+        self.changed_regions[merge_from] = (merged_start, merged_end);
+        if scan > merge_from + 1 {
+            self.changed_regions.drain((merge_from + 1)..scan);
+        }
     }
 }
 
@@ -325,6 +345,23 @@ mod tests {
         assert!(
             !parser.needs_reparse(21, 30),
             "regions outside merged range should not be reparsed"
+        );
+    }
+
+    #[test]
+    fn incremental_parser_merges_out_of_order_regions() {
+        let mut parser = IncrementalParser::new();
+        parser.mark_changed(30, 40);
+        parser.mark_changed(10, 20);
+        parser.mark_changed(18, 35);
+
+        assert!(
+            parser.needs_reparse(12, 38),
+            "overlap across merged out-of-order edits should trigger reparsing"
+        );
+        assert!(
+            !parser.needs_reparse(41, 45),
+            "regions past the merged change should remain unaffected"
         );
     }
 }
