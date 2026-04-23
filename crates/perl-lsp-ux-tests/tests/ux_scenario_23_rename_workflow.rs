@@ -13,6 +13,10 @@ use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use serde_json::{json, Value};
 use std::time::Duration;
 
+fn binary_available() -> bool {
+    perl_lsp_ux_tests::resolve_binary().is_ok()
+}
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 const RENAME_FIXTURE: &str = r#"use strict;
@@ -28,6 +32,10 @@ print greet();
 
 #[test]
 fn scenario_23_prepare_rename_and_rename_do_not_error() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_23: perl-lsp binary not found");
+        return Ok(());
+    }
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("rename_flow.pl", RENAME_FIXTURE))?;
     harness.open_file("rename_flow.pl", RENAME_FIXTURE)?;
@@ -65,6 +73,10 @@ fn scenario_23_prepare_rename_and_rename_do_not_error() -> Result<()> {
 
 #[test]
 fn scenario_23_rename_workspace_edit_targets_file_and_multiple_occurrences() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_23: perl-lsp binary not found");
+        return Ok(());
+    }
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("rename_flow.pl", RENAME_FIXTURE))?;
     harness.open_file("rename_flow.pl", RENAME_FIXTURE)?;
