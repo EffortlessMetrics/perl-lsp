@@ -63,8 +63,36 @@ fn build_incremental_edit_set(
 
         // Map back to original-document space by undoing the byte shift that
         // prior edits introduced into the working rope.
-        let orig_start = (evolving_start as isize - cumulative_shift) as usize;
-        let orig_end = (evolving_end as isize - cumulative_shift) as usize;
+        //
+        // Some clients may send out-of-order ranges in a single didChange
+        // payload. In that case the shift can temporarily exceed
+        // `evolving_start`/`evolving_end`; we defensively abort incremental
+        // mapping and fall back to full reparse.
+        let Some(orig_start) = (evolving_start as isize).checked_sub(cumulative_shift) else {
+            tracing::debug!(
+                "Incremental edit mapping failed: evolving_start={} cumulative_shift={}",
+                evolving_start,
+                cumulative_shift
+            );
+            return None;
+        };
+        let Some(orig_end) = (evolving_end as isize).checked_sub(cumulative_shift) else {
+            tracing::debug!(
+                "Incremental edit mapping failed: evolving_end={} cumulative_shift={}",
+                evolving_end,
+                cumulative_shift
+            );
+            return None;
+        };
+        if orig_start < 0 || orig_end < 0 || orig_start > orig_end {
+            tracing::debug!(
+                "Incremental edit mapping produced invalid original range: {}..{}",
+                orig_start,
+                orig_end
+            );
+            return None;
+        }
+        let (orig_start, orig_end) = (orig_start as usize, orig_end as usize);
         edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
 
         // Apply this edit to the working rope so the next iteration's
@@ -1358,6 +1386,40 @@ mod tests {
         //   2. apply edit[0] (start_byte=1):         "abcYZ"[1..1] ← "X"   ⟹ "aXbcYZ"
         let result = edit_set.apply_to_string(original_str);
         assert_eq!(result, "aXbcYZ", "apply_to_string must reproduce the client-intended document");
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_rejects_invalid_original_mapping() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        let original = ropey::Rope::from_str("abcdef");
+        let changes = vec![
+            // Insert first, so cumulative_shift becomes +3.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 6 },
+                    end: Position { line: 0, character: 6 },
+                }),
+                range_length: None,
+                text: "XYZ".to_string(),
+            },
+            // Out-of-order edit near the start of the evolving document.
+            // Mapping this back to original-space would require a negative byte offset.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 0 },
+                    end: Position { line: 0, character: 1 },
+                }),
+                range_length: None,
+                text: "q".to_string(),
+            },
+        ];
+
+        assert!(
+            build_incremental_edit_set(&original, &changes).is_none(),
+            "invalid original-space mapping should disable incremental path"
+        );
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
