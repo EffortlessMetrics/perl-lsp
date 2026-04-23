@@ -43,24 +43,29 @@ Effective Claude compute was roughly 1.5 hours (31% of a 5-hour window). Disposi
 
 ## Economics
 
-### Budget footprint (user-reported at session close)
+### Budget footprint — two iterations
 
-| Channel | Fraction consumed | Notes |
-|---|---|---|
-| Claude Code 20× Max — 5h session | ~31% | Orchestrator + all sub-agents |
-| Claude Code 20× Max — weekly | ~5% | Rolls up into the monthly quota |
-| Codex Pro — weekly | ~7% | Input stream of ~150 PRs across the session |
-| Non-Codex PR queue (pre-session) | modest | Older PRs that had been waiting, authored via Jules and other channels |
+Both iterations used **Claude 20× Max** (orchestrator + all sub-agents) and **Codex Pro** (PR generation). Plan names matter here: the matched-intensity ratio between the two tools is what makes spray-and-filter economically viable at scale.
+
+| Iteration | Claude 20× Max — 5h session | Claude 20× Max — weekly | Codex Pro — 5h session | Codex Pro — weekly | Merges / Closes / Issues |
+|---|---|---|---|---|---|
+| **Iteration 1** (2026-04-22) | ~31% | ~5% | ~26% | ~7% | 116 merged, 120 closed, 31 issues filed |
+| **Iteration 2** (follow-up) | ~13% | ~2% | ~10% | ~2% | ~85 merged, ~60 closed, ~22 issues filed (53 structural sub-issues across #4706/#4905/#4928) |
+| **Cumulative** | — | **~7%** | — | **~9%** | ~201 merged, ~180 closed, ~53 structural sub-issues |
+
+Non-Codex PR queue (pre-session): modest — older PRs that had been waiting, authored via Jules and other channels.
+
+**Second iteration confirming matched intensity:** Iteration 2 reproduced the same near-matched session burn (13% Claude 20× Max vs. 10% Codex Pro) at lower absolute scale. The ratio holds across both iterations — if one side were 3× the other, the bottleneck tool would cap throughput. Matched intensity is a structural property of the pattern, not a coincidence.
 
 ### Rough cost-per-outcome envelope
 
-Treating the Claude 5% weekly-budget slice as a rough cost proxy (exact dollar figure depends on plan amortisation; omitted deliberately):
+Treating the Claude 20× Max weekly-budget slice as a rough cost proxy (exact dollar figure depends on plan amortisation; omitted deliberately):
 
 - Cost per merged PR: **low-single-digit cents**
 - Cost per disposition (merge or close): **roughly half of per-merge** — closes are cheaper than merges because they don't require CI churn
-- Codex side: the ~7% weekly spend bought ~150 input PRs, of which ~116 landed useful fixes/features and ~120 were duplicates or scope-drift — so **~50% Codex throughput efficiency**, with the orchestrator absorbing the triage cost on the Claude side
+- Codex Pro side: the ~7% weekly spend (iteration 1) bought ~150 input PRs, of which ~116 landed useful fixes/features and ~120 were duplicates or scope-drift — so **~50% Codex throughput efficiency**, with the orchestrator absorbing the triage cost on the Claude side
 
-The ratio that matters: Codex is cheaper per *attempt*, Claude is cheaper per *decision*. The orchestration pattern exploits that asymmetry by letting Codex spray and Claude filter.
+The ratio that matters: Codex Pro is cheaper per *attempt*, Claude 20× Max is cheaper per *decision*. The orchestration pattern exploits that asymmetry by letting Codex Pro spray and Claude 20× Max filter.
 
 ### Where the Claude budget went
 
