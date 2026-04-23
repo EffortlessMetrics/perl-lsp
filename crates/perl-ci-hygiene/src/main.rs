@@ -3837,6 +3837,9 @@ fn collect_todo_hits(
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     for (idx, _) in line.match_indices("//") {
+        if is_index_in_rust_literal(line, idx) {
+            continue;
+        }
         if is_url_like_hash_comment(line, idx) {
             continue;
         }
@@ -3848,6 +3851,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         }
     }
     for (idx, _) in line.match_indices("/*") {
+        if is_index_in_rust_literal(line, idx) {
+            continue;
+        }
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
@@ -3889,6 +3895,91 @@ fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> boo
         return false;
     }
     matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+}
+
+fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes: Option<usize> = None;
+
+    while i < bytes.len() && i < target_idx {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        if bytes[i] == b'r' || (bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'r') {
+            let mut j = i + 1;
+            if bytes[i] == b'b' {
+                j += 1;
+            }
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + if bytes[i] == b'b' { 2 } else { 1 }));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    in_string || in_char || raw_hashes.is_some()
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4160,6 +4251,26 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_non_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"not a comment // TODO in literal\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"block marker /* FIXME in literal */\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"safe literal\"; // TODO: follow up",
             &todo_re
         ));
 
