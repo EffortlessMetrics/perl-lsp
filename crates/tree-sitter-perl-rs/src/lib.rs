@@ -480,6 +480,9 @@ fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
     found
 }
 
+// Invariant: TreeCursor path is constructed by the traversal that just yielded this
+// index, so child_at is guaranteed valid.
+#[allow(clippy::expect_used)]
 fn resolve_path<'tree>(root: &'tree AstNode, path: &[usize]) -> &'tree AstNode {
     let mut current = root;
     for &index in path {
