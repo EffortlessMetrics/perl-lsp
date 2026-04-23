@@ -77,9 +77,6 @@ jobs:
         with:
           tool: just
 
-      - name: Check formatting
-        run: cargo xtask fmt --check
-
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
@@ -89,8 +86,7 @@ jobs:
 
       - name: Run PR smoke checks
         run: |
-          just clippy-core
-          just test-core
+          just pr-fast
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
