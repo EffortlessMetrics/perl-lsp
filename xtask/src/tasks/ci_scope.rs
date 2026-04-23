@@ -133,6 +133,12 @@ fn is_workspace_root_change(files: &[String]) -> bool {
     })
 }
 
+/// Returns true if the changed files include `features.toml`, which triggers
+/// UX regression widening per #4706.
+fn has_features_toml_change(files: &[String]) -> bool {
+    files.iter().any(|f| f == "features.toml")
+}
+
 /// Extract unique crate names from the cargo metadata JSON for crate dirs
 /// seen in the changed files list.
 ///
@@ -330,6 +336,15 @@ pub fn classify_files(
             lane: "ci_policy".to_string(),
             reason: "workspace_root".to_string(),
             scope: vec![],
+        });
+    }
+
+    // features.toml change: UX regression lane (per #4706)
+    if has_features_toml_change(files) {
+        lanes.push(LaneEntry {
+            lane: "ux_regression".to_string(),
+            reason: "features_toml".to_string(),
+            scope: vec!["perl-lsp-rs".to_string()],
         });
     }
 
@@ -707,7 +722,10 @@ mod tests {
         let rev = build_reverse_dep_map(&metadata);
         let dependents = rev.get("perl-parser");
         assert!(dependents.is_some(), "perl-parser should have reverse deps");
-        assert!(dependents.unwrap().contains("perl-lsp-rs"));
+        assert!(
+            dependents.is_some_and(|d| d.contains("perl-lsp-rs")),
+            "perl-parser dependents should include perl-lsp-rs"
+        );
     }
 
     #[test]
