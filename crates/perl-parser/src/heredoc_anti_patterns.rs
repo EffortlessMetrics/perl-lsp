@@ -65,6 +65,68 @@ fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
     Location { line, column, offset: offset + start }
 }
 
+fn mask_non_code_regions(code: &str) -> String {
+    let mut masked = String::with_capacity(code.len());
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_line_comment = false;
+    let mut escaped = false;
+
+    for ch in code.chars() {
+        if in_line_comment {
+            if ch == '\n' {
+                in_line_comment = false;
+                masked.push('\n');
+            } else {
+                masked.push(' ');
+            }
+            continue;
+        }
+
+        if in_single_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_single_quote = false;
+            }
+            masked.push(' ');
+            continue;
+        }
+
+        if in_double_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_double_quote = false;
+            }
+            masked.push(' ');
+            continue;
+        }
+
+        match ch {
+            '#' => {
+                in_line_comment = true;
+                masked.push(' ');
+            }
+            '\'' => {
+                in_single_quote = true;
+                masked.push(' ');
+            }
+            '"' => {
+                in_double_quote = true;
+                masked.push(' ');
+            }
+            _ => masked.push(ch),
+        }
+    }
+
+    masked
+}
+
 // Format heredoc detector
 struct FormatHeredocDetector;
 
@@ -78,8 +140,9 @@ static FORMAT_PATTERN: LazyLock<Regex> =
 impl PatternDetector for FormatHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in FORMAT_PATTERN.captures_iter(code) {
+        for cap in FORMAT_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 let format_name = name_match.as_str().to_string();
                 let location = location_from_start(code, offset, match_pos.start());
@@ -87,7 +150,7 @@ impl PatternDetector for FormatHeredocDetector {
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
                 let body_end = code[body_start..].find("\n.").unwrap_or(code.len() - body_start);
-                let body = &code[body_start..body_start + body_end];
+                let body = &scan_code[body_start..body_start + body_end];
 
                 if body.contains("<<") {
                     results.push((
@@ -187,16 +250,17 @@ fn find_matching_brace(code: &str, opening_brace_idx: usize) -> Option<usize> {
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for begin_match in BEGIN_BLOCK_START_PATTERN.find_iter(code) {
+        for begin_match in BEGIN_BLOCK_START_PATTERN.find_iter(&scan_code) {
             let Some(opening_brace_rel) = begin_match.as_str().rfind('{') else {
                 continue;
             };
             let opening_brace_idx = begin_match.start() + opening_brace_rel;
-            let Some(closing_brace_idx) = find_matching_brace(code, opening_brace_idx) else {
+            let Some(closing_brace_idx) = find_matching_brace(&scan_code, opening_brace_idx) else {
                 continue;
             };
-            let block_content = &code[opening_brace_idx + 1..closing_brace_idx];
+            let block_content = &scan_code[opening_brace_idx + 1..closing_brace_idx];
 
             if !block_content.contains("<<") {
                 continue;
@@ -246,8 +310,9 @@ static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(code) {
+        for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
                 let expression = match_pos.as_str().to_string();
                 let location = location_from_start(code, offset, match_pos.start());
@@ -292,8 +357,9 @@ static SOURCE_FILTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 impl PatternDetector for SourceFilterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in SOURCE_FILTER_PATTERN.captures_iter(code) {
+        for cap in SOURCE_FILTER_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
                 let filter_module = module_match.as_str().to_string();
                 let location = location_from_start(code, offset, match_pos.start());
@@ -340,8 +406,9 @@ static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
 impl PatternDetector for RegexHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in REGEX_HEREDOC_PATTERN.captures_iter(code) {
+        for cap in REGEX_HEREDOC_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
                 let location = location_from_start(code, offset, match_pos.start());
 
@@ -427,10 +494,11 @@ static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+
 impl PatternDetector for TiedHandleDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
         // First find tied handles
         let mut tied_handles = Vec::new();
-        for cap in TIE_PATTERN.captures_iter(code) {
+        for cap in TIE_PATTERN.captures_iter(&scan_code) {
             if let Some(handle_match) = cap.get(1) {
                 tied_handles.push(handle_match.as_str());
             }
@@ -444,7 +512,7 @@ impl PatternDetector for TiedHandleDetector {
             // Look for usage of this handle with heredoc
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
             if let Ok(re) = Regex::new(&usage_pattern) {
-                for usage_match in re.find_iter(code) {
+                for usage_match in re.find_iter(&scan_code) {
                     let location = location_from_start(code, offset, usage_match.start());
 
                     results.push((
@@ -762,5 +830,29 @@ SECOND
         assert_eq!(location.line, 1);
         assert_eq!(location.column, 0);
         assert_eq!(location.offset, 11);
+    }
+
+    #[test]
+    fn test_source_filter_detection_ignores_comments_and_strings() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+# use Filter::Simple;
+my $s = "use Filter::Simple";
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_begin_detection_ignores_comments_and_strings() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+# BEGIN { my $x = <<'END'; END }
+my $s = "BEGIN { my $x = <<'END'; END }";
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(diagnostics.is_empty());
     }
 }
