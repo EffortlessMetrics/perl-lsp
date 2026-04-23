@@ -1734,7 +1734,7 @@ my $msg = "value: ${Foo::name}";
     let table = parse_and_extract(code);
     assert!(
         table.references.contains_key("Foo::name"),
-        "${Foo::name} inside a double-quoted string should register a reference",
+        "${{Foo::name}} inside a double-quoted string should register a reference",
     );
     Ok(())
 }
