@@ -130,6 +130,9 @@ struct EditorUxFixtureMatrix {
 
 #[derive(Debug, Deserialize)]
 struct EditorUxWorkflow {
+    // ci_tier is present in the JSON but not used for signal counting;
+    // the fixture integrity test enforces that tags, not tier, are the source of truth.
+    #[allow(dead_code)]
     ci_tier: String,
     confidence_signals: Vec<String>,
 }
@@ -141,25 +144,25 @@ pub(super) fn collect_editor_ux_confidence_counts(root: &Path) -> Result<BTreeMa
     let matrix: EditorUxFixtureMatrix = serde_json::from_str(&matrix_raw)
         .with_context(|| format!("parsing {}", matrix_path.display()))?;
 
-    let mut counts = BTreeMap::new();
-    counts.insert("first_five_minutes_harness".to_string(), matrix.workflows.len());
-    counts.insert(
-        "manual_editor_smoke".to_string(),
-        matrix.workflows.iter().filter(|workflow| workflow.ci_tier == "pr").count(),
-    );
-    counts.insert(
-        "issue_burndown_regression_guard".to_string(),
-        matrix
-            .workflows
-            .iter()
-            .filter(|workflow| {
-                workflow
-                    .confidence_signals
-                    .iter()
-                    .any(|signal| signal == "issue_burndown_regression_guard")
-            })
-            .count(),
-    );
+    // Count by reading the explicit confidence_signals tags on each workflow.
+    // This is the authoritative source — the fixture matrix integrity test enforces
+    // that every declared signal is exercised by at least one workflow, so any
+    // workflow added without the right tags will fail the matrix integrity test.
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for workflow in &matrix.workflows {
+        for signal in &workflow.confidence_signals {
+            *counts.entry(signal.clone()).or_insert(0) += 1;
+        }
+    }
+    // Ensure all three canonical signal keys are always present (even if zero),
+    // so callers can unwrap_or(0) without worrying about missing keys.
+    for signal in &[
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard",
+    ] {
+        counts.entry((*signal).to_string()).or_insert(0);
+    }
     Ok(counts)
 }
 
@@ -352,12 +355,13 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
-        let confidence_names = receipt["confidence_signals"]
+        let confidence_signals = receipt["confidence_signals"]
             .as_array()
-            .ok_or_else(|| eyre!("confidence_signals must be an array"))?
+            .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
+        let confidence_names: std::collections::BTreeSet<&str> = confidence_signals
             .iter()
             .map(|row| row["name"].as_str().ok_or_else(|| eyre!("confidence signal name missing")))
-            .collect::<Result<std::collections::BTreeSet<_>>>()?;
+            .collect::<Result<_>>()?;
         assert_eq!(
             confidence_names,
             std::collections::BTreeSet::from([
@@ -366,6 +370,24 @@ mod tests {
                 "issue_burndown_regression_guard",
             ])
         );
+        // Cross-check: receipt workflow_count values must match what
+        // collect_editor_ux_confidence_counts computes from the fixture tags.
+        // This catches stale hardcoded JSON and verifies the emit path uses
+        // the same source-of-truth function.
+        let live_counts = super::collect_editor_ux_confidence_counts(&root)?;
+        for row in confidence_signals {
+            let name = row["name"].as_str().ok_or_else(|| eyre!("name missing"))?;
+            let receipt_count = row["workflow_count"]
+                .as_u64()
+                .ok_or_else(|| eyre!("workflow_count missing for {name}"))?;
+            let live_count = *live_counts.get(name).unwrap_or(&0) as u64;
+            assert_eq!(
+                receipt_count, live_count,
+                "receipt workflow_count for `{name}` ({receipt_count}) diverges from \
+                 live fixture count ({live_count}) — re-run `cargo xtask update-status` to sync"
+            );
+            assert!(receipt_count > 0, "signal `{name}` has zero workflow coverage");
+        }
         Ok(())
     }
 }
