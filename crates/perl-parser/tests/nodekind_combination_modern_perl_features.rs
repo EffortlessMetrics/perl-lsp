@@ -191,6 +191,72 @@ sub process_item {
     assert!(!binary_ops.is_empty(), "Should have binary operations for dereferencing");
 }
 
+/// Test BDD-style given/when/default control flow with statement modifiers and nested decisions
+#[test]
+fn test_bdd_given_when_then_flow_with_modifiers() {
+    let code = r#"
+use feature 'switch';
+
+sub classify_event {
+    my ($event) = @_;
+
+    given ($event->{actor}) {
+        when ('user') {
+            given ($event->{action}) {
+                when ('create') {
+                    record_audit("Given user, when create, then created");
+                }
+                when ('update') {
+                    record_audit("Given user, when update, then updated");
+                }
+                default {
+                    record_audit("Given user, when unknown action, then ignored");
+                }
+            }
+        }
+        when ('system') {
+            record_audit("Given system actor, then accepted");
+        }
+        default {
+            record_audit("Given unknown actor, then rejected");
+        }
+    }
+
+    return "processed" if defined $event->{id};
+    return "missing-id" unless defined $event->{id};
+}
+
+my $result = classify_event({
+    actor => 'user',
+    action => 'create',
+    id => 42,
+});
+"#;
+
+    let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
+    let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
+    let when_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::When { .. }));
+    let default_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Default { .. }));
+    let modifier_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::StatementModifier { .. }));
+    let return_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Return { .. }));
+    let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
+
+    assert_eq!(given_nodes.len(), 2, "Expected outer and nested given blocks");
+    assert_eq!(when_nodes.len(), 4, "Expected two actor and two action when clauses");
+    assert_eq!(default_nodes.len(), 2, "Expected defaults for actor and action branches");
+    assert_eq!(
+        modifier_nodes.len(),
+        2,
+        "Expected `if` and `unless` statement modifiers on returns"
+    );
+    assert_eq!(return_nodes.len(), 2, "Expected two guarded return statements");
+    assert!(function_calls.len() >= 5, "Expected classify_event + record_audit calls to be parsed");
+}
+
 /// Test class/method with inheritance, roles, and attributes
 #[test]
 fn test_class_method_inheritance_roles_attributes() {
