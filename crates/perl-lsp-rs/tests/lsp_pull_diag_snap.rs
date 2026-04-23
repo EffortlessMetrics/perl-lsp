@@ -93,6 +93,49 @@ print "Hello, World!\\n";
 }
 
 #[test]
+fn snapshot_document_diagnostic_changed_report() -> Result<(), Box<dyn std::error::Error>> {
+    let uri = "file:///snapshot-changed.pl";
+    let initial_content = r#"#!/usr/bin/perl
+use strict;
+my $x = 1;
+"#;
+    let changed_content = r#"#!/usr/bin/perl
+use strict;
+my $x = 1;
+print $y;  # Undefined variable after change
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(Some(json!({})))?;
+    harness.open_document(uri, initial_content)?;
+
+    let first = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+    let previous_result_id = first
+        .get("resultId")
+        .and_then(Value::as_str)
+        .ok_or("missing resultId in first document diagnostic")?;
+
+    harness.change_full(uri, 2, changed_content)?;
+
+    let mut changed = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri },
+            "previousResultId": previous_result_id
+        }),
+    )?;
+
+    scrub_result_ids(&mut changed);
+    assert_yaml_snapshot!("document_diagnostic_changed_report", changed);
+    Ok(())
+}
+
+#[test]
 fn snapshot_workspace_diagnostic_reports() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
     harness.initialize(Some(json!({})))?;
