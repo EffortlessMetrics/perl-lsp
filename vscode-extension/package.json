@@ -58,7 +58,8 @@
   "activationEvents": [
     "onLanguage:perl",
     "onLanguage:gherkin",
-    "onWalkthrough:perl-lsp.gettingStarted"
+    "onWalkthrough:perl-lsp.gettingStarted",
+    "onStartupFinished"
   ],
   "contributes": {
     "languages": [
@@ -217,6 +218,12 @@
             "timeout": 5000
           }
         ]
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "perl-lsp.mcp-servers",
+        "label": "Perl LSP MCP Servers"
       }
     ],
     "configuration": [
@@ -522,6 +529,62 @@
             "order": 60,
             "description": "Traces the communication between VS Code and the perl-lsp language server. Set to messages or verbose to capture protocol traffic for debugging.",
             "markdownDescription": "Traces the communication between VS Code and the perl-lsp language server. Set to `messages` or `verbose` to capture protocol traffic for debugging."
+          },
+          "perl-lsp.mcp.servers": {
+            "type": "array",
+            "scope": "machine",
+            "order": 95,
+            "default": [],
+            "description": "Optional MCP stdio servers exposed to VS Code language models. Each entry supports label, command, args, cwd, env, version, and enabled.",
+            "markdownDescription": "Optional MCP stdio servers exposed to VS Code language models. Each entry supports `label`, `command`, `args`, `cwd`, `env`, `version`, and `enabled`.",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "command"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Display name shown in MCP server pickers."
+                },
+                "command": {
+                  "type": "string",
+                  "description": "Executable used to start the MCP server."
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Command-line arguments passed to the server."
+                },
+                "cwd": {
+                  "type": "string",
+                  "description": "Optional working directory used when launching the server."
+                },
+                "env": {
+                  "type": "object",
+                  "description": "Optional environment variable overrides (set a key to null to unset).",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "version": {
+                  "type": "string",
+                  "description": "Optional MCP server version used by VS Code for refresh prompts."
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Set to false to keep a server config without publishing it."
+                }
+              }
+            }
           }
         }
       }
