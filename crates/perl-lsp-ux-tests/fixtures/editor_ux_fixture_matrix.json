@@ -8,6 +8,7 @@
   ],
   "component_metrics": [
     "cross_file_definition_success_rate",
+    "cross_editor_completion_conformance_rate",
     "module_resolution_workflow_success_rate",
     "multi_root_workspace_navigation_success_rate"
   ],
@@ -394,6 +395,21 @@
       "expected_outcomes": [
         "first publishDiagnostics arrives within 5 seconds",
         "real-repo fixture parsing remains crash-free"
+      ]
+    },
+    {
+      "id": "cross_editor_completion_conformance",
+      "scenario_file": "ux_scenario_21_completion_editor_conformance.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "request completions with VS Code, Zed, Neovim, and Helix-style capabilities and compare metadata parity",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_editor_completion_conformance_rate"
+      ],
+      "expected_outcomes": [
+        "completion labels and snippet/commit-character metadata stay stable across editor profiles"
       ]
     }
   ],

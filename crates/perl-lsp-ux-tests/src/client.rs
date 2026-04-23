@@ -6,7 +6,7 @@
 //! notifications, etc.) are captured in an event queue so scenarios can
 //! assert on user-visible messages after the fact.
 
-use crate::{FakeWorkspace, ScenarioConfig};
+use crate::{EditorClientProfile, FakeWorkspace, ScenarioConfig};
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -173,11 +173,7 @@ impl UxClient {
                     "hover": {
                         "contentFormat": ["markdown", "plaintext"]
                     },
-                    "completion": {
-                        "completionItem": {
-                            "snippetSupport": true
-                        }
-                    },
+                    "completion": completion_capabilities(config.editor_profile),
                     "formatting": {},
                     "definition": {},
                     "publishDiagnostics": {
@@ -343,6 +339,54 @@ impl UxClient {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+}
+
+fn completion_capabilities(profile: EditorClientProfile) -> Value {
+    match profile {
+        EditorClientProfile::Generic => json!({
+            "completionItem": {
+                "snippetSupport": true
+            }
+        }),
+        EditorClientProfile::VsCode => json!({
+            "completionItem": {
+                "snippetSupport": true,
+                "commitCharactersSupport": true,
+                "insertReplaceSupport": true,
+                "labelDetailsSupport": true
+            },
+            "completionList": {
+                "itemDefaults": [
+                    "commitCharacters",
+                    "editRange",
+                    "insertTextFormat"
+                ]
+            },
+            "contextSupport": true
+        }),
+        EditorClientProfile::Zed => json!({
+            "completionItem": {
+                "snippetSupport": true,
+                "commitCharactersSupport": true,
+                "insertReplaceSupport": true
+            },
+            "contextSupport": true
+        }),
+        EditorClientProfile::Neovim => json!({
+            "completionItem": {
+                "snippetSupport": true,
+                "commitCharactersSupport": false
+            },
+            "contextSupport": true
+        }),
+        EditorClientProfile::Helix => json!({
+            "completionItem": {
+                "snippetSupport": true,
+                "commitCharactersSupport": false,
+                "insertReplaceSupport": false
+            }
+        }),
     }
 }
 

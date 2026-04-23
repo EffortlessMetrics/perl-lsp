@@ -60,6 +60,30 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
+/// Client capability profiles that emulate completion behavior differences
+/// across popular editors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorClientProfile {
+    Generic,
+    VsCode,
+    Zed,
+    Neovim,
+    Helix,
+}
+
+impl EditorClientProfile {
+    /// Human-readable profile name for test diagnostics.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Generic => "generic",
+            Self::VsCode => "vscode",
+            Self::Zed => "zed",
+            Self::Neovim => "neovim",
+            Self::Helix => "helix",
+        }
+    }
+}
+
 /// Configuration for a UX scenario.
 ///
 /// Centralises all the knobs that affect the test environment without
@@ -85,6 +109,8 @@ pub struct ScenarioConfig {
     /// Optional workspace folders for multi-root initialization.
     /// Each entry is `(relative_path, name)`.
     pub workspace_folders: Vec<(String, String)>,
+    /// Which editor capability profile to advertise in `initialize`.
+    pub editor_profile: EditorClientProfile,
 }
 
 impl Default for ScenarioConfig {
@@ -101,6 +127,7 @@ impl Default for ScenarioConfig {
             extra_env: Vec::new(),
             workspace_files: Vec::new(),
             workspace_folders: Vec::new(),
+            editor_profile: EditorClientProfile::Generic,
         }
     }
 }
@@ -141,6 +168,12 @@ impl ScenarioConfig {
         name: impl Into<String>,
     ) -> Self {
         self.workspace_folders.push((relative_path.into(), name.into()));
+        self
+    }
+
+    /// Select the editor capability profile advertised during `initialize`.
+    pub fn with_editor_profile(mut self, profile: EditorClientProfile) -> Self {
+        self.editor_profile = profile;
         self
     }
 }
