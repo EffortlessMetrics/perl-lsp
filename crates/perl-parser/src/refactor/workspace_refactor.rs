@@ -799,14 +799,6 @@ impl WorkspaceRefactor {
             return Err(RefactorError::InvalidInput("Variable name cannot be empty".to_string()));
         }
 
-        let (sigil, bare) = normalize_var(var_name);
-        let key = SymbolKey {
-            pkg: Arc::from("main".to_string()),
-            name: Arc::from(bare.to_string()),
-            sigil,
-            kind: SymKind::Var,
-        };
-
         let def_uri = fs_path_to_uri(def_file_path).map_err(|e| {
             RefactorError::UriConversion(format!("Failed to convert path to URI: {}", e))
         })?;
@@ -814,6 +806,17 @@ impl WorkspaceRefactor {
         let def_doc = store.get(&def_uri).ok_or_else(|| {
             RefactorError::DocumentNotIndexed(def_file_path.display().to_string())
         })?;
+
+        let package_name =
+            find_package_declaration(&def_doc.text).unwrap_or_else(|| "main".to_string());
+
+        let (sigil, bare) = normalize_var(var_name);
+        let key = SymbolKey {
+            pkg: Arc::from(package_name.clone()),
+            name: Arc::from(bare.to_string()),
+            sigil,
+            kind: SymKind::Var,
+        };
 
         let def_line_idx = def_doc
             .text
@@ -859,6 +862,9 @@ impl WorkspaceRefactor {
         if all_locations.is_empty() {
             for doc in store.all_documents() {
                 if !doc.text.contains(var_name) {
+                    continue;
+                }
+                if !is_document_in_package_scope(&doc.text, &package_name) {
                     continue;
                 }
 
@@ -919,9 +925,17 @@ impl WorkspaceRefactor {
                 RefactorError::UriConversion(format!("Failed to convert URI to path: {}", loc.uri))
             })?;
 
-            files_affected.insert(path.clone());
-
             if let Some(doc) = store.get(&loc.uri) {
+                let start_off =
+                    doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
+                let location_package =
+                    start_off.and_then(|offset| find_package_at_offset(&doc.text, offset));
+                if location_package.as_deref().unwrap_or("main") != package_name {
+                    continue;
+                }
+
+                files_affected.insert(path.clone());
+
                 let start_off =
                     doc.line_index.position_to_offset(loc.range.start.line, loc.range.start.column);
                 let end_off =
@@ -971,6 +985,50 @@ impl WorkspaceRefactor {
 
         Ok(RefactorResult { file_edits, description, warnings })
     }
+}
+
+fn find_package_declaration(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with("package ") {
+            return None;
+        }
+
+        let package_part = trimmed.strip_prefix("package ")?;
+        let end_idx = package_part
+            .char_indices()
+            .find_map(|(idx, ch)| (ch == ';' || ch == '{' || ch.is_whitespace()).then_some(idx))
+            .unwrap_or(package_part.len());
+        let package_name = &package_part[..end_idx];
+
+        (!package_name.is_empty()).then(|| package_name.to_string())
+    })
+}
+
+fn is_document_in_package_scope(text: &str, package_name: &str) -> bool {
+    find_package_declaration(text).as_deref().unwrap_or("main") == package_name
+}
+
+fn find_package_at_offset(text: &str, offset: usize) -> Option<String> {
+    let before = &text[..offset.min(text.len())];
+    let mut package = None;
+    let mut search_pos = 0usize;
+
+    while let Some(found) = before[search_pos..].find("package ") {
+        let package_start = search_pos + found + "package ".len();
+        let rest = &before[package_start..];
+        let package_end = rest
+            .char_indices()
+            .find_map(|(idx, ch)| (ch == ';' || ch == '{' || ch.is_whitespace()).then_some(idx))
+            .unwrap_or(rest.len());
+        let candidate = &rest[..package_end];
+        if !candidate.is_empty() {
+            package = Some(candidate.to_string());
+        }
+        search_pos = package_start;
+    }
+
+    package
 }
 
 #[cfg(test)]
@@ -1459,6 +1517,22 @@ use JSON; # Duplicate
         assert!(
             result.description.contains("occurrence") || result.description.contains("workspace")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn inline_multi_file_uses_definition_package_for_index_lookup()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![
+            ("a.pl", "package Foo;\nmy $x = 42;\nprint $x;\n"),
+            ("b.pl", "package Foo;\nprint $x;\n"),
+            ("c.pl", "package Bar;\nprint $x;\n"),
+        ])?;
+        let refactor = WorkspaceRefactor::new(index);
+        let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
+
+        let edited_files = result.file_edits.len();
+        assert_eq!(edited_files, 2, "Should edit only Foo package files");
         Ok(())
     }
 }
