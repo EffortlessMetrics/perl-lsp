@@ -56,7 +56,8 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         change: Some(TextDocumentSyncKind::FULL),
         will_save: None,
         will_save_wait_until: None,
-        save: None,
+        // The server handles didSave for diagnostics refresh and post-save hooks.
+        save: Some(TextDocumentSyncSaveOptions::Supported(true)),
     }));
 
     if build.hover {
@@ -507,5 +508,20 @@ mod tests {
                 "missing completion trigger character: {expected}"
             );
         }
+    }
+
+    #[test]
+    fn text_document_sync_advertises_did_save_support() {
+        let caps = capabilities_for(BuildFlags::default());
+        let save = caps.text_document_sync.as_ref().and_then(|sync| match sync {
+            TextDocumentSyncCapability::Options(opts) => opts.save.as_ref(),
+            TextDocumentSyncCapability::Kind(_) => None,
+        });
+
+        assert_eq!(
+            save,
+            Some(&TextDocumentSyncSaveOptions::Supported(true)),
+            "textDocumentSync.save must advertise didSave support"
+        );
     }
 }
