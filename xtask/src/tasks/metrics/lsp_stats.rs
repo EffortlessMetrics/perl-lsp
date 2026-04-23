@@ -197,7 +197,7 @@ pub fn run_with_json(json: bool) -> Result<()> {
             schema_version: 1,
             measured_at: Utc::now().to_rfc3339(),
             subsystem: "editor_ux",
-            last_run: last_run.clone(),
+            last_run: None,
             metrics,
         };
         write_json_receipt(&receipt_path, &output)
@@ -250,10 +250,8 @@ fn load_observed_rates(path: &Path) -> Option<ObservedUxRates> {
     // where pass-rate data is inside `metrics` as individual rates.
     // Prefer `last_run` when available because it carries numerator/denominator
     // data and avoids rounding loss.
-    if let Some(last) = doc.get("last_run") {
-        if let Ok(parsed) = serde_json::from_value::<LastRunMetrics>(last.clone()) {
-            return Some(ObservedUxRates::from_last_run(&parsed));
-        }
+    if let Some(parsed) = load_last_run(path) {
+        return Some(ObservedUxRates::from_last_run(&parsed));
     }
 
     let metrics = doc.get("metrics")?;
@@ -269,6 +267,13 @@ fn load_observed_rates(path: &Path) -> Option<ObservedUxRates> {
             .get("completion_top5_usefulness")
             .and_then(serde_json::Value::as_f64),
     })
+}
+
+fn load_last_run(path: &Path) -> Option<LastRunMetrics> {
+    let raw = fs::read_to_string(path).ok()?;
+    let doc: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let last = doc.get("last_run")?;
+    serde_json::from_value(last.clone()).ok()
 }
 
 fn write_json_receipt(path: &Path, output: &EditorUxMetrics) -> Result<()> {
@@ -314,9 +319,6 @@ fn print_table(
         }
         if let Some(rate) = rates.goto_definition_exact_hit_rate {
             println!("  goto_definition_exact_hit:   {:.1}%", rate * 100.0);
-        }
-        if let Some(rate) = run.completion_rate() {
-            println!("  completion_top5_relevance:   {:.1}%", rate * 100.0);
         }
         if let Some(rate) = rates.completion_top5_usefulness {
             println!("  completion_top5_usefulness:  {:.1}%", rate * 100.0);
@@ -413,15 +415,18 @@ mod tests {
         assert!((parsed["metrics"]["workflow_pass_rate"].as_f64().unwrap() - 0.91).abs() < 0.001);
         assert!(parsed["metrics"]["rename_success_rate"].is_null());
         // Verify new relevance fields serialize correctly
-        assert!(parsed["metrics"]["completion_top1_relevance"].is_null(),
-            "completion_top1_relevance should be null (Phase 2)");
+        assert!(
+            parsed["metrics"]["completion_top1_relevance"].is_null(),
+            "completion_top1_relevance should be null (Phase 2)"
+        );
         assert!(
             (parsed["metrics"]["completion_top5_relevance"].as_f64().unwrap() - 0.86).abs() < 0.001,
             "completion_top5_relevance should serialize to 0.86"
         );
         // Backward-compat alias should also be present
         assert!(
-            (parsed["metrics"]["completion_top5_usefulness"].as_f64().unwrap() - 0.86).abs() < 0.001,
+            (parsed["metrics"]["completion_top5_usefulness"].as_f64().unwrap() - 0.86).abs()
+                < 0.001,
             "completion_top5_usefulness alias should still serialize"
         );
     }
