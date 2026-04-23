@@ -1,6 +1,16 @@
 use perl_lexer::PerlLexer;
 use proptest::prelude::*;
 
+fn matching_delimiter(open: char) -> char {
+    match open {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    }
+}
+
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: 256,
@@ -63,5 +73,39 @@ proptest! {
 
             prop_assert!(count < 1000, "Possible infinite loop in pattern: {}", pattern);
         }
+    }
+
+    #[test]
+    fn lexer_quote_like_constructs_terminate_without_panics(
+        operator in prop::sample::select(vec!["q", "qq", "qw", "qx", "qr", "m", "s", "tr", "y"]),
+        delimiter in prop::sample::select(vec!['/', '!', '#', '~', '(', '{', '[', '<']),
+        lhs in ".{0,32}",
+        rhs in ".{0,32}",
+        modifiers in "[a-z]{0,6}",
+    ) {
+        let close = matching_delimiter(delimiter);
+
+        let script = match operator {
+            "s" | "tr" | "y" => {
+                format!("{operator}{delimiter}{lhs}{close}{delimiter}{rhs}{close}{modifiers}")
+            }
+            _ => format!("{operator}{delimiter}{lhs}{close}{modifiers}"),
+        };
+
+        let mut lexer = PerlLexer::new(&script);
+        let max_expected_tokens = script.len().max(1) * 2 + 100;
+
+        for _ in 0..max_expected_tokens {
+            if lexer.next_token().is_none() {
+                return Ok(());
+            }
+        }
+
+        prop_assert!(
+            false,
+            "Lexer failed to terminate for quote-like input after {} tokens: {}",
+            max_expected_tokens,
+            script
+        );
     }
 }
