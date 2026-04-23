@@ -509,6 +509,122 @@ mod tests {
     }
 
     #[test]
+    fn test_utf8_action_adds_utf8_when_open_already_present() {
+        // Inverse regression: only `use open :utf8` is present, should only add `use utf8;`.
+        let source = "use open qw(:std :utf8);\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+        let utf8_action = must_some(actions.iter().find(|a| a.title == "Add UTF-8 support"));
+
+        assert_eq!(
+            utf8_action.edit.changes[0].new_text, "use utf8;\n",
+            "Should only add missing utf8 pragma when use open :utf8 already exists"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_suppressed_when_both_pragmas_present() {
+        // Both pragmas already present — no UTF-8 action should be generated.
+        let source = "use utf8;\nuse open qw(:std :utf8);\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "Should not suggest UTF-8 pragmas when both are already present"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_suppressed_for_ascii_only_source() {
+        // No non-ASCII content — no UTF-8 action regardless of pragma presence.
+        let source = "my $msg = \"hello\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "Should not suggest UTF-8 pragmas for ASCII-only source"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_recognizes_encoding_utf8_variant() {
+        // `use open ... :encoding(UTF-8)` must also count as open-utf8 pragma present.
+        let source = "use utf8;\nuse open IO => ':encoding(UTF-8)';\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "encoding(UTF-8) variant should be recognized as the open :utf8 pragma"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_recognizes_indented_pragma() {
+        // Leading whitespace on the pragma line should still be matched (anchored to ^\s*).
+        let source = "    use utf8;\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+        let utf8_action = must_some(actions.iter().find(|a| a.title == "Add UTF-8 support"));
+
+        assert_eq!(
+            utf8_action.edit.changes[0].new_text, "use open qw(:std :utf8);\n",
+            "Indented 'use utf8;' should still count as present"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_does_not_match_utf8mode_lookalike() {
+        // `use utf8mode` (hypothetical) is not `use utf8` — the \b word boundary must prevent a match.
+        let source = "use utf8mode;\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+        let utf8_action = must_some(actions.iter().find(|a| a.title == "Add UTF-8 support"));
+
+        assert_eq!(
+            utf8_action.edit.changes[0].new_text, "use utf8;\nuse open qw(:std :utf8);\n",
+            "`use utf8mode;` should not be treated as the utf8 pragma"
+        );
+    }
+
+    #[test]
+    fn test_utf8_action_recognizes_string_after_pragma_line() {
+        // Comment on same line after pragma should still match.
+        let source = "use utf8; # enable unicode\nmy $msg = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_global_refactorings(&ast);
+        let utf8_action = must_some(actions.iter().find(|a| a.title == "Add UTF-8 support"));
+
+        assert_eq!(
+            utf8_action.edit.changes[0].new_text, "use open qw(:std :utf8);\n",
+            "Trailing same-line comment should not hide pragma"
+        );
+    }
+
+    #[test]
     fn test_add_error_checking() {
         let source = "open my $fh, '<', 'file.txt';";
         let mut parser = Parser::new(source);
