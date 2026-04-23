@@ -4596,6 +4596,11 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("my @x = (1,# TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("my @x = (1,# TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
 
         Ok(())
     }
