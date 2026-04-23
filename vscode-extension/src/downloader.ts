@@ -117,11 +117,10 @@ export class BinaryDownloader {
                 // Architecture or OS not supported by the release
                 const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
                 const platformStr = platformMatch ? platformMatch[1] : 'your platform';
-                if (this.isAndroidEnvironment()) {
+                if (this.isTermuxEnvironment() || platformStr.includes('linux-android')) {
                     message =
-                        `perl-lsp: Android environment detected (${platformStr}). ` +
-                        'Pre-built Android binaries are not published yet. ' +
-                        'Use Termux package tooling or build from source, then point perl-lsp.serverPath to the binary. ' +
+                        `perl-lsp: No pre-built binary for ${platformStr} (Termux/Android). ` +
+                        'Install from source in Termux (for example: pkg install rust && cargo install --locked --path crates/perllsp), then configure perl-lsp.serverPath. ' +
                         manualInstallNote;
                 } else {
                     message =
@@ -597,6 +596,9 @@ export class BinaryDownloader {
                 return androidArchMap[arch] ?? `${arch}-linux-android`;
             }
             const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            if (this.isTermuxEnvironment()) {
+                return `${archPrefix}-linux-android`;
+            }
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
         } else if (platform === 'win32') {
@@ -649,6 +651,14 @@ export class BinaryDownloader {
         ];
         
         return muslLibs.some(lib => fs.existsSync(lib));
+    }
+
+    private isTermuxEnvironment(): boolean {
+        return Boolean(
+            process.env.TERMUX_VERSION ||
+            process.env.PREFIX?.includes('/com.termux/') ||
+            fs.existsSync('/data/data/com.termux/files/usr')
+        );
     }
     
     private getLocalBinaryPath(): string {
