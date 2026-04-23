@@ -320,10 +320,7 @@ fn test_workspace_members_match_crates_directory() {
         .collect();
 
     // Parse current workspace members from the manifest.
-    assert!(
-        !members.is_empty(),
-        "Workspace members list must not be empty"
-    );
+    assert!(!members.is_empty(), "Workspace members list must not be empty");
 
     // Discover crate directories that contain a Cargo.toml.
     let crates_dir = workspace_root.join("crates");
@@ -333,9 +330,7 @@ fn test_workspace_members_match_crates_directory() {
         .map(|entry| entry.path())
         .filter(|path| path.is_dir() && path.join("Cargo.toml").exists())
         .filter_map(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .map(|name| format!("crates/{name}"))
+            path.file_name().and_then(|name| name.to_str()).map(|name| format!("crates/{name}"))
         })
         .collect();
 
