@@ -445,6 +445,47 @@ fn measure_workspace_symbol(fixture: &ProjectFixture, entry_content: &str) -> Ve
     samples
 }
 
+/// Build a synthetic ~5000-line Catalyst-style controller source.
+fn build_large_catalyst_controller() -> String {
+    let mut source = String::from(
+        "package MyApp::Controller::Big;\n\
+use strict;\n\
+use warnings;\n\
+use parent 'Catalyst::Controller';\n\
+\n\
+",
+    );
+
+    // 250 actions × 20 lines ≈ 5000 lines plus header/footer.
+    for idx in 0..250 {
+        source.push_str(&format!(
+            "sub action_{idx} :Path('/action/{idx}') Args(0) {{\n\
+    my ($self, $c) = @_;\n\
+    my $acc = 0;\n\
+    $acc += 1;\n\
+    $acc += 2;\n\
+    $acc += 3;\n\
+    $acc += 4;\n\
+    $acc += 5;\n\
+    $acc += 6;\n\
+    $acc += 7;\n\
+    $acc += 8;\n\
+    $acc += 9;\n\
+    $acc += 10;\n\
+    $acc += 11;\n\
+    $acc += 12;\n\
+    $acc += 13;\n\
+    $acc += 14;\n\
+    $c->stash(action => '{idx}', sum => $acc);\n\
+}}\n\
+\n"
+        ));
+    }
+
+    source.push_str("1;\n");
+    source
+}
+
 // ---- JSON output --------------------------------------------------------------
 
 /// Serialise a LatencySummary to a serde_json Value.
@@ -736,4 +777,45 @@ fn real_project_latency_full_suite() {
     }
     write_baseline(&results);
     eprintln!("\nBaseline written to {OUTPUT_PATH}");
+}
+
+/// Real-repo perf gate: first diagnostics for a 5000+ line Catalyst app should
+/// arrive within 5 seconds.
+#[test]
+#[ignore = "nightly only — performance assertion on representative large file"]
+fn real_project_first_diagnostics_catalyst_5000_lines_under_5s() {
+    let root = workspace_root();
+    let file_path = root.join("test_corpus/real_projects/catalyst_skeleton/lib/BigController.pm");
+    let uri = file_uri(&file_path);
+    let source = build_large_catalyst_controller();
+    let source_line_count = source.lines().count();
+    assert!(source_line_count >= 5000, "expected >=5000 lines, got {source_line_count}");
+
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let start = Instant::now();
+    open_document(&server, &uri, &source);
+    let maybe_diag = common::read_notification_method(
+        &server,
+        "textDocument/publishDiagnostics",
+        Duration::from_secs(5),
+    );
+    let elapsed = start.elapsed();
+
+    assert!(
+        maybe_diag.is_some(),
+        "did not receive publishDiagnostics within 5s for {source_line_count}-line Catalyst source"
+    );
+    assert!(
+        elapsed <= Duration::from_secs(5),
+        "first diagnostics took {:?} for {source_line_count}-line Catalyst source (target <5s)",
+        elapsed
+    );
+
+    eprintln!(
+        "real_project_first_diagnostics_catalyst_5000_lines_under_5s: {} ms ({} lines)",
+        elapsed.as_millis(),
+        source_line_count
+    );
 }
