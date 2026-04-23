@@ -127,9 +127,12 @@ impl IncrementalParser {
     pub fn mark_changed(&mut self, start: usize, end: usize) {
         let (start, end) = if start <= end { (start, end) } else { (end, start) };
 
-        // Ignore zero-length spans to keep the tracking set focused on
-        // meaningful byte ranges.
+        // Treat zero-length edits (insertions) as touching a single-byte window
+        // so callers that report insertion-only ranges still trigger reparsing
+        // for overlapping nodes.
         if start == end {
+            self.changed_regions.push((start, start.saturating_add(1)));
+            self.merge_overlapping_regions();
             return;
         }
 
