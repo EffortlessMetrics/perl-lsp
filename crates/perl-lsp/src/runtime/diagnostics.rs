@@ -268,9 +268,6 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
     pub fn reset(&self) {
@@ -281,6 +278,12 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    /// Test-only probe for whether pull-diagnostics currently has a cached analyzer.
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_has_cached_critic_analyzer(&self) -> bool {
+        self.critic_analyzer.lock().is_some()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {

@@ -444,4 +444,53 @@ include_paths = ["other_lib"]
             );
         }
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_critic_analyzer() {
+        use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use std::sync::Arc;
+
+        let server = LspServer::new();
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let file_path = temp.path().join("critic_reset_test.pl");
+        std::fs::write(&file_path, "my $x = 1;\n").expect("failed to write test perl file");
+        let uri = url::Url::from_file_path(&file_path)
+            .expect("failed to convert file path to uri")
+            .to_string();
+
+        server.test_configure_perlcritic(true, 5, None);
+        server.test_bypass_perlcritic_command_check();
+        let runtime = Arc::new(MockSubprocessRuntime::new());
+        runtime.add_response(MockResponse::success("[]\n"));
+        server.test_install_mock_critic_runtime(runtime);
+
+        let mut diagnostics = Vec::new();
+        server.pull_diagnostics_orchestrator.collect_perlcritic_diagnostics(
+            &server,
+            &uri,
+            "my $x = 1;\n",
+            &mut diagnostics,
+        );
+
+        assert!(
+            server.pull_diagnostics_orchestrator.test_has_cached_critic_analyzer(),
+            "pull diagnostics analyzer should be initialized after a collection pass"
+        );
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "severity": 4
+                    }
+                }
+            }
+        })));
+
+        assert!(
+            !server.pull_diagnostics_orchestrator.test_has_cached_critic_analyzer(),
+            "pull diagnostics analyzer should be reset when perlcritic config changes"
+        );
+    }
 }
