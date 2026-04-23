@@ -15,25 +15,40 @@ perllsp --version
 perllsp --health
 ```
 
-## Quick Setup
+## Kiro IDE (Desktop)
 
-Kiro is a desktop editor that can run stdio-based language servers. Configure Perl
-files to launch:
+Kiro IDE is built on VS Code's open-source foundation and uses the OpenVSX
+extension registry. Install the Perl LSP extension from the Extensions panel:
 
-```text
-perllsp --stdio
-```
+- Search for `perl-lsp` in Kiro's Extensions panel
+- Extension ID: `EffortlessMetrics.perl-lsp-rs`
 
-If Kiro supports VS Code-compatible settings in your environment, the minimal
-client shape is:
+If the extension is not available in OpenVSX, download the `.vsix` from
+[GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and
+install it via "Install from VSIX..." in the Extensions panel menu.
+
+## Kiro CLI
+
+If you use the Kiro command-line interface, add a custom language server entry
+in `.kiro/settings/lsp.json` at your project root:
 
 ```json
 {
-  "command": "perllsp",
-  "args": ["--stdio"],
-  "filetypes": ["perl"]
+  "languages": {
+    "perl": {
+      "name": "perllsp",
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "file_extensions": ["pl", "pm", "t", "psgi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL"],
+      "multi_workspace": false
+    }
+  }
 }
 ```
+
+Run `/code init` in the project root first if the `.kiro/settings/` directory
+does not exist, then restart the Kiro CLI to load the new configuration.
 
 ## Recommended Workspace Settings
 
