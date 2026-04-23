@@ -4041,7 +4041,11 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
 }
 
 fn linked_marker(suffix: &str) -> bool {
-    let suffix = suffix.trim_start();
+    let mut suffix = suffix.trim_start();
+    while let Some(next) = suffix.strip_prefix(':').or_else(|| suffix.strip_prefix('-')) {
+        suffix = next.trim_start();
+    }
+
     let Some(rest) = suffix.strip_prefix("(#") else {
         return false;
     };
@@ -4273,6 +4277,9 @@ mod tests {
     fn linked_marker_requires_parenthesized_issue_number() {
         assert!(linked_marker("(#123)"));
         assert!(linked_marker("   (#42) trailing text"));
+        assert!(linked_marker(": (#42) trailing text"));
+        assert!(linked_marker(" - (#42) trailing text"));
+        assert!(linked_marker(":- (#42) trailing text"));
         assert!(!linked_marker("#123"));
         assert!(!linked_marker("(#)"));
         assert!(!linked_marker("(#12"));
