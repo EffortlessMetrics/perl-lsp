@@ -138,7 +138,7 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(node.location.start, body),
                         details: if attributes.is_empty() {
                             vec![]
                         } else {
@@ -173,7 +173,7 @@ impl SemanticAnalyzer {
 
                     let hover = HoverInfo {
                         signature: signature_str,
-                        documentation: self.extract_documentation(node.location.start),
+                        documentation: self.extract_sub_documentation(node.location.start, body),
                         details,
                     };
 
@@ -205,7 +205,7 @@ impl SemanticAnalyzer {
                 // Add hover info
                 let hover = HoverInfo {
                     signature: format!("method {}", name),
-                    documentation: self.extract_documentation(node.location.start),
+                    documentation: self.extract_sub_documentation(node.location.start, body),
                     details: if attributes.is_empty() {
                         vec![]
                     } else {
@@ -908,7 +908,20 @@ impl SemanticAnalyzer {
         }
     }
 
-    /// Extract documentation (POD or comments) preceding a position
+    /// Extract documentation (POD or comments) immediately preceding a
+    /// position.
+    ///
+    /// The returned string is trimmed and corresponds to whichever of POD
+    /// or comments is found first at the very end of `source[..start]`. If
+    /// both kinds appear earlier in the source but neither is *immediately
+    /// before* `start`, this returns `None` — anchoring is intentional so
+    /// that documentation blocks belonging to one declaration do not bleed
+    /// into a later, unrelated declaration.
+    ///
+    /// Anchoring uses `\z` (absolute end of string) rather than `$`. With
+    /// the `m` flag, `$` matches at the end of every line, which made the
+    /// previous regex match POD blocks anywhere in `before` and leak them
+    /// into hover docs for unrelated subs that followed.
     pub(super) fn extract_documentation(&self, start: usize) -> Option<String> {
         static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
         static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -918,9 +931,9 @@ impl SemanticAnalyzer {
         }
         let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
+        // Check for POD blocks ending with =cut, anchored at end of string.
         let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
+            .get_or_init(|| Regex::new(r"(?s)(=[a-zA-Z0-9].*?\n=cut\n?)\s*\z"))
             .as_ref()
             .ok()?;
         if let Some(caps) = pod_re.captures(before) {
@@ -929,9 +942,9 @@ impl SemanticAnalyzer {
             }
         }
 
-        // Check for consecutive comment lines
+        // Check for consecutive comment lines, anchored at end of string.
         let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
+            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+[\t ]*\z")).as_ref().ok()?;
         if let Some(caps) = comment_re.captures(before) {
             if let Some(comment_match) = caps.get(0) {
                 // Strip the # prefix from each comment line
@@ -947,6 +960,55 @@ impl SemanticAnalyzer {
         }
 
         None
+    }
+
+    /// Extract documentation for a subroutine or method, falling back to
+    /// inline POD blocks inside the body when no leading docs are found.
+    ///
+    /// Resolution order:
+    /// 1. Leading docs (POD or comments) immediately preceding `start` —
+    ///    matches `extract_documentation` and preserves the existing
+    ///    "explicit author intent wins" precedence.
+    /// 2. The first POD block inside `body` (between `body.location.start`
+    ///    and `body.location.end`). This handles the inline-POD style of
+    ///    documenting a sub from within its body, e.g.:
+    ///
+    /// ```perl
+    /// sub process_data {
+    ///     =pod
+    ///     Internal documentation for this sub
+    ///     =cut
+    ///     ...
+    /// }
+    /// ```
+    pub(super) fn extract_sub_documentation(&self, start: usize, body: &Node) -> Option<String> {
+        self.extract_documentation(start).or_else(|| self.find_pod_in_node_body(body))
+    }
+
+    /// Find the first POD block inside the source range covered by `body`.
+    ///
+    /// Matches any POD block (`=pod`, `=head1`, `=item`, etc.) that ends
+    /// with a `=cut` directive. The returned string is trimmed of
+    /// surrounding whitespace and includes the opening directive through
+    /// the closing `=cut`, mirroring the format produced by
+    /// `extract_documentation` for leading POD blocks.
+    pub(super) fn find_pod_in_node_body(&self, body: &Node) -> Option<String> {
+        static BODY_POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+        let start = body.location.start;
+        let end = body.location.end;
+        if self.source.is_empty() || end <= start || end > self.source.len() {
+            return None;
+        }
+        let body_src = &self.source[start..end];
+
+        let pod_re = BODY_POD_RE
+            .get_or_init(|| Regex::new(r"(?ms)^\s*(=[a-zA-Z0-9].*?\n=cut)\b"))
+            .as_ref()
+            .ok()?;
+        let caps = pod_re.captures(body_src)?;
+        let pod_text = caps.get(1)?.as_str().trim().to_string();
+        Some(pod_text)
     }
 
     /// Extract the POD `=head1 NAME` section for a package.
