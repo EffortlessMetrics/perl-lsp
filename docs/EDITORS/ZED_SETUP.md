@@ -33,21 +33,22 @@ entry and a `perllsp` language server.
       "binary": {
         "path": "perllsp",
         "arguments": ["--stdio"]
-      },
-      "initialization_options": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"],
-            "useSystemInc": false
-          },
-          "inlayHints": {
-            "enabled": true
-          }
-        }
       }
     }
   }
 }
+```
+
+To configure workspace include paths and inlay hints, add a `.perl-lsp.toml`
+file at the root of your project:
+
+```toml
+[workspace]
+include_paths = ["lib", ".", "local/lib/perl5"]
+use_system_inc = false
+
+[inlay_hints]
+enabled = true
 ```
 
 ## Quick validation checklist
@@ -66,7 +67,8 @@ without errors.
   works, or use an absolute binary path in `lsp.perllsp.binary.path`.
 - **No project symbols**: ensure you opened the project root folder, not only a
   single file.
-- **Missing includes**: add paths under `initialization_options.perl.workspace.includePaths`.
+- **Missing includes**: add paths under `include_paths` in `.perl-lsp.toml` at
+  the workspace root.
 
 For general LSP issues, continue with
 [`docs/how-to/TROUBLESHOOTING.md`](../how-to/TROUBLESHOOTING.md).
