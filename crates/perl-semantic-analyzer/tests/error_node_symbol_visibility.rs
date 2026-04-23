@@ -221,3 +221,44 @@ fn variables_around_missing_rhs_are_visible() -> Result<(), Box<dyn std::error::
 
     Ok(())
 }
+
+/// Mixed recovery path: unclosed block and partial Error node in one file.
+///
+/// This mirrors #3499 user flow while typing: a partially-written subroutine
+/// plus a truncated postfix chain should still allow downstream symbol
+/// extraction to proceed.
+#[test]
+fn mixed_unclosed_block_and_partial_error_still_extracts_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+sub foo {
+    my $inside = 1;
+my $obj = {};
+my $tmp = $obj->;
+my $after = 2;
+"#;
+    let table = parse_and_extract(source);
+
+    assert!(
+        has_symbol(&table, "foo", SymbolKind::Subroutine),
+        "sub foo should be visible when block is unclosed; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    assert!(
+        has_symbol(&table, "inside", SymbolKind::scalar()),
+        "$inside should be visible inside unclosed sub; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    assert!(
+        has_symbol(&table, "tmp", SymbolKind::scalar()),
+        "$tmp should be visible when initialized by Error{{partial}}; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+    assert!(
+        has_symbol(&table, "after", SymbolKind::scalar()),
+        "$after should remain visible after mixed recovery sites; symbols: {:?}",
+        table.symbols.keys().collect::<Vec<_>>()
+    );
+
+    Ok(())
+}
