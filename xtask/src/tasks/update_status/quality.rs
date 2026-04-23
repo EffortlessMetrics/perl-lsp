@@ -122,6 +122,54 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn collect_manual_smoke_workflows(root: &Path) -> Vec<String> {
+    let protocol_path = root.join("docs/project/protocols/verification.md");
+    let Ok(text) = fs::read_to_string(protocol_path) else {
+        return Vec::new();
+    };
+
+    let Some(line) = text.lines().find(|line| line.starts_with("Manual editor smoke test:")) else {
+        return Vec::new();
+    };
+    let Some((_, workflow_list)) = line.split_once(':') else {
+        return Vec::new();
+    };
+
+    workflow_list
+        .split(',')
+        .map(str::trim)
+        .filter(|step| !step.is_empty())
+        .map(ToOwned::to_owned)
+        .collect()
+}
+
+pub(super) fn collect_open_ux_gap_issue_ids(root: &Path) -> Vec<u64> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+    let Some(start) = readme.find("## Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let Some(end) = readme.find("#### What shipped this cycle (v0.12.x)") else {
+        return Vec::new();
+    };
+    let section = &readme[start..end];
+
+    let Ok(issue_re) =
+        regex::Regex::new(r"https://github\.com/EffortlessMetrics/perl-lsp/issues/(\d+)")
+    else {
+        return Vec::new();
+    };
+    let mut issue_ids: Vec<u64> = issue_re
+        .captures_iter(section)
+        .filter_map(|caps| caps.get(1).and_then(|id| id.as_str().parse::<u64>().ok()))
+        .collect();
+    issue_ids.sort_unstable();
+    issue_ids.dedup();
+    issue_ids
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +178,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let manual_smoke_steps = collect_manual_smoke_workflows(root);
+    let open_gap_issues = collect_open_ux_gap_issue_ids(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +194,18 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **Manual smoke workflows**: {} Tier C editor checks from \
+           `docs/project/protocols/verification.md`\n\
+         - **Open UX gap burn-down**: {} tracked README known-gap issue(s): {}\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        manual_smoke_steps.len(),
+        open_gap_issues.len(),
+        if open_gap_issues.is_empty() {
+            "none".to_string()
+        } else {
+            open_gap_issues.iter().map(|id| format!("#{id}")).collect::<Vec<_>>().join(", ")
+        }
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,11 +229,25 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let manual_smoke_steps = collect_manual_smoke_workflows(root);
+    let open_gap_issues = collect_open_ux_gap_issue_ids(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
         "receipt_kind": "planning_scaffold",
         "scorecard": "editor_ux",
+        "confidence_signals": {
+            "manual_editor_smoke": {
+                "source": "docs/project/protocols/verification.md",
+                "workflow_count": manual_smoke_steps.len(),
+                "workflows": manual_smoke_steps,
+            },
+            "open_issue_burndown": {
+                "source": "README.md#known-gaps-toward-solid-ux",
+                "open_issue_count": open_gap_issues.len(),
+                "open_issue_ids": open_gap_issues,
+            },
+        },
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
@@ -265,6 +339,14 @@ mod tests {
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
         );
+        let manual_smoke = receipt["confidence_signals"]["manual_editor_smoke"]["workflows"]
+            .as_array()
+            .ok_or_else(|| eyre!("manual smoke workflows must be an array"))?;
+        assert!(!manual_smoke.is_empty(), "manual smoke workflows should not be empty");
+        let open_issues = receipt["confidence_signals"]["open_issue_burndown"]["open_issue_ids"]
+            .as_array()
+            .ok_or_else(|| eyre!("open issue IDs must be an array"))?;
+        assert!(!open_issues.is_empty(), "known-gap issue list should not be empty");
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
             .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
@@ -280,6 +362,18 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_open_ux_gap_issue_ids_is_unique_and_sorted() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let issue_ids = collect_open_ux_gap_issue_ids(&root);
+        assert!(!issue_ids.is_empty(), "expected known-gap issues in README");
+        let mut sorted = issue_ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(issue_ids, sorted, "issue IDs should be unique and sorted");
         Ok(())
     }
 }
