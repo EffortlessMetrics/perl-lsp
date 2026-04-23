@@ -3939,6 +3939,21 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut prev_was_escape_single = false;
 
     for (idx, ch) in line.char_indices() {
+        if in_single_ansi_c {
+            if prev_was_escape_single {
+                prev_was_escape_single = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_single = true;
+                continue;
+            }
+            if ch == '\'' {
+                in_single = false;
+                in_single_ansi_c = false;
+            }
+            continue;
+        }
         if in_single {
             if prev_single_was_escape {
                 prev_single_was_escape = false;
@@ -3950,21 +3965,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             }
             if ch == '\'' {
                 in_single = false;
-            }
-            continue;
-        }
-        if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
-                continue;
-            }
-            if ch == '\\' {
-                prev_was_escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_single = false;
-                in_single_ansi_c = false;
             }
             continue;
         }
@@ -4027,7 +4027,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                     if prev.is_whitespace()
                         || matches!(
                             prev,
-                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
+                            ';' | ',' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
                         )
                     {
                         return Some(idx);
@@ -4727,6 +4727,8 @@ mod tests {
         assert!(has_unlinked_todo_in_hash_line("cat ># TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("len=${#value} # TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo \"quoted\" # TODO: follow up", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo \"# TODO in string\" && true", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi&&# TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi||# TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
@@ -4748,6 +4750,10 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line(
             "printf $'it\\'s # TODO in string' # TODO: follow up",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "printf \"it\\\"s # TODO in string\" # TODO: follow up",
             &todo_re,
         ));
 
