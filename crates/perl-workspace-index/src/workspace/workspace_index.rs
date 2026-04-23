@@ -3378,9 +3378,10 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
                 if stripped.is_empty() {
                     return None;
                 }
-                if stripped.chars().all(|c| {
-                    c.is_alphanumeric() || c == '_' || c == ':' || c == '\''
-                }) {
+                if stripped
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+                {
                     Some(stripped.to_string())
                 } else {
                     None
@@ -3501,7 +3502,7 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         if remainder.trim().is_empty() {
             for word in qw_words {
                 if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    names.push(word);
+                    push_unique(&mut names, &mut seen, &word);
                 }
             }
             return names;
