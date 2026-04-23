@@ -16,12 +16,12 @@ just editor-specific setup and feature discovery.
 
 ## What is a Language Server?
 
-A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. `perllsp` is the native Perl 5 language server CLI from the perl-lsp project: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Neovim, Emacs, Helix, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
+A **language server** is a program that runs alongside your editor and gives it deep understanding of your code. Instead of each editor re-implementing features like "go to definition" or "show all references," the [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) defines a standard way for any editor to talk to a language-specific backend. `perllsp` is the native Perl 5 language server CLI from the perl-lsp project: it parses your code, builds an index of symbols, and responds to editor requests over JSON-RPC -- so you get IDE-grade navigation, completion, diagnostics, and refactoring in VS Code, Cursor, Neovim, Emacs, Helix, or any other LSP-capable editor. No Perl runtime is required; the server is a single native binary.
 
 ## Prerequisites
 
 - **Rust 1.92+** (for building from source)
-- **A supported editor**: VS Code, Neovim, Emacs, Helix, or Sublime Text
+- **A supported editor**: VS Code, Cursor, Neovim, Emacs, Helix, or Sublime Text
 
 ## Installation
 
