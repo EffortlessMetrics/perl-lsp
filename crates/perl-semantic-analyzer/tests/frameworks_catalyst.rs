@@ -115,7 +115,7 @@ sub helper :Path :Args(0) { }
         "did not expect Catalyst action marker in a non-controller package"
     );
     assert!(
-        helper.documentation.as_deref().map_or(true, |doc| !doc.contains("Catalyst action")),
+        helper.documentation.as_deref().is_none_or(|doc| !doc.contains("Catalyst action")),
         "did not expect Catalyst action documentation in a non-controller package"
     );
 }

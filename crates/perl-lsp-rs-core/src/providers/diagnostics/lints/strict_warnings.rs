@@ -472,6 +472,21 @@ mod tests {
     }
 
     #[test]
+    fn eval_string_containing_pragmas_is_handled_conservatively() {
+        // String eval is runtime-generated code. We cannot trust pragma text
+        // inside the string to affect file-level strict/warnings analysis.
+        let diags = strict_warnings_diags("eval \"use strict; use warnings;\";\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "eval STRING content must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "eval STRING content must not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
     fn top_level_strict_after_eval_block_suppresses_diagnostic() {
         // Top-level use strict/warnings after an eval block are still honored.
         // Neither PL100 nor PL101 should fire.
@@ -491,6 +506,19 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
             "sub-scoped strict must not suppress missing-strict (PL100)"
+        );
+    }
+
+    #[test]
+    fn conditional_use_if_pragmas_suppress_file_level_missing_diagnostics() {
+        // `use if COND, 'strict'/'warnings'` is represented as module "if" in the AST,
+        // and should still update tracked top-level pragma state.
+        let diags =
+            strict_warnings_diags("use if 1, 'strict';\nuse if 1, 'warnings';\nmy $x = 1;\n");
+        let codes: Vec<&str> = diags.iter().filter_map(|d| d.code.as_deref()).collect();
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "conditional use-if pragmas should suppress PL100/PL101 (got: {codes:?})"
         );
     }
 

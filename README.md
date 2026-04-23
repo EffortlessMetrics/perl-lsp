@@ -173,7 +173,7 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 #### Must land for v0.13.0
 
-- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x (PR #3984: per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x ([#3984](https://github.com/EffortlessMetrics/perl-lsp/pull/3984): per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
 
 #### Nice to land
 
@@ -187,10 +187,10 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 These items were rough edges in the previous list and have since landed:
 
-- Parser error recovery: unclosed block recovery (PR #4079), symbol extractor descends into partial `Error` nodes (PR #4071) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed
+- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed
 - Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
 - `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
-- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489](https://github.com/EffortlessMetrics/perl-lsp/issues/3489) closed
+- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)
 
 ## Security
 
