@@ -39,6 +39,7 @@ TITLE="$(json_read '.title')"
 is_docs_only_path() {
     local path="$1"
     case "$path" in
+        .hermes/conveyor/work-*/**|.hermes/conveyor/work-*|.hermes/conveyor/work-*-*.md) return 0 ;;
         docs/*) return 0 ;;
         *.md|*.mdx|*.txt|*.rst|*.adoc) return 0 ;;
         *) return 1 ;;

@@ -291,6 +291,24 @@ test_review_gate_error_message_is_clear() {
     fi
 }
 
+# ── Test 14: Hermes conveyor metadata PR can skip reviewed-deep ─────────────
+
+test_hermes_metadata_pr_passes_without_reviewed_deep() {
+    local json='{"isDraft":false,"labels":[{"name":"merge-ready"}],"title":"docs(agent): attach hermes work artifacts (#4097)","files":[{"path":".hermes/conveyor/work-abc12345/findings.md"},{"path":".hermes/conveyor/work-abc12345-specs.md"}]}'
+    local mock
+    mock="$(make_mock_gh "$json")"
+
+    local code
+    code="$(run_check "$mock")"
+    cleanup "$mock"
+
+    if [[ "$code" -eq 0 ]]; then
+        pass "hermes metadata PR passes without reviewed-deep"
+    else
+        fail "hermes metadata PR without reviewed-deep — expected exit 0, got $code"
+    fi
+}
+
 # ── Run all tests ─────────────────────────────────────────────────────────────
 
 echo "=== pre-merge-check test suite ==="
@@ -309,6 +327,7 @@ test_issue_ref_middle_of_title_passes
 test_docs_only_pr_passes_without_reviewed_deep
 test_non_docs_pr_requires_reviewed_deep
 test_review_gate_error_message_is_clear
+test_hermes_metadata_pr_passes_without_reviewed_deep
 
 echo ""
 echo "=== Results: $PASS_COUNT passed, $FAIL_COUNT failed ==="
