@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `await` gets full semantic token highlighting; `async` semantic tokens
   are deferred to a follow-up work item. (#3538)
 
+### Quality
+
+- **Lint enforcement gap closed in `perl-lsp-launcher`** — Added
+  `#![deny(clippy::print_stderr, clippy::print_stdout)]` to
+  `crates/perl-lsp-launcher/src/lib.rs`, completing the pattern that PR #2446
+  established but left incomplete. The only remaining `eprintln!` in library
+  code (the startup banner) is explicitly exempted with `#[allow]`, since it
+  fires before the tracing subscriber is configured. This prevents future
+  contributions from bypassing structured logging. (#3224)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
