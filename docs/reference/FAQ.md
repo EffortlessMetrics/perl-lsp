@@ -66,6 +66,7 @@ Yes. The parser targets Perl 5.8 as the minimum and handles most idioms from tha
 Any editor with LSP client support works. Point it at `perllsp --stdio`:
 
 - **VS Code** — native extension with auto-download, UI settings, and DAP debugging
+- **Firebase Studio** — install the same extension from Open VSX; see [Firebase Studio setup](../EDITORS/FIREBASE_STUDIO_SETUP.md)
 - **Neovim** — via `nvim-lspconfig` (`perl_ls` server)
 - **Emacs** — via `eglot` or `lsp-mode`
 - **Helix** — via `languages.toml`
