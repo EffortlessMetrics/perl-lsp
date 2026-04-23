@@ -61,6 +61,16 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
   });
+
+  test('uses linux-android target in Termux environments', () => {
+    if (process.platform !== 'linux') {
+      return;
+    }
+
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
+    const target = getPlatformTarget(downloader);
+    expect(target).toMatch(/-linux-android$/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -858,6 +868,20 @@ describe('ensureBinary error classification', () => {
     const call = vscode.window.showErrorMessage.mock.calls[0];
     // Must include the platform string and the manual install setting
     expect(call[0]).toMatch(/arm64-unknown-linux-gnu/);
+    expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('termux platform mismatch shows Termux-specific source-build guidance', async () => {
+    setupDownloadError('No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+    jest.spyOn(downloader as any, 'isTermuxEnvironment').mockReturnValue(true);
+    const vscode = require('vscode');
+    vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+    await downloader.ensureBinary();
+
+    const call = vscode.window.showErrorMessage.mock.calls[0];
+    expect(call[0]).toMatch(/Termux|Android/i);
+    expect(call[0]).toMatch(/pkg install rust/i);
     expect(call[0]).toMatch(/perl-lsp\.serverPath/);
   });
 
