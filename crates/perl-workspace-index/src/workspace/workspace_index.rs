@@ -3378,9 +3378,10 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
                 if stripped.is_empty() {
                     return None;
                 }
-                if stripped.chars().all(|c| {
-                    c.is_alphanumeric() || c == '_' || c == ':' || c == '\''
-                }) {
+                if stripped
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+                {
                     Some(stripped.to_string())
                 } else {
                     None
@@ -3501,7 +3502,7 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
         if remainder.trim().is_empty() {
             for word in qw_words {
                 if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    names.push(word);
+                    push_unique(&mut names, &mut seen, &word);
                 }
             }
             return names;
@@ -3690,6 +3691,24 @@ use constant {
     fn test_extract_constant_names_deduplicates_qw_form() {
         let names = extract_constant_names_from_use_args(&["qw(FOO BAR FOO)".to_string()]);
         assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_use_constant_qw_duplicate_names_indexed_once() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/QwDedupConfig.pm";
+        let code = r#"package My::QwDedupConfig;
+use constant qw(RETRY_COUNT TIMEOUT RETRY_COUNT);
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        let retry_count_symbols = symbols.iter().filter(|s| s.name == "RETRY_COUNT").count();
+        assert_eq!(
+            retry_count_symbols, 1,
+            "RETRY_COUNT should be indexed once even when repeated in use constant qw form"
+        );
     }
 
     #[test]
