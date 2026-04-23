@@ -752,6 +752,22 @@ fn line_index_utf16_column_surrogate() {
     assert_eq!(col, 3); // a(1) + 😀(2) = 3 UTF-16 units
 }
 
+#[test]
+fn line_index_offset_to_position_non_boundary_clamps_to_previous_boundary() {
+    let idx = LineIndex::new("a😀b".to_string());
+    let (line, col) = idx.offset_to_position(2); // in the middle of 😀
+    assert_eq!(line, 0);
+    assert_eq!(col, 1); // clamps to byte offset 1 (just after 'a')
+}
+
+#[test]
+fn line_index_offset_to_position_beyond_end_clamps_to_eof() {
+    let idx = LineIndex::new("a😀b".to_string());
+    let (line, col) = idx.offset_to_position(usize::MAX);
+    assert_eq!(line, 0);
+    assert_eq!(col, 4); // a(1) + 😀(2) + b(1)
+}
+
 // ─── convert: offset_to_utf16_line_col ───────────────────────────────────────
 
 #[test]
