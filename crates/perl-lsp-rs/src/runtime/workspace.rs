@@ -171,17 +171,6 @@ impl LspServer {
         }
 
         let now = std::time::Instant::now();
-        self.pending_workspace_configuration_requests.lock().retain(|request_id, pending| {
-            let still_fresh = now.saturating_duration_since(pending.created_at)
-                <= WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT;
-            if !still_fresh {
-                tracing::warn!(
-                    request_id = *request_id,
-                    "Dropping stale workspace/configuration request"
-                );
-            }
-            still_fresh
-        });
 
         let folder_uris: Vec<String> =
             self.workspace_folders.lock().iter().map(|folder| folder.uri.clone()).collect();
@@ -202,7 +191,15 @@ impl LspServer {
             return;
         }
 
-        self.pending_workspace_configuration_requests.lock().insert(
+        let mut pending = self.pending_workspace_configuration_requests.lock();
+        if !pending.is_empty() {
+            tracing::debug!(
+                superseded_requests = pending.len(),
+                "Dropping older workspace/configuration requests in favor of latest snapshot"
+            );
+            pending.clear();
+        }
+        pending.insert(
             request_id,
             PendingWorkspaceConfigurationRequest {
                 folder_uris,
