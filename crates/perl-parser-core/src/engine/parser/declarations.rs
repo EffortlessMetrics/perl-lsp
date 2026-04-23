@@ -540,14 +540,27 @@ impl<'a> Parser<'a> {
             }
         };
 
-        // Handle :: in module names
-        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        // Normalize legacy package separator `'` to modern `::`.
+        if module.contains('\'') {
+            module = module.replace('\'', "::");
+        }
+
+        // Handle package separators in module names.
+        // Accept both modern `::` and legacy `'` separators, canonicalizing both to `::`.
+        // Also handle separate `:` tokens in case the lexer sends `::` as two colons.
         while self.peek_kind() == Some(TokenKind::DoubleColon)
             || (self.peek_kind() == Some(TokenKind::Colon)
                 && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+            || (self.peek_kind() == Some(TokenKind::Unknown)
+                && self.tokens.peek().map(|t| t.text.as_ref() == "'").unwrap_or(false))
         {
             if self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else if self.peek_kind() == Some(TokenKind::Unknown)
+                && self.tokens.peek().map(|t| t.text.as_ref() == "'").unwrap_or(false)
+            {
+                self.consume_token()?; // consume legacy separator '
                 module.push_str("::");
             } else {
                 // Handle two separate Colon tokens as ::
@@ -1106,14 +1119,27 @@ impl<'a> Parser<'a> {
             ));
         };
 
-        // Handle :: in module names
-        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
+        // Normalize legacy package separator `'` to modern `::`.
+        if module.contains('\'') {
+            module = module.replace('\'', "::");
+        }
+
+        // Handle package separators in module names.
+        // Accept both modern `::` and legacy `'` separators, canonicalizing both to `::`.
+        // Also handle separate `:` tokens in case the lexer sends `::` as two colons.
         while self.peek_kind() == Some(TokenKind::DoubleColon)
             || (self.peek_kind() == Some(TokenKind::Colon)
                 && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+            || (self.peek_kind() == Some(TokenKind::Unknown)
+                && self.tokens.peek().map(|t| t.text.as_ref() == "'").unwrap_or(false))
         {
             if self.peek_kind() == Some(TokenKind::DoubleColon) {
                 self.consume_token()?; // consume ::
+                module.push_str("::");
+            } else if self.peek_kind() == Some(TokenKind::Unknown)
+                && self.tokens.peek().map(|t| t.text.as_ref() == "'").unwrap_or(false)
+            {
+                self.consume_token()?; // consume legacy separator '
                 module.push_str("::");
             } else {
                 // Handle two separate Colon tokens as ::
