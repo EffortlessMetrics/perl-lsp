@@ -122,6 +122,17 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn count_fixture_matrix_workflows(root: &Path) -> usize {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return 0;
+    };
+    let Ok(doc) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return 0;
+    };
+    doc.get("workflows").and_then(serde_json::Value::as_array).map_or(0, std::vec::Vec::len)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +153,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; tracked receipt at \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -169,15 +180,30 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let workflow_count = count_fixture_matrix_workflows(root);
+    let workflow_inventory_coverage_rate =
+        if scenario_count == 0 { 0.0 } else { workflow_count as f64 / scenario_count as f64 };
+    let scenario_matrix_sync = scenario_count == workflow_count;
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": "tracking_baseline",
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
+        },
+        "ux_confidence_tracking": {
+            "harness_scenarios_total": scenario_count,
+            "fixture_matrix_workflows_total": workflow_count,
+            "workflow_inventory_coverage_rate": workflow_inventory_coverage_rate,
+            "scenario_matrix_sync": scenario_matrix_sync,
+            "signals_tracked": [
+                "manual_editor_smoke_workflows",
+                "first_5_minutes_harness",
+                "known_gap_issue_backlog"
+            ]
         },
         "top_line_metrics": [
             {
@@ -258,12 +284,25 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["receipt_kind"], "tracking_baseline");
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
             receipt["harness"]["scenario_count"].as_u64(),
             Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(
+            receipt["ux_confidence_tracking"]["harness_scenarios_total"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        let workflow_count = count_fixture_matrix_workflows(&root) as u64;
+        assert_eq!(
+            receipt["ux_confidence_tracking"]["fixture_matrix_workflows_total"].as_u64(),
+            Some(workflow_count)
+        );
+        assert_eq!(
+            receipt["ux_confidence_tracking"]["scenario_matrix_sync"].as_bool(),
+            Some(workflow_count == count_ux_scenarios(&root) as u64)
         );
         let top_line_names = receipt["top_line_metrics"]
             .as_array()
