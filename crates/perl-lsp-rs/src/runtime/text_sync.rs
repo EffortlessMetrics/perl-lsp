@@ -64,31 +64,20 @@ fn build_incremental_edit_set(
         // Map back to original-document space by undoing the byte shift that
         // prior edits introduced into the working rope.
         //
-        // Some clients may send out-of-order ranges in a single didChange
-        // payload. In that case the shift can temporarily exceed
-        // `evolving_start`/`evolving_end`; we defensively abort incremental
-        // mapping and fall back to full reparse.
-        let Some(orig_start) = (evolving_start as isize).checked_sub(cumulative_shift) else {
-            tracing::debug!(
-                "Incremental edit mapping failed: evolving_start={} cumulative_shift={}",
-                evolving_start,
-                cumulative_shift
-            );
-            return None;
-        };
-        let Some(orig_end) = (evolving_end as isize).checked_sub(cumulative_shift) else {
-            tracing::debug!(
-                "Incremental edit mapping failed: evolving_end={} cumulative_shift={}",
-                evolving_end,
-                cumulative_shift
-            );
-            return None;
-        };
+        // Some clients send out-of-order ranges within a single didChange batch.
+        // When the cumulative shift from prior edits is larger than the current
+        // evolving position, the mapped original-space offset would be negative
+        // (no valid original byte to point to). Abort and fall back to full reparse.
+        let orig_start = evolving_start as isize - cumulative_shift;
+        let orig_end = evolving_end as isize - cumulative_shift;
         if orig_start < 0 || orig_end < 0 || orig_start > orig_end {
             tracing::debug!(
-                "Incremental edit mapping produced invalid original range: {}..{}",
+                "Incremental edit mapping produced invalid original range: {}..{} \n                 (evolving={}..{} shift={})",
                 orig_start,
-                orig_end
+                orig_end,
+                evolving_start,
+                evolving_end,
+                cumulative_shift,
             );
             return None;
         }
