@@ -120,6 +120,25 @@ fn bdd_parse_perl_file_reads_from_disk() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file with non utf8 bytes");
+    let file = unique_temp_file("parse_file_non_utf8");
+    let source = b"my $value = 1;\n# latin1 byte: \xE9\nprint $value;\n";
+
+    scenario.given("a Perl source file on disk containing non-UTF-8 bytes");
+    fs::write(&file, source)?;
+
+    scenario.when("parse_perl_file is invoked");
+    let tree = parse_perl_file(&file)?;
+
+    scenario.then("the parser should still return a syntax-valid source_file tree");
+    assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(!tree.root_node().has_error());
+    fs::remove_file(&file)?;
+    Ok(())
+}
+
+#[test]
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
