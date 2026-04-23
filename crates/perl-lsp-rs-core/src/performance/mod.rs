@@ -201,12 +201,14 @@ pub mod parallel {
             return Vec::new();
         }
 
+        let file_count = files.len();
+
         // Ensure callers cannot accidentally request zero workers and drop all work.
         // This preserves the API contract that every input file is processed once.
-        let effective_workers = num_workers.max(1).min(files.len());
+        let effective_workers = num_workers.max(1).min(file_count);
 
         let (tx, rx) = mpsc::channel();
-        let work_queue = Arc::new(Mutex::new(files));
+        let work_queue = Arc::new(Mutex::new(files.into_iter().enumerate().collect::<Vec<_>>()));
         let processor = Arc::new(processor);
 
         let mut handles = vec![];
@@ -226,9 +228,9 @@ pub mod parallel {
                     };
 
                     match file {
-                        Some(f) => {
-                            let result = processor(f);
-                            if tx.send(result).is_err() {
+                        Some((index, file)) => {
+                            let result = processor(file);
+                            if tx.send((index, result)).is_err() {
                                 break;
                             }
                         }
@@ -246,6 +248,13 @@ pub mod parallel {
             let _ = handle.join();
         }
 
-        rx.into_iter().collect()
+        let mut ordered_results = Vec::with_capacity(file_count);
+        ordered_results.resize_with(file_count, || None);
+
+        for (index, value) in rx {
+            ordered_results[index] = Some(value);
+        }
+
+        ordered_results.into_iter().flatten().collect()
     }
 }

@@ -61,8 +61,7 @@ fn incremental_parser_given_zero_width_change_when_marked_then_no_nodes_require_
 fn parallel_given_zero_workers_when_processing_then_all_files_are_still_processed() {
     let files = vec!["a.pm".to_string(), "b.pm".to_string(), "c.pm".to_string()];
 
-    let mut processed = parallel::process_files_parallel(files, 0, |file| file);
-    processed.sort();
+    let processed = parallel::process_files_parallel(files, 0, |file| file);
 
     assert_eq!(processed, vec!["a.pm", "b.pm", "c.pm"]);
 }
@@ -71,8 +70,29 @@ fn parallel_given_zero_workers_when_processing_then_all_files_are_still_processe
 fn parallel_given_more_workers_than_files_when_processing_then_each_file_processed_once() {
     let files = vec!["one.pm".to_string(), "two.pm".to_string()];
 
-    let mut processed = parallel::process_files_parallel(files, 16, |file| file);
-    processed.sort();
+    let processed = parallel::process_files_parallel(files, 16, |file| file);
 
     assert_eq!(processed, vec!["one.pm", "two.pm"]);
+}
+
+#[test]
+fn parallel_given_multiple_workers_when_processing_then_input_order_is_preserved() {
+    let files = vec![
+        "first.pm".to_string(),
+        "second.pm".to_string(),
+        "third.pm".to_string(),
+        "fourth.pm".to_string(),
+    ];
+
+    let processed = parallel::process_files_parallel(files.clone(), 4, |file| {
+        std::thread::sleep(std::time::Duration::from_millis(match file.as_str() {
+            "first.pm" => 40,
+            "second.pm" => 30,
+            "third.pm" => 20,
+            _ => 10,
+        }));
+        file
+    });
+
+    assert_eq!(processed, files);
 }
