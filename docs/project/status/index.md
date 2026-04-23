@@ -7,7 +7,7 @@
 
 - **Release posture**: GitHub Releases plus the editor channels (VS Code Marketplace and Open VSX) are live on `v0.12.3` as of 2026-04-09, the workspace version line is `v0.12.3`, crates.io intentionally remains on `v0.12.2`, and the active milestone is the `v0.13.0` public alpha announcement
 - **Status discipline**: this file is for narrative, subsystem files are for evidence, and `just status-update` plus `just status-check` are the anti-drift workflow
-- **LSP server**: `features.toml` is the canonical capability catalog; 58 user-visible features at 100% coverage (116/116 including plumbing protocol methods and DAP handlers — corrected in PR #4107 after the DAP catalog undercount audit) — computed coverage is generated from it
+- **LSP server**: `features.toml` is the canonical capability catalog; 60 user-visible features at 100% coverage (119/119 including plumbing protocol methods and DAP handlers — corrected in PR #4107 after the DAP catalog undercount audit) — computed coverage is generated from it
 - **Test infrastructure**: `nix develop -c just ci-gate` is the canonical merge receipt and `cargo xtask ignored-tests` is the tracked-test-debt source
 - **Parser stack**: the default parser path is the native recursive-descent stack backed by the Rust lexer and parser-core crates, with three named coverage lanes: Ubuntu system Perl as the compatibility baseline, CPAN top 1000 as the ecosystem-breadth baseline, and the repo-owned corpus as the deterministic regression baseline
 - **Refactoring engine**: inline and move-code flows exist; broader refactoring hardening is still roadmap work
