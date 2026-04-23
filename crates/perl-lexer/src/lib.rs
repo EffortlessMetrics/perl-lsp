@@ -1278,10 +1278,12 @@ impl<'a> PerlLexer<'a> {
                 // Hexadecimal: 0x[0-9a-fA-F_]+
                 pos += 2; // consume '0x'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len() && (bytes[pos].is_ascii_hexdigit() || bytes[pos] == b'_') {
+                    saw_digit |= bytes[pos].is_ascii_hexdigit();
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
@@ -1297,12 +1299,14 @@ impl<'a> PerlLexer<'a> {
                 // Binary: 0b[01_]+
                 pos += 2; // consume '0b'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len()
                     && (bytes[pos] == b'0' || bytes[pos] == b'1' || bytes[pos] == b'_')
                 {
+                    saw_digit |= bytes[pos] == b'0' || bytes[pos] == b'1';
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
@@ -1318,12 +1322,14 @@ impl<'a> PerlLexer<'a> {
                 // Octal (explicit): 0o[0-7_]+
                 pos += 2; // consume '0o'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len()
                     && ((bytes[pos] >= b'0' && bytes[pos] <= b'7') || bytes[pos] == b'_')
                 {
+                    saw_digit |= (b'0'..=b'7').contains(&bytes[pos]);
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
