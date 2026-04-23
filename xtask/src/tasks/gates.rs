@@ -756,11 +756,15 @@ fn run_single_gate(
     }
 
     if command == "cargo xtask fmt --check" {
-        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(true));
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::fmt::run(true, None)
+        });
     }
 
     if command == "cargo xtask fmt" {
-        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(false));
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::fmt::run(false, None)
+        });
     }
 
     // Run the command

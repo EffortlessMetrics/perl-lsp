@@ -276,6 +276,13 @@ enum Commands {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
     },
 
     /// Run corpus tests
@@ -1353,7 +1360,7 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
-        Commands::Fmt { check } => fmt::run(check),
+        Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
