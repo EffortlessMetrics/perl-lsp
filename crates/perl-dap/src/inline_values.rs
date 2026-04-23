@@ -60,6 +60,77 @@ fn normalize_line_bounds(
 ///
 /// Bytes that belong to Perl comments (`# ...`) or single/double-quoted string
 /// literals are marked `false` and should be ignored by lightweight regex scans.
+fn matching_delimiter(open: u8) -> Option<u8> {
+    match open {
+        b'(' => Some(b')'),
+        b'{' => Some(b'}'),
+        b'[' => Some(b']'),
+        b'<' => Some(b'>'),
+        _ => None,
+    }
+}
+
+fn quote_like_literal_end(bytes: &[u8], start: usize) -> Option<usize> {
+    if start >= bytes.len() || bytes[start] != b'q' {
+        return None;
+    }
+
+    let mut idx = start + 1;
+    if idx < bytes.len() && matches!(bytes[idx], b'q' | b'w' | b'r' | b'x') {
+        idx += 1;
+    }
+
+    while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+
+    if idx >= bytes.len() {
+        return None;
+    }
+
+    let open_delim = bytes[idx];
+    if open_delim.is_ascii_alphanumeric() || open_delim == b'_' {
+        return None;
+    }
+
+    let close_delim = matching_delimiter(open_delim).unwrap_or(open_delim);
+    let mut cursor = idx + 1;
+    let mut escaped = false;
+    let mut depth = 1;
+
+    while cursor < bytes.len() {
+        let current = bytes[cursor];
+        if escaped {
+            escaped = false;
+            cursor += 1;
+            continue;
+        }
+
+        if current == b'\\' {
+            escaped = true;
+            cursor += 1;
+            continue;
+        }
+
+        if current == open_delim && open_delim != close_delim {
+            depth += 1;
+            cursor += 1;
+            continue;
+        }
+
+        if current == close_delim {
+            depth -= 1;
+            if depth == 0 {
+                return Some(cursor + 1);
+            }
+        }
+
+        cursor += 1;
+    }
+
+    Some(bytes.len())
+}
+
 fn code_byte_mask(line: &str) -> Vec<bool> {
     let bytes = line.as_bytes();
     let mut mask = vec![true; bytes.len()];
@@ -97,6 +168,20 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
             continue;
         }
 
+        if b == b'q' {
+            let prev_is_ident =
+                i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+            if !prev_is_ident {
+                if let Some(end) = quote_like_literal_end(bytes, i) {
+                    for byte in mask.iter_mut().take(end).skip(i) {
+                        *byte = false;
+                    }
+                    i = end;
+                    continue;
+                }
+            }
+        }
+
         match b {
             b'#' => {
                 for byte in mask.iter_mut().take(bytes.len()).skip(i) {
@@ -105,8 +190,14 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
-                mask[i] = false;
-                in_single = true;
+                let prev_is_ident =
+                    i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_');
+                let next_is_ident = i + 1 < bytes.len()
+                    && (bytes[i + 1].is_ascii_alphanumeric() || bytes[i + 1] == b'_');
+                if !(prev_is_ident && next_is_ident) {
+                    mask[i] = false;
+                    in_single = true;
+                }
             }
             b'"' => {
                 mask[i] = false;
@@ -490,5 +581,28 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, None);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$real = ?");
+    }
+
+    #[test]
+    fn test_variable_like_tokens_in_quote_like_literals_are_ignored() {
+        let source = "my $real = 1; my $single = q{$fake}; my $double = qq($also_fake); my $words = qw/$x $y/;";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$single".to_string()));
+        assert!(names.contains(&"$double".to_string()));
+        assert!(names.contains(&"$words".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$also_fake".to_string()));
+        assert!(!names.contains(&"$x".to_string()));
+        assert!(!names.contains(&"$y".to_string()));
+    }
+
+    #[test]
+    fn test_quote_like_literals_with_nested_delimiters_are_masked() {
+        let source = "my $real = 1; my $pat = qr{(?<name>$nope{still_nope})};";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].text, "$real = ?");
+        assert_eq!(values[1].text, "$pat = ?");
     }
 }
