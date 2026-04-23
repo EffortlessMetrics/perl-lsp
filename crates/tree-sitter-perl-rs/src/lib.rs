@@ -327,7 +327,7 @@ impl<'tree> Node<'tree> {
 
     /// Returns the end byte offset in the source text (exclusive).
     pub fn end_byte(&self) -> usize {
-        self.inner.location.end
+        self.inner.location.end.min(self.tree_source.len())
     }
 
     /// Extracts the source text slice covered by this node.
@@ -444,8 +444,7 @@ mod tests {
         let tree = must_some(p.parse(source));
         let root = tree.root_node();
         assert_eq!(root.start_byte(), 0);
-        // End byte from the Program node spans to end of last statement.
-        assert!(root.end_byte() <= source.len() + 1, "end_byte out of range");
+        assert_eq!(root.end_byte(), source.len(), "root end_byte should clamp to source length");
     }
 
     #[test]
