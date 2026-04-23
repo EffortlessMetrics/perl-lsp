@@ -478,6 +478,68 @@ impl UxHarness {
         }
     }
 
+    /// Request references.
+    pub fn references(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Request rename edits for a symbol.
+    ///
+    /// Returns `None` when the server reports no workspace edit.
+    pub fn rename(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        new_name: &str,
+    ) -> Result<Option<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "newName": new_name
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("rename returned error: {}", resp["error"]));
+        }
+        if resp["result"].is_null() {
+            return Ok(None);
+        }
+        Ok(Some(resp["result"].clone()))
+    }
+
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
     /// and return them. Non-blocking — returns what's already buffered.
     ///

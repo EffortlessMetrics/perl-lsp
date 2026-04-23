@@ -1708,6 +1708,7 @@ name = "perl-lsp-ux-tests"
 version = "0.12.4"
 dependencies = [
  "anyhow",
+ "serde",
  "serde_json",
  "tempfile",
  "url",

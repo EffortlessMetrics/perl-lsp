@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "description": "Fixture-backed UX expectations for core editor-intelligence requests.",
+  "workspace_files": [
+    {
+      "path": "sample.pl",
+      "content": "use strict;\nuse warnings;\n\nsub alpha {\n    my ($n) = @_;\n    return $n + 1;\n}\n\nmy $value = alpha(41);\nprint $value;\n"
+    },
+    {
+      "path": "diag.pl",
+      "content": "use strict;\nmy $unterminated = (1 + ;\n"
+    }
+  ],
+  "checks": {
+    "hover": {
+      "path": "sample.pl",
+      "line": 8,
+      "character": 12,
+      "contains": "alpha"
+    },
+    "completion": {
+      "path": "sample.pl",
+      "line": 8,
+      "character": 13,
+      "must_include": ["alpha"]
+    },
+    "definition": {
+      "path": "sample.pl",
+      "line": 8,
+      "character": 12,
+      "target_suffix": "sample.pl",
+      "min_results": 1
+    },
+    "declaration": {
+      "path": "sample.pl",
+      "line": 8,
+      "character": 12,
+      "target_suffix": "sample.pl",
+      "min_results": 1
+    },
+    "references": {
+      "path": "sample.pl",
+      "line": 3,
+      "character": 4,
+      "min_results": 2,
+      "include_declaration": true
+    },
+    "document_symbols": {
+      "path": "sample.pl",
+      "must_include": ["alpha"]
+    },
+    "workspace_symbols": {
+      "query": "alpha",
+      "min_results": 1
+    },
+    "rename": {
+      "path": "sample.pl",
+      "line": 8,
+      "character": 12,
+      "new_name": "beta",
+      "min_edits": 2
+    },
+    "diagnostics": {
+      "path": "diag.pl",
+      "after_open_min": 1,
+      "after_fix_max": 0,
+      "fixed_content": "use strict;\nmy $unterminated = (1 + 2);\n"
+    }
+  }
+}
