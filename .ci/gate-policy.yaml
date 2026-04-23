@@ -276,6 +276,7 @@ gates:
     command: >-
       cargo xtask check-from-raw &&
       bash scripts/check-version-sync.sh &&
+      bash scripts/check_release_history.sh &&
       bash ci/check_missing_docs.sh &&
       bash ci/check_parse_errors.sh &&
       python3 scripts/check_features_invariants.py
