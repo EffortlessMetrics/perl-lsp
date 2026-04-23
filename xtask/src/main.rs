@@ -3,7 +3,7 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
@@ -31,6 +31,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -1284,6 +1288,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::List => {
+            print_top_level_commands();
+            Ok(())
+        }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
@@ -1638,5 +1646,17 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+    }
+}
+
+fn print_top_level_commands() {
+    let mut command_names = Cli::command()
+        .get_subcommands()
+        .map(|subcommand| subcommand.get_name().to_string())
+        .collect::<Vec<_>>();
+    command_names.sort_unstable();
+
+    for command_name in command_names {
+        println!("{command_name}");
     }
 }
