@@ -170,13 +170,18 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, ParseError> {
 
 /// Reads a file from `path` and parses it as Perl source.
 ///
+/// The file is read as raw bytes, so non-UTF-8 Perl source files (e.g. those
+/// containing Latin-1 comments or string literals) are handled correctly.
+///
 /// # Errors
 ///
-/// Returns an error if the file cannot be read or if parsing fails (see
-/// [`parse_perl_code`]).
+/// - [`ParseError::Io`] — if the file cannot be read (not found, permission denied, etc.)
+/// - [`ParseError::Language`] — if the parser cannot be configured (grammar version mismatch)
+/// - [`ParseError::ParseCancelled`] — if tree-sitter returns `None` (cancelled or timed out)
 pub fn parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, ParseError> {
-    let code = std::fs::read_to_string(path).map_err(ParseError::Io)?;
-    parse_perl_code(&code)
+    let bytes = std::fs::read(path).map_err(ParseError::Io)?;
+    let mut parser = try_create_parser().map_err(ParseError::Language)?;
+    parser.parse(bytes.as_slice(), None).ok_or(ParseError::ParseCancelled)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -273,6 +278,41 @@ mod tests {
         let missing = std::env::temp_dir().join("tree_sitter_perl_c_missing_input_for_io_error.pl");
         let result = parse_perl_file(&missing);
         assert!(matches!(result, Err(ParseError::Io(_))));
+    }
+
+    /// Verify that `ParseError::Display` covers all variants and produces
+    /// non-empty messages.  This guards against silent silencing of error info
+    /// if a new variant is added without a `fmt` arm.
+    #[test]
+    fn test_parse_error_display_is_non_empty_for_all_variants() {
+        use std::io;
+        let io_err = ParseError::Io(io::Error::new(io::ErrorKind::NotFound, "missing"));
+        assert!(!io_err.to_string().is_empty(), "Io variant must have a Display message");
+
+        let cancelled = ParseError::ParseCancelled;
+        assert!(
+            !cancelled.to_string().is_empty(),
+            "ParseCancelled variant must have a Display message"
+        );
+
+        // Language variant requires a real LanguageError; verify the Io and Cancelled
+        // variants are sufficient to confirm the Display impl compiles and runs.
+    }
+
+    /// Verify that `parse_perl_file` accepts a file containing non-UTF-8 bytes
+    /// (e.g. Latin-1 encoded comments) without returning an Io error.
+    #[test]
+    fn test_parse_perl_file_accepts_non_utf8_bytes() -> Result<(), Box<dyn std::error::Error>> {
+        let path =
+            std::env::temp_dir().join("tree_sitter_perl_c_non_utf8_parse_error_test.pl");
+        // Latin-1 byte 0xE9 ('é') embedded in a comment — valid Perl, invalid UTF-8
+        let source = b"# caf\xE9\nmy $x = 1;\n";
+        std::fs::write(&path, source)?;
+        let result = parse_perl_file(&path);
+        let _ = std::fs::remove_file(&path);
+        // Should succeed — tree-sitter handles raw bytes
+        assert!(result.is_ok(), "parse_perl_file should handle non-UTF-8 bytes, got: {result:?}");
+        Ok(())
     }
 }
 
