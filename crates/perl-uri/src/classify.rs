@@ -14,7 +14,18 @@ use url::Url;
 #[must_use]
 pub fn uri_key(uri: &str) -> String {
     if let Ok(parsed) = Url::parse(uri) {
-        let value = parsed.as_str().to_string();
+        let mut value = parsed.as_str().to_string();
+
+        // Canonicalize localhost file authorities (file://localhost/...) to
+        // the standard local form (file:///...) so equivalent URIs map to the
+        // same key.
+        if parsed.scheme() == "file"
+            && parsed.host_str() == Some("localhost")
+            && let Some(path) = value.strip_prefix("file://localhost")
+        {
+            value = format!("file://{path}");
+        }
+
         if let Some(rest) = value.strip_prefix("file:///")
             && rest.len() > 1
             && rest.as_bytes()[1] == b':'
@@ -66,6 +77,20 @@ mod tests {
     fn normalizes_uri_keys() {
         assert_eq!(uri_key("file:///tmp/test.pl"), "file:///tmp/test.pl");
         assert_eq!(uri_key("file:///C:/Users/test.pl"), "file:///c:/Users/test.pl");
+    }
+
+    #[test]
+    fn normalizes_localhost_file_authority() {
+        assert_eq!(uri_key("file://localhost/tmp/test.pl"), uri_key("file:///tmp/test.pl"));
+        assert_eq!(
+            uri_key("file://localhost/C:/Users/test.pl"),
+            uri_key("file:///c:/Users/test.pl")
+        );
+    }
+
+    #[test]
+    fn preserves_non_local_file_authority() {
+        assert_eq!(uri_key("file://server/share/test.pl"), "file://server/share/test.pl");
     }
 
     #[test]
