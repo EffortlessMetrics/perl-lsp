@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -245,6 +245,16 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Ok(cwd) = std::env::current_dir() {
+                // Compatibility fallback for lightweight clients (for example Aider)
+                // that initialize without workspaceFolders/rootUri/rootPath.
+                let cwd_uri = root_path_to_file_uri(&cwd.to_string_lossy());
+                let mut folders = self.workspace_folders.lock();
+                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                    cwd_uri.clone(),
+                ));
+                self.set_root_uri(&cwd_uri);
+                tracing::debug!(cwd_uri, "Initialized with process current directory fallback");
             }
         }
 
@@ -428,8 +438,9 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::LspServer;
+    use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
 
     #[test]
@@ -570,5 +581,26 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_uses_current_directory_when_root_is_missing() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {}
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "missing roots should fall back to current directory");
+
+        let expected_uri =
+            std::env::current_dir().ok().map(|cwd| root_path_to_file_uri(&cwd.to_string_lossy()));
+        assert_eq!(
+            folders[0].uri,
+            expected_uri.unwrap_or_default(),
+            "workspace folder should match current directory fallback URI"
+        );
     }
 }
