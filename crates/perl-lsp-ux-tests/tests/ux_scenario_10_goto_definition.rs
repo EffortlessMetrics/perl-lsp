@@ -84,6 +84,10 @@ fn is_lsp_location_shape(entry: &Value) -> bool {
     is_location || is_location_link
 }
 
+fn entry_uri(entry: &Value) -> Option<&str> {
+    entry.get("uri").or_else(|| entry.get("targetUri")).and_then(Value::as_str)
+}
+
 #[test]
 fn scenario_10_definition_same_file_call_site_resolves() -> Result<()> {
     if !binary_available() {
@@ -99,13 +103,29 @@ fn scenario_10_definition_same_file_call_site_resolves() -> Result<()> {
     // When go-to-definition is requested on `greet('World')`.
     let definitions = scenario.when_requesting_definition_with_retry("greet.pl", 8, 0)?;
 
-    // Then the server returns either a location or degrades cleanly.
+    // Then the server must return at least one result — the `sub greet`
+    // declaration is literally six lines above the call site. An empty list
+    // after retry indicates goto-definition is broken, not degraded UX.
+    assert!(
+        !definitions.is_empty(),
+        "expected at least one definition location for same-file `greet()` call site \
+         (sub defined on line 3) but got empty list after retries"
+    );
     for entry in &definitions {
         assert!(
             is_lsp_location_shape(entry),
             "definition entry must be a Location or LocationLink: {entry:?}"
         );
     }
+    // And at least one location must point back to greet.pl — otherwise the
+    // server resolved the call to some unrelated file (real regression).
+    let points_to_source = definitions.iter().any(|entry| {
+        entry_uri(entry).map(|uri| uri.ends_with("greet.pl")).unwrap_or(false)
+    });
+    assert!(
+        points_to_source,
+        "expected at least one definition result to point back to greet.pl, got: {definitions:?}"
+    );
 
     scenario.then_no_crash_signals_exist();
     Ok(())
@@ -127,7 +147,9 @@ fn scenario_10_definition_cross_file_module_symbol_points_to_module() -> Result<
     // When go-to-definition is requested on `increment` in `Counter->increment`.
     let definitions = scenario.when_requesting_definition_with_retry("main.pl", 5, 23)?;
 
-    // Then results are shape-valid and, if present, include the module file.
+    // Then results are shape-valid. Cross-file module resolution may degrade
+    // if `use lib` handling is incomplete; keep the empty path tolerated but
+    // log it so we notice when it happens in CI.
     for entry in &definitions {
         assert!(
             is_lsp_location_shape(entry),
@@ -135,19 +157,32 @@ fn scenario_10_definition_cross_file_module_symbol_points_to_module() -> Result<
         );
     }
 
-    let points_to_module = definitions.iter().any(|entry| {
-        entry
-            .get("uri")
-            .or_else(|| entry.get("targetUri"))
-            .and_then(Value::as_str)
-            .map(|uri| uri.ends_with("lib/Counter.pm"))
-            .unwrap_or(false)
-    });
-
-    assert!(
-        definitions.is_empty() || points_to_module,
-        "non-empty cross-file definition results should include lib/Counter.pm: {definitions:?}"
-    );
+    if definitions.is_empty() {
+        eprintln!(
+            "INFO scenario_10: cross-file definition returned empty — tolerated \
+             degraded path (cross-file indexing may not have settled)"
+        );
+    } else {
+        let points_to_module = definitions
+            .iter()
+            .any(|entry| entry_uri(entry).map(|uri| uri.ends_with("Counter.pm")).unwrap_or(false));
+        assert!(
+            points_to_module,
+            "non-empty cross-file definition results must include Counter.pm but did not: \
+             {definitions:?}"
+        );
+        // And they must never resolve to an unrelated file (e.g. leaking the
+        // call-site file as the definition would be a real regression).
+        let resolves_outside_workspace = definitions.iter().any(|entry| {
+            entry_uri(entry)
+                .map(|uri| !uri.ends_with("Counter.pm") && !uri.ends_with("main.pl"))
+                .unwrap_or(false)
+        });
+        assert!(
+            !resolves_outside_workspace,
+            "cross-file definition resolved to an unrelated file: {definitions:?}"
+        );
+    }
 
     scenario.then_no_crash_signals_exist();
     Ok(())
