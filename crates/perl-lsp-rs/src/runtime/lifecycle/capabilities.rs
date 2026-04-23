@@ -27,6 +27,15 @@ impl LspServer {
 
         // Parse client capabilities
         if let Some(params) = &params {
+            let is_jetbrains_client = params
+                .pointer("/clientInfo/name")
+                .and_then(|name| name.as_str())
+                .map(|name| {
+                    let lowered = name.to_ascii_lowercase();
+                    lowered.contains("jetbrains") || lowered.contains("intellij")
+                })
+                .unwrap_or(false);
+
             // Take lock once to write all capabilities
             {
                 let mut caps = self.client_capabilities.lock();
@@ -71,6 +80,12 @@ impl LspServer {
                     .and_then(|d| d.get("dynamicRegistration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                if is_jetbrains_client && caps.dynamic_registration_support {
+                    tracing::debug!(
+                        "JetBrains client detected; disabling dynamic watcher registration for compatibility"
+                    );
+                    caps.dynamic_registration_support = false;
+                }
 
                 caps.workspace_configuration_support = params
                     .get("capabilities")
@@ -489,5 +504,29 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_disables_dynamic_registration_for_jetbrains_clients() {
+        let server = LspServer::new();
+        let params = json!({
+            "clientInfo": {
+                "name": "JetBrains Gateway"
+            },
+            "capabilities": {
+                "workspace": {
+                    "didChangeWatchedFiles": {
+                        "dynamicRegistration": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        assert!(
+            !server.client_capabilities.lock().dynamic_registration_support,
+            "JetBrains clients should skip dynamic watcher registration"
+        );
     }
 }
