@@ -103,8 +103,16 @@ impl EnhancedCodeActionsProvider {
         }
 
         while end > start {
-            let Some(ch) = self.source[..end].chars().next_back() else {
-                break;
+            // Use .get(..end) to avoid panicking on a non-char-boundary `end` value
+            // that a stale or externally-sourced byte range might supply.
+            let Some(ch) = self.source.get(..end).and_then(|s| s.chars().next_back()) else {
+                // `end` is mid-char — snap to the nearest lower char boundary by
+                // decrementing one byte at a time until we land on a boundary.
+                end -= 1;
+                while end > start && !self.source.is_char_boundary(end) {
+                    end -= 1;
+                }
+                continue;
             };
 
             if ch.is_whitespace() || ch == ';' {
@@ -758,6 +766,20 @@ mod extract_variable_tests {
         let normalized = provider.normalize_range_for_refactors((0, len));
         assert!(normalized.0 <= normalized.1);
         assert!(normalized.1 <= len);
+    }
+
+    /// An externally-supplied `end` that bisects a multibyte UTF-8 character must
+    /// not cause a panic. The normalizer must snap to the nearest lower char boundary.
+    #[test]
+    fn test_normalize_range_mid_char_boundary_does_not_panic() {
+        // "π" is 2 bytes (0xCF 0x80). "my $x = " is 8 bytes, then "π" occupies
+        // bytes 8..10. Passing end=9 bisects the π character.
+        let source = "my $x = π;";
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        // end=9 is mid-char (π spans bytes 8 and 9). Must not panic.
+        let normalized = provider.normalize_range_for_refactors((0, 9));
+        assert!(normalized.0 <= normalized.1);
+        assert!(source.is_char_boundary(normalized.1), "result end must be a valid char boundary");
     }
 
     /// An empty source must not panic when any range is passed.
