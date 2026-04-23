@@ -65,3 +65,14 @@ fn test_begin_block_still_works() {
 fn test_end_block_still_works() {
     assert_clean_parse("END { cleanup(); }");
 }
+
+#[test]
+fn test_check_can_be_called_as_subroutine() {
+    // CPAN modules may define a sub named CHECK and invoke it as a normal call.
+    assert_clean_parse("CHECK();");
+}
+
+#[test]
+fn test_begin_can_be_called_as_subroutine() {
+    assert_clean_parse("BEGIN('arg');");
+}
