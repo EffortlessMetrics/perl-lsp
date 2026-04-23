@@ -39,8 +39,44 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::path::Path;
+use std::{fmt, path::Path};
 use tree_sitter::{Language, Parser};
+
+/// Error returned by [`parse_perl_code`] and [`parse_perl_file`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ParseError {
+    /// The parser could not be configured with the linked language/runtime pair.
+    Language(tree_sitter::LanguageError),
+    /// tree-sitter returned `None` from `parse` (cancelled parse or timeout).
+    ParseCancelled,
+    /// File I/O error while reading source from disk.
+    Io(std::io::Error),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::Language(err) => {
+                write!(f, "failed to configure Perl parser language: {err}")
+            }
+            ParseError::ParseCancelled => {
+                write!(f, "failed to parse code: parse was cancelled or timed out")
+            }
+            ParseError::Io(err) => write!(f, "failed to read Perl source file: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ParseError::Language(err) => Some(err),
+            ParseError::ParseCancelled => None,
+            ParseError::Io(err) => Some(err),
+        }
+    }
+}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -124,11 +160,11 @@ pub fn create_parser() -> Parser {
 /// let tree = parse_perl_code("my $x = 42;").unwrap();
 /// assert!(!tree.root_node().has_error());
 /// ```
-pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = try_create_parser()?;
+pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, ParseError> {
+    let mut parser = try_create_parser().map_err(ParseError::Language)?;
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
+        None => Err(ParseError::ParseCancelled),
     }
 }
 
@@ -138,10 +174,8 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 ///
 /// Returns an error if the file cannot be read or if parsing fails (see
 /// [`parse_perl_code`]).
-pub fn parse_perl_file<P: AsRef<Path>>(
-    path: P,
-) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read_to_string(path)?;
+pub fn parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, ParseError> {
+    let code = std::fs::read_to_string(path).map_err(ParseError::Io)?;
     parse_perl_code(&code)
 }
 
@@ -232,6 +266,13 @@ mod tests {
 
         assert!(matched, "expected Inline::CPP heredoc to match the injection query");
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_perl_file_reports_io_errors() {
+        let missing = std::env::temp_dir().join("tree_sitter_perl_c_missing_input_for_io_error.pl");
+        let result = parse_perl_file(&missing);
+        assert!(matches!(result, Err(ParseError::Io(_))));
     }
 }
 
