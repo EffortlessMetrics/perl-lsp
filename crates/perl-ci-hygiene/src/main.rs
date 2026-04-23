@@ -3882,10 +3882,19 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
 fn find_hash_comment_start(line: &str) -> Option<usize> {
     let mut in_single = false;
     let mut in_double = false;
+    let mut prev_was_single_escape = false;
     let mut prev_was_escape = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
+            if prev_was_single_escape {
+                prev_was_single_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_single_escape = true;
+                continue;
+            }
             if ch == '\'' {
                 in_single = false;
             }
@@ -3907,7 +3916,10 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
         }
 
         match ch {
-            '\'' => in_single = true,
+            '\'' => {
+                in_single = true;
+                prev_was_single_escape = false;
+            }
             '"' => in_double = true,
             '#' => {
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
@@ -4346,6 +4358,22 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_ignores_escaped_single_quotes_in_perl_strings() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_hash_line(
+            r#"my $msg = 'it\'s # TODO inside string';"#,
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            r#"my $msg = 'it\'s okay'; # TODO: follow up"#,
+            &todo_re
+        ));
 
         Ok(())
     }
