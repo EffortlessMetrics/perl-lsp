@@ -47,5 +47,28 @@
       "owner": "perl-lsp-ux-tests",
       "state": "planned"
     }
+  ],
+  "supporting_signals": [
+    {
+      "name": "first_five_minutes_workflow_count",
+      "owner": "perl-lsp-ux-tests",
+      "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+      "state": "measured",
+      "unit": "scenarios",
+      "value": 17
+    },
+    {
+      "breakdown": {
+        "deferred": 1,
+        "must_land": 1,
+        "nice_to_land": 2
+      },
+      "name": "open_known_gap_issue_count",
+      "owner": "docs/README known gaps list",
+      "source": "README.md::Known gaps toward solid UX",
+      "state": "measured",
+      "unit": "issues",
+      "value": 4
+    }
   ]
 }

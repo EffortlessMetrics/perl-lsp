@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "supporting_signals",
     "integration_points"
   ],
   "properties": {
@@ -125,6 +126,76 @@
         }
       },
       "additionalProperties": false
+    },
+    "supporting_signals": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "first_five_minutes_workflow_count"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "open_known_gap_issue_count"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["name", "state", "owner", "value", "unit", "source"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "first_five_minutes_workflow_count",
+              "open_known_gap_issue_count"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["planned", "measured"]
+          },
+          "owner": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "breakdown": {
+            "type": "object",
+            "required": ["must_land", "nice_to_land", "deferred"],
+            "properties": {
+              "must_land": { "type": "integer", "minimum": 0 },
+              "nice_to_land": { "type": "integer", "minimum": 0 },
+              "deferred": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

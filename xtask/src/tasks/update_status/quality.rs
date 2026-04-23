@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
 
@@ -122,6 +123,64 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) struct UxGapIssueCounts {
+    must_land: usize,
+    nice_to_land: usize,
+    deferred: usize,
+}
+
+impl UxGapIssueCounts {
+    pub(super) fn total(self) -> usize {
+        self.must_land + self.nice_to_land + self.deferred
+    }
+}
+
+pub(super) fn collect_readme_ux_gap_issue_counts(root: &Path) -> UxGapIssueCounts {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return UxGapIssueCounts::default();
+    };
+    let heading_re = Regex::new(r"^####\s+(.+)$").ok();
+    let issue_re = Regex::new(r"\[#\d+\]\(").ok();
+
+    enum GapSection {
+        MustLand,
+        NiceToLand,
+        Deferred,
+        Other,
+    }
+
+    let mut section = GapSection::Other;
+    let mut counts = UxGapIssueCounts::default();
+
+    for line in readme.lines() {
+        if let Some(caps) = heading_re.as_ref().and_then(|re| re.captures(line)) {
+            section = match caps.get(1).map(|m| m.as_str().trim()) {
+                Some("Must land for v0.13.0") => GapSection::MustLand,
+                Some("Nice to land") => GapSection::NiceToLand,
+                Some("Deferred to v0.14.0") => GapSection::Deferred,
+                _ => GapSection::Other,
+            };
+            continue;
+        }
+
+        let issue_count = issue_re.as_ref().map_or(0, |re| re.find_iter(line).count());
+        if issue_count == 0 {
+            continue;
+        }
+
+        match section {
+            GapSection::MustLand => counts.must_land += issue_count,
+            GapSection::NiceToLand => counts.nice_to_land += issue_count,
+            GapSection::Deferred => counts.deferred += issue_count,
+            GapSection::Other => {}
+        }
+    }
+
+    counts
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -130,6 +189,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
     let mutation_by_crate = collect_per_crate_mutation(root);
     let tests_by_crate = collect_per_crate_test_counts(root);
     let ux_scenarios = count_ux_scenarios(root);
+    let ux_gap_issues = collect_readme_ux_gap_issue_counts(root);
 
     let has_mutation_data = !mutation_by_crate.is_empty();
     let mutation_note = if has_mutation_data {
@@ -144,8 +204,15 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; planning scaffold at \
            `docs/project/status/editor_ux.json`\n\
+         - **UX confidence scorecard**: {ux_scenarios} scripted workflows and \
+           {ux_gap_total} active known-gap issues from README ({ux_gap_must} must-land / \
+           {ux_gap_nice} nice-to-land / {ux_gap_deferred} deferred)\n\
          - **Mutation testing**: {mutation_note}\n\
-         - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
+         - **Production Status**: LSP server public alpha (`just ci-gate` passing)",
+        ux_gap_total = ux_gap_issues.total(),
+        ux_gap_must = ux_gap_issues.must_land,
+        ux_gap_nice = ux_gap_issues.nice_to_land,
+        ux_gap_deferred = ux_gap_issues.deferred
     );
 
     let crate_table = format_crate_quality_table(&mutation_by_crate, &tests_by_crate);
@@ -169,6 +236,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let ux_gap_issues = collect_readme_ux_gap_issue_counts(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -194,6 +262,29 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
                 "name": "p95_time_to_first_useful_result_ms",
                 "state": "planned",
                 "owner": "perl-lsp-ux-tests",
+            },
+        ],
+        "supporting_signals": [
+            {
+                "name": "first_five_minutes_workflow_count",
+                "state": "measured",
+                "owner": "perl-lsp-ux-tests",
+                "value": scenario_count,
+                "unit": "scenarios",
+                "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+            },
+            {
+                "name": "open_known_gap_issue_count",
+                "state": "measured",
+                "owner": "docs/README known gaps list",
+                "value": ux_gap_issues.total(),
+                "unit": "issues",
+                "source": "README.md::Known gaps toward solid UX",
+                "breakdown": {
+                    "must_land": ux_gap_issues.must_land,
+                    "nice_to_land": ux_gap_issues.nice_to_land,
+                    "deferred": ux_gap_issues.deferred,
+                },
             },
         ],
         "integration_points": {
@@ -280,6 +371,34 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        let supporting_signals = receipt["supporting_signals"]
+            .as_array()
+            .ok_or_else(|| eyre!("supporting_signals must be an array"))?;
+        assert_eq!(supporting_signals.len(), 2, "expected two supporting UX signals");
+        assert_eq!(supporting_signals[0]["name"], "first_five_minutes_workflow_count");
+        assert_eq!(supporting_signals[1]["name"], "open_known_gap_issue_count");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collect_readme_ux_gap_issue_counts() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let readme = r#"
+#### Must land for v0.13.0
+- Workspace rename ([#3522](https://example.com/3522))
+
+#### Nice to land
+- Dynamic require ([#3476](https://example.com/3476), umbrella [#4246](https://example.com/4246))
+
+#### Deferred to v0.14.0
+- Dynamic workspace configuration ([#3515](https://example.com/3515))
+"#;
+        fs::write(dir.path().join("README.md"), readme)?;
+        let counts = collect_readme_ux_gap_issue_counts(dir.path());
+        assert_eq!(counts.must_land, 1);
+        assert_eq!(counts.nice_to_land, 2);
+        assert_eq!(counts.deferred, 1);
+        assert_eq!(counts.total(), 4);
         Ok(())
     }
 }
