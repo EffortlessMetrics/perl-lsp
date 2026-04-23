@@ -3288,10 +3288,8 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     } else {
         repo_root.join(docs_dir)
     };
-    let home_machine = Regex::new(r"/home/[^u]")?;
-    let home_steven = Regex::new(r"/home/steven")?;
-    let users_machine = Regex::new(r"/Users/[^N]")?;
-    let users_placeholder = Regex::new(r"/Users/Name")?;
+    let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+    let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
 
     let mut hard_failures = Vec::new();
     let mut warnings = Vec::new();
@@ -3312,13 +3310,10 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
         let contents = fs::read_to_string(path)?;
         for (line_no, line) in contents.lines().enumerate() {
             let number = line_no + 1;
-            if home_machine.is_match(line) && !line.contains("/home/user") {
+            if has_machine_specific_home_path(line, &home_user_path) {
                 hard_failures.push(format!("{rel}:{number}:{line}"));
             }
-            if home_steven.is_match(line) {
-                hard_failures.push(format!("{rel}:{number}:{line}"));
-            }
-            if users_machine.is_match(line) && !users_placeholder.is_match(line) {
+            if has_machine_specific_users_path(line, &users_name_path) {
                 warnings.push(format!("{rel}:{number}:{line}"));
             }
         }
@@ -3346,6 +3341,18 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     println!("  - Use relative paths: docs/file.md instead of /home/.../docs/file.md");
     println!("  - Use generic examples: /home/user/project for user-facing docs");
     Ok(1)
+}
+
+fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
+    home_user_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
+    })
+}
+
+fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
+    users_name_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("name"))
+    })
 }
 
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
@@ -4141,6 +4148,39 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn home_path_detection_only_allows_generic_user_examples() -> Result<()> {
+        let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_home_path(
+            "Use /home/user/project as the example.",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path(
+            "My path is /home/ubuntu/workspace/perl-lsp",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path("Local path: /home/u/project", &home_user_path,));
+
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_detection_only_allows_generic_name_examples() -> Result<()> {
+        let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/Name/project",
+            &users_name_path,
+        ));
+        assert!(has_machine_specific_users_path(
+            "Personal path: /Users/alice/dev/perl-lsp",
+            &users_name_path,
+        ));
 
         Ok(())
     }
