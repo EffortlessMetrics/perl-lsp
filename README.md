@@ -179,6 +179,10 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 - **Dynamic require / literal import** — `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
 
+#### Delivered in v0.13.x
+
+- **Dynamic workspace configuration** — per-folder `.perl-lsp.toml` remains supported and the `workspace/configuration` reverse-request flow now refreshes per-folder scoped settings on topology/config changes ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+
 #### What shipped this cycle (v0.12.x)
 
 These items were rough edges in the previous list and have since landed:
@@ -187,7 +191,7 @@ These items were rough edges in the previous list and have since landed:
   reverse-request flow is now implemented and merged over per-folder
   `.perl-lsp.toml` base config ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
 
-- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) � [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
+- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) � [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
 - Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
 - `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
 - Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)

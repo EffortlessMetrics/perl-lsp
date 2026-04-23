@@ -473,4 +473,38 @@ include_paths = ["other_lib"]
         assert!(msg.contains("distro package manager on Linux"));
         Ok(())
     }
+
+    #[test]
+    fn did_change_workspace_folders_clears_pending_scoped_configuration_requests()
+    -> anyhow::Result<()> {
+        let server = LspServer::new();
+        let temp = tempfile::tempdir()?;
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder)?;
+        let uri = url::Url::from_directory_path(&folder)
+            .map_err(|()| anyhow::anyhow!("failed to create folder URI"))?
+            .to_string();
+
+        server.pending_workspace_configuration_requests.lock().insert(
+            700,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec![uri.clone()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+
+        server.handle_did_change_workspace_folders(Some(serde_json::json!({
+            "event": {
+                "added": [{ "uri": uri, "name": "folder" }],
+                "removed": []
+            }
+        })))?;
+
+        assert!(
+            server.pending_workspace_configuration_requests.lock().is_empty(),
+            "workspace folder changes should invalidate stale scoped configuration requests",
+        );
+        Ok(())
+    }
 }
