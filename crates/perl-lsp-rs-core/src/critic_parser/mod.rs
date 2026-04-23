@@ -38,6 +38,7 @@ pub fn parse_perlcritic_output(output: &str) -> Vec<ParsedCriticLine> {
 
 /// Parse one Perl::Critic verbose output line.
 pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
+    let line = line.trim_end_matches('\r');
     if line.trim().is_empty() {
         return None;
     }
@@ -65,6 +66,9 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     let line_num = parts[start].parse::<u32>().ok()?;
     let column = parts[start + 1].parse::<u32>().ok()?;
     let severity = parts[start + 2].parse::<u8>().ok()?;
+    if line_num == 0 || column == 0 || !(1..=5).contains(&severity) {
+        return None;
+    }
 
     let tail = parts[start + 3..].join(":");
     let boundary = find_policy_message_boundary(&tail)?;
@@ -77,6 +81,59 @@ pub fn parse_perlcritic_line(line: &str) -> Option<ParsedCriticLine> {
     }
 
     Some(ParsedCriticLine { file, line: line_num, column, severity, policy, message })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_perlcritic_line, parse_perlcritic_output};
+
+    #[test]
+    fn parse_perlcritic_line_rejects_zero_line_and_column() {
+        let zero_line = "lib/Foo.pm:0:2:3:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(zero_line).is_none());
+
+        let zero_col = "lib/Foo.pm:1:0:3:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(zero_col).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_rejects_out_of_range_severity() {
+        let too_low = "lib/Foo.pm:1:1:0:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(too_low).is_none());
+
+        let too_high = "lib/Foo.pm:1:1:7:TestingAndDebugging::RequireUseStrict:msg";
+        assert!(parse_perlcritic_line(too_high).is_none());
+    }
+
+    #[test]
+    fn parse_perlcritic_line_trims_crlf_line_endings() {
+        let line = "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg\r";
+        let parsed = parse_perlcritic_line(line).expect("valid perlcritic line");
+        assert_eq!(parsed.message, "msg");
+    }
+
+    #[test]
+    fn parse_perlcritic_line_supports_windows_drive_paths() {
+        let line = "C:\\project\\lib\\Foo.pm:10:4:2:TestingAndDebugging::RequireUseStrict:msg";
+        let parsed = parse_perlcritic_line(line).expect("valid windows path");
+        assert_eq!(parsed.file, "C:\\project\\lib\\Foo.pm");
+        assert_eq!(parsed.line, 10);
+        assert_eq!(parsed.column, 4);
+    }
+
+    #[test]
+    fn parse_perlcritic_output_skips_invalid_lines() {
+        let output = [
+            "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg",
+            "lib/Foo.pm:0:1:5:TestingAndDebugging::RequireUseStrict:invalid",
+            "",
+        ]
+        .join("\n");
+
+        let parsed = parse_perlcritic_output(&output);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].line, 1);
+    }
 }
 
 fn find_policy_message_boundary(tail: &str) -> Option<usize> {
