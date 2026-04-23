@@ -162,8 +162,10 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?; // consume 'local'
         let declarator = declarator_token.text.to_string();
 
-        // Parse the lvalue expression that's being localized
-        let variable = Box::new(self.parse_expression()?);
+        // Parse the localizable lvalue target without consuming assignment operators.
+        // `local $SIG{__WARN__} = sub { ... };` must leave `=` for the initializer branch
+        // so anonymous sub expressions parse as the RHS, not as a separate statement.
+        let variable = Box::new(self.parse_ternary()?);
 
         let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
