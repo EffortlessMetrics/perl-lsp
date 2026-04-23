@@ -34,7 +34,7 @@ fn is_special_variable_name(name: &str) -> bool {
 /// Convert 1-based line bounds into inclusive 0-based indexes.
 ///
 /// Non-positive line inputs are clamped to line 1, and the end index is
-/// clamped to the final available line.
+/// rejected when either bound is past the available line count.
 fn normalize_line_bounds(
     start_line: i64,
     end_line: i64,
@@ -46,11 +46,79 @@ fn normalize_line_bounds(
 
     let start_1_based = start_line.max(1) as usize;
     let end_1_based = end_line.max(1) as usize;
+    if start_1_based > line_count || end_1_based > line_count {
+        return None;
+    }
 
-    let start_idx = start_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
-    let end_idx = end_1_based.saturating_sub(1).min(line_count.saturating_sub(1));
+    let start_idx = start_1_based.saturating_sub(1);
+    let end_idx = end_1_based.saturating_sub(1);
 
     (start_idx <= end_idx).then_some((start_idx, end_idx))
+}
+
+/// Build a byte-level mask for regions that should be considered executable code.
+///
+/// Bytes that belong to Perl comments (`# ...`) or single/double-quoted string
+/// literals are marked `false` and should be ignored by lightweight regex scans.
+fn code_byte_mask(line: &str) -> Vec<bool> {
+    let bytes = line.as_bytes();
+    let mut mask = vec![true; bytes.len()];
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    let mut i = 0;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+
+        if in_single {
+            mask[i] = false;
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'\'' {
+                in_single = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_double {
+            mask[i] = false;
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'"' {
+                in_double = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        match b {
+            b'#' => {
+                for byte in mask.iter_mut().take(bytes.len()).skip(i) {
+                    *byte = false;
+                }
+                break;
+            }
+            b'\'' => {
+                mask[i] = false;
+                in_single = true;
+            }
+            b'"' => {
+                mask[i] = false;
+                in_double = true;
+            }
+            _ => {}
+        }
+
+        i += 1;
+    }
+
+    mask
 }
 
 /// Extract unique variable names from source code within a line range.
@@ -74,8 +142,12 @@ pub fn extract_variable_names(source: &str, start_line: i64, end_line: i64) -> V
     let mut names = Vec::new();
 
     for line in lines.iter().skip(start_idx).take(end_idx - start_idx + 1) {
+        let code_mask = code_byte_mask(line);
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
+                if !code_mask[m.start()..m.end()].iter().all(|is_code| *is_code) {
+                    continue;
+                }
                 let name = m.as_str();
                 if !is_special_variable_name(name) && seen.insert(name.to_string()) {
                     names.push(name.to_string());
@@ -163,8 +235,12 @@ pub fn collect_inline_values_with_runtime(
     let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
+        let code_mask = code_byte_mask(line);
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
+                if !code_mask[m.start()..m.end()].iter().all(|is_code| *is_code) {
+                    continue;
+                }
                 let var_name = m.as_str();
                 if is_special_variable_name(var_name) {
                     continue;
@@ -206,8 +282,12 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
     let mut inline_values = Vec::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
+        let code_mask = code_byte_mask(line);
         for cap in re.captures_iter(line) {
             if let Some(m) = cap.get(0) {
+                if !code_mask[m.start()..m.end()].iter().all(|is_code| *is_code) {
+                    continue;
+                }
                 let var_text = m.as_str();
                 let column = (m.start() + 1) as i64;
                 inline_values.push(InlineValueText {
@@ -365,6 +445,14 @@ mod tests {
     }
 
     #[test]
+    fn test_out_of_range_line_bounds_return_empty() {
+        let source = "my $x = 1;\nmy $y = 2;";
+        assert!(extract_variable_names(source, 3, 3).is_empty());
+        assert!(collect_inline_values_with_runtime(source, 3, 3, None).is_empty());
+        assert!(collect_inline_values(source, 3, 3).is_empty());
+    }
+
+    #[test]
     fn test_runtime_inline_value_for_namespaced_scalar() {
         let source = "our $Foo::bar = 1;";
         let mut rv = HashMap::new();
@@ -384,5 +472,23 @@ mod tests {
         let values = collect_inline_values_with_runtime(source, 1, 1, Some(&rv));
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$Foo'bar = 42");
+    }
+
+    #[test]
+    fn test_variable_like_tokens_in_strings_and_comments_are_ignored() {
+        let source = "my $real = 1; my $msg = \"$fake\"; # $commented";
+        let names = extract_variable_names(source, 1, 1);
+        assert!(names.contains(&"$real".to_string()));
+        assert!(names.contains(&"$msg".to_string()));
+        assert!(!names.contains(&"$fake".to_string()));
+        assert!(!names.contains(&"$commented".to_string()));
+    }
+
+    #[test]
+    fn test_inline_values_ignore_strings_and_comments() {
+        let source = "my $real = 1; print \"$ignored\"; # and $commented";
+        let values = collect_inline_values_with_runtime(source, 1, 1, None);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$real = ?");
     }
 }
