@@ -364,6 +364,7 @@
         "request does not error"
       ],
       "confidence_signals": [
+        "first_five_minutes_harness",
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]

@@ -32,12 +32,20 @@ fn scenario_18_declaration_request_does_not_error() -> Result<()> {
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
     harness.open_file("declaration.pl", DECLARATION_FIXTURE)?;
-    let result = harness.declaration("declaration.pl", 9, 13);
+    // `inc` in `inc($value)`
+    let sub_result = harness.declaration("declaration.pl", 9, 13);
+    // `$value` in `inc($value)`
+    let variable_result = harness.declaration("declaration.pl", 9, 17);
 
     assert!(
-        result.is_ok(),
+        sub_result.is_ok(),
         "textDocument/declaration must not return a JSON-RPC error — feature grid regression: {:?}",
-        result
+        sub_result
+    );
+    assert!(
+        variable_result.is_ok(),
+        "textDocument/declaration for variables must not return a JSON-RPC error: {:?}",
+        variable_result
     );
 
     harness.assert_no_crash();
