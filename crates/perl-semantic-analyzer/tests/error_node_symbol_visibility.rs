@@ -171,8 +171,8 @@ fn second_unclosed_sub_is_visible() -> Result<(), Box<dyn std::error::Error>> {
 /// This guards the interaction between PR #4079 (unclosed-block recovery) and
 /// PR #4071 (descend into `Error.partial`).
 #[test]
-fn recovers_unclosed_block_and_keeps_symbols_after_partial_error(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn recovers_unclosed_block_and_keeps_symbols_after_partial_error()
+-> Result<(), Box<dyn std::error::Error>> {
     let source = "sub foo {\n  my $obj = {};\n  my $broken = $obj->;\nsub bar { }\n";
     let table = parse_and_extract(source);
 
