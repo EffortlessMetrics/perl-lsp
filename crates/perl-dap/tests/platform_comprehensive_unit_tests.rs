@@ -330,7 +330,10 @@ fn format_command_args_single_empty_string() -> Result<(), anyhow::Error> {
     let args = vec![String::new()];
     let formatted = format_command_args(&args);
     assert_eq!(formatted.len(), 1);
-    assert_eq!(formatted[0], "", "empty string has no space, returned as-is");
+    #[cfg(windows)]
+    assert_eq!(formatted[0], "\"\"", "empty string should be quoted to survive shell splitting");
+    #[cfg(not(windows))]
+    assert_eq!(formatted[0], "''", "empty string should be quoted to survive shell splitting");
     Ok(())
 }
 

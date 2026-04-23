@@ -17,11 +17,13 @@ fn empty_args_returns_empty_vec() {
 }
 
 #[test]
-fn single_empty_string_arg_passes_through() {
-    // An empty string contains no spaces, so it should pass through unchanged.
+fn single_empty_string_arg_is_quoted_to_preserve_emptiness() {
     let args = vec![String::new()];
     let result = format_command_args(&args);
-    assert_eq!(result, vec![""]);
+    #[cfg(windows)]
+    assert_eq!(result, vec!["\"\""]);
+    #[cfg(not(windows))]
+    assert_eq!(result, vec!["''"]);
 }
 
 #[test]
@@ -211,11 +213,11 @@ mod unix_quoting {
     }
 
     #[test]
-    fn newline_without_space_passes_through() {
-        // Newlines alone don't trigger quoting.
+    fn newline_without_space_is_quoted() {
+        // Newline is whitespace and must be quoted to avoid shell token splitting.
         let args = vec!["line1\nline2".to_string()];
         let result = format_command_args(&args);
-        assert_eq!(result[0], "line1\nline2");
+        assert_eq!(result[0], "'line1\nline2'");
     }
 }
 
