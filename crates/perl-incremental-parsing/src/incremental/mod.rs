@@ -1,3 +1,9 @@
+//! Core incremental parsing orchestration primitives.
+//!
+//! This module coordinates checkpoint creation and edit application for
+//! incremental parsing workflows. It intentionally exposes compact state and
+//! edit types that can be reused by multiple incremental strategies.
+
 #![allow(missing_docs)]
 
 use anyhow::Result;
@@ -11,54 +17,81 @@ use crate::ast::{Node, NodeKind, SourceLocation};
 use crate::parser::Parser;
 use perl_lexer::{LexerMode, PerlLexer, Token, TokenType};
 
+/// Advanced subtree-reuse analysis and matching heuristics.
 pub mod incremental_advanced_reuse;
+/// Lexer-checkpoint-based incremental parsing pipeline.
 pub mod incremental_checkpoint;
+/// Document model for versioned incremental parsing with subtree reuse.
 pub mod incremental_document;
+/// Edit value types and helpers used by incremental parsers.
 pub mod incremental_edit;
+/// Compatibility shim for legacy incremental didChange handling.
 pub mod incremental_handler_v2;
+/// Integration helpers for wiring incremental parsing into LSP flows.
 pub mod incremental_integration;
+/// Baseline simple incremental parser implementation.
 pub mod incremental_simple;
+/// Comprehensive v2 incremental parser with broader reuse support.
 pub mod incremental_v2;
 
 /// Stable restart points to avoid re-lexing the whole world
 #[derive(Clone, Copy, Debug)]
 pub struct LexCheckpoint {
+    /// Byte offset where lexing can restart safely.
     pub byte: usize,
+    /// Lexer mode that should be restored at `byte`.
     pub mode: LexerMode,
+    /// Zero-based line number for position conversion.
     pub line: usize,
+    /// Zero-based column number for position conversion.
     pub column: usize,
 }
 
 /// Scope information at a parse checkpoint
 #[derive(Clone, Debug, Default)]
 pub struct ScopeSnapshot {
+    /// Current package name in scope.
     pub package_name: String,
+    /// Lexical variables visible at this point.
     pub locals: Vec<String>,
+    /// Package variables declared with `our`.
     pub our_vars: Vec<String>,
+    /// Inheritance parents collected from `@ISA`-style relationships.
     pub parent_isa: Vec<String>,
 }
 
 /// Parse checkpoint with scope context
 #[derive(Clone, Debug)]
 pub struct ParseCheckpoint {
+    /// Byte offset where this parse checkpoint is anchored.
     pub byte: usize,
+    /// Scope captured at checkpoint creation time.
     pub scope_snapshot: ScopeSnapshot,
-    pub node_id: usize, // ID of AST node at this point
+    /// Synthetic identifier of the AST node associated with this checkpoint.
+    pub node_id: usize,
 }
 
 /// Incremental parsing state
 #[derive(Clone)]
 pub struct IncrementalState {
+    /// Rope-backed view of the current source text.
     pub rope: Rope,
+    /// Byte/line index for converting offsets and positions.
     pub line_index: LineIndex,
+    /// Lexer restart points discovered from the token stream.
     pub lex_checkpoints: Vec<LexCheckpoint>,
+    /// Parser restart points discovered from the AST.
     pub parse_checkpoints: Vec<ParseCheckpoint>,
+    /// Latest parsed AST.
     pub ast: Node,
+    /// Latest lexed tokens (excluding EOF).
     pub tokens: Vec<Token>,
+    /// Current source text.
     pub source: String,
 }
 
 impl IncrementalState {
+    /// Build incremental parser state from a source snapshot.
     pub fn new(source: String) -> Self {
         let rope = Rope::from_str(&source);
         let line_index = LineIndex::new(&source);
@@ -321,9 +354,13 @@ impl IncrementalState {
 /// Edit description
 #[derive(Clone, Debug)]
 pub struct Edit {
+    /// Start byte offset of the replacement.
     pub start_byte: usize,
+    /// End byte offset in the old source.
     pub old_end_byte: usize,
+    /// End byte offset in the new source.
     pub new_end_byte: usize,
+    /// Replacement text inserted at `start_byte`.
     pub new_text: String,
 }
 
@@ -357,12 +394,15 @@ impl Edit {
 /// Result of incremental reparse
 #[derive(Debug)]
 pub struct ReparseResult {
+    /// Byte ranges considered changed by incremental reparsing.
     pub changed_ranges: Vec<Range<usize>>,
+    /// Diagnostics emitted while reparsing.
     pub diagnostics: Vec<Diagnostic>,
+    /// Number of bytes reparsed after applying edits.
     pub reparsed_bytes: usize,
 }
 
-/// Apply edits incrementally
+/// Apply edits incrementally and return reparse metadata.
 pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<ReparseResult> {
     // Handle multiple edits by sorting and applying in reverse order
     let mut sorted_edits = edits.to_vec();
