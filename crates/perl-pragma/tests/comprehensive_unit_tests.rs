@@ -879,6 +879,38 @@ fn modern_container_bodies_are_traversed_and_scoped() -> Result<(), Box<dyn std:
     Ok(())
 }
 
+#[test]
+fn eval_string_call_is_handled_conservatively() -> Result<(), Box<dyn std::error::Error>> {
+    let eval_string_call = function_call(
+        "eval",
+        vec![Node {
+            kind: NodeKind::String {
+                value: "use warnings; no strict 'refs';".to_string(),
+                interpolated: true,
+            },
+            location: loc(20, 58),
+        }],
+        15,
+        59,
+    );
+    let ast = program(vec![use_node("strict", &[], 0, 12), eval_string_call]);
+
+    let map = PragmaTracker::build(&ast);
+    let state_after_eval_string = PragmaTracker::state_for_offset(&map, 60);
+
+    assert!(
+        state_after_eval_string.strict_vars
+            && state_after_eval_string.strict_subs
+            && state_after_eval_string.strict_refs,
+        "eval STRING should not be interpreted as compile-time pragma state"
+    );
+    assert!(
+        !state_after_eval_string.warnings,
+        "string eval content must not be treated as lexical `use warnings`"
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // state_for_offset edge cases
 // ===========================================================================
