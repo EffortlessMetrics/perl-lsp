@@ -2453,11 +2453,16 @@ impl WorkspaceIndex {
     /// let _files = index.find_dependents("My::Module");
     /// ```
     pub fn find_dependents(&self, module_name: &str) -> Vec<String> {
+        let canonical = canonicalize_perl_module_name(module_name);
+        let legacy = legacy_perl_module_name(&canonical);
         let files = self.files.read();
         let mut dependents = Vec::new();
 
         for (uri_key, file_index) in files.iter() {
-            if file_index.dependencies.contains(module_name) {
+            if file_index.dependencies.contains(module_name)
+                || file_index.dependencies.contains(&canonical)
+                || file_index.dependencies.contains(&legacy)
+            {
                 dependents.push(uri_key.clone());
             }
         }
@@ -3382,7 +3387,7 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
                     .chars()
                     .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
                 {
-                    Some(stripped.to_string())
+                    Some(canonicalize_perl_module_name(stripped))
                 } else {
                     None
                 }
@@ -3391,6 +3396,16 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     }));
 
     modules
+}
+
+fn canonicalize_perl_module_name(name: &str) -> String {
+    // Perl supports the legacy `'` package separator (e.g. Foo'Bar).
+    // Canonicalize to `::` so lookups and dependency matching share one key shape.
+    name.replace('\'', "::")
+}
+
+fn legacy_perl_module_name(name: &str) -> String {
+    name.replace("::", "'")
 }
 
 fn extract_qw_words(input: &str) -> (Vec<String>, String) {
@@ -4890,8 +4905,33 @@ Utils::process_data();
     fn test_extract_module_names_legacy_separator() {
         // Perl legacy package separator ' (tick) inside module name
         let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
-        // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
-        assert_eq!(names, vec!["Foo'Bar"]);
+        // Legacy separators are normalized for downstream dependency matching.
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_find_dependents_matches_legacy_separator_queries() {
+        let index = WorkspaceIndex::new();
+        let base_uri = must(url::Url::parse("file:///test/workspace/lib/Foo/Bar.pm"));
+        let child_uri = must(url::Url::parse("file:///test/workspace/child.pl"));
+
+        must(index.index_file(base_uri, "package Foo::Bar;\n1;\n".to_string()));
+        must(index.index_file(
+            child_uri.clone(),
+            "package Child;\nuse parent qw(Foo'Bar);\n1;\n".to_string(),
+        ));
+
+        let dependents_modern = index.find_dependents("Foo::Bar");
+        assert!(
+            dependents_modern.contains(&child_uri.to_string()),
+            "Expected dependency match when queried with modern separator"
+        );
+
+        let dependents_legacy = index.find_dependents("Foo'Bar");
+        assert!(
+            dependents_legacy.contains(&child_uri.to_string()),
+            "Expected dependency match when queried with legacy separator"
+        );
     }
 
     #[test]
