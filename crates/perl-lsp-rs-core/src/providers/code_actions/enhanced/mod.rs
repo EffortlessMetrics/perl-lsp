@@ -408,7 +408,16 @@ impl EnhancedCodeActionsProvider {
         }
 
         // Add utf8 support if missing
-        if !self.source.contains("use utf8") && helpers.has_non_ascii_content() {
+        let has_utf8_pragma = has_utf8_pragma(&self.source);
+        let has_utf8_open_layer = has_utf8_open_layer(&self.source);
+        if helpers.has_non_ascii_content() && (!has_utf8_pragma || !has_utf8_open_layer) {
+            let mut utf8_pragmas = Vec::new();
+            if !has_utf8_pragma {
+                utf8_pragmas.push("use utf8;");
+            }
+            if !has_utf8_open_layer {
+                utf8_pragmas.push("use open qw(:std :utf8);");
+            }
             let insert_pos = helpers.find_pragma_insert_position();
 
             actions.push(CodeAction {
@@ -418,7 +427,7 @@ impl EnhancedCodeActionsProvider {
                 edit: CodeActionEdit {
                     changes: vec![TextEdit {
                         location: SourceLocation { start: insert_pos, end: insert_pos },
-                        new_text: "use utf8;\nuse open qw(:std :utf8);\n".to_string(),
+                        new_text: format!("{}\n", utf8_pragmas.join("\n")),
                     }],
                 },
                 is_preferred: false,
@@ -427,6 +436,21 @@ impl EnhancedCodeActionsProvider {
 
         actions
     }
+}
+
+fn has_utf8_pragma(source: &str) -> bool {
+    source.lines().any(|line| line.trim_start().starts_with("use utf8"))
+}
+
+fn has_utf8_open_layer(source: &str) -> bool {
+    source.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("use open")
+            && (trimmed.contains(":utf8")
+                || trimmed.contains(":encoding(UTF-8)")
+                || trimmed.contains(":encoding(utf8)")
+                || trimmed.contains(":encoding(utf-8)"))
+    })
 }
 
 #[cfg(test)]
@@ -479,6 +503,36 @@ mod tests {
         let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
 
         assert!(actions.iter().any(|a| a.title.contains("postfix")));
+    }
+
+    #[test]
+    fn test_utf8_action_only_adds_missing_open_layer() {
+        let source = "use utf8;\nmy $name = \"José\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        let utf8_action = actions.iter().find(|a| a.title == "Add UTF-8 support");
+
+        let action = must(utf8_action.ok_or("missing UTF-8 support action"));
+        assert_eq!(action.edit.changes.len(), 1);
+        assert_eq!(action.edit.changes[0].new_text, "use open qw(:std :utf8);\n");
+    }
+
+    #[test]
+    fn test_utf8_action_only_adds_missing_utf8_pragma() {
+        let source = "use open qw(:std :utf8);\nmy $name = \"José\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+        let utf8_action = actions.iter().find(|a| a.title == "Add UTF-8 support");
+
+        let action = must(utf8_action.ok_or("missing UTF-8 support action"));
+        assert_eq!(action.edit.changes.len(), 1);
+        assert_eq!(action.edit.changes[0].new_text, "use utf8;\n");
     }
 }
 
