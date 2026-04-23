@@ -22,6 +22,20 @@ Checkpoints during Window 1:
 | 10 → 20% | #5018 merged, cascade-updated 19 PRs, filed 3 CI-improvement issues (#5019, #5020, #5021), sent #5022 + #5024 + #5027 + #5029 + #5030 to reviewer-deep |
 | 20 → 33% | Collected reviewer-deep batches, fix-forward on #4979/#5022/#5024/#4999/#5029, merged #4998/#5000/#5001/#5005/#5008/#5010/#5012/#5015/#5031, wrote session forensic |
 
+### Window 2 extended — end-of-window checkpoint (5h reset approaching)
+
+**Claude 25% -> 38% session / Weekly 84% -> 85% / Codex 33% session used / Codex ~26% weekly used**
+
+Checkpoints during Window 2 extension:
+
+| At Claude % | Work produced in the interval |
+|---|---|
+| 25 -> 30% | .git damage discovered (rebase agent corrupted main checkout during "repo recreation" recovery). Filed #5380 for hook-level enforcement. Memory: feedback_agent_damaged_main_checkout. User re-cloned the main repo. |
+| 30 -> 35% | 11 rebase agents dispatched (one PR per worktree). Results: #5272 clean, #5288 clean, #5252 clean, #5208 clean, #5207 clean (TTL backstop deferred for builder), #5238 merged 9 wire.rs doc hunks, #5246 merged Windows matrix fix, #5243 + #5244 merged Catalyst generator, #5227 merged release-history template, #5268 renumbered scenario 18 -> 19. Stuck: #5305 (CRLF block in Windows env), #5210 (workspace.rs tangled), #5207 TTL backstop. 6 merges via REST API post-rebase. |
+| 35 -> 38% | 4 more Haiku triage agents dispatched on new Codex wave (editor-docs cluster, BDD tests, forensics+metrics, mixed batch #5418-5432). |
+
+**Session totals this window run:** 380+ merges today, queue bottomed at deep-reviewed=0 (all deep-reviewed either merged or hit CI); 7 bit-rot master fixes; ~65 dupes closed; 9 memory files added; 5 doc articles merged.
+
 ### Window 2 — current
 
 **Claude 0 → 18% session / Codex 0 → 11% session / Weekly Claude 79% → 82%, Codex ~18% → ~21%**
