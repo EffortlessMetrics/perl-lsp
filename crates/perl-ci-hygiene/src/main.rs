@@ -3387,7 +3387,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+    let todo_re = Regex::new(r"(?i)\b(?:TODO|FIXME)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -3857,10 +3857,32 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
     token_re: &Regex,
     in_block_comment: &mut bool,
 ) -> bool {
-    let mut state: Option<usize> = if *in_block_comment { Some(0) } else { None };
-    let result = has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut state);
-    *in_block_comment = state.is_some();
-    result
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            let in_comment = &line[..end_idx];
+            let mut found = has_unlinked_token(in_comment, token_re);
+            *in_block_comment = false;
+            if !found {
+                found = has_unlinked_todo_in_rust_line(&line[end_idx + 2..], token_re);
+            }
+            return found;
+        }
+        return has_unlinked_token(line, token_re);
+    }
+
+    for (idx, _) in line.match_indices("/*") {
+        if is_index_in_rust_literal(line, idx, None)
+            || is_likely_string_literal_comment_start(line, idx)
+        {
+            continue;
+        }
+        if find_block_comment_end(line, idx + 2).is_none() {
+            *in_block_comment = true;
+            break;
+        }
+    }
+
+    has_unlinked_todo_in_rust_line(line, token_re)
 }
 
 fn has_unlinked_todo_in_rust_line_with_state(
@@ -3930,13 +3952,11 @@ fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
 
 fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single = false;
-    let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
     let mut prev_single_was_escape = false;
     let mut prev_was_escape = false;
     let mut prev_was_escape_double = false;
-    let mut prev_was_escape_single = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
@@ -3950,21 +3970,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
             }
             if ch == '\'' {
                 in_single = false;
-            }
-            continue;
-        }
-        if in_double {
-            if prev_was_escape {
-                prev_was_escape = false;
-                continue;
-            }
-            if ch == '\\' {
-                prev_was_escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_single = false;
-                in_single_ansi_c = false;
             }
             continue;
         }
@@ -4000,8 +4005,6 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         match ch {
             '\'' => {
                 in_single = true;
-                in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
-                prev_was_escape_single = false;
                 prev_single_was_escape = false;
             }
             '"' => {
@@ -4027,7 +4030,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                     if prev.is_whitespace()
                         || matches!(
                             prev,
-                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
+                            ';' | ',' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>'
                         )
                     {
                         return Some(idx);
@@ -4246,10 +4249,12 @@ fn rust_raw_string_state_after_line(
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
-    for m in token_re.find_iter(comment) {
-        let suffix = &comment[m.end()..];
-        if !linked_marker(suffix) {
-            return true;
+    for scan_comment in [comment.to_string(), comment.to_ascii_uppercase()] {
+        for m in token_re.find_iter(&scan_comment) {
+            let suffix = &scan_comment[m.end()..];
+            if !linked_marker(suffix) {
+                return true;
+            }
         }
     }
     false
