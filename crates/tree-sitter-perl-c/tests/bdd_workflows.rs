@@ -13,8 +13,8 @@ use std::{
 
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 use tree_sitter_perl_c::{
-    create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file,
-    try_create_parser,
+    create_parser, get_scanner_config, language, parse_perl_code, parse_perl_code_with_parser,
+    parse_perl_file, try_create_parser,
 };
 
 struct Scenario {
@@ -84,6 +84,25 @@ fn bdd_parse_valid_source_returns_an_error_free_tree() -> Result<(), Box<dyn Err
     scenario.then("the parse tree should be rooted at source_file and have no errors");
     assert_eq!(tree.root_node().kind(), "source_file");
     assert!(!tree.root_node().has_error());
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_with_reused_parser_supports_multiple_inputs() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse with reused parser");
+    let first_source = "my $value = 1;";
+    let second_source = "my $next = $value + 1;";
+
+    scenario.given("a single configured parser and multiple Perl snippets");
+    let mut parser = try_create_parser()?;
+
+    scenario.when("parse_perl_code_with_parser is invoked for each snippet");
+    let first_tree = parse_perl_code_with_parser(&mut parser, first_source)?;
+    let second_tree = parse_perl_code_with_parser(&mut parser, second_source)?;
+
+    scenario.then("both parses should succeed without constructing another parser");
+    assert!(!first_tree.root_node().has_error());
+    assert!(!second_tree.root_node().has_error());
     Ok(())
 }
 

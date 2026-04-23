@@ -60,12 +60,12 @@ fn main() {
 For repeated parsing, reuse a configured parser:
 
 ```rust
-use tree_sitter_perl_c::try_create_parser;
+use tree_sitter_perl_c::{parse_perl_code_with_parser, try_create_parser};
 
 let mut parser = try_create_parser().unwrap();
 
 for snippet in &["my $x = 1;", "print $x;"] {
-    let tree = parser.parse(snippet, None).unwrap();
+    let tree = parse_perl_code_with_parser(&mut parser, snippet).unwrap();
     assert!(!tree.root_node().has_error());
 }
 ```
@@ -78,6 +78,7 @@ for snippet in &["my $x = 1;", "print $x;"] {
 | `try_create_parser()` | Creates a `tree_sitter::Parser` (returns `Result`) |
 | `create_parser()` | Creates a parser, silently ignoring language-set errors |
 | `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
+| `parse_perl_code_with_parser(parser, code)` | Parses code with a reused parser |
 | `parse_perl_file(path)` | Reads and parses a file |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 

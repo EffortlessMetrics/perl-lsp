@@ -126,6 +126,22 @@ pub fn create_parser() -> Parser {
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let mut parser = try_create_parser()?;
+    parse_perl_code_with_parser(&mut parser, code)
+}
+
+/// Parses Perl source with an already-configured parser.
+///
+/// This avoids re-creating a parser for each call and is preferred in
+/// throughput-sensitive loops.
+///
+/// # Errors
+///
+/// Returns an error when tree-sitter returns `None` from `parse` (cancelled or
+/// timed out).
+pub fn parse_perl_code_with_parser(
+    parser: &mut Parser,
+    code: &str,
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
         None => Err("Failed to parse code".into()),
@@ -142,7 +158,8 @@ pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let code = std::fs::read_to_string(path)?;
-    parse_perl_code(&code)
+    let mut parser = try_create_parser()?;
+    parse_perl_code_with_parser(&mut parser, &code)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -231,6 +248,17 @@ mod tests {
         }
 
         assert!(matched, "expected Inline::CPP heredoc to match the injection query");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_with_reused_parser() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = try_create_parser()?;
+        let first = parse_perl_code_with_parser(&mut parser, "my $x = 1;")?;
+        let second = parse_perl_code_with_parser(&mut parser, "my $y = $x + 1;")?;
+
+        assert!(!first.root_node().has_error());
+        assert!(!second.root_node().has_error());
         Ok(())
     }
 }
