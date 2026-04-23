@@ -26,16 +26,24 @@ pub struct WorkspaceFolderChange {
 /// interpreted as a path fallback.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
-    if workspace_folder.starts_with("file://") {
+    if let Some(path_without_scheme) = strip_file_scheme(workspace_folder) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = uri_to_fs_path(workspace_folder) {
             return path;
         }
 
-        return PathBuf::from(workspace_folder.trim_start_matches("file://"));
+        return PathBuf::from(path_without_scheme);
     }
 
     PathBuf::from(workspace_folder)
+}
+
+#[must_use]
+fn strip_file_scheme(uri_or_path: &str) -> Option<&str> {
+    uri_or_path
+        .get(..7)
+        .filter(|prefix| prefix.eq_ignore_ascii_case("file://"))
+        .and_then(|_| uri_or_path.get(7..))
 }
 
 /// Extract workspace folder URIs from an LSP `workspaceFolders` array.
@@ -105,6 +113,13 @@ mod tests {
     #[test]
     fn parses_file_uri_when_possible() {
         let parsed = workspace_folder_to_path("file:///tmp/project");
+        assert!(parsed.to_string_lossy().contains("tmp"));
+        assert!(parsed.to_string_lossy().contains("project"));
+    }
+
+    #[test]
+    fn parses_uppercase_file_uri_scheme() {
+        let parsed = workspace_folder_to_path("FILE:///tmp/project");
         assert!(parsed.to_string_lossy().contains("tmp"));
         assert!(parsed.to_string_lossy().contains("project"));
     }
