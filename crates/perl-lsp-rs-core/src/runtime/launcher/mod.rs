@@ -40,6 +40,23 @@ pub fn should_enable_logging(explicit_flag: bool) -> bool {
     explicit_flag || logging_env_directive().is_some()
 }
 
+/// Returns whether ANSI output should be emitted for a stream.
+///
+/// ANSI is enabled when `NO_COLOR` is not present and either:
+/// - the stream is attached to a terminal, or
+/// - Warp Terminal is detected via `TERM_PROGRAM`.
+pub fn should_use_ansi(stream_is_terminal: bool) -> bool {
+    std::env::var("NO_COLOR").is_err()
+        && (stream_is_terminal
+            || term_program_is_warp(std::env::var("TERM_PROGRAM").ok().as_deref()))
+}
+
+fn term_program_is_warp(term_program: Option<&str>) -> bool {
+    term_program.is_some_and(|program| {
+        program.eq_ignore_ascii_case("WarpTerminal") || program.eq_ignore_ascii_case("Warp")
+    })
+}
+
 fn logging_env_directive() -> Option<String> {
     std::env::var("PERL_LSP_LOG").ok().or_else(|| std::env::var("RUST_LOG").ok())
 }
@@ -74,7 +91,7 @@ pub fn init_logging(default_filter: &str) {
             .or_else(|_| EnvFilter::try_new(default_filter))
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
-        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+        let use_ansi = should_use_ansi(io::stderr().is_terminal());
 
         // If PERL_LSP_LOG_FILE is set, add a rolling file appender alongside stderr.
         if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
@@ -880,6 +897,20 @@ mod tests {
         let plan = must(parse_args(["perl-lsp", "--help"]));
         assert_eq!(plan.action, LaunchAction::Help);
         assert_eq!(plan.config.transport, TransportMode::Stdio);
+    }
+
+    #[test]
+    fn warp_term_program_detection_accepts_known_values() {
+        assert!(super::term_program_is_warp(Some("WarpTerminal")));
+        assert!(super::term_program_is_warp(Some("warpterminal")));
+        assert!(super::term_program_is_warp(Some("Warp")));
+    }
+
+    #[test]
+    fn warp_term_program_detection_rejects_other_terminals() {
+        assert!(!super::term_program_is_warp(None));
+        assert!(!super::term_program_is_warp(Some("Apple_Terminal")));
+        assert!(!super::term_program_is_warp(Some("iTerm.app")));
     }
 
     #[test]
