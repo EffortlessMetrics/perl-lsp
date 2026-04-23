@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Crush | add a Perl LSP entry in `.crush.json` | [docs/EDITORS/CRUSH_SETUP.md](../EDITORS/CRUSH_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,11 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### Crush
+
+Create a `.crush.json` file and add a Perl LSP entry that starts `perllsp --stdio`.
+The dedicated guide includes a copy/paste config and logging-based verification.
 
 ## When Setup Fails
 
