@@ -148,12 +148,8 @@ fi
 # Falls back to the full gate if classification is ambiguous.
 SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
 if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
-    SINGLE_CRATE_DIR="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
-    # Resolve the Cargo package name from Cargo.toml, not the directory basename.
-    # This fixes the perl-lsp -> perl-lsp-rs mismatch (issue #4512).
-    # Falls back to directory name if cargo xtask is unavailable.
-    SINGLE_CRATE_NAME="$(cargo xtask resolve-package-name "crates/${SINGLE_CRATE_DIR}" 2>/dev/null || printf '%s' "$SINGLE_CRATE_DIR")"
-    echo "Single-crate push (${SINGLE_CRATE_DIR} -> ${SINGLE_CRATE_NAME}) — running targeted gate"
+    SINGLE_CRATE_NAME="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    echo "Single-crate push (${SINGLE_CRATE_NAME}) — running targeted gate"
     echo "   (Skip with: git push --no-verify)"
     echo ""
     run_single_crate_gate() {
