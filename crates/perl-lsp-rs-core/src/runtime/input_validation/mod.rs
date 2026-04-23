@@ -16,6 +16,9 @@ const MAX_PATH_LENGTH: usize = 4096;
 
 /// Allowed file extensions for Perl files.
 const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod"];
+/// Allowed URI schemes for text document synchronization.
+const ALLOWED_TEXT_DOCUMENT_URI_SCHEMES: &[&str] =
+    &["file://", "untitled:", "opencode:"];
 
 /// Validates and sanitizes a file path to prevent path traversal attacks.
 pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Result<PathBuf> {
@@ -120,7 +123,10 @@ fn validate_text_document_params(params: &serde_json::Value) -> Result<()> {
         .and_then(|text_document| text_document.get("uri"))
         .and_then(serde_json::Value::as_str)
     {
-        if !uri.starts_with("file://") && !uri.starts_with("untitled:") {
+        if !ALLOWED_TEXT_DOCUMENT_URI_SCHEMES
+            .iter()
+            .any(|scheme| uri.starts_with(scheme))
+        {
             return Err(anyhow!("Invalid URI scheme: {}", uri));
         }
 
@@ -270,6 +276,34 @@ mod tests {
 
         let result = validate_lsp_request(method, &params);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_lsp_request_valid_opencode_uri() {
+        let method = "textDocument/didOpen";
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": "opencode:/workspace/lib/My/Module.pm",
+                "text": "package My::Module;\n1;\n"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_lsp_request_invalid_uri_scheme() {
+        let method = "textDocument/didOpen";
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": "https://example.com/test.pl",
+                "text": "print 'Hello';"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_err());
     }
 
     #[test]
