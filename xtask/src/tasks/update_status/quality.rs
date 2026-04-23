@@ -7,7 +7,8 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{Context, ContextCompat, Result};
+use serde_json::Value;
 
 use super::{replace_block, run_cmd};
 
@@ -122,6 +123,68 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn collect_editor_ux_fixture_matrix_summary(root: &Path) -> Result<Value> {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let matrix_raw = fs::read_to_string(&matrix_path)
+        .with_context(|| format!("reading {}", matrix_path.display()))?;
+    let matrix: Value = serde_json::from_str(&matrix_raw)
+        .with_context(|| format!("parsing {}", matrix_path.display()))?;
+
+    let workflows: &[Value] = matrix
+        .get("workflows")
+        .and_then(Value::as_array)
+        .context("fixture matrix workflows missing")?;
+    let component_metrics: &[Value] = matrix
+        .get("component_metrics")
+        .and_then(Value::as_array)
+        .context("fixture matrix component_metrics missing")?;
+    let component_metric_set: std::collections::BTreeSet<String> =
+        component_metrics.iter().filter_map(Value::as_str).map(ToOwned::to_owned).collect();
+
+    let mut scenario_files = std::collections::BTreeSet::new();
+    let mut component_metrics_exercised = std::collections::BTreeSet::new();
+    let mut pr_workflows = 0usize;
+    let mut nightly_workflows = 0usize;
+    for workflow in workflows {
+        if let Some(scenario_file) = workflow.get("scenario_file").and_then(Value::as_str) {
+            scenario_files.insert(scenario_file.to_string());
+        }
+        match workflow.get("ci_tier").and_then(Value::as_str) {
+            Some("pr") => pr_workflows += 1,
+            Some("nightly") => nightly_workflows += 1,
+            _ => {}
+        }
+        for metric in workflow
+            .get("measures")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            if component_metric_set.contains(metric) {
+                component_metrics_exercised.insert(metric.to_string());
+            }
+        }
+    }
+
+    let scenario_count = count_ux_scenarios(root);
+    let covered = scenario_files.len();
+    let scenario_coverage_rate =
+        if scenario_count == 0 { 0.0 } else { covered as f64 / scenario_count as f64 };
+
+    Ok(serde_json::json!({
+        "workflow_count": workflows.len(),
+        "scenario_files_covered": covered,
+        "scenario_coverage_rate": scenario_coverage_rate,
+        "ci_tier_counts": {
+            "pr": pr_workflows,
+            "nightly": nightly_workflows,
+        },
+        "component_metrics_declared": component_metric_set.len(),
+        "component_metrics_exercised": component_metrics_exercised.len(),
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +232,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let fixture_matrix_summary = collect_editor_ux_fixture_matrix_summary(root)?;
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -196,6 +260,7 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
                 "owner": "perl-lsp-ux-tests",
             },
         ],
+        "tracking_signals": fixture_matrix_summary,
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -279,6 +344,9 @@ mod tests {
                 "p95_time_to_first_useful_result_ms",
             ])
         );
+        assert_eq!(receipt["tracking_signals"]["scenario_coverage_rate"], 1.0);
+        assert_eq!(receipt["tracking_signals"]["ci_tier_counts"]["pr"], 16);
+        assert_eq!(receipt["tracking_signals"]["ci_tier_counts"]["nightly"], 1);
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
         Ok(())
     }

@@ -52,8 +52,8 @@ feature-gated 10k-line large-file case from Scenario 06.
 
 ## Workflow Scorecard Contract
 
-The UX harness is also the fixture source for the planned `editor_ux`
-scorecard:
+The UX harness is also the fixture source for the `editor_ux` scorecard
+tracking signals:
 
 - `docs/project/metrics/WORKFLOW_SCORECARDS.md` describes the workflow layer and
   the top-line/current-component rows it owns.
@@ -64,8 +64,11 @@ scorecard:
 - `crates/perl-lsp-ux-tests/tests/editor_ux_fixture_matrix.rs` prevents the
   matrix from drifting away from the executable scenario files.
 
-This keeps the workflow scorecard grounded in real harness coverage instead of a
-manually curated checklist.
+`cargo xtask update-status --only quality` writes
+`docs/project/status/editor_ux.json`, including concrete tracking signals
+derived from this fixture matrix (scenario coverage, CI-tier split, and
+component-metric exercise counts). This keeps the workflow scorecard grounded
+in real harness coverage instead of a manually curated checklist.
 
 ## How to Add a New Scenario
 
