@@ -3827,14 +3827,10 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
-        let mut in_rust_block_comment = false;
+        let mut raw_string_state = None;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line_with_block_context(
-                    line,
-                    todo_re,
-                    &mut in_rust_block_comment,
-                )
+                has_unlinked_todo_in_rust_line_with_state(line, todo_re, &mut raw_string_state)
             } else if path
                 .extension()
                 .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
@@ -3853,8 +3849,7 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut in_block_comment = false;
-    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut in_block_comment)
+    has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut None)
 }
 
 fn has_unlinked_todo_in_rust_line_with_block_context(
@@ -3862,24 +3857,19 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
     token_re: &Regex,
     in_block_comment: &mut bool,
 ) -> bool {
-    if *in_block_comment {
-        if let Some(end_idx) = find_block_comment_end(line, 0) {
-            if has_unlinked_token(&line[..end_idx], token_re) {
-                *in_block_comment = false;
-                return true;
-            }
-            *in_block_comment = false;
-            return has_unlinked_todo_in_rust_line_with_block_context(
-                &line[end_idx + 2..],
-                token_re,
-                in_block_comment,
-            );
-        }
-        return has_unlinked_token(line, token_re);
-    }
+    let mut state: Option<usize> = if *in_block_comment { Some(0) } else { None };
+    let result = has_unlinked_todo_in_rust_line_with_state(line, token_re, &mut state);
+    *in_block_comment = state.is_some();
+    result
+}
 
+fn has_unlinked_todo_in_rust_line_with_state(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+) -> bool {
     for (idx, _) in line.match_indices("//") {
-        if is_index_in_rust_literal(line, idx) {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
             continue;
         }
         if is_url_like_hash_comment(line, idx) {
@@ -3893,7 +3883,7 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
         }
     }
     for (idx, _) in line.match_indices("/*") {
-        if is_index_in_rust_literal(line, idx) {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
             continue;
         }
         if is_likely_string_literal_comment_start(line, idx) {
@@ -3906,22 +3896,17 @@ fn has_unlinked_todo_in_rust_line_with_block_context(
             continue;
         }
         if has_unlinked_token(&line[idx + 2..], token_re) {
-            *in_block_comment = true;
             return true;
         }
-        *in_block_comment = true;
     }
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        return true;
-    }
+    *raw_string_state = rust_raw_string_state_after_line(line, *raw_string_state);
     false
 }
 
 fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
     for (rel_idx, _) in line[start_idx..].match_indices("*/") {
         let idx = start_idx + rel_idx;
-        if is_index_in_rust_literal(line, idx) {
+        if is_index_in_rust_literal(line, idx, None) {
             continue;
         }
         return Some(idx);
@@ -4050,13 +4035,17 @@ fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> boo
     matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
 }
 
-fn is_index_in_rust_literal(line: &str, target_idx: usize) -> bool {
+fn is_index_in_rust_literal(
+    line: &str,
+    target_idx: usize,
+    initial_raw_hashes: Option<usize>,
+) -> bool {
     let bytes = line.as_bytes();
     let mut i = 0;
     let mut in_string = false;
     let mut in_char = false;
     let mut escape = false;
-    let mut raw_hashes: Option<usize> = None;
+    let mut raw_hashes = initial_raw_hashes;
 
     while i < bytes.len() && i < target_idx {
         if let Some(hash_count) = raw_hashes {
@@ -4146,6 +4135,94 @@ fn raw_string_prefix_len(bytes: &[u8], idx: usize) -> usize {
         return 2;
     }
     0
+}
+
+fn rust_raw_string_state_after_line(
+    line: &str,
+    initial_raw_hashes: Option<usize>,
+) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes = initial_raw_hashes;
+
+    while i < bytes.len() {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        if bytes[i] == b'r' || (bytes[i] == b'b' && i + 1 < bytes.len() && bytes[i + 1] == b'r') {
+            let mut j = i + 1;
+            if bytes[i] == b'b' {
+                j += 1;
+            }
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + if bytes[i] == b'b' { 2 } else { 1 }));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    raw_hashes
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4448,6 +4525,31 @@ mod tests {
         assert!(has_unlinked_todo_in_rust_line(
             "let s = c\"safe literal\"; // TODO: follow up",
             &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_raw_string_content() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = r#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
         ));
 
         Ok(())
