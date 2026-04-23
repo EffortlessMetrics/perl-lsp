@@ -2987,7 +2987,7 @@ impl IndexVisitor {
             }
 
             NodeKind::Use { module, args, .. } => {
-                let module_name = module.clone();
+                let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
 
                 // Also track actual parent/base class names for dependency discovery.
@@ -2995,7 +2995,7 @@ impl IndexVisitor {
                 // so find_dependents("Foo::Bar") would miss files with only use parent.
                 if module == "parent" || module == "base" {
                     for name in extract_module_names_from_use_args(args) {
-                        file_index.dependencies.insert(name);
+                        file_index.dependencies.insert(normalize_dependency_module_name(&name));
                     }
                 }
 
@@ -3158,8 +3158,8 @@ impl IndexVisitor {
             }
 
             NodeKind::No { module, .. } => {
-                let module_name = module.clone();
-                file_index.dependencies.insert(module_name.clone());
+                let module_name = normalize_dependency_module_name(module);
+                file_index.dependencies.insert(module_name);
             }
 
             NodeKind::Class { name, .. } => {
@@ -3406,6 +3406,12 @@ fn canonicalize_perl_module_name(name: &str) -> String {
 
 fn legacy_perl_module_name(name: &str) -> String {
     name.replace("::", "'")
+}
+
+/// Normalize a module name for dependency storage and lookup.
+/// Converts legacy `'` separators to `::` so stored keys are canonical.
+fn normalize_dependency_module_name(module_name: &str) -> String {
+    canonicalize_perl_module_name(module_name)
 }
 
 fn extract_qw_words(input: &str) -> (Vec<String>, String) {
@@ -4874,6 +4880,29 @@ Utils::process_data();
             "child.pl should be in dependents, got: {:?}",
             dependents
         );
+    }
+
+    #[test]
+    fn test_find_dependents_normalizes_legacy_separator_in_query() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/legacy-query.pl"));
+        let src = "package Child;\nuse parent 'My::Base';\n1;\n";
+        must(index.index_file(uri, src.to_string()));
+
+        let dependents = index.find_dependents("My'Base");
+        assert_eq!(dependents, vec!["file:///test/workspace/legacy-query.pl".to_string()]);
+    }
+
+    #[test]
+    fn test_file_dependencies_normalize_legacy_separator_in_source() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/legacy-source.pl"));
+        let src = "package Child;\nuse parent \"My'Base\";\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("My::Base"));
+        assert!(!deps.contains("My'Base"));
     }
 
     #[test]
