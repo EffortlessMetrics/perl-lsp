@@ -51,7 +51,7 @@ pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
-pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
+pub use scorecard::{aggregate_editor_ux_scorecard, EditorUxScorecard, ScenarioScore};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
@@ -302,6 +302,31 @@ impl UxHarness {
     /// Request completion at a canonical cursor position.
     pub fn completion_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
         self.completion(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request completion and collect best-effort labels for UX assertions.
+    ///
+    /// Label extraction order per completion item:
+    /// 1. `label` (preferred by spec)
+    /// 2. `insertText` (fallback for legacy payloads)
+    /// 3. `filterText` (last-resort fallback)
+    pub fn completion_labels(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<String>> {
+        let items = self.completion(relative_path, line, character)?;
+        Ok(items
+            .iter()
+            .filter_map(|item| {
+                item.get("label")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("insertText").and_then(Value::as_str))
+                    .or_else(|| item.get("filterText").and_then(Value::as_str))
+                    .map(str::to_string)
+            })
+            .collect())
     }
 
     /// Request document formatting.
@@ -869,7 +894,11 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self { v["message"].as_str() } else { None }
+        if let Self::Error(v) = self {
+            v["message"].as_str()
+        } else {
+            None
+        }
     }
 
     /// True if there are text edits.
