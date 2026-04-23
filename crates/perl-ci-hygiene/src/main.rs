@@ -3882,6 +3882,7 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
 fn find_hash_comment_start(line: &str) -> Option<usize> {
     let mut in_single = false;
     let mut in_double = false;
+    let mut in_backtick = false;
     let mut prev_was_escape = false;
 
     for (idx, ch) in line.char_indices() {
@@ -3905,10 +3906,25 @@ fn find_hash_comment_start(line: &str) -> Option<usize> {
             }
             continue;
         }
+        if in_backtick {
+            if prev_was_escape {
+                prev_was_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape = true;
+                continue;
+            }
+            if ch == '`' {
+                in_backtick = false;
+            }
+            continue;
+        }
 
         match ch {
             '\'' => in_single = true,
             '"' => in_double = true,
+            '`' => in_backtick = true,
             '#' => {
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
                     return None;
@@ -4346,6 +4362,11 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo `printf '# TODO in backticks'`", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo `printf '# TODO in backticks'` # TODO: follow up",
+            &todo_re
+        ));
 
         Ok(())
     }
