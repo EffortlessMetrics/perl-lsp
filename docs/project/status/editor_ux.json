@@ -1,4 +1,15 @@
 {
+  "confidence_signals": {
+    "automated_workflow_scenario_count": 17,
+    "fixture_matrix_workflow_count": 17,
+    "known_gap_issue_count": 4,
+    "known_gap_issue_refs": [
+      "#3476",
+      "#3515",
+      "#3522",
+      "#4246"
+    ]
+  },
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,

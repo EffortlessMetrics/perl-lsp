@@ -122,6 +122,41 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+pub(super) fn count_fixture_matrix_workflows(root: &Path) -> usize {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let Ok(raw) = fs::read_to_string(matrix_path) else {
+        return 0;
+    };
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return 0;
+    };
+    parsed.get("workflows").and_then(serde_json::Value::as_array).map_or(0, std::vec::Vec::len)
+}
+
+pub(super) fn collect_known_ux_gap_issue_refs(root: &Path) -> Vec<String> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+
+    let Some(section_start) = readme.find("### Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let Some(section_end_rel) = readme[section_start..].find("### What shipped this cycle") else {
+        return Vec::new();
+    };
+    let section = &readme[section_start..section_start + section_end_rel];
+    let Ok(issue_ref_re) = regex::Regex::new(r"/issues/(\d+)") else {
+        return Vec::new();
+    };
+
+    let mut issue_refs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for captures in issue_ref_re.captures_iter(section) {
+        issue_refs.insert(format!("#{}", &captures[1]));
+    }
+    issue_refs.into_iter().collect()
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +204,9 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let workflow_count = count_fixture_matrix_workflows(root);
+    let known_gap_issue_refs = collect_known_ux_gap_issue_refs(root);
+    let known_gap_count = known_gap_issue_refs.len();
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -201,6 +239,12 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "release_lane": "just ux-tests-full",
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
+        },
+        "confidence_signals": {
+            "automated_workflow_scenario_count": scenario_count,
+            "fixture_matrix_workflow_count": workflow_count,
+            "known_gap_issue_refs": known_gap_issue_refs,
+            "known_gap_issue_count": known_gap_count,
         },
     });
 
@@ -280,6 +324,25 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["confidence_signals"]["automated_workflow_scenario_count"].as_u64(),
+            Some(count_ux_scenarios(&root) as u64)
+        );
+        assert_eq!(
+            receipt["confidence_signals"]["fixture_matrix_workflow_count"].as_u64(),
+            Some(count_fixture_matrix_workflows(&root) as u64)
+        );
+        let known_gaps = receipt["confidence_signals"]["known_gap_issue_refs"]
+            .as_array()
+            .ok_or_else(|| eyre!("known_gap_issue_refs must be an array"))?;
+        assert!(
+            !known_gaps.is_empty(),
+            "known gap issue list must not be empty while UX confidence remains qualitative"
+        );
+        assert_eq!(
+            receipt["confidence_signals"]["known_gap_issue_count"].as_u64(),
+            Some(known_gaps.len() as u64)
+        );
         Ok(())
     }
 }
