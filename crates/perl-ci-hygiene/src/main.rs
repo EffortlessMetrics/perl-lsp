@@ -3882,10 +3882,19 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
 fn find_hash_comment_start(line: &str) -> Option<usize> {
     let mut in_single = false;
     let mut in_double = false;
+    let mut prev_single_escape = false;
     let mut prev_was_escape = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
+            if prev_single_escape {
+                prev_single_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_single_escape = true;
+                continue;
+            }
             if ch == '\'' {
                 in_single = false;
             }
@@ -4346,6 +4355,14 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo 'quoted \\'# TODO in string\\'' && true",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo 'quoted \\'# TODO in string\\'' # TODO: follow up",
+            &todo_re
+        ));
 
         Ok(())
     }
