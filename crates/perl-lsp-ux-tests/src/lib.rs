@@ -56,6 +56,8 @@ pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -152,6 +154,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -173,7 +176,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -182,7 +185,25 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.set_document_version(relative_path, 1);
+        Ok(())
+    }
+
+    /// Apply a full-document content change (`textDocument/didChange`) to an
+    /// already-open file. The harness tracks LSP document versions internally.
+    pub fn change_file(&self, relative_path: &str, content: &str) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        let version = self.bump_document_version(relative_path);
+        self.client.did_change(&uri, content, version)
+    }
+
+    /// Close an open file (`textDocument/didClose`) and forget tracked version state.
+    pub fn close_file(&self, relative_path: &str) -> Result<()> {
+        let uri = self.workspace.uri(relative_path);
+        self.clear_document_version(relative_path);
+        self.client.did_close(&uri)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -380,6 +401,22 @@ impl UxHarness {
         relative_path: &str,
         timeout: std::time::Duration,
     ) -> Vec<Value> {
+        self.wait_for_diagnostics_matching(relative_path, timeout, |_| true).unwrap_or_default()
+    }
+
+    /// Wait up to `timeout` for diagnostics that satisfy `predicate`.
+    ///
+    /// Returns `Some(diagnostics)` for the first matching notification, or
+    /// `None` if the timeout expires without any matching update.
+    pub fn wait_for_diagnostics_matching<F>(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+        predicate: F,
+    ) -> Option<Vec<Value>>
+    where
+        F: Fn(&[Value]) -> bool,
+    {
         let uri = self.workspace.uri(relative_path);
         let deadline = std::time::Instant::now() + timeout;
         loop {
@@ -387,8 +424,8 @@ impl UxHarness {
                 let events = self.client.peek_events();
                 for ev in &events {
                     if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
-                        if diag_uri == &uri {
-                            return diagnostics.clone();
+                        if diag_uri == &uri && predicate(diagnostics) {
+                            return Some(diagnostics.clone());
                         }
                     }
                 }
@@ -398,7 +435,7 @@ impl UxHarness {
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        Vec::new()
+        None
     }
 
     /// Request go-to-definition.
@@ -551,6 +588,29 @@ impl UxHarness {
     /// Returns the root URI of the workspace (useful for the `rootUri` initialize param).
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
+    }
+}
+
+impl UxHarness {
+    fn set_document_version(&self, relative_path: &str, version: i32) {
+        if let Ok(mut versions) = self.document_versions.lock() {
+            versions.insert(relative_path.to_string(), version);
+        }
+    }
+
+    fn bump_document_version(&self, relative_path: &str) -> i32 {
+        if let Ok(mut versions) = self.document_versions.lock() {
+            let next = versions.get(relative_path).copied().unwrap_or(0) + 1;
+            versions.insert(relative_path.to_string(), next);
+            return next;
+        }
+        1
+    }
+
+    fn clear_document_version(&self, relative_path: &str) {
+        if let Ok(mut versions) = self.document_versions.lock() {
+            versions.remove(relative_path);
+        }
     }
 }
 
