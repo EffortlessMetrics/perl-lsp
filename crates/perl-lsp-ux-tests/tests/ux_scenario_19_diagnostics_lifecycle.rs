@@ -33,7 +33,7 @@ fn scenario_19_diagnostics_clear_after_fix() -> Result<()> {
     );
 
     // When: the user fixes the file via a full-document didChange.
-    harness.change_file_full("live.pl", FIXED_SOURCE, 2)?;
+    harness.change_file_full("live.pl", FIXED_SOURCE)?;
 
     // Then: diagnostics eventually clear for the same document.
     let cleared = harness.wait_for_no_diagnostics("live.pl", Duration::from_secs(5));

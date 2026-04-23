@@ -187,13 +187,6 @@ impl UxHarness {
         self.client.did_open(&uri, content)
     }
 
-    /// Apply a full-document change and update the workspace copy.
-    pub fn change_file_full(&self, relative_path: &str, content: &str, version: i32) -> Result<()> {
-        self.workspace.write(relative_path, content)?;
-        let uri = self.workspace.uri(relative_path);
-        self.client.did_change_full(&uri, content, version)
-    }
-
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
     ///
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).
