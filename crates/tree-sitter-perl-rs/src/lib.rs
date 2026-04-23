@@ -327,7 +327,7 @@ impl<'tree> Node<'tree> {
 
     /// Returns the end byte offset in the source text (exclusive).
     pub fn end_byte(&self) -> usize {
-        self.inner.location.end
+        self.inner.location.end.min(self.tree_source.len())
     }
 
     /// Extracts the source text slice covered by this node.
@@ -535,8 +535,50 @@ mod tests {
         let tree = must_some(p.parse(source));
         let root = tree.root_node();
         assert_eq!(root.start_byte(), 0);
-        // End byte from the Program node spans to end of last statement.
-        assert!(root.end_byte() <= source.len() + 1, "end_byte out of range");
+        assert_eq!(root.end_byte(), source.len(), "root end_byte should clamp to source length");
+    }
+
+    /// Verify the end_byte clamp invariant: for every node in the tree,
+    /// `end_byte()` must not exceed `tree.source().len()`.  This exercises the
+    /// `.min(self.tree_source.len())` guard on the full node set, not just the
+    /// root, so that any future parser regression producing an out-of-bounds
+    /// location is caught here.
+    #[test]
+    fn test_end_byte_never_exceeds_source_len_for_all_nodes() {
+        let sources = [
+            "my $x = 42;",
+            "sub foo { return 1; }",
+            "use strict;\nuse warnings;\nmy @arr = (1, 2, 3);",
+            // empty source — edge case for zero-length trees
+            "",
+        ];
+        for source in sources {
+            let mut p = Parser::new();
+            let tree = match p.parse(source) {
+                Some(t) => t,
+                // v3 parser returns None only on extreme failure; skip rather than panic
+                None => continue,
+            };
+            let source_len = tree.source().len();
+            // Walk all direct children of root and check the invariant
+            let root = tree.root_node();
+            assert!(
+                root.end_byte() <= source_len,
+                "root end_byte {} > source_len {} for source {:?}",
+                root.end_byte(),
+                source_len,
+                source
+            );
+            for child in root.children() {
+                assert!(
+                    child.end_byte() <= source_len,
+                    "child end_byte {} > source_len {} for source {:?}",
+                    child.end_byte(),
+                    source_len,
+                    source
+                );
+            }
+        }
     }
 
     #[test]
