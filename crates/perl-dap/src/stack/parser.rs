@@ -40,7 +40,7 @@ static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// - `  #0  main::foo at script.pl line 10`
 static STACK_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)",
+        r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>.+?)\s+line\s+(?P<line>\d+)",
     )
 });
 
@@ -549,5 +549,16 @@ $ = main::run() called from file `script.pl' line 5
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[0].name, "DB::DB");
         assert_eq!(frames[1].name, "main::foo");
+    }
+
+    #[test]
+    fn test_parse_standard_frame_with_space_in_file_path() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new();
+        let line = "  #0  main::foo at /tmp/My Project/script.pl line 10";
+        let frame = must_some(parser.parse_frame(line, 0));
+        assert_eq!(frame.name, "main::foo");
+        assert_eq!(frame.line, 10);
+        assert_eq!(frame.file_path(), Some("/tmp/My Project/script.pl"));
     }
 }

@@ -763,6 +763,20 @@ mod tests {
         assert_eq!(frames[1].source.name, Some("Foo.pm".to_string()));
     }
 
+    #[test]
+    pub(super) fn test_parse_stack_trace_with_space_in_paths() {
+        let output = r#"# 0 main::test at /tmp/My Project/script.pl line 10
+# 1 Foo::bar called at C:\Work Files\lib\Foo.pm line 25"#;
+
+        let frames = DebugAdapter::parse_stack_trace(output);
+
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].source.path, "/tmp/My Project/script.pl");
+        assert_eq!(frames[0].source.name, Some("script.pl".to_string()));
+        assert_eq!(frames[1].source.path, r"C:\Work Files\lib\Foo.pm");
+        assert_eq!(frames[1].source.name, Some("Foo.pm".to_string()));
+    }
+
     // AC8.2: Stack trace parsing with empty output
     #[test]
     pub(super) fn test_parse_stack_trace_empty_output() {
