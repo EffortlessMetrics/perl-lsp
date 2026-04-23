@@ -220,6 +220,14 @@ impl Tree {
     pub fn edit(&mut self, edit: &InputEdit) {
         self.pending_edits.push(edit.clone());
     }
+
+    /// Returns a cursor positioned at the root node.
+    ///
+    /// Mirrors `tree_sitter::Tree::walk` for API compatibility and is equivalent
+    /// to `tree.root_node().walk()`.
+    pub fn walk(&self) -> TreeCursor<'_> {
+        self.root_node().walk()
+    }
 }
 
 /// A borrowed reference to a node in the syntax tree.
@@ -816,6 +824,17 @@ mod tests {
         assert!(cursor.goto_next_sibling(), "first statement should have a sibling");
         assert_eq!(cursor.node().grammar_kind(), "my_declaration");
         assert!(!cursor.goto_next_sibling(), "second statement should be the last sibling");
+    }
+
+    #[test]
+    fn test_tree_walk_starts_cursor_at_root() {
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 42;"));
+        let mut cursor = tree.walk();
+
+        assert_eq!(cursor.node().grammar_kind(), "source_file");
+        assert!(cursor.goto_first_child(), "source_file should have at least one child");
+        assert_eq!(cursor.node().grammar_kind(), "my_declaration");
     }
 
     #[test]
