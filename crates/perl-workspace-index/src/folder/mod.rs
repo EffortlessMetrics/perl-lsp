@@ -26,13 +26,16 @@ pub struct WorkspaceFolderChange {
 /// interpreted as a path fallback.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
-    if workspace_folder.starts_with("file://") {
+    let is_file_uri =
+        workspace_folder.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"));
+
+    if is_file_uri {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = uri_to_fs_path(workspace_folder) {
             return path;
         }
 
-        return PathBuf::from(workspace_folder.trim_start_matches("file://"));
+        return PathBuf::from(&workspace_folder[7..]);
     }
 
     PathBuf::from(workspace_folder)
@@ -105,6 +108,14 @@ mod tests {
     #[test]
     fn parses_file_uri_when_possible() {
         let parsed = workspace_folder_to_path("file:///tmp/project");
+        assert!(parsed.to_string_lossy().contains("tmp"));
+        assert!(parsed.to_string_lossy().contains("project"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn parses_uppercase_file_uri_scheme() {
+        let parsed = workspace_folder_to_path("FILE:///tmp/project");
         assert!(parsed.to_string_lossy().contains("tmp"));
         assert!(parsed.to_string_lossy().contains("project"));
     }
