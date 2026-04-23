@@ -79,8 +79,23 @@ impl FixAllRange {
         let (a, b) = if self <= other { (self, other) } else { (other, self) };
         let a_is_insertion = a.start_line == a.end_line && a.start_char == a.end_char;
         let b_is_insertion = b.start_line == b.end_line && b.start_char == b.end_char;
-        if a_is_insertion || b_is_insertion {
-            return false;
+        match (a_is_insertion, b_is_insertion) {
+            (true, true) => return false,
+            // Insertion versus replacement/deletion: conflict iff insertion
+            // happens strictly inside the other edit's replaced span.
+            // Insertion at a boundary is allowed because both edits still
+            // refer to the same original document position.
+            (true, false) => {
+                let insertion_pos = (a.start_line, a.start_char);
+                return insertion_pos > (b.start_line, b.start_char)
+                    && insertion_pos < (b.end_line, b.end_char);
+            }
+            (false, true) => {
+                let insertion_pos = (b.start_line, b.start_char);
+                return insertion_pos > (a.start_line, a.start_char)
+                    && insertion_pos < (a.end_line, a.end_char);
+            }
+            (false, false) => {}
         }
         // a.start <= b.start; they overlap iff b.start < a.end.
         (b.start_line, b.start_char) < (a.end_line, a.end_char)
@@ -925,18 +940,41 @@ mod tests {
     }
 
     #[test]
-    fn fix_all_range_overlap_insertion_inside_real_range_allowed() {
-        // Design note: overlaps() returns false when either side is a zero-width
-        // insertion, even if the insertion falls inside a replacement range.
-        // The assumption is that quick fixes operate on original document positions
-        // per the LSP spec ("all text edit ranges refer to positions in the original
-        // document"), so an insertion at (0,5) and a replacement of (0,0)-(0,10) are
-        // independently valid.  This test documents the current behaviour so it is
-        // visible to future maintainers.
+    fn fix_all_range_overlap_insertion_inside_real_range_conflicts() {
+        // Insertion inside a replaced span is order-sensitive and can lead to
+        // unstable aggregate edits, so it must be treated as overlapping.
         let replacement = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 10 };
         let insertion = FixAllRange { start_line: 0, start_char: 5, end_line: 0, end_char: 5 };
-        assert!(!replacement.overlaps(&insertion));
-        assert!(!insertion.overlaps(&replacement));
+        assert!(replacement.overlaps(&insertion));
+        assert!(insertion.overlaps(&replacement));
+    }
+
+    #[test]
+    fn fix_all_range_overlap_insertion_at_replacement_boundary_allowed() {
+        let replacement = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 10 };
+        let left_boundary = FixAllRange { start_line: 0, start_char: 0, end_line: 0, end_char: 0 };
+        let right_boundary =
+            FixAllRange { start_line: 0, start_char: 10, end_line: 0, end_char: 10 };
+        assert!(!replacement.overlaps(&left_boundary));
+        assert!(!left_boundary.overlaps(&replacement));
+        assert!(!replacement.overlaps(&right_boundary));
+        assert!(!right_boundary.overlaps(&replacement));
+    }
+
+    #[test]
+    fn build_source_fix_all_rejects_insertion_inside_existing_replacement() {
+        let uri = "file:///insertion_overlap.pl";
+        let actions = vec![
+            make_quickfix(uri, 0, 0, 10, "replace", "Replace span", Some("PL100")),
+            make_quickfix(uri, 0, 5, 5, "insert", "Insert inside span", Some("PL101")),
+            make_quickfix(uri, 1, 0, 3, "other", "Other edit", Some("PL102")),
+        ];
+
+        let aggregate = build_source_fix_all(&actions, uri).expect("aggregate present");
+        let edits = aggregate["edit"]["changes"][uri].as_array().expect("aggregate has edits");
+        let new_texts: Vec<&str> =
+            edits.iter().filter_map(|edit| edit["newText"].as_str()).collect();
+        assert_eq!(new_texts, vec!["replace", "other"]);
     }
 
     #[test]
