@@ -1,0 +1,12 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_code_actions_snap.rs
+expression: normalized
+---
+- has_command: false
+  has_edit: true
+  kind: refactor.rewrite
+  title: "Add error checking to 'open'"
+- has_command: false
+  has_edit: true
+  kind: refactor.rewrite
+  title: "Add error checking to 'open'"
