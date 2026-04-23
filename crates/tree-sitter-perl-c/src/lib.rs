@@ -109,6 +109,22 @@ pub fn create_parser() -> Parser {
     parser
 }
 
+/// Parses Perl source bytes and returns the resulting [`tree_sitter::Tree`].
+///
+/// This accepts arbitrary bytes so callers can parse non-UTF-8 source files.
+///
+/// # Errors
+///
+/// Returns an error if the parser cannot be initialised (version mismatch) or
+/// if tree-sitter returns `None` from `parse` (cancelled or timed out).
+pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+    let mut parser = try_create_parser()?;
+    match parser.parse(code, None) {
+        Some(tree) => Ok(tree),
+        None => Err("Failed to parse code".into()),
+    }
+}
+
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
 ///
 /// # Errors
@@ -125,11 +141,7 @@ pub fn create_parser() -> Parser {
 /// assert!(!tree.root_node().has_error());
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = try_create_parser()?;
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    parse_perl_bytes(code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -141,8 +153,8 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read_to_string(path)?;
-    parse_perl_code(&code)
+    let code = std::fs::read(path)?;
+    parse_perl_bytes(&code)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -185,6 +197,14 @@ mod tests {
     fn test_basic_parsing() -> Result<(), Box<dyn std::error::Error>> {
         let code = "my $var = 'hello';";
         let tree = parse_perl_code(code)?;
+        assert!(!tree.root_node().has_error());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_bytes() -> Result<(), Box<dyn std::error::Error>> {
+        let code = b"my $var = 'hello';";
+        let tree = parse_perl_bytes(code)?;
         assert!(!tree.root_node().has_error());
         Ok(())
     }
