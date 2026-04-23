@@ -59,7 +59,9 @@
 //! These metrics can be accessed via [`CheckpointedIncrementalParser::stats()`]
 //! and formatted using the `Display` implementation for debugging and monitoring.
 
-use crate::{ast::Node, edit::Edit as OriginalEdit, error::ParseResult, parser::Parser};
+use crate::{
+    ast::Node, edit::Edit as OriginalEdit, error::ParseError, error::ParseResult, parser::Parser,
+};
 use perl_lexer::{CheckpointCache, Checkpointable, LexerCheckpoint, PerlLexer};
 use perl_parser_core::token_stream::{Token, TokenStream};
 
@@ -433,6 +435,8 @@ impl CheckpointedIncrementalParser {
 
     /// Apply an edit and reparse incrementally
     pub fn apply_edit(&mut self, edit: &SimpleEdit) -> ParseResult<Node> {
+        self.validate_edit(edit)?;
+
         self.stats.total_parses += 1;
         self.stats.incremental_parses += 1;
 
@@ -470,6 +474,51 @@ impl CheckpointedIncrementalParser {
             // No checkpoint found, full reparse
             self.parse_with_checkpoints()
         }
+    }
+
+    fn validate_edit(&self, edit: &SimpleEdit) -> ParseResult<()> {
+        if edit.start > edit.end {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "invalid edit range: start {} is greater than end {}",
+                    edit.start, edit.end
+                ),
+                location: edit.start,
+            });
+        }
+
+        if edit.end > self.source.len() {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "invalid edit range: end {} exceeds document length {}",
+                    edit.end,
+                    self.source.len()
+                ),
+                location: edit.end,
+            });
+        }
+
+        if !self.source.is_char_boundary(edit.start) {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "invalid edit boundary: start {} is not on a UTF-8 character boundary",
+                    edit.start
+                ),
+                location: edit.start,
+            });
+        }
+
+        if !self.source.is_char_boundary(edit.end) {
+            return Err(ParseError::SyntaxError {
+                message: format!(
+                    "invalid edit boundary: end {} is not on a UTF-8 character boundary",
+                    edit.end
+                ),
+                location: edit.end,
+            });
+        }
+
+        Ok(())
     }
 
     /// Parse with checkpoint collection and parser-token caching.
@@ -732,7 +781,7 @@ impl CheckpointedIncrementalParser {
 mod tests {
     use super::*;
     use crate::NodeKind;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_checkpoint_incremental_parsing() {
@@ -895,5 +944,39 @@ mod tests {
             parser.checkpoint_cache.find_after(100).is_some(),
             "expected a checkpoint to be recorded once lexing crossed byte 100"
         );
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_out_of_bounds_range() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = 1;\n".to_string()));
+
+        let edit = SimpleEdit { start: 0, end: 100, new_text: "2".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "out-of-bounds edit should return an error");
+        assert!(matches!(result, Err(ParseError::SyntaxError { location: 100, .. })));
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_non_char_boundary_range() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = \"é\";\n".to_string()));
+
+        let source = parser.source.clone();
+        let char_start = must_some(source.find('é'));
+        let invalid_start = char_start + 1;
+        let edit =
+            SimpleEdit { start: invalid_start, end: invalid_start + 1, new_text: "e".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "non-char-boundary edit should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError {
+                location,
+                message,
+            }) if location == invalid_start && message.contains("UTF-8 character boundary")
+        ));
     }
 }
