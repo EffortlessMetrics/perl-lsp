@@ -68,6 +68,7 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
 
     let mut scenarios_in_matrix = BTreeSet::new();
     let mut component_metrics_exercised = BTreeSet::new();
+    let mut workflows_with_component_metric = 0usize;
     for workflow in workflows {
         let scenario_file = workflow
             .get("scenario_file")
@@ -89,6 +90,9 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             if component_metrics.contains(measure) {
                 component_metrics_exercised.insert(measure.clone());
             }
+        }
+        if measures.iter().any(|measure| component_metrics.contains(measure)) {
+            workflows_with_component_metric += 1;
         }
 
         let expected_outcomes = workflow
@@ -138,6 +142,10 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
     assert_eq!(
         component_metrics_exercised, component_metrics,
         "every declared component metric must be exercised by at least one workflow"
+    );
+    assert!(
+        workflows_with_component_metric * 2 >= workflows.len(),
+        "at least half of workflows must exercise a component metric to preserve metric diversity"
     );
     assert_eq!(
         confidence_signals_exercised, confidence_signals,

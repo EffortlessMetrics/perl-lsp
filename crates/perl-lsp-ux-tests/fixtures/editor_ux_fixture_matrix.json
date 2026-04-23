@@ -8,6 +8,8 @@
   ],
   "component_metrics": [
     "cross_file_definition_success_rate",
+    "graceful_degradation_success_rate",
+    "diagnostics_refresh_success_rate",
     "module_resolution_workflow_success_rate",
     "multi_root_workspace_navigation_success_rate"
   ],
@@ -25,7 +27,8 @@
       "user_journey": "open a simple Perl file and verify hover and completion work without crashing",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "server starts cleanly",
@@ -45,7 +48,8 @@
       "user_journey": "request formatting when perltidy is unavailable",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "format request degrades gracefully",
@@ -64,7 +68,8 @@
       "user_journey": "start the server without perl on PATH and perform basic editor actions",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "server starts in degraded mode",
@@ -83,7 +88,8 @@
       "user_journey": "publish diagnostics when perlcritic is unavailable",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "diagnostics degrade gracefully",
@@ -102,7 +108,8 @@
       "user_journey": "open a workspace with invalid tool configuration",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "invalid config does not crash the server",
@@ -122,7 +129,8 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "p95_time_to_first_useful_result_ms",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "large files do not crash the server",
@@ -140,7 +148,8 @@
       "user_journey": "open multiple files in a workspace and navigate across them",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
         "cross-file definition request completes without error",
@@ -159,7 +168,8 @@
       "user_journey": "open a Perl file without a .pl extension",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "languageId-perl files without extensions still behave like Perl"
@@ -177,7 +187,8 @@
       "user_journey": "open files with BOMs, utf8 pragmas, and Unicode text",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "graceful_degradation_success_rate"
       ],
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
@@ -196,7 +207,8 @@
       "user_journey": "run goto-definition inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "definition request returns a location or clean empty result",
@@ -216,7 +228,8 @@
       "user_journey": "run hover over names and variables in a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "hover request returns useful structure or clean empty result",
@@ -236,7 +249,8 @@
       "user_journey": "open a strict warnings file and wait for settled diagnostics",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "diagnostics_refresh_success_rate"
       ],
       "expected_outcomes": [
         "publishDiagnostics arrives",
@@ -256,7 +270,8 @@
       "user_journey": "request document symbols for parsable and empty files",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
         "document symbols return valid structure",
@@ -357,11 +372,17 @@
       "user_journey": "run goto-declaration inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "declaration request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -372,18 +393,19 @@
       "user_journey": "open a file, edit it, and verify diagnostics republish for the updated content",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "diagnostics_refresh_success_rate"
       ],
       "expected_outcomes": [
         "didChange full-document edit succeeds",
         "publishDiagnostics republish occurs after edit",
         "updated diagnostic payload remains valid"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
-  ],
-  "confidence_signals": [
-    "manual_editor_smoke",
-    "first_five_minutes_harness",
-    "issue_burndown_regression_guard"
   ]
 }
