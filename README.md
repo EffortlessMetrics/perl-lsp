@@ -34,7 +34,9 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 The extension auto-downloads the matching `perllsp` binary for your platform.
 
-**Other editors:** download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
+**Codex Desktop** — add a custom Perl language server command that runs `perllsp --stdio` (guide: [docs/EDITORS/CODEX_DESKTOP_SETUP.md](docs/EDITORS/CODEX_DESKTOP_SETUP.md)).
+
+**Other editors** â€” download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
 
 ```lua
 -- Neovim (nvim-lspconfig)
