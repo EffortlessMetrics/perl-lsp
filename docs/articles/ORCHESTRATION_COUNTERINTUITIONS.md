@@ -32,6 +32,8 @@ It's not. Adjusted analysis:
 
 The economic shape: **Codex spray + Claude filter** is profitable specifically *because* generation is cheap enough that a 50% filter ratio is acceptable. If Codex were 10× more expensive per attempt, the calculus would flip toward requiring higher first-pass quality. At current prices, spray-and-filter wins.
 
+**Updated figures** from the session close: Codex Pro consumed **~26% of a 5-hour session budget + ~7% of the weekly budget** for the ~150 attempts. Combined with Claude at **~31% of 5-hour session + ~5% weekly**, both tools ran at near-matched intensity. The 5-hour-session slice suggests one session this intense burns **~5–6× a typical day's consumption simultaneously on each tool** — unusual-but-sustainable for focused review pushes, not a steady-state rate.
+
 ---
 
 ## Counterintuition 3: Context *is* the source of truth
