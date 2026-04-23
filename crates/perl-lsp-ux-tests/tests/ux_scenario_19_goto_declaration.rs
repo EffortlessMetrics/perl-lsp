@@ -1,4 +1,4 @@
-//! Scenario 18 — Go-to-declaration feature grid coverage.
+//! Scenario 19 — Go-to-declaration feature grid coverage.
 //!
 //! Verifies that `textDocument/declaration` is wired up end-to-end for the LSP
 //! server process used in UX regression testing.
@@ -27,7 +27,7 @@ print "$result\n";
 "#;
 
 #[test]
-fn scenario_18_declaration_request_does_not_error() -> Result<()> {
+fn scenario_19_declaration_request_does_not_error() -> Result<()> {
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 

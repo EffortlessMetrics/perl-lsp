@@ -351,7 +351,7 @@
     },
     {
       "id": "goto_declaration_core",
-      "scenario_file": "ux_scenario_18_goto_declaration.rs",
+      "scenario_file": "ux_scenario_19_goto_declaration.rs",
       "subsystem_owner": "editor_intelligence",
       "ci_tier": "pr",
       "user_journey": "run goto-declaration inside a representative file",
