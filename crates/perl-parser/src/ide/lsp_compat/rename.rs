@@ -337,8 +337,9 @@ impl RenameProvider {
                 new_text: new_name.to_string(),
             };
             
-            file_changes.entry(reference.uri.clone())
-                .or_insert_with(Vec::new)
+            file_changes
+                .entry(reference.uri.clone())
+                .or_default()
                 .push(text_edit);
         }
         
