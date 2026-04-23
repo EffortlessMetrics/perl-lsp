@@ -456,6 +456,23 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "fixture_backed_editor_intelligence_surface",
+      "scenario_file": "ux_scenario_18_fixture_scorecard.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "exercise hover, completion, definition/declaration/references, symbols, rename, and diagnostics-after-edit from one executable fixture",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "fixture-backed UX requests stay green end-to-end",
+        "rename response yields workspace edits",
+        "diagnostics settle down after an in-place fix edit"
+      ]
     }
   ]
 }
