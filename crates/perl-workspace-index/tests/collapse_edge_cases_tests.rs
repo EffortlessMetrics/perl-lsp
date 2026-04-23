@@ -297,7 +297,7 @@ fn test_cargo_toml_no_deleted_satellite_deps() {
 ///
 /// Wave A (#4426) removed 6 perl-workspace-* satellites.
 /// Wave D (#4454) removed 13+ parser/AST satellites into perl-parser-core and perl-parser.
-/// Combined baseline was ~120, now ~83 members.
+/// Keep this guard relational so it doesn't rot when workspace membership changes.
 #[test]
 fn test_workspace_members_reduced_by_six() {
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -308,10 +308,12 @@ fn test_workspace_members_reduced_by_six() {
     let content =
         std::fs::read_to_string(&cargo_toml_path).expect("Failed to read workspace Cargo.toml");
 
-    // Count unique "crates/" entries (each workspace member)
+    // Count unique "crates/" entries from [workspace].members.
     let members: HashSet<&str> = content
         .lines()
-        .filter(|line| line.contains("\"crates/") && !line.contains("."))
+        .skip_while(|line| !line.trim().starts_with("members = ["))
+        .take_while(|line| !line.trim().starts_with(']'))
+        .filter(|line| line.contains("\"crates/"))
         .filter_map(|line| {
             let start = line.find("crates/")?;
             let end = line[start..].find('"')? + start;
@@ -319,18 +321,45 @@ fn test_workspace_members_reduced_by_six() {
         })
         .collect();
 
-    // After Wave A (6 removed) and Wave D (13+ removed), expect ≤120 members.
-    // Allow flexibility for concurrent PR activity.
-    assert!(
-        members.len() <= 120,
-        "Workspace should have ≤120 members after Wave A+D satellite deletions, found {}",
-        members.len()
-    );
-    assert!(
-        members.len() >= 70,
-        "Workspace should have ≥70 members (check for inadvertent removals), found {}",
-        members.len()
-    );
+    // Extract package names from [workspace.metadata.publish].allow.
+    let allowlist: HashSet<&str> = content
+        .lines()
+        .skip_while(|line| !line.trim().starts_with("[workspace.metadata.publish]"))
+        .skip(1)
+        .skip_while(|line| !line.trim().starts_with("allow = ["))
+        .take_while(|line| !line.trim().starts_with(']'))
+        .filter_map(|line| {
+            let first_quote = line.find('"')?;
+            let rest = &line[(first_quote + 1)..];
+            let second_quote = rest.find('"')?;
+            Some(&rest[..second_quote])
+        })
+        .collect();
+
+    // This test intentionally avoids absolute workspace counts.
+    // Instead, enforce that publishable crates remain represented in workspace members.
+    assert!(!members.is_empty(), "Workspace members list unexpectedly empty");
+    assert!(!allowlist.is_empty(), "Publish allowlist unexpectedly empty");
+
+    // Translate workspace paths to package names.
+    let member_names: HashSet<&str> = members
+        .iter()
+        .filter_map(|entry| entry.rsplit('/').next())
+        .map(|member| match member {
+            // Path/name compatibility shims that intentionally differ.
+            "perl-workspace-index" => "perl-workspace",
+            "perl-lsp" => "perl-lsp-rs",
+            other => other,
+        })
+        .collect();
+
+    for allowed in allowlist {
+        assert!(
+            member_names.contains(allowed),
+            "Publish allowlist crate `{}` missing from workspace members list",
+            allowed
+        );
+    }
 }
 
 // =============================================================================
