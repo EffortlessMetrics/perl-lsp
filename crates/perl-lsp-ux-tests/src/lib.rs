@@ -154,7 +154,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
-    file_versions: Mutex<HashMap<String, i32>>,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -176,7 +176,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config, file_versions: Mutex::new(HashMap::new()) })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -186,7 +186,7 @@ impl UxHarness {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
         self.client.did_open(&uri, content)?;
-        self.record_open_version(&uri);
+        self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
         Ok(())
     }
 
@@ -569,13 +569,8 @@ impl UxHarness {
         &self.workspace.root_uri
     }
 
-    fn record_open_version(&self, uri: &str) {
-        let mut guard = self.file_versions.lock().unwrap_or_else(|e| e.into_inner());
-        guard.insert(uri.to_string(), 1);
-    }
-
     fn bump_file_version(&self, uri: &str) -> Result<i32> {
-        let mut guard = self.file_versions.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
         match guard.get_mut(uri) {
             Some(version) => {
                 *version += 1;
