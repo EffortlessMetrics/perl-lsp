@@ -21,13 +21,12 @@ pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<O
     loop {
         // Check completion before the deadline so a process that finishes
         // exactly at the deadline boundary is never reported as timed out.
-        match child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))? {
-            Some(_status) => {
-                return child
-                    .wait_with_output()
-                    .map_err(|error| format!("failed collecting command output: {error}"));
-            }
-            None => {}
+        if let Some(_status) =
+            child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))?
+        {
+            return child
+                .wait_with_output()
+                .map_err(|error| format!("failed collecting command output: {error}"));
         }
 
         if start.elapsed() >= timeout {
