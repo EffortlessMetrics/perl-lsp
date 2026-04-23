@@ -102,3 +102,46 @@ pub fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 
     (char_count, emoji_count, complex_char_count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        analyze_unicode_complexity, get_unicode_stats, is_perl_identifier_continue,
+        is_perl_identifier_start, reset_unicode_stats,
+    };
+
+    #[test]
+    fn identifier_start_accepts_ascii_xid_and_emoji() {
+        reset_unicode_stats();
+
+        assert!(is_perl_identifier_start('_'));
+        assert!(is_perl_identifier_start('A'));
+        assert!(is_perl_identifier_start('λ'));
+        assert!(is_perl_identifier_start('🚀'));
+        assert!(!is_perl_identifier_start('1'));
+
+        let (checks, emoji_hits) = get_unicode_stats();
+        assert_eq!(checks, 5);
+        assert_eq!(emoji_hits, 1);
+    }
+
+    #[test]
+    fn identifier_continue_accepts_joiners_selectors_and_modifiers() {
+        assert!(is_perl_identifier_continue('\''));
+        assert!(is_perl_identifier_continue('\u{200D}'));
+        assert!(is_perl_identifier_continue('\u{FE0F}'));
+        assert!(is_perl_identifier_continue('\u{1F3FB}'));
+        assert!(!is_perl_identifier_continue(' '));
+    }
+
+    #[test]
+    fn analyze_complexity_counts_chars_emoji_and_non_bmp() {
+        // a + lambda + rocket + FE0F variation selector
+        let (char_count, emoji_count, complex_char_count) =
+            analyze_unicode_complexity("aλ🚀\u{FE0F}");
+
+        assert_eq!(char_count, 4);
+        assert_eq!(emoji_count, 1);
+        assert_eq!(complex_char_count, 2);
+    }
+}
