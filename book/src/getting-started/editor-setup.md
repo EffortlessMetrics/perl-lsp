@@ -6,6 +6,7 @@ This guide provides copy/paste ready configurations for setting up the Perl LSP 
 
 - [Prerequisites](#prerequisites)
 - [VS Code](#vs-code)
+- [Trae (ByteDance)](#trae-bytedance)
 - [Neovim](#neovim)
 - [Emacs](#emacs)
 - [Helix](#helix)
@@ -105,6 +106,50 @@ For troubleshooting, enable server tracing:
   "perl-lsp.trace.server": "verbose"
 }
 ```
+
+---
+
+## Trae (ByteDance)
+
+Trae is VS Code-compatible, so you can use the same `perl-lsp-rs` extension and
+settings that work in VS Code.
+
+### Install the Extension
+
+Install the marketplace extension in Trae:
+
+```bash
+trae --install-extension effortlesssteven.perl-lsp
+```
+
+If your Trae build does not expose the `trae` CLI yet, install
+`effortlesssteven.perl-lsp` from the Extensions UI and then reload the window.
+
+### Recommended Settings
+
+Open Trae settings JSON and add:
+
+```json
+{
+  "perl-lsp.serverPath": "",
+  "perl-lsp.autoDownload": true,
+  "perl-lsp.trace.server": "off",
+  "perl-lsp.enableDiagnostics": true,
+  "perl-lsp.enableSemanticTokens": true,
+  "perl-lsp.enableFormatting": true,
+  "perl-lsp.enableRefactoring": true,
+  "perl-lsp.includePaths": ["lib", "local/lib/perl5"]
+}
+```
+
+### Troubleshooting Trae-specific Startup
+
+If the extension activates but language features do not appear:
+
+1. Confirm the server binary starts from a terminal: `perllsp --version`
+2. Set `"perl-lsp.trace.server": "verbose"` and inspect the LSP output channel
+3. Reload the Trae window after changing `perl-lsp.serverPath`
+4. As a fallback, set an absolute path in `perl-lsp.serverPath`
 
 ---
 
