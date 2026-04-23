@@ -1,0 +1,16 @@
+<toolSet name="External Tools">
+  <tool name="perl-lsp: just dev-watch-tests" description="Run repo default continuous test loop" showInMainMenu="true" showInEditor="false" showInProject="true" showInSearchPopup="true" disabled="false" useConsole="true" showConsoleOnStdOut="true" showConsoleOnStdErr="true" synchronizeAfterRun="true">
+    <exec>
+      <option name="COMMAND" value="just" />
+      <option name="PARAMETERS" value="dev-watch-tests" />
+      <option name="WORKING_DIRECTORY" value="$ProjectFileDir$" />
+    </exec>
+  </tool>
+  <tool name="perl-lsp: nextest local-fast" description="Run nextest local-fast profile over workspace" showInMainMenu="true" showInEditor="false" showInProject="true" showInSearchPopup="true" disabled="false" useConsole="true" showConsoleOnStdOut="true" showConsoleOnStdErr="true" synchronizeAfterRun="true">
+    <exec>
+      <option name="COMMAND" value="cargo" />
+      <option name="PARAMETERS" value="nextest run --profile local-fast --workspace" />
+      <option name="WORKING_DIRECTORY" value="$ProjectFileDir$" />
+    </exec>
+  </tool>
+</toolSet>
