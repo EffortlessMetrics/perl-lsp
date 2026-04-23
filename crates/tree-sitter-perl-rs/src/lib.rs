@@ -785,4 +785,21 @@ mod tests {
         cursor.reset();
         assert_eq!(cursor.node().grammar_kind(), "source_file");
     }
+
+    #[test]
+    fn test_tree_cursor_goto_first_child_returns_false_for_leaf() {
+        // A leaf node has no children; goto_first_child must return false and
+        // leave the cursor positioned at the leaf rather than panicking.
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse("my $x = 1;"));
+        let root = tree.root_node();
+        let mut cursor = root.walk();
+
+        // Navigate to a leaf: root -> first child (my_declaration) -> first child (leaf token).
+        assert!(cursor.goto_first_child(), "root should have a child");
+        assert!(cursor.goto_first_child(), "my_declaration should have a child");
+        // The leaf must refuse another goto_first_child.
+        let at_leaf = !cursor.goto_first_child();
+        assert!(at_leaf, "goto_first_child must return false on a leaf node");
+    }
 }
