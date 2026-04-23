@@ -64,8 +64,9 @@ fn test_transport_lib_rs_exists() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_runtime_transport_not_absorbed() -> Result<(), Box<dyn std::error::Error>> {
     // Regression guard: transport should be accessible from rs-core::transport.
-    // If this test compiles, it verifies the module is properly re-exported.
-    use perl_lsp_rs_core::transport as _transport;
+    // Touch a concrete transport item so this check stays meaningful and warning-free.
+    let _type_name =
+        std::any::type_name::<perl_lsp_rs_core::transport::ContentLengthMessageReader>();
     Ok(())
 }
 
