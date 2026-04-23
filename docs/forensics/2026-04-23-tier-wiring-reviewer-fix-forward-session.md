@@ -8,14 +8,27 @@
 
 Plans: **Claude 20× Max** + **Codex Pro**. 5h sessions reset; weekly budget is the rollup. These are the numbers for the current 5h session window only — prior iterations (2026-04-22) covered in `docs/forensics/2026-04-22-continuous-codex-review-session.md`.
 
-| Measure | Current session usage | Weekly total (after this session) | Weekly delta this session |
+### Mid-session checkpoint
+
+| Measure | Session used | Weekly used | Weekly remaining |
 |---|---|---|---|
-| Claude Code (20× Max) | **33%** of the 5h window | **79%** | **+3–4%** (from ~76%) |
-| Codex Pro | **41%** of the 5h window | (82% remaining) | **+6%** |
+| Claude Code (20× Max) | **33%** | **79%** | 21% |
+| Codex Pro | **41%** | ~18% | ~82% |
 
-**Per-outcome cost.** Claude's 33% session drove: ~20 merges, 18+ deep-reviews with fix-forward, 8 issues filed, 10+ dupe closes, 1 critical master bit-rot fix (#5018), 1 tier-wiring landing (#5005), 1 forensic + policy memory (this doc + `feedback_reviewer_deep_proactive_fixes.md`). **Roughly ~1% Claude session per actionable outcome** — consistent with prior sessions at ~$0.05 each at retail 20× Max pricing.
+### Later checkpoint (after Haiku+reviewer-deep parallel dispatch)
 
-**Matched intensity held.** When Codex dispatched 40+ PR waves, Claude triaged/reviewed/merged at matching pace. Claude 33% session ↔ Codex 41% session is within ~25% of each other — the spray-and-filter economics survives continued throughput increases.
+| Measure | Session used | Weekly used | Weekly remaining |
+|---|---|---|---|
+| Claude Code (20× Max) | **18%** (new 5h window) | **82%** | **18%** |
+| Codex Pro | **11%** (new window) | **~21%** | **~79%** |
+
+**Key economic observation:** Codex Pro is ~4× more budget-efficient than Claude 20× Max this week by weekly consumption. Codex did the heavy generation (200+ PRs produced); Claude did high-leverage routing and review. The spray-and-filter pattern ALIGNS with this cost asymmetry — the cheap model sprays, the expensive model filters.
+
+**When the Claude weekly approaches saturation (82%), the right move is to lean into Haiku for mechanical work** (see `docs/articles/HAIKU_FOR_MECHANICAL.md`). 7 Haiku reviewer batches dispatched this session closed ~20 duplicate PRs with negligible Claude cost — work that would have eaten real Sonnet budget per review.
+
+**Per-outcome cost.** Mid-session Claude 33% drove: ~20 merges, 18+ deep-reviews with fix-forward, 8 issues filed, 10+ dupe closes, 1 critical master bit-rot fix (#5018), 1 tier-wiring landing (#5005), 1 forensic + policy memory. Later pass additional ~15% Claude session: 7 Haiku standards reviewers across 103 PRs (~15 per batch), 8 reviewer-deep agents across ~45 substantive PRs, the reviewer-deep skill-chain fix (#5314), reviewer validate-title clarification (#5315), multiple doc articles (TWO_MODE, TRIAGE_AS_LEARNING, HAIKU_FOR_MECHANICAL, TWO_PHASE_MERGE_GATE).
+
+Roughly **~1% Claude session per actionable outcome** held across the session. Haiku's per-outcome cost was a small fraction of that — closer to ~0.1%.
 
 **What changed the cost shape.** The fix-forward policy (reviewer-deep pushes mechanical fixes directly) collapsed the typical find→file→build→review→merge pipeline into find→push→merge for narrow corrections. One-line and small fixes no longer pay a fresh-builder spawn.
 
