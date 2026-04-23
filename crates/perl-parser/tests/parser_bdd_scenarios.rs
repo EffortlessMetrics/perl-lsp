@@ -184,3 +184,61 @@ fn bdd_given_unclosed_quote_when_parsed_then_recovery_is_reported_without_panick
         }
     }
 }
+
+#[test]
+fn bdd_given_nested_try_catch_and_finally_when_parsed_then_exception_flow_nodes_are_preserved()
+-> TestResult {
+    // Given: a developer uses nested exception handling with fallback and cleanup logic.
+    let code = r#"
+        my $status = "pending";
+        try {
+            try {
+                die "boom";
+            } catch ($inner) {
+                $status = "inner";
+            }
+        } catch ($outer) {
+            $status = "outer";
+        } finally {
+            $status = "done";
+        }
+    "#;
+
+    // When: the parser processes the nested exception handling flow.
+    let sexp = parse_sexp(code)?;
+
+    // Then: structured try/catch/finally constructs remain visible and parse is clean.
+    assert!(sexp.contains("(try"), "Expected Try node in: {sexp}");
+    assert!(sexp.contains("(catch"), "Expected Catch node in: {sexp}");
+    assert!(sexp.contains("(finally"), "Expected Finally node in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
+
+#[test]
+fn bdd_given_labeled_loop_control_when_parsed_then_label_and_control_ops_are_retained() -> TestResult
+{
+    // Given: a developer writes a labeled loop with next/last/redo control flow.
+    let code = r#"
+        OUTER: while (my $line = <STDIN>) {
+            next OUTER if $line =~ /^\s*$/;
+            redo OUTER if $line =~ /\\$/;
+            last OUTER if $line =~ /^quit$/;
+            print $line;
+        }
+    "#;
+
+    // When: the parser builds the AST for loop-control heavy code.
+    let sexp = parse_sexp(code)?;
+
+    // Then: loop control operations should survive parsing without recovery noise.
+    assert!(sexp.contains("(while"), "Expected While node in: {sexp}");
+    assert!(sexp.contains("(next"), "Expected Next loop-control node in: {sexp}");
+    assert!(sexp.contains("(redo"), "Expected Redo loop-control node in: {sexp}");
+    assert!(sexp.contains("(last"), "Expected Last loop-control node in: {sexp}");
+    assert!(sexp.contains("OUTER"), "Expected loop label in: {sexp}");
+    assert!(!sexp.contains("ERROR"), "Did not expect recovery ERROR nodes for valid code: {sexp}");
+
+    Ok(())
+}
