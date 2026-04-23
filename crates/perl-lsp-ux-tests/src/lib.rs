@@ -46,10 +46,12 @@
 
 pub mod client;
 pub mod env;
+pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
+pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
@@ -430,6 +432,38 @@ impl UxHarness {
         )?;
         if resp.get("error").is_some() {
             return Err(anyhow!("definition returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    // Single location object
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Request go-to-declaration.
+    pub fn declaration(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/declaration",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("declaration returned error: {}", resp["error"]));
         }
         match resp["result"].as_array() {
             Some(locs) => Ok(locs.clone()),
