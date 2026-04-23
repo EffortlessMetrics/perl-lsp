@@ -90,7 +90,7 @@ fn scenario_19_didchange_evicts_stale_symbol_and_definition() -> Result<()> {
     assert!(saw_prechange_symbol, "Expected old symbol before edit");
     assert!(saw_prechange_definition, "Expected definition target before edit");
 
-    harness.change_file_full("lib/Churn.pm", MODULE_V2, 2)?;
+    harness.change_file_full("lib/Churn.pm", MODULE_V2)?;
 
     let deadline = Instant::now() + Duration::from_secs(8);
     let mut stale_symbol_gone = false;
