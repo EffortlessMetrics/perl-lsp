@@ -291,6 +291,28 @@ sub show_status {
     );
 }
 
+#[test]
+fn openclaw_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use OpenClaw;
+
+get '/health' => 'show_health';
+
+sub show_health {
+    return 'ok';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "/health", SymbolKind::Subroutine),
+        "expected OpenClaw route to synthesize `/health` symbol"
+    );
+    assert!(
+        has_reference(&table, "show_health", SymbolKind::Subroutine),
+        "expected OpenClaw route target string `show_health` to be recorded as a Subroutine reference"
+    );
+}
+
 // === Plack::Builder middleware chain detection ===
 
 #[test]

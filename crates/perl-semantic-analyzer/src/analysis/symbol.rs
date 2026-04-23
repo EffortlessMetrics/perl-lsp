@@ -352,6 +352,8 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
     /// `use Plack::Builder;`
     PlackBuilder,
+    /// `use OpenClaw;` or `use OpenClaw::DSL;`
+    OpenClaw,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -388,7 +390,7 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite, OpenClaw).
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
@@ -1565,7 +1567,7 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
-    /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    /// Detect Dancer/Dancer2/Mojolicious::Lite/OpenClaw route declarations and synthesize route symbols.
     ///
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
@@ -1617,7 +1619,11 @@ impl SymbolExtractor {
 
                         if matches!(
                             web_framework,
-                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                            Some(
+                                WebFrameworkKind::Dancer
+                                    | WebFrameworkKind::Dancer2
+                                    | WebFrameworkKind::OpenClaw
+                            )
                         ) && let Some(target_node) = args.get(1)
                         {
                             if let Some(target_name) =
@@ -2144,6 +2150,7 @@ impl SymbolExtractor {
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
+            "OpenClaw" | "OpenClaw::DSL" => Some(WebFrameworkKind::OpenClaw),
             _ => None,
         };
         if let Some(kind) = web_kind {
