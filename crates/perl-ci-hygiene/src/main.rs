@@ -3384,7 +3384,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"TODO|FIXME")?;
+    let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -4281,7 +4281,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
@@ -4297,7 +4297,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
@@ -4310,7 +4310,7 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_non_raw_string_comment_markers() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = \"not a comment // TODO in literal\";",
@@ -4330,7 +4330,7 @@ mod tests {
 
     #[test]
     fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
@@ -4346,6 +4346,21 @@ mod tests {
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn todo_detection_requires_word_boundaries() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "// TODOLIST items are tracked elsewhere",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("echo hi # PRETODO is not a marker", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// TODO: this is tracked inline", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi # FIXME: follow-up needed", &todo_re));
 
         Ok(())
     }
