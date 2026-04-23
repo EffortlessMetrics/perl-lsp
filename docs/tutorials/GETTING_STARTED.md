@@ -21,7 +21,7 @@ A **language server** is a program that runs alongside your editor and gives it 
 ## Prerequisites
 
 - **Rust 1.92+** (for building from source)
-- **A supported editor**: VS Code, Neovim, Emacs, Helix, or Sublime Text
+- **A supported editor**: VS Code, Vim/Neovim (native LSP or coc.nvim), Emacs, Helix, or Sublime Text
 
 ## Installation
 
@@ -128,6 +128,24 @@ lspconfig.perl_lsp.setup({
 ```
 
 **Verify it works**: open a `.pl` file and run `:LspInfo` -- you should see `perl_lsp` attached.
+
+### Vim / Neovim (with coc.nvim)
+
+Add this to `~/.vim/coc-settings.json` (or `~/.config/nvim/coc-settings.json`):
+
+```json
+{
+  "languageserver": {
+    "perl-lsp": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"]
+    }
+  }
+}
+```
+
+**Verify it works**: open a `.pl` file and run `:CocInfo` -- you should see `perl-lsp` running.
 
 ### Emacs (with eglot, Emacs 29+)
 
