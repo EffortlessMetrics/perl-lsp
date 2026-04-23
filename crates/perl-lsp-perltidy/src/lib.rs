@@ -351,7 +351,12 @@ impl BuiltInFormatter {
             }
             result.push('\n');
 
-            indent_level = (indent_level + net_delimiter_delta(trimmed)).max(0);
+            // net_delimiter_delta counts all delimiters including leading closers.
+            // We already decremented by leading_closers before printing, so add them
+            // back to avoid double-counting: the net change for the *next* line is
+            // delta + leading_closers (leading closers cancel in the net formula).
+            indent_level =
+                (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
         }
 
         result
