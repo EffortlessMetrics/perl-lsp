@@ -118,35 +118,98 @@ impl PatternDetector for FormatHeredocDetector {
 // BEGIN-time heredoc detector
 struct BeginTimeHeredocDetector;
 
-/// Pattern for identifying BEGIN blocks with heredocs
-static BEGIN_BLOCK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}") {
+/// Pattern for identifying BEGIN block openings
+static BEGIN_BLOCK_START_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"\bBEGIN\s*\{") {
         Ok(re) => re,
-        Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),
+        Err(_) => unreachable!("BEGIN_BLOCK_START_PATTERN regex failed to compile"),
     });
+
+fn find_matching_brace(code: &str, opening_brace_idx: usize) -> Option<usize> {
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for (idx, &byte) in bytes.iter().enumerate().skip(opening_brace_idx) {
+        let ch = byte as char;
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if in_single_quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' => in_single_quote = true,
+            '"' => in_double_quote = true,
+            '{' => depth += 1,
+            '}' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
 
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
-        for cap in BEGIN_BLOCK_PATTERN.captures_iter(code) {
-            if let (Some(match_pos), Some(content_match)) = (cap.get(0), cap.get(1)) {
-                let block_content = content_match.as_str();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+        for begin_match in BEGIN_BLOCK_START_PATTERN.find_iter(code) {
+            let Some(opening_brace_rel) = begin_match.as_str().rfind('{') else {
+                continue;
+            };
+            let opening_brace_idx = begin_match.start() + opening_brace_rel;
+            let Some(closing_brace_idx) = find_matching_brace(code, opening_brace_idx) else {
+                continue;
+            };
+            let block_content = &code[opening_brace_idx + 1..closing_brace_idx];
 
-                results.push((
-                    AntiPattern::BeginTimeHeredoc {
-                        location: location.clone(),
-                        heredoc_content: block_content.to_string(),
-                        side_effects: vec!["Phase-dependent parsing".to_string()],
-                    },
-                    location,
-                ));
+            if !block_content.contains("<<") {
+                continue;
             }
+
+            let location = Location {
+                line: code[..begin_match.start()].lines().count(),
+                column: begin_match.start() - code[..begin_match.start()].rfind('\n').unwrap_or(0),
+                offset: offset + begin_match.start(),
+            };
+
+            results.push((
+                AntiPattern::BeginTimeHeredoc {
+                    location: location.clone(),
+                    heredoc_content: block_content.to_string(),
+                    side_effects: vec!["Phase-dependent parsing".to_string()],
+                },
+                location,
+            ));
         }
 
         results
@@ -574,6 +637,27 @@ END
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::BeginTimeHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_begin_heredoc_detection_with_nested_braces() {
+        let detector = AntiPatternDetector::new();
+        let code = r###"
+BEGIN {
+    if ($ENV{DEV}) {
+        $config = <<'END';
+        server = localhost
+END
+    }
+}
+"###;
+
+        let diagnostics = detector.detect_all(code);
+        let begin_count = diagnostics
+            .iter()
+            .filter(|diag| matches!(diag.pattern, AntiPattern::BeginTimeHeredoc { .. }))
+            .count();
+        assert_eq!(begin_count, 1);
     }
 
     #[test]
