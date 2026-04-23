@@ -119,11 +119,11 @@ fn test_import_module_types_are_accessible() {
 /// Verify parse_module_import_head works correctly (end-to-end).
 #[test]
 fn test_parse_module_import_head_function() {
-    if let Some(head) = parse_module_import_head("use My::Module;") {
+    let head = parse_module_import_head("use My::Module;");
+    assert!(head.is_some(), "Failed to parse module import head");
+    if let Some(head) = head {
         assert_eq!(head.token, "My::Module");
         assert_eq!(head.kind, ModuleImportKind::Use);
-    } else {
-        panic!("Failed to parse module import head");
     }
 }
 
@@ -153,11 +153,11 @@ fn test_token_module_functions() {
 /// Verify token_parser can parse module tokens.
 #[test]
 fn test_token_parser_function() {
-    if let Some(token) = parse_module_token("My::Module", 0) {
+    let token = parse_module_token("My::Module", 0);
+    assert!(token.is_some(), "Failed to parse module token");
+    if let Some(token) = token {
         assert_eq!(token.start, 0);
         assert_eq!(token.end, "My::Module".len());
-    } else {
-        panic!("Failed to parse module token");
     }
 }
 
@@ -172,10 +172,10 @@ fn test_import_match_module_function() {
 #[test]
 fn test_reference_module_functions() {
     let source = "use My::Module;";
-    if let Some(module_name) = extract_module_reference(source, 4) {
+    let module_name = extract_module_reference(source, 4);
+    assert!(module_name.is_some(), "Failed to extract module reference");
+    if let Some(module_name) = module_name {
         assert_eq!(module_name, "My::Module");
-    } else {
-        panic!("Failed to extract module reference");
     }
 }
 
@@ -312,11 +312,11 @@ fn test_legacy_package_separator_preservation() {
 #[test]
 fn test_token_parsing_roundtrip() {
     let name = "Complex::Nested::Module::Name";
-    if let Some(token) = parse_module_token(name, 0) {
+    let token = parse_module_token(name, 0);
+    assert!(token.is_some(), "Failed to parse module token");
+    if let Some(token) = token {
         assert_eq!(token.start, 0);
         assert_eq!(token.end, name.len());
-    } else {
-        panic!("Failed to parse module token");
     }
 }
 
