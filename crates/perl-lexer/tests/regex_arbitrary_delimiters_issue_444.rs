@@ -256,3 +256,33 @@ fn test_m_vs_bareword_disambiguation() {
         tokens2[0].token_type
     );
 }
+
+#[test]
+fn test_slash_regex_with_character_class_containing_slash() {
+    let code = r#"/[\/]/"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex text should include full character class");
+}
+
+#[test]
+fn test_slash_regex_with_url_character_class() {
+    let code = r#"/[a-z/]+/i"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected regex token and EOF");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), code, "Regex token should include trailing modifier");
+}
