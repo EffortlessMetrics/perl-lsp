@@ -155,6 +155,9 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
 /// - UTF-8 BOM (`EF BB BF`) is removed.
 /// - UTF-16 LE/BE with BOM is decoded.
 /// - Other content first tries strict UTF-8, then falls back to lossy UTF-8.
+///
+/// Odd-length payloads after a UTF-16 BOM fall back to lossy UTF-8 decoding
+/// of the original bytes rather than silently dropping the trailing byte.
 #[cfg(feature = "workspace")]
 fn read_text_with_encoding_fallback(path: &Path) -> std::io::Result<String> {
     let bytes = std::fs::read(path)?;
@@ -162,17 +165,23 @@ fn read_text_with_encoding_fallback(path: &Path) -> std::io::Result<String> {
         return Ok(String::from_utf8_lossy(&bytes[3..]).into_owned());
     }
     if bytes.starts_with(&[0xFF, 0xFE]) {
-        let units: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .collect();
+        let payload = &bytes[2..];
+        if !payload.len().is_multiple_of(2) {
+            // Odd-length UTF-16 payload; fall back to lossy UTF-8 of the
+            // full original bytes rather than truncating the trailing byte.
+            return Ok(String::from_utf8_lossy(&bytes).into_owned());
+        }
+        let units: Vec<u16> =
+            payload.chunks_exact(2).map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])).collect();
         return Ok(String::from_utf16_lossy(&units));
     }
     if bytes.starts_with(&[0xFE, 0xFF]) {
-        let units: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
-            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
-            .collect();
+        let payload = &bytes[2..];
+        if !payload.len().is_multiple_of(2) {
+            return Ok(String::from_utf8_lossy(&bytes).into_owned());
+        }
+        let units: Vec<u16> =
+            payload.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
         return Ok(String::from_utf16_lossy(&units));
     }
     match String::from_utf8(bytes) {
@@ -2222,6 +2231,42 @@ mod tests {
 
         let read = read_text_with_encoding_fallback(&path)?;
         assert_eq!(read, "package");
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 LE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate. We fall back to lossy
+    /// UTF-8 of the original bytes so the caller still gets something
+    /// reasonable to index.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16le()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16le.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFF, 0xFE, 0x6D, 0x00, 0x79])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        // Must return something (not panic) — the replacement string is
+        // lossy but deterministic.
+        assert!(!read.is_empty());
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 BE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16be()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16be.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFE, 0xFF, 0x00, 0x6D, 0x00])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert!(!read.is_empty());
         Ok(())
     }
 }
