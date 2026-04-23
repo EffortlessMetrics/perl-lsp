@@ -602,4 +602,34 @@ mod tests {
             "top-level Moo should suppress both missing strict/warnings diagnostics"
         );
     }
+
+    #[test]
+    fn implicit_strict_module_inside_sub_body_does_not_suppress_missing_strict() {
+        // `use Moose` inside a sub body is not at file scope.
+        // collect_file_scope_use_modules only checks Program.statements, so
+        // a sub-scoped `use Moose` must not suppress PL100/PL101.
+        let diags = strict_warnings_diags("sub configure { use Moose; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "sub-scoped Moose should not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "sub-scoped Moose should not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
+    fn all_implicit_strict_modules_suppress_at_top_level() {
+        // Spot-check two more members of IMPLICIT_STRICT_MODULES to ensure
+        // collect_file_scope_use_modules covers the full list, not just Moo.
+        for module in &["Moose", "Modern::Perl"] {
+            let source = format!("use {};\nmy $x = 1;\n", module);
+            let diags = strict_warnings_diags(&source);
+            assert!(
+                diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+                "top-level `use {module}` should suppress both missing strict/warnings diagnostics"
+            );
+        }
+    }
 }
