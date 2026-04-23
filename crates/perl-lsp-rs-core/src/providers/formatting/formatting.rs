@@ -204,7 +204,21 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
                 &args.iter().map(String::as_str).collect::<Vec<_>>(),
                 Some(content.as_bytes()),
             )
-            .map_err(|error| FormattingError::PerltidyNotFound(error.message))?;
+            .map_err(|error| {
+                tracing::debug!(
+                    error = %error.message,
+                    "perltidy unavailable; using Rust formatting fallback"
+                );
+                FormattingError::PerltidyNotFound(error.message)
+            });
+
+        let output = match output {
+            Ok(output) => output,
+            Err(FormattingError::PerltidyNotFound(_)) => {
+                return Ok(format_with_rust_fallback(content, options));
+            }
+            Err(err) => return Err(err),
+        };
 
         if !output.success() {
             return Err(FormattingError::PerltidyError(
@@ -213,5 +227,91 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+}
+
+fn format_with_rust_fallback(content: &str, options: &FormattingOptions) -> String {
+    let mut normalized = content.replace("\r\n", "\n");
+
+    if options.trim_trailing_whitespace.unwrap_or(false) {
+        let had_terminal_newline = normalized.ends_with('\n');
+        normalized = normalized
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
+        if had_terminal_newline {
+            normalized.push('\n');
+        }
+    }
+
+    if options.trim_final_newlines.unwrap_or(false) {
+        normalized = normalized.trim_end_matches('\n').to_string();
+        if !normalized.is_empty() {
+            normalized.push('\n');
+        }
+    }
+
+    if options.insert_final_newline.unwrap_or(false)
+        && !normalized.is_empty()
+        && !normalized.ends_with('\n')
+    {
+        normalized.push('\n');
+    }
+
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_subprocess_runtime::{SubprocessError, SubprocessOutput};
+
+    struct MissingToolRuntime;
+
+    impl perl_subprocess_runtime::SubprocessRuntime for MissingToolRuntime {
+        fn run_command(
+            &self,
+            _program: &str,
+            _args: &[&str],
+            _stdin: Option<&[u8]>,
+        ) -> Result<SubprocessOutput, SubprocessError> {
+            Err(SubprocessError::new("failed to start perltidy"))
+        }
+    }
+
+    #[test]
+    fn format_document_falls_back_when_perltidy_is_unavailable() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let formatter = FormattingProvider::new(MissingToolRuntime);
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(true),
+            insert_final_newline: Some(true),
+            trim_final_newlines: Some(false),
+        };
+
+        let input = "my $x = 1;   \r\nmy $y = 2;   ";
+        let result = formatter.format_document(input, &options)?;
+
+        assert_eq!("my $x = 1;\nmy $y = 2;\n", result.text);
+        Ok(())
+    }
+
+    #[test]
+    fn rust_fallback_trim_final_newlines_reduces_to_single_newline() {
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: Some(false),
+            insert_final_newline: Some(false),
+            trim_final_newlines: Some(true),
+        };
+
+        let input = "my $x = 1;\n\n\n";
+        let output = format_with_rust_fallback(input, &options);
+
+        assert_eq!("my $x = 1;\n", output);
     }
 }
