@@ -1918,7 +1918,9 @@ impl CompletionProvider {
         // Check user-defined functions
         for (name, symbols) in &self.symbol_table.symbols {
             for symbol in symbols {
-                if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix) {
+                if (symbol.kind == SymbolKind::Subroutine || symbol.kind == SymbolKind::Constant)
+                    && name.starts_with(prefix)
+                {
                     return true;
                 }
             }
@@ -2168,6 +2170,32 @@ proc
 
         assert!(completions.iter().any(|c| c.label == "process_data"));
         assert!(completions.iter().any(|c| c.label == "process_items"));
+    }
+
+    #[test]
+    fn test_constant_symbols_in_visible_table_are_completed() {
+        use perl_semantic_analyzer::SourceLocation;
+        use perl_semantic_analyzer::symbol::Symbol;
+
+        let code = "P";
+        let mut parser = Parser::new("");
+        let ast = must(parser.parse());
+
+        let mut provider = CompletionProvider::new(&ast);
+        provider.symbol_table.symbols.entry("PI".to_string()).or_default().push(Symbol {
+            name: "PI".to_string(),
+            qualified_name: "PI".to_string(),
+            kind: SymbolKind::Constant,
+            location: SourceLocation { start: 0, end: 0 },
+            scope_id: 0,
+            declaration: Some("constant".to_string()),
+            documentation: Some("constant PI".to_string()),
+            attributes: vec![],
+        });
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(completions.iter().any(|c| c.label == "PI"));
     }
 
     #[test]

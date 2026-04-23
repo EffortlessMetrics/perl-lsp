@@ -20,22 +20,38 @@ pub fn add_function_completions(
 
     for (name, symbols) in &symbol_table.symbols {
         for symbol in symbols {
-            if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix_without_amp) {
-                let distance =
-                    compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
-                completions.push(CompletionItem {
-                    label: name.clone(),
-                    kind: super::items::CompletionItemKind::Function,
-                    detail: Some("sub".to_string()),
-                    documentation: symbol.documentation.clone(),
-                    insert_text: Some(format!("{}()", name)),
-                    sort_text: Some(format!("2{}_{}", distance.sort_key(), name)),
-                    filter_text: Some(name.clone()),
-                    additional_edits: vec![],
-                    text_edit_range: Some((context.prefix_start, context.position)),
-                    commit_characters: None,
-                });
+            if !name.starts_with(prefix_without_amp) {
+                continue;
             }
+
+            let (kind, detail, insert_text) = match symbol.kind {
+                SymbolKind::Subroutine => (
+                    super::items::CompletionItemKind::Function,
+                    Some("sub".to_string()),
+                    Some(format!("{name}()")),
+                ),
+                SymbolKind::Constant => (
+                    super::items::CompletionItemKind::Constant,
+                    Some("constant".to_string()),
+                    Some(name.clone()),
+                ),
+                _ => continue,
+            };
+
+            let distance =
+                compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind,
+                detail,
+                documentation: symbol.documentation.clone(),
+                insert_text,
+                sort_text: Some(format!("2{}_{}", distance.sort_key(), name)),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
     }
 }
