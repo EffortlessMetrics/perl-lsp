@@ -566,6 +566,59 @@ fn empty_include_paths_skips_workspace_search() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn whitespace_include_path_entries_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Trim/Me.pm")?;
+
+    let result = resolve_module_uri(
+        "Trim::Me",
+        &[],
+        &[workspace_uri],
+        &["  ".to_string(), "\t".to_string(), "lib".to_string(), " lib ".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("Trim/Me.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn duplicate_system_inc_entries_do_not_change_resolution_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let first_inc = temp.path().join("inc-1");
+    let second_inc = temp.path().join("inc-2");
+    std::fs::create_dir_all(first_inc.join("Sys"))?;
+    std::fs::create_dir_all(second_inc.join("Sys"))?;
+    std::fs::write(first_inc.join("Sys").join("Dup.pm"), "# first")?;
+    std::fs::write(second_inc.join("Sys").join("Dup.pm"), "# second")?;
+
+    let result = resolve_module_uri(
+        "Sys::Dup",
+        &[],
+        &[],
+        &[],
+        true,
+        &[PathBuf::from("  "), PathBuf::from("."), first_inc.clone(), first_inc, second_inc],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("inc-1"), "first unique @INC should win, got: {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn empty_workspace_folders_skips_to_system_inc() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let inc_dir = temp.path().join("perl5");

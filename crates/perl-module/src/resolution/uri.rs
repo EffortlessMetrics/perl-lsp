@@ -65,7 +65,9 @@ pub fn resolve_module_uri(
     timeout: Duration,
 ) -> ModuleUriResolution {
     let mut effective_inc_roots = Vec::new();
-    for (idx, include_path) in include_paths.iter().enumerate() {
+    let mut precedence = 0usize;
+
+    for include_path in normalized_unique_include_paths(include_paths) {
         let path = PathBuf::from(include_path);
         let kind = if path.is_absolute() {
             IncRootKind::ExternalAbsolute
@@ -75,18 +77,20 @@ pub fn resolve_module_uri(
         effective_inc_roots.push(IncRoot {
             kind,
             path,
-            precedence: idx,
+            precedence,
             source: "includePaths".to_string(),
         });
+        precedence += 1;
     }
     if use_system_inc {
-        for (offset, path) in system_inc.iter().enumerate() {
+        for path in normalized_unique_system_inc(system_inc) {
             effective_inc_roots.push(IncRoot {
                 kind: IncRootKind::InterpreterStartup,
-                path: path.clone(),
-                precedence: include_paths.len() + offset,
+                path,
+                precedence,
                 source: "interpreter-startup-inc".to_string(),
             });
+            precedence += 1;
         }
     }
     resolve_module_uri_with_effective_inc(
@@ -96,6 +100,34 @@ pub fn resolve_module_uri(
         &effective_inc_roots,
         timeout,
     )
+}
+
+fn normalized_unique_include_paths(include_paths: &[String]) -> Vec<&str> {
+    let mut normalized = Vec::new();
+    for include_path in include_paths {
+        let trimmed = include_path.trim();
+        if trimmed.is_empty() || normalized.contains(&trimmed) {
+            continue;
+        }
+        normalized.push(trimmed);
+    }
+    normalized
+}
+
+fn normalized_unique_system_inc(system_inc: &[PathBuf]) -> Vec<PathBuf> {
+    let mut normalized = Vec::new();
+    for path in system_inc {
+        let trimmed = path.to_string_lossy().trim().to_string();
+        if trimmed.is_empty() || trimmed == "." {
+            continue;
+        }
+        let normalized_path = PathBuf::from(trimmed);
+        if normalized.contains(&normalized_path) {
+            continue;
+        }
+        normalized.push(normalized_path);
+    }
+    normalized
 }
 
 /// Resolve a module name to a `file://` URI using an ordered effective `@INC` model.
