@@ -1352,6 +1352,28 @@ impl LspServer {
                                         return Ok(Some(json!([lsp_location])));
                                     }
                                 }
+
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && symbol_key.sigil.is_none()
+                                    && let Some(import_source) =
+                                        self.find_import_source(ast, &symbol_key.name)
+                                    && let Some(def_location) = find_workspace_definition_location(
+                                        workspace_index,
+                                        &import_source,
+                                        &symbol_key.name,
+                                    )
+                                    && let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
+                                {
+                                    tracing::debug!(
+                                        symbol = %symbol_key.name,
+                                        source_pkg = %import_source,
+                                        "resolved bare imported symbol through require/import source"
+                                    );
+                                    return Ok(Some(json!([lsp_location])));
+                                }
                             }
                         }
                         // No coordinator: fall through to same-file semantic model
