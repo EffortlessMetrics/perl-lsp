@@ -36,9 +36,29 @@ pub struct VersionSite {
 /// Semantic version X.Y.Z validation regex. Keep in sync with bump's CLI
 /// validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
-    if !SEMVER_EXACT_RE.is_match(version) {
+    let mut parts = version.split('.');
+
+    let major = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+    let minor = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+    let patch = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+
+    if parts.next().is_some()
+        || major.is_empty()
+        || minor.is_empty()
+        || patch.is_empty()
+        || !major.chars().all(|ch| ch.is_ascii_digit())
+        || !minor.chars().all(|ch| ch.is_ascii_digit())
+        || !patch.chars().all(|ch| ch.is_ascii_digit())
+    {
         bail!("invalid version format: {version:?} (expected X.Y.Z)");
     }
+
     Ok(())
 }
 
@@ -248,7 +268,6 @@ fn rewrite_version_in_line(line: &str, old: &str, new: &str) -> String {
 // Collectors
 // ---------------------------------------------------------------------------
 
-static SEMVER_EXACT_RE: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"^\d+\.\d+\.\d+$"));
 static BARE_VERSION_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#));
 static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -632,5 +651,8 @@ mod tests {
         assert!(validate_version_format("0.12").is_err());
         assert!(validate_version_format("0.12.2-rc1").is_err());
         assert!(validate_version_format("").is_err());
+        assert!(validate_version_format("1..2").is_err());
+        assert!(validate_version_format("1.2.3.4").is_err());
+        assert!(validate_version_format("1.two.3").is_err());
     }
 }
