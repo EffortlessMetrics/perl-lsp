@@ -4,6 +4,7 @@ pub mod client_caps;
 pub mod env_guard;
 pub mod lsp_client;
 pub mod lsp_harness;
+pub mod lsp_ux_harness;
 pub mod message_framing;
 pub mod notification_queue;
 pub mod test_helpers;
