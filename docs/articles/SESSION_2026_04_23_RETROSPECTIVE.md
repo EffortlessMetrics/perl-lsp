@@ -145,35 +145,40 @@ Killed agent `a6061b35` (35-PR deep-review) mid-run because the scope felt shall
 
 **Per-outcome cost observation:** ~0.22% Claude session per actionable outcome when Haiku offloads mechanical work, vs ~1% without. A 4-5× cost reduction just from model-tiering correctly.
 
-## CI-cost efficiency (measured)
+## CI-cost efficiency (open question, billing lag)
 
-Real GitHub-side CI spend for the month (as observed by user):
+Real GitHub-side CI spend for the month:
 
-| Date | Month-PRs-merged | Month-CI-cost | $/PR (cumulative) |
+| Date | Month-PRs-merged | Month-CI-cost | Reading |
 |---|---|---|---|
-| 2026-04-22 (prior day) | 680 | $230.52 | $0.339 |
-| 2026-04-23 (this session) | 1051 | $235.97 | $0.224 (cumulative) |
+| 2026-04-22 (prior day, fully billed) | 680 | $230.52 | **$0.339/PR solid reading** (complete) |
+| 2026-04-23 (this session, billing lags) | 1051 | $235.97 | Apparent $0.2245/PR **misleading denominator** |
 
-**Solid reading:** $0.2245/PR cumulative month-to-date is a real, measurable number.
+**The trustable number is the prior day's $0.339/PR.** Today's reported $235.97 only reflects ~$5 of new CI spend over yesterday, but **~371 additional PRs merged today have CI runs not yet billed**. GitHub Actions billing typically lags 24-48h. Dividing by the full 1051 PRs (including ~371 unbilled) produces an artificially low cumulative.
 
-**Tentative delta for this session's work** (subject to billing lag):
-- +371 PRs merged this session (mostly today)
-- +$5.45 in reported CI spend (~$0.0147/PR apparent marginal)
-- **Very likely understated** — GitHub Actions billing typically lags 24-48h. Actual marginal this session may be higher once the lag resolves. The cumulative number ($0.2245/PR) is the one to trust as floor.
+**What we'll actually know in ~24-48h:** the real $/PR for this session's work once today's CI runs get billed.
 
-**Efficiency hypothesis to test against tomorrow's bill:** if the lag catches up and marginal-per-PR for today ends up close to the cumulative $0.224, the session didn't materially improve per-PR CI cost — just held the line at scale. If marginal comes in meaningfully below cumulative (say < $0.15), the tier-wiring + preflight-cancel + bit-rot-fix compounding hypothesis is validated empirically.
+**Agent-side cost** (the other half of the economics):
+- **Claude Max 20x** ($200 USD/mo flat-rate subscription)
+- **ChatGPT Pro** ($200 USD/mo flat-rate subscription)
+- Combined agent subscription: **$400/mo**
 
-**What would have plausibly driven improvement** (to evaluate tomorrow):
-1. **Tier-wiring (#5005)** — scope-aware PR Smoke skipped full workspace clippy+test on PRs whose scope didn't warrant it
-2. **Preflight latest-SHA check** — cancelled superseded CI runs on rapid-push cascades, saving runner-minutes on stale SHAs
-3. **Compile-all-targets as parallel job** — didn't serially block merge-gate
-4. **Windows Guardrails fix (#5317)** — unblocked ~25 PRs in one CI pass instead of each re-triggering CI 3-4 times
-5. **Cascade-update pattern** — one master merge cascades to N PRs without N×(full-CI) cost
-6. **Dupes closed early** — ~60 closed-without-merge didn't consume merge-gate budget at all
+Per-PR amortized agent cost at 1051 PRs MTD = **~$0.38/PR** ($400/1051). Decreases with each additional merge since flat-rate. The Claude Max plan at this throughput represents a multi-x discount vs token-retail pricing.
 
-Correlated with the session's structural work: #5005 tier-wiring + #4988 check-all-targets parallelization + #4977 coalesce-queue-tail preflight + 7 bit-rot fixes. Whether these compound into the per-PR savings the hypothesis predicts is an **open empirical question until the billing lag resolves**.
+**Combined rough order-of-magnitude** (once CI billing lag resolves):
+- Agent subscription cost per PR amortized: ~$0.38 (decreasing with scale)
+- CI runner cost per PR: tbd, likely $0.15-0.35 range
+- **Total ~$0.50-0.75/PR combined** at current scale
 
-**Billing context:** Agent-compute (Claude + Codex) is characterized throughout as ~1% session per outcome. CI-runner side cumulative month-to-date is $0.2245/PR. Combined rough order-of-magnitude: **each merged PR this session represents ~$0.10-0.30 combined agent-compute + CI-runner cost** based on the current cumulative numbers — pending tomorrow's billing update to see if the marginal trend is actually downward.
+**Efficiency hypothesis to test against tomorrow's bill:** if cumulative CI $/PR settles meaningfully below $0.339 (say < $0.25), structural CI work paid out empirically per-PR. If it settles near $0.339, the structural work held per-PR cost constant at 1.5x throughput still meaningful value, but not a per-PR efficiency improvement. **Revisit after 2026-04-24 billing update.**
+
+**Plausible efficiency drivers** (to evaluate once billing resolves):
+1. **Tier-wiring (#5005)** scope-aware PR Smoke skipped full workspace clippy+test
+2. **Preflight latest-SHA check (#4977)** cancelled superseded CI runs on rapid-push cascades
+3. **Compile-all-targets parallelization (#4988)** didn't serially block merge-gate
+4. **Windows Guardrails fix (#5317)** unblocked ~25 PRs in one CI pass
+5. **Cascade-update pattern** one master merge cascades to N PRs without N x full-CI cost
+6. **Dupes closed early** ~60 closed without merging consumed zero merge-gate budget
 
 ---
 
