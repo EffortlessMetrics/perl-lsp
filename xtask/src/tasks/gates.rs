@@ -210,6 +210,30 @@ pub struct Receipt {
     pub summary: ReceiptSummary,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<AgentScopeReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_lanes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reasons: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub failures: Option<AgentFailureReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub baselines: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub next_actions: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentScopeReceipt {
+    pub tier: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gate_filter: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentFailureReceipt {
+    pub repro: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -703,12 +727,27 @@ fn run_gates(
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
 
+    let selected_lanes: Vec<String> = gates.iter().map(|gate| gate.name.clone()).collect();
+    let reasons = build_lane_reasons(gates);
+    let failures = build_failure_repro(&results);
+    let baselines = build_baselines(config);
+    let next_actions = build_next_actions(&summary, &results);
+
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
         metadata,
         gates: results,
         summary,
         diff_config: None,
+        scope: Some(AgentScopeReceipt {
+            tier: config.tier.to_string(),
+            gate_filter: config.gate_filter.clone(),
+        }),
+        selected_lanes,
+        reasons,
+        failures,
+        baselines,
+        next_actions,
     })
 }
 
@@ -1358,10 +1397,57 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
     if blocking_failures.is_empty() { if failed > 0 { "partial" } else { "pass" } } else { "fail" }
 }
 
+fn build_lane_reasons(gates: &[&GateDefinition]) -> Vec<String> {
+    gates.iter().map(|gate| format!("{}: {}", gate.name, gate.description)).collect()
+}
+
+fn build_failure_repro(results: &[GateResult]) -> Option<AgentFailureReceipt> {
+    let repro: Vec<String> = results
+        .iter()
+        .filter(|result| is_blocking_gate_status(&result.status))
+        .map(|result| format!("{} (`{}`)", result.gate_name, result.command))
+        .collect();
+
+    if repro.is_empty() { None } else { Some(AgentFailureReceipt { repro }) }
+}
+
+fn build_baselines(config: &GateRunnerConfig) -> Vec<String> {
+    config.diff_baseline.as_ref().map(|path| vec![path.display().to_string()]).unwrap_or_default()
+}
+
+fn build_next_actions(summary: &ReceiptSummary, results: &[GateResult]) -> Vec<String> {
+    if summary.overall_status == "pass" {
+        return vec!["No blocking failures detected; proceed with merge flow.".to_string()];
+    }
+
+    let mut actions: Vec<String> = results
+        .iter()
+        .filter(|result| is_blocking_gate_status(&result.status))
+        .map(|result| {
+            format!(
+                "Reproduce and fix {} via `{}`; review {}.",
+                result.gate_name,
+                result.command,
+                result.log_path.as_deref().unwrap_or("captured output")
+            )
+        })
+        .collect();
+
+    if actions.is_empty() {
+        actions.push(
+            "Non-blocking failures detected; inspect failing lanes and decide whether to escalate."
+                .to_string(),
+        );
+    }
+
+    actions
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, is_blocking_gate_status,
+        GateResult, ReceiptSummary, blocking_failure_gate_names, build_failure_repro,
+        build_next_actions, determine_overall_status, is_blocking_gate_status,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1408,5 +1494,32 @@ mod tests {
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
         assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
+
+    #[test]
+    fn failure_repro_is_included_for_blocking_failures() {
+        let results = vec![gate_result("clippy", "fail", true), gate_result("fmt", "pass", true)];
+        let failures = build_failure_repro(&results).expect("blocking failures should be present");
+        assert_eq!(failures.repro, vec!["clippy (`true`)"]);
+    }
+
+    #[test]
+    fn next_actions_is_success_message_when_receipt_passes() {
+        let summary = ReceiptSummary {
+            total_gates: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            timeout: None,
+            error: None,
+            total_duration_ms: 1,
+            tier_results: None,
+            overall_status: "pass".to_string(),
+            blocking_failures: None,
+            aggregate_metrics: None,
+        };
+
+        let actions = build_next_actions(&summary, &[]);
+        assert_eq!(actions, vec!["No blocking failures detected; proceed with merge flow."]);
     }
 }

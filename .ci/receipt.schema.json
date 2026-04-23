@@ -29,9 +29,72 @@
     },
     "diff_config": {
       "$ref": "#/$defs/diff_config"
+    },
+    "scope": {
+      "$ref": "#/$defs/agent_scope"
+    },
+    "selected_lanes": {
+      "type": "array",
+      "description": "Selected gate lanes for this run.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reasons": {
+      "type": "array",
+      "description": "Human-readable reasons for selected lanes.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failures": {
+      "$ref": "#/$defs/agent_failures"
+    },
+    "baselines": {
+      "type": "array",
+      "description": "Baseline artifacts considered by this run.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "next_actions": {
+      "type": "array",
+      "description": "Suggested operator follow-up actions.",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$defs": {
+    "agent_scope": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["tier"],
+      "properties": {
+        "tier": {
+          "type": "string",
+          "description": "Gate tier used for this run."
+        },
+        "gate_filter": {
+          "type": ["string", "null"],
+          "description": "Optional single-gate filter used for this run."
+        }
+      }
+    },
+    "agent_failures": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["repro"],
+      "properties": {
+        "repro": {
+          "type": "array",
+          "description": "Reproduction commands for failed blocking lanes.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "metadata": {
       "type": "object",
       "description": "Execution context and environment information",
