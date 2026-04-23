@@ -47,8 +47,6 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
              '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
-For Zed, see [docs/EDITORS/ZED_SETUP.md](docs/EDITORS/ZED_SETUP.md).
-
 ```text
 # Any generic LSP client
 perllsp --stdio
@@ -132,7 +130,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules, Roo Code), read [AGENTS.md](AGENTS.md) first.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules, Gemini CLI), read [AGENTS.md](AGENTS.md) first. Gemini CLI users should also read [GEMINI.md](GEMINI.md).
 
 ```bash
 cargo test --workspace --lib
