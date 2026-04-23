@@ -15,20 +15,12 @@ use std::time::Duration;
 
 pub use perl_symbol::SymbolIndex;
 
-/// Assert that a value is `Some` and return it, panicking with `message` if `None`.
+/// Return `Ok(T)` when `value` is `Some`, or a descriptive `Err` otherwise.
 ///
-/// This is a test helper exported for integration tests that do `use performance::*`.
-///
-/// # Panics
-///
-/// Panics with `message` if `value` is `None`. Intended for tests only.
-#[allow(clippy::panic)]
-#[track_caller]
-pub fn assert_some<T>(value: Option<T>, message: &str) -> T {
-    match value {
-        Some(v) => v,
-        None => panic!("{message}"),
-    }
+/// This helper is used by integration tests that do `use performance::*`
+/// and want explicit failure messages without relying on panic helpers.
+pub fn assert_some<T>(value: Option<T>, message: &str) -> Result<T, String> {
+    value.ok_or_else(|| message.to_string())
 }
 
 /// Cache for parsed ASTs with TTL.
