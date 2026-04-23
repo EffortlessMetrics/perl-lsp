@@ -561,15 +561,29 @@ impl RegexAnalyzer {
         }
 
         // Modifier explanations.
+        // Preserve the input order while suppressing duplicate modifier notes.
+        let mut seen_modifiers = Vec::new();
         let modifier_notes: Vec<&str> = modifiers
             .chars()
-            .filter_map(|m| match m {
-                'i' => Some("case-insensitive matching"),
-                'm' => Some("multiline mode: ^ and $ match line boundaries"),
-                's' => Some("single-line mode: dot matches newline"),
-                'x' => Some("extended mode: whitespace and comments allowed"),
-                'g' => Some("global: match all occurrences"),
-                _ => None,
+            .filter_map(|m| {
+                if seen_modifiers.contains(&m) {
+                    return None;
+                }
+                seen_modifiers.push(m);
+                match m {
+                    'i' => Some("case-insensitive matching"),
+                    'm' => Some("multiline mode: ^ and $ match line boundaries"),
+                    's' => Some("single-line mode: dot matches newline"),
+                    'x' => Some("extended mode: whitespace and comments allowed"),
+                    'g' => Some("global: match all occurrences"),
+                    'a' => Some("ASCII-safe mode: character classes are ASCII-only"),
+                    'd' => Some("native charset mode (legacy default semantics)"),
+                    'l' => Some("locale mode: character classes follow locale rules"),
+                    'u' => Some("Unicode mode: character classes follow Unicode semantics"),
+                    'n' => Some("non-capturing mode: unnamed (...) groups do not capture"),
+                    'p' => Some("preserve matched-string variables for ${^MATCH} family"),
+                    _ => None,
+                }
             })
             .collect();
 

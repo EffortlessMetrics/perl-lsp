@@ -279,6 +279,28 @@ fn test_hover_text_empty_pattern() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn test_hover_text_modifier_u_explained() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex(r"\w+", "u");
+    assert!(text.to_lowercase().contains("unicode"));
+    Ok(())
+}
+
+#[test]
+fn test_hover_text_modifier_n_explained() -> Result<(), Box<dyn std::error::Error>> {
+    let text = RegexAnalyzer::hover_text_for_regex("(foo)(?<bar>baz)", "n");
+    assert!(text.to_lowercase().contains("non-capturing"));
+    Ok(())
+}
+
+#[test]
+fn test_hover_text_duplicate_modifiers_are_deduplicated() -> Result<(), Box<dyn std::error::Error>>
+{
+    let text = RegexAnalyzer::hover_text_for_regex("hello", "iiigg");
+    let count = text.match_indices("case-insensitive matching").count();
+    assert_eq!(count, 1, "duplicate modifiers should produce one note");
+    Ok(())
+}
+#[test]
 fn test_hover_text_unknown_modifier_ignored_gracefully() -> Result<(), Box<dyn std::error::Error>> {
     // Unknown modifier letters should not panic
     let text = RegexAnalyzer::hover_text_for_regex("\\d+", "z");
