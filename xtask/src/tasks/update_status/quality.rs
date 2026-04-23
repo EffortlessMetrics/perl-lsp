@@ -5,11 +5,24 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
 
 use super::{replace_block, run_cmd};
+
+static RUNNING_UNITTESTS_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
+        .expect("running-unittests regex must compile")
+});
+static TEST_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r":\s*test\s*$").expect("test-line regex must compile"));
+static ISSUE_LINK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\[#(\d{3,5})\]\(https://github\.com/EffortlessMetrics/perl-lsp/issues/\d+\)")
+        .expect("issue-link regex must compile")
+});
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -45,23 +58,16 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
-
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
+        if let Some(caps) = RUNNING_UNITTESTS_RE.captures(line) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
+        if TEST_LINE_RE.is_match(line)
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -122,6 +128,31 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn parse_known_gap_issue_numbers(readme: &str) -> Vec<u64> {
+    let Some(gaps_start) = readme.find("### Known gaps toward solid UX") else {
+        return Vec::new();
+    };
+    let section = &readme[gaps_start..];
+    let section_end = section.find("#### What shipped this cycle").unwrap_or(section.len());
+    let relevant = &section[..section_end];
+
+    let mut numbers: Vec<u64> = ISSUE_LINK_RE
+        .captures_iter(relevant)
+        .filter_map(|caps| caps.get(1).and_then(|m| m.as_str().parse::<u64>().ok()))
+        .collect();
+    numbers.sort_unstable();
+    numbers.dedup();
+    numbers
+}
+
+pub(super) fn collect_known_gap_issue_numbers(root: &Path) -> Vec<u64> {
+    let readme_path = root.join("README.md");
+    let Ok(readme) = fs::read_to_string(readme_path) else {
+        return Vec::new();
+    };
+    parse_known_gap_issue_numbers(&readme)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +200,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let known_gap_issue_numbers = collect_known_gap_issue_numbers(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -202,6 +234,21 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
         },
+        "confidence_signals": {
+            "manual_editor_smoke_workflows": {
+                "guide": "docs/reference/UX_TESTING.md",
+                "verification_command": "just ux-tests",
+            },
+            "first_five_minutes_harness": {
+                "scenario_count": scenario_count,
+                "scenario_inventory": "docs/project/status/editor_ux.json#/harness/scenario_files",
+            },
+            "open_issue_burndown": {
+                "source_section": "README.md#known-gaps-toward-solid-ux",
+                "tracked_issue_numbers": known_gap_issue_numbers,
+                "tracked_issue_count": known_gap_issue_numbers.len(),
+            },
+        }
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
@@ -280,6 +327,31 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        assert_eq!(
+            receipt["confidence_signals"]["manual_editor_smoke_workflows"]["guide"],
+            "docs/reference/UX_TESTING.md"
+        );
+        assert_eq!(
+            receipt["confidence_signals"]["open_issue_burndown"]["tracked_issue_numbers"],
+            serde_json::json!([3476, 3515, 3522, 4246])
+        );
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_known_gap_issue_numbers_limits_to_known_gaps_section() {
+        let readme = r#"
+## Status
+
+### Known gaps toward solid UX
+- workspace rename [#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522)
+- dynamic require [#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246)
+- configuration [#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515)
+
+#### What shipped this cycle (v0.12.x)
+- shipped fix [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499)
+"#;
+        let issues = parse_known_gap_issue_numbers(readme);
+        assert_eq!(issues, vec![3476, 3515, 3522, 4246]);
     }
 }

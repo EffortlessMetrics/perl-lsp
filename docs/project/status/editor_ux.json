@@ -28,6 +28,21 @@
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality"
   },
+  "confidence_signals": {
+    "manual_editor_smoke_workflows": {
+      "guide": "docs/reference/UX_TESTING.md",
+      "verification_command": "just ux-tests"
+    },
+    "first_five_minutes_harness": {
+      "scenario_count": 17,
+      "scenario_inventory": "docs/project/status/editor_ux.json#/harness/scenario_files"
+    },
+    "open_issue_burndown": {
+      "source_section": "README.md#known-gaps-toward-solid-ux",
+      "tracked_issue_numbers": [3476, 3515, 3522, 4246],
+      "tracked_issue_count": 4
+    }
+  },
   "receipt_kind": "planning_scaffold",
   "schema_version": 1,
   "scorecard": "editor_ux",
