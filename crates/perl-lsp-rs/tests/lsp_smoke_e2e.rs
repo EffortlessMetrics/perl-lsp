@@ -39,6 +39,166 @@ fn line_col(source: &str, target_line: usize, needle: &str) -> Result<(u32, u32)
     Ok((target_line as u32, col as u32))
 }
 
+fn completion_labels(response: &Value) -> Result<Vec<String>, String> {
+    let items = response["result"]["items"]
+        .as_array()
+        .or_else(|| response["result"].as_array())
+        .ok_or_else(|| "completion result missing items array".to_string())?;
+
+    Ok(items.iter().filter_map(|item| item["label"].as_str().map(ToOwned::to_owned)).collect())
+}
+
+#[test]
+fn lsp_smoke_e2e_didclose_reopen_resets_document_state() -> Result<(), Box<dyn std::error::Error>> {
+    let server = common::start_lsp_server();
+    let timeout = Duration::from_secs(2);
+    let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
+
+    let uri = "file:///tmp/lsp_smoke_e2e_lifecycle.pl";
+    let fixture_v1 = "my $value = gre\nsub greet { 1 }\n";
+    let fixture_v2 = "my $value = wel\nsub welcome { 1 }\n";
+
+    let init_response = send_request_with_timeout(
+        &server,
+        100,
+        "initialize",
+        json!({
+            "processId": null,
+            "rootUri": null,
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true
+                        }
+                    }
+                }
+            }
+        }),
+        init_timeout,
+    )?;
+    assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "initialized",
+            "params": {}
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": fixture_v1
+                }
+            }
+        }),
+    );
+
+    let completion_v1 = send_request_with_timeout(
+        &server,
+        101,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 15 }
+        }),
+        timeout,
+    )?;
+    let labels_v1 = completion_labels(&completion_v1)?;
+    assert!(labels_v1.iter().any(|label| label == "greet"), "expected greet completion in v1");
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didClose",
+            "params": {
+                "textDocument": { "uri": uri }
+            }
+        }),
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 2,
+                    "text": fixture_v2
+                }
+            }
+        }),
+    );
+
+    let completion_v2 = send_request_with_timeout(
+        &server,
+        102,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 15 }
+        }),
+        timeout,
+    )?;
+    let labels_v2 = completion_labels(&completion_v2)?;
+
+    assert!(
+        labels_v2.iter().any(|label| label == "welcome"),
+        "expected welcome completion after reopen"
+    );
+    assert!(
+        !labels_v2.iter().any(|label| label == "greet"),
+        "didClose + didOpen should clear stale greet symbol"
+    );
+
+    let shutdown_response =
+        send_request_with_timeout(&server, 103, "shutdown", json!(null), timeout)?;
+    assert!(
+        shutdown_response.get("error").is_none(),
+        "shutdown returned error: {shutdown_response:#}"
+    );
+
+    common::send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "exit",
+            "params": null
+        }),
+    );
+
+    let wait_deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(status) = server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()? {
+            assert!(status.success(), "perl-lsp process exited with non-zero status: {status}");
+            break;
+        }
+
+        if Instant::now() >= wait_deadline {
+            let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
+            return Err("perl-lsp did not exit cleanly within timeout".into());
+        }
+
+        std::thread::sleep(Duration::from_millis(25));
+    }
+
+    Ok(())
+}
+
 #[test]
 fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
     let server = common::start_lsp_server();
