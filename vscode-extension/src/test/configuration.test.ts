@@ -194,8 +194,9 @@ describe('package.json contributes', () => {
   });
 
   describe('activation events', () => {
-    test('activates on perl language', () => {
+    test('activates on perl language ids', () => {
       expect(pkg.activationEvents).toContain('onLanguage:perl');
+      expect(pkg.activationEvents).toContain('onLanguage:perl5');
     });
 
     test('activates on gherkin language', () => {
