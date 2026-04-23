@@ -747,8 +747,7 @@ impl LspServer {
                     // changed so the next diagnostic cycle rebuilds it with the new config.
                     #[cfg(not(target_arch = "wasm32"))]
                     if critic_config_changed {
-                        *self.critic_analyzer.lock() = None;
-                        self.critic_workspace_warnings_sent.lock().clear();
+                        self.reset_perlcritic_state();
                     }
 
                     // Update workspace config (include paths, @INC)

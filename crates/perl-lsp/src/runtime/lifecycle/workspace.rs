@@ -444,4 +444,25 @@ include_paths = ["other_lib"]
             );
         }
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn did_change_configuration_resets_pull_diagnostics_perlcritic_state() {
+        let server = LspServer::new();
+
+        server.pull_diagnostics_orchestrator.test_seed_warning("missing-binary");
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 1);
+
+        server.handle_did_change_configuration(Some(serde_json::json!({
+            "settings": {
+                "perl": {
+                    "perlcritic": {
+                        "enabled": true
+                    }
+                }
+            }
+        })));
+
+        assert_eq!(server.pull_diagnostics_orchestrator.test_warning_count(), 0);
+    }
 }

@@ -268,11 +268,7 @@ impl PullDiagnosticsOrchestrator {
     fn emit_warning(&self, _server: &LspServer, _key: String, _message: &str) {}
 
     /// Reset the orchestrator state (e.g., on configuration change).
-    ///
-    /// TODO: Wire into `handle_did_change_configuration` so pull-diagnostics
-    /// CriticAnalyzer is also invalidated on config changes.
     #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
     pub fn reset(&self) {
         *self.critic_analyzer.lock() = None;
         self.warnings_sent.lock().clear();
@@ -281,6 +277,16 @@ impl PullDiagnosticsOrchestrator {
     /// No-op stub for WASM targets.
     #[cfg(target_arch = "wasm32")]
     pub fn reset(&self) {}
+
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_seed_warning(&self, key: impl Into<String>) {
+        self.warnings_sent.lock().insert(key.into());
+    }
+
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    pub(crate) fn test_warning_count(&self) -> usize {
+        self.warnings_sent.lock().len()
+    }
 }
 
 impl Default for PullDiagnosticsOrchestrator {
@@ -290,6 +296,21 @@ impl Default for PullDiagnosticsOrchestrator {
 }
 
 impl LspServer {
+    /// Reset all perlcritic analyzer caches and warning dedup state.
+    ///
+    /// Push diagnostics and pull diagnostics each maintain their own analyzer/warning cache.
+    /// This keeps both flows consistent after configuration changes.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn reset_perlcritic_state(&self) {
+        *self.critic_analyzer.lock() = None;
+        self.critic_workspace_warnings_sent.lock().clear();
+        self.pull_diagnostics_orchestrator.reset();
+    }
+
+    /// No-op stub for WASM targets.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn reset_perlcritic_state(&self) {}
+
     /// Convert internal diagnostic tags to LSP tag values
     ///
     /// Maps internal `DiagnosticTag` variants to their LSP numeric equivalents:

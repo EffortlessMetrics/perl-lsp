@@ -249,8 +249,8 @@ impl LspServer {
         runtime: std::sync::Arc<dyn perl_subprocess_runtime::SubprocessRuntime>,
     ) {
         *self.critic_runtime_override.lock() = Some(runtime);
-        // Reset any cached analyzer so it is rebuilt with the new runtime.
-        *self.critic_analyzer.lock() = None;
+        // Reset any cached analyzer state so it is rebuilt with the new runtime.
+        self.reset_perlcritic_state();
     }
 
     /// Skip the `command_exists("perlcritic")` guard in
