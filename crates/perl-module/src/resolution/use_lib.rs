@@ -3,7 +3,7 @@
 //! Scans Perl source text for `use lib` pragmas and recognizes common
 //! `FindBin` patterns to discover additional module include directories.
 
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 /// A discovered include path from a `use lib` statement.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +32,7 @@ pub enum UseLibAction {
 /// - `use lib qw/path1 path2/;`
 /// - `use lib ("path1", "path2");`
 /// - `use lib '$FindBin::Bin/path'` and `"$FindBin::Bin/path"`
+/// - `use lib '$Bin/path'` and `"$RealBin/path"` (from `FindBin` exports)
 ///
 /// Returns extracted paths in order of appearance.
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
@@ -92,7 +93,9 @@ pub fn resolve_use_lib_paths(
 
         if ulp.from_findbin {
             let base = file_dir.unwrap_or(workspace_root);
-            let resolved = base.join(path_str);
+            let Some(resolved) = normalize_findbin_path(base, path_str) else {
+                continue;
+            };
             if resolved.strip_prefix(workspace_root).is_err() {
                 continue;
             }
@@ -265,10 +268,46 @@ fn extract_one_quoted(s: &str) -> Option<(String, bool, &str)> {
 }
 
 fn resolve_findbin_in_string(s: &str) -> (String, bool) {
-    let findbin_vars =
+    // Fully-qualified FindBin variables — no word-boundary ambiguity because `::` terminates
+    // the name and braced forms are unambiguous.
+    let qualified_vars =
         ["$FindBin::Bin", "$FindBin::RealBin", "${FindBin::Bin}", "${FindBin::RealBin}"];
 
-    for var in &findbin_vars {
+    for var in &qualified_vars {
+        if let Some(rest) = s.strip_prefix(var) {
+            let path = rest.strip_prefix('/').unwrap_or(rest);
+            if path.is_empty() {
+                return (".".to_string(), true);
+            }
+            return (path.to_string(), true);
+        }
+    }
+
+    // Short exported forms: `$Bin`, `$RealBin`, `${Bin}`, `${RealBin}`.
+    // Braced forms (`${Bin}`) are always unambiguous.  Bare forms (`$Bin`,
+    // `$RealBin`) must be followed by `/`, end-of-string, or a non-identifier
+    // character to avoid false-positives on variables like `$BinDir` or
+    // `$RealBinPath`.
+    let bare_short = ["$Bin", "$RealBin"];
+    let braced_short = ["${Bin}", "${RealBin}"];
+
+    for var in &bare_short {
+        if let Some(rest) = s.strip_prefix(var) {
+            // Word-boundary check: the character after the variable name must
+            // not be a Perl identifier character (letter, digit, or `_`).
+            // This prevents `$BinDir` or `$RealBinPath` from matching `$Bin`/`$RealBin`.
+            let next = rest.chars().next();
+            if next.is_none() || next.is_some_and(|c| !c.is_alphanumeric() && c != '_') {
+                let path = rest.strip_prefix('/').unwrap_or(rest);
+                if path.is_empty() {
+                    return (".".to_string(), true);
+                }
+                return (path.to_string(), true);
+            }
+        }
+    }
+
+    for var in &braced_short {
         if let Some(rest) = s.strip_prefix(var) {
             let path = rest.strip_prefix('/').unwrap_or(rest);
             if path.is_empty() {
@@ -293,4 +332,21 @@ fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String>
 
 fn normalize_relative_path_string(path: &str) -> String {
     path.replace('\\', "/")
+}
+
+fn normalize_findbin_path(base: &Path, relative: &str) -> Option<PathBuf> {
+    let mut normalized = PathBuf::from(base);
+    for component in Path::new(relative).components() {
+        match component {
+            Component::CurDir => {}
+            Component::Normal(segment) => normalized.push(segment),
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    return None;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    Some(normalized)
 }

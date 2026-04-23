@@ -168,8 +168,52 @@ impl EditSet {
     pub fn affected_ranges(&self) -> Vec<Range> {
         self.edits
             .iter()
-            .map(|edit| Range::new(edit.start_position, edit.old_end_position))
+            .map(|edit| {
+                let mut range = Range::new(edit.start_position, edit.old_end_position);
+                if range.is_empty() {
+                    // Pure insertions have an empty old range, but incremental reuse still
+                    // needs a small invalidation window around the insertion boundary.
+                    //
+                    // Use byte-only context here: overlap checks in incremental reuse are
+                    // byte-based, so line/column fields are not consulted.
+                    let start_byte = range.start.byte.saturating_sub(1);
+                    let end_byte = range.end.byte.saturating_add(1);
+                    range = Range::new(
+                        Position::new(start_byte, range.start.line, range.start.column),
+                        Position::new(end_byte, range.end.line, range.end.column),
+                    );
+                }
+                range
+            })
             .collect()
+    }
+
+    /// Get affected ranges with overlapping and adjacent regions coalesced.
+    ///
+    /// This is useful for incremental parsing workflows that only need the
+    /// minimal set of invalidation windows.
+    pub fn coalesced_affected_ranges(&self) -> Vec<Range> {
+        let mut ranges = self.affected_ranges();
+        if ranges.len() <= 1 {
+            return ranges;
+        }
+
+        ranges.sort_by_key(|range| range.start.byte);
+
+        let mut merged = Vec::with_capacity(ranges.len());
+        let mut current = ranges[0];
+        for range in ranges.into_iter().skip(1) {
+            if range.start.byte <= current.end.byte {
+                if range.end.byte > current.end.byte {
+                    current.end = range.end;
+                }
+            } else {
+                merged.push(current);
+                current = range;
+            }
+        }
+        merged.push(current);
+        merged
     }
 }
 
@@ -252,5 +296,77 @@ mod tests {
 
         // Check cumulative shift
         assert_eq!(edits.byte_shift_at(50), 7); // +2 from first, +5 from second
+    }
+
+    #[test]
+    fn test_coalesced_affected_ranges() {
+        let mut edits = EditSet::new();
+        edits.add(Edit::new(
+            10,
+            15,
+            17,
+            Position::new(10, 1, 0),
+            Position::new(15, 1, 5),
+            Position::new(17, 1, 7),
+        ));
+        edits.add(Edit::new(
+            14,
+            20,
+            21,
+            Position::new(14, 1, 4),
+            Position::new(20, 1, 10),
+            Position::new(21, 1, 11),
+        ));
+        edits.add(Edit::new(
+            30,
+            35,
+            36,
+            Position::new(30, 2, 0),
+            Position::new(35, 2, 5),
+            Position::new(36, 2, 6),
+        ));
+
+        let ranges = edits.coalesced_affected_ranges();
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(ranges[0].start.byte, 10);
+        assert_eq!(ranges[0].end.byte, 20);
+        assert_eq!(ranges[1].start.byte, 30);
+        assert_eq!(ranges[1].end.byte, 35);
+    }
+
+    #[test]
+    fn test_affected_ranges_expands_zero_length_insertions() {
+        let mut edits = EditSet::new();
+        edits.add(Edit::new(
+            10,
+            10,
+            12,
+            Position::new(10, 1, 2),
+            Position::new(10, 1, 2),
+            Position::new(12, 1, 4),
+        ));
+
+        let ranges = edits.affected_ranges();
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start.byte, 9);
+        assert_eq!(ranges[0].end.byte, 11);
+    }
+
+    #[test]
+    fn test_affected_ranges_expands_zero_length_insertions_at_start() {
+        let mut edits = EditSet::new();
+        edits.add(Edit::new(
+            0,
+            0,
+            1,
+            Position::new(0, 0, 0),
+            Position::new(0, 0, 0),
+            Position::new(1, 0, 1),
+        ));
+
+        let ranges = edits.affected_ranges();
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start.byte, 0);
+        assert_eq!(ranges[0].end.byte, 1);
     }
 }

@@ -17,9 +17,11 @@ use super::lints::duplicate_hash_keys::check_duplicate_hash_keys;
 use super::lints::eval_error_flow::check_eval_error_flow;
 use super::lints::ffi_checklib::check_ffi_checklib;
 use super::lints::goto_label::check_goto_labels;
+use super::lints::loop_control_label::check_loop_control_labels;
 use super::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
+use super::lints::pod_coverage::check_pod_coverage;
 use super::lints::printf_format::check_printf_format;
 use super::lints::role_conflicts::check_role_conflicts;
 use super::lints::security::check_security;
@@ -156,6 +158,7 @@ impl DiagnosticsProvider {
         // Moo/Moose role conflict diagnostics (same-file only)
         check_role_conflicts(ast, &symbol_table, &mut diagnostics);
         check_goto_labels(ast, &symbol_table, &mut diagnostics);
+        check_loop_control_labels(ast, &symbol_table, &mut diagnostics);
 
         // Security anti-pattern detection (string eval, two-arg open, backtick exec)
         check_security(ast, &mut diagnostics);
@@ -164,6 +167,9 @@ impl DiagnosticsProvider {
 
         // Unused import detection
         check_unused_imports(ast, source, &mut diagnostics);
+
+        // POD coverage for exported subroutines (PL304)
+        check_pod_coverage(ast, source, &mut diagnostics);
 
         // Version compatibility lint (PL900)
         check_version_compat(ast, &mut diagnostics);

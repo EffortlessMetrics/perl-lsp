@@ -1693,6 +1693,53 @@ print "Hello, $name!\n";
 }
 
 #[test]
+fn qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Verify that the SymbolExtractor records a reference for $Foo::name when it
+    // appears inside a double-quoted string.  The old scalar-interpolation regex
+    // only matched bare names (\w+) and silently dropped package-qualified forms.
+    let code = r#"
+my $greeting = "Hello, $Foo::name!";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::name"),
+        "$Foo::name inside a double-quoted string should register a reference in the symbol table",
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Three-level package qualifier: $Foo::Bar::x.
+    let code = r#"
+my $msg = "value: $Foo::Bar::x";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::Bar::x"),
+        "$Foo::Bar::x inside a double-quoted string should register a reference",
+    );
+    Ok(())
+}
+
+#[test]
+fn braced_qualified_var_in_string_interpolation_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Braced form: ${Foo::name}.
+    let code = r#"
+my $msg = "value: ${Foo::name}";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("Foo::name"),
+        "Foo::name inside a double-quoted string should register a reference",
+    );
+    Ok(())
+}
+
+#[test]
 fn escaped_interpolated_variable_is_still_unused() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 my $name = "World";
@@ -1758,6 +1805,24 @@ print $unknown_var;
 }
 
 #[test]
+fn strict_hash_slice_marks_declared_hash_as_used() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+my %h = (key1 => 1, key2 => 2);
+my @values = @h{qw(key1 key2)};
+print scalar @values;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "h"),
+        "@h{{...}} should resolve through declared %h under strict; issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_vars_only_checks_undeclared_variables() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'vars';
@@ -1809,6 +1874,42 @@ print PL_sv_undef;
             "strict 'subs' should not flag internal special constant {internal}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_qw_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use List::Util qw(sum);
+print sum(1, 2, 3);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "sum"
+        }),
+        "strict 'subs' should not flag qw-imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_tag_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use POSIX qw(:sys_wait_h);
+print WIFEXITED(0);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "WIFEXITED"
+        }),
+        "strict 'subs' should not flag symbols imported through known export tags"
+    );
     Ok(())
 }
 
@@ -2960,6 +3061,63 @@ if ("hello" =~ /ell/) {
     assert!(
         !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
         "@+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_percent_plus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("alpha-beta" =~ /(?<lhs>alpha)-(?<rhs>beta)/) {
+    my %named_caps = %+;
+    print $named_caps{lhs}, "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "+"),
+        "%+ should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_percent_minus_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+if ("alpha-beta" =~ /(?<lhs>alpha)-(?<rhs>beta)/) {
+    my %named_cap_hist = %-;
+    print $named_cap_hist{lhs}[0], "\n";
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "-"),
+        "%- should be a recognized builtin; got issues: {:?}",
+        issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn builtin_percent_bang_no_undeclared_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+use warnings;
+my $errno_name = $!{ENOENT};
+my %errno_table = %!;
+print $errno_name, "\n";
+print scalar(keys %errno_table), "\n";
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "!"),
+        "%! should be a recognized builtin; got issues: {:?}",
         issues.iter().map(|i| (&i.kind, &i.variable_name)).collect::<Vec<_>>()
     );
     Ok(())

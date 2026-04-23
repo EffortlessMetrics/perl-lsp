@@ -106,7 +106,7 @@ Severity of uncaught-hypothetical: the whole point of the ratchet gate is to cat
 
 ### green-tdd (regression on #4510)
 
-Builder on #4510 (Wave G1b) completed ~60 minutes of work collapsing 10 crates, then green-tdd ran a hardening pass and found that three imports in `crates/perl-lsp/tests/wired_crates_integration_test.rs` still referenced `perl_lsp_inline_completion` (the crate being absorbed). Builder had missed them. Green-tdd flagged `needs-builder-fix`; builder pushed a 3-line correction commit.
+Builder on #4510 (Wave G1b) completed ~60 minutes of work collapsing 10 crates, then green-tdd ran a hardening pass and found that three imports in `crates/perl-lsp-rs/tests/wired_crates_integration_test.rs` still referenced `perl_lsp_inline_completion` (the crate being absorbed). Builder had missed them. Green-tdd flagged `needs-builder-fix`; builder pushed a 3-line correction commit.
 
 Cost: ~10 minutes of haiku.
 

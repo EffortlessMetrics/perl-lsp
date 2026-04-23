@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_capability_snapshot_test.rs
+expression: "&name"
+---
+perl-lsp

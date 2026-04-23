@@ -208,7 +208,7 @@ pub fn check_missing_modules<F>(
         }
 
         // Skip version-only use: `use 5.010;` or `use v5.38;`
-        if module_str.chars().next().is_some_and(|c| c.is_ascii_digit() || c == 'v') {
+        if is_version_only_use(module_str) {
             continue;
         }
 
@@ -256,6 +256,23 @@ pub fn check_missing_modules<F>(
             )),
         });
     }
+}
+
+fn is_version_only_use(module: &str) -> bool {
+    fn is_numeric_version_fragment(fragment: &str) -> bool {
+        !fragment.is_empty() && fragment.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '_')
+    }
+
+    if module.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        return is_numeric_version_fragment(module);
+    }
+
+    if let Some(rest) = module.strip_prefix('v') {
+        return rest.chars().next().is_some_and(|c| c.is_ascii_digit())
+            && is_numeric_version_fragment(rest);
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -558,6 +575,26 @@ mod tests {
             suggestion.contains(".perl-lsp.toml") || suggestion.contains("include_paths"),
             "suggestion should mention config path hint; got: {suggestion:?}"
         );
+    }
+
+    #[test]
+    fn modules_starting_with_v_are_not_treated_as_versions() {
+        let source = "use vTools::Parser;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
+        assert_eq!(diags.len(), 1, "module names beginning with 'v' should still be resolved");
+        assert_eq!(diags[0].code.as_deref(), Some("PL701"));
+        assert!(diags[0].message.contains("vTools::Parser"));
+    }
+
+    #[test]
+    fn v_prefixed_numeric_use_is_treated_as_version_requirement() {
+        let source = "use v5.38;\n";
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_missing_modules(&ast, source, resolver_never_finds, &[], &mut diags);
+        assert!(diags.is_empty(), "v-prefixed numeric versions should not emit PL701");
     }
 
     /// File with a syntax error followed by a valid `use` — the lint should still

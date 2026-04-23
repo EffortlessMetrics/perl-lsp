@@ -9,6 +9,8 @@
 
 use crate::ignore::{is_skipped_dir_name, path_contains_skipped_component};
 use perl_parser_core::source_file::is_perl_source_path;
+use std::collections::HashSet;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
@@ -97,16 +99,17 @@ fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std
 }
 
 fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize) {
-    let stdout = String::from_utf8_lossy(stdout);
     let mut files = Vec::new();
+    let mut seen = HashSet::new();
     let mut excluded_count: usize = 0;
 
-    for entry in stdout.split('\0') {
+    for entry in stdout.split(|byte| *byte == b'\0') {
         if entry.is_empty() {
             continue;
         }
 
-        let relative_path = Path::new(entry);
+        let relative_path = PathBuf::from(bytes_to_os_string(entry));
+        let relative_path = relative_path.as_path();
         if path_contains_skipped_component(relative_path) {
             excluded_count += 1;
             continue;
@@ -114,24 +117,43 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
 
         let path = root.join(relative_path);
         if is_perl_discovery_path(&path) {
-            files.push(path);
+            if seen.insert(path.clone()) {
+                files.push(path);
+            } else {
+                excluded_count += 1;
+            }
         } else {
             excluded_count += 1;
         }
     }
 
+    sort_paths_lexically(&mut files);
     (files, excluded_count)
+}
+
+#[cfg(unix)]
+fn bytes_to_os_string(bytes: &[u8]) -> OsString {
+    use std::os::unix::ffi::OsStringExt;
+    OsString::from_vec(bytes.to_vec())
+}
+
+#[cfg(not(unix))]
+fn bytes_to_os_string(bytes: &[u8]) -> OsString {
+    String::from_utf8_lossy(bytes).into_owned().into()
 }
 
 fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
     let mut files = Vec::new();
     let mut excluded_count: usize = 0;
+    let mut skipped_dir_count: usize = 0;
 
-    for entry in WalkDir::new(root)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|entry| !should_skip_dir(entry))
-    {
+    for entry in WalkDir::new(root).follow_links(false).into_iter().filter_entry(|entry| {
+        if should_skip_dir(entry) {
+            skipped_dir_count += 1;
+            return false;
+        }
+        true
+    }) {
         let entry = match entry {
             Ok(entry) => entry,
             Err(_) => continue,
@@ -147,6 +169,8 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
             excluded_count += 1;
         }
     }
+    excluded_count += skipped_dir_count;
+    sort_paths_lexically(&mut files);
 
     let result = DiscoveryResult {
         files,
@@ -165,6 +189,10 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
     }
 
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
+}
+
+fn sort_paths_lexically(paths: &mut [PathBuf]) {
+    paths.sort_unstable_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -244,6 +272,25 @@ mod tests {
         assert_eq!(result.method, DiscoveryMethod::Walk);
         assert_eq!(result.files.len(), 1);
         assert!(result.files[0].ends_with("lib/Foo.pm"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn walk_discovery_counts_skipped_directories_as_excluded() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "lib/Foo.pm")?;
+        create_file(root, "node_modules/pkg.pm")?;
+        create_file(root, "target/build/generated.pm")?;
+        create_file(root, ".cache/precompiled.pm")?;
+
+        let result = walk_discovery(root, Instant::now());
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert_eq!(result.files.len(), 1);
+        assert!(result.files[0].ends_with("lib/Foo.pm"));
+        assert_eq!(result.excluded_count, 3);
 
         Ok(())
     }
@@ -355,6 +402,35 @@ mod tests {
 
         assert_eq!(files.len(), 1);
         assert_eq!(files[0], Path::new("/home/user/project/lib/Module.pm"));
+    }
+
+    #[test]
+    fn parse_git_output_deduplicates_duplicate_entries() {
+        let root = Path::new("/tmp/workspace");
+        let payload = b"lib/Foo.pm\0lib/Foo.pm\0script.pl\0script.pl\0README.md\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|p| p.ends_with("lib/Foo.pm")));
+        assert!(files.iter().any(|p| p.ends_with("script.pl")));
+        // Two duplicate Perl paths + one non-Perl file.
+        assert_eq!(excluded_count, 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parse_git_output_handles_non_utf8_paths() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let root = Path::new("/tmp/workspace");
+        let payload = b"lib/\xFFfoo.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(excluded_count, 0);
+        assert!(files[0].as_os_str().as_bytes().ends_with(b"lib/\xFFfoo.pm"));
     }
 
     // --- Additional coverage: path_contains_skipped_component ---
@@ -648,5 +724,37 @@ mod tests {
         assert_eq!(files.len(), 4);
         // README.md + Makefile (non-perl) + node_modules/e.pm (skipped dir)
         assert_eq!(excluded_count, 3);
+    }
+
+    #[test]
+    fn parse_git_output_sorts_paths_lexically_for_determinism() {
+        let root = Path::new("/tmp/workspace");
+        let payload = b"zeta/Z.pm\0alpha/A.pm\0mid/M.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(excluded_count, 0);
+        assert_eq!(
+            files,
+            vec![root.join("alpha/A.pm"), root.join("mid/M.pm"), root.join("zeta/Z.pm"),]
+        );
+    }
+
+    #[test]
+    fn walk_discovery_sorts_paths_lexically_for_determinism() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "zeta/Z.pm")?;
+        create_file(root, "alpha/A.pm")?;
+        create_file(root, "mid/M.pm")?;
+
+        let result = walk_discovery(root, Instant::now());
+        assert_eq!(
+            result.files,
+            vec![root.join("alpha/A.pm"), root.join("mid/M.pm"), root.join("zeta/Z.pm"),]
+        );
+
+        Ok(())
     }
 }

@@ -486,27 +486,37 @@ impl CheckpointedIncrementalParser {
 
         let mut lexer = PerlLexer::new(&self.source);
         let mut raw_tokens = Vec::new();
-        let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
+        let mut relexed_tokens = 0usize;
+        let mut relexed_bytes = 0usize;
+        let checkpoint_positions = [0, 100, 500, 1000, 5000];
+        let mut next_checkpoint_idx = 0;
 
         // Collect raw lexer tokens and save checkpoints at specific positions
-        let mut position = 0;
+        let mut position;
         while let Some(token) = lexer.next_token() {
-            // Save checkpoint at specific positions
-            if checkpoint_positions.first() == Some(&position) {
-                checkpoint_positions.remove(0);
+            position = token.end;
+
+            // Save checkpoints once we have lexed past configured byte positions.
+            while next_checkpoint_idx < checkpoint_positions.len()
+                && position >= checkpoint_positions[next_checkpoint_idx]
+            {
                 let checkpoint = lexer.checkpoint();
                 self.checkpoint_cache.add(checkpoint);
+                next_checkpoint_idx += 1;
             }
-
-            position = token.end;
 
             // Stop at EOF
             if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                 break;
             }
 
+            relexed_tokens += 1;
+            relexed_bytes += token.end.saturating_sub(token.start);
             raw_tokens.push(token);
         }
+
+        self.stats.tokens_relexed += relexed_tokens;
+        self.stats.bytes_relexed += relexed_bytes;
 
         // Convert raw lexer tokens to parser tokens (trivia-filtered + kind-mapped)
         // and cache them for reuse in incremental reparses.
@@ -862,5 +872,28 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_parse_records_early_checkpoint() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse("my $x = 1;\n".to_string()));
+
+        assert!(
+            parser.checkpoint_cache.find_before(10).is_some(),
+            "expected parser to record an early checkpoint during lexing"
+        );
+    }
+
+    #[test]
+    fn test_parse_records_checkpoint_after_crossing_threshold() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = format!("my ${} = 1;\n", "long_identifier_".repeat(10));
+        must(parser.parse(source));
+
+        assert!(
+            parser.checkpoint_cache.find_after(100).is_some(),
+            "expected a checkpoint to be recorded once lexing crossed byte 100"
+        );
     }
 }

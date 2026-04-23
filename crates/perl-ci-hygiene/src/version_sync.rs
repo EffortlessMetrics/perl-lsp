@@ -18,6 +18,7 @@ use color_eyre::eyre::{Result, bail, eyre};
 use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 /// A discovered reference to the workspace version somewhere on disk.
 #[derive(Debug, Clone)]
@@ -35,8 +36,7 @@ pub struct VersionSite {
 /// Semantic version X.Y.Z validation regex. Keep in sync with bump's CLI
 /// validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
-    let re = Regex::new(r"^\d+\.\d+\.\d+$")?;
-    if !re.is_match(version) {
+    if !SEMVER_EXACT_RE.is_match(version) {
         bail!("invalid version format: {version:?} (expected X.Y.Z)");
     }
     Ok(())
@@ -248,34 +248,34 @@ fn rewrite_version_in_line(line: &str, old: &str, new: &str) -> String {
 // Collectors
 // ---------------------------------------------------------------------------
 
-/// Pre-compiled regex set. Compiling these once per collect() is fine; they
-/// are not hot-path code.
-struct Patterns {
-    /// Matches a semver literal after `version = "..."` with optional
-    /// whitespace. Captures the version string.
-    bare_version: Regex,
-    /// Matches an inline-table entry whose `path` field points to `crates/…`
-    /// and that carries a `version` field. Used in [workspace.dependencies].
-    workspace_dep_with_version: Regex,
-    /// Matches a path dependency that carries a version field.
-    crate_dep_with_version: Regex,
-    /// JSON top-level version field. Uses a narrow regex rather than
-    /// full JSON parsing so we can preserve line numbers.
-    json_version: Regex,
-}
+static SEMVER_EXACT_RE: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"^\d+\.\d+\.\d+$"));
+static BARE_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#));
+static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    compile_regex(r#"\{\s*path\s*=\s*"crates/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#)
+});
+static CRATE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    compile_regex(r#"\{\s*path\s*=\s*"\.\.?/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#)
+});
+static JSON_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r#"^\s*"version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static LOCKFILE_ROOT_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static LOCKFILE_SELF_VERSION_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static README_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*"));
+static CLAUDE_RELEASE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)"));
+static ROADMAP_WORKSPACE_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`"));
+static ROADMAP_PUBLISHED_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile_regex(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`"));
 
-impl Patterns {
-    fn new() -> Result<Self> {
-        Ok(Self {
-            bare_version: Regex::new(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#)?,
-            workspace_dep_with_version: Regex::new(
-                r#"\{\s*path\s*=\s*"crates/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#,
-            )?,
-            crate_dep_with_version: Regex::new(
-                r#"\{\s*path\s*=\s*"\.\.?/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#,
-            )?,
-            json_version: Regex::new(r#"^\s*"version"\s*:\s*"(\d+\.\d+\.\d+)""#)?,
-        })
+fn compile_regex(pattern: &str) -> Regex {
+    match Regex::new(pattern) {
+        Ok(regex) => regex,
+        Err(err) => unreachable!("internal regex must be valid: {err}"),
     }
 }
 
@@ -283,7 +283,6 @@ fn collect_root_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>)
     let rel = PathBuf::from("Cargo.toml");
     let abs = repo_root.join(&rel);
     let raw = fs::read_to_string(&abs).map_err(|e| eyre!("reading {}: {e}", abs.display()))?;
-    let patterns = Patterns::new()?;
 
     let mut in_workspace_package = false;
     let mut in_workspace_dependencies = false;
@@ -301,7 +300,7 @@ fn collect_root_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>)
 
         if in_workspace_package
             && !seen_package_version
-            && let Some(caps) = patterns.bare_version.captures(line)
+            && let Some(caps) = BARE_VERSION_RE.captures(line)
         {
             let v = caps[1].to_string();
             sites.push(VersionSite {
@@ -315,7 +314,7 @@ fn collect_root_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>)
         }
 
         if in_workspace_dependencies
-            && let Some(caps) = patterns.workspace_dep_with_version.captures(line)
+            && let Some(caps) = WORKSPACE_DEP_WITH_VERSION_RE.captures(line)
         {
             // Name is everything before the first `=` on the line.
             let name = line.split_once('=').map(|(n, _)| n.trim()).unwrap_or("<unknown>");
@@ -342,7 +341,6 @@ fn collect_crate_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>
     if !crates_dir.is_dir() {
         return Ok(());
     }
-    let patterns = Patterns::new()?;
 
     let mut entries: Vec<PathBuf> = fs::read_dir(&crates_dir)
         .map_err(|e| eyre!("reading {}: {e}", crates_dir.display()))?
@@ -388,7 +386,7 @@ fn collect_crate_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>
 
             if in_package
                 && !seen_package_version
-                && let Some(caps) = patterns.bare_version.captures(line)
+                && let Some(caps) = BARE_VERSION_RE.captures(line)
             {
                 let v = caps[1].to_string();
                 sites.push(VersionSite {
@@ -404,7 +402,7 @@ fn collect_crate_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>
                 continue;
             }
 
-            if in_deps && let Some(caps) = patterns.crate_dep_with_version.captures(line) {
+            if in_deps && let Some(caps) = CRATE_DEP_WITH_VERSION_RE.captures(line) {
                 let name = line.split_once('=').map(|(n, _)| n.trim()).unwrap_or("<unknown>");
                 let v = caps[1].to_string();
                 sites.push(VersionSite {
@@ -430,7 +428,6 @@ fn collect_features_toml_site(repo_root: &Path, sites: &mut Vec<VersionSite>) ->
         return Ok(());
     }
     let raw = fs::read_to_string(&abs).map_err(|e| eyre!("reading {}: {e}", abs.display()))?;
-    let patterns = Patterns::new()?;
 
     let mut in_meta = false;
     for (idx, line) in raw.lines().enumerate() {
@@ -440,7 +437,7 @@ fn collect_features_toml_site(repo_root: &Path, sites: &mut Vec<VersionSite>) ->
             in_meta = trimmed.starts_with("[meta]");
             continue;
         }
-        if in_meta && let Some(caps) = patterns.bare_version.captures(line) {
+        if in_meta && let Some(caps) = BARE_VERSION_RE.captures(line) {
             sites.push(VersionSite {
                 path: rel.clone(),
                 line: line_no,
@@ -454,8 +451,6 @@ fn collect_features_toml_site(repo_root: &Path, sites: &mut Vec<VersionSite>) ->
 }
 
 fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<()> {
-    let patterns = Patterns::new()?;
-
     // package.json: exactly one top-level "version" field.
     let pkg_rel = PathBuf::from("vscode-extension/package.json");
     let pkg_abs = repo_root.join(&pkg_rel);
@@ -464,7 +459,7 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
             .map_err(|e| eyre!("reading {}: {e}", pkg_abs.display()))?;
         // First top-level "version" line (indented by 2 spaces in our formatted JSON).
         for (idx, line) in raw.lines().enumerate() {
-            if let Some(caps) = patterns.json_version.captures(line) {
+            if let Some(caps) = JSON_VERSION_RE.captures(line) {
                 sites.push(VersionSite {
                     path: pkg_rel.clone(),
                     line: idx + 1,
@@ -492,14 +487,12 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
         // of 2 spaces (top level of the JSON object). The "" package entry
         // is inside `"packages": { "": { ... "version": ... } }` and sits at
         // indent 6. Any deeper indentation is a transitive dep.
-        let two_space = Regex::new(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
-        let six_space = Regex::new(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
         let mut found_root = false;
         let mut found_self = false;
         let mut in_empty_package = false;
         for (idx, line) in raw.lines().enumerate() {
             let line_no = idx + 1;
-            if !found_root && let Some(caps) = two_space.captures(line) {
+            if !found_root && let Some(caps) = LOCKFILE_ROOT_VERSION_RE.captures(line) {
                 sites.push(VersionSite {
                     path: lock_rel.clone(),
                     line: line_no,
@@ -514,7 +507,7 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
                     in_empty_package = true;
                     continue;
                 }
-                if in_empty_package && let Some(caps) = six_space.captures(line) {
+                if in_empty_package && let Some(caps) = LOCKFILE_SELF_VERSION_RE.captures(line) {
                     sites.push(VersionSite {
                         path: lock_rel.clone(),
                         line: line_no,
@@ -536,42 +529,38 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
 
 fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<()> {
     // README.md: "**Current release: v<version>**"
-    let readme_pattern = Regex::new(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*")?;
     collect_single_line_doc_site(
         repo_root,
         "README.md",
         "README current release line",
-        &readme_pattern,
+        &README_RELEASE_RE,
         sites,
     )?;
 
     // CLAUDE.md: "**Latest Release**: <version>"
-    let claude_pattern = Regex::new(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)")?;
     collect_single_line_doc_site(
         repo_root,
         "CLAUDE.md",
         "CLAUDE.md latest release line",
-        &claude_pattern,
+        &CLAUDE_RELEASE_RE,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Workspace version line: `v<version>`"
-    let roadmap_ws_pattern = Regex::new(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP workspace version line",
-        &roadmap_ws_pattern,
+        &ROADMAP_WORKSPACE_RE,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Latest published release: `v<version>`"
-    let roadmap_latest_pattern = Regex::new(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP latest published release",
-        &roadmap_latest_pattern,
+        &ROADMAP_PUBLISHED_RE,
         sites,
     )?;
 
@@ -608,6 +597,18 @@ fn collect_single_line_doc_site(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_repo_dir(label: &str) -> Result<PathBuf> {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| eyre!("system clock before unix epoch: {e}"))?
+            .as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("perl-ci-hygiene-{label}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).map_err(|e| eyre!("creating {}: {e}", dir.display()))?;
+        Ok(dir)
+    }
 
     #[test]
     fn rewrite_version_in_line_replaces_only_target() {
@@ -643,5 +644,104 @@ mod tests {
         assert!(validate_version_format("0.12").is_err());
         assert!(validate_version_format("0.12.2-rc1").is_err());
         assert!(validate_version_format("").is_err());
+    }
+
+    #[test]
+    fn rewrite_version_in_line_updates_only_first_match() {
+        let line = r#"version = "0.12.2" # historical "0.12.2""#;
+        let updated = rewrite_version_in_line(line, "0.12.2", "0.13.0");
+        assert_eq!(updated, r#"version = "0.13.0" # historical "0.12.2""#);
+    }
+
+    #[test]
+    fn trailing_newline_suffix_preserves_expected_shape() {
+        assert_eq!(trailing_newline_suffix("a"), "");
+        assert_eq!(trailing_newline_suffix("a\n"), "\n");
+        assert_eq!(trailing_newline_suffix("a\n\n"), "\n");
+    }
+
+    #[test]
+    fn collect_vscode_sites_ignores_transitive_lockfile_versions() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("lockfile-scan")?;
+        let vscode_dir = repo_root.join("vscode-extension");
+        fs::create_dir_all(&vscode_dir)
+            .map_err(|e| eyre!("creating {}: {e}", vscode_dir.display()))?;
+
+        let package_json = r#"{
+  "name": "perl-lsp",
+  "version": "0.42.0"
+}"#;
+        fs::write(vscode_dir.join("package.json"), package_json)
+            .map_err(|e| eyre!("writing package.json: {e}"))?;
+
+        let package_lock = r#"{
+  "name": "perl-lsp",
+  "version": "0.42.0",
+  "packages": {
+    "": {
+      "version": "0.42.0"
+    },
+    "node_modules/x": {
+      "version": "9.9.9"
+    }
+  }
+}"#;
+        fs::write(vscode_dir.join("package-lock.json"), package_lock)
+            .map_err(|e| eyre!("writing package-lock.json: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_vscode_sites(&repo_root, &mut sites)?;
+
+        let versions: Vec<String> = sites.iter().map(|site| site.found.clone()).collect();
+        assert_eq!(
+            versions,
+            vec!["0.42.0".to_string(), "0.42.0".to_string(), "0.42.0".to_string()]
+        );
+        assert!(
+            !versions.iter().any(|version| version == "9.9.9"),
+            "transitive lockfile versions must not be collected"
+        );
+
+        fs::remove_dir_all(&repo_root)
+            .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
+        Ok(())
+    }
+
+    #[test]
+    fn collect_crate_cargo_toml_sites_scans_all_dependency_sections() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("deps-sections")?;
+        let crate_dir = repo_root.join("crates/example-crate");
+        fs::create_dir_all(&crate_dir).map_err(|e| eyre!("creating crate dir: {e}"))?;
+
+        let cargo_toml = r#"[package]
+name = "example-crate"
+version = "0.42.0"
+
+[dependencies]
+perl-lexer = { path = "../perl-lexer", version = "0.42.0" }
+
+[target.'cfg(unix)'.dependencies]
+perl-parser = { path = "../perl-parser", version = "0.42.0" }
+
+[build-dependencies]
+perl-token = { path = "../perl-token", version = "0.42.0" }
+"#;
+        fs::write(crate_dir.join("Cargo.toml"), cargo_toml)
+            .map_err(|e| eyre!("writing test Cargo.toml: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_crate_cargo_toml_sites(&repo_root, &mut sites)?;
+
+        let dep_sites =
+            sites.iter().filter(|site| site.description.contains("dependency on")).count();
+        assert_eq!(dep_sites, 3, "all dependency sections must be discovered");
+        assert!(
+            sites.iter().any(|site| site.description.contains("[package] version")),
+            "package version should also be discovered"
+        );
+
+        fs::remove_dir_all(&repo_root)
+            .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
+        Ok(())
     }
 }

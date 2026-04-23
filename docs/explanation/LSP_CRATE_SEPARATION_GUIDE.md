@@ -27,7 +27,7 @@ The comprehensive LSP crate separation in v0.8.8 represents a major architectura
 - **Incremental parsing** - document state management, cache handling
 - **Library API** - stable interface for external consumers
 
-**perl-lsp crate** (`/crates/perl-lsp/`):
+**perl-lsp crate** (`/crates/perl-lsp-rs/`):
 - **LSP protocol implementation** - JSON-RPC communication, request handling
 - **Command-line interface** - argument parsing, logging, health checks
 - **Server lifecycle management** - initialization, shutdown, error handling
@@ -57,8 +57,8 @@ use perl_parser::{Parser, LspServer, CompletionProvider};
 **For Contributors**:
 - **Parser improvements** → `/crates/perl-parser/src/`
 - **LSP protocol features** → `/crates/perl-parser/src/` (provider logic)
-- **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
-- **Integration tests** → `/crates/perl-lsp/tests/` (E2E LSP tests)
+- **CLI enhancements** → `/crates/perl-lsp-rs/src/` (binary interface)
+- **Integration tests** → `/crates/perl-lsp-rs/tests/` (E2E LSP tests)
 
 ## Quality Improvements
 

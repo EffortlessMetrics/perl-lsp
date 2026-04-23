@@ -9,7 +9,7 @@ use perl_dap::api::*;
 
 #[test]
 fn test_perl_lsp_can_import_platform_module() {
-    // The actual import path in perl-lsp/src/runtime/lifecycle/workspace.rs is:
+    // The actual import path in perl-lsp-rs/src/runtime/lifecycle/workspace.rs is:
     // use perl_dap::platform::{PerlInterpreterResult, find_perl_interpreter};
     //
     // This test verifies the import path resolves correctly.

@@ -10,7 +10,7 @@ The test suite uses feature gates to separate different types of tests:
 
 ## Feature Flags
 
-### perl-lsp crate (`crates/perl-lsp/Cargo.toml`)
+### perl-lsp crate (`crates/perl-lsp-rs/Cargo.toml`)
 
 | Feature | Description | When to Run |
 |---------|-------------|-------------|

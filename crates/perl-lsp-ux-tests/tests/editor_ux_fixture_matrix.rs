@@ -9,7 +9,10 @@ const FIXTURE_MATRIX: &str = "crates/perl-lsp-ux-tests/fixtures/editor_ux_fixtur
 const UX_TESTS_DIR: &str = "crates/perl-lsp-ux-tests/tests";
 
 fn workspace_root() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent).expect("workspace root")
+    match Path::new(env!("CARGO_MANIFEST_DIR")).parent().and_then(Path::parent) {
+        Some(p) => p,
+        None => unreachable!("CARGO_MANIFEST_DIR always has two parent directories"),
+    }
 }
 
 #[test]
@@ -44,8 +47,21 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         matrix.get("component_metrics").context("component_metrics missing")?,
         "component_metrics",
     )?;
+    let confidence_signals = collect_string_set(
+        matrix.get("confidence_signals").context("confidence_signals missing")?,
+        "confidence_signals",
+    )?;
+    assert_eq!(
+        confidence_signals,
+        BTreeSet::from([
+            "manual_editor_smoke".to_string(),
+            "first_five_minutes_harness".to_string(),
+            "issue_burndown_regression_guard".to_string(),
+        ])
+    );
     let allowed_metrics =
         top_line_metrics.union(&component_metrics).cloned().collect::<BTreeSet<_>>();
+    let mut confidence_signals_exercised = BTreeSet::new();
 
     let workflows =
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
@@ -83,6 +99,21 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             !expected_outcomes.is_empty(),
             "workflow `{scenario_file}` must define expected outcomes"
         );
+        let workflow_confidence_signals = collect_string_set(
+            workflow.get("confidence_signals").context("workflow missing confidence_signals")?,
+            &format!("{scenario_file}.confidence_signals"),
+        )?;
+        assert!(
+            !workflow_confidence_signals.is_empty(),
+            "workflow `{scenario_file}` must define at least one confidence signal"
+        );
+        for signal in workflow_confidence_signals {
+            assert!(
+                confidence_signals.contains(&signal),
+                "workflow `{scenario_file}` references unknown confidence signal `{signal}`"
+            );
+            confidence_signals_exercised.insert(signal);
+        }
 
         let scenario_path = workspace_root().join(UX_TESTS_DIR).join(scenario_file);
         assert!(
@@ -107,6 +138,10 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
     assert_eq!(
         component_metrics_exercised, component_metrics,
         "every declared component metric must be exercised by at least one workflow"
+    );
+    assert_eq!(
+        confidence_signals_exercised, confidence_signals,
+        "every declared confidence signal must be exercised by at least one workflow"
     );
 
     Ok(())

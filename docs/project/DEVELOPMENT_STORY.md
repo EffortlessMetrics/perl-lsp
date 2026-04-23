@@ -470,7 +470,7 @@ A parallel unsafe syntax ratchet enforces zero explicit `unsafe` blocks in
 production source.
 
 The only exception is a single centralized `#[allow(clippy::expect_used)]` for
-an `lsp_types::Uri` fallback in `crates/perl-lsp/src/util/uri.rs`.
+an `lsp_types::Uri` fallback in `crates/perl-lsp-rs/src/util/uri.rs`.
 
 The motivation is direct: a language server that crashes takes down your editor
 session. Graceful degradation is not optional.

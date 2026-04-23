@@ -460,6 +460,17 @@ fn test_document_store_update_nonexistent() {
 }
 
 #[test]
+fn test_document_store_rejects_stale_update_version() {
+    let store = DocumentStore::new();
+    store.open("file:///stale.pl".to_string(), 10, "latest".to_string());
+    assert!(!store.update("file:///stale.pl", 9, "older".to_string()));
+
+    let doc = must_some(store.get("file:///stale.pl"));
+    assert_eq!(doc.version, 10);
+    assert_eq!(doc.text, "latest");
+}
+
+#[test]
 fn test_document_store_close_nonexistent() {
     let store = DocumentStore::new();
     assert!(!store.close("file:///never_opened.pl"));

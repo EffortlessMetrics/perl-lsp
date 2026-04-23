@@ -98,7 +98,7 @@ Different users walk in through different doors. Pick the one that matches your 
 
 | Layer | Crates | Role |
 | --- | --- | --- |
-| LSP server binary | `crates/perllsp`, `crates/perl-lsp` | Protocol loop, request dispatch |
+| LSP server binary | `crates/perllsp`, `crates/perl-lsp-rs` | Protocol loop, request dispatch |
 | Debug adapter | `crates/perl-dap` | DAP server for stepping, breakpoints, evaluate |
 | **Parser stack (center)** | `crates/perl-parser`, `crates/perl-lexer`, `crates/perl-parser-core` | Recursive-descent v3 parser and context-aware lexer — all IDE features read from this |
 | Semantic analysis | `crates/perl-semantic-analyzer` | Scope tracking, symbol resolution, Moose/Moo handling |
@@ -145,7 +145,7 @@ Find beginner-friendly issues:
 gh issue list --label "good-first-issue" --state open
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. If you are an AI implementation agent (Codex, Jules), read [AGENTS.md](AGENTS.md) first.
 
 ## Status
 
@@ -173,24 +173,24 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 #### Must land for v0.13.0
 
-- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x (PR #3984: per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x ([#3984](https://github.com/EffortlessMetrics/perl-lsp/pull/3984): per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
 
 #### Nice to land
 
 - **Dynamic require / literal import** — `require Module; Module->import('sym')` with static string names: goto-def on the bareword should resolve to the definition site; `@ISA` / `use parent` / `use base` chains and `use Module qw(...)` list imports already work; this is the remaining slice of the import visibility lane ([#3476](https://github.com/EffortlessMetrics/perl-lsp/issues/3476), tracked by umbrella [#4246](https://github.com/EffortlessMetrics/perl-lsp/issues/4246))
 
-#### Deferred to v0.14.0
-
-- **Dynamic workspace configuration** — per-folder `.perl-lsp.toml` is the supported v0.13 mechanism; fully dynamic per-folder scoping via the `workspace/configuration` reverse-request flow is deferred ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
-
 #### What shipped this cycle (v0.12.x)
 
 These items were rough edges in the previous list and have since landed:
 
-- Parser error recovery: unclosed block recovery (PR #4079), symbol extractor descends into partial `Error` nodes (PR #4071) — [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed
+- Dynamic workspace configuration via the `workspace/configuration`
+  reverse-request flow is now implemented and merged over per-folder
+  `.perl-lsp.toml` base config ([#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515))
+
+- Parser error recovery: unclosed block recovery ([PR #4079](https://github.com/EffortlessMetrics/perl-lsp/pull/4079)), symbol extractor descends into partial `Error` nodes ([PR #4071](https://github.com/EffortlessMetrics/perl-lsp/pull/4071)) � [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499) closed (docs(readme): mark dynamic workspace config as shipped (#3515))
 - Import list bareword resolution for `use Module qw(...)` and tag imports — [#3472](https://github.com/EffortlessMetrics/perl-lsp/issues/3472) closed
 - `use constant` symbols tracked in visible symbol table — [#3475](https://github.com/EffortlessMetrics/perl-lsp/issues/3475) closed
-- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489](https://github.com/EffortlessMetrics/perl-lsp/issues/3489) closed
+- Pragma tracker: `use if`, feature bundles, eval/sub-scoped pragma leakage (PRs #4050, #4038, #4052), conservative `eval STRING` handling (PR #4052) — [#3489 Improve](https://github.com/EffortlessMetrics/perl-lsp/issues/3489)
 
 ## Security
 

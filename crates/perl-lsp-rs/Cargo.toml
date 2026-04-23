@@ -1,0 +1,140 @@
+[package]
+name = "perl-lsp-rs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
+readme = "README.md"
+documentation = "https://docs.rs/perl-lsp-rs"
+keywords = ["perl", "lsp", "language-server", "ide", "tree-sitter"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "build.rs",
+  "features_sot.toml",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[lib]
+name = "perl_lsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perl-lsp"
+path = "src/main.rs"
+
+[dependencies]
+perl-dap = { workspace = true }
+# perl-incremental-parsing absorbed into perl-parser::incremental (Wave 4-Completion)
+perl-parser = { workspace = true, features = ["test-performance"] }
+# (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
+# (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
+# perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
+# perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 6)
+perl-subprocess-runtime = { workspace = true }
+# Wave Final PR B: perl-lsp-config absorbed into perl-lsp-rs-core::config; use perl_lsp_rs_core::config::* instead
+# perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+# perl-lsp-transport absorbed into perl-lsp-rs-core::transport (Wave G3 step 4)
+# (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
+# (perl-lsp-inline-completion absorbed into perl-lsp-rs-core::providers::inline_completion — Wave G1b)
+# (perl-lsp-ai-provider absorbed into perl-lsp-rs-core::providers::ai — Wave G1b)
+# (perl-lsp-completion absorbed into perl-lsp-rs-core::providers::completion — Wave G1b)
+# (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
+perl-diagnostics = { workspace = true }
+# (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)
+# (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
+# (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
+# Provider crates absorbed into perl-lsp-rs-core (Wave G1a)
+# perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser (Wave G3 step 7)
+perl-lsp-rs-core = { workspace = true, features = ["lsp-compat"] }
+# perl-lsp-performance absorbed into perl-lsp-rs-core::performance (Wave G3 step 5)
+perl-lsp-perltidy = { workspace = true }
+perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-symbol = { workspace = true }
+perl-module = { workspace = true }
+perl-pod = { workspace = true }
+perl-parser-core = { workspace = true }
+perl-workspace = { workspace = true }
+perl-lexer = { workspace = true }
+lsp-types.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+url.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+md5 = "0.8.0"
+parking_lot.workspace = true
+walkdir.workspace = true
+uuid = { version = "1.23.0", features = ["v4"] }
+
+# Core dependencies for position mapping
+ropey = { version = "1.6.1" }
+tokio = { workspace = true }
+once_cell.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[features]
+default = ["workspace", "incremental"]  # Enable workspace indexing and incremental parsing by default
+workspace = []  # Workspace-wide indexing for cross-file features
+incremental = ["perl-parser/incremental"]  # Incremental parsing support (perl-incremental-parsing absorbed into perl-parser)
+test-performance = []  # Performance optimizations for test environments
+# When enabled, advertise *only* the conservative GA set (for emergency point releases).
+lsp-ga-lock = [
+  # perl-lsp-protocol/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::protocol (Wave G3 step 2)
+  # perl-lsp-feature-governance/lsp-ga-lock removed — absorbed into perl-lsp-rs-core::governance (Wave G3 step 1)
+  "perl-lsp-rs-core/lsp-ga-lock",
+]
+experimental-features = []  # Experimental LSP features for testing
+stress-tests = []  # Enable stress tests that are too slow for CI
+
+# Aspirational features for tests that should eventually pass
+constant-advanced = []  # Advanced constant pragma parsing (hash form, qw form)
+qw-variants = []  # Support for all qw delimiter variants
+package-qualified = []  # Package-qualified subroutine resolution
+error-classifier-v2 = []  # Next generation error classification
+lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
+expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers for integration tests
+lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
+strict-jsonrpc = []  # Strict JSON-RPC 2.0 protocol validation tests
+dap-phase1 = []  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
+dap-phase3 = ["dap-phase1"]  # DAP Phase 3: Non-regression tests (AC17), requires DAP bridge
+utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
+
+[dev-dependencies]
+assert_cmd = "2.1.2"
+insta = { version = "1.47.2", features = ["yaml"] }
+predicates = "3.1.3"
+serial_test = "3.4.0"
+tempfile.workspace = true
+proptest.workspace = true
+perl-tdd-support = { workspace = true }
+# Wave Final PR B: perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing
+which = "8.0.2"
+parking_lot.workspace = true
+criterion.workspace = true
+perl-corpus = { workspace = true }
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/perl-lsp-{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[[bench]]
+name = "rope_performance_benchmark"
+harness = false

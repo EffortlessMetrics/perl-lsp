@@ -93,6 +93,54 @@ fn when_hash_uses_fat_comma_pairs_then_parser_keeps_hash_assignment_structure() 
 }
 
 #[test]
+fn when_given_when_has_default_clause_then_parser_emits_given_shape() {
+    let sexp = parse_to_sexp(
+        r#"
+        given ($kind) {
+            when ("A") { print "alpha"; }
+            default { print "other"; }
+        }
+        "#,
+    );
+
+    assert!(sexp.contains("(given_statement"), "expected given_statement; got: {sexp}");
+    assert!(sexp.contains("(when_clause"), "expected when_clause in given block; got: {sexp}");
+    assert!(
+        sexp.contains("(default_clause"),
+        "expected default_clause in given block; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_if_has_elsif_and_else_then_parser_recovers_primary_if_shape() {
+    let sexp = parse_to_sexp(
+        r#"
+        if ($x == 1) { print "one"; }
+        elsif ($x == 2) { print "two"; }
+        else { print "other"; }
+        "#,
+    );
+
+    assert!(sexp.contains("(if_statement"), "expected if_statement; got: {sexp}");
+    assert!(
+        sexp.contains("(string_literal one)"),
+        "expected recovery output to preserve primary branch body; got: {sexp}"
+    );
+}
+
+#[test]
+fn when_ternary_expression_is_used_then_parser_emits_ternary_shape() {
+    let sexp = parse_to_sexp(r#"my $label = $ok ? "yes" : "no";"#);
+
+    assert!(
+        sexp.contains("(unhandled_node TernaryOp")
+            || sexp.contains("(ternary")
+            || sexp.contains("(ternary_op"),
+        "expected ternary-compatible expression shape; got: {sexp}"
+    );
+}
+
+#[test]
 fn when_input_has_valid_then_invalid_then_recovery_returns_partial_program() -> Result<(), String> {
     let ast = parse_ast("my $ok = 1;\nmy = ;\nprint $ok;\n");
 

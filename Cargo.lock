@@ -117,9 +117,9 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "2.2.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a686bbee5efb88a82df0621b236e74d925f470e5445d3220a5648b892ec99c9"
+checksum = "39bae1d3fa576f7c6519514180a72559268dd7d1fe104070956cb687bc6673bd"
 dependencies = [
  "anstyle",
  "bstr",
@@ -1507,10 +1507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-content-length-framing"
-version = "0.12.4"
-
-[[package]]
 name = "perl-corpus"
 version = "0.12.4"
 dependencies = [
@@ -1537,10 +1533,8 @@ dependencies = [
  "criterion",
  "nix",
  "once_cell",
- "perl-content-length-framing",
- "perl-feature-catalog",
  "perl-lexer",
- "perl-lsp-launcher",
+ "perl-lsp-rs-core",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
@@ -1553,6 +1547,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "winapi",
 ]
@@ -1590,24 +1585,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-feature-catalog"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
- "serde",
- "tempfile",
- "thiserror",
- "toml",
-]
-
-[[package]]
 name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
  "anyhow",
+ "criterion",
  "lsp-types",
  "perl-lexer",
  "perl-line-index",
+ "perl-parser",
  "perl-parser-core",
  "perl-tdd-support",
  "ropey",
@@ -1638,80 +1624,6 @@ name = "perl-line-index"
 version = "0.12.4"
 
 [[package]]
-name = "perl-lsp-cancellation"
-version = "0.12.4"
-dependencies = [
- "proptest",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-config"
-version = "0.12.4"
-dependencies = [
- "perl-dap",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
-]
-
-[[package]]
-name = "perl-lsp-critic-parser"
-version = "0.12.4"
-dependencies = [
- "perl-tdd-support",
-]
-
-[[package]]
-name = "perl-lsp-feature-governance"
-version = "0.12.4"
-dependencies = [
- "perl-lsp-rs-core",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-input-validation"
-version = "0.12.4"
-dependencies = [
- "anyhow",
- "perl-lsp-limits",
- "perl-parser-core",
- "perl-tdd-support",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "perl-lsp-launcher"
-version = "0.12.4"
-dependencies = [
- "clap",
- "perl-lsp-feature-governance",
- "perl-tdd-support",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "perl-lsp-limits"
-version = "0.12.4"
-dependencies = [
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-performance"
-version = "0.12.4"
-dependencies = [
- "moka",
- "perl-parser-core",
- "perl-symbol",
-]
-
-[[package]]
 name = "perl-lsp-perltidy"
 version = "0.12.4"
 dependencies = [
@@ -1719,17 +1631,6 @@ dependencies = [
  "perl-tdd-support",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-protocol"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
- "perl-lsp-rs-core",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1744,26 +1645,12 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
- "perl-content-length-framing",
  "perl-corpus",
  "perl-dap",
  "perl-diagnostics",
- "perl-incremental-parsing",
  "perl-lexer",
- "perl-lsp-cancellation",
- "perl-lsp-config",
- "perl-lsp-critic-parser",
- "perl-lsp-feature-governance",
- "perl-lsp-input-validation",
- "perl-lsp-launcher",
- "perl-lsp-limits",
- "perl-lsp-performance",
  "perl-lsp-perltidy",
- "perl-lsp-protocol",
  "perl-lsp-rs-core",
- "perl-lsp-tooling",
- "perl-lsp-transport",
- "perl-lsp-uri",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
@@ -1793,73 +1680,41 @@ dependencies = [
 name = "perl-lsp-rs-core"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
+ "clap",
  "insta",
  "lsp-types",
+ "moka",
  "once_cell",
  "perl-ast",
  "perl-diagnostics",
- "perl-feature-catalog",
  "perl-lexer",
  "perl-lsp-perltidy",
  "perl-lsp-rs",
- "perl-lsp-text-utils",
- "perl-lsp-tooling",
- "perl-lsp-uri",
  "perl-module",
  "perl-parser",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-pragma",
  "perl-semantic-analyzer",
+ "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
  "perl-workspace",
+ "proptest",
  "regex",
  "rustc-hash",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "ureq",
  "url",
  "walkdir",
-]
-
-[[package]]
-name = "perl-lsp-text-utils"
-version = "0.12.4"
-
-[[package]]
-name = "perl-lsp-tooling"
-version = "0.12.4"
-dependencies = [
- "criterion",
- "lsp-types",
- "perl-lsp-critic-parser",
- "perl-lsp-performance",
- "perl-lsp-perltidy",
- "perl-parser-core",
- "perl-subprocess-runtime",
- "perl-tdd-support",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-transport"
-version = "0.12.4"
-dependencies = [
- "perl-content-length-framing",
- "perl-lsp-protocol",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "perl-lsp-uri"
-version = "0.12.4"
-dependencies = [
- "lsp-types",
 ]
 
 [[package]]
@@ -1895,12 +1750,11 @@ dependencies = [
  "lsp-types",
  "perl-ast",
  "perl-corpus",
- "perl-dead-code",
- "perl-incremental-parsing",
  "perl-lexer",
+ "perl-line-index",
  "perl-lsp-rs-core",
+ "perl-module",
  "perl-parser-core",
- "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace",
@@ -1909,10 +1763,12 @@ dependencies = [
  "ropey",
  "rstest",
  "rustc-hash",
+ "serde",
  "serde_json",
  "serial_test",
  "tempfile",
  "thiserror",
+ "tracing",
  "url",
 ]
 
@@ -2005,6 +1861,7 @@ dependencies = [
 name = "perl-semantic-analyzer"
 version = "0.12.4"
 dependencies = [
+ "perl-module",
  "perl-parser-core",
  "perl-symbol",
  "perl-tdd-support",
@@ -2632,9 +2489,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.12"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8279bb85272c9f10811ae6a6c547ff594d6a7f3c6c6b02ee9726d1d0dcfcdd06"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -2984,6 +2841,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
+name = "symlink"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7973cce6668464ea31f176d85b13c7ab3bba2cb3b77a2ed26abd7801688010a"
+
+[[package]]
 name = "syn"
 version = "2.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3213,11 +3076,12 @@ dependencies = [
 
 [[package]]
 name = "tracing-appender"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "786d480bce6247ab75f005b14ae1624ad978d3029d9113f0a22fa1ac773faeaf"
+checksum = "050686193eb999b4bb3bc2acfa891a13da00f79734704c4b8b4ef1a10b368a3c"
 dependencies = [
  "crossbeam-channel",
+ "symlink",
  "thiserror",
  "time",
  "tracing-subscriber",
@@ -3324,9 +3188,9 @@ dependencies = [
 
 [[package]]
 name = "typenum"
-version = "1.19.0"
+version = "1.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 
 [[package]]
 name = "ucd-trie"
@@ -3488,11 +3352,11 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.2+wasi-0.2.9"
+version = "1.0.3+wasi-0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+checksum = "20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.57.1",
 ]
 
 [[package]]
@@ -3501,7 +3365,7 @@ version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5"
 dependencies = [
- "wit-bindgen",
+ "wit-bindgen 0.51.0",
 ]
 
 [[package]]
@@ -3895,6 +3759,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-bindgen"
+version = "0.57.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
 name = "wit-bindgen-core"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4006,8 +3876,7 @@ dependencies = [
  "notify",
  "peak_alloc",
  "perl-corpus",
- "perl-feature-catalog",
- "perl-lsp-feature-governance",
+ "perl-lsp-rs-core",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",

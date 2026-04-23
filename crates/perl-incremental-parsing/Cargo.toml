@@ -1,5 +1,6 @@
 [package]
 name = "perl-incremental-parsing"
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -37,6 +38,8 @@ default = []
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+criterion.workspace = true
+perl-parser = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

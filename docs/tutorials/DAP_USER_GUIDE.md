@@ -158,7 +158,7 @@ Let's debug a simple Perl script to verify everything works.
 6. **Inspect variables**:
    - Hover over variables to inspect parsed values
    - Use the Variables panel to explore data structures with lazy expansion
-   - Use the Debug Console to evaluate Perl expressions (safe mode by default)
+   - Use the Debug Console to evaluate Perl expressions (safe mode by default — syntactic validation only, not interpreter sandboxing)
 
 7. **Stop debugging**: Press `Shift+F5` or click the red stop square in the debug toolbar.
 

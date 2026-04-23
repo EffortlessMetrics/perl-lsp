@@ -674,6 +674,18 @@ sub add { 1 }
     }
 
     #[test]
+    fn test_extract_documentation_with_out_of_bounds_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "sub add { 1 }\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        assert_eq!(analyzer.extract_documentation(code.len() + 1), None);
+        Ok(())
+    }
+
+    #[test]
     fn test_cross_package_navigation() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package Foo {
@@ -1431,6 +1443,33 @@ push @items, 5;
     }
 
     #[test]
+    fn test_core_prefixed_builtin_hover_for_function_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = r#"
+my $value = "abc";
+CORE::length($value);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let length_pos = code.find("CORE::length").ok_or("CORE::length not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= length_pos && loc.end > length_pos);
+
+        assert!(hover.is_some(), "Should have hover info for CORE::length builtin");
+        let (_, hover) = hover.ok_or("missing hover for CORE::length")?;
+        assert!(
+            hover.signature.contains("length"),
+            "Hover signature should contain 'length', got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_package_hover_with_pod_name_section() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 =head1 NAME
@@ -1722,8 +1761,9 @@ my %config = (key => "value");
     #[test]
     fn test_find_definition_redirects_method_modifier_to_target_method()
     -> Result<(), Box<dyn std::error::Error>> {
-        let code =
-            include_str!("../../../../perl-lsp/tests/fixtures/frameworks/moo_method_modifiers.pl");
+        let code = include_str!(
+            "../../../../perl-lsp-rs/tests/fixtures/frameworks/moo_method_modifiers.pl"
+        );
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
 

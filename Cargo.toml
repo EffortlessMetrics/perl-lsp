@@ -20,15 +20,15 @@ members = [
     "crates/perl-test-generators",
     # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
     # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
-    "crates/perl-lsp-protocol",
+    # (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
     "crates/perl-lsp-rs-core",
-    "crates/perl-lsp-transport",
+    # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
     # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "crates/perl-lsp-tooling",
+    # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
     "crates/perl-lsp-perltidy",
     # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "crates/perl-lsp-performance",
-    "crates/perl-lsp-critic-parser",
+    # (perl-lsp-performance absorbed into perl-lsp-rs-core::tooling::performance — Wave G3 step 5)
+    # (perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser — Wave G3 step 7)
     "crates/perl-subprocess-runtime",
     # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
     # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -36,8 +36,8 @@ members = [
     # (perl-lsp-semantic-tokens absorbed into perl-lsp-rs-core::providers::semantic_tokens — Wave G1b)
     # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "crates/perl-lsp-feature-governance",
-    "crates/perl-lsp-launcher",
+    # (perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance — Wave G3 step 1)
+    # (perl-lsp-launcher absorbed into perl-lsp-rs-core::runtime::launcher — Wave G2)
     # (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)
     # (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -52,28 +52,28 @@ members = [
     # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-selection-range absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "crates/perl-lsp-text-utils",
+    # (perl-lsp-text-utils absorbed into perl-lsp-rs-core::runtime::text_utils — Wave G2)
     # (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "crates/perl-lsp-cancellation",
-    "crates/perl-lsp-input-validation",
-    "crates/perl-lsp-limits",
-    "crates/perl-lsp-uri",
-    "crates/perl-lsp-config",
+    # (perl-lsp-cancellation absorbed into perl-lsp-rs-core::runtime::cancellation — Wave G2)
+    # (perl-lsp-input-validation absorbed into perl-lsp-rs-core::runtime::input_validation — Wave G2)
+    # (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
+    # (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
+    # (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
     "crates/perl-diagnostics",
     "crates/perl-position-tracking",
     "crates/perl-symbol",
     "crates/perl-module",
     "crates/perl-line-index",
-    "crates/perl-content-length-framing",
+    # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
     "crates/perl-uri",
     "crates/perl-pod",
     "crates/perl-corpus",
-    "crates/perl-lsp",
+    "crates/perl-lsp-rs",
     "crates/perl-lsp-ux-tests",
     "crates/perllsp",
     "crates/perl-dap",
     "crates/perl-dead-code",
-    "crates/perl-feature-catalog",
+    # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
     "crates/tree-sitter-perl-c",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ci-hygiene",
@@ -95,10 +95,10 @@ allow = [
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
     "perl-token",
-    "perl-content-length-framing",
+    # (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
     # (perl-percentile absorbed into perl-parser — Wave D)
     "perl-subprocess-runtime",
-    "perl-lsp-protocol",
+    # (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
     # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
     "perl-regex",
     "perl-pod",
@@ -121,7 +121,7 @@ allow = [
     # Tier 2+ — Rust-native tree-sitter facade (depends on perl-parser-core + perl-ast)
     "tree-sitter-perl-rs",
     "perl-test-generators",
-    "perl-incremental-parsing",
+    # (perl-incremental-parsing absorbed into perl-parser::incremental — Wave 4-Completion)
     "perl-symbol",
     "perl-uri",
     # (perl-path-normalize, perl-path-security, perl-text-line absorbed into perl-parser-core — Wave D)
@@ -130,7 +130,7 @@ allow = [
     "perl-semantic-analyzer",
     "perl-diagnostics",
     # (perl-lsp-diagnostics absorbed into perl-lsp-rs-core::providers::diagnostics — Wave G1b)
-    "perl-lsp-text-utils",
+    # (perl-lsp-text-utils absorbed into perl-lsp-rs-core::runtime::text_utils — Wave G2)
     # (perl-lsp-rename absorbed into perl-lsp-rs-core::providers::rename — Wave G1b)
     # (perl-lsp-code-actions absorbed into perl-lsp-rs-core::providers::code_actions — Wave G1b)
     # (perl-lsp-folding absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -153,10 +153,10 @@ allow = [
     # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-workspace-symbols absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "perl-lsp-tooling",
+    # (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
     "perl-lsp-perltidy",
-    "perl-lsp-performance",
-    "perl-lsp-critic-parser",
+    # (perl-lsp-performance absorbed into perl-lsp-rs-core::tooling::performance — Wave G3 step 5)
+    # (perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser — Wave G3 step 7)
     # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
     # (perl-lsp-formatting absorbed into perl-lsp-rs-core::providers::formatting — Wave G1b)
     # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -164,10 +164,10 @@ allow = [
     # (perl-lsp-providers absorbed into perl-lsp-rs-core::providers::lsp_compat — Wave G1b)
     # (perl-ast-utils, perl-qualified-name absorbed into perl-parser — Wave D)
     # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
-    "perl-refactoring",
+    # (perl-refactoring absorbed into perl-parser::refactor — Wave 4-Completion)
 
     # Tier 5 — Application crates
-    "perl-dead-code",
+    # (perl-dead-code absorbed into perl-parser::dead_code — Wave 4-Completion)
     "perl-parser",
     "perl-parser-bench",
     "perl-parser-pest",
@@ -175,20 +175,20 @@ allow = [
 
     # Tier 5 — DAP components (Wave H: satellites collapsed into perl-dap)
     # (perl-path-security absorbed into perl-parser-core — Wave D)
-    "perl-feature-catalog",
+    # (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
     "perl-dap",
 
     # Tier 5 — LSP governance and infrastructure
     # (perl-lsp-feature-* and perl-lsp-capability-map absorbed into perl-lsp-rs-core — Wave F)
-    "perl-lsp-cancellation",
-    "perl-lsp-input-validation",
+    # (perl-lsp-cancellation absorbed into perl-lsp-rs-core::runtime::cancellation — Wave G2)
+    # (perl-lsp-input-validation absorbed into perl-lsp-rs-core::runtime::input_validation — Wave G2)
     "perl-lsp-rs-core",
-    "perl-lsp-feature-governance",
-    "perl-lsp-launcher",
-    "perl-lsp-limits",
-    "perl-lsp-uri",
-    "perl-lsp-config",
-    "perl-lsp-transport",
+    # (perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance — Wave G3 step 1)
+    # (perl-lsp-launcher absorbed into perl-lsp-rs-core::runtime::launcher — Wave G2)
+    # (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
+    # (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
+    # (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
+    # (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
 
     # Tier 6 — Module resolution higher tiers
     # (perl-text-line, perl-source-file absorbed — Wave D)
@@ -229,20 +229,20 @@ perl-module = { path = 'crates/perl-module', version = "0.12.4" }
 perl-line-index = { path = "crates/perl-line-index", version = "0.12.4" }
 # Wave D absorbed: perl-source-file → perl-parser::source_file
 # Wave D absorbed: perl-text-line → perl-parser-core::text_line
-perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.12.4" }
+# (perl-content-length-framing absorbed into perl-lsp-rs-core::transport::framing — Wave Final PR B)
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.12.4" }
 # (perl-lsp-document-highlight absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-document-links absorbed into perl-lsp-rs-core::providers — Wave G1a)
-perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.12.4" }
+# (perl-lsp-performance absorbed into perl-lsp-rs-core::tooling::performance — Wave G3 step 5)
 # (perl-lsp-symbol-query absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # Wave D absorbed: perl-ast-utils → perl-parser::ast_utils
-perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.12.4" }
-perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.12.4" }
+# (perl-lsp-input-validation absorbed into perl-lsp-rs-core::runtime::input_validation — Wave G2)
+# (perl-lsp-text-utils absorbed into perl-lsp-rs-core::runtime::text_utils — Wave G2)
 perl-uri = { path = "crates/perl-uri", version = "0.12.4" }
 # Wave D absorbed: perl-percentile → perl-parser::percentile
 # (perl-lsp-import-management absorbed into perl-lsp-rs-core::providers — Wave G1a)
-perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.12.4" }
-perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.12.4" }
+# (perl-lsp-critic-parser absorbed into perl-lsp-rs-core::critic_parser — Wave G3 step 7)
+# (perl-lsp-protocol absorbed into perl-lsp-rs-core::protocol — Wave G3 step 2)
 # Wave D absorbed: perl-path-normalize → perl-parser-core::path_normalize
 # Wave D absorbed: perl-path-security → perl-parser-core::path_security
 perl-lsp-rs-core = { path = "crates/perl-lsp-rs-core", version = "0.12.4" }
@@ -250,11 +250,11 @@ perl-pod = { path = "crates/perl-pod", version = "0.12.4" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.12.4" }
 perl-dap = { path = "crates/perl-dap", version = "0.12.4" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.12.4" }
-perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.12.4" }
+# (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.12.4" }
-perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.12.4" }
-perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.12.4" }
+# (perl-lsp-transport absorbed into perl-lsp-rs-core::transport — Wave G3 step 4)
+# (perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling — Wave G3 step 6)
 perl-lsp-perltidy = { path = "crates/perl-lsp-perltidy", version = "0.12.4" }
 # (perl-lsp-on-type-formatting absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-formatting-types absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -266,12 +266,12 @@ perl-test-must = { path = "crates/perl-test-must", version = "0.12.4" }
 # (perl-lsp-inlay-hints absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-code-lens absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-color-provider absorbed into perl-lsp-rs-core::providers — Wave G1a)
-perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.12.4" }
-perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.12.4" }
-perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.12.4" }
-perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.12.4" }
-perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.12.4" }
-perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.12.4" }
+# (perl-lsp-cancellation absorbed into perl-lsp-rs-core::runtime::cancellation — Wave G2)
+# (perl-lsp-limits absorbed into perl-lsp-rs-core::runtime::limits — Wave G2)
+# (perl-lsp-uri absorbed into perl-lsp-rs-core::uri — Wave G3 step 3)
+# (perl-lsp-config absorbed into perl-lsp-rs-core::config — Wave Final PR B)
+# (perl-lsp-feature-governance absorbed into perl-lsp-rs-core::governance — Wave G3 step 1)
+# (perl-lsp-launcher absorbed into perl-lsp-rs-core::runtime::launcher — Wave G2)
 # (perl-lsp-navigation absorbed into perl-lsp-rs-core::providers::navigation — Wave G1b)
 # (perl-lsp-type-hierarchy absorbed into perl-lsp-rs-core::providers — Wave G1a)
 # (perl-lsp-workspace-symbols absorbed into perl-lsp-rs-core::providers — Wave G1a)
@@ -297,7 +297,7 @@ perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.
 
 # Tier 5: Application crates
 perl-parser = { path = "crates/perl-parser", version = "0.12.4" }
-perl-lsp-rs = { path = "crates/perl-lsp", version = "0.12.4" }
+perl-lsp-rs = { path = "crates/perl-lsp-rs", version = "0.12.4" }
 
 # Legacy/Compatibility crates
 perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.12.4" }

@@ -88,6 +88,12 @@
 //! | `PL300` | Warning | Subroutine name defined more than once |
 //! | `PL303` | Warning | Same-file Moo/Moose roles provide conflicting methods |
 //!
+//! ## POD coverage (`pod_coverage.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL304` | Hint | Exported subroutine lacks POD documentation |
+//!
 //! ## Dead code (`dead_code.rs`)
 //!
 //! | Code | Severity | Description |
@@ -114,6 +120,12 @@
 //! | Code | Severity | Description |
 //! |------|----------|-------------|
 //! | `PL409` | Warning | `goto LABEL` references a label that is not defined in the file |
+//!
+//! ## Loop control labels (`loop_control_label.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL410` | Warning | `next`/`last`/`redo LABEL` references a label that is not defined in the file |
 //!
 //! # Severity Levels
 //!
@@ -142,10 +154,14 @@ pub mod eval_error_flow;
 pub mod ffi_checklib;
 /// Conservative `goto LABEL` validation
 pub mod goto_label;
+/// Conservative `next`/`last`/`redo LABEL` validation (PL410)
+pub mod loop_control_label;
 /// Missing module detection (PL701)
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
 pub mod package_subroutine;
+/// POD coverage for exported subroutines (PL304)
+pub mod pod_coverage;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
 /// Same-file Moo/Moose role conflict detection (PL303)

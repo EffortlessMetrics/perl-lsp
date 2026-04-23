@@ -150,7 +150,7 @@ The `perl-lsp` binary uses a nice hybrid shape:
 
 That is a practical architecture choice.
 
-It avoids forcing the raw input side into a fully async design while still letting the main dispatch and serving path share one runtime model. The comments in `crates/perl-lsp/src/main.rs` are explicit that stdio and TCP should converge on the same async dispatch path.
+It avoids forcing the raw input side into a fully async design while still letting the main dispatch and serving path share one runtime model. The comments in `crates/perl-lsp-rs/src/main.rs` are explicit that stdio and TCP should converge on the same async dispatch path.
 
 ### Learning
 
@@ -274,9 +274,9 @@ This write-up was based on direct inspection of the checked-out tree, especially
 
 - `crates/perl-workspace-index/src/workspace/workspace_index.rs`
 - `crates/perl-workspace-index/tests/dual_indexing_tests.rs`
-- `crates/perl-lsp/src/runtime/routing.rs`
-- `crates/perl-lsp/src/runtime/mod.rs`
-- `crates/perl-lsp/src/main.rs`
+- `crates/perl-lsp-rs/src/runtime/routing.rs`
+- `crates/perl-lsp-rs/src/runtime/mod.rs`
+- `crates/perl-lsp-rs/src/main.rs`
 - `crates/perl-lsp-uri/src/lib.rs`
 
 It also used lightweight repository-wide counts for crate totals, file counts, line counts, and largest/smallest crate snapshots.

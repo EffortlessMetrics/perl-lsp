@@ -1123,20 +1123,13 @@ mod integration_mutation_tests {
         Ok(())
     }
 
-    /// Test that documents arithmetic underflow issue in incremental parsing
-    /// This test is currently expected to expose bugs in the incremental parser
+    /// Regression guard: arithmetic underflow in incremental parsing was fixed.
+    /// Previously nodes_reused could exceed count_nodes(), causing subtraction overflow.
     #[test]
-    #[should_panic(expected = "attempt to subtract with overflow")]
-    fn test_incremental_arithmetic_underflow_documentation() {
-        // This test documents a real bug in incremental_document.rs:356
-        // where nodes_reused can be larger than count_nodes(), causing underflow
+    fn test_incremental_arithmetic_underflow_fixed() -> TestResult {
         let source = "package Test; sub test_function { }";
-        let mut doc = match IncrementalDocument::new(source.to_string()) {
-            Ok(d) => d,
-            Err(e) => must(Err::<(), _>(format!("Should create document: {:?}", e))),
-        };
+        let mut doc = must(IncrementalDocument::new(source.to_string()));
 
-        // This edit triggers the underflow bug - it's a legitimate bug to fix
         let edit = IncrementalEdit::with_positions(
             source.len(),
             source.len(),
@@ -1145,7 +1138,8 @@ mod integration_mutation_tests {
             Position::new(source.len(), 0, 0),
         );
 
-        // This will panic due to arithmetic underflow - this is the bug we're documenting
-        let _result = doc.apply_edit(edit);
+        let result = doc.apply_edit(edit);
+        assert!(result.is_ok(), "Incremental edit should not panic or fail");
+        Ok(())
     }
 }

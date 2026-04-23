@@ -55,6 +55,78 @@ trait PatternDetector: Send + Sync {
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic>;
 }
 
+fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
+    let line = code[..start].lines().count();
+    let column = match code[..start].rfind('\n') {
+        Some(last_newline) => start.saturating_sub(last_newline + 1),
+        None => start,
+    };
+
+    Location { line, column, offset: offset + start }
+}
+
+fn mask_non_code_regions(code: &str) -> String {
+    let mut masked = String::with_capacity(code.len());
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut in_line_comment = false;
+    let mut escaped = false;
+
+    for ch in code.chars() {
+        if in_line_comment {
+            if ch == '\n' {
+                in_line_comment = false;
+                masked.push('\n');
+            } else {
+                masked.push(' ');
+            }
+            continue;
+        }
+
+        if in_single_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_single_quote = false;
+            }
+            masked.push(' ');
+            continue;
+        }
+
+        if in_double_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_double_quote = false;
+            }
+            masked.push(' ');
+            continue;
+        }
+
+        match ch {
+            '#' => {
+                in_line_comment = true;
+                masked.push(' ');
+            }
+            '\'' => {
+                in_single_quote = true;
+                masked.push(' ');
+            }
+            '"' => {
+                in_double_quote = true;
+                masked.push(' ');
+            }
+            _ => masked.push(ch),
+        }
+    }
+
+    masked
+}
+
 // Format heredoc detector
 struct FormatHeredocDetector;
 
@@ -68,20 +140,17 @@ static FORMAT_PATTERN: LazyLock<Regex> =
 impl PatternDetector for FormatHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in FORMAT_PATTERN.captures_iter(code) {
+        for cap in FORMAT_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 let format_name = name_match.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
                 let body_end = code[body_start..].find("\n.").unwrap_or(code.len() - body_start);
-                let body = &code[body_start..body_start + body_end];
+                let body = &scan_code[body_start..body_start + body_end];
 
                 if body.contains("<<") {
                     results.push((
@@ -118,35 +187,95 @@ impl PatternDetector for FormatHeredocDetector {
 // BEGIN-time heredoc detector
 struct BeginTimeHeredocDetector;
 
-/// Pattern for identifying BEGIN blocks with heredocs
-static BEGIN_BLOCK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}") {
+/// Pattern for identifying BEGIN block openings
+static BEGIN_BLOCK_START_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"\bBEGIN\s*\{") {
         Ok(re) => re,
-        Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),
+        Err(_) => unreachable!("BEGIN_BLOCK_START_PATTERN regex failed to compile"),
     });
+
+fn find_matching_brace(code: &str, opening_brace_idx: usize) -> Option<usize> {
+    let bytes = code.as_bytes();
+    let mut depth = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for (idx, &byte) in bytes.iter().enumerate().skip(opening_brace_idx) {
+        let ch = byte as char;
+
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if in_single_quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '\'' {
+                in_single_quote = false;
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '\'' => in_single_quote = true,
+            '"' => in_double_quote = true,
+            '{' => depth += 1,
+            '}' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
 
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in BEGIN_BLOCK_PATTERN.captures_iter(code) {
-            if let (Some(match_pos), Some(content_match)) = (cap.get(0), cap.get(1)) {
-                let block_content = content_match.as_str();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+        for begin_match in BEGIN_BLOCK_START_PATTERN.find_iter(&scan_code) {
+            let Some(opening_brace_rel) = begin_match.as_str().rfind('{') else {
+                continue;
+            };
+            let opening_brace_idx = begin_match.start() + opening_brace_rel;
+            let Some(closing_brace_idx) = find_matching_brace(&scan_code, opening_brace_idx) else {
+                continue;
+            };
+            let block_content = &scan_code[opening_brace_idx + 1..closing_brace_idx];
 
-                results.push((
-                    AntiPattern::BeginTimeHeredoc {
-                        location: location.clone(),
-                        heredoc_content: block_content.to_string(),
-                        side_effects: vec!["Phase-dependent parsing".to_string()],
-                    },
-                    location,
-                ));
+            if !block_content.contains("<<") {
+                continue;
             }
+
+            let location = location_from_start(code, offset, begin_match.start());
+
+            results.push((
+                AntiPattern::BeginTimeHeredoc {
+                    location: location.clone(),
+                    heredoc_content: block_content.to_string(),
+                    side_effects: vec!["Phase-dependent parsing".to_string()],
+                },
+                location,
+            ));
         }
 
         results
@@ -181,15 +310,12 @@ static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(code) {
+        for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
                 let expression = match_pos.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
@@ -231,15 +357,12 @@ static SOURCE_FILTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 impl PatternDetector for SourceFilterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in SOURCE_FILTER_PATTERN.captures_iter(code) {
+        for cap in SOURCE_FILTER_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
                 let filter_module = module_match.as_str().to_string();
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::SourceFilterHeredoc {
@@ -283,14 +406,11 @@ static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
 impl PatternDetector for RegexHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
-        for cap in REGEX_HEREDOC_PATTERN.captures_iter(code) {
+        for cap in REGEX_HEREDOC_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
@@ -334,11 +454,7 @@ impl PatternDetector for EvalHeredocDetector {
 
         for cap in EVAL_HEREDOC_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = Location {
-                    line: code[..match_pos.start()].lines().count(),
-                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + match_pos.start(),
-                };
+                let location = location_from_start(code, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::EvalStringHeredoc { location: location.clone() },
@@ -378,10 +494,11 @@ static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+
 impl PatternDetector for TiedHandleDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
+        let scan_code = mask_non_code_regions(code);
 
         // First find tied handles
         let mut tied_handles = Vec::new();
-        for cap in TIE_PATTERN.captures_iter(code) {
+        for cap in TIE_PATTERN.captures_iter(&scan_code) {
             if let Some(handle_match) = cap.get(1) {
                 tied_handles.push(handle_match.as_str());
             }
@@ -394,23 +511,18 @@ impl PatternDetector for TiedHandleDetector {
 
             // Look for usage of this handle with heredoc
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
-            if let Ok(re) = Regex::new(&usage_pattern)
-                && let Some(usage_match) = re.find(code)
-            {
-                let location = Location {
-                    line: code[..usage_match.start()].lines().count(),
-                    column: usage_match.start()
-                        - code[..usage_match.start()].rfind('\n').unwrap_or(0),
-                    offset: offset + usage_match.start(),
-                };
+            if let Ok(re) = Regex::new(&usage_pattern) {
+                for usage_match in re.find_iter(&scan_code) {
+                    let location = location_from_start(code, offset, usage_match.start());
 
-                results.push((
-                    AntiPattern::TiedHandleHeredoc {
-                        location: location.clone(),
-                        handle_name: handle_to_search.to_string(),
-                    },
-                    location,
-                ));
+                    results.push((
+                        AntiPattern::TiedHandleHeredoc {
+                            location: location.clone(),
+                            handle_name: handle_to_search.to_string(),
+                        },
+                        location,
+                    ));
+                }
             }
         }
 
@@ -577,6 +689,27 @@ END
     }
 
     #[test]
+    fn test_begin_heredoc_detection_with_nested_braces() {
+        let detector = AntiPatternDetector::new();
+        let code = r###"
+BEGIN {
+    if ($ENV{DEV}) {
+        $config = <<'END';
+        server = localhost
+END
+    }
+}
+"###;
+
+        let diagnostics = detector.detect_all(code);
+        let begin_count = diagnostics
+            .iter()
+            .filter(|diag| matches!(diag.pattern, AntiPattern::BeginTimeHeredoc { .. }))
+            .count();
+        assert_eq!(begin_count, 1);
+    }
+
+    #[test]
     fn test_dynamic_delimiter_detection() {
         let detector = AntiPatternDetector::new();
         let code = r###"
@@ -659,5 +792,72 @@ DATA
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
+    }
+
+    #[test]
+    fn test_tied_handle_reports_multiple_writes() {
+        let detector = AntiPatternDetector::new();
+        let code = r###"
+tie *FH, 'Tie::Handle';
+print FH <<'FIRST';
+One
+FIRST
+print FH <<'SECOND';
+Two
+SECOND
+"###;
+
+        let diagnostics = detector.detect_all(code);
+        let tied_handle_count = diagnostics
+            .iter()
+            .filter(|diag| matches!(diag.pattern, AntiPattern::TiedHandleHeredoc { .. }))
+            .count();
+        assert_eq!(tied_handle_count, 2);
+    }
+
+    #[test]
+    fn test_location_column_is_zero_based_for_new_line_matches() {
+        let detector = AntiPatternDetector::new();
+        let code = "my $x = 1;\nuse Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+
+        assert!(
+            matches!(diagnostics[0].pattern, AntiPattern::SourceFilterHeredoc { .. }),
+            "expected SourceFilterHeredoc pattern, got: {:?}",
+            diagnostics[0].pattern
+        );
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            return;
+        };
+
+        assert_eq!(location.line, 1);
+        assert_eq!(location.column, 0);
+        assert_eq!(location.offset, 11);
+    }
+
+    #[test]
+    fn test_source_filter_detection_ignores_comments_and_strings() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+# use Filter::Simple;
+my $s = "use Filter::Simple";
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_begin_detection_ignores_comments_and_strings() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"
+# BEGIN { my $x = <<'END'; END }
+my $s = "BEGIN { my $x = <<'END'; END }";
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(diagnostics.is_empty());
     }
 }

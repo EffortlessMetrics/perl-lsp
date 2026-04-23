@@ -29,12 +29,16 @@ pub struct ModuleLineEdit {
 /// - `use base 'Module::Name';`
 /// - `use base "Module::Name";`
 /// - `use base qw(Module::Name Other);`
+/// - `extends 'Module::Name';`
+/// - `extends qw(Module::Name Other::Parent);`
+/// - `with 'Module::Role';`
+/// - `with qw(Module::Role Other::Role);`
 ///
 /// Also rewrites:
+/// - Package declarations: `package Module::Name;` → `package NewName;`
 /// - Qualified function calls: `Module::Name::func()` → `NewName::func()`
 /// - Static method calls: `Module::Name->method()` → `NewName->method()`
 /// - `@ISA` array assignments
-/// - Package declarations: `package Module::Name;` → `package NewName;`
 ///
 /// Legacy package separators (`Foo'Bar`) are also handled.
 #[must_use]
@@ -62,6 +66,18 @@ pub fn plan_module_rename_edits(
             {
                 let current_line = rewritten.as_deref().unwrap_or(line);
                 if line_references_module_import(current_line, old_variant) {
+                    let (candidate, changed) =
+                        replace_module_token(current_line, old_variant, new_variant);
+                    if changed {
+                        rewritten = Some(candidate);
+                    }
+                }
+            }
+
+            // Check Moose/Moo inheritance/role composition forms.
+            {
+                let current_line = rewritten.as_deref().unwrap_or(line);
+                if line_references_moose_moo_dsl(current_line, old_variant) {
                     let (candidate, changed) =
                         replace_module_token(current_line, old_variant, new_variant);
                     if changed {
@@ -120,6 +136,20 @@ pub fn plan_module_rename_edits(
     edits
 }
 
+fn line_references_moose_moo_dsl(line: &str, module_name: &str) -> bool {
+    if line.is_empty() || module_name.is_empty() {
+        return false;
+    }
+    let trimmed = line.trim_start();
+    let is_extends =
+        trimmed == "extends" || trimmed.starts_with("extends ") || trimmed.starts_with("extends(");
+    let is_with = trimmed == "with" || trimmed.starts_with("with ") || trimmed.starts_with("with(");
+    if !is_extends && !is_with {
+        return false;
+    }
+    crate::token::contains_module_token(line, module_name)
+}
+
 /// Return `true` when `line` contains an `@ISA` assignment that references
 /// `module_name` as a standalone token.
 #[must_use]
@@ -140,37 +170,47 @@ pub fn line_references_qualified_call(line: &str, module_name: &str) -> bool {
     if line.is_empty() || module_name.is_empty() {
         return false;
     }
-    let needle = format!("{}::", module_name);
-    let needle_bytes = needle.as_bytes();
-    let line_bytes = line.as_bytes();
-    let needle_len = needle_bytes.len();
-
-    if line_bytes.len() < needle_len {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+        || trimmed.starts_with("no ")
+    {
         return false;
     }
+    for separator in ["::", "'"] {
+        let needle = format!("{module_name}{separator}");
+        let needle_bytes = needle.as_bytes();
+        let line_bytes = line.as_bytes();
+        let needle_len = needle_bytes.len();
 
-    let mut start = 0usize;
-    while start + needle_len <= line_bytes.len() {
-        let Some(rel) = line[start..].find(needle.as_str()) else {
-            break;
-        };
-        let abs = start + rel;
-        let after = abs + needle_len;
-
-        let before_ok = abs == 0 || {
-            let ch = line_bytes[abs - 1] as char;
-            !ch.is_alphanumeric() && ch != '_' && ch != ':'
-        };
-
-        let after_ok = after < line_bytes.len() && {
-            let ch = line_bytes[after] as char;
-            ch.is_alphabetic() || ch == '_'
-        };
-
-        if before_ok && after_ok {
-            return true;
+        if line_bytes.len() < needle_len {
+            continue;
         }
-        start = abs + 1;
+
+        let mut start = 0usize;
+        while start + needle_len <= line_bytes.len() {
+            let Some(rel) = line[start..].find(needle.as_str()) else {
+                break;
+            };
+            let abs = start + rel;
+            let after = abs + needle_len;
+
+            let before_ok = abs == 0 || {
+                let ch = line_bytes[abs - 1] as char;
+                !ch.is_alphanumeric() && ch != '_' && ch != ':'
+            };
+
+            let after_ok = after < line_bytes.len() && {
+                let ch = line_bytes[after] as char;
+                ch.is_alphabetic() || ch == '_'
+            };
+
+            if before_ok && after_ok && !index_is_in_quote_or_comment(line, abs) {
+                return true;
+            }
+            start = abs + 1;
+        }
     }
 
     false
@@ -195,49 +235,123 @@ pub fn replace_module_name_prefix(line: &str, old_module: &str, new_module: &str
     if old_module.is_empty() || new_module.is_empty() || line.is_empty() {
         return line.to_string();
     }
-
-    let needle = format!("{}::", old_module);
-    let replacement = format!("{}::", new_module);
-    let needle_bytes = needle.as_bytes();
-    let needle_len = needle_bytes.len();
-    let line_bytes = line.as_bytes();
-
-    if line_bytes.len() < needle_len {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with("package ")
+        || trimmed.starts_with("use ")
+        || trimmed.starts_with("require ")
+        || trimmed.starts_with("no ")
+    {
         return line.to_string();
     }
 
-    let mut out = String::with_capacity(line.len());
-    let mut cursor = 0usize;
+    let mut out = line.to_string();
 
-    while cursor + needle_len <= line_bytes.len() {
-        let Some(rel) = line[cursor..].find(needle.as_str()) else {
-            break;
-        };
-        let abs = cursor + rel;
-        let after = abs + needle_len;
+    for separator in ["::", "'"] {
+        let needle = format!("{old_module}{separator}");
+        let replacement = format!("{new_module}{separator}");
+        let needle_bytes = needle.as_bytes();
+        let needle_len = needle_bytes.len();
+        let line_bytes = out.as_bytes();
 
-        let before_ok = abs == 0 || {
-            let ch = line_bytes[abs - 1] as char;
-            !ch.is_alphanumeric() && ch != '_' && ch != ':'
-        };
+        if line_bytes.len() < needle_len {
+            continue;
+        }
 
-        let after_ok = after < line_bytes.len() && {
-            let ch = line_bytes[after] as char;
-            ch.is_alphabetic() || ch == '_'
-        };
+        let mut replaced = String::with_capacity(out.len());
+        let mut cursor = 0usize;
 
-        if before_ok && after_ok {
-            out.push_str(&line[cursor..abs]);
-            out.push_str(&replacement);
-            cursor = after;
-        } else {
-            out.push_str(&line[cursor..abs + 1]);
-            cursor = abs + 1;
+        while cursor + needle_len <= line_bytes.len() {
+            let Some(rel) = out[cursor..].find(needle.as_str()) else {
+                break;
+            };
+            let abs = cursor + rel;
+            let after = abs + needle_len;
+
+            let before_ok = abs == 0 || {
+                let ch = line_bytes[abs - 1] as char;
+                !ch.is_alphanumeric() && ch != '_' && ch != ':'
+            };
+
+            let after_ok = after < line_bytes.len() && {
+                let ch = line_bytes[after] as char;
+                ch.is_alphabetic() || ch == '_'
+            };
+
+            if before_ok && after_ok && !index_is_in_quote_or_comment(&out, abs) {
+                replaced.push_str(&out[cursor..abs]);
+                replaced.push_str(&replacement);
+                cursor = after;
+            } else {
+                replaced.push_str(&out[cursor..abs + 1]);
+                cursor = abs + 1;
+            }
+        }
+
+        replaced.push_str(&out[cursor..]);
+        out = replaced;
+    }
+
+    out
+}
+
+fn index_is_in_quote_or_comment(line: &str, index: usize) -> bool {
+    let bytes = line.as_bytes();
+    if index >= bytes.len() {
+        return false;
+    }
+
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        if i == index {
+            return in_single || in_double;
+        }
+
+        let ch = byte as char;
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if in_single {
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == '\'' {
+                in_single = false;
+            }
+            continue;
+        }
+
+        if in_double {
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+
+        if ch == '#' {
+            return i < index;
+        }
+
+        if ch == '\'' {
+            in_single = true;
+            continue;
+        }
+
+        if ch == '"' {
+            in_double = true;
         }
     }
 
-    out.push_str(&line[cursor..]);
-    out
+    false
 }
 
 /// Apply full-line `ModuleLineEdit` replacements to source text.

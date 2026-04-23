@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md)
+**Latest Release**: 0.12.4 | **Metrics**: [status/index.md](docs/project/status/index.md) | **API Stability**: [STABILITY.md](docs/reference/STABILITY.md) | **Implementation agents**: [AGENTS.md](AGENTS.md)
 
 ## Orchestration Model
 
@@ -208,7 +208,7 @@ cargo test --workspace --lib          # Run all tests
 | Crate | Path | Purpose |
 |-------|------|---------|
 | **perl-parser** | `crates/perl-parser/` | Main parser (v3 recursive descent) |
-| **perl-lsp** | `crates/perl-lsp/` | LSP server binary |
+| **perl-lsp** | `crates/perl-lsp-rs/` | LSP server binary |
 | **perl-dap** | `crates/perl-dap/` | Debug Adapter Protocol |
 | **perl-lexer** | `crates/perl-lexer/` | Context-aware tokenizer |
 | **perl-parser-core** | `crates/perl-parser-core/` | Core parsing infrastructure |
@@ -299,7 +299,7 @@ just cpan-corpus-ratchet              # Auto-add clean modules to manifest
 |------|-------|
 | Parser source | `crates/perl-parser/src/` |
 | LSP providers | `crates/perl-lsp-*/src/` |
-| LSP server binary | `crates/perl-lsp/src/` |
+| LSP server binary | `crates/perl-lsp-rs/src/` |
 | DAP server | `crates/perl-dap/src/` |
 | Tests | `crates/*/tests/` |
 | Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
@@ -338,7 +338,7 @@ Invoke `/coding-standards` for full detail.
 - **Banned in production code**: `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()`, `std::process::abort()`, `dbg!()`
   - Use `?`, `.ok_or_else()`, pattern matching, `Result`/`Option` instead
   - `std::process::exit()` only in `bin/` and `lifecycle.rs`
-  - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+  - Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
   - Exception: `bin/` targets may use `#[allow(clippy::expect_used)]` for profiling / CLI entry points, including `crates/perl-workspace-index/src/bin/workspace_memory_profile.rs`
   - Exception: static `LazyLock<Regex>` initializers may use `unreachable!()`/`expect()` for known-good patterns, including `crates/perl-heredoc-anti-patterns/src/lib.rs`
   - Tests: `Result<()>` returns or `perl_tdd_support::must`/`must_some`

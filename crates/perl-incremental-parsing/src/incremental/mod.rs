@@ -1,3 +1,13 @@
+//! Core incremental parsing state and edit application pipeline.
+//!
+//! This module owns the long-lived [`IncrementalState`] used by the LSP server
+//! to apply text changes, rebuild lexer/parser checkpoints, and decide whether
+//! to do a targeted reparse or a full fallback parse.
+//!
+//! Submodules in this folder provide focused strategies (checkpoint-based,
+//! document-level, and v2 handlers), while this file defines the shared data
+//! structures and high-level edit flow used across those strategies.
+
 #![allow(missing_docs)]
 
 use anyhow::Result;
@@ -23,25 +33,35 @@ pub mod incremental_v2;
 /// Stable restart points to avoid re-lexing the whole world
 #[derive(Clone, Copy, Debug)]
 pub struct LexCheckpoint {
+    /// Byte offset where lexing can safely resume.
     pub byte: usize,
+    /// Lexer mode to restore at `byte`.
     pub mode: LexerMode,
+    /// Zero-based line number at the checkpoint.
     pub line: usize,
+    /// Zero-based column number at the checkpoint.
     pub column: usize,
 }
 
 /// Scope information at a parse checkpoint
 #[derive(Clone, Debug, Default)]
 pub struct ScopeSnapshot {
+    /// Active package name at this point in the parse.
     pub package_name: String,
+    /// Lexically-scoped variables visible at this point.
     pub locals: Vec<String>,
+    /// Package variables declared with `our`.
     pub our_vars: Vec<String>,
+    /// Inherited package list (`@ISA`) known at this point.
     pub parent_isa: Vec<String>,
 }
 
 /// Parse checkpoint with scope context
 #[derive(Clone, Debug)]
 pub struct ParseCheckpoint {
+    /// Byte offset where parsing can safely resume.
     pub byte: usize,
+    /// Scope state captured at `byte`.
     pub scope_snapshot: ScopeSnapshot,
     pub node_id: usize, // ID of AST node at this point
 }
@@ -49,12 +69,19 @@ pub struct ParseCheckpoint {
 /// Incremental parsing state
 #[derive(Clone)]
 pub struct IncrementalState {
+    /// Rope view of the current document text.
     pub rope: Rope,
+    /// Cached line/column index for UTF-8 byte conversion.
     pub line_index: LineIndex,
+    /// Restart points for incremental lexing.
     pub lex_checkpoints: Vec<LexCheckpoint>,
+    /// Restart points for incremental parsing.
     pub parse_checkpoints: Vec<ParseCheckpoint>,
+    /// Latest parsed syntax tree.
     pub ast: Node,
+    /// Latest token stream excluding EOF.
     pub tokens: Vec<Token>,
+    /// Current source text snapshot.
     pub source: String,
 }
 
@@ -321,9 +348,13 @@ impl IncrementalState {
 /// Edit description
 #[derive(Clone, Debug)]
 pub struct Edit {
+    /// Start byte offset in the previous document.
     pub start_byte: usize,
+    /// End byte offset in the previous document.
     pub old_end_byte: usize,
+    /// End byte offset in the new document after applying the edit.
     pub new_end_byte: usize,
+    /// Replacement text for the edited range.
     pub new_text: String,
 }
 
@@ -357,8 +388,11 @@ impl Edit {
 /// Result of incremental reparse
 #[derive(Debug)]
 pub struct ReparseResult {
+    /// Byte ranges considered changed by the reparse pass.
     pub changed_ranges: Vec<Range<usize>>,
+    /// Diagnostics produced during reparsing.
     pub diagnostics: Vec<Diagnostic>,
+    /// Total byte count reparsed for this update.
     pub reparsed_bytes: usize,
 }
 
@@ -610,6 +644,64 @@ mod tests {
             result.reparsed_bytes,
             state.source.len(),
             "large edit must trigger full reparse, reparsed_bytes should equal doc length"
+        );
+
+        Ok(())
+    }
+
+    /// Empty edit list must take the `full_reparse` path: `reparsed_bytes`
+    /// equals the full document length, `changed_ranges` spans the whole
+    /// document, and the AST and checkpoints are rebuilt against the same
+    /// source text without mutation.
+    ///
+    /// This contract is what the `bench_warm_reparse` benchmark relies on
+    /// to measure the warm-path reparse cost — if `apply_edits(&mut s, &[])`
+    /// were ever specialised to a no-op, the warm benchmark would silently
+    /// stop measuring the reparse regime.  See issue #4063 (parser scorecard,
+    /// cold / warm / incremental regime separation).
+    #[test]
+    fn test_apply_edits_empty_slice_full_reparses() -> Result<()> {
+        let source = "my $x = 1;\nmy $y = 2;\nsub f { return $x + $y; }\n".to_string();
+        let mut state = IncrementalState::new(source.clone());
+
+        let ast_before = format!("{:?}", state.ast);
+        let tokens_before = state.tokens.len();
+        let source_before = state.source.clone();
+
+        let result = apply_edits(&mut state, &[])?;
+
+        // Warm-path contract: full reparse covers the whole document.
+        assert_eq!(
+            result.reparsed_bytes,
+            source.len(),
+            "empty edit list must reparse the full document ({} bytes)",
+            source.len()
+        );
+        assert_eq!(
+            result.changed_ranges,
+            vec![0..source.len()],
+            "empty edit list must report the whole document as the changed range"
+        );
+
+        // Source text must be untouched.
+        assert_eq!(state.source, source_before, "empty edit list must not modify the source text");
+
+        // AST and tokens must be rebuilt (same structure, same token count).
+        assert_eq!(
+            state.tokens.len(),
+            tokens_before,
+            "token count must match after warm reparse with no edits"
+        );
+        assert_eq!(
+            format!("{:?}", state.ast),
+            ast_before,
+            "AST must be equivalent after warm reparse with no edits"
+        );
+
+        // Checkpoints must be rebuilt (non-empty for a multi-statement doc).
+        assert!(
+            !state.lex_checkpoints.is_empty(),
+            "lex checkpoints must be rebuilt after warm reparse"
         );
 
         Ok(())

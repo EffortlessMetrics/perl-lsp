@@ -1,8 +1,11 @@
+//! Unicode-aware identifier classification utilities.
+//!
+//! The lexer uses this module to decide whether characters may start or
+//! continue Perl identifiers, combining Unicode XID checks with
+//! Perl-specific allowances such as apostrophe package separators and emoji.
+//! It also exposes lightweight counters used for profiling Unicode-heavy
+//! corpora in tests and debugging.
 use std::sync::atomic::{AtomicU64, Ordering};
-/// Unicode character classification for Perl identifiers
-///
-/// Perl allows a wide range of Unicode characters in identifiers,
-/// including emoji and other symbols.
 use unicode_ident::{is_xid_continue, is_xid_start};
 
 // Performance tracking for Unicode operations
@@ -101,4 +104,55 @@ pub fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
     }
 
     (char_count, emoji_count, complex_char_count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        analyze_unicode_complexity, get_unicode_stats, is_perl_identifier_continue,
+        is_perl_identifier_start, reset_unicode_stats,
+    };
+
+    #[test]
+    fn identifier_start_accepts_ascii_xid_and_emoji() {
+        reset_unicode_stats();
+
+        assert!(is_perl_identifier_start('_'));
+        assert!(is_perl_identifier_start('A'));
+        assert!(is_perl_identifier_start('λ'));
+        assert!(is_perl_identifier_start('🚀'));
+        assert!(!is_perl_identifier_start('1'));
+
+        let (checks, emoji_hits) = get_unicode_stats();
+        assert_eq!(checks, 5);
+        assert_eq!(emoji_hits, 1);
+    }
+
+    #[test]
+    fn identifier_start_rejects_punctuation() {
+        assert!(!is_perl_identifier_start('-'));
+    }
+
+    #[test]
+    fn identifier_continue_accepts_joiners_selectors_and_modifiers() {
+        assert!(is_perl_identifier_continue('\''));
+        assert!(is_perl_identifier_continue('\u{200C}'));
+        assert!(is_perl_identifier_continue('\u{200D}'));
+        assert!(is_perl_identifier_continue('\u{FE0F}'));
+        assert!(is_perl_identifier_continue('\u{1F3FB}'));
+        assert!(is_perl_identifier_continue('\u{1F3FD}'));
+        assert!(!is_perl_identifier_continue(' '));
+        assert!(!is_perl_identifier_continue('-'));
+    }
+
+    #[test]
+    fn analyze_complexity_counts_chars_emoji_and_non_bmp() {
+        // a + lambda + rocket + FE0F variation selector
+        let (char_count, emoji_count, complex_char_count) =
+            analyze_unicode_complexity("aλ🚀\u{FE0F}");
+
+        assert_eq!(char_count, 4);
+        assert_eq!(emoji_count, 1);
+        assert_eq!(complex_char_count, 2);
+    }
 }

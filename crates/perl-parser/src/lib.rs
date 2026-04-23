@@ -454,9 +454,12 @@ pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 /// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
-/// Dead code detection for Perl workspaces (previously `perl-dead-code`).
+/// Dead code detection for Perl workspaces (absorbed from `perl-dead-code`).
 #[cfg(not(target_arch = "wasm32"))]
-pub use perl_dead_code as dead_code_detector;
+pub mod dead_code;
+/// Backwards-compatibility alias: `perl_parser::dead_code_detector` still works.
+#[cfg(not(target_arch = "wasm32"))]
+pub use dead_code as dead_code_detector;
 
 /// Import statement analysis and optimization.
 pub use refactor::import_optimizer;

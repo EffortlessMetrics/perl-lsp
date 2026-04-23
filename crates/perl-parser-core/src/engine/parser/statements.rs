@@ -214,13 +214,21 @@ impl<'a> Parser<'a> {
                 ));
             }
 
-            // Variable declarations
+            // Variable declarations (`my $x`, `our @y`, ...) and scoped sub declarations
+            // (`my sub helper { ... }`, `our sub helper { ... }`, `state sub memo { ... }`).
             TokenKind::My | TokenKind::Our | TokenKind::State => {
-                let decl = self.parse_variable_declaration()?;
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    self.finish_expression_from(decl)
+                if matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::Sub)) {
+                    let decl_token = self.consume_token()?;
+                    let mut sub_node = self.parse_subroutine()?;
+                    sub_node.location.start = decl_token.start;
+                    self.finish_subroutine_statement(sub_node)
                 } else {
-                    Ok(self.parse_word_or_expr(decl)?)
+                    let decl = self.parse_variable_declaration()?;
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.finish_expression_from(decl)
+                    } else {
+                        Ok(self.parse_word_or_expr(decl)?)
+                    }
                 }
             }
             // `field` is a variable declarator only in Perl 5.38+ class bodies.
@@ -339,7 +347,26 @@ impl<'a> Parser<'a> {
             | TokenKind::End
             | TokenKind::Check
             | TokenKind::Init
-            | TokenKind::Unitcheck => self.parse_phase_block(),
+            | TokenKind::Unitcheck
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::LeftBrace)
+                    .unwrap_or(false) =>
+            {
+                self.parse_phase_block()
+            }
+
+            // Phase keywords can also be used as barewords/sub names in normal
+            // statement position (e.g. `CHECK();` from CPAN code).  If there is
+            // no `{` after the keyword, parse as a regular expression statement
+            // instead of forcing phase-block syntax.
+            TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck => self.parse_expression_statement(),
 
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),

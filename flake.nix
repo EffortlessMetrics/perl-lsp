@@ -29,6 +29,8 @@
           rustToolchain
           pkg-config
           openssl
+          perl      # CPAN corpus: execute bootstrapped cpanm script
+          curl     # CPAN corpus: download cpanm standalone script
         ] ++ lib.optionals stdenv.isDarwin [
           darwin.apple_sdk.frameworks.Security
           darwin.apple_sdk.frameworks.SystemConfiguration
@@ -202,14 +204,14 @@
 
           perl-lsp = pkgs.rustPlatform.buildRustPackage {
             pname = "perl-lsp";
-            version = "0.12.3";  # Keep in sync with CLAUDE.md
+            version = "0.12.4";  # Synced manually — see issue #4357 for structural fix
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 
             inherit buildInputs;
             nativeBuildInputs = with pkgs; [ pkg-config ];
 
-            buildAndTestSubdir = "crates/perl-lsp";
+            buildAndTestSubdir = "crates/perl-lsp-rs";
 
             # Skip tests during package build (run via checks)
             doCheck = false;

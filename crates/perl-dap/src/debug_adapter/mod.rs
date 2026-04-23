@@ -39,8 +39,8 @@ use crate::stack::{PerlStackParser, is_internal_frame_name_and_path};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use crate::types::{Source, StackFrame, Variable};
 use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
-use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_lexer::DAP_COMPLETION_KEYWORDS;
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
 use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -137,7 +137,7 @@ fn prompt_re() -> Option<&'static Regex> {
 fn stack_frame_re() -> Option<&'static Regex> {
     STACK_FRAME_RE
         .get_or_init(|| {
-            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)")
+            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>.+?)\s+line\s+(?P<line>\d+)")
         })
         .as_ref()
         .ok()
@@ -686,9 +686,12 @@ impl DebugAdapter {
     }
 
     /// Wait briefly for debugger command responses to arrive in the output buffer.
+    fn debugger_output_window_ms(timeout_ms: u32) -> u64 {
+        u64::from(timeout_ms).max(DEBUGGER_QUERY_WAIT_MS)
+    }
+
     fn wait_for_debugger_output_window(timeout_ms: u32) {
-        let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
-        thread::sleep(Duration::from_millis(wait_ms));
+        thread::sleep(Duration::from_millis(Self::debugger_output_window_ms(timeout_ms)));
     }
 
     /// Expand debugger query budgets in heavily instrumented environments.
@@ -738,6 +741,16 @@ mod tests {
         assert_eq!(adapter.next_seq(), 1);
         assert_eq!(adapter.next_seq(), 2);
         assert_eq!(adapter.next_seq(), 3);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_enforces_minimum_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(1), DEBUGGER_QUERY_WAIT_MS);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_honors_extended_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(600), 600);
     }
 
     #[test]
@@ -1272,6 +1285,51 @@ mod tests {
                 assert!(message.is_some());
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("192.168.1.100:9000"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_trims_host_for_tcp_target() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": " 192.168.1.100 ",
+            "port": 9000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("192.168.1.100:9000"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_accepts_timeout_ms_alias() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeoutMs": 0
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("Timeout must be greater than 0"));
             }
             _ => return Err("Expected response".into()),
         }

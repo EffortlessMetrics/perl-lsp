@@ -1,4 +1,6 @@
 // Build script for generating feature-contract support artifacts.
+// Wave Final PR B: pearl-feature-catalog absorbed into feature_catalog.rs.
+// Build-time catalog logic is inlined via include!().
 #![allow(clippy::pedantic, clippy::panic)]
 
 use std::env;
@@ -6,7 +8,14 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use perl_feature_catalog::{
+// Import catalog helpers inlined from build_catalog.rs
+// (separate file because build.rs is its own compilation unit)
+mod catalog {
+    #![allow(dead_code)] // DAP-specific helpers used only by perl-dap/build.rs
+    include!("build_catalog.rs");
+}
+
+use catalog::{
     load_catalog_for_build, render_lsp_fallback_module, render_lsp_feature_catalog_module,
 };
 

@@ -2,6 +2,23 @@
 
 This page is the documentation front door for the `perl-lsp` workspace.
 
+## Diataxis Quick Guide
+
+Use this quick classifier when you are reading or adding docs:
+
+| If your question sounds like... | Doc type | Primary docs folder |
+|---|---|---|
+| "Can you teach me this from scratch?" | Tutorial | `docs/tutorials/` |
+| "How do I complete a specific task?" | How-to | `docs/how-to/` |
+| "What is the exact behavior/contract?" | Reference | `docs/reference/` |
+| "Why is it designed this way?" | Explanation | `docs/explanation/` |
+
+Rule of thumb:
+- Tutorials optimize for learning flow.
+- How-to guides optimize for successful outcomes.
+- Reference docs optimize for completeness and lookup speed.
+- Explanation docs optimize for understanding tradeoffs and rationale.
+
 ## Start Here
 
 Choose the path that matches what you are trying to do:
@@ -22,11 +39,12 @@ Choose the path that matches what you are trying to do:
 | Add or audit public API documentation | [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md) |
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
+| Decide where a doc belongs in Diataxis | [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md) |
 
 ## Documentation Map
 
 ### Tutorials
-Hands-on guides for learning the system by doing.
+Hands-on guides for learning the system by doing (learning-oriented).
 
 - [Getting Started](tutorials/GETTING_STARTED.md)
 - [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md)
@@ -35,7 +53,7 @@ Hands-on guides for learning the system by doing.
 - [AI Build Guide](tutorials/AI_BUILD_GUIDE.md)
 
 ### How-to Guides
-Task-focused instructions for common operational and development workflows.
+Task-focused instructions for common workflows (goal-oriented).
 
 - [Installation Guide](how-to/INSTALLATION.md)
 - [GitHub Actions Integration](how-to/GITHUB_ACTIONS.md)
@@ -49,7 +67,7 @@ Task-focused instructions for common operational and development workflows.
 - [Security Development Guide](how-to/SECURITY_DEVELOPMENT_GUIDE.md)
 
 ### Reference
-Authoritative descriptions of configuration, architecture, commands, and feature contracts.
+Authoritative descriptions of commands, options, data, and feature contracts (information-oriented).
 
 - [Commands Reference](reference/COMMANDS_REFERENCE.md)
 - [Configuration Reference](reference/CONFIG.md)
@@ -57,12 +75,13 @@ Authoritative descriptions of configuration, architecture, commands, and feature
 - [LSP Features](reference/LSP_FEATURES.md)
 - [Missing Documentation Guide](reference/MISSING_DOCUMENTATION_GUIDE.md)
 - [API Documentation Standards](reference/API_DOCUMENTATION_STANDARDS.md)
+- [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md)
 - [FAQ](reference/FAQ.md)
 - [Parser Feature Matrix](reference/PARSER_FEATURE_MATRIX.md)
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md)
 
 ### Explanation
-Background material that explains why the system is designed the way it is.
+Background material that explains why the system is designed the way it is (understanding-oriented).
 
 - [LSP Documentation](explanation/LSP_DOCUMENTATION.md)
 - [Cancellation Architecture Guide](explanation/CANCELLATION_ARCHITECTURE_GUIDE.md)

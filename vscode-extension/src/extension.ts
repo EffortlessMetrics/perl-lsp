@@ -1542,9 +1542,22 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
                 ? ` ${missingPaths.length} include paths are missing.`
                 : '';
 
+        const creatablePaths = missingPaths.filter(includePath => {
+            if (path.isAbsolute(includePath)) {
+                return false;
+            }
+            const resolved = path.resolve(folder.uri.fsPath, includePath);
+            const relative = path.relative(folder.uri.fsPath, resolved);
+            return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+        });
+        const actions = ['Open Settings'];
+        if (creatablePaths.length > 0) {
+            actions.push('Create Missing Directories');
+        }
+
         const choice = await vscode.window.showWarningMessage(
             `Perl LSP: include path "${firstMissing}" (${relativeNote}) does not exist.${suffix}`,
-            'Open Settings'
+            ...actions
         );
 
         if (choice === 'Open Settings') {
@@ -1552,6 +1565,23 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
                 'workbench.action.openSettings',
                 '@ext:EffortlessMetrics.perl-lsp-rs perl-lsp.includePaths'
             );
+        } else if (choice === 'Create Missing Directories') {
+            const createdPaths: string[] = [];
+            for (const includePath of creatablePaths) {
+                const resolved = path.resolve(folder.uri.fsPath, includePath);
+                if (!fs.existsSync(resolved)) {
+                    fs.mkdirSync(resolved, { recursive: true });
+                    createdPaths.push(includePath);
+                }
+            }
+
+            if (createdPaths.length > 0) {
+                vscode.window.showInformationMessage(
+                    `Created ${createdPaths.length} include director${createdPaths.length === 1 ? 'y' : 'ies'}: ${createdPaths.join(', ')}.`
+                );
+                await context.globalState.update(cacheKey, undefined);
+                continue;
+            }
         }
 
         await context.globalState.update(cacheKey, missingSignature);

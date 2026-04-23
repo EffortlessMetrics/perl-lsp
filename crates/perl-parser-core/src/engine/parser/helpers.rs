@@ -23,6 +23,10 @@ impl<'a> Parser<'a> {
         matches!(kind, Some(TokenKind::Or) | Some(TokenKind::DefinedOr))
     }
 
+    /// Returns true if the token kind is a postfix increment/decrement operator.
+    ///
+    /// These operators (`++` and `--`) can appear after an expression like `$x++`
+    /// unlike prefix operators which appear before.
     #[inline]
     fn is_postfix_op(kind: Option<TokenKind>) -> bool {
         matches!(kind, Some(TokenKind::Increment) | Some(TokenKind::Decrement))
@@ -610,14 +614,45 @@ impl<'a> Parser<'a> {
     /// `;`, `}`, `)`, `]`, or EOF.  Encountering one after consuming an infix
     /// operator is a clear sign that the operand is missing.
     fn is_infix_rhs_absent(&mut self) -> bool {
+        if self.peek_kind() == Some(TokenKind::Sub) && self.next_token_starts_anonymous_sub() {
+            return false;
+        }
+
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::RightParen)
                 | Some(TokenKind::RightBracket)
+                // Statement-starter keywords cannot serve as an expression RHS.
+                // Treating them as "missing operand" allows declaration parsing
+                // to recover cleanly and resume at the next statement boundary.
+                | Some(TokenKind::My)
+                | Some(TokenKind::Our)
+                | Some(TokenKind::State)
+                | Some(TokenKind::Sub)
+                | Some(TokenKind::Package)
+                | Some(TokenKind::Use)
+                | Some(TokenKind::No)
+                | Some(TokenKind::If)
+                | Some(TokenKind::Unless)
+                | Some(TokenKind::Elsif)
+                | Some(TokenKind::Else)
+                | Some(TokenKind::While)
+                | Some(TokenKind::Until)
+                | Some(TokenKind::For)
+                | Some(TokenKind::Foreach)
                 | Some(TokenKind::Eof)
                 | None
+        )
+    }
+
+    /// Returns true when `sub` is followed by tokens that start an anonymous
+    /// subroutine expression (`sub {}`, `sub (...) {}`, or `sub :attr {}`).
+    fn next_token_starts_anonymous_sub(&mut self) -> bool {
+        matches!(
+            self.tokens.peek_second().ok().map(|token| token.kind),
+            Some(TokenKind::LeftBrace | TokenKind::LeftParen | TokenKind::Colon)
         )
     }
 

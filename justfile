@@ -48,12 +48,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "release-history" "just ci-release-history" && \
+    just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -61,6 +64,31 @@ pr-fast: _check-tools-basic
     echo "  PR-fast gate complete (total: $((END - START))s)"
     echo "=============================================="
     exit $RC
+
+# Compile-only gate: catches integration-test/benchmark bit-rot and also
+# validates feature-gated code paths without incurring full test runtime.
+# Matches the workspace excludes used by the rest of the CI gates
+# (tree-sitter-perl, fuzz, archive are excluded from Cargo.toml workspace).
+check-all-targets:
+    @echo "Compiling all targets (default features) — bit-rot check..."
+    cargo check --workspace --all-targets --locked
+    @echo "Compiling all targets (all features) — deep verification check..."
+    cargo check --workspace --all-targets --all-features --locked
+    @echo "All targets compile clean."
+
+# Fail if README.md has duplicate level-2 headings. Helps catch accidental
+# copy/paste doc drift that is otherwise easy to miss during review.
+readme-heading-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    duplicates=$(awk '/^## /{counts[$0]++} END{for (heading in counts) if (counts[heading] > 1) printf "%s (%dx)\n", heading, counts[heading]}' README.md)
+    if [ -n "$duplicates" ]; then
+        echo "❌ Duplicate level-2 headings found in README.md:"
+        echo "$duplicates"
+        echo "Hint: run 'grep -n \"^## \" README.md' to inspect heading layout."
+        exit 1
+    fi
+    echo "✅ README heading structure looks good"
 
 # Pre-merge guard: verify a PR is not draft, has merge-ready label, and title has (#NNN)
 # Usage: just pre-merge-check 3291
@@ -311,6 +339,7 @@ fuzz-bounded:
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
     @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
+    @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
@@ -345,6 +374,11 @@ doctor-env:
 
 # Short alias for the developer environment quick check
 devex: doctor-env
+
+# One-command pre-flight before pushing a branch:
+# 1) repair/report workspace state issues, then 2) run the fast PR gate.
+ready: doctor pr-fast
+    @echo "✅ Workspace is ready to push (doctor + pr-fast passed)"
 
 # Run before any agent-spawning session. Safe to run repeatedly (idempotent).
 # Checks: core.bare corruption (#3205), stale branches, worktree leaks, orphaned
@@ -611,21 +645,29 @@ doctor:
     fi
 
     # ------------------------------------------------------------------
-    # Check 7: Master is fast-forward-able
-    # Use the cached refs_dump to check origin/master existence (no extra call).
+    # Check 7: Current checkout is fast-forward-able with remote default branch.
+    # Prefer origin/HEAD, then fall back to common branch names.
     # ------------------------------------------------------------------
-    if [ -n "${remote_ref_set[origin/master]:-}" ]; then
-        behind=$(git rev-list --count HEAD..origin/master 2>/dev/null || echo 0)
+    default_remote_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    if [ -z "$default_remote_ref" ]; then
+        if [ -n "${remote_ref_set[origin/main]:-}" ]; then
+            default_remote_ref="origin/main"
+        elif [ -n "${remote_ref_set[origin/master]:-}" ]; then
+            default_remote_ref="origin/master"
+        fi
+    fi
+    if [ -n "$default_remote_ref" ]; then
+        behind=$(git rev-list --count HEAD.."$default_remote_ref" 2>/dev/null || echo 0)
         if [ "$behind" = "0" ]; then
-            echo "✅ master is up to date with origin/master"
+            echo "✅ branch is up to date with $default_remote_ref"
         else
-            echo "⚠️  HEAD is $behind commits behind origin/master"
+            echo "⚠️  HEAD is $behind commits behind $default_remote_ref"
             echo "   Fix: git pull --ff-only"
             issues=$((issues + 1))
         fi
     else
-        echo "⚠️  origin/master ref not found (cannot check fast-forward state)"
-        echo "   Fix: git fetch origin master:refs/remotes/origin/master"
+        echo "⚠️  could not resolve default remote branch (cannot check fast-forward state)"
+        echo "   Fix: git remote set-head origin -a && git fetch origin"
         issues=$((issues + 1))
     fi
 
@@ -637,10 +679,34 @@ doctor:
     fi
     exit 0
 
-# Targeted checks for changed crates (fast feedback for active branch)
-devex-targeted base='origin/master' mode='all':
-    @echo "Running targeted checks (base={{base}}, mode={{mode}})..."
-    @cargo xtask targeted-checks --base "{{base}}" --mode "{{mode}}"
+# Targeted checks for changed crates (fast feedback for active branch).
+# If `base` is empty, resolve from origin/HEAD, then fall back to common names.
+devex-targeted base='' mode='all':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="{{base}}"
+    if [ -z "$base" ]; then
+        base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/master >/dev/null; then
+        base="origin/master"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet main >/dev/null; then
+        base="main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet master >/dev/null; then
+        base="master"
+    fi
+    if [ -z "$base" ]; then
+        echo "ERROR: Could not auto-detect base branch."
+        echo "Hint: run 'just devex-targeted <base-ref>' (example: origin/main)."
+        exit 1
+    fi
+    echo "Running targeted checks (base=$base, mode={{mode}})..."
+    cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
 
 # Tool availability check (basic tools for PR-fast)
 [private]
@@ -650,14 +716,28 @@ _check-tools-basic:
     MISSING=""
     if ! command -v cargo >/dev/null 2>&1; then MISSING="$MISSING cargo"; fi
     if ! command -v rustfmt >/dev/null 2>&1; then MISSING="$MISSING rustfmt"; fi
-    if ! cargo nextest --version >/dev/null 2>&1; then MISSING="$MISSING cargo-nextest"; fi
     if [ -n "$MISSING" ]; then
         echo "ERROR: Missing required tools:$MISSING"
         echo "  Install Rust: https://rustup.rs"
-        echo "  Install nextest: cargo install cargo-nextest --locked"
+        echo "  Install rustfmt: rustup component add rustfmt"
         exit 1
     fi
     cargo xtask check-toolchain
+
+# Tool availability check for Nextest-backed recipes
+[private]
+_check-tools-nextest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if command -v cargo-nextest >/dev/null 2>&1; then
+        exit 0
+    fi
+    if cargo nextest --version >/dev/null 2>&1; then
+        exit 0
+    fi
+    echo "ERROR: Missing required tool: cargo-nextest"
+    echo "  Install nextest: cargo install cargo-nextest --locked"
+    exit 1
 
 # ============================================================================
 # CI Validation Commands (Issue #211)
@@ -744,6 +824,7 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just ci-release-history && \
     just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
@@ -768,7 +849,8 @@ ci-gate:
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
-    just ci-published-crate-count
+    just ci-published-crate-count && \
+    just ci-release-history-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -776,6 +858,10 @@ ci-gate:
 gates tier='merge-gate' *args='':
     @echo "🧾 Running gate runner (tier: {{tier}})..."
     cargo xtask gates --tier {{tier}} --receipt {{args}}
+
+# Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
+ci-release-history:
+    bash scripts/check_release_history.sh
 
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':
@@ -883,6 +969,12 @@ ci-published-crate-count:
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
 
+# Release-history drift check: tags, notes, ledger, changelog
+ci-release-history-check:
+    @echo "📚 Checking release-history surface drift..."
+    bash scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
+
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
 ci-publish-manifest-check:
     @echo "Checking publish manifest (allowlist drift + LICENSE)..."
@@ -898,6 +990,7 @@ ci-test-core:
 # Library tests only (fastest, for merge gate)
 ci-test-lib:
     @echo "🧪 Running library tests..."
+    @just _check-tools-nextest
     cargo nextest run --workspace --lib --locked --profile ci
     @echo "✅ Library tests passed"
 
@@ -1346,7 +1439,7 @@ health:
     @echo ""
     @echo "📝 Ignored Tests by Crate:"
     @echo "  perl-parser: $(grep -r '#\[ignore' crates/perl-parser/tests/ 2>/dev/null | wc -l || echo 0)"
-    @echo "  perl-lsp:    $(grep -r '#\[ignore' crates/perl-lsp/tests/ 2>/dev/null | wc -l || echo 0)"
+    @echo "  perl-lsp:    $(grep -r '#\[ignore' crates/perl-lsp-rs/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo "  perl-lexer:  $(grep -r '#\[ignore' crates/perl-lexer/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo "  perl-dap:    $(grep -r '#\[ignore' crates/perl-dap/tests/ 2>/dev/null | wc -l || echo 0)"
     @echo ""
@@ -1363,8 +1456,8 @@ health:
     @echo "  pub struct: $(grep -r '^[[:space:]]*pub struct' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo "  pub enum:   $(grep -r '^[[:space:]]*pub enum' crates/perl-parser/src/ --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo ""
-    @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
-    @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
+    @echo "🔧 LSP Crate Size (crates/perl-lsp-rs/src/):"
+    @echo "  Lines:      $(find crates/perl-lsp-rs/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
     @echo ""
     @echo "🧹 Dead Code Metrics:"
     @echo "  Unused deps: $(cargo machete 2>&1 | grep -c 'Cargo.toml:' || echo 0) crates affected"
@@ -1932,6 +2025,7 @@ fuzz-regression duration='30':
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
+    @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
@@ -2313,7 +2407,7 @@ release-check: release-gate semver-check
       crates/*/src/ \
       --exclude-dir='tests' --exclude-dir='benches' \
       -- | grep -v '#\[allow' | grep -v '// allow' \
-           | grep -v 'crates/perl-lsp/src/util/uri.rs' \
+           | grep -v 'crates/perl-lsp-rs/src/util/uri.rs' \
            | grep -v '#\[cfg(test)\]' || true)
     if [ -n "$PANIC_HITS" ]; then
       echo "WARNING: Potential panic constructs found in production code:"

@@ -240,7 +240,7 @@ impl CodeActionsProvider {
 
         // Source-level lints (not diagnostic-driven)
         // Only suggest shebang fix when the range includes the first line
-        if range.0 == 0 || self.source[..range.0].lines().count() <= 1 {
+        if range.0 == 0 || !self.source[..range.0].contains('\n') {
             actions.extend(quick_fixes::fix_hardcoded_shebang(&self.source));
         }
 
@@ -453,6 +453,25 @@ mod tests {
     }
 
     #[test]
+    fn test_shebang_fix_not_suggested_when_range_starts_after_first_line() {
+        let source = "#!/usr/bin/perl\nmy $x = 1;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![];
+        let range_start = source.find("my $x").expect("line exists");
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (range_start, source.len()), &diagnostics);
+
+        let shebang_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("portable shebang")).collect();
+        assert!(
+            shebang_actions.is_empty(),
+            "Shebang fix should only appear when requested range includes line 1"
+        );
+    }
+
+    #[test]
     fn test_perlcritic_policy_aliases_produce_quick_fixes() {
         let source = "open FH, $path;\n";
         let mut parser = Parser::new(source);
@@ -481,6 +500,27 @@ mod tests {
         let provider = CodeActionsProvider::new(source.to_string());
         let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
         assert!(actions.iter().any(|a| a.title.contains("bareword filehandle")));
+        assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
+    }
+
+    #[test]
+    fn test_perlcritic_require_brief_open_alias_produces_quick_fix() {
+        let source = "open FH, $path;\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        let diagnostics = vec![Diagnostic {
+            range: (0, 4),
+            severity: DiagnosticSeverity::Warning,
+            code: Some("InputOutput::RequireBriefOpen".to_string()),
+            message: "Use 3-arg open".to_string(),
+            suggestion: None,
+            related_information: Vec::new(),
+            tags: Vec::new(),
+        }];
+
+        let provider = CodeActionsProvider::new(source.to_string());
+        let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+
         assert!(actions.iter().any(|a| a.title.contains("three-argument open() for safety")));
     }
 
@@ -577,5 +617,27 @@ mod tests {
         let rewritten = apply_action(source, action);
         assert!(rewritten.starts_with("#!/usr/bin/perl\nuse warnings;\n"));
         assert!(rewritten.contains("BEGIN {  }"));
+    }
+
+    #[test]
+    fn test_parse_error_code_variants_route_to_same_quick_fix() {
+        let source = "my $x =\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        for code in ["PL001", "PL002", "parse-error-missing-expression"] {
+            let diagnostics = vec![make_diagnostic(
+                source.len() - 1,
+                source.len(),
+                code,
+                "Parse error near newline",
+            )];
+            let provider = CodeActionsProvider::new(source.to_string());
+            let actions = provider.get_code_actions(&ast, (0, source.len()), &diagnostics);
+            assert!(
+                !actions.is_empty(),
+                "Expected parse error code {code} to produce at least one quick fix"
+            );
+        }
     }
 }

@@ -7,7 +7,7 @@ v0.12.1, the project shipped 71 commits across seven sub-milestones (v0.12.2
 through v0.12.8) in a single high-throughput development session, delivering
 major advances in refactoring, diagnostics, parser performance, distribution
 packaging, and developer experience. LSP and DAP feature coverage reached 100% across
-all 116 catalogued capabilities (87 LSP + 24 DAP + 5 extension features, corrected
+all 119 catalogued capabilities (88 LSP + 24 DAP + 7 extension features, corrected
 from the prior 102 count in PR #4107 after a DAP catalog audit surfaced 14 uncatalogued
 handlers).
 
@@ -124,5 +124,5 @@ Over 60 issues were closed across the 0.12.2--0.12.8 sub-milestones, including:
 
 - 71 commits merged to master since v0.12.1
 - 59+ PRs merged in the 0.12.x series
-- 134 workspace crates, 116 catalogued capabilities at 100% coverage (87 LSP + 24 DAP + 5 extension)
+- 134 workspace crates, 119 catalogued capabilities at 100% coverage (88 LSP + 24 DAP + 7 extension)
 - 8 Dependabot PRs for dependency freshness

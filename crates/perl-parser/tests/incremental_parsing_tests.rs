@@ -4,6 +4,62 @@ use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[derive(Clone, Copy)]
+struct XorShift64 {
+    state: u64,
+}
+
+impl XorShift64 {
+    fn seeded(seed: u64) -> Self {
+        Self { state: seed }
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        let mut x = self.state;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.state = x;
+        x
+    }
+
+    fn range(&mut self, max_exclusive: usize) -> usize {
+        if max_exclusive == 0 {
+            return 0;
+        }
+        (self.next_u64() as usize) % max_exclusive
+    }
+}
+
+fn random_ascii_text(rng: &mut XorShift64, max_len: usize) -> String {
+    const ALPHABET: &[u8] =
+        b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$;=() \n\t";
+    let len = rng.range(max_len + 1);
+    let mut out = String::with_capacity(len);
+    for _ in 0..len {
+        let idx = rng.range(ALPHABET.len());
+        out.push(ALPHABET[idx] as char);
+    }
+    out
+}
+
+fn random_edit_for_source(rng: &mut XorShift64, source: &str) -> Edit {
+    let start = rng.range(source.len() + 1);
+    let delete_len = rng.range(source.len().saturating_sub(start) + 1).min(32);
+    let old_end = start + delete_len;
+    let new_text = random_ascii_text(rng, 32);
+    Edit {
+        start_byte: start,
+        old_end_byte: old_end,
+        new_end_byte: start + new_text.len(),
+        new_text,
+    }
+}
+
+fn apply_edit_to_string(source: &mut String, edit: &Edit) {
+    source.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+}
+
 #[test]
 fn test_incremental_state_creation() {
     let source = "my $x = 42;\nprint $x;".to_string();
@@ -176,5 +232,36 @@ fn test_edit_in_subroutine() -> TestResult {
     assert_eq!(state.source, "sub foo {\n    my $x = 42;\n    return $x;\n}");
     // Should have checkpoint at sub start
     assert!(result.reparsed_bytes > 0);
+    Ok(())
+}
+
+#[test]
+fn fuzz_incremental_random_edit_sequences_match_ground_truth() -> TestResult {
+    let mut rng = XorShift64::seeded(0x4999_FEED_CAFE_BABE);
+    let mut initial = String::from("my $x = 1;\nmy $y = 2;\nsub f { return $x + $y; }\n");
+    initial.push_str(&random_ascii_text(&mut rng, 64));
+
+    for _case in 0..200 {
+        let mut incremental_state = IncrementalState::new(initial.clone());
+        let mut expected = initial.clone();
+
+        for _step in 0..100 {
+            let edit = random_edit_for_source(&mut rng, &expected);
+            apply_edit_to_string(&mut expected, &edit);
+            apply_edits(&mut incremental_state, &[edit])?;
+        }
+
+        assert_eq!(
+            incremental_state.source, expected,
+            "incremental apply_edits source mismatch after random edit sequence"
+        );
+
+        let full_state = IncrementalState::new(expected);
+        assert_eq!(
+            incremental_state.source, full_state.source,
+            "incremental final document diverged from full parse source"
+        );
+    }
+
     Ok(())
 }

@@ -1085,7 +1085,7 @@ Parallelism: 100+ concurrent agents (bottleneck: CI @ 5 min)
 ### Codebase
 
 - **crates/perl-parser/src/** — Main parser (v3 recursive descent)
-- **crates/perl-lsp/src/** — LSP server binary
+- **crates/perl-lsp-rs/src/** — LSP server binary
 - **crates/perl-parser-core/src/engine/parser/** — Parser core (statements, expressions, variables)
 - **test_corpus/**, **tree-sitter-perl/test/corpus/** — Parser test corpus
 - **.ci/parser-corpus-baseline.json** — Error bucket tracking

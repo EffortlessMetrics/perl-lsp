@@ -82,7 +82,7 @@ Heuristic: >2000 LOC, >20 direct deps, or >20 Rust source files.
 | `perl-dap` | 12807 | 13 | 25 | 10 | `crates/perl-dap` |
 | `perl-incremental-parsing` | 6012 | 10 | 9 | 4 | `crates/perl-incremental-parsing` |
 | `perl-lexer` | 3850 | 8 | 8 | 2 | `crates/perl-lexer` |
-| `perl-lsp` | 26760 | 93 | 52 | 27 | `crates/perl-lsp` |
+| `perl-lsp` | 26760 | 93 | 52 | 27 | `crates/perl-lsp-rs` |
 | `perl-lsp-code-actions` | 2024 | 14 | 4 | 4 | `crates/perl-lsp-code-actions` |
 | `perl-lsp-completion` | 2649 | 14 | 8 | 5 | `crates/perl-lsp-completion` |
 | `perl-lsp-navigation` | 2225 | 6 | 10 | 6 | `crates/perl-lsp-navigation` |

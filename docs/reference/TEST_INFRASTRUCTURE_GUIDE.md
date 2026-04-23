@@ -72,13 +72,13 @@ cargo test -p perl-parser semantic::tests
 **Key Test Modules**:
 - Parser unit tests: `/crates/perl-parser/src/lib.rs` (semantic analysis, AST validation)
 - Lexer unit tests: `/crates/perl-lexer/src/lib.rs` (tokenization, Unicode handling)
-- LSP unit tests: `/crates/perl-lsp/src/lib.rs` (protocol handling, state management)
+- LSP unit tests: `/crates/perl-lsp-rs/src/lib.rs` (protocol handling, state management)
 
 ### 2. Integration Tests (*Diataxis: Tutorial*)
 
 **Purpose**: Test component interactions, LSP protocol compliance, and cross-module behavior.
 
-**Location**: `crates/perl-lsp/tests/lsp_*.rs` and `crates/perl-parser/tests/*_tests.rs`
+**Location**: `crates/perl-lsp-rs/tests/lsp_*.rs` and `crates/perl-parser/tests/*_tests.rs`
 
 **Examples**:
 ```bash
@@ -156,7 +156,7 @@ proptest! {
 
 **Purpose**: Full workflow validation including LSP server lifecycle, client communication, and workspace operations.
 
-**Location**: `crates/perl-lsp/tests/lsp_comprehensive_e2e_test.rs`
+**Location**: `crates/perl-lsp-rs/tests/lsp_comprehensive_e2e_test.rs`
 
 **Examples**:
 ```bash
@@ -1075,7 +1075,7 @@ cargo tarpaulin --workspace --exclude-files '**/prop_*.rs' --out Html
   ...
 
 🟡 Top 10 files with most eprintln! calls:
-  crates/perl-lsp/tests/common/mod.rs: 12
+  crates/perl-lsp-rs/tests/common/mod.rs: 12
   ...
 ```
 

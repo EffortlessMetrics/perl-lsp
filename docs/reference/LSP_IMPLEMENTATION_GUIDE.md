@@ -83,11 +83,11 @@ didChange v3 ─▶ gen=2, parse starts
               ◀─ v3 parse done: gen(2) = current(2) → store
 ```
 
-This mechanism is implemented in `crates/perl-lsp/src/runtime/text_sync.rs` and uses `SeqCst` ordering to guarantee visibility across the mutex boundary.
+This mechanism is implemented in `crates/perl-lsp-rs/src/runtime/text_sync.rs` and uses `SeqCst` ordering to guarantee visibility across the mutex boundary.
 
 ### workspace/didChangeWatchedFiles
 
-The server registers for file-system change notifications via dynamic registration. When a watched file changes outside the editor (e.g., `git checkout`, build tool output), the handler in `crates/perl-lsp/src/runtime/workspace.rs`:
+The server registers for file-system change notifications via dynamic registration. When a watched file changes outside the editor (e.g., `git checkout`, build tool output), the handler in `crates/perl-lsp-rs/src/runtime/workspace.rs`:
 
 - **Created**: indexes the new file into the workspace symbol table
 - **Changed**: re-indexes if the file is not currently open (open documents are authoritative via `textDocument/didChange`)

@@ -442,7 +442,16 @@ impl PragmaTracker {
         // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
-        if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() }
+        let mut state =
+            if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
     }
 
     /// Process a lexically scoped body and then restore the caller state.
@@ -533,36 +542,7 @@ impl PragmaTracker {
                             return;
                         }
                         "feature" => {
-                            let mut changed = false;
-                            for arg in conditional_args {
-                                for item in pragma_arg_items(arg) {
-                                    match item.as_str() {
-                                        "signatures" => {
-                                            current_state.strict_vars = true;
-                                            current_state.strict_subs = true;
-                                            current_state.strict_refs = true;
-                                            changed = true;
-                                        }
-                                        "unicode_strings" => {
-                                            current_state.unicode_strings = true;
-                                            changed = true;
-                                        }
-                                        item if item.starts_with(':') => {
-                                            if let Some(version) =
-                                                parse_perl_version(item.trim_start_matches(':'))
-                                            {
-                                                if version >= PerlVersion::new(5, 12) {
-                                                    current_state.unicode_strings = true;
-                                                    changed = true;
-                                                }
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-
-                            if changed {
+                            if apply_feature_state(current_state, conditional_args, true) {
                                 ranges.push((
                                     node.location.start..node.location.end,
                                     current_state.clone(),

@@ -8,9 +8,8 @@
 
 pub use crate::features::contracts::{
     BddFeatureRow, Feature, FeatureProfileSpec, LSP_VERSION, VERSION, advertised_features,
-    advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows, catalog,
-    compliance_percent, compliance_percent_for_grid, feature_profile_specs, has_feature,
-    trackable_feature_count_for_grid,
+    all_features, bdd_feature_rows, catalog, compliance_percent, compliance_percent_for_grid,
+    feature_profile_specs, has_feature, lsp_bdd_feature_rows, trackable_feature_count_for_grid,
 };
 pub use crate::features::policy::{FeatureProfile, catalog_advertised_feature_ids};
 
@@ -43,8 +42,12 @@ pub fn to_json_for_profile(profile: FeatureProfile) -> String {
 }
 
 /// BDD-compatible feature catalog JSON for an explicit profile set.
+///
+/// The top-level advertised feature list and compliance math are scoped to the
+/// union of the provided profiles.
 pub fn to_json_for_profiles(profiles: &[FeatureProfile]) -> String {
-    feature_grid_payload(profiles, None).to_string()
+    let canonical_profiles = canonicalize_profiles(profiles);
+    feature_grid_payload(&canonical_profiles, None).to_string()
 }
 
 /// BDD-compatible feature catalog JSON with all canonical profiles.
@@ -78,6 +81,32 @@ fn advertised_trackable_feature_count(advertised: &[&'static str]) -> usize {
         .count()
 }
 
+fn advertised_for_profiles(profiles: &[FeatureProfile]) -> Vec<&'static str> {
+    if profiles.is_empty() {
+        return Vec::new();
+    }
+
+    let profile_sets: Vec<Vec<&'static str>> =
+        profiles.iter().copied().map(catalog_advertised_feature_ids).collect();
+
+    all_features()
+        .iter()
+        .filter_map(|feature| {
+            profile_sets.iter().any(|ids| ids.contains(&feature.id)).then_some(feature.id)
+        })
+        .collect()
+}
+
+fn canonicalize_profiles(profiles: &[FeatureProfile]) -> Vec<FeatureProfile> {
+    let mut canonical = Vec::new();
+    for profile in profiles.iter().copied() {
+        if !canonical.contains(&profile) {
+            canonical.push(profile);
+        }
+    }
+    canonical
+}
+
 fn feature_grid_payload(
     profiles: &[FeatureProfile],
     selected_profile: Option<FeatureProfile>,
@@ -91,7 +120,12 @@ fn feature_grid_payload(
                 advertised_trackable_feature_count(&advertised);
             (advertised, advertised_trackable_feature_count)
         }
-        None => (advertised_features().to_vec(), advertised_trackable_feature_count_for_grid()),
+        None => {
+            let advertised = advertised_for_profiles(profiles);
+            let advertised_trackable_feature_count =
+                advertised_trackable_feature_count(&advertised);
+            (advertised, advertised_trackable_feature_count)
+        }
     };
     let trackable_feature_count = trackable_feature_count_for_grid();
     let compliance_percent = if trackable_feature_count == 0 {
@@ -112,8 +146,13 @@ fn feature_grid_payload(
             "columns": FEATURE_GRID_COLUMNS,
             "rows": bdd_feature_rows(),
         },
+        "lsp_feature_grid": {
+            "columns": FEATURE_GRID_COLUMNS,
+            "rows": lsp_bdd_feature_rows(),
+        },
         "profiles": profile_summaries,
         "feature_count": all_features().len(),
+        "lsp_feature_count": lsp_bdd_feature_rows().len(),
     });
 
     if let Some(profile) = selected_profile {
@@ -161,10 +200,13 @@ mod tests {
         assert!(value.get("lsp_version").is_some());
         assert!(value.get("compliance_percent").is_some());
         assert!(value.get("feature_grid").is_some());
+        assert!(value.get("lsp_feature_grid").is_some());
         assert!(value.get("feature_profiles").is_some());
         assert!(value.get("profiles").is_some());
         assert!(value["feature_grid"].get("columns").is_some());
         assert!(value["feature_grid"].get("rows").is_some());
+        assert!(value["lsp_feature_grid"].get("columns").is_some());
+        assert!(value["lsp_feature_grid"].get("rows").is_some());
         let profiles = must_some(value.get("profiles").and_then(|profiles| profiles.as_array()));
         assert!(!profiles.is_empty());
         let rows = must_some(
@@ -174,6 +216,16 @@ mod tests {
                 .and_then(|rows| rows.as_array()),
         );
         assert!(!rows.is_empty());
+        let lsp_rows = must_some(
+            value
+                .get("lsp_feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array()),
+        );
+        assert!(!lsp_rows.is_empty());
+        assert!(lsp_rows.iter().all(|row| {
+            row.get("id").and_then(|id| id.as_str()).is_some_and(|id| id.starts_with("lsp."))
+        }));
     }
 
     #[test]
@@ -265,12 +317,64 @@ mod tests {
     // ── to_json_for_profiles ────────────────────────────────────────
 
     #[test]
+    fn to_json_for_profiles_scopes_top_level_advertised_to_profile_union() {
+        let payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+
+        let top_level = must_some(value["advertised_trackable_feature_count"].as_u64());
+        let summary = must_some(
+            value["profiles"]
+                .as_array()
+                .and_then(|profiles| profiles.first())
+                .and_then(|profile| profile["advertised_trackable_feature_count"].as_u64()),
+        );
+
+        assert_eq!(top_level, summary);
+    }
+
+    #[test]
+    fn to_json_for_profiles_empty_input_has_zero_advertised_counts() {
+        let payload = super::to_json_for_profiles(&[]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+
+        assert_eq!(value["advertised_trackable_feature_count"].as_u64(), Some(0));
+        assert_eq!(value["advertised"].as_array().map(Vec::len), Some(0));
+        assert_eq!(value["compliance_percent"].as_f64(), Some(0.0));
+    }
+
+    #[test]
     fn to_json_for_profiles_subset() {
         let payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
         let value: serde_json::Value = must(serde_json::from_str(&payload));
         let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0]["profile"].as_str(), Some("ga-lock"));
+    }
+
+    #[test]
+    fn to_json_for_profiles_deduplicates_profile_summaries() {
+        let payload =
+            super::to_json_for_profiles(&[FeatureProfile::GaLock, FeatureProfile::GaLock]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0]["profile"].as_str(), Some("ga-lock"));
+    }
+
+    #[test]
+    fn to_json_for_profiles_duplicate_input_matches_unique_input() {
+        let unique_payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
+        let duplicate_payload =
+            super::to_json_for_profiles(&[FeatureProfile::GaLock, FeatureProfile::GaLock]);
+
+        let unique_value: serde_json::Value = must(serde_json::from_str(&unique_payload));
+        let duplicate_value: serde_json::Value = must(serde_json::from_str(&duplicate_payload));
+
+        assert_eq!(
+            unique_value["advertised_trackable_feature_count"],
+            duplicate_value["advertised_trackable_feature_count"]
+        );
+        assert_eq!(unique_value["compliance_percent"], duplicate_value["compliance_percent"]);
     }
 
     // ── Profile summary fields ──────────────────────────────────────
@@ -310,6 +414,15 @@ mod tests {
         let value: serde_json::Value = must(serde_json::from_str(&payload));
         assert_eq!(value["profile"].as_str(), Some("production"));
         assert!(value.get("feature_count").is_some());
+        let lsp_count = must_some(value.get("lsp_feature_count").and_then(|count| count.as_u64()));
+        let lsp_rows_len = must_some(
+            value
+                .get("lsp_feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array())
+                .map(|rows| rows.len() as u64),
+        );
+        assert_eq!(lsp_count, lsp_rows_len);
     }
 
     // ── Default to_json has no profile key ───────────────────────────

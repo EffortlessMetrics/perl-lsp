@@ -19,6 +19,8 @@ pub const KEYWORDS: &[&str] = &[
     "__PACKAGE__",
     "abs",
     "and",
+    "async",
+    "await",
     "bless",
     "blessed",
     "break",
@@ -144,6 +146,8 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "__LINE__",
     "__PACKAGE__",
     "and",
+    "async",
+    "await",
     "blessed",
     "cmp",
     "defined",
@@ -216,9 +220,9 @@ pub const RENAME_KEYWORDS: &[&str] = &[
 
 /// Keywords used by parser LSP-compat completion/rename paths.
 pub const PARSER_LSP_KEYWORDS: &[&str] = &[
-    "break", "continue", "default", "die", "do", "else", "elsif", "eval", "for", "foreach",
-    "given", "goto", "if", "last", "local", "my", "next", "no", "our", "package", "redo",
-    "require", "return", "sub", "unless", "until", "use", "warn", "when", "while",
+    "async", "await", "break", "continue", "default", "die", "do", "else", "elsif", "eval", "for",
+    "foreach", "given", "goto", "if", "last", "local", "my", "next", "no", "our", "package",
+    "redo", "require", "return", "sub", "unless", "until", "use", "warn", "when", "while",
 ];
 
 /// Keywords recognized by `perl-lexer` for token classification.
@@ -229,6 +233,7 @@ pub const LEXER_KEYWORDS: &[&str] = &[
     "INIT",
     "UNITCHECK",
     "and",
+    "await",
     "break",
     "catch",
     "class",

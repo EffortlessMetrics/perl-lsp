@@ -3,7 +3,7 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
@@ -31,6 +31,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -276,6 +280,13 @@ enum Commands {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
     },
 
     /// Run corpus tests
@@ -368,6 +379,24 @@ enum Commands {
         /// Output directory for ci_baseline artifacts.
         #[arg(short, long, default_value = ".ci")]
         output: PathBuf,
+    },
+
+    /// Compute the CI scope — changed crates, reverse-dep closure, and architectural wideners.
+    ///
+    /// Emits a JSON (or text) payload listing changed files, mapped crates, the
+    /// reverse-dependency closure, architectural wideners applied, and the
+    /// selected CI lanes with reasons. Deterministic given the same diff and
+    /// `cargo metadata` output.
+    ///
+    /// Example: `cargo xtask ci-scope --base origin/master --format json`
+    CiScope {
+        /// Base git reference to diff against (default: origin/master).
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Output format: `json` or `text` (default: json).
+        #[arg(long, default_value = "json")]
+        format: String,
     },
 
     /// Run version-sync checks from `perl-ci-hygiene`.
@@ -498,6 +527,28 @@ enum Commands {
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
+    },
+
+    /// Extract the curated release body from `docs/releases/<tag>.md`.
+    ///
+    /// Reads the file, strips its YAML frontmatter, and emits the body to
+    /// stdout (or to `--output` if provided). Used by the `release.yml`
+    /// workflow to drive GitHub Release bodies from the curated per-release
+    /// notes that ship in the repo.
+    ReleaseNotes {
+        /// Release tag (e.g. `v0.12.4`). A bare version like `0.12.4` is
+        /// accepted and normalized to `v0.12.4`.
+        #[arg(long)]
+        tag: String,
+
+        /// Optional output file. When omitted, the body is written to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Override the repository root used to resolve `docs/releases/`.
+        /// Intended as a testing seam; the release workflow never passes this.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
     },
 
     /// Trigger PR-driven release orchestration workflow
@@ -1017,9 +1068,9 @@ enum Commands {
     /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
     /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
     ///
-    /// Example: `cargo xtask resolve-package-name crates/perl-lsp` outputs `perl-lsp-rs`
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp-rs` outputs `perl-lsp-rs`
     ResolvePackageName {
-        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp")
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp-rs")
         crate_dir: String,
     },
 
@@ -1244,6 +1295,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::List => {
+            print_top_level_commands();
+            Ok(())
+        }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
@@ -1313,7 +1368,7 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
-        Commands::Fmt { check } => fmt::run(check),
+        Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
@@ -1330,6 +1385,7 @@ fn main() -> Result<()> {
             parse_rust::run(source, sexp, ast, bench)
         }
         Commands::Release { version, yes } => release::run(version, yes),
+        Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,
             positional_version,
@@ -1376,6 +1432,9 @@ fn main() -> Result<()> {
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {
             ci_metrics::run_ci_baseline(branch, days, limit, output)
+        }
+        Commands::CiScope { base, format } => {
+            ci_scope::run(ci_scope::CiScopeConfig { base, format })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
@@ -1594,5 +1653,17 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+    }
+}
+
+fn print_top_level_commands() {
+    let mut command_names = Cli::command()
+        .get_subcommands()
+        .map(|subcommand| subcommand.get_name().to_string())
+        .collect::<Vec<_>>();
+    command_names.sort_unstable();
+
+    for command_name in command_names {
+        println!("{command_name}");
     }
 }

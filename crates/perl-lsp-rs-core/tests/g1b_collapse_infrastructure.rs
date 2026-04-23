@@ -130,7 +130,7 @@ fn test_crate_perl_lsp_providers_deleted() {
 // PUBLISHED CRATE BASELINE TEST
 // ============================================================================
 
-/// Test that xtask/published-crate-baseline.txt is updated from 59 to 49.
+/// Test that xtask/published-crate-baseline.txt reflects the current wave reduction.
 #[test]
 fn test_published_crate_baseline_updated() {
     let root = get_workspace_root();
@@ -140,13 +140,17 @@ fn test_published_crate_baseline_updated() {
     let content = fs::read_to_string(baseline_path)
         .expect("Failed to read xtask/published-crate-baseline.txt");
     let trimmed = content.trim();
+    let count: u32 = trimmed.parse().expect("baseline should be a number");
 
-    // After G1b, should be 49 (59 - 10 G1b crates)
-    assert_eq!(
-        trimmed, "49",
-        "published-crate-baseline.txt should be '49' (post-G1b), but found '{}'",
+    // History: G1a → 59; G1b → 49 (59-10); G2 → 44 (49-5); G3 → 37 (44-7)
+    // The baseline must be <= 44 (G2 was the last confirmed reduction before G3)
+    // and >= 1 (sanity check). G3 sets it to 37.
+    assert!(
+        count <= 44,
+        "published-crate-baseline.txt should be at most 44 (post-G2 or further reduced), but found '{}'",
         trimmed
     );
+    assert!(count >= 1, "published-crate-baseline.txt should be positive, but found '{}'", trimmed);
 }
 
 // ============================================================================
@@ -157,11 +161,11 @@ fn test_published_crate_baseline_updated() {
 #[test]
 fn test_perl_lsp_cargo_toml_no_g1b_deps() {
     let root = get_workspace_root();
-    let cargo_path = root.join("crates/perl-lsp/Cargo.toml");
-    assert!(cargo_path.exists(), "crates/perl-lsp/Cargo.toml should exist");
+    let cargo_path = root.join("crates/perl-lsp-rs/Cargo.toml");
+    assert!(cargo_path.exists(), "crates/perl-lsp-rs/Cargo.toml should exist");
 
     let content =
-        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp/Cargo.toml");
+        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp-rs/Cargo.toml");
 
     // These 10 dependencies should be removed after G1b collapse
     let forbidden_deps = [
@@ -182,7 +186,7 @@ fn test_perl_lsp_cargo_toml_no_g1b_deps() {
         let pattern = format!("{} = {{", dep);
         assert!(
             !content.contains(&pattern),
-            "crates/perl-lsp/Cargo.toml should not contain '{}' after G1b collapse, but found it",
+            "crates/perl-lsp-rs/Cargo.toml should not contain '{}' after G1b collapse, but found it",
             pattern
         );
     }
@@ -192,16 +196,16 @@ fn test_perl_lsp_cargo_toml_no_g1b_deps() {
 #[test]
 fn test_perl_lsp_cargo_toml_has_core_dep() {
     let root = get_workspace_root();
-    let cargo_path = root.join("crates/perl-lsp/Cargo.toml");
-    assert!(cargo_path.exists(), "crates/perl-lsp/Cargo.toml should exist");
+    let cargo_path = root.join("crates/perl-lsp-rs/Cargo.toml");
+    assert!(cargo_path.exists(), "crates/perl-lsp-rs/Cargo.toml should exist");
 
     let content =
-        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp/Cargo.toml");
+        fs::read_to_string(cargo_path).expect("Failed to read crates/perl-lsp-rs/Cargo.toml");
 
     // perl-lsp-rs-core must remain
     assert!(
         content.contains("perl-lsp-rs-core"),
-        "crates/perl-lsp/Cargo.toml must contain perl-lsp-rs-core dependency after G1b collapse"
+        "crates/perl-lsp-rs/Cargo.toml must contain perl-lsp-rs-core dependency after G1b collapse"
     );
 }
 
@@ -213,7 +217,7 @@ fn test_perl_lsp_cargo_toml_has_core_dep() {
 #[test]
 fn test_perl_lsp_src_features_rename_migrated() {
     let root = get_workspace_root();
-    let file = root.join("crates/perl-lsp/src/features/rename.rs");
+    let file = root.join("crates/perl-lsp-rs/src/features/rename.rs");
     if file.exists() {
         let content = fs::read_to_string(file).expect("Failed to read features/rename.rs");
 
@@ -235,7 +239,7 @@ fn test_perl_lsp_src_features_rename_migrated() {
 #[test]
 fn test_perl_lsp_src_features_diagnostics_migrated() {
     let root = get_workspace_root();
-    let file = root.join("crates/perl-lsp/src/features/diagnostics/mod.rs");
+    let file = root.join("crates/perl-lsp-rs/src/features/diagnostics/mod.rs");
     if file.exists() {
         let content = fs::read_to_string(file).expect("Failed to read features/diagnostics/mod.rs");
 

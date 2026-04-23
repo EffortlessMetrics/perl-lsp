@@ -16,7 +16,7 @@ perl-lsp's agent harness (`.claude/hooks/*.sh`, `.git/hooks/*`, the task-tool ba
 
 ### 1. Pre-push hook infers package name from directory basename
 
-`.git/hooks/pre-push` (via `cargo xtask fmt --check`) invokes `cargo fmt -p <inferred>`, where `<inferred>` is the basename of the crate directory. For `crates/perl-lsp/` this gives `-p perl-lsp` — but the actual package name in `Cargo.toml` is `perl-lsp-rs`. The command fails; the hook rejects the push; two builders in one session bypassed with `--no-verify`.
+`.git/hooks/pre-push` (via `cargo xtask fmt --check`) invokes `cargo fmt -p <inferred>`, where `<inferred>` is the basename of the crate directory. For `crates/perl-lsp-rs/` this gives `-p perl-lsp` — but the actual package name in `Cargo.toml` is `perl-lsp-rs`. The command fails; the hook rejects the push; two builders in one session bypassed with `--no-verify`.
 
 Every other crate in the workspace has dir-basename matching package-name. The one mismatch was enough to train two agents to `--no-verify`. Tracked as issue #4512. Fix: read the package name via `cargo metadata --no-deps` instead of inferring from the directory.
 
@@ -70,7 +70,7 @@ The shim remains: `.git/hooks/pre-push` becomes a two-line script that calls `ca
 
 - **#4514** — plan: migrate `.claude/hooks/*.sh` logic into `xtask` (systemic, this article's direct ask)
 - **#4512** — fix: pre-push hook uses `cargo_metadata` instead of basename (tactical, enables #4514's first phase)
-- **#4511** — cosmetic: rename `crates/perl-lsp/` → `crates/perl-lsp-rs/` to eliminate the one dir-vs-package mismatch (cosmetic, supplements #4512)
+- **#4511** — cosmetic: rename `crates/perl-lsp-rs/` → `crates/perl-lsp-rs/` to eliminate the one dir-vs-package mismatch (cosmetic, supplements #4512)
 - **#4456** — MAX_PATH audit (existing, ongoing)
 - **#4342** — main-branch switch prevention (existing)
 - **#4509** — task-tool persistence (harness-backend, likely outside xtask's reach)

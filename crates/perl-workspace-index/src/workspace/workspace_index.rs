@@ -1094,6 +1094,8 @@ impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
 /// File-level index data
 #[derive(Default, Clone)]
 pub struct FileIndex {
+    /// Canonical file URI for this index entry.
+    source_uri: String,
     /// Symbols defined in this file
     symbols: Vec<WorkspaceSymbol>,
     /// References in this file (symbol name -> references)
@@ -1219,6 +1221,7 @@ impl WorkspaceIndex {
     /// ```
     fn determine_folder_uri(&self, file_uri: &str) -> Option<String> {
         let folders = self.workspace_folders.read();
+        let mut best_match: Option<&String> = None;
         for folder_uri in folders.iter() {
             // Check if the file URI starts with the folder URI
             // We need to ensure proper URI matching (with or without trailing slash)
@@ -1228,10 +1231,13 @@ impl WorkspaceIndex {
                 format!("{}/", folder_uri)
             };
             if file_uri.starts_with(&folder_with_slash) || file_uri == folder_uri {
-                return Some(folder_uri.clone());
+                match best_match {
+                    Some(existing) if existing.len() >= folder_uri.len() => {}
+                    _ => best_match = Some(folder_uri),
+                }
             }
         }
-        None
+        best_match.cloned()
     }
 
     fn find_definition_in_files(
@@ -1453,8 +1459,12 @@ impl WorkspaceIndex {
         let folder_uri = self.determine_folder_uri(&uri_str);
 
         // Extract symbols and references
-        let mut file_index =
-            FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+        let mut file_index = FileIndex {
+            source_uri: uri_str.clone(),
+            content_hash,
+            folder_uri: folder_uri.clone(),
+            ..Default::default()
+        };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
 
@@ -1641,29 +1651,21 @@ impl WorkspaceIndex {
     /// index.remove_folder("file:///project1");
     /// ```
     pub fn remove_folder(&self, folder_uri: &str) {
-        let mut files_to_remove = Vec::new();
+        let mut uris_to_remove = Vec::new();
         let files = self.files.read();
 
         // Collect all files that belong to this folder
-        for (key, file_index) in files.iter() {
+        for file_index in files.values() {
             if file_index.folder_uri.as_deref() == Some(folder_uri) {
-                files_to_remove.push(key.clone());
+                uris_to_remove.push(file_index.source_uri.clone());
             }
         }
         drop(files);
 
-        // Remove each file
-        for key in files_to_remove {
-            let mut files = self.files.write();
-            if let Some(file_index) = files.remove(&key) {
-                // Incrementally remove symbols
-                let mut symbols = self.symbols.write();
-                Self::incremental_remove_symbols(&files, &mut symbols, &file_index);
-
-                // Remove from global reference index
-                let mut global_refs = self.global_references.write();
-                Self::remove_file_global_refs(&mut global_refs, &file_index, &key);
-            }
+        // Remove each file through the full removal path to keep
+        // symbol/reference caches and document store in sync.
+        for uri in uris_to_remove {
+            self.remove_file(&uri);
         }
     }
 
@@ -1774,8 +1776,12 @@ impl WorkspaceIndex {
             // Determine workspace folder URI from the file URI
             let folder_uri = self.determine_folder_uri(&uri_str);
 
-            let mut file_index =
-                FileIndex { content_hash, folder_uri: folder_uri.clone(), ..Default::default() };
+            let mut file_index = FileIndex {
+                source_uri: uri_str.clone(),
+                content_hash,
+                folder_uri: folder_uri.clone(),
+                ..Default::default()
+            };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
 
@@ -1887,6 +1893,27 @@ impl WorkspaceIndex {
                     }
                 }
             }
+        } else {
+            // If the symbol is bare, also collect qualified references that end
+            // with the same bare name, e.g. `Pkg::foo` when searching for `foo`.
+            for (name, refs) in global_refs.iter() {
+                if !Self::is_qualified_variant_of(name, symbol_name) {
+                    continue;
+                }
+
+                for loc in refs {
+                    let key = (
+                        loc.uri.clone(),
+                        loc.range.start.line,
+                        loc.range.start.column,
+                        loc.range.end.line,
+                        loc.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                    }
+                }
+            }
         }
 
         locations
@@ -1927,10 +1954,30 @@ impl WorkspaceIndex {
                         ));
                     }
                 }
+            } else {
+                for (name, refs) in &file_index.references {
+                    if !Self::is_qualified_variant_of(name, symbol_name) {
+                        continue;
+                    }
+
+                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                        seen.insert((
+                            r.uri.clone(),
+                            r.range.start.line,
+                            r.range.start.column,
+                            r.range.end.line,
+                            r.range.end.column,
+                        ));
+                    }
+                }
             }
         }
 
         seen.len()
+    }
+
+    fn is_qualified_variant_of(candidate: &str, bare_symbol: &str) -> bool {
+        candidate.rsplit_once("::").is_some_and(|(_, candidate_bare)| candidate_bare == bare_symbol)
     }
 
     /// Find the definition of a symbol
@@ -2406,11 +2453,16 @@ impl WorkspaceIndex {
     /// let _files = index.find_dependents("My::Module");
     /// ```
     pub fn find_dependents(&self, module_name: &str) -> Vec<String> {
+        let canonical = canonicalize_perl_module_name(module_name);
+        let legacy = legacy_perl_module_name(&canonical);
         let files = self.files.read();
         let mut dependents = Vec::new();
 
         for (uri_key, file_index) in files.iter() {
-            if file_index.dependencies.contains(module_name) {
+            if file_index.dependencies.contains(module_name)
+                || file_index.dependencies.contains(&canonical)
+                || file_index.dependencies.contains(&legacy)
+            {
                 dependents.push(uri_key.clone());
             }
         }
@@ -2928,6 +2980,14 @@ impl IndexVisitor {
                     kind: ReferenceKind::Usage,
                 });
 
+                if name == "extends" || name == "with" {
+                    for module_name in extract_module_names_from_call_args(args) {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(&module_name));
+                    }
+                }
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node(arg, file_index);
@@ -2935,7 +2995,7 @@ impl IndexVisitor {
             }
 
             NodeKind::Use { module, args, .. } => {
-                let module_name = module.clone();
+                let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
 
                 // Also track actual parent/base class names for dependency discovery.
@@ -2943,7 +3003,7 @@ impl IndexVisitor {
                 // so find_dependents("Foo::Bar") would miss files with only use parent.
                 if module == "parent" || module == "base" {
                     for name in extract_module_names_from_use_args(args) {
-                        file_index.dependencies.insert(name);
+                        file_index.dependencies.insert(normalize_dependency_module_name(&name));
                     }
                 }
 
@@ -3106,8 +3166,8 @@ impl IndexVisitor {
             }
 
             NodeKind::No { module, .. } => {
-                let module_name = module.clone();
-                file_index.dependencies.insert(module_name.clone());
+                let module_name = normalize_dependency_module_name(module);
+                file_index.dependencies.insert(module_name);
             }
 
             NodeKind::Class { name, .. } => {
@@ -3305,42 +3365,172 @@ impl IndexVisitor {
 /// Returns the module names with surrounding quotes/qw wrappers stripped.
 /// Tokens starting with `-` or not matching `[\w::']+` are silently skipped.
 fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    fn normalize_module_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+
+        stripped
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'')
+            .then_some(stripped)
+    }
+
     let joined = args.join(" ");
 
-    // Strip qw(...) wrapper and collect the inner tokens
-    let inner = if let Some(start) = joined.find("qw(") {
-        if let Some(end) = joined[start..].find(')') {
-            joined[start + 3..start + end].to_string()
-        } else {
-            joined.clone()
+    let (qw_words, remainder) = extract_qw_words(&joined);
+    let mut modules = Vec::new();
+    let mut seen = HashSet::new();
+    for word in qw_words {
+        if let Some(candidate) = normalize_module_name(&word) {
+            let canonical = canonicalize_perl_module_name(candidate);
+            if seen.insert(canonical.clone()) {
+                modules.push(canonical);
+            }
         }
-    } else {
-        joined.clone()
-    };
+    }
 
-    inner
-        .split_whitespace()
-        .filter_map(|token| {
-            // Skip flags like -norequire and bare punctuation from qw() or parens
-            if token.starts_with('-') {
-                return None;
+    for token in remainder.split_whitespace().flat_map(|t| t.split(',')) {
+        if let Some(candidate) = normalize_module_name(token) {
+            let canonical = canonicalize_perl_module_name(candidate);
+            if seen.insert(canonical.clone()) {
+                modules.push(canonical);
             }
-            // Strip surrounding single or double quotes
-            let stripped = token.trim_matches('\'').trim_matches('"');
-            // Strip surrounding parentheses (e.g. `use parent ('Foo')`)
-            let stripped = stripped.trim_matches('(').trim_matches(')');
-            let stripped = stripped.trim_matches('\'').trim_matches('"');
-            // Accept tokens containing only word characters, `::`, or `'` (legacy separator)
-            if stripped.is_empty() {
-                return None;
+        }
+    }
+
+    modules
+}
+
+fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
+    fn collect_from_node(node: &Node, out: &mut Vec<String>) {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                out.extend(extract_module_names_from_use_args(std::slice::from_ref(value)));
             }
-            if stripped.chars().all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '\'') {
-                Some(stripped.to_string())
+            NodeKind::Identifier { name } => {
+                out.extend(extract_module_names_from_use_args(std::slice::from_ref(name)));
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    collect_from_node(element, out);
+                }
+            }
+            NodeKind::FunctionCall { name, args, .. } if name == "qw" => {
+                for arg in args {
+                    collect_from_node(arg, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut modules = Vec::new();
+    for arg in args {
+        collect_from_node(arg, &mut modules);
+    }
+    modules
+}
+
+fn canonicalize_perl_module_name(name: &str) -> String {
+    // Perl supports the legacy `'` package separator (e.g. Foo'Bar).
+    // Canonicalize to `::` so lookups and dependency matching share one key shape.
+    name.replace('\'', "::")
+}
+
+fn legacy_perl_module_name(name: &str) -> String {
+    name.replace("::", "'")
+}
+
+/// Normalize a module name for dependency storage and lookup.
+/// Converts legacy `'` separators to `::` so stored keys are canonical.
+fn normalize_dependency_module_name(module_name: &str) -> String {
+    canonicalize_perl_module_name(module_name)
+}
+
+fn extract_qw_words(input: &str) -> (Vec<String>, String) {
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+    let mut words = Vec::new();
+    let mut remainder = String::new();
+
+    while i < chars.len() {
+        if chars[i] == 'q'
+            && i + 1 < chars.len()
+            && chars[i + 1] == 'w'
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j >= chars.len() {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let open = chars[j];
+            let (close, is_paired_delimiter) = match open {
+                '(' => (')', true),
+                '[' => (']', true),
+                '{' => ('}', true),
+                '<' => ('>', true),
+                _ => (open, false),
+            };
+            if open.is_alphanumeric() || open == '_' || open == '\'' || open == '"' {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let mut k = j + 1;
+            if is_paired_delimiter {
+                let mut depth = 1usize;
+                while k < chars.len() && depth > 0 {
+                    if chars[k] == open {
+                        depth += 1;
+                    } else if chars[k] == close {
+                        depth -= 1;
+                    }
+                    k += 1;
+                }
+                if depth != 0 {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+                k -= 1;
             } else {
-                None
+                while k < chars.len() && chars[k] != close {
+                    k += 1;
+                }
+                if k >= chars.len() {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
             }
-        })
-        .collect()
+
+            let content: String = chars[j + 1..k].iter().collect();
+            for word in content.split_whitespace() {
+                if !word.is_empty() {
+                    words.push(word.to_string());
+                }
+            }
+            i = k + 1;
+            continue;
+        }
+
+        remainder.push(chars[i]);
+        i += 1;
+    }
+
+    (words, remainder)
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -3361,7 +3551,28 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
 ///
 /// Returns a deduplicated list of bare constant names (e.g. `["FOO", "BAR"]`).
 fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    fn push_unique(names: &mut Vec<String>, seen: &mut HashSet<String>, candidate: &str) {
+        if seen.insert(candidate.to_string()) {
+            names.push(candidate.to_string());
+        }
+    }
+
+    fn normalize_constant_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+
+        stripped.chars().all(|c| c.is_alphanumeric() || c == '_').then_some(stripped)
+    }
+
     let mut names = Vec::new();
+    let mut seen = HashSet::new();
 
     // Scalar form (most common): args = ["FOO", <value...>]
     // The first arg is a plain identifier with no `=>` in args at all.
@@ -3373,33 +3584,54 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
     // qw form: single arg starting with "qw"
     if first.starts_with("qw") {
-        let content = first
-            .trim_start_matches("qw")
+        let (qw_words, remainder) = extract_qw_words(first);
+        if remainder.trim().is_empty() {
+            for word in qw_words {
+                if let Some(candidate) = normalize_constant_name(&word) {
+                    push_unique(&mut names, &mut seen, candidate);
+                }
+            }
+            return names;
+        }
+
+        // Fallback for odd tokenisation: tolerate `qw` followed by spacing before the opener.
+        let content = first.trim_start_matches("qw").trim_start();
+        let content = content
             .trim_start_matches(|c: char| "([{/<|!".contains(c))
             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
         for word in content.split_whitespace() {
-            if !word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                names.push(word.to_string());
+            if let Some(candidate) = normalize_constant_name(word) {
+                push_unique(&mut names, &mut seen, candidate);
             }
         }
         return names;
     }
 
-    // Hash form: args start with "{"
-    if first == "{" {
+    // Hash form: args start with "{", "+{", or "+" followed by "{"
+    let starts_hash_form = first == "{"
+        || first == "+{"
+        || (first == "+" && args.get(1).map(String::as_str) == Some("{"));
+    if starts_hash_form {
+        let mut skipped_leading_plus = false;
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.next() {
+            // Some parser/tokenizer variants can emit "+{" as a single token for
+            // `use constant +{ ... }`. Treat it as structural punctuation.
+            if arg == "+{" {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "+" && !skipped_leading_plus {
+                skipped_leading_plus = true;
+                continue;
+            }
             if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
                 continue;
             }
-            // Skip -option flags
-            if arg.starts_with('-') {
-                continue;
-            }
-            let is_plain_ident =
-                !arg.is_empty() && arg.chars().all(|c| c.is_alphanumeric() || c == '_');
-            if is_plain_ident && iter.peek().map(|s| s.as_str()) == Some("=>") {
-                names.push(arg.clone());
+            if let Some(candidate) = normalize_constant_name(arg)
+                && iter.peek().map(|s| s.as_str()) == Some("=>")
+            {
+                push_unique(&mut names, &mut seen, candidate);
             }
         }
         return names;
@@ -3407,12 +3639,8 @@ fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
     // Scalar form: first arg is the constant name (if it is a plain identifier)
     // Remaining args are the value and are skipped.
-    // Skip -option flags
-    if !first.starts_with('-')
-        && !first.is_empty()
-        && first.chars().all(|c| c.is_alphanumeric() || c == '_')
-    {
-        names.push(first.to_string());
+    if let Some(candidate) = normalize_constant_name(first) {
+        push_unique(&mut names, &mut seen, candidate);
     }
 
     names
@@ -3552,6 +3780,108 @@ use constant {
     }
 
     #[test]
+    fn test_extract_constant_names_deduplicates_qw_form() {
+        let names = extract_constant_names_from_use_args(&["qw(FOO BAR FOO)".to_string()]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_quoted_scalar_form() {
+        let names = extract_constant_names_from_use_args(&[
+            "'HTTP_OK'".to_string(),
+            "=>".to_string(),
+            "200".to_string(),
+        ]);
+        assert_eq!(names, vec!["HTTP_OK"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_quoted_hash_form() {
+        let names = extract_constant_names_from_use_args(&[
+            "{".to_string(),
+            "'FOO'".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "\"BAR\"".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_plus_hash_form_split_tokens() {
+        let names = extract_constant_names_from_use_args(&[
+            "+".to_string(),
+            "{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_accepts_plus_hash_form_combined_token() {
+        let names = extract_constant_names_from_use_args(&[
+            "+{".to_string(),
+            "FOO".to_string(),
+            "=>".to_string(),
+            "1".to_string(),
+            ",".to_string(),
+            "BAR".to_string(),
+            "=>".to_string(),
+            "2".to_string(),
+            "}".to_string(),
+        ]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+    #[test]
+    fn test_use_constant_duplicate_names_indexed_once() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/DedupConfig.pm";
+        let code = r#"package My::DedupConfig;
+use constant {
+    RETRY_COUNT => 3,
+    RETRY_COUNT => 5,
+};
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        let retry_count_symbols = symbols.iter().filter(|s| s.name == "RETRY_COUNT").count();
+        assert_eq!(
+            retry_count_symbols, 1,
+            "RETRY_COUNT should be indexed once even when repeated in use constant hash form"
+        );
+    }
+
+    #[test]
+    fn test_use_constant_plus_hash_form_indexes_keys() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/My/PlusHash.pm";
+        let code = r#"package My::PlusHash;
+use constant +{
+    FOO => 1,
+    BAR => 2,
+};
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        assert!(index.find_definition("My::PlusHash::FOO").is_some());
+        assert!(index.find_definition("My::PlusHash::BAR").is_some());
+    }
+
+    #[test]
     fn test_basic_indexing() {
         let index = WorkspaceIndex::new();
         let uri = "file:///test.pl";
@@ -3592,6 +3922,56 @@ sub test {
 
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
+    }
+
+    #[test]
+    fn test_find_references_bare_name_includes_qualified_calls() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///refs.pl";
+        let code = r#"
+package RefDemo;
+sub helper {
+    return 1;
+}
+
+helper();
+RefDemo::helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let bare_refs = index.find_references("helper");
+        let qualified_refs = index.find_references("RefDemo::helper");
+
+        assert!(
+            bare_refs.len() >= qualified_refs.len(),
+            "bare-name reference lookup should include qualified calls"
+        );
+    }
+
+    #[test]
+    fn test_count_usages_bare_name_includes_qualified_calls() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///usage.pl";
+        let code = r#"
+package UsageDemo;
+sub helper {
+    return 1;
+}
+
+helper();
+UsageDemo::helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let bare_usage_count = index.count_usages("helper");
+        let qualified_usage_count = index.count_usages("UsageDemo::helper");
+
+        assert!(
+            bare_usage_count >= qualified_usage_count,
+            "bare-name usage count should include qualified call sites"
+        );
     }
 
     #[test]
@@ -4524,15 +4904,14 @@ Utils::process_data();
         // 3. find_dependents("MyBase") should return child.pl
         let index = WorkspaceIndex::new();
 
-        let base_url = url::Url::parse("file:///test/workspace/lib/MyBase.pm").unwrap();
-        index
-            .index_file(base_url, "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string())
-            .expect("indexing MyBase.pm");
+        let base_url = must(url::Url::parse("file:///test/workspace/lib/MyBase.pm"));
+        must(index.index_file(
+            base_url,
+            "package MyBase;\nsub new { bless {}, shift }\n1;\n".to_string(),
+        ));
 
-        let child_url = url::Url::parse("file:///test/workspace/child.pl").unwrap();
-        index
-            .index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string())
-            .expect("indexing child.pl");
+        let child_url = must(url::Url::parse("file:///test/workspace/child.pl"));
+        must(index.index_file(child_url, "package Child;\nuse parent 'MyBase';\n1;\n".to_string()));
 
         let dependents = index.find_dependents("MyBase");
         assert!(
@@ -4556,38 +4935,109 @@ Utils::process_data();
     }
 
     #[test]
+    fn test_find_dependents_normalizes_legacy_separator_in_query() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/legacy-query.pl"));
+        let src = "package Child;\nuse parent 'My::Base';\n1;\n";
+        must(index.index_file(uri, src.to_string()));
+
+        let dependents = index.find_dependents("My'Base");
+        assert_eq!(dependents, vec!["file:///test/workspace/legacy-query.pl".to_string()]);
+    }
+
+    #[test]
+    fn test_file_dependencies_normalize_legacy_separator_in_source() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/legacy-source.pl"));
+        let src = "package Child;\nuse parent \"My'Base\";\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("My::Base"));
+        assert!(!deps.contains("My'Base"));
+    }
+
+    #[test]
+    fn test_index_dependency_via_moose_extends_end_to_end() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+
+        let parent_url = must(url::Url::parse("file:///test/workspace/lib/My/App/Parent.pm"));
+        must(index.index_file(parent_url, "package My::App::Parent;\n1;\n".to_string()));
+
+        let child_url = must(url::Url::parse("file:///test/workspace/child-moose.pl"));
+        let child_src = "package Child;\nuse Moose;\nextends 'My::App::Parent';\n1;\n";
+        must(index.index_file(child_url, child_src.to_string()));
+
+        let dependents = index.find_dependents("My::App::Parent");
+        assert!(
+            dependents.contains(&"file:///test/workspace/child-moose.pl".to_string()),
+            "expected child-moose.pl in dependents, got: {dependents:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_moo_with_role_end_to_end() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+
+        let role_url = must(url::Url::parse("file:///test/workspace/lib/My/App/Role.pm"));
+        must(index.index_file(role_url, "package My::App::Role;\n1;\n".to_string()));
+
+        let consumer_url = must(url::Url::parse("file:///test/workspace/consumer-moo.pl"));
+        let consumer_src = "package Consumer;\nuse Moo;\nwith 'My::App::Role';\n1;\n";
+        must(index.index_file(consumer_url.clone(), consumer_src.to_string()));
+
+        let dependents = index.find_dependents("My::App::Role");
+        assert!(
+            dependents.contains(&"file:///test/workspace/consumer-moo.pl".to_string()),
+            "expected consumer-moo.pl in dependents, got: {dependents:?}"
+        );
+
+        let deps = index.file_dependencies(consumer_url.as_str());
+        assert!(deps.contains("My::App::Role"));
+        Ok(())
+    }
+
+    #[test]
     fn test_parser_produces_correct_args_for_use_parent() {
         // Regression for #2747: verify that the parser produces args=["'MyBase'"]
         // for `use parent 'MyBase'`, so extract_module_names_from_use_args strips
         // the quotes and registers the dependency under the bare name "MyBase".
         use crate::Parser;
         let mut p = Parser::new("package Child;\nuse parent 'MyBase';\n1;\n");
-        let ast = p.parse().expect("parse succeeded");
-        if let NodeKind::Program { statements } = &ast.kind {
-            for stmt in statements {
-                if let NodeKind::Use { module, args, .. } = &stmt.kind {
-                    if module == "parent" {
-                        assert_eq!(
-                            args,
-                            &["'MyBase'".to_string()],
-                            "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
-                            args
-                        );
-                        let extracted = extract_module_names_from_use_args(args);
-                        assert_eq!(
-                            extracted,
-                            vec!["MyBase".to_string()],
-                            "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
-                            extracted
-                        );
-                        return; // Test passed
-                    }
+        let ast = must(p.parse());
+        assert!(
+            matches!(ast.kind, NodeKind::Program { .. }),
+            "Expected Program root, got {:?}",
+            ast.kind
+        );
+        let NodeKind::Program { statements } = &ast.kind else {
+            return;
+        };
+        let mut found_parent_use = false;
+        for stmt in statements {
+            if let NodeKind::Use { module, args, .. } = &stmt.kind {
+                if module == "parent" {
+                    found_parent_use = true;
+                    assert_eq!(
+                        args,
+                        &["'MyBase'".to_string()],
+                        "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
+                        args
+                    );
+                    let extracted = extract_module_names_from_use_args(args);
+                    assert_eq!(
+                        extracted,
+                        vec!["MyBase".to_string()],
+                        "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
+                        extracted
+                    );
                 }
             }
-            panic!("No Use node with module='parent' found in AST");
-        } else {
-            panic!("Expected Program root");
         }
+        assert!(found_parent_use, "No Use node with module='parent' found in AST");
     }
 
     // -------------------------------------------------------------------------
@@ -4613,6 +5063,25 @@ Utils::process_data();
     }
 
     #[test]
+    fn test_extract_module_names_qw_slash_delimiter() {
+        let names = extract_module_names_from_use_args(&["qw/Foo::Bar Other::Base/".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_with_space_before_delimiter() {
+        let names = extract_module_names_from_use_args(&["qw [Foo::Bar Other::Base]".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_qw_list_trims_wrapped_punctuation() {
+        let names =
+            extract_module_names_from_use_args(&["qw((Foo::Bar) [Other::Base],)".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
     fn test_extract_module_names_norequire_flag() {
         let names = extract_module_names_from_use_args(&[
             "-norequire".to_string(),
@@ -4631,8 +5100,97 @@ Utils::process_data();
     fn test_extract_module_names_legacy_separator() {
         // Perl legacy package separator ' (tick) inside module name
         let names = extract_module_names_from_use_args(&["'Foo'Bar'".to_string()]);
-        // After stripping outer quotes the raw token is Foo'Bar — a valid legacy name
-        assert_eq!(names, vec!["Foo'Bar"]);
+        // Legacy separators are normalized for downstream dependency matching.
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_find_dependents_matches_legacy_separator_queries() {
+        let index = WorkspaceIndex::new();
+        let base_uri = must(url::Url::parse("file:///test/workspace/lib/Foo/Bar.pm"));
+        let child_uri = must(url::Url::parse("file:///test/workspace/child.pl"));
+
+        must(index.index_file(base_uri, "package Foo::Bar;\n1;\n".to_string()));
+        must(index.index_file(
+            child_uri.clone(),
+            "package Child;\nuse parent qw(Foo'Bar);\n1;\n".to_string(),
+        ));
+
+        let dependents_modern = index.find_dependents("Foo::Bar");
+        assert!(
+            dependents_modern.contains(&child_uri.to_string()),
+            "Expected dependency match when queried with modern separator"
+        );
+
+        let dependents_legacy = index.find_dependents("Foo'Bar");
+        assert!(
+            dependents_legacy.contains(&child_uri.to_string()),
+            "Expected dependency match when queried with legacy separator"
+        );
+    }
+
+    #[test]
+    fn test_extract_module_names_comma_adjacent_tokens() {
+        let names = extract_module_names_from_use_args(&[
+            "'Foo::Bar',".to_string(),
+            "\"Other::Base\",".to_string(),
+            "'Last::One'".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base", "Last::One"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_parenthesized_without_spaces() {
+        let names = extract_module_names_from_use_args(&["('Foo::Bar','Other::Base')".to_string()]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_deduplicates_identical_entries() {
+        let names = extract_module_names_from_use_args(&[
+            "qw(Foo::Bar Foo::Bar)".to_string(),
+            "'Foo::Bar'".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_trims_semicolon_suffix() {
+        let names = extract_module_names_from_use_args(&[
+            "'Foo::Bar',".to_string(),
+            "'Other::Base',".to_string(),
+            "'Third::Leaf';".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base", "Third::Leaf"]);
+    }
+
+    #[test]
+    fn test_extract_module_names_trims_wrapped_punctuation() {
+        let names = extract_module_names_from_use_args(&[
+            "('Foo::Bar',".to_string(),
+            "'Other::Base')".to_string(),
+        ]);
+        assert_eq!(names, vec!["Foo::Bar", "Other::Base"]);
+    }
+
+    #[test]
+    fn test_extract_constant_names_qw_with_space_before_delimiter() {
+        let names = extract_constant_names_from_use_args(&["qw [FOO BAR]".to_string()]);
+        assert_eq!(names, vec!["FOO", "BAR"]);
+    }
+
+    #[test]
+    fn test_index_use_constant_qw_with_space_before_delimiter() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///workspace/lib/My/Config.pm"));
+        let source = "package My::Config;\nuse constant qw [FOO BAR];\n1;\n";
+
+        must(index.index_file(uri, source.to_string()));
+
+        let foo = index.find_definition("My::Config::FOO");
+        let bar = index.find_definition("My::Config::BAR");
+        assert!(foo.is_some(), "Expected My::Config::FOO to be indexed");
+        assert!(bar.is_some(), "Expected My::Config::BAR to be indexed");
     }
 
     #[test]
@@ -4828,6 +5386,24 @@ sub other_sub {
     }
 
     #[test]
+    fn test_determine_folder_uri_prefers_most_specific_match() {
+        let index = WorkspaceIndex::new();
+
+        // Keep broad folder first to ensure we don't rely on insertion order.
+        index.set_workspace_folders(vec![
+            "file:///project".to_string(),
+            "file:///project/lib".to_string(),
+        ]);
+
+        let folder = index.determine_folder_uri("file:///project/lib/My/Module.pm");
+        assert_eq!(
+            folder,
+            Some("file:///project/lib".to_string()),
+            "Nested workspace folders should attribute files to the most specific folder"
+        );
+    }
+
+    #[test]
     fn test_remove_folder() {
         let index = WorkspaceIndex::new();
 
@@ -4860,17 +5436,42 @@ sub other_sub {
 
         // Verify both files are indexed
         assert_eq!(index.file_count(), 2, "Should have 2 files indexed");
+        assert_eq!(index.document_store().count(), 2, "Document store should track both files");
 
         // Remove project1 folder
         index.remove_folder("file:///project1");
 
         // Verify only project2 file remains
         assert_eq!(index.file_count(), 1, "Should have 1 file after removing folder");
+        assert_eq!(
+            index.document_store().count(),
+            1,
+            "Document store should drop files removed via folder deletion"
+        );
         assert!(index.file_symbols(uri1).is_empty(), "File from removed folder should be gone");
         assert_eq!(
             index.file_symbols(uri2).len(),
             2,
             "File from remaining folder should still be present"
+        );
+    }
+
+    #[test]
+    fn test_remove_folder_removes_symbol_free_files() {
+        let index = WorkspaceIndex::new();
+        index.set_workspace_folders(vec!["file:///project1".to_string()]);
+
+        let uri = "file:///project1/empty.pl";
+        must(index.index_file(must(url::Url::parse(uri)), "# comments only".to_string()));
+        assert_eq!(index.file_count(), 1, "Expected file to be indexed");
+
+        index.remove_folder("file:///project1");
+
+        assert_eq!(index.file_count(), 0, "Folder removal should delete symbol-free files");
+        assert_eq!(
+            index.document_store().count(),
+            0,
+            "Document store should stay in sync for symbol-free files"
         );
     }
 }

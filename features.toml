@@ -5,7 +5,7 @@
 [meta]
 version = "0.12.4"
 lsp_version = "3.18"
-compliance_percent = 100  # 119 total features (88 LSP + 24 DAP + 7 perl-lsp extensions), 53/53 advertised
+compliance_percent = 100  # 119 total features (88 LSP + 24 DAP + 7 perl-lsp extensions), 118/119 advertised
 
 # Text Document Features
 
@@ -15,7 +15,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_completion_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_completion_tests.rs"]
 description = "Code completion with 150+ built-in functions, DBI type inference (db/st handle methods), Moo option-key completion, file-path completion, method completion from workspace symbols, auto-import suggestions, XS API completion, and test helper (Test::More) completions"
 
 [[feature]]
@@ -24,7 +24,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_hover_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_hover_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_11_hover.rs",
+]
 description = "Hover information with POD markdown rendering, XS::Typemap integration, Moo/Moose attribute display (isa, is, required, predicate, builder, clearer), inherited method resolution across the class hierarchy, pragma documentation, special variable explanations, regex explainer, and file-test operator reference"
 
 [[feature]]
@@ -33,7 +37,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_signature_help_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_signature_help_tests.rs"]
 description = "Signature help with parameter hints"
 
 [[feature]]
@@ -42,7 +46,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_definition_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_definition_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_10_goto_definition.rs",
+]
 description = "Go to definition"
 
 [[feature]]
@@ -51,7 +59,11 @@ spec = "LSP 3.14"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_definition_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_definition_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_10_goto_definition.rs",
+]
 description = "Go to declaration"
 
 [[feature]]
@@ -60,7 +72,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_references_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_references_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Find references across workspace"
 
 [[feature]]
@@ -69,7 +84,11 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_symbols_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_symbols_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_13_document_symbols.rs",
+]
 description = "Document symbols with hierarchy"
 
 [[feature]]
@@ -78,7 +97,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_code_actions_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_code_actions_tests.rs"]
 description = "Code actions with 9 action kinds: QuickFix (diagnostic fixes for undefined/unused variables, missing strict/warnings, deprecated patterns), Refactor, RefactorExtract (extract variable/subroutine), RefactorInline, RefactorRewrite (C-style for to foreach, postfix if conversion), Source, SourceOrganizeImports, SourceFixAll, SourceModernize (legacy pattern modernization)"
 
 [[feature]]
@@ -87,7 +106,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_code_lens_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Code lens with reference counts"
 
 [[feature]]
@@ -96,7 +118,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_formatting_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Document formatting with Perl::Tidy"
 
 [[feature]]
@@ -105,7 +130,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_formatting_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_formatting_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Range formatting (single range)"
 
 [[feature]]
@@ -114,7 +142,7 @@ spec = "LSP 3.18"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_formatting_e2e.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_formatting_e2e.rs"]
 description = "Multi-range formatting (textDocument/rangesFormatting) (@proposed)"
 
 [[feature]]
@@ -123,7 +151,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_on_type_formatting.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_on_type_formatting.rs"]
 description = "On-type formatting with auto-indent"
 
 [[feature]]
@@ -132,7 +160,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_rename_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_rename_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Rename symbol across files"
 
 [[feature]]
@@ -159,7 +190,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_document_links_test.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_document_links_test.rs"]
 description = "Document links to modules and docs"
 
 [[feature]]
@@ -168,7 +199,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_folding_ranges_test.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_folding_ranges_test.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Folding ranges with fallback"
 
 [[feature]]
@@ -177,7 +211,10 @@ spec = "LSP 3.15"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_selection_range_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_selection_range_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Smart selection expansion"
 
 [[feature]]
@@ -186,7 +223,7 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_semantic_tokens.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_semantic_tokens.rs"]
 description = "Semantic syntax highlighting via 23 token types (namespace, type, class, interface, enum, enumMember, typeParameter, function, method, property, macro, variable, parameter, keyword, modifier, comment, string, number, regexp, operator, plus sql_string/sql_heredoc_keyword/json_heredoc_key for embedded language context) and 13 modifiers (declaration, definition, readonly, static, deprecated, abstract, async, modification, documentation, defaultLibrary, scalarVariable, arrayVariable, hashVariable). Token pipeline: lexer fast-path classification plus AST overlay for package/subroutine/method/variable nodes, with overlap deduplication (longer token wins) and delta-encoded [u32;5] response format (mandatory LSP wire encoding). Supports full (textDocument/semanticTokens/full) and range (textDocument/semanticTokens/range) requests per LSP 3.16"
 
 [[feature]]
@@ -195,7 +232,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_inlay_hints.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_inlay_hints.rs"]
 description = "Inlay hints with parameter-name labels for 14 Perl built-in functions (open, split, substr, push, map, grep, sort, join, sprintf, printf, index, rindex, splice, pack/unpack) and lightweight type labels for literal expressions (Num, Str, Hash, Array, Regex, CodeRef). Hints are range-scoped to the visible editor region and support label.location (jump-to-definition) via resolve; tooltip text deferred to inlayHint/resolve per LSP 3.17"
 
 [[feature]]
@@ -204,7 +241,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_type_hierarchy_test.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_type_hierarchy_test.rs"]
 description = "Type hierarchy for classes/roles"
 
 [[feature]]
@@ -213,7 +250,7 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_call_hierarchy_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_call_hierarchy_tests.rs"]
 description = "Call hierarchy navigation"
 
 [[feature]]
@@ -222,7 +259,11 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Pull model diagnostics"
 
 [[feature]]
@@ -231,7 +272,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use strict' pragma diagnostic (PL100) — warns when .pm/.pl files lack strict enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -240,7 +281,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs"]
 description = "Missing 'use warnings' pragma diagnostic (PL101) — warns when .pm/.pl files lack warnings enforcement, recognizes framework equivalents (Moo, Moose, Modern::Perl)"
 
 [[feature]]
@@ -250,8 +291,8 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 tests = [
-  "crates/perl-lsp-diagnostics/tests/lint_pipeline_integration_tests.rs",
-  "crates/perl-lsp-code-actions/src/code_actions.rs",
+  "crates/perl-lsp-rs-core/src/providers/diagnostics/lints/strict_warnings.rs",
+  "crates/perl-lsp-rs-core/src/providers/code_actions/code_actions.rs",
 ]
 description = "Phase-scoped pragma misconception diagnostics (PL502/PL503) — warns when `use strict` or `use warnings` appears only inside BEGIN/END/INIT/CHECK/UNITCHECK and offers a quick fix to move it to file scope"
 
@@ -261,7 +302,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp-diagnostics/tests/unreachable_code_tests.rs"]
+tests = ["crates/perl-lsp-rs-core/tests/unreachable_code_continue_tests.rs"]
 description = "Unreachable code highlighting (PL406) with DiagnosticTag::Unnecessary — detects code after return/die/exit/croak statements"
 
 [[feature]]
@@ -270,7 +311,11 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Unused variable diagnostics (PL102) via scope analyzer — warns on declared-but-never-used variables, suppressed by underscore prefix"
 
 [[feature]]
@@ -279,7 +324,7 @@ spec = "LSP 3.18"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_inline_completion_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_inline_completion_tests.rs"]
 description = "Inline AI-powered completions (@proposed)"
 
 [[feature]]
@@ -288,7 +333,7 @@ spec = "perl-lsp"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_streaming_completion_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_streaming_completion_tests.rs"]
 description = "Streaming inline AI completions via textDocument/perlInlineCompletionStream — delivers incremental completions via $/progress with session and sequence tracking"
 
 [[feature]]
@@ -297,7 +342,7 @@ spec = "LSP 3.6"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_type_definition_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_type_definition_tests.rs"]
 description = "Go to type definition"
 
 [[feature]]
@@ -306,7 +351,7 @@ spec = "LSP 3.6"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_implementation_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_implementation_tests.rs"]
 description = "Go to implementation"
 
 [[feature]]
@@ -315,7 +360,7 @@ spec = "LSP 3.6"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_color_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_color_tests.rs"]
 description = "Color decorators"
 
 [[feature]]
@@ -324,7 +369,7 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_linked_editing_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_linked_editing_tests.rs"]
 description = "Linked editing of related tokens"
 
 # Workspace Features
@@ -335,7 +380,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_symbol_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_symbol_tests.rs"]
 description = "Workspace symbol search across all indexed files with substring and prefix matching, proximity-ranked results (search_symbols_ranked prioritises symbols in the active document's package hierarchy), multi-root workspace support (folder_uri attribution per symbol), incremental re-index with content-hash early-exit (unchanged files skip re-parse), stale-index detection and cleanup on file removal, and parse-storm throttling for large batch indexing. Supports searching packages, subroutines, variables, classes, and methods across CPAN-scale workspaces (validated to 10k+ files)"
 
 [[feature]]
@@ -344,7 +389,11 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Workspace-wide pull diagnostics"
 
 [[feature]]
@@ -353,7 +402,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_execute_command_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_execute_command_tests.rs"]
 description = "Execute commands (Perl::Critic, etc)"
 
 [[feature]]
@@ -362,7 +411,7 @@ spec = "LSP 3.6"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "Multi-root workspace support"
 
 [[feature]]
@@ -371,7 +420,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_file_operations_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_file_operations_tests.rs"]
 description = "File rename/create/delete tracking"
 
 [[feature]]
@@ -380,7 +429,7 @@ spec = "LSP 3.0"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_file_ops_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "Apply workspace-wide edits"
 
 [[feature]]
@@ -389,7 +438,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_3_17_compliance_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_compliance_tests.rs"]
 description = "Cross-project symbol identity"
 
 # Window Features
@@ -400,7 +449,7 @@ spec = "LSP 3.0"
 area = "window"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_progress_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_progress_tests.rs"]
 description = "Progress reporting"
 
 [[feature]]
@@ -410,7 +459,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_window_tests.rs"]
 description = "Show messages to user"
 
 [[feature]]
@@ -420,7 +469,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_window_tests.rs", "crates/perl-lsp/tests/lsp_window_progress_test.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_window_tests.rs", "crates/perl-lsp-rs/tests/lsp_window_progress_test.rs"]
 description = "Log messages"
 
 [[feature]]
@@ -429,7 +478,7 @@ spec = "LSP 3.15"
 area = "window"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_3_17_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_window_tests.rs"]
 description = "Detailed work progress"
 
 # Notebook Features
@@ -441,7 +490,7 @@ area = "notebook"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_notebook_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_notebook_tests.rs"]
 description = "Notebook document synchronization (didOpen/didChange/didSave/didClose handlers)"
 
 [[feature]]
@@ -451,7 +500,7 @@ area = "notebook"
 maturity = "ga"
 advertised = false
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_notebook_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_notebook_tests.rs"]
 description = "Notebook cell execution summary tracking (LSP does not execute cells; this tracks executionSummary metadata)"
 
 # Debug Features (DAP)
@@ -705,7 +754,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_lifecycle_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_lifecycle_tests.rs"]
 description = "Initialize handshake"
 
 [[feature]]
@@ -715,7 +764,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_lifecycle_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_lifecycle_tests.rs"]
 description = "Initialized notification"
 
 [[feature]]
@@ -725,7 +774,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_lifecycle_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_lifecycle_tests.rs"]
 description = "Graceful shutdown request"
 
 [[feature]]
@@ -735,7 +784,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_lifecycle_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_lifecycle_tests.rs"]
 description = "Exit notification with proper exit codes"
 
 [[feature]]
@@ -745,7 +794,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_3_17_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_window_tests.rs"]
 description = "Request cancellation ($/cancelRequest)"
 
 [[feature]]
@@ -755,7 +804,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_registration_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_registration_tests.rs"]
 description = "Dynamic capability registration (server->client)"
 
 [[feature]]
@@ -765,7 +814,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_registration_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_registration_tests.rs"]
 description = "Dynamic capability unregistration (server->client)"
 
 [[feature]]
@@ -775,7 +824,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_trace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_trace_tests.rs"]
 description = "Client sets server trace level ($/setTrace)"
 
 [[feature]]
@@ -785,7 +834,7 @@ area = "protocol"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_trace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_trace_tests.rs"]
 description = "Server trace logging ($/logTrace)"
 
 # Text Document Synchronization
@@ -797,7 +846,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_text_sync_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_text_sync_tests.rs"]
 description = "didOpen/didChange/didClose text synchronization"
 
 [[feature]]
@@ -807,7 +856,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_text_sync_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_text_sync_tests.rs"]
 description = "didSave notifications"
 
 [[feature]]
@@ -817,7 +866,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_text_sync_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_text_sync_tests.rs"]
 description = "willSave notifications"
 
 [[feature]]
@@ -827,7 +876,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_text_sync_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_text_sync_tests.rs"]
 description = "willSaveWaitUntil request with format-on-save"
 
 # Additional Language Features
@@ -838,7 +887,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_document_highlight_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_document_highlight_tests.rs"]
 description = "Document highlights (local references)"
 
 [[feature]]
@@ -847,7 +896,10 @@ spec = "LSP 3.12"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_rename_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_rename_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Validate rename and compute placeholder/range"
 
 [[feature]]
@@ -856,7 +908,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_3_17_compliance_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_3_17_compliance_tests.rs"]
 description = "Inline values during debugging (LSP inlineValue)"
 
 [[feature]]
@@ -865,7 +917,7 @@ spec = "LSP 3.6"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_color_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_color_tests.rs"]
 description = "Color presentation request (pairs with documentColor)"
 
 # Resolve Routes
@@ -876,7 +928,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_completion_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_completion_tests.rs"]
 description = "Resolve additional completion item details"
 
 [[feature]]
@@ -885,7 +937,7 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_code_actions_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_code_actions_tests.rs"]
 description = "Resolve additional code action details"
 
 [[feature]]
@@ -894,7 +946,10 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_code_lens_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/lsp_code_lens_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+]
 description = "Resolve code lens command"
 
 [[feature]]
@@ -903,7 +958,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_document_link_resolve_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_document_link_resolve_tests.rs"]
 description = "Resolve document link target"
 
 [[feature]]
@@ -912,7 +967,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_inlay_hint_resolve_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_inlay_hint_resolve_tests.rs"]
 description = "Resolve inlay hint label locations"
 
 [[feature]]
@@ -921,7 +976,7 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_symbol_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_symbol_tests.rs"]
 description = "Resolve additional workspace symbol info"
 
 # Refresh Routes (Server -> Client)
@@ -933,7 +988,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh code lenses"
 
 [[feature]]
@@ -943,7 +998,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh semantic tokens"
 
 [[feature]]
@@ -953,7 +1008,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inlay hints"
 
 [[feature]]
@@ -963,7 +1018,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh inline values"
 
 [[feature]]
@@ -973,7 +1028,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh pulled diagnostics"
 
 [[feature]]
@@ -983,7 +1038,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_refresh_methods_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_refresh_methods_tests.rs"]
 description = "Request client to refresh folding ranges (workspace/foldingRange/refresh, @proposed)"
 
 # Workspace Plumbing
@@ -995,7 +1050,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_workspace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/configuration request (server->client)"
 
 [[feature]]
@@ -1005,7 +1060,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_workspace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeConfiguration notification"
 
 [[feature]]
@@ -1015,7 +1070,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_workspace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/didChangeWatchedFiles notification"
 
 [[feature]]
@@ -1025,7 +1080,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_workspace_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_tests.rs"]
 description = "workspace/applyEdit request (server->client)"
 
 [[feature]]
@@ -1035,7 +1090,11 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/pull_diagnostics_tests.rs"]
+tests = [
+  "crates/perl-lsp-rs/tests/pull_diagnostics_tests.rs",
+  "crates/perl-lsp-rs/tests/lsp_bdd_workflows.rs",
+  "crates/perl-lsp-ux-tests/tests/ux_scenario_12_diagnostics_strict.rs",
+]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
 # Window / Telemetry
@@ -1047,7 +1106,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_window_tests.rs"]
 description = "Prompt user with choices (showMessageRequest)"
 
 [[feature]]
@@ -1057,7 +1116,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_window_tests.rs"]
 description = "Ask client to open/display a URI (showDocument)"
 
 [[feature]]
@@ -1067,7 +1126,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_window_tests.rs"]
 description = "Create server-initiated work done progress"
 
 [[feature]]
@@ -1077,7 +1136,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_window_tests.rs"]
 description = "Client cancels server-initiated work done progress"
 
 [[feature]]
@@ -1087,7 +1146,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_window_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_window_tests.rs"]
 description = "Server telemetry events (telemetry/event)"
 
 # LSP 3.18 Additions
@@ -1099,7 +1158,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_diagnostic_enrichment_test.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_diagnostic_enrichment_test.rs"]
 description = "Markdown-formatted diagnostic messages (textDocument.diagnostic.markupMessageSupport) — server includes messageMarkup in diagnostic data when client opts in"
 
 [[feature]]
@@ -1108,7 +1167,7 @@ spec = "LSP 3.18"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_virtual_content_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs"]
 description = "workspace/textDocumentContent request (@proposed)"
 
 [[feature]]
@@ -1118,7 +1177,7 @@ area = "workspace"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["crates/perl-lsp/tests/lsp_virtual_content_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_virtual_content_tests.rs"]
 description = "workspace/textDocumentContent/refresh request (@proposed)"
 
 # File Operations (method-level breakdown)
@@ -1129,7 +1188,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_file_ops_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/willCreateFiles request"
 
 [[feature]]
@@ -1138,7 +1197,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_file_ops_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/didCreateFiles notification"
 
 [[feature]]
@@ -1147,7 +1206,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_file_operations_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_file_operations_tests.rs"]
 description = "workspace/willRenameFiles request"
 
 [[feature]]
@@ -1156,7 +1215,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_file_operations_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_file_operations_tests.rs"]
 description = "workspace/didRenameFiles notification"
 
 [[feature]]
@@ -1165,7 +1224,7 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_file_ops_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/willDeleteFiles request"
 
 [[feature]]
@@ -1174,5 +1233,5 @@ spec = "LSP 3.16"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["crates/perl-lsp/tests/lsp_workspace_file_ops_tests.rs"]
+tests = ["crates/perl-lsp-rs/tests/lsp_workspace_file_ops_tests.rs"]
 description = "workspace/didDeleteFiles notification"

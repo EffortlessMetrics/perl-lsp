@@ -2,21 +2,22 @@ name: CI
 
 # Tiered CI for perl-lsp (see tests/TAXONOMY.md)
 # - PR smoke: fast feedback on every push (~1-2 min)
-# - Merge gate: full validation on merge-ready label or merge (~5-10 min)
-# Cost: ~$0.03 per PR (smoke), ~$0.05 on merge gate
+# - Merge gate: full validation on every PR push and push to main (~5-10 min)
+# Cost: ~$0.05 per PR (smoke + merge gate; see #4675 for rationale)
 
 on:
   pull_request:
     branches: [ main, master ]
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, ready_for_review, converted_to_draft]
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Cancel in-flight runs on new pushes (saves minutes)
+# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
+# preflight gate instead of cancelling in-flight work mid-run.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -28,16 +29,68 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  draft-pr-check:
+    name: Draft PR guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    outputs:
+      run_ci: ${{ steps.guard.outputs.run_ci }}
+    steps:
+      - name: Decide whether full CI should run
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Non-PR event detected — running full CI"
+          elif [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "run_ci=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Draft PR detected — skipping CI jobs until ready for review"
+          else
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Ready-for-review PR detected — running full CI"
+          fi
+
+  # ── Preflight: skip superseded SHAs to save cost ─────────────────────
+  preflight-latest-check:
+    name: Preflight — is this SHA latest?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    needs: draft-pr-check
+    if: needs.draft-pr-check.outputs.run_ci == 'true'
+    outputs:
+      is_latest: ${{ steps.check.outputs.is_latest }}
+    steps:
+      - name: Check if this SHA is latest on the ref
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          CURRENT="${{ github.event.pull_request.head.sha || github.sha }}"
+          LATEST=$(git ls-remote "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/heads/${BRANCH}" | awk '{print $1}')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::This SHA ($CURRENT) is latest on $BRANCH — running full CI"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Superseded by $LATEST — skipping remaining jobs to save cost"
+          fi
+
   # ── PR Smoke: fast feedback for every PR (~1-2 min) ──────────────────
   pr-smoke:
     name: PR Smoke (Fast Feedback)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     steps:
       - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+          # Fetch enough history so ci-scope can diff against origin/master.
+          # 0 = full history; balances correctness vs. clone cost.
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
@@ -50,18 +103,11 @@ jobs:
         with:
           tool: just
 
-      - name: Auto-fix formatting
-        run: |
-          cargo xtask fmt
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "chore: auto-format with cargo fmt"
-            git push
-            echo "::notice::Auto-formatted code pushed. CI will re-run."
-            exit 0
-          fi
+      - name: Check formatting
+        run: cargo xtask fmt --check
+
+      - name: Check release history drift
+        run: bash scripts/check_release_history.sh
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
@@ -70,22 +116,122 @@ jobs:
           cache-all-crates: true
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
-      - name: Run PR smoke checks
+      # Compute CI scope: classify the diff and select lanes.
+      # Falls back gracefully — if ci-scope fails, SCOPE_OK=false and we
+      # fall through to the hardcoded clippy-core / test-core baseline.
+      - name: Compute CI scope
+        id: scope
         run: |
-          just clippy-core
-          just test-core
+          SCOPE_OK=true
+          SCOPE_JSON=$(cargo xtask ci-scope --base origin/master --format json 2>/dev/null) || SCOPE_OK=false
 
-  # ── Merge Gate: full validation (label-gated or push to main) ────────
+          if [ "$SCOPE_OK" = "false" ] || [ -z "$SCOPE_JSON" ]; then
+            echo "::warning::ci-scope failed or emitted empty output — falling back to clippy-core / test-core"
+            echo "scope_ok=false" >> "$GITHUB_OUTPUT"
+            echo "diff_class=unknown" >> "$GITHUB_OUTPUT"
+            echo "crates_args=" >> "$GITHUB_OUTPUT"
+          else
+            echo "scope_ok=true" >> "$GITHUB_OUTPUT"
+
+            # Extract diff_class
+            DIFF_CLASS=$(echo "$SCOPE_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('diff_class','unknown'))")
+            echo "diff_class=$DIFF_CLASS" >> "$GITHUB_OUTPUT"
+
+            # Build -p args from direct_crates + architecture_wideners (unique, non-empty)
+            CRATES_ARGS=$(echo "$SCOPE_JSON" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          names = set()
+          for c in d.get('direct_crates', []):
+              n = c.get('name', '').strip()
+              if n: names.add(n)
+          for c in d.get('architecture_wideners', []):
+              n = c.get('name', '').strip()
+              if n: names.add(n)
+          print(' '.join('-p ' + n for n in sorted(names)))
+          ")
+            echo "crates_args=$CRATES_ARGS" >> "$GITHUB_OUTPUT"
+
+            # Log the scope decision for debugging
+            echo "::notice::ci-scope diff_class=$DIFF_CLASS crates=$CRATES_ARGS"
+          fi
+
+      # Skip heavy lanes entirely for prose-only or CI-config-only diffs.
+      - name: Skip notice (prose-only / CI-config diff)
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          (steps.scope.outputs.diff_class == 'prose_only' ||
+           steps.scope.outputs.diff_class == 'ci_config')
+        run: |
+          echo "::notice::Prose-only / CI-config diff — skipping Rust build lanes (no code changed)"
+
+      # ── Scoped clippy (scope-aware path) ─────────────────────────────────
+      # Runs when ci-scope succeeded AND diff is not prose/CI-config AND
+      # there are crates to check.
+      - name: Scoped clippy
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo clippy --locked ${{ steps.scope.outputs.crates_args }} -- -D warnings -A missing_docs
+
+      # ── Scoped test (scope-aware path) ───────────────────────────────────
+      - name: Scoped test
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
+
+      # Compile integration tests for scoped crates to catch tests/* bit-rot.
+      - name: Scoped integration-test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
+
+      # ── Fallback: baseline clippy-core / test-core ────────────────────────
+      # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
+      # crates to check (empty crates_args on a non-prose diff — shouldn't
+      # happen but guards against gaps in the classifier).
+      - name: Fallback clippy-core
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: just clippy-core
+
+      - name: Fallback test-core
+        if: |
+          steps.scope.outputs.scope_ok == 'false' ||
+          (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'ci_config' &&
+           steps.scope.outputs.crates_args == '')
+        run: just test-core
+
+      # Note: workspace-wide integration-test compilation is covered by the
+      # parallel check-all-targets job (just check-all-targets), which runs
+      # cargo check --workspace --all-targets --locked independently of pr-smoke.
+      # Adding a redundant fallback here would duplicate that work without gain.
+
+  # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
     name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: pr-smoke
-    # Run on: merge-ready label, push to main/master, or workflow_dispatch
-    if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'merge-ready'))
+    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    # Run on every PR push and on push to main/master
+    # Earlier gating > label-gated gating (see #4675)
+    # Frequent commits will queue; preflight skips superseded SHAs.
     steps:
       - uses: actions/checkout@v6
         with:
@@ -112,6 +258,9 @@ jobs:
 
       - name: Run full ci-gate with receipts
         run: just gates
+
+      - name: Release history drift check
+        run: bash scripts/check_release_history.sh
 
       - name: Upload gate receipt
         if: always()
@@ -221,7 +370,8 @@ jobs:
     name: UX Regression Tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    needs: pr-smoke
+    needs: [draft-pr-check, pr-smoke, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
     # Run on every PR push — this is the regression prevention gate.
     steps:
       - uses: actions/checkout@v6
@@ -230,17 +380,17 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
           toolchain: 1.92.0
 
       - name: Install just
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
         with:
           tool: just
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           cache-on-failure: true
           cache-all-crates: true
@@ -254,3 +404,85 @@ jobs:
           PERL_LSP_BIN: ${{ github.workspace }}/target/debug/perl-lsp
           RUST_TEST_THREADS: "1"
         run: just ux-tests
+
+  # ── Compile All Targets: catch integration-test + bench bit-rot ───────
+  check-all-targets:
+    name: Compile All Targets (bit-rot guard)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [draft-pr-check, preflight-latest-check]
+    if: needs.draft-pr-check.outputs.run_ci == 'true' && needs.preflight-latest-check.outputs.is_latest == 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-all-targets-${{ hashFiles('Cargo.lock') }}
+
+      - name: Compile all targets (catches integration-test + bench bit-rot)
+        run: just check-all-targets
+
+  # ── Windows Guardrails: proactive Windows regression catchers ─────────
+  windows-guardrails:
+    name: Windows Guardrails (${{ matrix.lane.name }})
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: preflight-latest-check
+    if: needs.preflight-latest-check.outputs.is_latest == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - name: compile
+            command: >-
+              cargo check --locked --all-targets
+              -p perl-module
+              -p perl-lsp-rs
+              -p perl-workspace
+          - name: module-separator-regressions
+            command: >-
+              cargo test --locked -p perl-module
+              --test path_comprehensive_unit_tests
+              --test module_resolution_use_require
+          - name: sandbox-fail-closed
+            command: >-
+              cargo test --locked -p perl-lsp-rs
+              security::sandbox::tests::test_windows_sandbox_fails_closed
+              -- --exact
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-windows-guardrails-${{ hashFiles('Cargo.lock') }}-${{ matrix.lane.name }}
+
+      - name: Run Windows guardrail lane
+        shell: bash
+        run: ${{ matrix.lane.command }}

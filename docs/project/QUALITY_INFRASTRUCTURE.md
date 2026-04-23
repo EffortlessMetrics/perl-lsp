@@ -18,7 +18,7 @@ This is not a convention enforced by code review alone. Three separate automated
 
 A parallel **unsafe syntax ratchet** (`ci/check_unsafe_prod.sh`) enforces zero explicit `unsafe` blocks in production source.
 
-The only exception is a single centralized `#[allow(clippy::expect_used)]` for an `lsp_types::Uri` fallback in `crates/perl-lsp/src/util/uri.rs`. In tests, the project uses `Result<()>` return types and dedicated `perl_tdd_support::must`/`must_some` helpers instead of assertions that could panic.
+The only exception is a single centralized `#[allow(clippy::expect_used)]` for an `lsp_types::Uri` fallback in `crates/perl-lsp-rs/src/util/uri.rs`. In tests, the project uses `Result<()>` return types and dedicated `perl_tdd_support::must`/`must_some` helpers instead of assertions that could panic.
 
 The philosophy: an LSP server that crashes takes down your editor. Graceful degradation is not optional.
 

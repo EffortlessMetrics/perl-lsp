@@ -41,10 +41,10 @@ regex.workspace = true
 url.workspace = true
 
 # Wave G1b additional dependencies (10 medium-risk providers absorbed)
-perl-lsp-tooling.workspace = true
+# perl-lsp-tooling absorbed into perl-lsp-rs-core::tooling (Wave G3 step 7)
+perl-subprocess-runtime.workspace = true
 perl-lsp-perltidy.workspace = true
-perl-lsp-text-utils.workspace = true
-perl-lsp-uri.workspace = true
+# perl-lsp-uri absorbed into perl-lsp-rs-core::uri (Wave G3 step 3)
 perl-diagnostics.workspace = true
 perl-workspace.workspace = true
 perl-pragma.workspace = true
@@ -52,10 +52,23 @@ perl-symbol.workspace = true
 perl-parser.workspace = true
 rustc-hash = "2.1.2"
 thiserror.workspace = true
+toml = "1.1.2"
 ureq = { version = "3", features = ["json"] }
+# Wave G3 step 5: perl-lsp-performance absorbed
+moka = { version = "0.12", features = ["sync"] }
+
+# Wave G2 runtime crate dependencies (6 runtime crates absorbed)
+anyhow.workspace = true
+clap = { workspace = true }
+# Wave Final PR B: perl-content-length-framing absorbed inline into transport::framing; dep removed
+tracing.workspace = true
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 [build-dependencies]
-perl-feature-catalog.workspace = true
+# Wave Final PR B: feature-catalog absorbed into feature_catalog.rs; build.rs uses inline catalog code
+serde = { workspace = true, features = ["derive"] }
+toml = "1.1.2"
 
 [features]
 lsp-ga-lock = []
@@ -65,9 +78,10 @@ lsp-compat = []
 perl-tdd-support.workspace = true
 serde_json.workspace = true
 perl-lsp-rs.workspace = true
-perl-lsp-tooling.workspace = true
+perl-subprocess-runtime.workspace = true
 tempfile.workspace = true
 insta = { version = "1.47.2", features = ["yaml"] }
+proptest.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true

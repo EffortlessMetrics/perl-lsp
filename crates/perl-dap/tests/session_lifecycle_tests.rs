@@ -984,6 +984,54 @@ fn test_error_handling_variables_missing_reference() {
 
 #[test]
 // AC:5.4
+fn test_error_handling_variables_negative_start_rejected() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({
+            "variablesReference": 1,
+            "start": -1
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "variables with negative start should fail");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Invalid start"));
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
+fn test_error_handling_variables_negative_count_rejected() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({
+            "variablesReference": 1,
+            "count": -7
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "variables with negative count should fail");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Invalid count"));
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
 fn test_error_handling_launch_program_is_directory() {
     // Test that launch rejects directory paths
     let (mut adapter, _rx) = create_test_adapter();
