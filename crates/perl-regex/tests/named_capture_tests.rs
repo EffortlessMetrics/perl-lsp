@@ -107,6 +107,18 @@ fn test_capture_group_has_pattern_field() -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+#[test]
+fn test_capture_pattern_with_char_class_containing_rparen() -> Result<(), Box<dyn std::error::Error>>
+{
+    // A closing paren inside [...] is literal and must not terminate the group pattern scan.
+    let captures = RegexAnalyzer::extract_named_captures(r"(?<tok>[^)]+)");
+    assert_eq!(captures.len(), 1);
+    assert_eq!(captures[0].name, "tok");
+    assert_eq!(captures[0].index, 1);
+    assert_eq!(captures[0].pattern, "[^)]+");
+    Ok(())
+}
+
 // ── CaptureGroup struct ──────────────────────────────────────────────────
 
 #[test]
