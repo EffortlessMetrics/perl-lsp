@@ -75,6 +75,22 @@ impl LspServer {
 
     /// Handle initialized notification
     pub(super) fn handle_initialized_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
+        if !self.initialize_requested.load(Ordering::Acquire) {
+            return Err(JsonRpcError {
+                code: -32002, // ServerNotInitialized per LSP spec
+                message: "Server not initialized".to_string(),
+                data: None,
+            });
+        }
+
+        if self.initialized.load(Ordering::Acquire) {
+            return Err(JsonRpcError {
+                code: -32600, // InvalidRequest per LSP spec
+                message: "initialized notification may only be sent once".to_string(),
+                data: None,
+            });
+        }
+
         self.initialized.store(true, Ordering::Release);
         tracing::info!("Server initialized");
 
@@ -102,5 +118,32 @@ impl LspServer {
         }
 
         Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initialized_requires_initialize_request_first() {
+        let server = LspServer::new();
+
+        let result = server.handle_initialized_dispatch();
+
+        assert!(result.is_err(), "initialized before initialize must error");
+        assert!(!server.is_initialized(), "server must remain uninitialized");
+    }
+
+    #[test]
+    fn initialized_can_only_be_sent_once() {
+        let server = LspServer::new();
+        server.handle_initialize(None).expect("initialize request should succeed");
+
+        let first = server.handle_initialized_dispatch();
+        let second = server.handle_initialized_dispatch();
+
+        assert!(first.is_ok(), "first initialized must succeed");
+        assert!(second.is_err(), "second initialized must error");
     }
 }
