@@ -3840,7 +3840,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         if is_url_like_hash_comment(line, idx) {
             continue;
         }
-        if is_likely_string_literal_comment_start(line, idx) {
+        if is_likely_string_literal_comment_start(line, idx)
+            || is_inside_rust_string_or_char_literal(line, idx)
+        {
             continue;
         }
         if has_unlinked_token(&line[idx + 2..], token_re) {
@@ -3848,7 +3850,9 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         }
     }
     for (idx, _) in line.match_indices("/*") {
-        if is_likely_string_literal_comment_start(line, idx) {
+        if is_likely_string_literal_comment_start(line, idx)
+            || is_inside_rust_string_or_char_literal(line, idx)
+        {
             continue;
         }
         if has_unlinked_token(&line[idx + 2..], token_re) {
@@ -3889,6 +3893,86 @@ fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> boo
         return false;
     }
     matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+}
+
+fn is_inside_rust_string_or_char_literal(line: &str, idx: usize) -> bool {
+    #[derive(Clone, Copy)]
+    enum Mode {
+        Normal,
+        String,
+        Char,
+        RawString { hashes: usize },
+    }
+
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    let mut mode = Mode::Normal;
+    while i < idx && i < bytes.len() {
+        match mode {
+            Mode::Normal => match bytes[i] {
+                b'"' => {
+                    mode = Mode::String;
+                    i += 1;
+                }
+                b'\'' => {
+                    mode = Mode::Char;
+                    i += 1;
+                }
+                b'r' => {
+                    let mut j = i + 1;
+                    while j < idx && j < bytes.len() && bytes[j] == b'#' {
+                        j += 1;
+                    }
+                    if j < idx && j < bytes.len() && bytes[j] == b'"' {
+                        mode = Mode::RawString { hashes: j.saturating_sub(i + 1) };
+                        i = j + 1;
+                    } else {
+                        i += 1;
+                    }
+                }
+                _ => i += 1,
+            },
+            Mode::String => {
+                if bytes[i] == b'\\' {
+                    i = (i + 2).min(idx);
+                } else if bytes[i] == b'"' {
+                    mode = Mode::Normal;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::Char => {
+                if bytes[i] == b'\\' {
+                    i = (i + 2).min(idx);
+                } else if bytes[i] == b'\'' {
+                    mode = Mode::Normal;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::RawString { hashes } => {
+                if bytes[i] == b'"' {
+                    let mut j = i + 1;
+                    let mut seen = 0usize;
+                    while j < idx && j < bytes.len() && bytes[j] == b'#' && seen < hashes {
+                        j += 1;
+                        seen += 1;
+                    }
+                    if seen == hashes {
+                        mode = Mode::Normal;
+                        i = j;
+                    } else {
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+    !matches!(mode, Mode::Normal)
 }
 
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
@@ -4160,6 +4244,30 @@ mod tests {
         assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line(
             "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_comment_markers_inside_literals() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO still in string\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"prefix /* FIXME still in string */\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = r##\"path//TODO and /* FIXME */ in raw\"##;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"prefix // TODO still in string\"; // TODO: real comment",
             &todo_re
         ));
 
