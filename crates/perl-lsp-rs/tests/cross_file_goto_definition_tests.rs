@@ -2947,3 +2947,121 @@ my $value = greet();
 
     Ok(())
 }
+/// `Catalyst::Plugin::Session::Store::DBIC::Encrypted` inherits through
+/// multiple parents and should resolve methods defined on the root base class.
+#[test]
+fn go_to_definition_cross_file_five_deep_catalyst_style_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Core.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::Core;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub fetch_session {
+    my ($self) = @_;
+    return "from core";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC;
+use parent 'Catalyst::Plugin::Session::Store::DBIC::Core';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/RoleCompat.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::RoleCompat;
+use parent 'Catalyst::Plugin::Session::Store::DBIC';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/EncryptedBase.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::EncryptedBase;
+use parent 'Catalyst::Plugin::Session::Store::DBIC::RoleCompat';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+use parent 'Catalyst::Plugin::Session::Store::DBIC::EncryptedBase';
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in [
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Core.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC/RoleCompat.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC/EncryptedBase.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+    ] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+
+my $store = Catalyst::Plugin::Session::Store::DBIC::Encrypted->new();
+$store->fetch_session();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Line 7 (0-indexed): `$store->fetch_session();`
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 10}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for 5-deep catalyst-style chain goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected 5-deep catalyst-style inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("Core.pm"),
+        "5-deep catalyst-style chain: definition should point to Core.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+
