@@ -37,12 +37,15 @@ The extension auto-downloads the matching `perllsp` binary for your platform.
 **Other editors** — download a prebuilt binary from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), add it to your `PATH`, then point your LSP client at it:
 
 ```lua
--- Neovim (nvim-lspconfig)
+-- Neovim (nvim-lspconfig) — register a custom server config
 local lspconfig = require('lspconfig')
-local perl = lspconfig.perl_lsp or lspconfig.perl_ls
-if perl then
-  perl.setup { cmd = { "perllsp", "--stdio" } }
+local configs = require('lspconfig.configs')
+if not configs.perl_lsp then
+  configs.perl_lsp = {
+    default_config = { cmd = { "perllsp", "--stdio" }, filetypes = { "perl" },
+                       root_dir = lspconfig.util.root_pattern('.git') } }
 end
+lspconfig.perl_lsp.setup {}
 ```
 
 ```elisp
