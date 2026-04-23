@@ -100,6 +100,33 @@ yaml_get() {
     fi
 }
 
+# Evaluate an arbitrary yq expression against a file.
+# Returns empty string when yq is unavailable, file missing, or expression fails.
+yaml_eval() {
+    local file="$1"
+    local expr="$2"
+
+    if [[ ! -f "$file" ]] || ! command -v yq &>/dev/null; then
+        echo ""
+        return
+    fi
+
+    local result
+    result=$(yq -r "$expr" "$file" 2>/dev/null) || result=""
+    if [[ "$result" == "null" ]]; then
+        echo ""
+    else
+        echo "$result"
+    fi
+}
+
+# Convert ISO-8601 timestamp to epoch seconds.
+# Returns empty string on parse failure.
+iso_to_epoch() {
+    local iso="$1"
+    date -u -d "$iso" +%s 2>/dev/null || true
+}
+
 # Format date for display
 format_date() {
     date -u +"%Y-%m-%d"
@@ -249,10 +276,60 @@ fi
 
 # Extract temporal data if available
 if [[ "$HAS_TEMPORAL" == "true" ]]; then
+    # Support both legacy scalar-style temporal schema and current list-style schema.
     SESSION_COUNT=$(yaml_get "$TEMPORAL_FILE" '.sessions.count')
+    if [[ -z "$SESSION_COUNT" ]]; then
+        SESSION_COUNT=$(yaml_eval "$TEMPORAL_FILE" '.sessions | length')
+    fi
+    if [[ -z "$SESSION_COUNT" ]]; then
+        SESSION_COUNT=$(grep -c '^[[:space:]]*-[[:space:]]id:' "$TEMPORAL_FILE" 2>/dev/null || true)
+    fi
+
     PATTERN=$(yaml_get "$TEMPORAL_FILE" '.convergence.pattern')
     STABILIZATION=$(yaml_get "$TEMPORAL_FILE" '.convergence.stabilization_commit')
+    if [[ -z "$STABILIZATION" ]]; then
+        STABILIZATION=$(yaml_get "$TEMPORAL_FILE" '.stabilization.inflection_commit')
+    fi
+    if [[ -z "$STABILIZATION" ]]; then
+        STABILIZATION=$(grep -E '^[[:space:]]*inflection_commit:' "$TEMPORAL_FILE" 2>/dev/null | head -1 | sed -E 's/^[^:]*:[[:space:]]*"?([^"]*)"?/\1/')
+    fi
+
     WALL_CLOCK=$(yaml_get "$TEMPORAL_FILE" '.timeline.wall_clock_hours')
+    if [[ -z "$WALL_CLOCK" ]]; then
+        first_start=$(yaml_eval "$TEMPORAL_FILE" '.sessions[0].start')
+        last_end=$(yaml_eval "$TEMPORAL_FILE" '.sessions[-1].end')
+        if [[ -z "$first_start" ]]; then
+            first_start=$(grep -E '^[[:space:]]*start:' "$TEMPORAL_FILE" 2>/dev/null | head -1 | sed -E 's/^[^:]*:[[:space:]]*"?([^"]*)"?/\1/')
+        fi
+        if [[ -z "$last_end" ]]; then
+            last_end=$(grep -E '^[[:space:]]*end:' "$TEMPORAL_FILE" 2>/dev/null | tail -1 | sed -E 's/^[^:]*:[[:space:]]*"?([^"]*)"?/\1/')
+        fi
+        first_epoch=$(iso_to_epoch "$first_start")
+        last_epoch=$(iso_to_epoch "$last_end")
+        if [[ -n "$first_epoch" && -n "$last_epoch" && "$last_epoch" -ge "$first_epoch" ]]; then
+            WALL_CLOCK=$(awk "BEGIN {printf \"%.2f\", ($last_epoch - $first_epoch) / 3600}")
+        fi
+    fi
+
+    if [[ -z "$PATTERN" ]]; then
+        grind_sessions=$(yaml_eval "$TEMPORAL_FILE" '[.sessions[] | select(.is_grind == true)] | length')
+        if [[ -z "$grind_sessions" ]]; then
+            grind_sessions=$(grep -c '^[[:space:]]*is_grind:[[:space:]]*true' "$TEMPORAL_FILE" 2>/dev/null || true)
+        fi
+        if [[ "$SESSION_COUNT" =~ ^[0-9]+$ ]] && [[ "$SESSION_COUNT" -le 1 ]]; then
+            PATTERN="single_pass"
+        elif [[ "$grind_sessions" =~ ^[0-9]+$ ]] && [[ "$grind_sessions" -gt 0 ]]; then
+            PATTERN="iterative_with_grind"
+        elif [[ "$SESSION_COUNT" =~ ^[0-9]+$ ]]; then
+            PATTERN="iterative"
+        else
+            PATTERN="<unknown>"
+        fi
+    fi
+
+    [[ -z "$SESSION_COUNT" ]] && SESSION_COUNT="<unknown>"
+    [[ -z "$WALL_CLOCK" ]] && WALL_CLOCK="<unknown>"
+    [[ -z "$STABILIZATION" ]] && STABILIZATION="none"
 else
     SESSION_COUNT="<unknown>"
     PATTERN="<unknown - run temporal-analysis.sh>"
@@ -471,15 +548,25 @@ _Delta scale: +2=significant improvement, +1=minor improvement, 0=no change, -1=
 EOF
 
     # Generate DevLT estimate based on session count and pattern
-    if [[ "$HAS_TEMPORAL" == "true" && "$SESSION_COUNT" != "null" && "$SESSION_COUNT" != "" ]]; then
-        # Rough DevLT bands based on session count
+    if [[ "$HAS_TEMPORAL" == "true" && "$SESSION_COUNT" =~ ^[0-9]+$ ]]; then
+        # Decision-time estimate anchored to observed temporal shape.
         case "$SESSION_COUNT" in
-            1) DEVLT_RANGE="15-45m" ;;
-            2) DEVLT_RANGE="30-90m" ;;
-            3|4) DEVLT_RANGE="60-120m" ;;
-            *) DEVLT_RANGE="90-180m" ;;
+            1) base_low=15; base_high=45 ;;
+            2) base_low=30; base_high=90 ;;
+            3|4) base_low=60; base_high=120 ;;
+            *) base_low=90; base_high=180 ;;
         esac
-        echo "| DevLT | $DEVLT_RANGE | estimated | medium | $SESSION_COUNT sessions, pattern: $PATTERN |"
+
+        if [[ "$WALL_CLOCK" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+            wall_clock_ceil=$(awk "BEGIN {printf \"%d\", ($WALL_CLOCK == int($WALL_CLOCK)) ? $WALL_CLOCK : int($WALL_CLOCK)+1}")
+            wall_low=$((wall_clock_ceil * 8))
+            wall_high=$((wall_clock_ceil * 20))
+            if [[ $wall_low -gt $base_low ]]; then base_low=$wall_low; fi
+            if [[ $wall_high -gt $base_high ]]; then base_high=$wall_high; fi
+        fi
+
+        DEVLT_RANGE="${base_low}-${base_high}m"
+        echo "| DevLT | $DEVLT_RANGE | estimated | medium | sessions=$SESSION_COUNT, pattern=$PATTERN, wall_clock=${WALL_CLOCK}h |"
     else
         echo "| DevLT | <X-Ym> | estimated | medium | <from temporal analysis> |"
     fi
