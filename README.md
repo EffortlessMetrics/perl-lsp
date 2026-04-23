@@ -38,7 +38,11 @@ The extension auto-downloads the matching `perllsp` binary for your platform.
 
 ```lua
 -- Neovim (nvim-lspconfig)
-require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
+local lspconfig = require('lspconfig')
+local perl = lspconfig.perl_lsp or lspconfig.perl_ls
+if perl then
+  perl.setup { cmd = { "perllsp", "--stdio" } }
+end
 ```
 
 ```elisp
