@@ -47,6 +47,22 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
              '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
+```json
+// Zed settings.json
+{
+  "lsp": {
+    "perllsp": {
+      "command": { "path": "perllsp", "arguments": ["--stdio"] }
+    }
+  },
+  "languages": {
+    "Perl": {
+      "language_servers": ["perllsp"]
+    }
+  }
+}
+```
+
 ```text
 # Any generic LSP client
 perllsp --stdio

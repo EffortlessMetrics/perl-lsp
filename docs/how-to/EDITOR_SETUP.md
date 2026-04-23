@@ -27,6 +27,7 @@ perllsp --health
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
+| Zed | register `perllsp` and map it to Perl | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 
 ## Minimal Configurations
@@ -57,6 +58,26 @@ editor-specific guide has the full snippets for both.
 [[language-server.perl-lsp]]
 command = "perllsp"
 args = ["--stdio"]
+```
+
+### Zed
+
+```json
+{
+  "lsp": {
+    "perllsp": {
+      "command": {
+        "path": "perllsp",
+        "arguments": ["--stdio"]
+      }
+    }
+  },
+  "languages": {
+    "Perl": {
+      "language_servers": ["perllsp"]
+    }
+  }
+}
 ```
 
 ### Sublime Text

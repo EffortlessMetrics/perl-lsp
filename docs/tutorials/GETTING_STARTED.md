@@ -152,6 +152,30 @@ command = "perllsp"
 args = ["--stdio"]
 ```
 
+### Zed
+
+Add to your Zed settings JSON:
+
+```json
+{
+  "lsp": {
+    "perllsp": {
+      "command": {
+        "path": "perllsp",
+        "arguments": ["--stdio"]
+      }
+    }
+  },
+  "languages": {
+    "Perl": {
+      "language_servers": ["perllsp"]
+    }
+  }
+}
+```
+
+Then open a Perl file and confirm the language server attaches.
+
 ## Your First 5 Minutes
 
 Once installed, open any Perl file and try these features. Each heading describes what you will see in your editor.
