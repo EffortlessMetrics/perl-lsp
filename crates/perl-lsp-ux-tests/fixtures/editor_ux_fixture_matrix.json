@@ -364,6 +364,28 @@
         "request does not error"
       ],
       "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "template_language_mode_resilience",
+      "scenario_file": "ux_scenario_19_template_language_mode.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "open a template file in html mode and continue navigating in neighboring Perl files",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "template-like html mode file does not emit Perl parse diagnostics",
+        "goto-definition in adjacent Perl files remains functional"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
