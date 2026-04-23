@@ -32,7 +32,9 @@ It's not. Adjusted analysis:
 
 The economic shape: **Codex spray + Claude filter** is profitable specifically *because* generation is cheap enough that a 50% filter ratio is acceptable. If Codex were 10× more expensive per attempt, the calculus would flip toward requiring higher first-pass quality. At current prices, spray-and-filter wins.
 
-**Updated figures** from the session close: Codex Pro consumed **~26% of a 5-hour session budget + ~7% of the weekly budget** for the ~150 attempts. Combined with Claude at **~31% of 5-hour session + ~5% weekly**, both tools ran at near-matched intensity. The 5-hour-session slice suggests one session this intense burns **~5–6× a typical day's consumption simultaneously on each tool** — unusual-but-sustainable for focused review pushes, not a steady-state rate.
+**Iteration 1 figures** (session close): Codex Pro consumed **~26% of a 5-hour session budget + ~7% of the weekly budget** for the ~150 attempts. Combined with Claude 20× Max at **~31% of 5-hour session + ~5% weekly**, both tools ran at near-matched intensity. The 5-hour-session slice suggests one session this intense burns **~5–6× a typical day's consumption simultaneously on each tool** — unusual-but-sustainable for focused review pushes, not a steady-state rate.
+
+**Iteration 2 corroboration:** A follow-up session reproduced the same near-matched burn at lower absolute scale — Claude 20× Max at **~13% of 5-hour session + ~2% weekly**, Codex Pro at **~10% of 5-hour session + ~2% weekly**. The ratio (13%/10%) tracks the iteration-1 ratio (31%/26%) closely. Two data points confirm this is a structural property of the spray-and-filter pattern, not a coincidence of session shape. Cumulative weekly cost across both iterations: **~7% Claude 20× Max + ~9% Codex Pro** for ~201 merges, ~180 closes, and ~53 structural sub-issues filed.
 
 ---
 
