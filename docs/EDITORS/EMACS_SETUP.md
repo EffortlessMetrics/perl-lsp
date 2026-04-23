@@ -32,10 +32,13 @@ Copy this into your Emacs config:
 ```elisp
 (use-package eglot
   :hook ((perl-mode . eglot-ensure)
-         (cperl-mode . eglot-ensure))
+         (cperl-mode . eglot-ensure)
+         (perl-ts-mode . eglot-ensure)
+         (cperl-ts-mode . eglot-ensure))
   :config
   (add-to-list 'eglot-server-programs
-               '((perl-mode cperl-mode) . ("perllsp" "--stdio"))))
+               '((perl-mode cperl-mode perl-ts-mode cperl-ts-mode)
+                 . ("perllsp" "--stdio"))))
 ```
 
 Then:
@@ -85,13 +88,15 @@ If you prefer `lsp-mode`, use this minimal config:
 ```elisp
 (use-package lsp-mode
   :hook ((perl-mode . lsp-deferred)
-         (cperl-mode . lsp-deferred))
+         (cperl-mode . lsp-deferred)
+         (perl-ts-mode . lsp-deferred)
+         (cperl-ts-mode . lsp-deferred))
   :commands lsp
   :config
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
-    :major-modes '(perl-mode cperl-mode)
+    :major-modes '(perl-mode cperl-mode perl-ts-mode cperl-ts-mode)
     :server-id 'perllsp)))
 ```
 
@@ -120,7 +125,7 @@ Run these in order:
    M-: major-mode
    ```
 
-   Expected: `perl-mode` or `cperl-mode`.
+   Expected: `perl-mode`, `cperl-mode`, `perl-ts-mode`, or `cperl-ts-mode`.
 
 4. Check client attachment:
 
@@ -141,6 +146,6 @@ This page intentionally focuses on:
 
 - a successful first connection,
 - consistent binary naming (`perllsp`), and
-- consistent mode coverage (`perl-mode` + `cperl-mode`).
+- consistent mode coverage across classic and tree-sitter modes (`perl-mode`, `cperl-mode`, `perl-ts-mode`, and `cperl-ts-mode`).
 
 For broader editor guidance, see [Editor Setup](../how-to/EDITOR_SETUP.md).
