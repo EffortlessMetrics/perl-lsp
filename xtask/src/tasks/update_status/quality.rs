@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use serde_json::Value;
 
 use super::{replace_block, run_cmd};
 
@@ -169,33 +170,78 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let measured = load_editor_ux_topline_metrics(root);
+
+    let workflow_pass_rate_row = measured
+        .get("workflow_pass_rate")
+        .and_then(Value::as_f64)
+        .map(|value| {
+            serde_json::json!({
+                "name": "workflow_pass_rate",
+                "state": "measured",
+                "owner": "perl-lsp-ux-tests",
+                "value": value,
+                "source": ".ci/metrics/editor_ux.json",
+            })
+        })
+        .unwrap_or_else(|| {
+            serde_json::json!({
+                "name": "workflow_pass_rate",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            })
+        });
+
+    let workflow_stability_rate_row = measured
+        .get("workflow_stability_rate")
+        .and_then(Value::as_f64)
+        .map(|value| {
+            serde_json::json!({
+                "name": "workflow_stability_rate",
+                "state": "measured",
+                "owner": "perl-lsp-ux-tests",
+                "value": value,
+                "source": ".ci/metrics/editor_ux.json",
+            })
+        })
+        .unwrap_or_else(|| {
+            serde_json::json!({
+                "name": "workflow_stability_rate",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            })
+        });
+
+    let p95_row = measured
+        .get("p95_time_to_first_useful_result_ms")
+        .and_then(Value::as_u64)
+        .map(|value| {
+            serde_json::json!({
+                "name": "p95_time_to_first_useful_result_ms",
+                "state": "measured",
+                "owner": "perl-lsp-ux-tests",
+                "value": value,
+                "source": ".ci/metrics/editor_ux.json",
+            })
+        })
+        .unwrap_or_else(|| {
+            serde_json::json!({
+                "name": "p95_time_to_first_useful_result_ms",
+                "state": "planned",
+                "owner": "perl-lsp-ux-tests",
+            })
+        });
 
     let receipt = serde_json::json!({
         "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
+        "receipt_kind": if measured.is_empty() { "planning_scaffold" } else { "measured_scaffold" },
         "scorecard": "editor_ux",
         "harness": {
             "crate": "crates/perl-lsp-ux-tests",
             "scenario_count": scenario_count,
             "scenario_files": scenario_files,
         },
-        "top_line_metrics": [
-            {
-                "name": "workflow_pass_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-        ],
+        "top_line_metrics": [workflow_pass_rate_row, workflow_stability_rate_row, p95_row],
         "integration_points": {
             "ci_lane": "just ux-tests",
             "release_lane": "just ux-tests-full",
@@ -205,6 +251,20 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+}
+
+fn load_editor_ux_topline_metrics(root: &Path) -> serde_json::Map<String, Value> {
+    let receipt_path = root.join(".ci").join("metrics").join("editor_ux.json");
+    let Ok(raw) = fs::read_to_string(&receipt_path) else {
+        return serde_json::Map::new();
+    };
+    let Ok(doc) = serde_json::from_str::<Value>(&raw) else {
+        return serde_json::Map::new();
+    };
+    let Some(metrics) = doc.get("metrics") else {
+        return serde_json::Map::new();
+    };
+    metrics.as_object().cloned().unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +318,10 @@ mod tests {
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
         assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert!(
+            receipt["receipt_kind"] == "planning_scaffold"
+                || receipt["receipt_kind"] == "measured_scaffold"
+        );
         assert_eq!(receipt["scorecard"], "editor_ux");
         assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
         assert_eq!(
@@ -280,6 +343,45 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        Ok(())
+    }
+
+    #[test]
+    fn test_editor_ux_receipt_promotes_measured_metrics_when_receipt_exists() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let ux_metrics_dir = dir.path().join(".ci").join("metrics");
+        fs::create_dir_all(&ux_metrics_dir)?;
+        fs::write(
+            ux_metrics_dir.join("editor_ux.json"),
+            r#"{
+                "schema_version": 1,
+                "measured_at": "2026-04-23T00:00:00Z",
+                "subsystem": "editor_ux",
+                "metrics": {
+                    "workflow_pass_rate": 0.92,
+                    "workflow_stability_rate": null,
+                    "p95_time_to_first_useful_result_ms": null
+                }
+            }"#,
+        )?;
+
+        let tests_dir = dir.path().join("crates/perl-lsp-ux-tests/tests");
+        fs::create_dir_all(&tests_dir)?;
+        fs::write(tests_dir.join("ux_scenario_01_stub.rs"), "#[test]\nfn stub() {}\n")?;
+
+        let receipt_raw = generate_editor_ux_receipt(dir.path())?;
+        let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
+        assert_eq!(receipt["receipt_kind"], "measured_scaffold");
+        let top_line = receipt["top_line_metrics"]
+            .as_array()
+            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?;
+        let workflow_pass = top_line
+            .iter()
+            .find(|row| row["name"] == "workflow_pass_rate")
+            .ok_or_else(|| eyre!("workflow_pass_rate row missing"))?;
+        assert_eq!(workflow_pass["state"], "measured");
+        assert_eq!(workflow_pass["source"], ".ci/metrics/editor_ux.json");
+        assert!((workflow_pass["value"].as_f64().unwrap_or_default() - 0.92).abs() < 0.001);
         Ok(())
     }
 }
