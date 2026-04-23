@@ -39,8 +39,25 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::path::Path;
+use std::{fmt, path::Path};
 use tree_sitter::{Language, Parser};
+
+#[derive(Debug)]
+enum ParseError {
+    ParseReturnedNone,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ParseReturnedNone => {
+                write!(f, "tree-sitter returned no parse tree (parse was cancelled or timed out)")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParseError {}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -130,7 +147,7 @@ pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::e
     let mut parser = try_create_parser()?;
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
+        None => Err(ParseError::ParseReturnedNone.into()),
     }
 }
 
@@ -162,7 +179,13 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read(path)?;
+    let path_ref = path.as_ref();
+    let code = std::fs::read(path_ref).map_err(|err| {
+        std::io::Error::new(
+            err.kind(),
+            format!("failed to read Perl source file '{}': {err}", path_ref.display()),
+        )
+    })?;
     parse_perl_bytes(&code)
 }
 
@@ -282,6 +305,21 @@ mod tests {
         let tree = parse_perl_bytes(b"")?;
         assert_eq!(tree.root_node().kind(), "source_file");
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_file_error_includes_path_context() {
+        let missing_file = Path::new("/definitely/missing/tree_sitter_perl_c_input.pl");
+        let err = parse_perl_file(missing_file).expect_err("missing path should return an error");
+        let message = err.to_string();
+        assert!(
+            message.contains("failed to read Perl source file"),
+            "error should include contextual read message: {message}"
+        );
+        assert!(
+            message.contains("tree_sitter_perl_c_input.pl"),
+            "error should include file path context: {message}"
+        );
     }
 }
 
