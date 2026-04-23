@@ -64,6 +64,14 @@ pub struct UxMetrics {
 
     // --- Feature drill-down rows (Phase 1 fills the first three) ---
     pub hover_correctness_rate: Option<f64>,
+    /// Top-1 completion relevance against gold fixtures.
+    /// Phase 2 (ranking-aware fixture assertions).
+    pub completion_top1_relevance: Option<f64>,
+    /// Top-5 completion relevance against gold fixtures.
+    /// Phase 1 currently approximates this from completion pass rate.
+    pub completion_top5_relevance: Option<f64>,
+    /// Backward-compatible alias kept while downstream consumers migrate.
+    /// Prefer `completion_top5_relevance`.
     pub completion_top5_usefulness: Option<f64>,
     pub completion_empty_when_should_not_be_empty_rate: Option<f64>,
     pub goto_definition_exact_hit_rate: Option<f64>,
@@ -195,6 +203,8 @@ fn build_metrics(last_run: Option<&LastRunMetrics>) -> UxMetrics {
         workflow_stability_rate: None,            // Phase 2
         p95_time_to_first_useful_result_ms: None, // Phase 2
         hover_correctness_rate: hover_rate,
+        completion_top1_relevance: None, // Phase 2
+        completion_top5_relevance: completion_rate,
         completion_top5_usefulness: completion_rate,
         completion_empty_when_should_not_be_empty_rate: None, // Phase 2
         goto_definition_exact_hit_rate: goto_rate,
@@ -263,8 +273,10 @@ fn print_table(
             println!("  goto_definition_exact_hit:   {:.1}%", rate * 100.0);
         }
         if let Some(rate) = run.completion_rate() {
+            println!("  completion_top5_relevance:   {:.1}%", rate * 100.0);
             println!("  completion_top5_usefulness:  {:.1}%", rate * 100.0);
         }
+        println!("  completion_top1_relevance:   (Phase 2)");
         println!("  workflow_stability_rate:     (Phase 2)");
         println!("  p95_time_to_first_result_ms: (Phase 2)");
     } else {
@@ -327,6 +339,8 @@ mod tests {
                 workflow_stability_rate: None,
                 p95_time_to_first_useful_result_ms: None,
                 hover_correctness_rate: Some(0.89),
+                completion_top1_relevance: None,
+                completion_top5_relevance: Some(0.86),
                 completion_top5_usefulness: Some(0.86),
                 completion_empty_when_should_not_be_empty_rate: None,
                 goto_definition_exact_hit_rate: Some(0.94),
