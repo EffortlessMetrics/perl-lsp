@@ -122,15 +122,15 @@ impl PragmaState {
 /// - developer releases like `5.012_001`
 pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
     let s = module.strip_prefix('v').unwrap_or(module);
+    let mut parts = s.splitn(3, '.');
 
-    let parts: Vec<&str> = s.splitn(3, '.').collect();
-    let major: u32 = parse_version_component(parts.first()?)?;
-    let minor: u32 = match parts.get(1) {
+    let major = parse_version_component(parts.next()?)?;
+    let minor = match parts.next() {
         Some(part) => parse_version_component(part)?,
         None => 0,
     };
 
-    Some(PerlVersion { major, minor })
+    Some(PerlVersion::new(major, minor))
 }
 
 fn parse_version_component(component: &str) -> Option<u32> {
