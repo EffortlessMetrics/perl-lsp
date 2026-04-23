@@ -161,6 +161,16 @@ jobs:
         run: |
           cargo test --locked --lib ${{ steps.scope.outputs.crates_args }}
 
+      # Compile integration tests for scoped crates to catch tests/* bit-rot.
+      - name: Scoped integration-test compile
+        if: |
+          steps.scope.outputs.scope_ok == 'true' &&
+          steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'ci_config' &&
+          steps.scope.outputs.crates_args != ''
+        run: |
+          cargo check --locked --tests ${{ steps.scope.outputs.crates_args }}
+
       # ── Fallback: baseline clippy-core / test-core ────────────────────────
       # Runs when: ci-scope failed (scope_ok=false), OR ci-scope returned no
       # crates to check (empty crates_args on a non-prose diff — shouldn't
@@ -180,6 +190,11 @@ jobs:
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
+
+      # Note: workspace-wide integration-test compilation is covered by the
+      # parallel check-all-targets job (just check-all-targets), which runs
+      # cargo check --workspace --all-targets --locked independently of pr-smoke.
+      # Adding a redundant fallback here would duplicate that work without gain.
 
   # ── Merge Gate: full validation on every PR and push to main ─────────
   merge-gate:
