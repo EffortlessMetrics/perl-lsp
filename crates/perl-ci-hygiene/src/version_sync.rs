@@ -18,6 +18,7 @@ use color_eyre::eyre::{Result, bail, eyre};
 use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 /// A discovered reference to the workspace version somewhere on disk.
 #[derive(Debug, Clone)]
@@ -35,7 +36,7 @@ pub struct VersionSite {
 /// Semantic version X.Y.Z validation regex. Keep in sync with bump's CLI
 /// validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
-    let re = Regex::new(r"^\d+\.\d+\.\d+$")?;
+    let re = regex_or_err(&SEMVER_VERSION_RE, "semver version validator")?;
     if !re.is_match(version) {
         bail!("invalid version format: {version:?} (expected X.Y.Z)");
     }
@@ -253,31 +254,65 @@ fn rewrite_version_in_line(line: &str, old: &str, new: &str) -> String {
 struct Patterns {
     /// Matches a semver literal after `version = "..."` with optional
     /// whitespace. Captures the version string.
-    bare_version: Regex,
+    bare_version: &'static Regex,
     /// Matches an inline-table entry whose `path` field points to `crates/…`
     /// and that carries a `version` field. Used in [workspace.dependencies].
-    workspace_dep_with_version: Regex,
+    workspace_dep_with_version: &'static Regex,
     /// Matches a path dependency that carries a version field.
-    crate_dep_with_version: Regex,
+    crate_dep_with_version: &'static Regex,
     /// JSON top-level version field. Uses a narrow regex rather than
     /// full JSON parsing so we can preserve line numbers.
-    json_version: Regex,
+    json_version: &'static Regex,
 }
 
 impl Patterns {
     fn new() -> Result<Self> {
         Ok(Self {
-            bare_version: Regex::new(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#)?,
-            workspace_dep_with_version: Regex::new(
-                r#"\{\s*path\s*=\s*"crates/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#,
+            bare_version: regex_or_err(&BARE_VERSION_RE, "bare version matcher")?,
+            workspace_dep_with_version: regex_or_err(
+                &WORKSPACE_DEP_WITH_VERSION_RE,
+                "workspace dependency version matcher",
             )?,
-            crate_dep_with_version: Regex::new(
-                r#"\{\s*path\s*=\s*"\.\.?/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#,
+            crate_dep_with_version: regex_or_err(
+                &CRATE_DEP_WITH_VERSION_RE,
+                "crate dependency version matcher",
             )?,
-            json_version: Regex::new(r#"^\s*"version"\s*:\s*"(\d+\.\d+\.\d+)""#)?,
+            json_version: regex_or_err(&JSON_VERSION_RE, "json version matcher")?,
         })
     }
 }
+
+fn regex_or_err<'a>(
+    regex_result: &'a LazyLock<Result<Regex, regex::Error>>,
+    description: &str,
+) -> Result<&'a Regex> {
+    regex_result.as_ref().map_err(|err| eyre!("invalid {description} regex: {err}"))
+}
+
+static SEMVER_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"^\d+\.\d+\.\d+$"));
+static BARE_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#));
+static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r#"\{\s*path\s*=\s*"crates/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#)
+});
+static CRATE_DEP_WITH_VERSION_RE: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r#"\{\s*path\s*=\s*"\.\.?/[^"]+"[^}]*version\s*=\s*"(\d+\.\d+\.\d+)""#)
+});
+static JSON_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"^\s*"version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static TWO_SPACE_JSON_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static SIX_SPACE_JSON_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#));
+static README_RELEASE_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*"));
+static CLAUDE_RELEASE_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)"));
+static ROADMAP_WORKSPACE_VERSION_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`"));
+static ROADMAP_LATEST_RELEASE_RE: LazyLock<Result<Regex, regex::Error>> =
+    LazyLock::new(|| Regex::new(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`"));
 
 fn collect_root_cargo_toml_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<()> {
     let rel = PathBuf::from("Cargo.toml");
@@ -492,8 +527,8 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
         // of 2 spaces (top level of the JSON object). The "" package entry
         // is inside `"packages": { "": { ... "version": ... } }` and sits at
         // indent 6. Any deeper indentation is a transitive dep.
-        let two_space = Regex::new(r#"^  "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
-        let six_space = Regex::new(r#"^      "version"\s*:\s*"(\d+\.\d+\.\d+)""#)?;
+        let two_space = regex_or_err(&TWO_SPACE_JSON_VERSION_RE, "root package-lock version")?;
+        let six_space = regex_or_err(&SIX_SPACE_JSON_VERSION_RE, "self package-lock version")?;
         let mut found_root = false;
         let mut found_self = false;
         let mut in_empty_package = false;
@@ -536,42 +571,44 @@ fn collect_vscode_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Resul
 
 fn collect_doc_sites(repo_root: &Path, sites: &mut Vec<VersionSite>) -> Result<()> {
     // README.md: "**Current release: v<version>**"
-    let readme_pattern = Regex::new(r"\*\*Current release:\s*v(\d+\.\d+\.\d+)\*\*")?;
+    let readme_pattern = regex_or_err(&README_RELEASE_RE, "README release line matcher")?;
     collect_single_line_doc_site(
         repo_root,
         "README.md",
         "README current release line",
-        &readme_pattern,
+        readme_pattern,
         sites,
     )?;
 
     // CLAUDE.md: "**Latest Release**: <version>"
-    let claude_pattern = Regex::new(r"\*\*Latest Release\*\*:\s*(\d+\.\d+\.\d+)")?;
+    let claude_pattern = regex_or_err(&CLAUDE_RELEASE_RE, "CLAUDE release line matcher")?;
     collect_single_line_doc_site(
         repo_root,
         "CLAUDE.md",
         "CLAUDE.md latest release line",
-        &claude_pattern,
+        claude_pattern,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Workspace version line: `v<version>`"
-    let roadmap_ws_pattern = Regex::new(r"Workspace version line:\s*`v(\d+\.\d+\.\d+)`")?;
+    let roadmap_ws_pattern =
+        regex_or_err(&ROADMAP_WORKSPACE_VERSION_RE, "roadmap workspace version line matcher")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP workspace version line",
-        &roadmap_ws_pattern,
+        roadmap_ws_pattern,
         sites,
     )?;
 
     // docs/project/ROADMAP.md: "Latest published release: `v<version>`"
-    let roadmap_latest_pattern = Regex::new(r"Latest published release:\s*`v(\d+\.\d+\.\d+)`")?;
+    let roadmap_latest_pattern =
+        regex_or_err(&ROADMAP_LATEST_RELEASE_RE, "roadmap latest release line matcher")?;
     collect_single_line_doc_site(
         repo_root,
         "docs/project/ROADMAP.md",
         "ROADMAP latest published release",
-        &roadmap_latest_pattern,
+        roadmap_latest_pattern,
         sites,
     )?;
 
