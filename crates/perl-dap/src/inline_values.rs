@@ -33,8 +33,8 @@ fn is_special_variable_name(name: &str) -> bool {
 
 /// Convert 1-based line bounds into inclusive 0-based indexes.
 ///
-/// Non-positive line inputs are clamped to line 1, and the end index is
-/// rejected when either bound is past the available line count.
+/// Non-positive line inputs are clamped to line 1. End bounds past the
+/// available line count are clamped to the final line.
 fn normalize_line_bounds(
     start_line: i64,
     end_line: i64,
@@ -45,10 +45,10 @@ fn normalize_line_bounds(
     }
 
     let start_1_based = start_line.max(1) as usize;
-    let end_1_based = end_line.max(1) as usize;
-    if start_1_based > line_count || end_1_based > line_count {
+    if start_1_based > line_count {
         return None;
     }
+    let end_1_based = (end_line.max(1) as usize).min(line_count);
 
     let start_idx = start_1_based.saturating_sub(1);
     let end_idx = end_1_based.saturating_sub(1);
@@ -61,6 +61,10 @@ fn normalize_line_bounds(
 /// Bytes that belong to Perl comments (`# ...`) or single/double-quoted string
 /// literals are marked `false` and should be ignored by lightweight regex scans.
 fn code_byte_mask(line: &str) -> Vec<bool> {
+    fn is_ident_byte(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || byte == b'_'
+    }
+
     let bytes = line.as_bytes();
     let mut mask = vec![true; bytes.len()];
     let mut in_single = false;
@@ -105,6 +109,14 @@ fn code_byte_mask(line: &str) -> Vec<bool> {
                 break;
             }
             b'\'' => {
+                let prev_is_ident = i > 0 && is_ident_byte(bytes[i - 1]);
+                let next_is_ident = (i + 1) < bytes.len() && is_ident_byte(bytes[i + 1]);
+
+                if prev_is_ident && next_is_ident {
+                    i += 1;
+                    continue;
+                }
+
                 mask[i] = false;
                 in_single = true;
             }
@@ -450,6 +462,22 @@ mod tests {
         assert!(extract_variable_names(source, 3, 3).is_empty());
         assert!(collect_inline_values_with_runtime(source, 3, 3, None).is_empty());
         assert!(collect_inline_values(source, 3, 3).is_empty());
+    }
+
+    #[test]
+    fn test_end_line_past_file_is_clamped() {
+        let source = "my $x = 1;\nmy $y = 2;";
+
+        let names = extract_variable_names(source, 2, 999);
+        assert_eq!(names, vec!["$y".to_string()]);
+
+        let values = collect_inline_values_with_runtime(source, 2, 999, None);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$y = ?");
+
+        let legacy_values = collect_inline_values(source, 2, 999);
+        assert_eq!(legacy_values.len(), 1);
+        assert_eq!(legacy_values[0].text, "$y = ?");
     }
 
     #[test]
