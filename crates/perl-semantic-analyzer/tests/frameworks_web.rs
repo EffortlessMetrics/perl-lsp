@@ -401,3 +401,35 @@ builder {
         "bare `builder` should not synthesize mount symbols"
     );
 }
+
+#[test]
+fn builder_io_fusion_builder_enable_emits_middleware_symbol() {
+    let code = r#"
+use Builder::IO::Fusion;
+
+builder {
+    enable 'Static';
+};
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "Plack::Middleware::Static", SymbolKind::Package),
+        "expected Fusion builder middleware to normalize to Plack::Middleware::* symbol"
+    );
+}
+
+#[test]
+fn builder_io_fusion_builder_mount_emits_mount_symbol() {
+    let code = r#"
+use Builder::IO::Fusion;
+
+builder {
+    mount '/api' => $api_app;
+};
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_symbol(&table, "/api", SymbolKind::Subroutine),
+        "expected Fusion builder mount to synthesize mount symbol"
+    );
+}

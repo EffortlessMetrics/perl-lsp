@@ -352,6 +352,8 @@ pub enum WebFrameworkKind {
     MojoliciousLite,
     /// `use Plack::Builder;`
     PlackBuilder,
+    /// `use Builder::IO::Fusion;`
+    BuilderIoFusion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -388,7 +390,7 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite, Plack::Builder, Builder::IO::Fusion).
     pub web_framework: Option<WebFrameworkKind>,
     /// Async framework variant, if any (IO::Async).
     pub async_framework: Option<AsyncFrameworkKind>,
@@ -1713,7 +1715,11 @@ impl SymbolExtractor {
         let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
             return;
         };
-        if flags.web_framework != Some(WebFrameworkKind::PlackBuilder) || name != "builder" {
+        if !matches!(
+            flags.web_framework,
+            Some(WebFrameworkKind::PlackBuilder | WebFrameworkKind::BuilderIoFusion)
+        ) || name != "builder"
+        {
             return;
         }
 
@@ -2144,6 +2150,7 @@ impl SymbolExtractor {
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
             "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
+            "Builder::IO::Fusion" => Some(WebFrameworkKind::BuilderIoFusion),
             _ => None,
         };
         if let Some(kind) = web_kind {
