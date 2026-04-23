@@ -1,6 +1,6 @@
 # VS Code Setup Guide for perl-lsp
 
-This guide helps you set up and configure the Perl Language Server in Visual Studio Code.
+This guide helps you set up and configure the Perl Language Server in Visual Studio Code and Kilo Code.
 
 ## Table of Contents
 
@@ -21,6 +21,9 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 
 - **VS Code** version 1.88 or later
 - **perl-lsp** server installed (see [Installation](#installation))
+
+> Kilo Code users can follow the same setup flow, then install from Open VSX
+> instead of the VS Code Marketplace.
 
 ### Optional but Recommended
 
@@ -95,6 +98,12 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 # 2. Search for "perl-lsp"
 # 3. Click "Install"
 ```
+
+#### Kilo Code variant
+
+Kilo Code uses the Open VSX registry. Install
+`EffortlessMetrics.perl-lsp-rs` from Open VSX in Kilo Code's extensions UI, or
+download the VSIX from Open VSX and install it locally.
 
 ### Option 2: Generic LSP Client
 
