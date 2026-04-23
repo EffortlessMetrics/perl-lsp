@@ -46,10 +46,12 @@
 
 pub mod client;
 pub mod env;
+pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
+pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
