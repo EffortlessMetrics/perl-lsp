@@ -3933,12 +3933,27 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
     let mut in_single_ansi_c = false;
     let mut in_double = false;
     let mut in_backtick = false;
+    let mut prev_single_was_escape = false;
     let mut prev_was_escape = false;
     let mut prev_was_escape_double = false;
     let mut prev_was_escape_single = false;
 
     for (idx, ch) in line.char_indices() {
         if in_single {
+            if prev_single_was_escape {
+                prev_single_was_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_single_was_escape = true;
+                continue;
+            }
+            if ch == '\'' {
+                in_single = false;
+            }
+            continue;
+        }
+        if in_double {
             if prev_was_escape {
                 prev_was_escape = false;
                 continue;
@@ -3987,6 +4002,7 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                 in_single = true;
                 in_single_ansi_c = idx > 0 && line.as_bytes().get(idx - 1) == Some(&b'$');
                 prev_was_escape_single = false;
+                prev_single_was_escape = false;
             }
             '"' => {
                 in_double = true;
@@ -4691,6 +4707,7 @@ mod tests {
             &todo_re,
         ));
         assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(r"print 'it\'s # TODO in string';", &todo_re));
         assert!(has_unlinked_todo_in_hash_line(
             "echo '# TODO in string' # TODO: follow up",
             &todo_re
@@ -4698,6 +4715,10 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re,));
         assert!(has_unlinked_todo_in_hash_line(
             "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            r"print 'it\'s # TODO in string'; # TODO: follow up",
             &todo_re
         ));
         assert!(has_unlinked_todo_in_hash_line("echo ok&&# TODO: follow up", &todo_re));
