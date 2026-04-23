@@ -173,7 +173,7 @@ The table below is the honest state of v0.13.0 rough edges. None block basic use
 
 #### Must land for v0.13.0
 
-- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x (PR #3984: per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete, conditionally in scope pending verification ([#3522](https://github.com/EffortlessMetrics/perl-lsp/issues/3522))
+- **Workspace-wide rename slice** — multi-root workspace support shipped in 0.12.x (PR #3984: per-folder config loading, `WorkspaceFolderState`, cross-folder integration); workspace-wide rename and module-move are roughly 30% complete and conditionally in scope pending verification ([#3522](https://github.com/perl-lsp/perl-lsp/issues/3522))
 
 #### Nice to land
 
