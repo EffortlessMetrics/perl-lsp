@@ -327,6 +327,24 @@ after 'cleanup' => sub { };
 }
 
 #[test]
+fn moo_around_modifier_emits_symbols_for_multiple_method_names() {
+    let code = r#"
+package MyApp::User;
+use Moo;
+around 'name', 'email' => sub { };
+"#;
+
+    let table = extract_symbols(code);
+
+    let name_modifier =
+        find_symbol_with_declaration(&table, "name", SymbolKind::Subroutine, "around");
+    assert!(name_modifier.is_some(), "expected around modifier symbol for `name`");
+    let email_modifier =
+        find_symbol_with_declaration(&table, "email", SymbolKind::Subroutine, "around");
+    assert!(email_modifier.is_some(), "expected around modifier symbol for `email`");
+}
+
+#[test]
 fn moose_override_modifier_emits_subroutine_symbol() {
     let code = r#"
 package MyApp::User;

@@ -1223,7 +1223,7 @@ impl SymbolExtractor {
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
-                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+                args.iter().flat_map(Self::collect_symbol_names).collect();
             if !method_names.is_empty() {
                 let scope_id = self.table.current_scope();
                 let package = self.table.current_package.clone();
