@@ -374,6 +374,18 @@ fn code_action_titles(actions: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn code_lens_command_title(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("title")).and_then(Value::as_str)
+}
+
+fn code_lens_command_id(lens: &Value) -> Option<&str> {
+    lens.get("command").and_then(|command| command.get("command")).and_then(Value::as_str)
+}
+
+fn code_lens_data_kind(lens: &Value) -> Option<&str> {
+    lens.get("data").and_then(|data| data.get("kind")).and_then(Value::as_str)
+}
+
 fn has_lsp_range(value: &Value) -> bool {
     let range = if value.get("start").is_some() && value.get("end").is_some() {
         value
@@ -2252,6 +2264,10 @@ sub t_subtraction {
     is(4 - 1, 3, "subtraction works");
 }
 
+subtest "math block" => sub {
+    ok(1, "subtest works");
+};
+
 done_testing();
 "#;
 
@@ -2275,14 +2291,51 @@ done_testing();
         lenses.iter().all(has_lsp_range),
         "all code lenses should include a valid range; got {lenses:?}"
     );
+
+    let command_titles: Vec<&str> = lenses.iter().filter_map(code_lens_command_title).collect();
     assert!(
-        lenses.iter().any(|lens| {
-            lens.get("command")
-                .and_then(|command| command.get("title"))
-                .and_then(Value::as_str)
-                .is_some_and(|title| title.contains("Run Test"))
-        }),
-        "expected at least one Run Test code lens; got {lenses:?}"
+        command_titles.iter().any(|title| title.contains("Run All Tests")),
+        "expected Run All Tests lens for a .t file; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Test")),
+        "expected Run Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Debug Test")),
+        "expected Debug Test lens; got {command_titles:?}"
+    );
+    assert!(
+        command_titles.iter().any(|title| title.contains("Run Subtest")),
+        "expected Run Subtest lens; got {command_titles:?}"
+    );
+
+    scenario.when("resolving an unresolved references lens");
+    let unresolved = lenses
+        .iter()
+        .find(|lens| lens.get("command").is_none() && code_lens_data_kind(lens).is_some())
+        .ok_or("expected at least one unresolved references lens with data.kind")?;
+    let resolved = harness.request("codeLens/resolve", unresolved.clone())?;
+
+    scenario.then("resolved lens provides find-references command with editor coordinates");
+    assert_eq!(
+        code_lens_command_id(&resolved),
+        Some("editor.action.findReferences"),
+        "resolved references lens should use editor findReferences command; got {resolved:?}"
+    );
+    let resolved_title = code_lens_command_title(&resolved).unwrap_or_default();
+    assert!(
+        resolved_title.contains("reference"),
+        "resolved references lens title should include reference count; got {resolved_title:?}"
+    );
+    let args = resolved
+        .pointer("/command/arguments")
+        .and_then(Value::as_array)
+        .ok_or("resolved references lens should include command arguments")?;
+    assert_eq!(args.len(), 2, "expected [line, character] arguments; got {args:?}");
+    assert!(
+        args.iter().all(Value::is_number),
+        "resolved references lens arguments should be numeric editor coordinates; got {args:?}"
     );
 
     Ok(())
