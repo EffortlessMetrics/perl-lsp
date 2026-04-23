@@ -34,10 +34,11 @@
 /// This is a test-only replacement for `unwrap` that is compliant
 /// with the "no unwrap/expect" policy.
 #[track_caller]
+#[must_use]
 pub fn must<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
     match r {
         Ok(v) => v,
-        Err(e) => panic!("unexpected Err: {e:?}"),
+        Err(e) => panic!("unexpected Err<{}>: {e:?}", std::any::type_name::<E>()),
     }
 }
 
@@ -46,10 +47,11 @@ pub fn must<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
 /// This is a test-only replacement for `unwrap` that is compliant
 /// with the "no unwrap/expect" policy.
 #[track_caller]
+#[must_use]
 pub fn must_some<T>(o: Option<T>) -> T {
     match o {
         Some(v) => v,
-        None => panic!("unexpected None"),
+        None => panic!("unexpected None<{}>", std::any::type_name::<T>()),
     }
 }
 
@@ -58,10 +60,15 @@ pub fn must_some<T>(o: Option<T>) -> T {
 /// This is a test-only replacement for `.unwrap_err()` that is compliant
 /// with the "no unwrap/expect" policy.
 #[track_caller]
+#[must_use]
 pub fn must_err<T: std::fmt::Debug, E>(r: Result<T, E>) -> E {
     match r {
         Err(e) => e,
-        Ok(v) => panic!("expected Err, got Ok({:?})", v),
+        Ok(v) => panic!(
+            "expected Err<{}>, got Ok<{}>({v:?})",
+            std::any::type_name::<E>(),
+            std::any::type_name::<T>()
+        ),
     }
 }
 
@@ -79,7 +86,7 @@ mod tests {
     #[should_panic(expected = "unexpected Err")]
     fn must_panics_on_err() {
         let result: Result<i32, &str> = Err("oops");
-        must(result);
+        let _ = must(result);
     }
 
     #[test]
@@ -90,7 +97,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "unexpected None")]
     fn must_some_panics_on_none() {
-        must_some(Option::<i32>::None);
+        let _ = must_some(Option::<i32>::None);
     }
 
     #[test]
@@ -103,6 +110,6 @@ mod tests {
     #[should_panic(expected = "expected Err")]
     fn must_err_panics_on_ok() {
         let result: Result<i32, &str> = Ok(1);
-        must_err(result);
+        let _ = must_err(result);
     }
 }
