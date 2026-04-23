@@ -433,6 +433,16 @@ impl Default for WorkspaceConfig {
     }
 }
 
+fn dedupe_preserve_order<'a>(paths: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut result = Vec::new();
+    for path in paths {
+        if !result.iter().any(|existing| existing == path) {
+            result.push(path.to_string());
+        }
+    }
+    result
+}
+
 impl WorkspaceConfig {
     /// Parse a `PERL5LIB` environment variable value into a list of paths.
     ///
@@ -444,29 +454,41 @@ impl WorkspaceConfig {
         const SEP: char = ';';
         #[cfg(not(windows))]
         const SEP: char = ':';
-        value.split(SEP).filter(|s| !s.is_empty()).map(|s| s.to_string()).collect()
+        dedupe_preserve_order(value.split(SEP).map(str::trim).filter(|s| !s.is_empty()))
     }
 
     /// Return the effective module-search-path, merging `PERL5LIB` paths with
     /// `self.include_paths` according to `self.perl5lib_precedence`.
     ///
     /// If `self.use_perl5lib` is `false`, or `perl5lib_paths` is empty, the
-    /// returned list is identical to `self.include_paths`.
+    /// returned list contains only `self.include_paths` entries (trimmed and deduplicated).
     pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
         if !self.use_perl5lib || perl5lib_paths.is_empty() {
-            return self.include_paths.clone();
+            return dedupe_preserve_order(
+                self.include_paths
+                    .iter()
+                    .map(String::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty()),
+            );
         }
         match self.perl5lib_precedence {
-            Perl5LibPrecedence::Prepend => {
-                let mut result = perl5lib_paths.to_vec();
-                result.extend_from_slice(&self.include_paths);
-                result
-            }
-            Perl5LibPrecedence::Append => {
-                let mut result = self.include_paths.clone();
-                result.extend_from_slice(perl5lib_paths);
-                result
-            }
+            Perl5LibPrecedence::Prepend => dedupe_preserve_order(
+                perl5lib_paths
+                    .iter()
+                    .map(String::as_str)
+                    .chain(self.include_paths.iter().map(String::as_str))
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty()),
+            ),
+            Perl5LibPrecedence::Append => dedupe_preserve_order(
+                self.include_paths
+                    .iter()
+                    .map(String::as_str)
+                    .chain(perl5lib_paths.iter().map(String::as_str))
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty()),
+            ),
         }
     }
 
@@ -554,9 +576,15 @@ impl WorkspaceConfig {
         match output {
             Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
                 .lines()
+                .map(str::trim)
                 .filter(|line| !line.is_empty() && *line != ".")
                 .map(PathBuf::from)
-                .collect(),
+                .fold(Vec::new(), |mut acc, path| {
+                    if !acc.contains(&path) {
+                        acc.push(path);
+                    }
+                    acc
+                }),
             _ => Vec::new(),
         }
     }
@@ -904,5 +932,69 @@ perltidy_extra_args = ["-noll"]
 
         assert!(!workspace.use_perl5lib);
         assert!(matches!(workspace.perl5lib_precedence, Perl5LibPrecedence::Append));
+    }
+
+    #[test]
+    fn parse_perl5lib_trims_and_dedupes_entries() {
+        // Use the platform separator so the test works on both Unix and Windows.
+        #[cfg(windows)]
+        let input = " lib ;local/lib;;lib; ";
+        #[cfg(not(windows))]
+        let input = " lib :local/lib::lib: ";
+        let parsed = WorkspaceConfig::parse_perl5lib(input);
+        assert_eq!(parsed, vec!["lib", "local/lib"]);
+    }
+
+    #[test]
+    fn effective_include_paths_dedupes_with_prepend_precedence() {
+        let config = WorkspaceConfig {
+            include_paths: vec!["lib".to_string(), "local/lib".to_string(), "lib".to_string()],
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+
+        let paths = config.effective_include_paths(&[
+            "local/lib".to_string(),
+            "vendor/lib".to_string(),
+            "vendor/lib".to_string(),
+        ]);
+
+        assert_eq!(paths, vec!["local/lib", "vendor/lib", "lib"]);
+    }
+
+    #[test]
+    fn effective_include_paths_dedupes_with_append_precedence() {
+        let config = WorkspaceConfig {
+            include_paths: vec!["lib".to_string(), "local/lib".to_string()],
+            perl5lib_precedence: Perl5LibPrecedence::Append,
+            ..WorkspaceConfig::default()
+        };
+
+        let paths = config.effective_include_paths(&[
+            "local/lib".to_string(),
+            "vendor/lib".to_string(),
+            "lib".to_string(),
+        ]);
+
+        assert_eq!(paths, vec!["lib", "local/lib", "vendor/lib"]);
+    }
+
+    #[test]
+    fn effective_include_paths_filters_whitespace_only_entries() {
+        // Whitespace-only entries in include_paths must be silently dropped.
+        let config = WorkspaceConfig {
+            include_paths: vec![
+                "lib".to_string(),
+                "  ".to_string(),
+                "".to_string(),
+                "lib".to_string(),
+            ],
+            perl5lib_precedence: Perl5LibPrecedence::Prepend,
+            ..WorkspaceConfig::default()
+        };
+        // use_perl5lib is true by default but perl5lib_paths is empty → takes the
+        // early-return branch that also dedupes and trims include_paths.
+        let paths = config.effective_include_paths(&[]);
+        assert_eq!(paths, vec!["lib"]);
     }
 }
