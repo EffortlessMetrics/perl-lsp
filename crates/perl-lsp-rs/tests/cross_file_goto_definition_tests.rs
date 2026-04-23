@@ -2228,6 +2228,128 @@ $gc->base_method();
     Ok(())
 }
 
+/// Test D2: Deep CPAN-style module chain — 5-deep inheritance with
+/// `Catalyst::Plugin::Session::Store::DBIC::Encrypted` should resolve inherited
+/// methods from the root base class.
+#[test]
+fn go_to_definition_cross_file_deep_cpan_style_inheritance_chain() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/Catalyst/Component.pm",
+        r#"package Catalyst::Component;
+
+sub component_method {
+    my ($self) = @_;
+    return "from Catalyst::Component";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin.pm",
+        r#"package Catalyst::Plugin;
+use parent 'Catalyst::Component';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session.pm",
+        r#"package Catalyst::Plugin::Session;
+use parent 'Catalyst::Plugin';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store.pm",
+        r#"package Catalyst::Plugin::Session::Store;
+use parent 'Catalyst::Plugin::Session';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC;
+use parent 'Catalyst::Plugin::Session::Store';
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+        r#"package Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+use parent 'Catalyst::Plugin::Session::Store::DBIC';
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in [
+        "lib/Catalyst/Component.pm",
+        "lib/Catalyst/Plugin.pm",
+        "lib/Catalyst/Plugin/Session.pm",
+        "lib/Catalyst/Plugin/Session/Store.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC.pm",
+        "lib/Catalyst/Plugin/Session/Store/DBIC/Encrypted.pm",
+    ] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use Catalyst::Plugin::Session::Store::DBIC::Encrypted;
+
+my $store = Catalyst::Plugin::Session::Store::DBIC::Encrypted->new();
+$store->component_method();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 7, "character": 8}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for deep CPAN-style inheritance goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected deep CPAN-style inheritance goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("Catalyst/Component.pm"),
+        "Deep CPAN-style inheritance: definition should point to Catalyst/Component.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
 /// Test E: `use parent -norequire` variant — method resolves correctly
 #[test]
 fn go_to_definition_cross_file_use_parent_norequire() -> TestResult {
