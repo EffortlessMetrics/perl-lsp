@@ -5,22 +5,25 @@ fn run_perllsp(args: &[&str]) -> Result<std::process::Output, Box<dyn std::error
     Ok(output)
 }
 
+fn successful_stdout(output: std::process::Output) -> Result<String, Box<dyn std::error::Error>> {
+    if output.status.success() {
+        return String::from_utf8(output.stdout).map_err(Into::into);
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(format!("command failed with status {}: {}", output.status, stderr).into())
+}
+
 #[test]
 fn help_mentions_perllsp() -> Result<(), Box<dyn std::error::Error>> {
-    let output = run_perllsp(&["--help"])?;
-    assert!(output.status.success(), "help should succeed");
-
-    let stdout = String::from_utf8(output.stdout)?;
+    let stdout = successful_stdout(run_perllsp(&["--help"])?)?;
     assert!(stdout.contains("Usage: perllsp"), "help should mention the facade name");
     Ok(())
 }
 
 #[test]
 fn version_mentions_facade_name_and_git_tag() -> Result<(), Box<dyn std::error::Error>> {
-    let output = run_perllsp(&["--version"])?;
-    assert!(output.status.success(), "version should succeed");
-
-    let stdout = String::from_utf8(output.stdout)?;
+    let stdout = successful_stdout(run_perllsp(&["--version"])?)?;
     assert!(stdout.contains("perllsp "), "version should print the facade name");
     assert!(stdout.contains("Git tag:"), "version should include the git tag line");
     Ok(())
