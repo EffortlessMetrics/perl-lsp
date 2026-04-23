@@ -68,6 +68,12 @@ static SIMPLE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 static EVAL_CONTEXT_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^\(eval\s+(?P<eval_num>\d+)\)\[(?P<file>[^\]:]+):(?P<line>\d+)\]"));
 
+/// Pattern for extracting a best-effort function name from stack-like lines
+/// that do not include source location information.
+static UNKNOWN_FRAME_NAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:#\s*\d+\s+)?(?:[\$\@\.]\s*=\s*)?(?P<func>[A-Za-z_][\w:]*+?)\b")
+});
+
 // Accessor functions for regexes
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE.as_ref().ok()
@@ -83,6 +89,9 @@ fn simple_frame_re() -> Option<&'static Regex> {
 }
 fn eval_context_re() -> Option<&'static Regex> {
     EVAL_CONTEXT_RE.as_ref().ok()
+}
+fn unknown_frame_name_re() -> Option<&'static Regex> {
+    UNKNOWN_FRAME_NAME_RE.as_ref().ok()
 }
 
 /// Parser for Perl debugger stack trace output.
@@ -165,7 +174,21 @@ impl PerlStackParser {
             return self.build_eval_frame(&caps, id);
         }
 
+        if self.include_unknown_frames && Self::looks_like_frame(line) {
+            return Some(self.build_unknown_frame(line, id));
+        }
+
         None
+    }
+
+    fn resolve_frame_id(&mut self, provided_id: i64) -> i64 {
+        if self.auto_assign_ids {
+            let id = self.next_id;
+            self.next_id += 1;
+            id
+        } else {
+            provided_id
+        }
     }
 
     /// Builds a frame from regex captures.
@@ -182,9 +205,7 @@ impl PerlStackParser {
 
         // Use frame number from capture if available, otherwise use provided/auto ID
         let id = if self.auto_assign_ids {
-            let id = self.next_id;
-            self.next_id += 1;
-            id
+            self.resolve_frame_id(provided_id)
         } else if let Some(frame_num) = caps.name("frame") {
             frame_num.as_str().parse().unwrap_or(provided_id)
         } else {
@@ -213,13 +234,7 @@ impl PerlStackParser {
         let line_str = caps.name("line").or_else(|| caps.name("line2"))?.as_str();
         let line: i64 = line_str.parse().ok()?;
 
-        let id = if self.auto_assign_ids {
-            let id = self.next_id;
-            self.next_id += 1;
-            id
-        } else {
-            provided_id
-        };
+        let id = self.resolve_frame_id(provided_id);
 
         let source = Source::new(file);
         let frame = StackFrame::new(id, func, Some(source), line);
@@ -238,13 +253,7 @@ impl PerlStackParser {
         let line_str = caps.name("line")?.as_str();
         let line: i64 = line_str.parse().ok()?;
 
-        let id = if self.auto_assign_ids {
-            let id = self.next_id;
-            self.next_id += 1;
-            id
-        } else {
-            provided_id
-        };
+        let id = self.resolve_frame_id(provided_id);
 
         let name = format!("(eval {})", eval_num);
         let source = Source::new(file).with_origin("eval");
@@ -252,6 +261,19 @@ impl PerlStackParser {
             .with_presentation_hint(StackFramePresentationHint::Label);
 
         Some(frame)
+    }
+
+    /// Builds a best-effort frame for stack-like lines missing source location.
+    fn build_unknown_frame(&mut self, line: &str, provided_id: i64) -> StackFrame {
+        let id = self.resolve_frame_id(provided_id);
+
+        let name = unknown_frame_name_re()
+            .and_then(|re| re.captures(line))
+            .and_then(|caps| caps.name("func"))
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_else(|| "<unknown>".to_string());
+
+        StackFrame::new(id, name, None, 0)
     }
 
     /// Parses multi-line stack trace output.
@@ -469,5 +491,37 @@ $ = main::run() called from file `script.pl' line 5
 
         let frame = parser.parse_frame("this is not a stack frame", 0);
         assert!(frame.is_none());
+    }
+
+    #[test]
+    fn test_parse_unknown_frame_when_enabled() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new().with_unknown_frames(true);
+
+        let frame = must_some(parser.parse_frame("#2 DB::DB", 42));
+        assert_eq!(frame.name, "DB::DB");
+        assert_eq!(frame.line, 0);
+        assert!(frame.source.is_none());
+        assert_eq!(frame.id, 1);
+    }
+
+    #[test]
+    fn test_parse_unknown_frame_when_disabled() {
+        let mut parser = PerlStackParser::new();
+        assert!(parser.parse_frame("#2 DB::DB", 42).is_none());
+    }
+
+    #[test]
+    fn test_parse_stack_trace_includes_unknown_when_enabled() {
+        let mut parser = PerlStackParser::new().with_unknown_frames(true);
+        let output = r#"
+#0 DB::DB
+  #1  main::foo at script.pl line 10
+"#;
+
+        let frames = parser.parse_stack_trace(output);
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].name, "DB::DB");
+        assert_eq!(frames[1].name, "main::foo");
     }
 }
