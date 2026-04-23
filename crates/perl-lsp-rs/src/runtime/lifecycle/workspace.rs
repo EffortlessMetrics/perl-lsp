@@ -10,6 +10,28 @@ use std::sync::Once;
 /// Fires at most once per LSP session, when Perl is not found anywhere.
 static PERL_NOT_FOUND_WARNED: Once = Once::new();
 
+fn perl_not_found_message(configured_path: Option<&str>, searched: &[String]) -> String {
+    let searched_str = searched.join(", ");
+    if configured_path.is_some_and(|p| !p.is_empty()) {
+        format!(
+            "perl-lsp: The configured Perl interpreter was not found. \
+             Searched: {searched_str}. \
+             Check `perl-lsp.perl.path` in your settings and reload the window \
+             (Ctrl+Shift+P \u{2192} Developer: Reload Window). \
+             If Perl is not installed yet, install it (https://strawberryperl.com on Windows, \
+             `brew install perl` on macOS, or your distro package manager on Linux)."
+        )
+    } else {
+        format!(
+            "perl-lsp: Perl interpreter not found on PATH. \
+             Searched: {searched_str}. \
+             Install Perl (https://strawberryperl.com on Windows, \
+             `brew install perl` on macOS, or your distro package manager on Linux) \
+             and reload the window, or set `perl-lsp.perl.path` in settings."
+        )
+    }
+}
+
 impl LspServer {
     /// Set the root path from the root URI during initialization
     pub(crate) fn set_root_uri(&self, root_uri: &str) {
@@ -55,23 +77,7 @@ impl LspServer {
             PerlInterpreterResult::NotFound { ref searched } => {
                 tracing::warn!(searched = ?searched, "Perl interpreter not found");
                 PERL_NOT_FOUND_WARNED.call_once(|| {
-                    let searched_str = searched.join(", ");
-                    let msg = if configured_path.as_deref().is_some_and(|p| !p.is_empty()) {
-                        format!(
-                            "perl-lsp: The configured Perl interpreter was not found. \
-                             Searched: {searched_str}. \
-                             Check `perl-lsp.perl.path` in your settings and reload the window \
-                             (Ctrl+Shift+P \u{2192} Developer: Reload Window)."
-                        )
-                    } else {
-                        format!(
-                            "perl-lsp: Perl interpreter not found on PATH. \
-                             Searched: {searched_str}. \
-                             Install Perl (https://strawberryperl.com on Windows, \
-                             `brew install perl` on macOS, or your system package manager) \
-                             and reload the window, or set `perl-lsp.perl.path` in settings."
-                        )
-                    };
+                    let msg = perl_not_found_message(configured_path.as_deref(), searched);
                     if let Err(e) = self.show_message(MessageType::Error, &msg) {
                         tracing::warn!(error = %e, "Failed to send showMessage for perl not found");
                     }
@@ -153,6 +159,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error;
 
     #[test]
     fn check_perl_interpreter_does_not_panic() {
@@ -443,5 +450,27 @@ include_paths = ["other_lib"]
                 folder.uri
             );
         }
+    }
+
+    #[test]
+    fn perl_not_found_message_without_config_is_actionable() -> Result<(), Box<dyn Error>> {
+        let searched = vec!["PATH".to_string(), "/usr/bin/perl".to_string()];
+        let msg = perl_not_found_message(None, &searched);
+        assert!(msg.contains("Perl interpreter not found on PATH"));
+        assert!(msg.contains("strawberryperl.com"));
+        assert!(msg.contains("brew install perl"));
+        assert!(msg.contains("distro package manager on Linux"));
+        Ok(())
+    }
+
+    #[test]
+    fn perl_not_found_message_with_config_mentions_fix_and_install() -> Result<(), Box<dyn Error>> {
+        let searched = vec!["configured path: /missing/perl".to_string()];
+        let msg = perl_not_found_message(Some("/missing/perl"), &searched);
+        assert!(msg.contains("configured Perl interpreter was not found"));
+        assert!(msg.contains("perl-lsp.perl.path"));
+        assert!(msg.contains("strawberryperl.com"));
+        assert!(msg.contains("distro package manager on Linux"));
+        Ok(())
     }
 }

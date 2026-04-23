@@ -9,6 +9,7 @@
     "scorecard",
     "harness",
     "top_line_metrics",
+    "confidence_signals",
     "integration_points"
   ],
   "properties": {
@@ -125,6 +126,72 @@
         }
       },
       "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "manual_editor_smoke"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "first_five_minutes_harness"
+              }
+            },
+            "required": ["name"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "const": "issue_burndown_regression_guard"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["name", "state", "owner", "workflow_count"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "manual_editor_smoke",
+              "first_five_minutes_harness",
+              "issue_burndown_regression_guard"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": ["tracked"]
+          },
+          "owner": {
+            "type": "string"
+          },
+          "workflow_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

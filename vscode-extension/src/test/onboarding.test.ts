@@ -115,7 +115,10 @@ describe('OnboardingManager.checkPerlInstalled', () => {
     );
     const result = await mgr.checkPerlInstalled();
     expect(result.ok).toBe(false);
-    expect(result.detail).toBeTruthy();
+    expect(result.detail).toContain('strawberryperl.com');
+    expect(result.detail).toContain('brew install perl');
+    expect(result.detail).toContain('package manager');
+    expect(result.detail).not.toContain('command not found');
   });
 });
 
@@ -349,6 +352,9 @@ describe('classifyStartupFailure', () => {
     const msg = classifyStartupFailure(results);
     expect(msg).toContain('Perl');
     expect(msg).toContain('5.10');
+    expect(msg).toContain('strawberryperl.com');
+    expect(msg).toContain('brew install perl');
+    expect(msg).toContain('package manager');
     expect(msg).toMatch(/install|Install/);
     // Should NOT show the generic "restart" message when root cause is known
     expect(msg).not.toContain('Restart the server');

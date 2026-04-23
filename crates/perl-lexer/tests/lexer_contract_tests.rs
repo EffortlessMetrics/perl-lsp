@@ -30,6 +30,26 @@ fn lexer_emits_eof_once() -> TestResult {
 }
 
 #[test]
+fn lexer_skips_formfeed_and_vertical_tab_whitespace() -> TestResult {
+    let mut lx = PerlLexer::new("my\x0C$x\x0B=\x0C1;");
+    let first = lx.next_token().ok_or("Expected keyword token")?;
+    assert!(matches!(first.token_type, TokenType::Keyword(_)));
+
+    let second = lx.next_token().ok_or("Expected identifier token for variable")?;
+    assert!(matches!(second.token_type, TokenType::Identifier(_)));
+    assert_eq!(second.text.as_ref(), "$x");
+
+    let third = lx.next_token().ok_or("Expected assignment operator token")?;
+    assert!(matches!(third.token_type, TokenType::Operator(ref op) if op.as_ref() == "="));
+
+    let fourth = lx.next_token().ok_or("Expected number token")?;
+    assert!(matches!(fourth.token_type, TokenType::Number(_)));
+    assert_eq!(fourth.text.as_ref(), "1");
+
+    Ok(())
+}
+
+#[test]
 fn word_op_without_delim_is_identifier() -> TestResult {
     for op in ["q", "qq", "qw", "qr", "qx", "m", "s", "tr", "y"] {
         let mut lx = PerlLexer::new(op); // no delimiter

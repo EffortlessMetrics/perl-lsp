@@ -1443,6 +1443,33 @@ push @items, 5;
     }
 
     #[test]
+    fn test_core_prefixed_builtin_hover_for_function_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = r#"
+my $value = "abc";
+CORE::length($value);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let length_pos = code.find("CORE::length").ok_or("CORE::length not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= length_pos && loc.end > length_pos);
+
+        assert!(hover.is_some(), "Should have hover info for CORE::length builtin");
+        let (_, hover) = hover.ok_or("missing hover for CORE::length")?;
+        assert!(
+            hover.signature.contains("length"),
+            "Hover signature should contain 'length', got: {}",
+            hover.signature
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_package_hover_with_pod_name_section() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 =head1 NAME

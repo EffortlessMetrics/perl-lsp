@@ -59,6 +59,7 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
         .find('\n')
         .map(|p| diagnostic.range.1 + p)
         .unwrap_or(source.len());
+    let delete_end = if line_end < source.len() { line_end + 1 } else { line_end };
 
     actions.push(CodeAction {
         title: "Remove unused variable".to_string(),
@@ -66,7 +67,7 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
         diagnostics: vec![DiagnosticCode::UnusedVariable.as_str().to_string()],
         edit: CodeActionEdit {
             changes: vec![TextEdit {
-                location: SourceLocation { start: line_start, end: line_end + 1 },
+                location: SourceLocation { start: line_start, end: delete_end },
                 new_text: String::new(),
             }],
         },
@@ -90,6 +91,79 @@ pub fn fix_unused_variable(source: &str, diagnostic: &QuickFixDiagnostic) -> Vec
     }
 
     actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn diagnostic_for(range: (usize, usize), message: &str) -> QuickFixDiagnostic {
+        QuickFixDiagnostic { range, message: message.to_string(), code: None }
+    }
+
+    #[test]
+    fn fix_unused_variable_removal_does_not_overrun_end_of_file() {
+        // Source has no trailing newline — delete_end must clamp to source.len().
+        let source = "my $unused = 1;";
+        let start = 3;
+        let end = 10;
+        let diagnostic = diagnostic_for((start, end), "Unused variable '$unused'");
+
+        let actions = fix_unused_variable(source, &diagnostic);
+        assert!(!actions.is_empty());
+
+        let remove_action = &actions[0];
+        let edit = &remove_action.edit.changes[0];
+
+        assert_eq!(edit.location.start, 0);
+        assert_eq!(edit.location.end, source.len());
+        assert!(edit.location.end <= source.len(), "edit end must not exceed source length");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn fix_unused_variable_removal_includes_newline_when_present() {
+        // Source has trailing newline — delete_end should include the newline character
+        // (line_end + 1) and must still be within source.len().
+        let source = "my $unused = 1;\n";
+        let start = 3;
+        let end = 10;
+        let diagnostic = diagnostic_for((start, end), "Unused variable '$unused'");
+
+        let actions = fix_unused_variable(source, &diagnostic);
+        assert!(!actions.is_empty());
+
+        let remove_action = &actions[0];
+        let edit = &remove_action.edit.changes[0];
+
+        assert_eq!(edit.location.start, 0);
+        // The newline at position 15 is found; delete_end = 15 + 1 = 16 = source.len()
+        assert_eq!(edit.location.end, source.len());
+        assert!(edit.location.end <= source.len(), "edit end must not exceed source length");
+        assert_eq!(edit.new_text, "");
+    }
+
+    #[test]
+    fn fix_unused_variable_removal_multiline_removes_correct_line() {
+        // Unused variable on the second line of a multiline source.
+        let source = "use strict;\nmy $unused = 1;\nmy $used = 2;\n";
+        let start = 16; // start of '$unused'
+        let end = 23; // end of '$unused'
+        let diagnostic = diagnostic_for((start, end), "Unused variable '$unused'");
+
+        let actions = fix_unused_variable(source, &diagnostic);
+        assert!(!actions.is_empty());
+
+        let remove_action = &actions[0];
+        let edit = &remove_action.edit.changes[0];
+
+        // Line starts after 'use strict;\n' at offset 12
+        assert_eq!(edit.location.start, 12);
+        // Line ends at the '\n' after 'my $unused = 1;' — include it: offset 28
+        assert_eq!(edit.location.end, 28);
+        assert!(edit.location.end <= source.len(), "edit end must not exceed source length");
+        assert_eq!(edit.new_text, "");
+    }
 }
 
 /// Fix assignment in condition
