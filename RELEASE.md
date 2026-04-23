@@ -427,6 +427,7 @@ This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHAN
 ## Release History Updates
 
 Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RELEASE_HISTORY.md) for the canonical ledger.
+For release-only pull requests, use [.github/pull_request_template_release.md](.github/pull_request_template_release.md).
 
 ### Before publishing
 

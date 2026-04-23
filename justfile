@@ -54,7 +54,8 @@ pr-fast: _check-tools-basic
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -85,6 +86,10 @@ readme-heading-check:
         exit 1
     fi
     echo "✅ README heading structure looks good"
+
+# Detect drift between tags, release notes files, CHANGELOG, and RELEASE_HISTORY.
+ci-release-history-check:
+    bash scripts/check_release_history.sh
 
 # Pre-merge guard: verify a PR is not draft, has merge-ready label, and title has (#NNN)
 # Usage: just pre-merge-check 3291
