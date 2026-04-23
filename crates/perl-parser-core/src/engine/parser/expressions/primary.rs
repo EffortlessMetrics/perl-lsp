@@ -233,7 +233,34 @@ impl<'a> Parser<'a> {
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
                 let (search, replace, modifiers) =
-                    quote_parser::extract_transliteration_parts(&token.text);
+                    quote_parser::extract_transliteration_parts_strict(&token.text).map_err(
+                        |e| {
+                            let message = match e {
+                                quote_parser::TransliterationError::InvalidModifier(c) => {
+                                    format!(
+                                        "Invalid transliteration modifier '{}'. Valid modifiers are: c, d, s, r",
+                                        c
+                                    )
+                                }
+                                quote_parser::TransliterationError::MissingDelimiter => {
+                                    "Missing delimiter after transliteration operator".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingSearch => {
+                                    "Missing search list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingReplacement => {
+                                    "Missing replacement list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingClosingDelimiter => {
+                                    "Missing closing delimiter in transliteration".to_string()
+                                }
+                            };
+                            ParseError::SyntaxError {
+                                message,
+                                location: token.start,
+                            }
+                        },
+                    )?;
 
                 // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
