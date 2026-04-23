@@ -9,7 +9,8 @@
     "scorecard",
     "harness",
     "top_line_metrics",
-    "integration_points"
+    "integration_points",
+    "confidence_signals"
   ],
   "properties": {
     "schema_version": {
@@ -125,6 +126,37 @@
         }
       },
       "additionalProperties": false
+    },
+    "confidence_signals": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["name", "value", "source", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "ux_workflow_scenarios",
+              "manual_smoke_workflows",
+              "open_ux_gap_issue_links"
+            ]
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "tracked"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

@@ -122,6 +122,41 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+fn count_manual_smoke_workflows_from_protocol(content: &str) -> usize {
+    content
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("Manual editor smoke test:")
+                .map(|items| items.split(',').filter(|item| !item.trim().is_empty()).count())
+        })
+        .unwrap_or(0)
+}
+
+pub(super) fn count_manual_smoke_workflows(root: &Path) -> usize {
+    let protocol_path = root.join("docs/project/protocols/verification.md");
+    let Ok(content) = fs::read_to_string(protocol_path) else {
+        return 0;
+    };
+    count_manual_smoke_workflows_from_protocol(&content)
+}
+
+fn count_known_ux_gaps_from_readme(content: &str) -> usize {
+    let Some(start) = content.find("### Known gaps toward solid UX") else {
+        return 0;
+    };
+    let tail = &content[start..];
+    let section = tail.find("### What shipped this cycle").map_or(tail, |end| &tail[..end]);
+    section.matches("https://github.com/EffortlessMetrics/perl-lsp/issues/").count()
+}
+
+pub(super) fn count_known_ux_gap_issue_links(root: &Path) -> usize {
+    let readme_path = root.join("README.md");
+    let Ok(content) = fs::read_to_string(readme_path) else {
+        return 0;
+    };
+    count_known_ux_gaps_from_readme(&content)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -169,6 +204,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let manual_smoke_workflow_count = count_manual_smoke_workflows(root);
+    let known_ux_gap_issue_count = count_known_ux_gap_issue_links(root);
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -202,6 +239,26 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
             "status_update": "cargo xtask update-status --only quality",
             "quality_surface": "docs/project/status/quality.md",
         },
+        "confidence_signals": [
+            {
+                "name": "ux_workflow_scenarios",
+                "value": scenario_count,
+                "source": "crates/perl-lsp-ux-tests/tests/ux_scenario_*.rs",
+                "status": "tracked",
+            },
+            {
+                "name": "manual_smoke_workflows",
+                "value": manual_smoke_workflow_count,
+                "source": "docs/project/protocols/verification.md",
+                "status": "tracked",
+            },
+            {
+                "name": "open_ux_gap_issue_links",
+                "value": known_ux_gap_issue_count,
+                "source": "README.md#known-gaps-toward-solid-ux",
+                "status": "tracked",
+            },
+        ],
     });
 
     serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
@@ -280,6 +337,28 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        let signals = receipt["confidence_signals"]
+            .as_array()
+            .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
+        assert_eq!(signals.len(), 3, "expected three tracked confidence signals");
         Ok(())
+    }
+
+    #[test]
+    fn test_count_manual_smoke_workflows_from_protocol() {
+        let content = "## Tier C: Real User Confirmation\n\nManual editor smoke test: diagnostics, completion, hover, go-to-definition, rename";
+        assert_eq!(count_manual_smoke_workflows_from_protocol(content), 5);
+    }
+
+    #[test]
+    fn test_count_known_ux_gaps_from_readme() {
+        let content = r#"
+### Known gaps toward solid UX
+- one ([#1](https://github.com/EffortlessMetrics/perl-lsp/issues/1))
+- two ([#2](https://github.com/EffortlessMetrics/perl-lsp/issues/2))
+### What shipped this cycle (v0.12.x)
+- done ([#3](https://github.com/EffortlessMetrics/perl-lsp/issues/3))
+"#;
+        assert_eq!(count_known_ux_gaps_from_readme(content), 2);
     }
 }
