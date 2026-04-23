@@ -3827,9 +3827,14 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
+        let mut in_rust_block_comment = false;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line(line, todo_re)
+                has_unlinked_todo_in_rust_line_with_block_context(
+                    line,
+                    todo_re,
+                    &mut in_rust_block_comment,
+                )
             } else if path
                 .extension()
                 .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
@@ -3848,6 +3853,31 @@ fn collect_todo_hits(
 }
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_block_context(line, token_re, &mut in_block_comment)
+}
+
+fn has_unlinked_todo_in_rust_line_with_block_context(
+    line: &str,
+    token_re: &Regex,
+    in_block_comment: &mut bool,
+) -> bool {
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            if has_unlinked_token(&line[..end_idx], token_re) {
+                *in_block_comment = false;
+                return true;
+            }
+            *in_block_comment = false;
+            return has_unlinked_todo_in_rust_line_with_block_context(
+                &line[end_idx + 2..],
+                token_re,
+                in_block_comment,
+            );
+        }
+        return has_unlinked_token(line, token_re);
+    }
+
     for (idx, _) in line.match_indices("//") {
         if is_index_in_rust_literal(line, idx) {
             continue;
@@ -3869,10 +3899,17 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
         if is_likely_string_literal_comment_start(line, idx) {
             continue;
         }
-        let comment_tail = block_comment_text_from(line, idx + 2);
-        if has_unlinked_token(comment_tail, token_re) {
+        if let Some(end_idx) = find_block_comment_end(line, idx + 2) {
+            if has_unlinked_token(&line[idx + 2..end_idx], token_re) {
+                return true;
+            }
+            continue;
+        }
+        if has_unlinked_token(&line[idx + 2..], token_re) {
+            *in_block_comment = true;
             return true;
         }
+        *in_block_comment = true;
     }
     let trimmed = line.trim_start();
     if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
@@ -3881,9 +3918,15 @@ fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     false
 }
 
-fn block_comment_text_from(line: &str, comment_start: usize) -> &str {
-    let remainder = &line[comment_start..];
-    if let Some(end) = remainder.find("*/") { &remainder[..end] } else { remainder }
+fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
+    for (rel_idx, _) in line[start_idx..].match_indices("*/") {
+        let idx = start_idx + rel_idx;
+        if is_index_in_rust_literal(line, idx) {
+            continue;
+        }
+        return Some(idx);
+    }
+    None
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
@@ -4417,6 +4460,58 @@ mod tests {
             "/* TODO(#123): tracked */ let s = \"safe\";",
             &todo_re
         ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* context",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(has_unlinked_todo_in_rust_line_with_block_context(
+            "  TODO: capture this follow-up",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "*/ let x = 1;",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* header",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " * TODO(#123): tracked",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
 
         Ok(())
     }
