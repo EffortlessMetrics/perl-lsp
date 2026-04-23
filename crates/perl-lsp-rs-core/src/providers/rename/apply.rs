@@ -16,20 +16,24 @@ pub fn adjust_location_for_sigil(mut location: SourceLocation, kind: SymbolKind)
     location
 }
 
-/// Find occurrences in comments and strings
+/// Find occurrences in comments and strings, replacing `old_name` with `new_name`.
+///
+/// The returned [`TextEdit`]s have `new_text` set to `new_name` so callers can
+/// apply them directly without a second rewrite pass.
 pub fn find_occurrences_in_text(
-    name: &str,
+    old_name: &str,
+    new_name: &str,
     kind: SymbolKind,
     options: &RenameOptions,
     source: &str,
 ) -> Vec<TextEdit> {
     let mut edits = Vec::new();
 
-    // Build search pattern
+    // Build search pattern (sigil + old name)
     let pattern = if let Some(sigil) = kind.sigil() {
-        format!("{}{}", sigil, name)
+        format!("{}{}", sigil, old_name)
     } else {
-        name.to_string()
+        old_name.to_string()
     };
 
     // Search through the source
@@ -57,8 +61,8 @@ pub fn find_occurrences_in_text(
                 };
 
                 edits.push(TextEdit {
-                    location: SourceLocation { start, end: start + name.len() },
-                    new_text: name.to_string(),
+                    location: SourceLocation { start, end: start + old_name.len() },
+                    new_text: new_name.to_string(),
                 });
             }
         }
@@ -156,10 +160,18 @@ mod tests {
             validate_new_name: true,
         };
 
-        let edits =
-            find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "x",
+            "renamed",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 2, "expected one comment and one string occurrence");
-        assert!(edits.iter().all(|edit| edit.new_text == "x"));
+        assert!(
+            edits.iter().all(|edit| edit.new_text == "renamed"),
+            "new_text must be the new name, not the old name"
+        );
         Ok(())
     }
 
@@ -172,8 +184,13 @@ mod tests {
             validate_new_name: true,
         };
 
-        let edits =
-            find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        let edits = find_occurrences_in_text(
+            "x",
+            "z",
+            SymbolKind::Variable(VarKind::Scalar),
+            &options,
+            source,
+        );
         assert_eq!(edits.len(), 2, "only standalone $x should match");
         Ok(())
     }
@@ -271,7 +288,11 @@ mod tests {
             rename_in_strings: true,
             validate_new_name: true,
         };
+<<<<<<< HEAD
         let edits = find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+=======
+        let edits = find_occurrences_in_text("x", "y", SymbolKind::Variable(VarKind::Scalar), &options, source);
+>>>>>>> 30252ac53 (fix(rename): pass new_name through find_occurrences_in_text so comment/string renames are non-vacuous)
         assert_eq!(edits.len(), 0);
         Ok(())
     }
@@ -284,8 +305,14 @@ mod tests {
             rename_in_strings: false,
             validate_new_name: true,
         };
+<<<<<<< HEAD
         let edits = find_occurrences_in_text("var", SymbolKind::Variable(VarKind::Scalar), &options, source);
         assert_eq!(edits.len(), 1);
+=======
+        let edits = find_occurrences_in_text("var", "renamed_var", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "renamed_var");
+>>>>>>> 30252ac53 (fix(rename): pass new_name through find_occurrences_in_text so comment/string renames are non-vacuous)
         Ok(())
     }
 
@@ -297,8 +324,14 @@ mod tests {
             rename_in_strings: true,
             validate_new_name: true,
         };
+<<<<<<< HEAD
         let edits = find_occurrences_in_text("var", SymbolKind::Variable(VarKind::Scalar), &options, source);
         assert_eq!(edits.len(), 1);
+=======
+        let edits = find_occurrences_in_text("var", "new_var", SymbolKind::Variable(VarKind::Scalar), &options, source);
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "new_var");
+>>>>>>> 30252ac53 (fix(rename): pass new_name through find_occurrences_in_text so comment/string renames are non-vacuous)
         Ok(())
     }
 
@@ -404,7 +437,11 @@ mod tests {
             rename_in_strings: false,
             validate_new_name: true,
         };
+<<<<<<< HEAD
         let edits = find_occurrences_in_text("x", SymbolKind::Variable(VarKind::Scalar), &options, source);
+=======
+        let edits = find_occurrences_in_text("x", "y", SymbolKind::Variable(VarKind::Scalar), &options, source);
+>>>>>>> 30252ac53 (fix(rename): pass new_name through find_occurrences_in_text so comment/string renames are non-vacuous)
         assert_eq!(edits.len(), 0);
         Ok(())
     }
