@@ -1,8 +1,12 @@
+//! Unicode classification helpers for Perl identifier lexing.
+//!
+//! Perl permits a broader identifier character set than plain ASCII. These
+//! helpers combine `unicode-ident` XID checks with Perl-oriented extensions
+//! such as emoji and join/variation code points used in modern source text.
+//!
+//! The module also exposes lightweight counters for debug-only observability of
+//! Unicode-heavy workloads during lexer development and tuning.
 use std::sync::atomic::{AtomicU64, Ordering};
-/// Unicode character classification for Perl identifiers
-///
-/// Perl allows a wide range of Unicode characters in identifiers,
-/// including emoji and other symbols.
 use unicode_ident::{is_xid_continue, is_xid_start};
 
 // Performance tracking for Unicode operations

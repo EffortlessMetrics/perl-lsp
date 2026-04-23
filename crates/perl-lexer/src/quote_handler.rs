@@ -1,11 +1,15 @@
+//! Quote-like operator helpers used by the lexer.
+//!
+//! This module centralizes small, reusable pieces of quote operator logic so the
+//! main lexer can stay focused on token flow. It covers:
+//! - operator classification (`q`, `qq`, `qw`, `qr`, `qx`, `m`, `s`, `tr`, `y`)
+//! - delimiter pairing helpers (for balanced delimiters such as `(...)` and `{...}`)
+//! - modifier specification tables for operators that accept trailing flags
+//! - token mapping from operator name to [`TokenType`]
+//!
+//! The parser is responsible for final modifier validation; this module keeps
+//! lightweight specs and parsing helpers for lexer-level behavior.
 use crate::TokenType;
-/// Quote operator handling with uniform delimiter processing and modifier attachment
-///
-/// This module provides consistent handling for all Perl quote-like operators:
-/// - q/qq/qw/qr/qx for quote operators
-/// - m for match operators  
-/// - s for substitution operators
-/// - tr/y for transliteration operators
 use std::sync::Arc;
 
 /// Specification for which modifiers are allowed for each operator
