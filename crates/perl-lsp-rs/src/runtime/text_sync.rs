@@ -935,11 +935,11 @@ impl LspServer {
             if let Err(e) = self.notify(
                 "textDocument/publishDiagnostics",
                 json!({
-                    "uri": normalized_uri,
+                    "uri": uri,
                     "diagnostics": []
                 }),
             ) {
-                tracing::warn!("Failed to clear diagnostics for {}: {}", normalized_uri, e);
+                tracing::warn!("Failed to clear diagnostics for {}: {}", uri, e);
             }
         }
 
@@ -1005,15 +1005,11 @@ impl LspServer {
                     if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
                         json!({
-                            "uri": normalized_uri,
+                            "uri": uri,
                             "diagnostics": lsp_diagnostics
                         }),
                     ) {
-                        tracing::warn!(
-                            "Failed to publish diagnostics for {}: {}",
-                            normalized_uri,
-                            e
-                        );
+                        tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
                 }
             }
@@ -1121,6 +1117,33 @@ impl LspServer {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::io::{self, Write};
+    use std::sync::Arc as StdArc;
+    use std::time::Duration;
+
+    /// Shared-buffer writer for capturing outbound notifications in tests.
+    struct SharedVecWriter {
+        inner: StdArc<parking_lot::Mutex<Vec<u8>>>,
+    }
+
+    impl Write for SharedVecWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.inner.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn make_server_with_capture() -> (LspServer, StdArc<parking_lot::Mutex<Vec<u8>>>) {
+        let buf = StdArc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+        let writer = SharedVecWriter { inner: StdArc::clone(&buf) };
+        let server =
+            LspServer::with_io(Box::new(std::io::Cursor::new(Vec::<u8>::new())), Box::new(writer));
+        (server, buf)
+    }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
     #[cfg(feature = "incremental")]
@@ -1551,6 +1574,69 @@ mod tests {
             "did_close must remove the URI entry from parse_cancel_flags"
         );
 
+        Ok(())
+    }
+
+    /// didClose must clear diagnostics using the client-provided URI string.
+    ///
+    /// This preserves exact URI identity for clients that key diagnostics by
+    /// the original URI representation rather than normalized equivalents.
+    #[test]
+    fn test_did_close_clears_diagnostics_with_original_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture();
+        let uri = "FILE:///test_close_uri_identity.pl";
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let text = String::from_utf8(buf.lock().clone()).unwrap_or_default();
+        assert!(
+            text.contains(r#""method":"textDocument/publishDiagnostics""#),
+            "didClose must publish diagnostics clear notification; got: {text:?}"
+        );
+        assert!(
+            text.contains(&format!(r#""uri":"{}""#, uri)),
+            "didClose must publish diagnostics using original URI; got: {text:?}"
+        );
+        Ok(())
+    }
+
+    /// didSave must publish diagnostics using the original URI string.
+    #[test]
+    fn test_did_save_publishes_diagnostics_with_original_uri()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (server, buf) = make_server_with_capture();
+        let uri = "FILE:///test_save_uri_identity.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "my $x = 1;\n"
+            }
+        }))?;
+
+        // Ignore notifications produced by didOpen; assert only didSave payload.
+        buf.lock().clear();
+
+        server.handle_did_save(Some(json!({
+            "textDocument": {"uri": uri, "version": 1}
+        })))?;
+        drop(server);
+        std::thread::sleep(Duration::from_millis(50));
+
+        let text = String::from_utf8(buf.lock().clone()).unwrap_or_default();
+        assert!(
+            text.contains(r#""method":"textDocument/publishDiagnostics""#),
+            "didSave must publish diagnostics notification; got: {text:?}"
+        );
+        assert!(
+            text.contains(&format!(r#""uri":"{}""#, uri)),
+            "didSave must publish diagnostics using original URI; got: {text:?}"
+        );
         Ok(())
     }
 
