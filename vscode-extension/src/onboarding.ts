@@ -45,7 +45,7 @@ export interface HealthCheckResult {
  */
 export const PERL_MISSING_MESSAGE =
   'Perl interpreter not found. ' +
-  'Install Perl 5.10+ (e.g. https://www.perl.org/get.html or Strawberry Perl for Windows) ' +
+  'Install Perl 5.10+ (Windows: Strawberry Perl at https://strawberryperl.com/, macOS: `brew install perl`, Linux: use your distro package manager) ' +
   'and reload the window. ' +
   'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
 
@@ -165,7 +165,8 @@ export class OnboardingManager {
         label,
         ok: false,
         status: HealthCheckStatus.Error,
-        detail: `Perl not found on PATH. Install Perl and reload. (${msg})`,
+        detail:
+          'Perl not found on PATH. Install Perl (Windows: strawberryperl.com, macOS: `brew install perl`, Linux: use your distro package manager) and reload.',
       };
     }
   }

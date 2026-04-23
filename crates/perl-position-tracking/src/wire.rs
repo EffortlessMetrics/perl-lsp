@@ -1,41 +1,61 @@
 //! LSP wire types for Position and Range.
 use crate::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 use serde::{Deserialize, Serialize};
+
+/// LSP-compatible position measured as zero-based UTF-16 coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WirePosition {
+    /// Zero-based line number.
     pub line: u32,
+    /// Zero-based UTF-16 column within the line.
     pub character: u32,
 }
 impl WirePosition {
+    /// Creates a new wire position.
     pub fn new(line: u32, character: u32) -> Self {
         Self { line, character }
     }
+
+    /// Converts a byte offset in `source` into a [`WirePosition`].
     pub fn from_byte_offset(source: &str, byte_offset: usize) -> Self {
         let (line, character) = offset_to_utf16_line_col(source, byte_offset);
         Self { line, character }
     }
+
+    /// Converts this position back into a byte offset for `source`.
     pub fn to_byte_offset(&self, source: &str) -> usize {
         utf16_line_col_to_offset(source, self.line, self.character)
     }
 }
+
+/// LSP-compatible range using UTF-16 wire positions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WireRange {
+    /// Inclusive range start.
     pub start: WirePosition,
+    /// Exclusive range end.
     pub end: WirePosition,
 }
 impl WireRange {
+    /// Creates a new wire range.
     pub fn new(start: WirePosition, end: WirePosition) -> Self {
         Self { start, end }
     }
+
+    /// Converts byte offsets in `source` to a [`WireRange`].
     pub fn from_byte_offsets(source: &str, start_byte: usize, end_byte: usize) -> Self {
         Self {
             start: WirePosition::from_byte_offset(source, start_byte),
             end: WirePosition::from_byte_offset(source, end_byte),
         }
     }
+
+    /// Creates an empty range anchored at `pos`.
     pub fn empty(pos: WirePosition) -> Self {
         Self { start: pos, end: pos }
     }
+
+    /// Creates a range spanning the entire `source` document.
     pub fn whole_document(source: &str) -> Self {
         Self {
             start: WirePosition::new(0, 0),
@@ -43,12 +63,17 @@ impl WireRange {
         }
     }
 }
+
+/// URI + range pair used in protocol payloads and snapshots.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WireLocation {
+    /// Document URI as a string.
     pub uri: String,
+    /// Location range within the document.
     pub range: WireRange,
 }
 impl WireLocation {
+    /// Creates a new wire location.
     pub fn new(uri: String, range: WireRange) -> Self {
         Self { uri, range }
     }

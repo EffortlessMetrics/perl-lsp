@@ -348,6 +348,21 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "goto_declaration_core",
+      "scenario_file": "ux_scenario_18_goto_declaration.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "run goto-declaration inside a representative file",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "declaration request returns a location or clean empty result",
+        "request does not error"
+      ]
     }
   ],
   "confidence_signals": [
