@@ -4,6 +4,19 @@ Use this directory as the short docs front door. It tells you where to go next
 without making you learn the workspace layout first. For the full Diataxis-style
 map of the docs tree, use [INDEX.md](INDEX.md).
 
+## Diataxis in This Repository
+
+When adding or moving docs, choose the content type first, then the file:
+
+| Content intent | Place it under | Writing focus |
+| --- | --- | --- |
+| Teach by doing | `docs/tutorials/` | step-by-step learning journey |
+| Solve a concrete task | `docs/how-to/` | shortest reliable path to an outcome |
+| Describe the contract | `docs/reference/` | exact behavior, options, and constraints |
+| Explain rationale | `docs/explanation/` | design tradeoffs and mental models |
+
+If a doc starts mixing multiple intents, split it and cross-link the parts.
+
 ## Canonical Sources
 
 | Topic | Source | Verified By |
@@ -58,3 +71,4 @@ just status-check
 - Put computed metrics in [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), not scattered through the docs tree.
 - Update [project/ROADMAP.md](project/ROADMAP.md) when the active milestone or release framing changes.
 - Keep top-level summary docs short and link back to the canonical project docs.
+- Keep each doc in the correct Diataxis category; prefer cross-links over hybrid docs that try to do everything.
