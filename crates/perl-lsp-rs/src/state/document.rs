@@ -284,6 +284,8 @@ pub struct ClientCapabilities {
     pub dynamic_registration_support: bool,
     /// Supports `workspace/configuration` reverse requests from server.
     pub workspace_configuration_support: bool,
+    /// Supports `workspaceFolders` capability negotiation/events.
+    pub workspace_folders_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
     /// Supports `completionItem.commitCharacters` in completion results

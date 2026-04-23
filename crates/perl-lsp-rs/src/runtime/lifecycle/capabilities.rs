@@ -78,6 +78,12 @@ impl LspServer {
                     .and_then(|w| w.get("configuration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.workspace_folders_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("workspaceFolders"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
 
                 // Check if client supports snippet syntax in completion items
                 caps.snippet_support = params
@@ -300,10 +306,11 @@ impl LspServer {
         });
 
         // Workspace capabilities: folders, file operations, and content schemes
+        let workspace_folders_support = self.client_capabilities.lock().workspace_folders_support;
         capabilities["workspace"] = json!({
             "workspaceFolders": {
-                "supported": true,
-                "changeNotifications": true
+                "supported": workspace_folders_support,
+                "changeNotifications": workspace_folders_support
             },
             "fileOperations": {
                 "willCreate": { "filters": [
@@ -481,7 +488,8 @@ mod tests {
         let params = json!({
             "capabilities": {
                 "workspace": {
-                    "configuration": true
+                    "configuration": true,
+                    "workspaceFolders": true
                 }
             }
         });
@@ -489,5 +497,39 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+        assert!(server.client_capabilities.lock().workspace_folders_support);
+    }
+
+    #[test]
+    fn initialize_disables_workspace_folder_server_capability_when_client_lacks_support()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceFolders": false
+                }
+            }
+        });
+
+        let response = server
+            .handle_initialize(Some(params))?
+            .ok_or("initialize should return payload")?;
+
+        let workspace_folders = response
+            .pointer("/capabilities/workspace/workspaceFolders/supported")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let change_notifications = response
+            .pointer("/capabilities/workspace/workspaceFolders/changeNotifications")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        assert!(!workspace_folders, "server must not advertise unsupported workspace folders");
+        assert!(
+            !change_notifications,
+            "server must not advertise workspace folder change notifications when unsupported"
+        );
+        Ok(())
     }
 }
