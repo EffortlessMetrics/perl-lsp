@@ -28,6 +28,7 @@ perllsp --health
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| IntelliJ IDEA | configure LSP4IJ with `perllsp --stdio` | [docs/EDITORS/INTELLIJ_IDEA_SETUP.md](../EDITORS/INTELLIJ_IDEA_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -63,6 +64,12 @@ args = ["--stdio"]
 
 Register a client whose command is `["perllsp", "--stdio"]` and scope it to
 Perl source files.
+
+### IntelliJ IDEA
+
+Install the LSP4IJ plugin, then register a server command of
+`perllsp --stdio` for Perl file types. Use `$ProjectFileDir$` as the working
+directory so workspace-relative features resolve correctly.
 
 ## When Setup Fails
 
