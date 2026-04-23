@@ -627,21 +627,29 @@ doctor:
     fi
 
     # ------------------------------------------------------------------
-    # Check 7: Master is fast-forward-able
-    # Use the cached refs_dump to check origin/master existence (no extra call).
+    # Check 7: Current checkout is fast-forward-able with remote default branch.
+    # Prefer origin/HEAD, then fall back to common branch names.
     # ------------------------------------------------------------------
-    if [ -n "${remote_ref_set[origin/master]:-}" ]; then
-        behind=$(git rev-list --count HEAD..origin/master 2>/dev/null || echo 0)
+    default_remote_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    if [ -z "$default_remote_ref" ]; then
+        if [ -n "${remote_ref_set[origin/main]:-}" ]; then
+            default_remote_ref="origin/main"
+        elif [ -n "${remote_ref_set[origin/master]:-}" ]; then
+            default_remote_ref="origin/master"
+        fi
+    fi
+    if [ -n "$default_remote_ref" ]; then
+        behind=$(git rev-list --count HEAD.."$default_remote_ref" 2>/dev/null || echo 0)
         if [ "$behind" = "0" ]; then
-            echo "✅ master is up to date with origin/master"
+            echo "✅ branch is up to date with $default_remote_ref"
         else
-            echo "⚠️  HEAD is $behind commits behind origin/master"
+            echo "⚠️  HEAD is $behind commits behind $default_remote_ref"
             echo "   Fix: git pull --ff-only"
             issues=$((issues + 1))
         fi
     else
-        echo "⚠️  origin/master ref not found (cannot check fast-forward state)"
-        echo "   Fix: git fetch origin master:refs/remotes/origin/master"
+        echo "⚠️  could not resolve default remote branch (cannot check fast-forward state)"
+        echo "   Fix: git remote set-head origin -a && git fetch origin"
         issues=$((issues + 1))
     fi
 
@@ -653,10 +661,34 @@ doctor:
     fi
     exit 0
 
-# Targeted checks for changed crates (fast feedback for active branch)
-devex-targeted base='origin/master' mode='all':
-    @echo "Running targeted checks (base={{base}}, mode={{mode}})..."
-    @cargo xtask targeted-checks --base "{{base}}" --mode "{{mode}}"
+# Targeted checks for changed crates (fast feedback for active branch).
+# If `base` is empty, resolve from origin/HEAD, then fall back to common names.
+devex-targeted base='' mode='all':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="{{base}}"
+    if [ -z "$base" ]; then
+        base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/master >/dev/null; then
+        base="origin/master"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet main >/dev/null; then
+        base="main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet master >/dev/null; then
+        base="master"
+    fi
+    if [ -z "$base" ]; then
+        echo "ERROR: Could not auto-detect base branch."
+        echo "Hint: run 'just devex-targeted <base-ref>' (example: origin/main)."
+        exit 1
+    fi
+    echo "Running targeted checks (base=$base, mode={{mode}})..."
+    cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
 
 # Tool availability check (basic tools for PR-fast)
 [private]
