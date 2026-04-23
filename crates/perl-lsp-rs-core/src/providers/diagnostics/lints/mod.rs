@@ -88,6 +88,12 @@
 //! | `PL300` | Warning | Subroutine name defined more than once |
 //! | `PL303` | Warning | Same-file Moo/Moose roles provide conflicting methods |
 //!
+//! ## POD coverage (`pod_coverage.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `PL304` | Hint | Exported subroutine lacks POD documentation |
+//!
 //! ## Dead code (`dead_code.rs`)
 //!
 //! | Code | Severity | Description |
@@ -154,6 +160,8 @@ pub mod loop_control_label;
 pub mod missing_module;
 /// Package and subroutine diagnostics (PL200, PL201, PL300, PL303)
 pub mod package_subroutine;
+/// POD coverage for exported subroutines (PL304)
+pub mod pod_coverage;
 /// printf/sprintf format specifier arity validation (PL405)
 pub mod printf_format;
 /// Same-file Moo/Moose role conflict detection (PL303)

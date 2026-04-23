@@ -21,6 +21,7 @@ use super::lints::loop_control_label::check_loop_control_labels;
 use super::lints::package_subroutine::{
     check_duplicate_package, check_duplicate_subroutine, check_missing_package_declaration,
 };
+use super::lints::pod_coverage::check_pod_coverage;
 use super::lints::printf_format::check_printf_format;
 use super::lints::role_conflicts::check_role_conflicts;
 use super::lints::security::check_security;
@@ -166,6 +167,9 @@ impl DiagnosticsProvider {
 
         // Unused import detection
         check_unused_imports(ast, source, &mut diagnostics);
+
+        // POD coverage for exported subroutines (PL304)
+        check_pod_coverage(ast, source, &mut diagnostics);
 
         // Version compatibility lint (PL900)
         check_version_compat(ast, &mut diagnostics);
