@@ -92,7 +92,6 @@ pub fn plan_module_rename_edits(
                     }
                 }
             }
-
         }
 
         if let Some(new_text) = rewritten {
