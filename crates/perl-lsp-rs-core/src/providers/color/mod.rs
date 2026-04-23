@@ -5,9 +5,9 @@
 //! options for editors.
 
 use once_cell::sync::Lazy;
-use perl_position_tracking::{offset_to_utf16_line_col, WirePosition, WireRange};
+use perl_position_tracking::{WirePosition, WireRange, offset_to_utf16_line_col};
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Regex for hex color codes: #RGB, #RRGGBB, #RRGGBBAA
 static HEX_COLOR_RE: Lazy<Option<Regex>> =

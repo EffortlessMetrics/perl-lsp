@@ -157,11 +157,7 @@ fn quickfix_text_edits_for_uri<'a>(action: &'a Value, uri: &str) -> Option<Vec<&
         collected.extend(edits.iter());
     }
 
-    if collected.is_empty() {
-        None
-    } else {
-        Some(collected)
-    }
+    if collected.is_empty() { None } else { Some(collected) }
 }
 
 fn build_source_fix_all(code_actions: &[Value], uri: &str) -> Option<Value> {

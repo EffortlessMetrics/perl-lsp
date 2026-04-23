@@ -50,18 +50,8 @@ jobs:
         with:
           tool: just
 
-      - name: Auto-fix formatting
-        run: |
-          cargo xtask fmt
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "chore: auto-format with cargo fmt"
-            git push
-            echo "::notice::Auto-formatted code pushed. CI will re-run."
-            exit 0
-          fi
+      - name: Check formatting
+        run: cargo xtask fmt --check
 
       - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
