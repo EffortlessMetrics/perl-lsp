@@ -823,8 +823,13 @@ SECOND
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
 
+        assert!(
+            matches!(diagnostics[0].pattern, AntiPattern::SourceFilterHeredoc { .. }),
+            "expected SourceFilterHeredoc pattern, got: {:?}",
+            diagnostics[0].pattern
+        );
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc pattern");
+            return;
         };
 
         assert_eq!(location.line, 1);

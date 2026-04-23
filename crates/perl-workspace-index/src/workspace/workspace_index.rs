@@ -4805,31 +4805,36 @@ Utils::process_data();
         use crate::Parser;
         let mut p = Parser::new("package Child;\nuse parent 'MyBase';\n1;\n");
         let ast = p.parse().expect("parse succeeded");
-        if let NodeKind::Program { statements } = &ast.kind {
-            for stmt in statements {
-                if let NodeKind::Use { module, args, .. } = &stmt.kind {
-                    if module == "parent" {
-                        assert_eq!(
-                            args,
-                            &["'MyBase'".to_string()],
-                            "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
-                            args
-                        );
-                        let extracted = extract_module_names_from_use_args(args);
-                        assert_eq!(
-                            extracted,
-                            vec!["MyBase".to_string()],
-                            "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
-                            extracted
-                        );
-                        return; // Test passed
-                    }
+        assert!(
+            matches!(ast.kind, NodeKind::Program { .. }),
+            "Expected Program root, got {:?}",
+            ast.kind
+        );
+        let NodeKind::Program { statements } = &ast.kind else {
+            return;
+        };
+        let mut found_parent_use = false;
+        for stmt in statements {
+            if let NodeKind::Use { module, args, .. } = &stmt.kind {
+                if module == "parent" {
+                    found_parent_use = true;
+                    assert_eq!(
+                        args,
+                        &["'MyBase'".to_string()],
+                        "Expected args=[\"'MyBase'\"] for `use parent 'MyBase'`, got: {:?}",
+                        args
+                    );
+                    let extracted = extract_module_names_from_use_args(args);
+                    assert_eq!(
+                        extracted,
+                        vec!["MyBase".to_string()],
+                        "extract_module_names_from_use_args should return [\"MyBase\"], got {:?}",
+                        extracted
+                    );
                 }
             }
-            panic!("No Use node with module='parent' found in AST");
-        } else {
-            panic!("Expected Program root");
         }
+        assert!(found_parent_use, "No Use node with module='parent' found in AST");
     }
 
     // -------------------------------------------------------------------------
