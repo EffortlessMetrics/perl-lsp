@@ -3908,6 +3908,14 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
 
     for (idx, ch) in line.char_indices() {
         if in_single {
+            if prev_was_escape {
+                prev_was_escape = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape = true;
+                continue;
+            }
             if ch == '\'' {
                 in_single = false;
             }
@@ -3943,8 +3951,14 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
         }
 
         match ch {
-            '\'' => in_single = true,
-            '"' => in_double = true,
+            '\'' => {
+                in_single = true;
+                prev_was_escape = false;
+            }
+            '"' => {
+                in_double = true;
+                prev_was_escape = false;
+            }
             '`' => in_backtick = true,
             '#' => {
                 if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
@@ -4436,6 +4450,11 @@ mod tests {
         assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
         assert!(has_unlinked_todo_in_hash_line(
             "echo '# TODO in string' # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re,));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
             &todo_re
         ));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
