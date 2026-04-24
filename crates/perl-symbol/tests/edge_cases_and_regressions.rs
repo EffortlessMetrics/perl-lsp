@@ -488,6 +488,33 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn edge_case_surface_conservatively_skips_non_ast_native_decl_kinds() -> Result<()> {
+    // `use`/`no` statements are module-loading forms and do not encode
+    // declaration-site semantics for SymbolKind::Import / ::Export / ::Role.
+    let use_node = Node::new(
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec!["subs".to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 16),
+    );
+    let no_node = Node::new(
+        NodeKind::No {
+            module: "warnings".to_string(),
+            args: vec!["once".to_string()],
+            has_filter_risk: false,
+        },
+        loc(17, 36),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, no_node] }, loc(0, 36));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert!(decls.is_empty());
+    Ok(())
+}
+
 // ─── Regression: CLAUDE.md banned dependencies are not transitively present ──
 
 /// Regression: `perl-symbol` must not depend on `perl-parser-core` or any

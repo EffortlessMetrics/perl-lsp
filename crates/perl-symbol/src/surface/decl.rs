@@ -80,10 +80,16 @@ pub struct SymbolDecl {
 /// | `Class { name, .. }` | `Class` |
 /// | `Subroutine { name: Some(..), .. }` | `Subroutine` |
 /// | `Method { name, .. }` | `Method` |
+/// | `Format { name, .. }` | `Format` |
+/// | `LabeledStatement { label, .. }` | `Label` |
 /// | `VariableDeclaration { variable, .. }` | `Variable(VarKind)` |
 /// | `Use { module: "constant", args, .. }` | `Constant` |
 ///
 /// Anonymous subroutines (`name: None`) are skipped.
+///
+/// `Role`, `Import`, and `Export` are intentionally not projected here:
+/// the current AST does not expose those declaration categories with stable
+/// declaration-site semantics.
 ///
 /// # Package context propagation
 ///
@@ -206,6 +212,35 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 declarator: None,
             });
             walk(body, ctx, out);
+        }
+
+        // ── Format declarations ───────────────────────────────────────────
+        NodeKind::Format { name, .. } => {
+            let container = ctx.current_package.clone();
+            out.push(SymbolDecl {
+                kind: SymbolKind::Format,
+                name: name.clone(),
+                qualified_name: ctx.qualify(name),
+                full_span: (node.location.start, node.location.end),
+                anchor_span: None, // Format has no name_span in current AST
+                container,
+                declarator: None,
+            });
+        }
+
+        // ── Labels ────────────────────────────────────────────────────────
+        NodeKind::LabeledStatement { label, statement } => {
+            let container = ctx.current_package.clone();
+            out.push(SymbolDecl {
+                kind: SymbolKind::Label,
+                name: label.clone(),
+                qualified_name: ctx.qualify(label),
+                full_span: (node.location.start, node.location.end),
+                anchor_span: None, // LabeledStatement has no label span in current AST
+                container,
+                declarator: None,
+            });
+            walk(statement, ctx, out);
         }
 
         // ── Variable declarations ──────────────────────────────────────────

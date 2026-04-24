@@ -503,6 +503,66 @@ fn test_class_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
+#[test]
+fn test_format_produces_symbol_decl() {
+    // format REPORT =
+    // .
+    let format_node = Node::new(
+        NodeKind::Format { name: "REPORT".to_string(), body: "@<<<".to_string() },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let d = &decls[0];
+    assert_eq!(d.kind, SymbolKind::Format);
+    assert_eq!(d.name, "REPORT");
+    assert_eq!(d.qualified_name, "REPORT");
+    assert_eq!(d.full_span, (0, 18));
+    assert!(d.anchor_span.is_none());
+}
+
+#[test]
+fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Result<(), String> {
+    // LOOP: sub inner { }
+    let sub_body = Node::new(NodeKind::Block { statements: vec![] }, loc(15, 18));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("inner".to_string()),
+            name_span: Some(loc(10, 15)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(sub_body),
+        },
+        loc(6, 18),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "LOOP".to_string(), statement: Box::new(sub_node) },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+
+    let label_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("expected label decl")?;
+    assert_eq!(label_decl.name, "LOOP");
+    assert_eq!(label_decl.qualified_name, "LOOP");
+    assert!(label_decl.anchor_span.is_none());
+
+    let sub_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Subroutine)
+        .ok_or("expected inner subroutine decl")?;
+    assert_eq!(sub_decl.name, "inner");
+    Ok(())
+}
+
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]
