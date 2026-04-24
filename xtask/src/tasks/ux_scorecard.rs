@@ -341,9 +341,7 @@ mod tests {
                 definition_exact_hit: None,
                 symbol_correct: Some(true),
                 cross_file_success: None,
-                latency_ms_by_request: BTreeMap::from([
-                    ("hover".to_string(), vec![10, 20, 30]),
-                ]),
+                latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30])]),
             },
             ScenarioMeasurement {
                 scenario_id: "completion_test".to_string(),
@@ -415,22 +413,16 @@ mod tests {
             provenance: serde_json::json!({"input": "fixture", "generator": "test"}),
         };
 
-        let json_str = serde_json::to_string_pretty(&artifact)
-            .expect("artifact must serialize without error");
+        let json_str =
+            serde_json::to_string_pretty(&artifact).expect("artifact must serialize without error");
         let parsed: serde_json::Value =
             serde_json::from_str(&json_str).expect("serialized artifact must parse back");
 
         assert_eq!(parsed["schema_version"], 1);
         assert_eq!(parsed["subsystem"], "editor_ux");
         // PercentMetric serializes as {"value": <f64>}.
-        assert_eq!(
-            parsed["rows"]["hover_correctness_pct"]["value"],
-            serde_json::json!(50.0)
-        );
-        assert_eq!(
-            parsed["rows"]["symbol_correctness_pct"]["value"],
-            serde_json::json!(50.0)
-        );
+        assert_eq!(parsed["rows"]["hover_correctness_pct"]["value"], serde_json::json!(50.0));
+        assert_eq!(parsed["rows"]["symbol_correctness_pct"]["value"], serde_json::json!(50.0));
         // Latency is serialized nested under latency_by_request_class.
         assert!(parsed["latency_by_request_class"]["hover"]["p50_ms"].is_number());
         assert!(parsed["latency_by_request_class"]["completion"]["p95_ms"].is_number());
