@@ -1018,6 +1018,30 @@ my $documented = 42;
     }
 
     #[test]
+    fn test_analyzer_find_definition_goto_label() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "START: while (1) {\n    goto START;\n}\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let ref_pos = code.find("START;\n").ok_or("could not find goto label")?;
+
+        let symbol = analyzer
+            .find_definition(ref_pos)
+            .ok_or("definition not found for goto label reference")?;
+
+        assert_eq!(symbol.name, "START");
+        assert_eq!(symbol.kind, SymbolKind::Label);
+        assert!(
+            symbol.location.start < ref_pos,
+            "Label definition {:?} should precede goto reference at byte {}",
+            symbol.location.start,
+            ref_pos
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_anonymous_subroutine_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 my $closure = sub {
