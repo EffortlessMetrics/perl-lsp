@@ -23,7 +23,7 @@ use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -216,33 +216,34 @@ pub struct Receipt {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentReceipt {
+    pub sha: String,
+    pub is_latest: bool,
+    pub tier: String,
     pub scope: AgentScope,
     pub selected_lanes: Vec<AgentLane>,
-    pub reasons: BTreeMap<String, String>,
-    pub failures: AgentFailures,
-    pub baselines: Vec<String>,
-    pub next_actions: Vec<String>,
+    pub failures: Vec<AgentFailure>,
+    pub suggested_next_actions: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AgentScope {
-    pub base: String,
-    pub diff_class: String,
-    pub changed_files: Vec<String>,
     pub direct_crates: Vec<String>,
-    pub reverse_dep_closure: Vec<String>,
+    pub reverse_deps: Vec<String>,
+    pub risk_tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentLane {
-    pub lane: String,
-    pub scope: Vec<String>,
+    pub name: String,
+    pub reason: String,
+    pub status: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct AgentFailures {
-    pub blocking: Vec<String>,
-    pub repro: Vec<String>,
+pub struct AgentFailure {
+    pub lane: String,
+    pub summary: String,
+    pub repro: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -735,7 +736,7 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
-    let agent_receipt = build_agent_receipt(&root, &results);
+    let agent_receipt = build_agent_receipt(&root, &results, &metadata.git_sha);
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
@@ -747,63 +748,69 @@ fn run_gates(
     })
 }
 
-fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
+fn build_agent_receipt(root: &Path, results: &[GateResult], sha: &str) -> AgentReceipt {
     let scope_output = compute_scope_output(root).ok();
-    let selected_lanes = scope_output
-        .as_ref()
-        .map(|scope| {
-            scope
-                .selected_lanes
+    let selected_lanes = scope_output.as_ref().map_or_else(Vec::new, |scope| {
+        scope
+            .selected_lanes
+            .iter()
+            .map(|lane| {
+                let explanation = scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                let reason = if explanation.is_empty() {
+                    lane.reason.clone()
+                } else {
+                    format!("{} — {}", lane.reason, explanation)
+                };
+                let status = results
+                    .iter()
+                    .find(|result| result.gate_name == lane.lane)
+                    .map(|result| result.status.clone())
+                    .unwrap_or_else(|| "not_run".to_string());
+                AgentLane { name: lane.lane.clone(), reason, status }
+            })
+            .collect()
+    });
+    let (blocking, repro, suggested_next_actions) = failure_guidance(results);
+    let failures: Vec<AgentFailure> = blocking
+        .iter()
+        .zip(repro.iter())
+        .map(|(lane, repro_cmd)| {
+            let summary = results
                 .iter()
-                .map(|lane| AgentLane { lane: lane.lane.clone(), scope: lane.scope.clone() })
-                .collect()
+                .find(|result| result.gate_name == *lane)
+                .and_then(|result| result.output_summary.clone())
+                .unwrap_or_else(|| "Blocking gate failed".to_string());
+            AgentFailure { lane: lane.clone(), summary, repro: repro_cmd.clone() }
         })
-        .unwrap_or_default();
-    let reasons = scope_output
-        .as_ref()
-        .map(|scope| {
-            scope
-                .selected_lanes
-                .iter()
-                .map(|lane| {
-                    let explanation =
-                        scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
-                    let reason = if explanation.is_empty() {
-                        lane.reason.clone()
-                    } else {
-                        format!("{} — {}", lane.reason, explanation)
-                    };
-                    (lane.lane.clone(), reason)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let (blocking, repro, next_actions) = failure_guidance(results);
-    let baselines = discover_baselines(root);
+        .collect();
+    let is_latest = cmd("git", ["rev-parse", "HEAD"])
+        .dir(root)
+        .read()
+        .map(|head| head.trim() == sha)
+        .unwrap_or(false);
+    let tier = results
+        .first()
+        .map(|result| result.tier.clone())
+        .unwrap_or_else(|| "unknown".to_string());
 
     let scope = if let Some(scope) = scope_output {
         AgentScope {
-            base: scope.base,
-            diff_class: scope.diff_class,
-            changed_files: scope.changed_files,
             direct_crates: scope.direct_crates.into_iter().map(|entry| entry.name).collect(),
-            reverse_dep_closure: scope
-                .reverse_dep_closure
-                .into_iter()
-                .map(|entry| entry.name)
-                .collect(),
+            reverse_deps: scope.reverse_dep_closure.into_iter().map(|entry| entry.name).collect(),
+            risk_tags: scope.risk_tags,
         }
     } else {
         AgentScope::default()
     };
 
     AgentReceipt {
+        sha: sha.to_string(),
+        is_latest,
+        tier,
         scope,
         selected_lanes,
-        reasons,
-        failures: AgentFailures { blocking, repro },
-        baselines,
-        next_actions,
+        failures,
+        suggested_next_actions,
     }
 }
 
@@ -827,21 +834,6 @@ fn failure_guidance(results: &[GateResult]) -> (Vec<String>, Vec<String>, Vec<St
             .collect()
     };
     (blocking, repro, next_actions)
-}
-
-fn discover_baselines(root: &Path) -> Vec<String> {
-    let candidates = [
-        ".ci/public-api-baselines",
-        ".ci/metrics/baselines",
-        "benchmarks/baselines",
-        ".ci/parser-corpus-baseline.json",
-        ".ci/cpan-corpus-baseline.json",
-    ];
-    candidates
-        .iter()
-        .filter(|path| root.join(path).exists())
-        .map(|path| (*path).to_string())
-        .collect()
 }
 
 fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
@@ -1721,18 +1713,17 @@ mod tests {
                 "overall_status": "pass"
             },
             "agent_receipt": {
+                "sha": "abc123",
+                "is_latest": true,
+                "tier": "pr_fast",
                 "scope": {
-                    "base": "",
-                    "diff_class": "",
-                    "changed_files": [],
                     "direct_crates": [],
-                    "reverse_dep_closure": []
+                    "reverse_deps": [],
+                    "risk_tags": []
                 },
                 "selected_lanes": [],
-                "reasons": {},
-                "failures": {"blocking": [], "repro": []},
-                "baselines": [],
-                "next_actions": []
+                "failures": [],
+                "suggested_next_actions": []
             }
         }"#).expect("minimal receipt JSON is valid");
         receipt.gates.push(GateResult {
@@ -1814,5 +1805,22 @@ mod tests {
         assert_eq!(warning_change.delta_percent, 100.0);
         assert!(!warning_change.delta_percent.is_nan());
         assert!(!warning_change.delta_percent.is_infinite());
+    }
+
+    #[test]
+    fn agent_receipt_shape_has_phase1_fields() {
+        let receipt = test_receipt_with_metrics(GateMetrics::default());
+        let value = serde_json::to_value(receipt).expect("receipt should serialize");
+        let agent = &value["agent_receipt"];
+
+        assert!(agent["sha"].is_string());
+        assert!(agent["is_latest"].is_boolean());
+        assert!(agent["tier"].is_string());
+        assert!(agent["scope"]["direct_crates"].is_array());
+        assert!(agent["scope"]["reverse_deps"].is_array());
+        assert!(agent["scope"]["risk_tags"].is_array());
+        assert!(agent["selected_lanes"].is_array());
+        assert!(agent["failures"].is_array());
+        assert!(agent["suggested_next_actions"].is_array());
     }
 }
