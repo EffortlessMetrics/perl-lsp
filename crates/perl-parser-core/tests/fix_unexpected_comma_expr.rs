@@ -359,3 +359,20 @@ fn test_pdl_dbg_pattern() {
     let source = r#"$stab = $stab->{$_.'::'} for grep length, split /::/, $package;"#;
     assert_clean_parse(source);
 }
+
+#[test]
+fn test_sort_subname_list_form() {
+    let source = r#"my @sorted = sort by_name @people;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_anonymous_sub_comma_list_in_block() {
+    // Minimized from /usr/share/perl/5.38/App/Cpan.pm (_generator)
+    let source = r#"sub _generator {
+    my @files = ();
+    sub { push @files, $_[0] },
+    sub { \@files },
+}"#;
+    assert_clean_parse(source);
+}

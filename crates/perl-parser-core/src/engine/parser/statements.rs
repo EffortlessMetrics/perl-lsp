@@ -113,12 +113,12 @@ impl<'a> Parser<'a> {
                 } else {
                     sub_node
                 };
-                // Wrap anonymous subroutines in expression statements
-                let location = expr.location;
-                Node::new(
-                    NodeKind::ExpressionStatement { expression: Box::new(expr) },
-                    location,
-                )
+                // Continue parsing low-precedence expression tails so patterns like
+                // `sub { ... }, sub { ... }` (comma operator/list in expression
+                // statement position) are handled as a single expression statement
+                // rather than producing an unexpected comma error after the first
+                // anonymous sub.
+                self.finish_expression_from(expr)?
             } else {
                 // Named subroutines are statements by themselves
                 sub_node
