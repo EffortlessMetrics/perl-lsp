@@ -133,4 +133,18 @@ impl SemanticModel {
     pub fn definition_at(&self, position: usize) -> Option<&Symbol> {
         self.analyzer.find_definition(position)
     }
+
+    /// Resolve inherited method definition location for a receiver class.
+    pub fn resolve_inherited_method_location(
+        &self,
+        receiver_class: &str,
+        method_name: &str,
+    ) -> Option<SourceLocation> {
+        self.analyzer.resolve_inherited_method_location(receiver_class, method_name)
+    }
+
+    /// Return the ordered parent chain for `receiver_class`.
+    pub fn parent_chain(&self, receiver_class: &str) -> Option<Vec<String>> {
+        self.analyzer.resolve_parent_chain(receiver_class)
+    }
 }

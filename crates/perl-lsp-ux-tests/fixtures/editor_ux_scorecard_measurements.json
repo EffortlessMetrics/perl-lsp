@@ -1,0 +1,62 @@
+[
+  {
+    "scenario_id": "hover_core",
+    "hover_correct": true,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "cross_file_success": null,
+    "latency_ms_by_request": {
+      "hover": [18, 21, 24, 31, 29]
+    }
+  },
+  {
+    "scenario_id": "goto_definition_core",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": true,
+    "symbol_correct": null,
+    "cross_file_success": true,
+    "latency_ms_by_request": {
+      "definition": [27, 32, 36, 39, 44]
+    }
+  },
+  {
+    "scenario_id": "multi_root_workspace_symbols",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": true,
+    "cross_file_success": true,
+    "latency_ms_by_request": {
+      "workspace_symbols": [42, 48, 55, 61, 68]
+    }
+  },
+  {
+    "scenario_id": "folder_removal_eviction",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": true,
+    "cross_file_success": true,
+    "latency_ms_by_request": {
+      "workspace_symbols": [46, 49, 58, 64, 70]
+    }
+  },
+  {
+    "scenario_id": "completion_ranking",
+    "hover_correct": null,
+    "completion_top1_correct": true,
+    "completion_top5_correct": true,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "cross_file_success": null,
+    "latency_ms_by_request": {
+      "completion": [19, 23, 27, 33, 35]
+    }
+  }
+]
