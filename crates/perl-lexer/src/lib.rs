@@ -864,7 +864,12 @@ impl<'a> PerlLexer<'a> {
     }
 
     #[inline]
-    fn consume_balanced_segment(&mut self, open: char, close: char) -> Option<usize> {
+    fn consume_balanced_segment(
+        &mut self,
+        open: char,
+        close: char,
+        string_delim: Option<char>,
+    ) -> Option<usize> {
         if self.current_char() != Some(open) {
             return None;
         }
@@ -872,6 +877,13 @@ impl<'a> PerlLexer<'a> {
         let mut depth = 1usize;
         self.advance();
         while let Some(ch) = self.current_char() {
+            // Recovery for incomplete interpolation tails in strings: when a quoted
+            // string closes before the interpolation segment closes, stop scanning
+            // and leave the quote for the outer string parser.
+            if string_delim.is_some() && Some(ch) == string_delim {
+                return None;
+            }
+
             match ch {
                 '\\' => {
                     self.advance();
@@ -2806,7 +2818,7 @@ impl<'a> PerlLexer<'a> {
                     self.advance();
                     match self.current_char() {
                         Some('{') => {
-                            if let Some(end) = self.consume_balanced_segment('{', '}') {
+                            if let Some(end) = self.consume_balanced_segment('{', '}', Some('"')) {
                                 parts.push(StringPart::Expression(Arc::from(
                                     &self.input[part_start..end],
                                 )));
@@ -2847,19 +2859,22 @@ impl<'a> PerlLexer<'a> {
 
                                     match self.current_char() {
                                         Some('[') => {
-                                            let _ = self.consume_balanced_segment('[', ']');
+                                            let _ =
+                                                self.consume_balanced_segment('[', ']', Some('"'));
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('{') => {
-                                            let _ = self.consume_balanced_segment('{', '}');
+                                            let _ =
+                                                self.consume_balanced_segment('{', '}', Some('"'));
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('(') => {
-                                            let _ = self.consume_balanced_segment('(', ')');
+                                            let _ =
+                                                self.consume_balanced_segment('(', ')', Some('"'));
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2884,7 +2899,11 @@ impl<'a> PerlLexer<'a> {
                                                 }
                                             }
                                             if self.current_char() == Some('(') {
-                                                let _ = self.consume_balanced_segment('(', ')');
+                                                let _ = self.consume_balanced_segment(
+                                                    '(',
+                                                    ')',
+                                                    Some('"'),
+                                                );
                                             }
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
@@ -2898,13 +2917,13 @@ impl<'a> PerlLexer<'a> {
                                     }
                                 } else if self.current_char() == Some('[') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('[', ']');
+                                    let _ = self.consume_balanced_segment('[', ']', Some('"'));
                                     parts.push(StringPart::ArraySlice(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));
                                 } else if self.current_char() == Some('{') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('{', '}');
+                                    let _ = self.consume_balanced_segment('{', '}', Some('"'));
                                     parts.push(StringPart::Expression(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));

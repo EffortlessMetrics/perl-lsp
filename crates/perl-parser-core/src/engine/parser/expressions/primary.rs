@@ -71,6 +71,9 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
+                if interpolated {
+                    self.record_incomplete_interpolation_index_diagnostics(&token.text, token.start);
+                }
                 Ok(Node::new(
                     NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
@@ -1004,5 +1007,98 @@ impl<'a> Parser<'a> {
                 Err(ParseError::unexpected("expression", token_kind.display_name(), pos))
             }
         }
+    }
+
+    fn record_incomplete_interpolation_index_diagnostics(&mut self, text: &str, start: usize) {
+        let Some(body) = text.strip_prefix('"').and_then(|s| s.strip_suffix('"')) else {
+            return;
+        };
+
+        let bytes = body.as_bytes();
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] == b'\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+
+            if bytes[i] != b'$' {
+                i += 1;
+                continue;
+            }
+
+            let mut j = i + 1;
+            while j < bytes.len() {
+                let b = bytes[j];
+                if (b as char).is_ascii_alphanumeric() || b == b'_' {
+                    j += 1;
+                } else {
+                    break;
+                }
+            }
+
+            // Ignore punctuation vars like $!, $$, etc.
+            if j == i + 1 {
+                i += 1;
+                continue;
+            }
+
+            if let Some((open_idx, open, close)) = Self::find_interpolation_opener(bytes, j) {
+                if Self::scan_balanced_interpolation(bytes, open_idx, open, close).is_none() {
+                    self.record_error(ParseError::syntax(
+                        format!(
+                            "Unclosed '{}' in string interpolation before closing quote",
+                            open
+                        ),
+                        start + 1 + open_idx,
+                    ));
+                    break;
+                }
+            }
+
+            i = j;
+        }
+    }
+
+    fn find_interpolation_opener(bytes: &[u8], mut idx: usize) -> Option<(usize, char, char)> {
+        if idx + 2 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'>' {
+            idx += 2;
+        }
+
+        match bytes.get(idx).copied() {
+            Some(b'{') => Some((idx, '{', '}')),
+            Some(b'[') => Some((idx, '[', ']')),
+            _ => None,
+        }
+    }
+
+    fn scan_balanced_interpolation(
+        bytes: &[u8],
+        open_idx: usize,
+        open: char,
+        close: char,
+    ) -> Option<usize> {
+        let mut depth = 0usize;
+        let mut i = open_idx;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'\\' => {
+                    i = i.saturating_add(2);
+                    continue;
+                }
+                c if c == open as u8 => {
+                    depth += 1;
+                }
+                c if c == close as u8 => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        None
     }
 }
