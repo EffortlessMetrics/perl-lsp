@@ -3,8 +3,8 @@
 //! These tests verify invariants that should hold for all inputs, not just
 //! specific examples.
 
-use perl_lsp_diagnostics::unreachable_code::check_unreachable_code;
 use perl_lsp_diagnostics::DiagnosticTag;
+use perl_lsp_diagnostics::unreachable_code::check_unreachable_code;
 use perl_parser_core::{Node, NodeKind, SourceLocation};
 
 // ---------------------------------------------------------------------------
@@ -420,10 +420,8 @@ fn property_return_produces_correct_diagnostic_count() {
 #[test]
 fn property_last_loop_control_produces_correct_diagnostic_count() {
     for num_following in 0..=10 {
-        let ctrl = Node::new(
-            NodeKind::LoopControl { op: "last".to_string(), label: None },
-            loc(10, 15),
-        );
+        let ctrl =
+            Node::new(NodeKind::LoopControl { op: "last".to_string(), label: None }, loc(10, 15));
 
         let mut stmts = vec![ctrl];
         let mut expected_count = 0;
@@ -449,10 +447,8 @@ fn property_last_loop_control_produces_correct_diagnostic_count() {
 #[test]
 fn property_next_loop_control_produces_correct_diagnostic_count() {
     for num_following in 0..=10 {
-        let ctrl = Node::new(
-            NodeKind::LoopControl { op: "next".to_string(), label: None },
-            loc(10, 15),
-        );
+        let ctrl =
+            Node::new(NodeKind::LoopControl { op: "next".to_string(), label: None }, loc(10, 15));
 
         let mut stmts = vec![ctrl];
         let mut expected_count = 0;
@@ -478,10 +474,8 @@ fn property_next_loop_control_produces_correct_diagnostic_count() {
 #[test]
 fn property_redo_loop_control_produces_correct_diagnostic_count() {
     for num_following in 0..=10 {
-        let ctrl = Node::new(
-            NodeKind::LoopControl { op: "redo".to_string(), label: None },
-            loc(10, 15),
-        );
+        let ctrl =
+            Node::new(NodeKind::LoopControl { op: "redo".to_string(), label: None }, loc(10, 15));
 
         let mut stmts = vec![ctrl];
         let mut expected_count = 0;
@@ -980,12 +974,8 @@ fn property_multiple_exits_cumulative() {
     // Key insight: once found_exit=true, EVERY subsequent statement (including
     // subsequent exit statements) is flagged as unreachable, not just the
     // non-exit statements that follow.
-    let stmts = vec![
-        return_node(),
-        my_var_decl(25, 35, "x"),
-        return_node(),
-        my_var_decl(40, 50, "y"),
-    ];
+    let stmts =
+        vec![return_node(), my_var_decl(25, 35, "x"), return_node(), my_var_decl(40, 50, "y")];
     let ast = program(vec![sub_node("foo", block(stmts))]);
 
     let mut diagnostics = vec![];
@@ -993,7 +983,11 @@ fn property_multiple_exits_cumulative() {
     let actual_count = count_pl406(&diagnostics);
 
     // 3 diagnostics: $x, second return, and $y are all unreachable
-    assert_eq!(actual_count, 3, "P8: return; $x; return; $y => expected 3 PL406, got {}", actual_count);
+    assert_eq!(
+        actual_count, 3,
+        "P8: return; $x; return; $y => expected 3 PL406, got {}",
+        actual_count
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1039,11 +1033,7 @@ fn property_all_loop_types_continue_block_same_behavior() {
 
 #[test]
 fn property_pl406_always_has_unnecessary_tag() {
-    let stmts = vec![
-        return_node(),
-        my_var_decl(25, 35, "x"),
-        my_var_decl(40, 50, "y"),
-    ];
+    let stmts = vec![return_node(), my_var_decl(25, 35, "x"), my_var_decl(40, 50, "y")];
     let ast = program(vec![sub_node("foo", block(stmts))]);
 
     let mut diagnostics = vec![];
@@ -1065,10 +1055,7 @@ fn property_pl406_always_has_unnecessary_tag() {
 
 #[test]
 fn property_pl406_always_has_hint_severity() {
-    let stmts = vec![
-        return_node(),
-        my_var_decl(25, 35, "x"),
-    ];
+    let stmts = vec![return_node(), my_var_decl(25, 35, "x")];
     let ast = program(vec![sub_node("foo", block(stmts))]);
 
     let mut diagnostics = vec![];
@@ -1090,10 +1077,7 @@ fn property_pl406_always_has_hint_severity() {
 
 #[test]
 fn property_pl406_always_has_suggestion() {
-    let stmts = vec![
-        return_node(),
-        my_var_decl(25, 35, "x"),
-    ];
+    let stmts = vec![return_node(), my_var_decl(25, 35, "x")];
     let ast = program(vec![sub_node("foo", block(stmts))]);
 
     let mut diagnostics = vec![];
@@ -1101,10 +1085,7 @@ fn property_pl406_always_has_suggestion() {
 
     for diag in &diagnostics {
         if diag.code.as_deref() == Some("PL406") {
-            assert!(
-                diag.suggestion.is_some(),
-                "P12: PL406 should always have a suggestion"
-            );
+            assert!(diag.suggestion.is_some(), "P12: PL406 should always have a suggestion");
         }
     }
 }

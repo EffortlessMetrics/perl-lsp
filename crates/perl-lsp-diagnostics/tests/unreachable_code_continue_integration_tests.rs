@@ -45,10 +45,15 @@ fn integration_continue_block_die_emits_pl406() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for die in continue block, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 
     // Verify it's a Hint severity with Unnecessary tag
@@ -71,10 +76,15 @@ fn integration_continue_block_exit_emits_pl406() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for exit in continue block, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -91,10 +101,15 @@ fn integration_continue_block_croak_emits_pl406() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for croak in continue block, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -106,15 +121,21 @@ fn integration_continue_block_croak_emits_pl406() {
 fn integration_continue_block_last_emits_pl406() {
     // "while (1) { } continue { last; print 'dead'; }"
     // expect: exactly 1 PL406 diagnostic on the print statement
-    let source = "use strict;\nuse warnings;\nwhile (1) {\n} continue {\n    last;\n    print 'dead';\n}\n";
+    let source =
+        "use strict;\nuse warnings;\nwhile (1) {\n} continue {\n    last;\n    print 'dead';\n}\n";
     let diags = diagnostics_for(source);
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for last in continue block, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -131,10 +152,15 @@ fn integration_continue_block_return_emits_pl406() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for return in continue block (in sub), got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -151,10 +177,15 @@ fn integration_continue_block_next_no_false_positive() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 0,
+        pl406_count,
+        0,
         "Expected 0 PL406 for next in continue block (next re-runs continue), got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -171,10 +202,15 @@ fn integration_continue_block_redo_no_false_positive() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 0,
+        pl406_count,
+        0,
         "Expected 0 PL406 for redo in continue block (redo re-runs continue), got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -191,10 +227,15 @@ fn integration_continue_block_multiple_unreachable() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 3,
+        pl406_count,
+        3,
         "Expected exactly 3 PL406 for multiple unreachable statements in continue block, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -211,10 +252,15 @@ fn integration_loop_body_detection_unchanged() {
     let pl406_count = count_pl406(&diags);
 
     assert_eq!(
-        pl406_count, 1,
+        pl406_count,
+        1,
         "Expected exactly 1 PL406 for unreachable code in loop body, got {} total PL406: {:?}",
         pl406_count,
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
 
@@ -305,7 +351,11 @@ fn integration_nested_block_inside_continue() {
     // from the continue block's perspective
     let source = "use strict;\nuse warnings;\nwhile (1) {\n} continue {\n    {\n        die 'err';\n    }\n    print 'reachable';\n}\n";
     let diags = diagnostics_for(source);
-    assert_eq!(count_pl406(&diags), 0, "Nested block in continue block should not affect outer reachability");
+    assert_eq!(
+        count_pl406(&diags),
+        0,
+        "Nested block in continue block should not affect outer reachability"
+    );
 }
 
 // =========================================================================
@@ -377,7 +427,11 @@ fn integration_next_continue_with_multiple_following() {
     // "while (1) { } continue { next; $x = 1; $y = 2; print 'reachable'; }"
     let source = "use strict;\nuse warnings;\nwhile (1) {\n} continue {\n    next;\n    my $x = 1;\n    my $y = 2;\n    print 'reachable';\n}\n";
     let diags = diagnostics_for(source);
-    assert_eq!(count_pl406(&diags), 0, "Multiple statements after next in continue block should not emit PL406");
+    assert_eq!(
+        count_pl406(&diags),
+        0,
+        "Multiple statements after next in continue block should not emit PL406"
+    );
 }
 
 // =========================================================================
@@ -389,7 +443,11 @@ fn integration_redo_continue_with_multiple_following() {
     // "while (1) { } continue { redo; $x = 1; $y = 2; print 'reachable'; }"
     let source = "use strict;\nuse warnings;\nwhile (1) {\n} continue {\n    redo;\n    my $x = 1;\n    my $y = 2;\n    print 'reachable';\n}\n";
     let diags = diagnostics_for(source);
-    assert_eq!(count_pl406(&diags), 0, "Multiple statements after redo in continue block should not emit PL406");
+    assert_eq!(
+        count_pl406(&diags),
+        0,
+        "Multiple statements after redo in continue block should not emit PL406"
+    );
 }
 
 // =========================================================================
@@ -404,8 +462,13 @@ fn integration_both_loop_body_and_continue_block() {
     let source = "use strict;\nuse warnings;\nwhile (1) {\n    die 'body_err';\n    print 'body_dead';\n} continue {\n    die 'cont_err';\n    print 'cont_dead';\n}\n";
     let diags = diagnostics_for(source);
     assert_eq!(
-        count_pl406(&diags), 2,
+        count_pl406(&diags),
+        2,
         "Expected 2 PL406 diagnostics (one for loop body, one for continue block), got: {:?}",
-        diags.iter().filter(|d| d.code.as_deref() == Some("PL406")).map(|d| &d.message).collect::<Vec<_>>()
+        diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL406"))
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
 }
