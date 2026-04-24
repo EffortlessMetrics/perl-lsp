@@ -351,6 +351,8 @@ mod tests {
     #[test]
     fn incremental_parser_merges_out_of_order_regions() {
         let mut parser = IncrementalParser::new();
+        // Three edits: (30,40), (10,20), then (18,35) bridges the gap.
+        // After full merge the result should be exactly one region: (10,40).
         parser.mark_changed(30, 40);
         parser.mark_changed(10, 20);
         parser.mark_changed(18, 35);
@@ -359,9 +361,32 @@ mod tests {
             parser.needs_reparse(12, 38),
             "overlap across merged out-of-order edits should trigger reparsing"
         );
+        // The gap between (10,20) and (30,40) is closed only by (18,35).
+        // Without the bridge, regions [(10,20),(30,40)] leave (21,29) uncovered.
+        // This assertion is false without correct bridging — it catches dropped-region bugs.
+        assert!(
+            parser.needs_reparse(21, 29),
+            "region inside the bridge edit must be covered after full merge"
+        );
         assert!(
             !parser.needs_reparse(41, 45),
             "regions past the merged change should remain unaffected"
+        );
+    }
+
+    #[test]
+    fn incremental_parser_clear_resets_state() {
+        let mut parser = IncrementalParser::new();
+        parser.mark_changed(10, 20);
+        parser.clear();
+
+        assert!(
+            !parser.needs_reparse(10, 20),
+            "after clear, previously changed regions should not trigger reparse"
+        );
+        assert!(
+            !parser.needs_reparse(0, 100),
+            "after clear, no region should trigger reparse"
         );
     }
 }
