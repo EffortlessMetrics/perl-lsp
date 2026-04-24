@@ -221,7 +221,15 @@ impl<'a> Parser<'a> {
                     let decl_token = self.consume_token()?;
                     let mut sub_node = self.parse_subroutine()?;
                     sub_node.location.start = decl_token.start;
-                    self.finish_subroutine_statement(sub_node)
+                    if let NodeKind::Subroutine { name, .. } = &sub_node.kind
+                        && name.is_none()
+                    {
+                        self.errors.push(ParseError::syntax(
+                            "Expected subroutine name after scoped declarator",
+                            decl_token.start,
+                        ));
+                    }
+                    Ok(sub_node)
                 } else {
                     let decl = self.parse_variable_declaration()?;
                     if self.peek_kind() == Some(TokenKind::FatArrow) {
