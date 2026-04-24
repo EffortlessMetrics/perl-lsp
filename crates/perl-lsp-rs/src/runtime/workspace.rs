@@ -1914,17 +1914,11 @@ impl LspServer {
 
     #[cfg(feature = "workspace")]
     fn read_workspace_text(&self, uri: &str) -> Option<String> {
-        if let Some(doc) = self.documents.lock().get(uri) {
-            return Some(doc.text.clone());
-        }
-
-        if let Some(coordinator) = self.coordinator() {
-            if let Some(doc) = coordinator.index().document_store().get(uri) {
-                return Some(doc.text.clone());
-            }
-        }
-
-        uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
+        // Security boundary: only return text for actively-open documents.
+        // `workspace/willRenameFiles` responses include replacement text, so
+        // reading closed files here can disclose file contents to clients that
+        // never opened those documents.
+        self.documents.lock().get(uri).map(|doc| doc.text.clone())
     }
 }
 
