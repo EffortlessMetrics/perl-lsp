@@ -980,7 +980,7 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 
 // Using lsp_types for Position and Range
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 /// Internal location type used during Navigate/Analyze workflows.
 pub struct Location {
     /// File URI where the symbol is located
@@ -1039,6 +1039,17 @@ pub struct SymbolReference {
     pub range: Range,
     /// How the symbol is being referenced (definition, usage, etc.)
     pub kind: ReferenceKind,
+}
+
+#[derive(Debug, Clone)]
+/// Stable symbol-reference query result for workspace-wide rename/delete planning.
+pub struct SymbolReferenceQueryResult {
+    /// Best available stable identity for the queried symbol.
+    pub symbol_identity: String,
+    /// Definition location for the symbol, when available.
+    pub definition: Option<Location>,
+    /// Reference locations excluding the definition.
+    pub references: Vec<Location>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1129,6 +1140,25 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn sort_locations(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            (
+                left.uri.as_str(),
+                left.range.start.line,
+                left.range.start.column,
+                left.range.end.line,
+                left.range.end.column,
+            )
+                .cmp(&(
+                    right.uri.as_str(),
+                    right.range.start.line,
+                    right.range.start.column,
+                    right.range.end.line,
+                    right.range.end.column,
+                ))
+        });
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1245,7 +1275,10 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
-        for file_index in files.values() {
+        let mut file_indices: Vec<&FileIndex> = files.values().collect();
+        file_indices.sort_by(|left, right| left.source_uri.cmp(&right.source_uri));
+
+        for file_index in file_indices {
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
             {
@@ -1916,6 +1949,7 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations(&mut locations);
         locations
     }
 
@@ -2022,6 +2056,52 @@ impl WorkspaceIndex {
         }
 
         None
+    }
+
+    /// Query a symbol with a deterministic identity, definition, and references.
+    ///
+    /// Returns references in stable lexical order by URI and range so downstream
+    /// edit builders (rename/safe-delete) can produce deterministic edits.
+    pub fn query_symbol_references(&self, symbol_name: &str) -> Option<SymbolReferenceQueryResult> {
+        let definition = self.find_definition(symbol_name);
+        let symbol_identity = self
+            .definition_symbol(symbol_name, definition.as_ref())
+            .unwrap_or_else(|| symbol_name.to_string());
+
+        let mut references = self.find_references(&symbol_identity);
+        if references.is_empty() && symbol_identity != symbol_name {
+            references = self.find_references(symbol_name);
+        }
+
+        if let Some(definition_location) = &definition {
+            references.retain(|loc| loc != definition_location);
+        }
+        Self::sort_locations(&mut references);
+
+        if definition.is_none() && references.is_empty() {
+            return None;
+        }
+
+        Some(SymbolReferenceQueryResult { symbol_identity, definition, references })
+    }
+
+    fn definition_symbol(&self, fallback_symbol: &str, definition: Option<&Location>) -> Option<String> {
+        let definition = definition?;
+        let files = self.files.read();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.uri == definition.uri && symbol.range == definition.range {
+                    return symbol
+                        .qualified_name
+                        .clone()
+                        .or_else(|| Some(symbol.name.clone()))
+                        .or_else(|| Some(fallback_symbol.to_string()));
+                }
+            }
+        }
+
+        Some(fallback_symbol.to_string())
     }
 
     /// Get all symbols in the workspace
@@ -3946,6 +4026,77 @@ RefDemo::helper();
         assert!(
             bare_refs.len() >= qualified_refs.len(),
             "bare-name reference lookup should include qualified calls"
+        );
+    }
+
+    #[test]
+    fn test_query_symbol_references_cross_file_returns_definition_and_references() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///workspace/lib/My/Service.pm";
+        let caller_a_uri = "file:///workspace/app/a.pl";
+        let caller_b_uri = "file:///workspace/app/b.pl";
+
+        must(index.index_file(
+            must(url::Url::parse(def_uri)),
+            r#"
+package My::Service;
+sub run { return 1; }
+1;
+"#
+            .to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(caller_a_uri)),
+            r#"
+use My::Service;
+My::Service::run();
+"#
+            .to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(caller_b_uri)),
+            r#"
+use My::Service;
+My::Service::run();
+"#
+            .to_string(),
+        ));
+
+        let query = must_some(index.query_symbol_references("My::Service::run"));
+
+        assert_eq!(query.symbol_identity, "My::Service::run");
+        assert_eq!(query.definition.as_ref().map(|loc| loc.uri.as_str()), Some(def_uri));
+        assert_eq!(query.references.len(), 2);
+        assert_eq!(
+            query.references.iter().map(|loc| loc.uri.as_str()).collect::<Vec<_>>(),
+            vec![caller_a_uri, caller_b_uri]
+        );
+    }
+
+    #[test]
+    fn test_query_symbol_references_is_deterministically_sorted() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///workspace/lib/My/Stable.pm";
+        let z_uri = "file:///workspace/calls/z.pl";
+        let a_uri = "file:///workspace/calls/a.pl";
+
+        must(index.index_file(
+            must(url::Url::parse(def_uri)),
+            "package My::Stable;\nsub ping { return 1; }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(z_uri)),
+            "use My::Stable;\nMy::Stable::ping();\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(a_uri)),
+            "use My::Stable;\nMy::Stable::ping();\n".to_string(),
+        ));
+
+        let query = must_some(index.query_symbol_references("My::Stable::ping"));
+        assert_eq!(
+            query.references.iter().map(|loc| loc.uri.as_str()).collect::<Vec<_>>(),
+            vec![a_uri, z_uri]
         );
     }
 
