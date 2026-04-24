@@ -51,6 +51,12 @@ fn test_check_label_with_last() {
 }
 
 #[test]
+fn test_check_label_targeted_by_last_keyword_label() {
+    // Loop control can target the CHECK label as a bareword.
+    assert_clean_parse("CHECK: while (1) { last CHECK; }");
+}
+
+#[test]
 fn test_phase_block_without_colon_still_works() {
     // Regression: actual phase blocks must still parse correctly
     assert_clean_parse("CHECK { print 'check phase'; }");

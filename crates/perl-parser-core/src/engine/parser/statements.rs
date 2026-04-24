@@ -1102,8 +1102,18 @@ impl<'a> Parser<'a> {
 
         self.mark_not_stmt_start();
 
-        // Check for optional label
-        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+        // Check for optional label.
+        // Labels may be ordinary identifiers, and phase keywords are also
+        // valid labels when used in labeled-loop control (`last CHECK`).
+        let label = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Identifier)
+                | Some(TokenKind::Begin)
+                | Some(TokenKind::End)
+                | Some(TokenKind::Check)
+                | Some(TokenKind::Init)
+                | Some(TokenKind::Unitcheck)
+        ) {
             let label_token = self.consume_token()?;
             Some(label_token.text.to_string())
         } else {
