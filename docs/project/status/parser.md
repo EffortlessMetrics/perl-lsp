@@ -10,7 +10,7 @@
 <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 97.1% clean (`6890/7095`) | Compatibility baseline; Perl `5.038002`, `48` unreadable, `157` with errors, baseline `2026-04-09` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) | Ecosystem breadth baseline; `6` unreadable, `435` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`91/91`) | Deterministic regression baseline; `69` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`93/93`) | Deterministic regression baseline; `71` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -24,8 +24,27 @@
 | **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | 10 modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
+
+## Failure Worklist (clustered)
+
+<!-- BEGIN: PARSER_FAILURE_WORKLIST -->
+| Cluster | Count | Representative examples |
+| --- | ---: | --- |
+| Transliteration / quote parsing | 8 | /usr/share/perl/5.38/ExtUtils/MM_VMS.pm<br>/usr/share/perl/5.38.2/ExtUtils/MM_VMS.pm<br>target/cpan-corpus/lib/perl5/Module/Build/Platform/Unix.pm |
+| Declaration / package parsing | 14 | target/cpan-corpus/lib/perl5/Mojo/Exception.pm<br>target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/default/lib/AppFile.pm<br>target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/tutorial/lib/AppFile/Schema/Result/Entry.pm |
+| Heredoc / delimiter handling | 58 | /usr/lib/x86_64-linux-gnu/perl/5.38/Encode/Guess.pm<br>/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/Guess.pm<br>target/cpan-corpus/lib/perl5/Mojo/DOM/CSS.pm |
+| Recovery-only failures | 348 | /usr/share/perl5/IO/Socket/SSL/Intercept.pm<br>/usr/share/perl5/Mail/Address.pm<br>/usr/share/perl5/Parse/RecDescent.pm |
+| Encoding / multibyte failures | 14 | /usr/lib/x86_64-linux-gnu/perl/5.38/Unicode/Collate.pm<br>/usr/lib/x86_64-linux-gnu/perl/5.38/Unicode/Normalize.pm<br>/usr/lib/x86_64-linux-gnu/perl/5.38.2/Unicode/Collate.pm |
+| Other | 150 | /usr/share/perl/5.38/B/Deparse.pm<br>/usr/share/perl/5.38/fields.pm<br>/usr/share/perl/5.38.2/B/Deparse.pm |
+<!-- END: PARSER_FAILURE_WORKLIST -->
+
+## Node-kind Gap (never seen)
+
+<!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->
+- Never-seen node kinds: `MissingBlock`, `MissingIdentifier`, `MissingStatement`, `UnknownRest`.
+<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->
 
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
