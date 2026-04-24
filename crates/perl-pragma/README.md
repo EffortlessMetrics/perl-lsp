@@ -26,3 +26,24 @@ pragma analysis for parsing and diagnostic flows.
 ## License
 
 MIT OR Apache-2.0
+
+## Benchmarks
+
+This crate includes Criterion benchmarks for pragma map build and query-heavy
+workloads.
+
+```bash
+cargo bench -p perl-pragma
+```
+
+The suite exposes stable benchmark names so results can be diffed over time:
+
+- `build_small_file`
+- `build_large_file`
+- `query_random_offsets`
+- `query_monotonic_offsets`
+- `final_state_lookup`
+- `version_compat_walk_style`
+- `scope_analyzer_walk_style`
+
+Criterion reports total execution time and per-iteration cost for each benchmark.
