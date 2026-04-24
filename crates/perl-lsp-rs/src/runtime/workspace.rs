@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -31,6 +31,38 @@ use std::time::Instant;
 use url::Url;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[cfg(feature = "workspace")]
+fn decode_windows_1252(bytes: &[u8]) -> String {
+    const WINDOWS_1252_EXTENDED: [char; 32] = [
+        '€', '\u{0081}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{008d}', 'Ž',
+        '\u{008f}', '\u{0090}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ',
+        '\u{009d}', 'ž', 'Ÿ',
+    ];
+
+    bytes
+        .iter()
+        .map(|&byte| {
+            if (0x80..=0x9F).contains(&byte) {
+                WINDOWS_1252_EXTENDED[(byte - 0x80) as usize]
+            } else {
+                char::from(byte)
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "workspace")]
+fn read_text_with_encoding_fallback(path: &std::path::Path) -> std::io::Result<String> {
+    let bytes = std::fs::read(path)?;
+    match String::from_utf8(bytes) {
+        Ok(text) => Ok(text),
+        Err(err) => {
+            let bytes = err.into_bytes();
+            Ok(decode_windows_1252(&bytes))
+        }
+    }
+}
 // Note: WalkDir logic has been extracted to super::file_discovery.
 // These helper functions are retained for potential future use by
 // other workspace operations (e.g., file watcher filtering).
@@ -897,7 +929,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -928,7 +960,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1046,7 +1078,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_text_with_encoding_fallback(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1297,7 +1329,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1370,7 +1402,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1620,7 +1652,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_text_with_encoding_fallback(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1863,7 +1895,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
     }
 }
 
@@ -2078,7 +2110,7 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{LspServer, module_name_appears_in_text};
+    use super::{module_name_appears_in_text, LspServer};
     use serde_json::json;
 
     #[test]
@@ -2156,5 +2188,19 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_windows_1252_maps_smart_quotes_and_euro() {
+        let decoded = super::decode_windows_1252(&[0x93, b'H', b'i', 0x94, b' ', 0x80]);
+        assert_eq!(decoded, "“Hi” €");
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_windows_1252_preserves_latin1_bytes() {
+        let decoded = super::decode_windows_1252(&[0xE9, 0xF1, 0xFC]);
+        assert_eq!(decoded, "éñü");
     }
 }
