@@ -49,11 +49,13 @@
 //! # }
 //! ```
 
+use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResolutionOrder};
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -359,6 +361,7 @@ struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
     imported_barewords: std::collections::HashSet<String>,
+    inherited_barewords: HashMap<String, HashMap<String, String>>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
@@ -370,6 +373,7 @@ impl<'a> AnalysisContext<'a> {
             code,
             pragma_map,
             imported_barewords: collect_imported_barewords(ast),
+            inherited_barewords: collect_inherited_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
@@ -377,6 +381,13 @@ impl<'a> AnalysisContext<'a> {
 
     fn has_imported_bareword(&self, name: &str) -> bool {
         self.imported_barewords.contains(name)
+    }
+
+    fn has_inherited_bareword(&self, name: &str) -> bool {
+        let current_package = self.current_package.borrow();
+        self.inherited_barewords
+            .get(current_package.as_str())
+            .is_some_and(|methods| methods.contains_key(name))
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -986,6 +997,7 @@ impl ScopeAnalyzer {
                     && !is_known_function(name)
                     && !pragma_state.has_builtin_import(name)
                     && !context.has_imported_bareword(name)
+                    && !context.has_inherited_bareword(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1890,6 +1902,134 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
     let mut imported = std::collections::HashSet::new();
     visit(ast, &mut imported);
     imported
+}
+
+fn collect_inherited_barewords(ast: &Node) -> HashMap<String, HashMap<String, String>> {
+    let models = ClassModelBuilder::new().build(ast);
+    let models_by_name: HashMap<&str, &ClassModel> =
+        models.iter().map(|model| (model.name.as_str(), model)).collect();
+    let mut inherited = HashMap::new();
+
+    for model in &models {
+        let local_methods: HashSet<&str> =
+            model.methods.iter().map(|method| method.name.as_str()).collect();
+        let ancestor_order = match model.mro {
+            MethodResolutionOrder::Dfs => dfs_ancestor_order(model.name.as_str(), &models_by_name),
+            MethodResolutionOrder::C3 => c3_ancestor_order(model.name.as_str(), &models_by_name),
+        };
+
+        let mut inherited_for_package = HashMap::new();
+        for ancestor in ancestor_order {
+            if let Some(ancestor_model) = models_by_name.get(ancestor.as_str()).copied() {
+                for method in &ancestor_model.methods {
+                    if !local_methods.contains(method.name.as_str()) {
+                        inherited_for_package
+                            .entry(method.name.clone())
+                            .or_insert_with(|| ancestor.clone());
+                    }
+                }
+            }
+        }
+
+        inherited.insert(model.name.clone(), inherited_for_package);
+    }
+
+    inherited
+}
+
+fn dfs_ancestor_order(package: &str, models_by_name: &HashMap<&str, &ClassModel>) -> Vec<String> {
+    fn walk(
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+        seen: &mut HashSet<String>,
+        out: &mut Vec<String>,
+    ) {
+        let Some(model) = models_by_name.get(package).copied() else {
+            return;
+        };
+
+        for parent in &model.parents {
+            if seen.insert(parent.clone()) {
+                out.push(parent.clone());
+                walk(parent, models_by_name, seen, out);
+            }
+        }
+    }
+
+    let mut seen = HashSet::from([package.to_string()]);
+    let mut out = Vec::new();
+    walk(package, models_by_name, &mut seen, &mut out);
+    out
+}
+
+fn c3_ancestor_order(package: &str, models_by_name: &HashMap<&str, &ClassModel>) -> Vec<String> {
+    fn linearize(
+        package: &str,
+        models_by_name: &HashMap<&str, &ClassModel>,
+        visited: &mut HashSet<String>,
+    ) -> Vec<String> {
+        if !visited.insert(package.to_string()) {
+            return vec![];
+        }
+
+        let Some(model) = models_by_name.get(package).copied() else {
+            return vec![package.to_string()];
+        };
+
+        let parents = model.parents.clone();
+        if parents.is_empty() {
+            return vec![package.to_string()];
+        }
+
+        let mut parent_mros: Vec<Vec<String>> = parents
+            .iter()
+            .map(|parent| linearize(parent, models_by_name, &mut visited.clone()))
+            .collect();
+        parent_mros.push(parents.clone());
+
+        let mut result = vec![package.to_string()];
+        loop {
+            parent_mros.retain(|list| !list.is_empty());
+            if parent_mros.is_empty() {
+                break;
+            }
+
+            let chosen = parent_mros.iter().find_map(|list| {
+                let candidate = list.first()?;
+                let in_tail = parent_mros
+                    .iter()
+                    .any(|other| other.iter().skip(1).any(|name| name == candidate));
+                if in_tail { None } else { Some(candidate.clone()) }
+            });
+
+            match chosen {
+                Some(name) => {
+                    if !result.contains(&name) {
+                        result.push(name.clone());
+                    }
+                    for list in &mut parent_mros {
+                        if list.first().is_some_and(|head| head == &name) {
+                            list.remove(0);
+                        }
+                    }
+                }
+                None => {
+                    for list in parent_mros {
+                        if let Some(head) = list.first()
+                            && !result.contains(head)
+                        {
+                            result.push(head.clone());
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        result
+    }
+
+    linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.

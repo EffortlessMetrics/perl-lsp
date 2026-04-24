@@ -1914,6 +1914,107 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_inherited_method_from_single_parent() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+package Base;
+sub inherited_method { 1 }
+package Child;
+use parent 'Base';
+inherited_method();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "inherited_method"
+        }),
+        "strict 'subs' should allow methods inherited through a single parent"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_inherited_method_from_grandparent() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+package Grandparent;
+sub root_method { 1 }
+package Parent;
+use parent 'Grandparent';
+package Child;
+use parent 'Parent';
+root_method();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "root_method"
+        }),
+        "strict 'subs' should allow methods inherited through parent/grandparent chains"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_inherited_methods_across_multiple_parents()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+package LeftParent;
+sub left_only { 1 }
+package RightParent;
+sub right_only { 1 }
+package Child;
+use parent qw(LeftParent RightParent);
+left_only();
+right_only();
+"#;
+    let issues = scope_issues_strict(code);
+
+    for method_name in ["left_only", "right_only"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword)
+                    && issue.variable_name == method_name
+            }),
+            "strict 'subs' should allow inherited bareword method `{method_name}` across multiple parents"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn strict_subs_child_method_shadowing_parent_remains_allowed()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+package Parent;
+sub method_name { 1 }
+package Child;
+use parent 'Parent';
+sub method_name { 2 }
+method_name();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "method_name"
+        }),
+        "child-local methods should shadow parent methods without triggering strict bareword diagnostics"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;
