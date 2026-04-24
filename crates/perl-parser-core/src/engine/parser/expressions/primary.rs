@@ -227,7 +227,7 @@ impl<'a> Parser<'a> {
                             let message = match e {
                                 quote_parser::SubstitutionError::InvalidModifier(c) => {
                                     format!(
-                                        "Invalid substitution modifier '{}'. Valid modifiers are: g, i, m, s, x, o, e, r",
+                                        "Invalid substitution modifier '{}'. Valid modifiers are: g, i, m, s, x, o, e, r, a, d, l, u, n, p, c",
                                         c
                                     )
                                 }

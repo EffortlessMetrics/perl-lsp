@@ -340,3 +340,32 @@ sub bootstrap_inherit {
 fn test_file_size_test_with_string_literal() {
     assert_clean_parse(r#"if (-s 'config.txt') { 1 }"#);
 }
+
+// ── Mixed replacement delimiter forms (paired pattern, unpaired replacement) ──
+
+#[test]
+fn test_subst_brace_pattern_slash_replacement() {
+    assert_clean_parse(r#"$x =~ s{foo}/bar/;"#);
+}
+
+#[test]
+fn test_subst_brace_pattern_pipe_replacement() {
+    assert_clean_parse(r#"$x =~ s{foo}|bar|g;"#);
+}
+
+#[test]
+fn test_transliteration_brace_pattern_slash_replacement() {
+    assert_clean_parse(r#"$x =~ tr{abc}/xyz/;"#);
+}
+
+#[test]
+fn test_transliteration_brace_pattern_pipe_replacement() {
+    assert_clean_parse(r#"$x =~ y{abc}|xyz|d;"#);
+}
+
+// ── Diagnostics guardrails (malformed forms still report errors, no panic) ──
+
+#[test]
+fn test_subst_invalid_modifier_still_reports_error() {
+    assert_has_error(r#"$x =~ s/foo/bar/z;"#, "Invalid substitution modifier");
+}

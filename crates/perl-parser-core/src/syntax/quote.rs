@@ -123,22 +123,23 @@ pub fn extract_substitution_parts_strict(
         let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
         (body, rest, found_closing)
     } else {
-        // Paired delimiters
+        // Paired delimiters.
+        // Perl allows replacement delimiters to differ from the pattern delimiter,
+        // including unpaired forms like `s{pat}/repl/`.
         let trimmed = rest1.trim_start();
-        // For paired delimiters, check what delimiter the replacement uses
-        // It may be the same as pattern or a different paired delimiter
-        // e.g., s[pattern]{replacement} uses [] for pattern and {} for replacement
         if let Some(rd) = trimmed.chars().next() {
-            // Check if it's a valid paired opening delimiter
-            if rd == '{' || rd == '[' || rd == '(' || rd == '<' {
+            if is_paired_open(rd) {
                 let repl_closing = get_closing_delimiter(rd);
                 extract_delimited_content_strict(trimmed, rd, repl_closing)
+            } else if is_valid_quote_delimiter(rd) {
+                let after_open = &trimmed[rd.len_utf8()..];
+                let (body, rest, found_closing) =
+                    extract_unpaired_body_skip_strings(after_open, rd);
+                (body, rest, found_closing)
             } else {
-                // Not a valid paired delimiter - malformed
                 return Err(SubstitutionError::MissingReplacement);
             }
         } else {
-            // No more content - missing replacement
             return Err(SubstitutionError::MissingReplacement);
         }
     };
@@ -433,6 +434,15 @@ pub fn extract_transliteration_parts_strict(
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
             (body, rest, found_closing)
+        } else if let Some(repl_delimiter) = trimmed.chars().next() {
+            if is_valid_quote_delimiter(repl_delimiter) {
+                let after_open = &trimmed[repl_delimiter.len_utf8()..];
+                let (body, rest, found_closing) =
+                    extract_unpaired_body_skip_strings(after_open, repl_delimiter);
+                (body, rest, found_closing)
+            } else {
+                return Err(TransliterationError::MissingReplacement);
+            }
         } else {
             return Err(TransliterationError::MissingReplacement);
         }
@@ -472,6 +482,10 @@ fn get_closing_delimiter(open: char) -> char {
 
 fn is_paired_open(ch: char) -> bool {
     matches!(ch, '{' | '[' | '(' | '<')
+}
+
+fn is_valid_quote_delimiter(ch: char) -> bool {
+    !ch.is_ascii_alphanumeric() && !ch.is_whitespace() && ch != '\\'
 }
 
 fn starts_with_paired_delimiter(text: &str) -> Option<char> {
