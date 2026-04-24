@@ -44,10 +44,14 @@ fn test_unitcheck_as_label() {
 #[test]
 fn test_check_label_with_last() {
     // Labels are commonly used with `last LABEL` / `next LABEL`.
-    // Note: `last CHECK` would require loop-control to also accept keyword
-    // tokens as label names (a separate issue); test with `next` on a regular
-    // flow to verify the label statement itself parses correctly.
-    assert_clean_parse("CHECK: while (1) { last; }");
+    assert_clean_parse("CHECK: while (1) { last CHECK; }");
+}
+
+#[test]
+fn test_phase_keyword_labels_in_loop_control() {
+    assert_clean_parse(
+        "INIT: while (1) { next INIT if rand() > 0.5; redo INIT if rand() > 0.25; last INIT; }",
+    );
 }
 
 #[test]

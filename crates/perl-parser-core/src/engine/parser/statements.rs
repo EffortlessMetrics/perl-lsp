@@ -1102,8 +1102,19 @@ impl<'a> Parser<'a> {
 
         self.mark_not_stmt_start();
 
-        // Check for optional label
-        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+        // Check for optional label.
+        //
+        // Perl labels are barewords, and phase keywords (BEGIN/END/CHECK/INIT/UNITCHECK)
+        // are also valid label names in this position.
+        let label = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Identifier)
+                | Some(TokenKind::Begin)
+                | Some(TokenKind::End)
+                | Some(TokenKind::Check)
+                | Some(TokenKind::Init)
+                | Some(TokenKind::Unitcheck)
+        ) {
             let label_token = self.consume_token()?;
             Some(label_token.text.to_string())
         } else {
