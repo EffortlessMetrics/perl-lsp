@@ -2925,7 +2925,7 @@ impl IndexVisitor {
                 // our @EXPORT = qw(foo bar);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    let location = Location { uri: uri.clone(), range: range.clone() };
+                    let location = Location { uri: uri.clone(), range };
                     let entry = ExportEntry {
                         module: package.clone(),
                         symbol: symbol.clone(),
@@ -2939,7 +2939,7 @@ impl IndexVisitor {
                 // our @EXPORT_OK = qw(baz qux);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    let location = Location { uri: uri.clone(), range: range.clone() };
+                    let location = Location { uri: uri.clone(), range };
                     let entry = ExportEntry {
                         module: package.clone(),
                         symbol: symbol.clone(),
