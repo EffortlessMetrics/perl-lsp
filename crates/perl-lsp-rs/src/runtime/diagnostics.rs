@@ -88,7 +88,11 @@ impl PullDiagnosticsOrchestrator {
         // Get config values
         let (perlcritic_enabled, perlcritic_severity, perlcritic_profile) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+            )
         };
 
         let profile =
@@ -132,9 +136,14 @@ impl PullDiagnosticsOrchestrator {
         use perl_lsp_rs_core::tooling::perl_critic::{CriticAnalyzer, CriticConfig};
 
         // Check config
-        let (enabled, severity, profile) = {
+        let (enabled, severity, profile, theme) = {
             let cfg = server.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.perlcritic_theme.clone(),
+            )
         };
 
         if !enabled {
@@ -205,8 +214,12 @@ impl PullDiagnosticsOrchestrator {
                         find_workspace_perlcritic_profile(workspace_root.as_deref(), &file_path)
                     });
 
-                let critic_config =
-                    CriticConfig { severity, profile: resolved_profile, ..Default::default() };
+                let critic_config = CriticConfig {
+                    severity,
+                    profile: resolved_profile,
+                    theme: theme.clone(),
+                    ..Default::default()
+                };
 
                 // Use injected test runtime if present, otherwise OS runtime
                 let analyzer = {
@@ -344,8 +357,8 @@ impl LspServer {
     /// Convert internal diagnostic tags to LSP tag values
     ///
     /// Maps internal `DiagnosticTag` variants to their LSP numeric equivalents:
-    /// - Unnecessary → 1
-    /// - Deprecated → 2
+    /// - Unnecessary â†’ 1
+    /// - Deprecated â†’ 2
     fn diagnostic_tags_to_lsp(tags: &[InternalDiagnosticTag]) -> Vec<i32> {
         tags.iter()
             .map(|t| match t {
@@ -427,7 +440,7 @@ impl LspServer {
 
         let lsp_diagnostics: Vec<Value> = if let Some(ast) = &ast_opt {
             // Get diagnostics (already includes unused variable detection).
-            // resolver is called with the documents lock *released* — no reentrant deadlock.
+            // resolver is called with the documents lock *released* â€” no reentrant deadlock.
             let provider = DiagnosticsProvider::new(ast, text.clone());
             let resolver = |module: &str| {
                 self.resolve_module_to_path_with_doc(module, Some(&text), Some(uri)).is_some()
@@ -548,7 +561,7 @@ impl LspServer {
         };
 
         // Generation-aware staleness guard: if a newer didChange arrived while
-        // diagnostics were being computed, discard this result — the debouncer
+        // diagnostics were being computed, discard this result â€” the debouncer
         // will fire again for the latest version.
         if generation.load(Ordering::SeqCst) != gen_at_snapshot {
             tracing::debug!(
@@ -598,7 +611,7 @@ impl LspServer {
     /// - The document has at least one parse error to report.
     ///
     /// The slow path (`publish_diagnostics`) will follow and replace this
-    /// notification with the full diagnostic set — LSP publishDiagnostics is
+    /// notification with the full diagnostic set â€” LSP publishDiagnostics is
     /// replace-mode, so the client never sees a partial accumulation.
     pub(crate) fn publish_parse_errors_fast(&self, uri: &str) {
         // Fast path is only meaningful for push-diagnostic clients.
@@ -1295,9 +1308,14 @@ impl LspServer {
         diagnostics: &mut Vec<InternalDiagnostic>,
     ) {
         // Check config: perlcritic must be explicitly enabled (opt-in)
-        let (enabled, severity, profile) = {
+        let (enabled, severity, profile, theme) = {
             let cfg = self.config.lock();
-            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
+            (
+                cfg.perlcritic_enabled,
+                cfg.perlcritic_severity,
+                cfg.perlcritic_profile.clone(),
+                cfg.perlcritic_theme.clone(),
+            )
         };
         if !enabled {
             return;
@@ -1378,6 +1396,7 @@ impl LspServer {
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
+                    theme: theme.clone(),
                     ..crate::perl_critic::CriticConfig::default()
                 };
                 // Use the injected test runtime when present; otherwise fall back
@@ -1603,7 +1622,7 @@ mod tests {
     }
 
     /// Guard wire test: advancing the generation counter before `publish_diagnostics`
-    /// is called must not suppress publication — the snapshot captures the CURRENT
+    /// is called must not suppress publication â€” the snapshot captures the CURRENT
     /// generation, so stable-during-computation is still the common case.
     /// This confirms the guard does not false-positive.
     #[test]
@@ -1618,7 +1637,7 @@ mod tests {
 
         // Advance generation BEFORE calling publish_diagnostics (simulates a prior
         // didChange that already completed). The snapshot will read this new value,
-        // computation runs, and the guard check sees the same value → publishes.
+        // computation runs, and the guard check sees the same value â†’ publishes.
         {
             let docs = server.documents.lock();
             if let Some(doc) = docs.get(uri) {
@@ -1683,7 +1702,7 @@ mod tests {
                     "uri": uri,
                     "languageId": "perl",
                     "version": 1,
-                    // Intentional syntax error — fast path would fire if not guarded.
+                    // Intentional syntax error â€” fast path would fire if not guarded.
                     "text": "sub { SYNTAX ERROR }\n"
                 }
             })))

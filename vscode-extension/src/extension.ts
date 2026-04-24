@@ -95,6 +95,7 @@ type PerlCriticSyncSettings = {
     enabled?: boolean;
     severity?: number;
     profile?: string;
+    theme?: string;
 };
 
 function inspectPerlCriticOverride(
@@ -138,6 +139,13 @@ function getPerlCriticSyncSettings(
         settings.profile = config.get<string>('perlcritic.profile', '');
     }
 
+    const theme = inspectPerlCriticOverride(config, 'perlcritic.theme');
+    if (theme?.globalValue !== undefined ||
+        theme?.workspaceValue !== undefined ||
+        theme?.workspaceFolderValue !== undefined) {
+        settings.theme = config.get<string>('perlcritic.theme', '');
+    }
+
     return settings;
 }
 
@@ -145,7 +153,8 @@ function buildPerlCriticConfiguration(settings: PerlCriticSyncSettings): Record<
     if (
         settings.enabled === undefined &&
         settings.severity === undefined &&
-        settings.profile === undefined
+        settings.profile === undefined &&
+        settings.theme === undefined
     ) {
         return undefined;
     }
@@ -161,7 +170,7 @@ function buildPerlCriticConfiguration(settings: PerlCriticSyncSettings): Record<
 
 function hasExplicitPerlCriticOverrides(documentUri?: vscode.Uri): boolean {
     const config = vscode.workspace.getConfiguration('perl-lsp', documentUri);
-    return ['perlcritic.enabled', 'perlcritic.severity', 'perlcritic.profile'].some(key => {
+    return ['perlcritic.enabled', 'perlcritic.severity', 'perlcritic.profile', 'perlcritic.theme'].some(key => {
         const value = config.inspect(key) as {
             globalValue?: unknown;
             workspaceValue?: unknown;
