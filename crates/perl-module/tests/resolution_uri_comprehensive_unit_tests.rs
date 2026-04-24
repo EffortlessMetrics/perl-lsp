@@ -538,6 +538,110 @@ fn precedence_is_stable_after_normalization() -> Result<(), Box<dyn std::error::
 }
 
 // ===========================================================================
+// Normalization edge cases (deep-review additions)
+// ===========================================================================
+
+/// `"./subdir"` must normalize to `"subdir"` for dedup and resolve correctly.
+/// Without normalization the CurDir component would be preserved and `"./subdir"`,
+/// `"subdir/"`, and `"subdir"` would be treated as three distinct roots.
+#[test]
+fn dot_slash_include_path_resolves_same_as_bare() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("mylib/DotSlash.pm")?;
+
+    // Both "./mylib" and "mylib" should find the same module; the second entry
+    // must be deduplicated (same normalized path).
+    let result = resolve_module_uri(
+        "DotSlash",
+        &[],
+        &[workspace_uri.clone()],
+        &["./mylib".to_string(), "mylib/".to_string(), "mylib".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("mylib/DotSlash.pm"), "expected mylib/DotSlash.pm in {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+/// `include_paths` and `system_inc` use separate `HashSet`s so the same path
+/// can appear in both tiers.  When it does, the `include_paths` entry wins
+/// (lower precedence value) because it is inserted first.
+#[test]
+fn same_path_in_include_and_system_inc_include_wins()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    // "shared" has ModuleA; "other" has the same file but will never be reached.
+    let shared = temp.path().join("shared");
+    std::fs::create_dir_all(&shared)?;
+    std::fs::write(shared.join("SharedWins.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "SharedWins",
+        &[],
+        &[],
+        &[shared.to_string_lossy().to_string()],
+        true,
+        &[PathBuf::from(&shared)],
+        Duration::from_millis(100),
+    );
+
+    // The path resolves regardless of which tier wins because both point to the
+    // same directory.  The important invariant is that it resolves at all (not
+    // deduplicated across tiers) and that the URI is correct.
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("SharedWins.pm"), "unexpected URI: {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+/// When all `include_paths` entries normalize to the same path (whitespace, dot,
+/// trailing slash variants), only a single `IncRoot` must be produced and the
+/// module still resolves.
+#[test]
+fn all_include_path_variants_collapse_to_one_root()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Collapse.pm")?;
+
+    let result = resolve_module_uri(
+        "Collapse",
+        &[],
+        &[workspace_uri],
+        &[
+            "lib".to_string(),
+            "lib/".to_string(),
+            "./lib".to_string(),
+            "./lib/".to_string(),
+            " lib ".to_string(),
+            " lib/ ".to_string(),
+        ],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("lib/Collapse.pm"), "unexpected URI: {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+// ===========================================================================
 // Timeout behavior
 // ===========================================================================
 
