@@ -99,6 +99,75 @@ impl Token {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Return the token byte span as `(start, end)`.
+    pub fn span(&self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return the user-facing display name for this token.
+    pub fn display_name(&self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Borrow this token as a [`TokenRef`] without allocating.
+    pub fn as_ref_token(&self) -> TokenRef<'_> {
+        TokenRef { kind: self.kind, text: self.text.as_ref(), start: self.start, end: self.end }
+    }
+}
+
+/// Borrowed token view for allocation-sensitive hot paths.
+///
+/// Unlike [`Token`], this view borrows text from the source (`&str`) and can be
+/// constructed without creating an `Arc<str>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenRef<'src> {
+    /// Token classification for parser decision making.
+    pub kind: TokenKind,
+    /// Borrowed source text for temporary token inspection.
+    pub text: &'src str,
+    /// Starting byte position for error reporting and location tracking.
+    pub start: usize,
+    /// Ending byte position for span calculation and navigation.
+    pub end: usize,
+}
+
+impl<'src> TokenRef<'src> {
+    /// Create a new borrowed token view.
+    pub const fn new(kind: TokenKind, text: &'src str, start: usize, end: usize) -> Self {
+        Self { kind, text, start, end }
+    }
+
+    /// Convert this borrowed view into an owned [`Token`].
+    pub fn to_owned_token(self) -> Token {
+        Token::new(self.kind, self.text, self.start, self.end)
+    }
+
+    /// Return the token span length in bytes.
+    pub fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether the token span is empty.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Return the token byte span as `(start, end)`.
+    pub fn span(self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return the user-facing display name for this token.
+    pub fn display_name(self) -> &'static str {
+        self.kind.display_name()
+    }
+}
+
+impl From<TokenRef<'_>> for Token {
+    fn from(value: TokenRef<'_>) -> Self {
+        value.to_owned_token()
+    }
 }
 
 /// Token classification for Perl parsing.

@@ -11,6 +11,7 @@ dependencies (only `std::sync::Arc`).
 ## Public API
 
 - **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
+- **`TokenRef<'src>`** -- borrowed token view with `text: &'src str` for allocation-sensitive paths
 - **`TokenKind`** -- enum classifying every Perl token: keywords, operators, delimiters, literals, sigils, and special tokens
 
 ## Usage
@@ -20,6 +21,22 @@ use perl_token::{Token, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+```
+
+Borrowed view for hot paths:
+
+```rust
+use perl_token::{Token, TokenKind, TokenRef};
+
+let borrowed = TokenRef::new(TokenKind::Identifier, "foo", 0, 3);
+let owned: Token = borrowed.into(); // explicit conversion to Arc-backed Token
+assert_eq!(&*owned.text, "foo");
+```
+
+Run the allocation scorecard benchmark:
+
+```bash
+cargo bench -p perl-token --bench token_borrowed_scorecard
 ```
 
 ## Workspace Role
