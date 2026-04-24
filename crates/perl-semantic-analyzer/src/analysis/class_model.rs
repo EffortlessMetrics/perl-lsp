@@ -199,6 +199,8 @@ pub struct ClassModel {
     pub exports: Vec<String>,
     /// Names available for explicit import via `@EXPORT_OK`
     pub export_ok: Vec<String>,
+    /// Exporter-specific metadata for straightforward static export declarations.
+    pub exporter_metadata: Option<ExporterMetadata>,
 }
 
 impl ClassModel {
@@ -211,6 +213,26 @@ impl ClassModel {
     pub fn object_pad_param_field_names(&self) -> impl Iterator<Item = &str> {
         self.fields.iter().filter(|field| field.param).map(|field| field.name.as_str())
     }
+}
+
+/// Export declaration metadata for straightforward `Exporter`-style modules.
+#[derive(Debug, Clone)]
+pub struct ExporterMetadata {
+    /// Exports declared in `@EXPORT`.
+    pub exports: Vec<ExportedSymbol>,
+    /// Exports declared in `@EXPORT_OK`.
+    pub export_ok: Vec<ExportedSymbol>,
+    /// Exports grouped by `%EXPORT_TAGS` tag name.
+    pub export_tags: HashMap<String, Vec<ExportedSymbol>>,
+}
+
+/// A single exported symbol name and an optional matching local sub definition.
+#[derive(Debug, Clone)]
+pub struct ExportedSymbol {
+    /// Name as listed in an export variable.
+    pub name: String,
+    /// Source location of a same-package `sub` definition, when one exists.
+    pub defined_at: Option<SourceLocation>,
 }
 
 /// Builds `ClassModel` instances by walking an AST.
@@ -228,6 +250,8 @@ pub struct ClassModelBuilder {
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
     current_export_ok: Vec<String>,
+    current_export_tags: HashMap<String, Vec<String>>,
+    current_uses_exporter: bool,
     current_package_aliases: HashSet<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
@@ -256,6 +280,8 @@ impl ClassModelBuilder {
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
             current_export_ok: Vec::new(),
+            current_export_tags: HashMap::new(),
+            current_uses_exporter: false,
             current_package_aliases: HashSet::new(),
             framework_map: HashMap::new(),
         }
@@ -278,8 +304,21 @@ impl ClassModelBuilder {
             || !self.current_parents.is_empty()
             || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
-            || !self.current_export_ok.is_empty();
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
         if has_oo_indicator {
+            let exported_methods = self
+                .current_methods
+                .iter()
+                .map(|method| (method.name.clone(), method.location))
+                .collect::<HashMap<_, _>>();
+            let exporter_metadata = build_exporter_metadata(
+                self.current_uses_exporter,
+                &self.current_exports,
+                &self.current_export_ok,
+                &self.current_export_tags,
+                &exported_methods,
+            );
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
@@ -293,8 +332,11 @@ impl ClassModelBuilder {
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
                 export_ok: std::mem::take(&mut self.current_export_ok),
+                exporter_metadata,
             };
             self.models.push(model);
+            self.current_export_tags.clear();
+            self.current_uses_exporter = false;
             self.current_package_aliases.clear();
         } else {
             // Reset accumulators even if we don't produce a model
@@ -308,6 +350,8 @@ impl ClassModelBuilder {
             self.current_modifiers.clear();
             self.current_exports.clear();
             self.current_export_ok.clear();
+            self.current_export_tags.clear();
+            self.current_uses_exporter = false;
             self.current_package_aliases.clear();
         }
     }
@@ -326,6 +370,7 @@ impl ClassModelBuilder {
                 self.current_framework =
                     self.framework_map.get(name).copied().unwrap_or(Framework::None);
                 self.current_mro = MethodResolutionOrder::Dfs;
+                self.current_uses_exporter = false;
 
                 if let Some(block) = block {
                     self.visit_node(block);
@@ -370,28 +415,38 @@ impl ClassModelBuilder {
                                 self.current_exports.extend(collect_symbol_names(init));
                             }
                             "EXPORT_OK" => {
-                                self.current_export_ok.extend(collect_symbol_names(init));
+                                self.current_export_ok.extend(collect_export_symbol_names(init));
                             }
                             _ => {}
                         }
+                    }
+
+                    if sigil == "%"
+                        && let Some(init) = initializer
+                        && name == "EXPORT_TAGS"
+                    {
+                        merge_export_tags(&mut self.current_export_tags, extract_export_tags(init));
                     }
                 }
             }
 
             // `@ISA = qw(...);` / `@EXPORT = qw(...);` / `@EXPORT_OK = qw(...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
-                if let NodeKind::Variable { sigil, name } = &lhs.kind
-                    && sigil == "@"
-                {
-                    match name.as_str() {
-                        "ISA" => self.extract_isa_from_node(rhs),
-                        "EXPORT" => {
-                            self.current_exports.extend(collect_symbol_names(rhs));
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if sigil == "@" {
+                        match name.as_str() {
+                            "ISA" => self.extract_isa_from_node(rhs),
+                            "EXPORT" => {
+                                self.current_exports.extend(collect_export_symbol_names(rhs));
+                            }
+                            "EXPORT_OK" => {
+                                self.current_export_ok.extend(collect_export_symbol_names(rhs));
+                            }
+                            _ => {}
                         }
-                        "EXPORT_OK" => {
-                            self.current_export_ok.extend(collect_symbol_names(rhs));
-                        }
-                        _ => {}
+                    }
+                    if sigil == "%" && name == "EXPORT_TAGS" {
+                        merge_export_tags(&mut self.current_export_tags, extract_export_tags(rhs));
                     }
                 }
             }
@@ -523,6 +578,9 @@ impl ClassModelBuilder {
 
     /// Detect framework from a `use` statement.
     fn detect_framework(&mut self, module: &str, args: &[String]) {
+        if module == "Exporter" {
+            self.current_uses_exporter = true;
+        }
         let framework = match module {
             "Moose" | "Moose::Role" => Framework::Moose,
             "Moo" | "Moo::Role" => Framework::Moo,
@@ -549,6 +607,8 @@ impl ClassModelBuilder {
                     for name in names {
                         if name == "Class::Accessor" {
                             has_class_accessor = true;
+                        } else if name == "Exporter" {
+                            self.current_uses_exporter = true;
                         } else {
                             captured_parents.push(name);
                         }
@@ -1114,6 +1174,9 @@ impl ClassModelBuilder {
     fn extract_isa_from_node(&mut self, node: &Node) {
         let parents = collect_symbol_names(node);
         if !parents.is_empty() {
+            if parents.iter().any(|parent| parent == "Exporter") {
+                self.current_uses_exporter = true;
+            }
             // Promote to PlainOO if no stronger framework is already set
             if self.current_framework == Framework::None {
                 self.current_framework = Framework::PlainOO;
@@ -1162,6 +1225,83 @@ fn collect_symbol_names(node: &Node) -> Vec<String> {
         }
         _ => Vec::new(),
     }
+}
+
+fn collect_export_symbol_names(node: &Node) -> Vec<String> {
+    match &node.kind {
+        NodeKind::String { value, .. } => expand_symbol_list(value),
+        NodeKind::Identifier { name } => expand_symbol_list(name),
+        NodeKind::ArrayLiteral { elements } => {
+            elements.iter().flat_map(collect_export_symbol_names).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn extract_export_tags(node: &Node) -> HashMap<String, Vec<String>> {
+    let mut tags = HashMap::new();
+    let NodeKind::HashLiteral { pairs } = &node.kind else {
+        return tags;
+    };
+
+    for (tag_node, values_node) in pairs {
+        let Some(tag_name) = collect_symbol_names(tag_node).into_iter().next() else {
+            continue;
+        };
+        let names = collect_export_symbol_names(values_node);
+        if !names.is_empty() {
+            tags.entry(tag_name).or_default().extend(names);
+        }
+    }
+
+    tags
+}
+
+fn merge_export_tags(
+    destination: &mut HashMap<String, Vec<String>>,
+    source: HashMap<String, Vec<String>>,
+) {
+    for (tag_name, names) in source {
+        destination.entry(tag_name).or_default().extend(names);
+    }
+}
+
+fn map_exported_symbols(
+    names: &[String],
+    methods_by_name: &HashMap<String, SourceLocation>,
+) -> Vec<ExportedSymbol> {
+    let mut seen = HashSet::new();
+    let mut mapped = Vec::new();
+    for name in names {
+        if seen.insert(name.clone()) {
+            mapped.push(ExportedSymbol {
+                name: name.clone(),
+                defined_at: methods_by_name.get(name).copied(),
+            });
+        }
+    }
+    mapped
+}
+
+fn build_exporter_metadata(
+    uses_exporter: bool,
+    exports: &[String],
+    export_ok: &[String],
+    export_tags: &HashMap<String, Vec<String>>,
+    methods_by_name: &HashMap<String, SourceLocation>,
+) -> Option<ExporterMetadata> {
+    if !uses_exporter || (exports.is_empty() && export_ok.is_empty() && export_tags.is_empty()) {
+        return None;
+    }
+
+    let exports = map_exported_symbols(exports, methods_by_name);
+    let export_ok = map_exported_symbols(export_ok, methods_by_name);
+    let export_tags = export_tags
+        .iter()
+        .map(|(tag, names)| (tag.clone(), map_exported_symbols(names, methods_by_name)))
+        .collect();
+
+    Some(ExporterMetadata { exports, export_ok, export_tags })
 }
 
 fn collect_accessor_names(node: &Node) -> Vec<String> {
@@ -2082,6 +2222,78 @@ has 'level' => (is => 'ro');
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
+    #[test]
+    fn exporter_metadata_extracts_static_lists_and_tags() {
+        let code = r#"
+package My::Exporter;
+use Exporter 'import';
+our @EXPORT = qw(foo bar);
+our @EXPORT_OK = ('baz', "qux");
+our %EXPORT_TAGS = (
+    all => [qw(foo baz)],
+    extras => ['qux'],
+);
+sub foo {}
+sub bar {}
+sub baz {}
+sub qux {}
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "My::Exporter").expect("My::Exporter model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+
+        let default_names: Vec<&str> =
+            metadata.exports.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(default_names, vec!["foo", "bar"]);
+
+        let export_ok_names: Vec<&str> =
+            metadata.export_ok.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(export_ok_names, vec!["baz", "qux"]);
+
+        let all_tag = metadata.export_tags.get("all").expect("all tag");
+        let all_names: Vec<&str> = all_tag.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(all_names, vec!["foo", "baz"]);
+
+        let extras_tag = metadata.export_tags.get("extras").expect("extras tag");
+        let extras_names: Vec<&str> =
+            extras_tag.iter().map(|symbol| symbol.name.as_str()).collect();
+        assert_eq!(extras_names, vec!["qux"]);
+
+        assert!(
+            metadata.exports.iter().all(|symbol| symbol.defined_at.is_some()),
+            "default exports should map to same-package sub definitions"
+        );
+    }
+
+    #[test]
+    fn exporter_metadata_missing_definition_is_conservative() {
+        let code = r#"
+package My::Exporter;
+use Exporter 'import';
+our @EXPORT = qw(defined_fn missing_fn);
+sub defined_fn {}
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "My::Exporter").expect("My::Exporter model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+
+        let defined = metadata
+            .exports
+            .iter()
+            .find(|symbol| symbol.name == "defined_fn")
+            .expect("defined_fn export");
+        assert!(defined.defined_at.is_some());
+
+        let missing = metadata
+            .exports
+            .iter()
+            .find(|symbol| symbol.name == "missing_fn")
+            .expect("missing_fn export");
+        assert!(missing.defined_at.is_none(), "missing definitions should stay unresolved");
     }
 
     // ---- Gap 2: push @ISA ----
