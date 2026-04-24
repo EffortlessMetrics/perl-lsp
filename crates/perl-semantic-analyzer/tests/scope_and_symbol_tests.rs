@@ -3762,6 +3762,64 @@ try {
     Ok(())
 }
 
+#[test]
+fn strict_vars_remains_active_after_eval_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'vars';
+eval {
+    my $inside_eval = 1;
+    print $inside_eval;
+};
+$outside_eval = 2;
+"#;
+
+    let issues = scope_issues_strict(code);
+    let undeclared_issues: Vec<_> =
+        issues.iter().filter(|issue| issue.kind == IssueKind::UndeclaredVariable).collect();
+
+    assert_eq!(
+        undeclared_issues.len(),
+        1,
+        "strict vars should remain active after eval block; issues: {:?}",
+        issues
+    );
+    assert!(
+        undeclared_issues.first().is_some_and(|issue| issue.variable_name.contains("outside_eval")),
+        "only post-eval undeclared variable should be flagged; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_vars_in_nested_block_restores_after_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'vars';
+{
+    no strict 'vars';
+    $inner_only = 1;
+}
+$outer_after_block = 2;
+"#;
+
+    let issues = scope_issues_strict(code);
+    let undeclared: Vec<_> =
+        issues.iter().filter(|issue| issue.kind == IssueKind::UndeclaredVariable).collect();
+
+    assert_eq!(
+        undeclared.len(),
+        1,
+        "strict vars should not leak disabled state out of nested block; issues: {:?}",
+        issues
+    );
+    assert!(
+        undeclared.first().is_some_and(|issue| issue.variable_name.contains("outer_after_block")),
+        "only post-block variable use should be undeclared; issues: {:?}",
+        issues
+    );
+    Ok(())
+}
+
 /// The catch variable range must point into the source at the catch parameter,
 /// not at an arbitrary offset, so that LSP diagnostics display correctly.
 #[test]

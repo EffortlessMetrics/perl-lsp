@@ -1587,3 +1587,16 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
     Ok(())
 }
+
+#[test]
+fn strict_query_api_treats_signatures_as_effective_strict() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 25)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 12);
+    assert!(state.is_strict_vars_active());
+    assert!(state.is_strict_subs_active());
+    assert!(state.is_strict_refs_active());
+    Ok(())
+}
