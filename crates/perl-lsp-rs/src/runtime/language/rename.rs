@@ -229,45 +229,61 @@ impl LspServer {
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
-                            if let (Some(coordinator), Some(key)) =
-                                (self.coordinator(), symbol_key.as_ref())
-                            {
-                                let edits = crate::workspace_rename::build_rename_edit(
-                                    coordinator.index(),
-                                    key,
-                                    new_name,
-                                );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
-                                }
-                            }
                             tracing::debug!(
                                 reason,
-                                "Rename: workspace rename unavailable, using same-file only"
+                                "Rename: refusing partial-index workspace rename"
                             );
-                            // Fall through to same-file rename
+                            return Err(JsonRpcError {
+                                code: -32602,
+                                message: format!(
+                                    "Workspace rename requires a fully ready index; current state: {}",
+                                    reason
+                                ),
+                                data: None,
+                            });
                         }
                         IndexAccessMode::None => {
                             tracing::debug!("Rename: no workspace feature, using same-file only");
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            if let Some(key) = symbol_key.as_ref() {
-                                // Use coordinator.index() directly instead of workspace_index()
-                                // to ensure we go through routing policy
-                                let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
-                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
-                                return Ok(Some(ws_edit));
+                            let key = symbol_key.as_ref().ok_or_else(|| JsonRpcError {
+                                code: -32602,
+                                message: "Rename requires an unambiguous symbol at cursor"
+                                    .to_string(),
+                                data: None,
+                            })?;
+
+                            // Use coordinator.index() directly instead of workspace_index()
+                            // to ensure we go through routing policy.
+                            let idx = coordinator.index();
+
+                            if idx.find_def(key).is_none() {
+                                return Err(JsonRpcError {
+                                    code: -32602,
+                                    message: format!(
+                                        "Rename requires a statically resolved definition for {}::{}",
+                                        key.pkg, key.name
+                                    ),
+                                    data: None,
+                                });
                             }
+
+                            let edits =
+                                crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                            if edits.is_empty() {
+                                return Err(JsonRpcError {
+                                    code: -32602,
+                                    message: format!(
+                                        "Rename could not produce a stable workspace edit for {}::{}",
+                                        key.pkg, key.name
+                                    ),
+                                    data: None,
+                                });
+                            }
+
+                            let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                            return Ok(Some(ws_edit));
                         }
                     }
                 }

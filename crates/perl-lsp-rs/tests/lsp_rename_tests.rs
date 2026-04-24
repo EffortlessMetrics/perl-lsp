@@ -302,3 +302,77 @@ fn test_rename_out_of_bounds() -> TestResult {
 
     Ok(())
 }
+
+/// Test workspace-wide rename across two files using static cross-file references.
+#[test]
+fn test_workspace_rename_subroutine_across_two_files() -> TestResult {
+    let files = [
+        ("lib/A.pm", "package A;\n\nsub target_name {\n    return 42;\n}\n\n1;\n"),
+        ("lib/B.pm", "package B;\n\nuse A;\n\nsub run {\n    return A::target_name();\n}\n\n1;\n"),
+    ];
+    let (mut harness, workspace) =
+        LspHarness::with_workspace(&files).map_err(std::io::Error::other)?;
+
+    let a_uri = workspace.uri("lib/A.pm");
+    harness.open(&a_uri, "package A;\n\nsub target_name {\n    return 42;\n}\n\n1;\n")?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": a_uri },
+            "position": { "line": 2, "character": 6 },
+            "newName": "renamed_target"
+        }),
+    )?;
+
+    let changes = response
+        .get("changes")
+        .and_then(|v| v.as_object())
+        .ok_or("expected WorkspaceEdit.changes object")?;
+    assert_eq!(changes.len(), 2, "workspace rename should produce edits for exactly two files");
+
+    let b_uri = workspace.uri("lib/B.pm");
+    for uri in [a_uri, b_uri] {
+        let edits = changes
+            .get(&uri)
+            .and_then(|v| v.as_array())
+            .ok_or("expected edits array for renamed file")?;
+        assert!(!edits.is_empty(), "rename should include at least one edit for {}", uri);
+        for edit in edits {
+            let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
+            assert_eq!(new_text, "renamed_target");
+        }
+    }
+
+    Ok(())
+}
+
+/// Test that workspace rename refuses ambiguous/unresolved symbol identity.
+#[test]
+fn test_workspace_rename_refuses_unresolved_symbol_identity() -> TestResult {
+    let (mut harness, workspace) =
+        LspHarness::with_workspace(&[("main.pl", "my $x = 1;\nprint $x;\n")])
+            .map_err(std::io::Error::other)?;
+
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, "my $x = 1;\nprint $x;\n")?;
+
+    // Cursor on whitespace: no stable symbol identity should be available.
+    let err = harness
+        .request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": 0, "character": 2 },
+                "newName": "renamed"
+            }),
+        )
+        .expect_err("rename should refuse unresolved symbol identity");
+
+    assert!(
+        err.contains("unambiguous symbol"),
+        "error should explain unresolved identity, got: {}",
+        err
+    );
+    Ok(())
+}
