@@ -62,10 +62,8 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
     let allowed_metrics =
         top_line_metrics.union(&component_metrics).cloned().collect::<BTreeSet<_>>();
     let mut confidence_signals_exercised = BTreeSet::new();
-    let baseline_metrics = BTreeSet::from([
-        "workflow_pass_rate".to_string(),
-        "workflow_stability_rate".to_string(),
-    ]);
+    let baseline_metrics =
+        BTreeSet::from(["workflow_pass_rate".to_string(), "workflow_stability_rate".to_string()]);
     let mut metric_usage_counts: HashMap<String, usize> =
         allowed_metrics.iter().cloned().map(|metric| (metric, 0_usize)).collect();
     let mut workflows_with_extended_metrics = 0_usize;

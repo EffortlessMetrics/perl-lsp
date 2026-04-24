@@ -968,7 +968,10 @@ mod tests {
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
-        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+        assert!(
+            !node.kind().is_empty(),
+            "cursor should remain at valid node after exhausting siblings"
+        );
     }
 
     #[test]
@@ -1009,11 +1012,7 @@ mod tests {
 
         // reset() should bring us back to root
         cursor.reset();
-        assert_eq!(
-            cursor.node().grammar_kind(),
-            "source_file",
-            "reset must return cursor to root"
-        );
+        assert_eq!(cursor.node().grammar_kind(), "source_file", "reset must return cursor to root");
     }
 
     #[test]
@@ -1073,10 +1072,7 @@ mod tests {
             sibling_count += 1;
         }
 
-        assert_eq!(
-            sibling_count, child_count,
-            "sibling count should match root.child_count()"
-        );
+        assert_eq!(sibling_count, child_count, "sibling count should match root.child_count()");
     }
 
     #[test]
