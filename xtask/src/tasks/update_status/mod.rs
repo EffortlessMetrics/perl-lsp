@@ -229,11 +229,12 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
     // --- DAP subsystem ---
     if need_dap {
         let dap_counts = dap::count_dap_tests(&root);
+        let dap_metrics = dap::collect_scorecard_metrics(&root);
 
         let dap_path = root.join("docs/project/status/dap.md");
         let original_dap =
             fs::read_to_string(&dap_path).context("reading docs/project/status/dap.md")?;
-        let updated_dap = dap::generate_dap_status(&dap_counts, &original_dap)?;
+        let updated_dap = dap::generate_dap_status(&dap_counts, &dap_metrics, &original_dap)?;
         if updated_dap != original_dap {
             files_to_update.push(("docs/project/status/dap.md", dap_path, updated_dap));
         }
