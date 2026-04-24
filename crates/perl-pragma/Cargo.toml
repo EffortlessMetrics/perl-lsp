@@ -16,8 +16,17 @@ categories = ["development-tools", "parser-implementations"]
 [dependencies]
 perl-ast = { workspace = true }
 
+[dev-dependencies]
+criterion.workspace = true
+perl-parser = { workspace = true }
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+
+[[bench]]
+name = "pragma_benchmarks"
+harness = false
