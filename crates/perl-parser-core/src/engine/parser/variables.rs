@@ -819,6 +819,13 @@ impl<'a> Parser<'a> {
         // Parse the variable
         let variable = self.parse_variable()?;
 
+        // Some signature-capable frameworks (and Object::Pad-style code in the wild)
+        // attach parameter traits/attributes after the variable:
+        //   sub f ($x :param, $y :reader(foo)) { ... }
+        // Treat these as parseable syntax and preserve only span/shape for now.
+        let mut end = variable.location.end;
+        end = self.consume_signature_param_attributes(end)?;
+
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
@@ -828,10 +835,10 @@ impl<'a> Parser<'a> {
             None
         };
 
-        let end = if let Some(ref default) = default_value {
+        end = if let Some(ref default) = default_value {
             default.location.end
         } else {
-            variable.location.end
+            end
         };
 
         // Check if variable is slurpy (@args or %hash)
@@ -849,6 +856,37 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Node::new(param_kind, SourceLocation { start, end }))
+    }
+
+    fn consume_signature_param_attributes(&mut self, mut end: usize) -> ParseResult<usize> {
+        while self.peek_kind() == Some(TokenKind::Colon) {
+            self.consume_token()?; // consume ':'
+            let attr = self.expect(TokenKind::Identifier)?;
+            end = attr.end;
+
+            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.consume_token()?; // consume '('
+                let mut depth = 1usize;
+                while depth > 0 && !self.tokens.is_eof() {
+                    let token = self.consume_token()?;
+                    end = token.end;
+                    match token.kind {
+                        TokenKind::LeftParen => depth += 1,
+                        TokenKind::RightParen => depth -= 1,
+                        _ => {}
+                    }
+                }
+
+                if depth != 0 {
+                    return Err(ParseError::syntax(
+                        "Unterminated signature parameter attribute arguments",
+                        self.current_position(),
+                    ));
+                }
+            }
+        }
+
+        Ok(end)
     }
 
     /// Check if the parenthesized content after sub name is a prototype (not a signature)
