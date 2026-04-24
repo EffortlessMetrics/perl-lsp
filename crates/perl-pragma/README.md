@@ -45,6 +45,26 @@ Benchmarks include stable names that can be diffed over time:
 
 Criterion reports per-benchmark timing statistics (including time per iteration and total sample estimates), which can be compared between runs.
 
+## Benchmarks
+
+Run the Criterion benchmark suite for build-heavy and query-heavy pragma workloads:
+
+```bash
+cargo bench -p perl-pragma
+```
+
+Benchmarks include stable names that can be diffed over time:
+
+- `build_small_file`
+- `build_large_file`
+- `query_random_offsets`
+- `query_monotonic_offsets`
+- `final_state_lookup`
+- `version_compat_walk_style`
+- `scope_analyzer_walk_style`
+
+Criterion reports per-benchmark timing statistics (including time per iteration and total sample estimates), which can be compared between runs.
+
 ## Workspace Role
 
 Tier 1 leaf crate. Depends only on `perl-ast`. Consumed by

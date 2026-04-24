@@ -1816,6 +1816,7 @@ version = "0.12.4"
 dependencies = [
  "criterion",
  "perl-ast",
+ "perl-parser",
 ]
 
 [[package]]
