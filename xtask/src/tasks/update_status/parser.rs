@@ -569,6 +569,193 @@ mod tests {
     }
 
     #[test]
+    fn test_classify_failure_bucket_routing() {
+        // RecoveryOnly matches take highest priority
+        assert_eq!(
+            classify_failure_bucket("unexpected_token_in_expr"),
+            FailureCluster::RecoveryOnly,
+            "catch-all expr token bucket must be RecoveryOnly"
+        );
+        assert_eq!(
+            classify_failure_bucket("Incomplete arrow expression"),
+            FailureCluster::RecoveryOnly,
+            "'incomplete' substring routes to RecoveryOnly"
+        );
+
+        // HeredocDelimiter for bracket/brace/paren/substitution errors
+        assert_eq!(
+            classify_failure_bucket("expected_left_brace"),
+            FailureCluster::HeredocDelimiter,
+            "brace errors map to HeredocDelimiter cluster"
+        );
+        assert_eq!(
+            classify_failure_bucket("unclosed_substitution_delimiter"),
+            FailureCluster::HeredocDelimiter,
+            "unclosed_ prefix maps to HeredocDelimiter"
+        );
+
+        // DeclarationPackage for identifier/variable/signature errors
+        assert_eq!(
+            classify_failure_bucket("expected_identifier"),
+            FailureCluster::DeclarationPackage,
+            "'identifier' routes to DeclarationPackage"
+        );
+        assert_eq!(
+            classify_failure_bucket("expected_variable"),
+            FailureCluster::DeclarationPackage,
+            "'variable' routes to DeclarationPackage"
+        );
+        assert_eq!(
+            classify_failure_bucket("CHECK must be followed by a block"),
+            FailureCluster::DeclarationPackage,
+            "CHECK block error routes to DeclarationPackage"
+        );
+
+        // EncodingMultibyte for utf/unicode/wide character errors
+        assert_eq!(
+            classify_failure_bucket("wide character in syswrite"),
+            FailureCluster::EncodingMultibyte,
+            "'wide character' substring routes to EncodingMultibyte"
+        );
+
+        // TransliterationQuote for quote/translit/tr/y/string errors
+        assert_eq!(
+            classify_failure_bucket("tr/abc/xyz/ misparse"),
+            FailureCluster::TransliterationQuote,
+            "'tr/' routes to TransliterationQuote"
+        );
+        assert_eq!(
+            classify_failure_bucket("unclosed string literal"),
+            FailureCluster::TransliterationQuote,
+            "'string' routes to TransliterationQuote"
+        );
+
+        // Other for unrecognized errors
+        assert_eq!(
+            classify_failure_bucket("expected_comma"),
+            FailureCluster::Other,
+            "comma errors fall through to Other"
+        );
+        assert_eq!(
+            classify_failure_bucket("expected_colon"),
+            FailureCluster::Other,
+            "colon errors fall through to Other"
+        );
+    }
+
+    #[test]
+    fn test_build_failure_worklist_with_populated_receipt() -> Result<()> {
+        use std::collections::BTreeMap;
+
+        let mut buckets = BTreeMap::new();
+        buckets.insert("expected_variable".to_string(), 6usize);
+        buckets.insert("expected_left_brace".to_string(), 10usize);
+        buckets.insert("unexpected_token_in_expr".to_string(), 3usize);
+        buckets.insert("expected_colon".to_string(), 5usize);
+
+        let mut files_by_bucket = BTreeMap::new();
+        files_by_bucket.insert(
+            "expected_variable".to_string(),
+            vec!["/usr/share/perl5/Foo.pm".to_string()],
+        );
+        files_by_bucket.insert(
+            "expected_left_brace".to_string(),
+            vec!["/usr/share/perl5/Bar.pm".to_string(), "/usr/share/perl5/Baz.pm".to_string()],
+        );
+
+        let report = super::super::super::parser_corpus_sweep::SweepReport {
+            schema_version: "1".to_string(),
+            commit: "abc".to_string(),
+            timestamp: "2026-04-09T00:00:00Z".to_string(),
+            corpus_profile: "system".to_string(),
+            corpus_roots: vec![],
+            resolved_roots_count: 0,
+            perl_version: "5.038".to_string(),
+            total_files: 200,
+            files_unreadable: 0,
+            clean_files: 176,
+            files_with_errors: 24,
+            total_error_nodes: 100,
+            first_error_buckets: buckets,
+            files_by_bucket,
+            file_results: vec![],
+            elapsed_secs: 1.0,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            slowest_files: vec![],
+        };
+
+        let worklist = build_failure_worklist(&report);
+
+        // DeclarationPackage: expected_variable (6)
+        assert!(
+            worklist.contains("declaration / package parsing"),
+            "DeclarationPackage cluster missing from worklist"
+        );
+        // HeredocDelimiter: expected_left_brace (10)
+        assert!(
+            worklist.contains("heredoc / delimiter handling"),
+            "HeredocDelimiter cluster missing from worklist"
+        );
+        // RecoveryOnly: unexpected_token_in_expr (3)
+        assert!(
+            worklist.contains("recovery-only failures"),
+            "RecoveryOnly cluster missing from worklist"
+        );
+        // Other: expected_colon (5)
+        assert!(worklist.contains("other"), "Other cluster missing from worklist");
+
+        // Counts should appear in the output rows
+        assert!(worklist.contains("| 6 |"), "DeclarationPackage count (6) not found");
+        assert!(worklist.contains("| 10 |"), "HeredocDelimiter count (10) not found");
+        assert!(worklist.contains("| 3 |"), "RecoveryOnly count (3) not found");
+        assert!(worklist.contains("| 5 |"), "Other count (5) not found");
+
+        // Rows are deterministic — same input always produces same output
+        let worklist2 = build_failure_worklist(&report);
+        assert_eq!(worklist, worklist2, "cluster worklist must be deterministic");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_failure_worklist_empty_buckets() {
+        use std::collections::BTreeMap;
+        use super::super::super::parser_corpus_sweep::SweepReport;
+
+        let report = SweepReport {
+            schema_version: "1".to_string(),
+            commit: "abc".to_string(),
+            timestamp: "2026-04-09T00:00:00Z".to_string(),
+            corpus_profile: "system".to_string(),
+            corpus_roots: vec![],
+            resolved_roots_count: 0,
+            perl_version: "5.038".to_string(),
+            total_files: 10,
+            files_unreadable: 0,
+            clean_files: 10,
+            files_with_errors: 0,
+            total_error_nodes: 0,
+            first_error_buckets: BTreeMap::new(),
+            files_by_bucket: BTreeMap::new(),
+            file_results: vec![],
+            elapsed_secs: 0.5,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            slowest_files: vec![],
+        };
+
+        let worklist = build_failure_worklist(&report);
+        // All six clusters should appear with 0 counts
+        assert!(worklist.contains("transliteration / quote parsing"), "TransliterationQuote row missing in empty case");
+        assert!(worklist.contains("declaration / package parsing"), "DeclarationPackage row missing in empty case");
+        assert!(worklist.contains("| 0 |"), "empty worklist should show 0 counts");
+        // Output should have 6 rows
+        let row_count = worklist.lines().count();
+        assert_eq!(row_count, 6, "empty worklist must have exactly 6 rows, got {row_count}");
+    }
+
+    #[test]
     fn test_parser_strict_clean_row_with_receipt() -> Result<()> {
         use std::collections::BTreeMap;
         let receipt = super::super::super::parser_corpus_sweep::SweepReport {
