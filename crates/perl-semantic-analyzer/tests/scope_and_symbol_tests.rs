@@ -1914,6 +1914,47 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_manual_require_imported_barewords() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+My::Loader->import('load_data');
+print load_data();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should not flag manually imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_manual_require_qw_imported_barewords()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Tools;
+My::Tools->import(qw(helper_func another_helper));
+print helper_func();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && (issue.variable_name == "helper_func" || issue.variable_name == "another_helper")
+        }),
+        "strict 'subs' should not flag manually qw-imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;

@@ -2987,6 +2987,27 @@ impl IndexVisitor {
                             .insert(normalize_dependency_module_name(&module_name));
                     }
                 }
+                if name == "require" {
+                    if let Some(first) = args.first() {
+                        let maybe_module = match &first.kind {
+                            NodeKind::Identifier { name } => Some(name.clone()),
+                            NodeKind::String { value, .. } => {
+                                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                                if cleaned.is_empty() {
+                                    None
+                                } else {
+                                    Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+                                }
+                            }
+                            _ => None,
+                        };
+                        if let Some(module_name) = maybe_module {
+                            file_index
+                                .dependencies
+                                .insert(normalize_dependency_module_name(&module_name));
+                        }
+                    }
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3158,6 +3179,14 @@ impl IndexVisitor {
                         kind: ReferenceKind::Usage,
                     },
                 );
+
+                if method == "import" {
+                    if let NodeKind::Identifier { name: module_name } = &object.kind {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(module_name));
+                    }
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3991,6 +4020,44 @@ use Data::Dumper;
         assert!(deps.contains("strict"));
         assert!(deps.contains("warnings"));
         assert!(deps.contains("Data::Dumper"));
+    }
+
+    #[test]
+    fn test_dependencies_include_static_require_and_manual_import() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///manual-import.pl";
+        let code = r#"
+require My::Loader;
+My::Loader->import('load_data');
+load_data();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let deps = index.file_dependencies(uri);
+        assert!(
+            deps.contains("My::Loader"),
+            "static require + manual import should register My::Loader dependency, got: {deps:?}"
+        );
+    }
+
+    #[test]
+    fn test_dependencies_include_static_require_path_and_qw_manual_import() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///manual-import-qw.pl";
+        let code = r#"
+require 'My/Tools.pm';
+My::Tools->import(qw(helper another));
+helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let deps = index.file_dependencies(uri);
+        assert!(
+            deps.contains("My::Tools"),
+            "file-path require + qw manual import should register My::Tools dependency, got: {deps:?}"
+        );
     }
 
     #[test]
