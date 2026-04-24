@@ -109,7 +109,10 @@ fn supported_batch_edits_match_fresh_parse() -> ParseResult<()> {
     let mut parser = Parser::new(&document.source);
     let parsed_fresh = parser.parse()?;
 
-    assert_eq!(format!("{:?}", document.root), format!("{:?}", parsed_fresh));
+    assert_eq!(
+        *document.root, parsed_fresh,
+        "incremental batch result must match a fresh parse of the same source"
+    );
 
     Ok(())
 }
@@ -119,15 +122,14 @@ fn empty_edit_set_is_a_noop() -> ParseResult<()> {
     // An empty batch must not mutate the document source or tree.
     let source = "my $x = 42;\n".to_string();
     let mut document = IncrementalDocument::new(source.clone())?;
-    let root_before = format!("{:?}", document.root);
+    let root_before = (*document.root).clone();
 
     let edits = IncrementalEditSet::new();
     document.apply_edits(&edits)?;
 
     assert_eq!(document.source, source, "source must be unchanged for empty edit set");
     assert_eq!(
-        format!("{:?}", document.root),
-        root_before,
+        *document.root, root_before,
         "tree must be unchanged for empty edit set"
     );
 
@@ -173,7 +175,7 @@ fn adjacent_non_overlapping_edits_both_apply() -> ParseResult<()> {
     // The post-edit tree should match a fresh parse of the new source.
     let mut parser = Parser::new(&document.source);
     let parsed_fresh = parser.parse()?;
-    assert_eq!(format!("{:?}", document.root), format!("{:?}", parsed_fresh));
+    assert_eq!(*document.root, parsed_fresh, "incremental batch must match fresh parse");
 
     Ok(())
 }
@@ -195,6 +197,58 @@ fn adjacent_touching_ranges_are_not_rejected() -> ParseResult<()> {
     // Both edits applied in reverse order: first (3,6)->"Z", then (0,3)->"XY".
     // After (3,6)->"Z": "abcZ". After (0,3)->"XY": "XYZ".
     assert_eq!(document.source, "XYZ", "adjacent touching edits must both apply");
+
+    Ok(())
+}
+
+#[test]
+fn whole_file_replacement_batch_takes_single_parse_path() -> ParseResult<()> {
+    // When an edit covers the entire source, there are no subtrees outside the
+    // affected range, so reusable is empty.  The no-reuse branch must do exactly
+    // one parse (not two) and produce a correct tree.
+    let source = "my $x = 1;\n".to_string();
+    let mut document = IncrementalDocument::new(source)?;
+
+    let mut edits = IncrementalEditSet::new();
+    // Replace the entire content with a new statement.
+    let new_content = "my $y = 99;\n".to_string();
+    edits.add(IncrementalEdit::new(0, 11, new_content.trim_end_matches('\n').to_string()));
+
+    document.apply_edits(&edits)?;
+
+    assert!(
+        document.source.contains("99"),
+        "whole-file replacement must produce updated source; got: {}",
+        document.source
+    );
+    let mut parser = Parser::new(&document.source);
+    let parsed_fresh = parser.parse()?;
+    assert_eq!(*document.root, parsed_fresh, "whole-file replacement must match fresh parse");
+
+    Ok(())
+}
+
+#[test]
+fn same_start_edits_apply_deterministically() -> ParseResult<()> {
+    // Two edits with the same start_byte but different old_end_byte.
+    // Correct reverse-sort order: larger old_end_byte first (so (2,6) before (2,4)).
+    // "abcdefgh" -> edit A=(2,6,"X") replaces "cdef" with "X" -> "abXgh"
+    //              edit B=(2,4,"Y") replaces "cd" with "Y" -> overlaps with A
+    // Because they overlap, normalize_for_source must reject both -> fallback.
+    // apply_to_string must use the same secondary sort as normalize_for_source
+    // so the deterministic ordering matches between the two paths.
+    let source = "abcdefgh".to_string();
+    let mut document = IncrementalDocument::new(source.clone())?;
+
+    let mut edits = IncrementalEditSet::new();
+    edits.add(IncrementalEdit::new(2, 6, "X".to_string())); // replaces "cdef"
+    edits.add(IncrementalEdit::new(2, 4, "Y".to_string())); // replaces "cd" — overlaps
+
+    let expected = edits.apply_to_string(&source);
+    document.apply_edits(&edits)?;
+
+    // Both paths (fallback via apply_to_string) should agree.
+    assert_eq!(document.source, expected, "same-start overlapping edits: fallback result must be deterministic");
 
     Ok(())
 }
