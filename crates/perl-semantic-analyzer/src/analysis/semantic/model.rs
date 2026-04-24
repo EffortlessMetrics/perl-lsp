@@ -1,12 +1,12 @@
 //! `SemanticModel` — a stable, query-oriented facade over `SemanticAnalyzer`.
 
-use crate::SourceLocation;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolTable};
+use crate::SourceLocation;
 
-use super::SemanticAnalyzer;
 use super::hover::HoverInfo;
 use super::tokens::SemanticToken;
+use super::{FileExportMetadata, SemanticAnalyzer};
 
 #[derive(Debug)]
 /// A stable, query-oriented view of semantic information over a parsed file.
@@ -79,6 +79,11 @@ impl SemanticModel {
     /// rather than accessing the symbol table directly.
     pub fn symbol_table(&self) -> &SymbolTable {
         self.analyzer.symbol_table()
+    }
+
+    /// Access per-file Exporter metadata extracted during analysis.
+    pub fn export_metadata(&self) -> &FileExportMetadata {
+        self.analyzer.export_metadata()
     }
 
     /// Get hover information for a symbol at a specific location during Navigate/Analyze.

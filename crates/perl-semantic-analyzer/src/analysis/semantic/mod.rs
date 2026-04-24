@@ -16,6 +16,7 @@
 //! | `model`    | `SemanticModel` — stable, query-oriented LSP facade |
 
 mod builtins;
+mod exporter_metadata;
 mod hover;
 mod model;
 mod node_analysis;
@@ -28,6 +29,7 @@ pub use builtins::{
     get_builtin_documentation, get_exception_context, get_moose_type_documentation,
     get_operator_documentation, get_pragma_documentation, is_exception_function,
 };
+pub use exporter_metadata::{ExportedSubroutine, FileExportMetadata, PackageExportMetadata};
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
@@ -90,6 +92,8 @@ pub struct SemanticAnalyzer {
     pub(super) source: String,
     /// Class models extracted from the same file (for same-file inheritance resolution)
     pub class_models: Vec<ClassModel>,
+    /// Per-file Exporter metadata extracted from statically readable assignments.
+    pub export_metadata: FileExportMetadata,
 }
 
 impl SemanticAnalyzer {
@@ -134,6 +138,7 @@ impl SemanticAnalyzer {
     pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
+        let export_metadata = exporter_metadata::ExportMetadataBuilder::new().build(ast);
 
         let mut analyzer = SemanticAnalyzer {
             symbol_table,
@@ -141,6 +146,7 @@ impl SemanticAnalyzer {
             hover_info: HashMap::new(),
             source: source.to_string(),
             class_models,
+            export_metadata,
         };
 
         analyzer.analyze_node(ast, 0);
@@ -155,6 +161,11 @@ impl SemanticAnalyzer {
     /// Get semantic tokens for syntax highlighting.
     pub fn semantic_tokens(&self) -> &[SemanticToken] {
         &self.semantic_tokens
+    }
+
+    /// Get per-file Exporter metadata for statically readable exports.
+    pub fn export_metadata(&self) -> &FileExportMetadata {
+        &self.export_metadata
     }
 
     /// Get hover information at a location for Navigate/Analyze stages.
