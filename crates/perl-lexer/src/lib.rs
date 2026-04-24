@@ -1906,6 +1906,8 @@ impl<'a> PerlLexer<'a> {
     fn try_identifier_or_keyword(&mut self) -> Option<Token> {
         let start = self.position;
         let ch = self.current_char()?;
+        let bytes = self.input_bytes;
+        let len = bytes.len();
 
         if is_perl_identifier_start(ch) {
             // Special case: substitution/transliteration with single-quote delimiter
@@ -1936,44 +1938,63 @@ impl<'a> PerlLexer<'a> {
                 return self.parse_transliteration(start);
             }
 
-            while let Some(ch) = self.current_char() {
-                // Single quote is usually allowed inside Perl identifiers (legacy package separator),
-                // but it can also be the delimiter for quote-like operators (q'..', qq'..', qr'..', m'..').
-                // If we've already read one of those operator words, stop before consuming the quote
-                // so the quote-operator path can handle it.
-                if ch == '\''
-                    && matches!(
-                        &self.input[start..self.position],
-                        "m" | "q" | "qq" | "qw" | "qx" | "qr"
-                    )
-                {
+            // Fast ASCII path for identifier continuation.
+            while self.position < len {
+                let byte = bytes[self.position];
+                if byte == b'\'' && is_quote_op_word_prefix(&bytes[start..self.position]) {
+                    // Keep apostrophe for quote-operator parsing in cases like q'...'.
                     break;
                 }
 
-                if is_perl_identifier_continue(ch) {
-                    self.advance();
-                } else {
+                if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'\'' {
+                    self.position += 1;
+                    continue;
+                }
+
+                if byte < 128 {
                     break;
                 }
+
+                if let Some(ch) = self.current_char()
+                    && is_perl_identifier_continue(ch)
+                {
+                    self.advance();
+                    continue;
+                }
+                break;
             }
-            // Handle package-qualified identifiers like Foo::bar
-            while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
-                // consume '::'
-                self.advance();
-                self.advance();
+            // Handle package-qualified identifiers like Foo::bar.
+            while self.config.max_lookahead >= 1
+                && self.position + 1 < len
+                && bytes[self.position] == b':'
+                && bytes[self.position + 1] == b':'
+            {
+                self.position += 2; // consume '::'
 
                 // consume following identifier segment if present
-                if let Some(ch) = self.current_char()
-                    && is_perl_identifier_start(ch)
-                {
-                    self.advance();
-                    while let Some(ch) = self.current_char() {
-                        if is_perl_identifier_continue(ch) {
-                            self.advance();
-                        } else {
-                            break;
-                        }
+                let Some(ch) = self.current_char() else {
+                    break;
+                };
+                if !is_perl_identifier_start(ch) {
+                    break;
+                }
+                self.advance();
+                while self.position < len {
+                    let byte = bytes[self.position];
+                    if byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'\'' {
+                        self.position += 1;
+                        continue;
                     }
+                    if byte < 128 {
+                        break;
+                    }
+                    if let Some(ch) = self.current_char()
+                        && is_perl_identifier_continue(ch)
+                    {
+                        self.advance();
+                        continue;
+                    }
+                    break;
                 }
             }
 
@@ -3370,6 +3391,11 @@ fn is_keyword_fast(word: &str) -> bool {
 #[inline]
 fn is_builtin_function(word: &str) -> bool {
     BARE_TERM_BUILTINS.binary_search(&word).is_ok()
+}
+
+#[inline(always)]
+fn is_quote_op_word_prefix(word: &[u8]) -> bool {
+    matches!(word, b"m" | b"q" | b"qq" | b"qw" | b"qx" | b"qr")
 }
 
 const BARE_TERM_BUILTINS: &[&str] = &[
