@@ -649,12 +649,7 @@ mod tests {
         // Delete almost the entire document; this should use full-reparse fallback
         // to keep incremental behavior predictable for large edits.
         let old_end_byte = state.source.len().saturating_sub(1);
-        let edit = Edit {
-            start_byte: 0,
-            old_end_byte,
-            new_end_byte: 0,
-            new_text: String::new(),
-        };
+        let edit = Edit { start_byte: 0, old_end_byte, new_end_byte: 0, new_text: String::new() };
 
         let result = apply_edits(&mut state, &[edit])?;
 

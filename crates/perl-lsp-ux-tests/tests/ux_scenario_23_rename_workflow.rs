@@ -10,7 +10,7 @@
 
 use anyhow::{Context, Result};
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 fn binary_available() -> bool {
