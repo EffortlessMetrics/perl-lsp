@@ -65,6 +65,118 @@ pub struct PragmaState {
     pub builtin_imports: Vec<String>,
 }
 
+/// Query object for asking which pragma state applies at a file position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PragmaQuery {
+    /// Byte offset in the source file.
+    pub offset: usize,
+}
+
+impl PragmaQuery {
+    /// Build a pragma query at the given source offset.
+    #[must_use]
+    pub const fn at_offset(offset: usize) -> Self {
+        Self { offset }
+    }
+}
+
+/// Immutable snapshot of effective pragma state at a query point.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PragmaSnapshot {
+    state: PragmaState,
+}
+
+impl PragmaSnapshot {
+    fn from_state(state: PragmaState) -> Self {
+        Self { state }
+    }
+
+    /// Returns the effective strict state (`vars`, `subs`, `refs`).
+    #[must_use]
+    pub fn strict(&self) -> (bool, bool, bool) {
+        (self.state.strict_vars, self.state.strict_subs, self.state.strict_refs)
+    }
+
+    /// Returns `true` when warnings are globally enabled.
+    #[must_use]
+    pub fn warnings(&self) -> bool {
+        self.state.warnings
+    }
+
+    /// Returns `true` when the given feature is currently enabled.
+    #[must_use]
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.state.has_feature(feature)
+    }
+
+    /// Borrow the underlying complete pragma state.
+    #[must_use]
+    pub fn state(&self) -> &PragmaState {
+        &self.state
+    }
+
+    /// Consume the snapshot and return the underlying pragma state value.
+    #[must_use]
+    pub fn into_state(self) -> PragmaState {
+        self.state
+    }
+}
+
+/// Immutable compile-time pragma environment built from a Perl AST.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PragmaEnvironment {
+    ranges: Vec<(Range<usize>, PragmaState)>,
+}
+
+impl PragmaEnvironment {
+    /// Build a range-indexed pragma environment from an AST.
+    #[must_use]
+    pub fn build(ast: &Node) -> Self {
+        let mut ranges = Vec::new();
+        let mut current_state = PragmaState::default();
+
+        PragmaTracker::build_ranges(ast, &mut current_state, &mut ranges);
+        ranges.sort_by_key(|(range, _)| range.start);
+
+        Self { ranges }
+    }
+
+    /// Query the effective pragma state for a source position.
+    #[must_use]
+    pub fn query(&self, query: PragmaQuery) -> PragmaSnapshot {
+        let idx = self.ranges.partition_point(|(range, _)| range.start <= query.offset);
+
+        let mut state =
+            if idx > 0 { self.ranges[idx - 1].1.clone() } else { PragmaState::default() };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        PragmaSnapshot::from_state(state)
+    }
+
+    /// Convenience for directly querying by byte offset.
+    #[must_use]
+    pub fn snapshot_at(&self, offset: usize) -> PragmaSnapshot {
+        self.query(PragmaQuery::at_offset(offset))
+    }
+
+    /// Borrow the internal range transitions used by the query engine.
+    #[must_use]
+    pub fn ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.ranges
+    }
+
+    /// Consume the environment and return underlying range transitions.
+    #[must_use]
+    pub fn into_ranges(self) -> Vec<(Range<usize>, PragmaState)> {
+        self.ranges
+    }
+}
+
 impl PragmaState {
     /// Create a new pragma state with all strict modes enabled
     pub fn all_strict() -> Self {
@@ -419,16 +531,7 @@ pub struct PragmaTracker;
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
-        let mut ranges = Vec::new();
-        let mut current_state = PragmaState::default();
-
-        // Build the pragma map by walking the AST
-        Self::build_ranges(ast, &mut current_state, &mut ranges);
-
-        // Sort by start offset
-        ranges.sort_by_key(|(range, _)| range.start);
-
-        ranges
+        PragmaEnvironment::build(ast).into_ranges()
     }
 
     /// Get the pragma state at a specific byte offset
@@ -436,22 +539,7 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        // Find the last pragma state that starts before this offset.
-        // pragma_map is sorted by start offset (guaranteed by build()).
-        // We use partition_point to find the first element where start > offset,
-        // then take the element before it.
-        let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
-
-        let mut state =
-            if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
-
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
-        }
-
-        state
+        PragmaEnvironment { ranges: pragma_map.to_vec() }.snapshot_at(offset).into_state()
     }
 
     /// Process a lexically scoped body and then restore the caller state.

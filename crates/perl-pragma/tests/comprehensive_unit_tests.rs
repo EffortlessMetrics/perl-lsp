@@ -5,7 +5,10 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaEnvironment, PragmaQuery, PragmaState, PragmaTracker,
+    features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1453,6 +1456,56 @@ fn eval_string_is_conservative_and_does_not_enable_pragmas()
     assert!(!state.strict_subs, "eval STRING must not assume strict is enabled");
     assert!(!state.strict_refs, "eval STRING must not assume strict is enabled");
     assert!(!state.warnings, "eval STRING must not assume warnings are enabled");
+    Ok(())
+}
+
+#[test]
+fn environment_query_inner_no_strict_does_not_leak() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        dummy_node(41, 48),
+    ]);
+    let env = PragmaEnvironment::build(&ast);
+
+    let inside = env.query(PragmaQuery::at_offset(28));
+    assert_eq!(inside.strict(), (true, true, false));
+
+    let outside = env.snapshot_at(44);
+    assert_eq!(outside.strict(), (true, true, true));
+    Ok(())
+}
+
+#[test]
+fn environment_query_eval_block_restores_outer_state() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("warnings", &[], 0, 14),
+        eval_node(block(vec![no_node("warnings", &[], 22, 35)], 20, 37), 18, 39),
+        dummy_node(40, 47),
+    ]);
+    let env = PragmaEnvironment::build(&ast);
+
+    let inside_eval = env.snapshot_at(30);
+    assert!(!inside_eval.warnings());
+
+    let after_eval = env.snapshot_at(45);
+    assert!(after_eval.warnings());
+    Ok(())
+}
+
+#[test]
+fn environment_query_string_eval_does_not_change_outer_static_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        eval_node(string_node("use warnings; no strict 'refs';", false, 13, 43), 13, 43),
+        dummy_node(44, 50),
+    ]);
+    let env = PragmaEnvironment::build(&ast);
+
+    let after_eval_string = env.snapshot_at(48);
+    assert_eq!(after_eval_string.strict(), (true, true, true));
+    assert!(!after_eval_string.warnings());
     Ok(())
 }
 

@@ -12,10 +12,14 @@ in the source.
 ## Public API
 
 - **`PragmaState`** -- tracks `strict_vars`, `strict_subs`, `strict_refs`,
-  and `warnings` booleans. Provides `all_strict()` and `Default`.
+  `warnings`, and tracked feature/builtin state. Provides helper query methods.
+- **`PragmaEnvironment`** -- immutable compile-time environment with
+  `query(PragmaQuery)` / `snapshot_at(offset)` APIs for position-based state
+  lookup.
+- **`PragmaSnapshot`** -- immutable per-position snapshot exposing strict,
+  warnings, and feature checks for downstream diagnostics/semantic consumers.
 - **`PragmaTracker`** -- walks an AST via `build()` to produce a sorted
-  `Vec<(Range<usize>, PragmaState)>`, and offers `state_for_offset()` to
-  query it.
+  `Vec<(Range<usize>, PragmaState)>` for compatibility with existing callers.
 
 ## Workspace Role
 
