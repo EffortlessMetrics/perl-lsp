@@ -16,3 +16,15 @@
 
 /// Re-exported AST node types used during Parse/Index/Analyze stages.
 pub use perl_ast::ast::*;
+
+/// Walk an AST in pre-order (node before descendants).
+///
+/// This traversal delegates child discovery to [`Node::for_each_child`], which is
+/// the canonical source of truth for child-bearing [`NodeKind`] variants.
+pub fn walk_preorder<F>(node: &Node, f: &mut F)
+where
+    F: FnMut(&Node),
+{
+    f(node);
+    node.for_each_child(|child| walk_preorder(child, f));
+}

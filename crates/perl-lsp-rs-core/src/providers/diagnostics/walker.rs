@@ -3,7 +3,7 @@
 //! This module provides a generic AST walker function for traversing
 //! Perl AST nodes and applying diagnostic checks.
 
-use perl_parser_core::ast::{Node, NodeKind};
+use perl_parser_core::ast::{Node, walk_preorder};
 
 /// Walk the AST and call a function for each node
 ///
@@ -14,132 +14,60 @@ pub fn walk_node<F>(node: &Node, func: &mut F)
 where
     F: FnMut(&Node),
 {
-    func(node);
+    walk_preorder(node, func);
+}
 
-    // Visit children based on node kind
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                walk_node(stmt, func);
+#[cfg(test)]
+mod tests {
+    use super::walk_node;
+    use perl_parser::Parser;
+    use perl_parser_core::NodeKind;
+
+    #[test]
+    fn traversal_visits_statement_and_condition_for_all_statement_modifiers() {
+        let source = r#"
+print "ok" if $x = 5;
+print "ok" unless $x = 5;
+print "ok" while $x = 5;
+print "ok" until $x = 5;
+print "ok" for @items;
+print "ok" foreach @items;
+print "ok" if ($x = 5) unless ($y = 7);
+"#;
+
+        let ast = Parser::new(source).parse_with_recovery().ast;
+
+        let mut print_calls = 0usize;
+        let mut seen_modifiers = std::collections::BTreeSet::new();
+        let mut visited = std::collections::BTreeSet::new();
+        let mut expected_statement_nodes = std::collections::BTreeSet::new();
+        let mut expected_condition_nodes = std::collections::BTreeSet::new();
+
+        walk_node(&ast, &mut |node| match &node.kind {
+            NodeKind::FunctionCall { name, .. } if name == "print" => {
+                print_calls += 1;
+                visited.insert(node as *const _ as usize);
             }
-        }
-        NodeKind::Block { statements } => {
-            for stmt in statements {
-                walk_node(stmt, func);
+            NodeKind::StatementModifier { modifier, statement, condition } => {
+                seen_modifiers.insert(modifier.clone());
+                expected_statement_nodes.insert(statement.as_ref() as *const _ as usize);
+                expected_condition_nodes.insert(condition.as_ref() as *const _ as usize);
+                visited.insert(node as *const _ as usize);
             }
-        }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-            walk_node(condition, func);
-            walk_node(then_branch, func);
-            for (cond, branch) in elsif_branches {
-                walk_node(cond, func);
-                walk_node(branch, func);
+            _ => {
+                visited.insert(node as *const _ as usize);
             }
-            if let Some(branch) = else_branch {
-                walk_node(branch, func);
-            }
-        }
-        NodeKind::While { condition, body, .. } => {
-            walk_node(condition, func);
-            walk_node(body, func);
-        }
-        NodeKind::Binary { left, right, .. } => {
-            walk_node(left, func);
-            walk_node(right, func);
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::IndirectCall { object, args, .. } => {
-            walk_node(object, func);
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::ExpressionStatement { expression } => {
-            walk_node(expression, func);
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            walk_node(lhs, func);
-            walk_node(rhs, func);
-        }
-        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
-            walk_node(init, func);
-        }
-        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
-            walk_node(init, func);
-        }
-        NodeKind::PhaseBlock { block, .. } => {
-            walk_node(block, func);
-        }
-        NodeKind::Eval { block } | NodeKind::Defer { block } => {
-            walk_node(block, func);
-        }
-        NodeKind::Class { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
-            walk_node(body, func);
-            for (_, catch_body) in catch_blocks {
-                walk_node(catch_body, func);
-            }
-            if let Some(finally) = finally_block {
-                walk_node(finally, func);
-            }
-        }
-        NodeKind::Given { expr, body } => {
-            walk_node(expr, func);
-            walk_node(body, func);
-        }
-        NodeKind::When { condition, body } => {
-            walk_node(condition, func);
-            walk_node(body, func);
-        }
-        NodeKind::Default { body } => {
-            walk_node(body, func);
-        }
-        NodeKind::Unary { operand, .. } => {
-            walk_node(operand, func);
-        }
-        NodeKind::Package { block: Some(blk), .. } => {
-            walk_node(blk, func);
-        }
-        NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::MethodCall { object, args, .. } => {
-            walk_node(object, func);
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
-            walk_node(condition, func);
-            walk_node(then_expr, func);
-            walk_node(else_expr, func);
-        }
-        NodeKind::Return { value: Some(v) } => {
-            walk_node(v, func);
-        }
-        NodeKind::LabeledStatement { statement, .. } => {
-            walk_node(statement, func);
-        }
-        NodeKind::HashLiteral { pairs } => {
-            for (key, value) in pairs {
-                walk_node(key, func);
-                walk_node(value, func);
-            }
-        }
-        NodeKind::ArrayLiteral { elements } => {
-            for elem in elements {
-                walk_node(elem, func);
-            }
-        }
-        _ => {} // Other nodes don't have children or are handled differently
+        });
+
+        assert_eq!(print_calls, 7, "expected every statement subtree to be traversed");
+        assert!(expected_statement_nodes.is_subset(&visited));
+        assert!(expected_condition_nodes.is_subset(&visited));
+        assert_eq!(
+            seen_modifiers,
+            ["for", "foreach", "if", "unless", "until", "while"]
+                .into_iter()
+                .map(std::string::ToString::to_string)
+                .collect()
+        );
     }
 }
