@@ -25,6 +25,18 @@ assert_eq!(var.sigil(), Some("$"));
 assert_eq!(SymbolKind::Subroutine.to_lsp_kind(), 12);
 ```
 
+## Benchmarks
+
+Run the crate's benchmark suite with:
+
+```bash
+cargo bench -p perl-symbol
+```
+
+The suite includes stable benchmark surfaces for cursor extraction, symbol
+range lookup, UTF-16 token-under-cursor, symbol indexing, and declaration
+surface extraction.
+
 ## History
 
 This crate consolidates four former microcrates (`perl-symbol-types`,
