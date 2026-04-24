@@ -6,7 +6,7 @@
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Which OO framework a package uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,6 +172,26 @@ impl MethodInfo {
     }
 }
 
+/// Exported symbol with same-package subroutine resolution status.
+#[derive(Debug, Clone)]
+pub struct ExportedSymbol {
+    /// Symbol name as declared in exporter arrays/tags.
+    pub name: String,
+    /// Source location of the matching same-package subroutine, if any.
+    pub subroutine: Option<SourceLocation>,
+}
+
+/// Per-package Exporter metadata extracted from static declarations.
+#[derive(Debug, Clone, Default)]
+pub struct ExporterMetadata {
+    /// `@EXPORT` entries mapped to same-package subroutines when available.
+    pub export: Vec<ExportedSymbol>,
+    /// `@EXPORT_OK` entries mapped to same-package subroutines when available.
+    pub export_ok: Vec<ExportedSymbol>,
+    /// `%EXPORT_TAGS` entries mapped to same-package subroutines when available.
+    pub export_tags: BTreeMap<String, Vec<ExportedSymbol>>,
+}
+
 /// Structured model of a Perl OOP class or role.
 #[derive(Debug, Clone)]
 pub struct ClassModel {
@@ -199,6 +219,8 @@ pub struct ClassModel {
     pub exports: Vec<String>,
     /// Names available for explicit import via `@EXPORT_OK`
     pub export_ok: Vec<String>,
+    /// Per-file metadata for straightforward Exporter declarations.
+    pub exporter_metadata: Option<ExporterMetadata>,
 }
 
 impl ClassModel {
@@ -228,6 +250,8 @@ pub struct ClassModelBuilder {
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
     current_export_ok: Vec<String>,
+    current_export_tags: BTreeMap<String, Vec<String>>,
+    current_uses_exporter: bool,
     current_package_aliases: HashSet<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
@@ -256,6 +280,8 @@ impl ClassModelBuilder {
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
             current_export_ok: Vec::new(),
+            current_export_tags: BTreeMap::new(),
+            current_uses_exporter: false,
             current_package_aliases: HashSet::new(),
             framework_map: HashMap::new(),
         }
@@ -278,8 +304,10 @@ impl ClassModelBuilder {
             || !self.current_parents.is_empty()
             || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
-            || !self.current_export_ok.is_empty();
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
         if has_oo_indicator {
+            let exporter_metadata = self.build_exporter_metadata();
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
@@ -293,6 +321,7 @@ impl ClassModelBuilder {
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
                 export_ok: std::mem::take(&mut self.current_export_ok),
+                exporter_metadata,
             };
             self.models.push(model);
             self.current_package_aliases.clear();
@@ -308,8 +337,10 @@ impl ClassModelBuilder {
             self.current_modifiers.clear();
             self.current_exports.clear();
             self.current_export_ok.clear();
+            self.current_export_tags.clear();
             self.current_package_aliases.clear();
         }
+        self.current_uses_exporter = false;
     }
 
     fn visit_node(&mut self, node: &Node) {
@@ -326,6 +357,7 @@ impl ClassModelBuilder {
                 self.current_framework =
                     self.framework_map.get(name).copied().unwrap_or(Framework::None);
                 self.current_mro = MethodResolutionOrder::Dfs;
+                self.current_uses_exporter = false;
 
                 if let Some(block) = block {
                     self.visit_node(block);
@@ -345,6 +377,9 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
+                if module == "Exporter" {
+                    self.current_uses_exporter = true;
+                }
             }
 
             NodeKind::No { module, .. } if module == "mro" => {
@@ -375,23 +410,38 @@ impl ClassModelBuilder {
                             _ => {}
                         }
                     }
+                    if sigil == "%"
+                        && name == "EXPORT_TAGS"
+                        && let Some(init) = initializer
+                    {
+                        for (tag, symbols) in collect_export_tag_entries(init) {
+                            self.current_export_tags.insert(tag, symbols);
+                        }
+                    }
                 }
             }
 
             // `@ISA = qw(...);` / `@EXPORT = qw(...);` / `@EXPORT_OK = qw(...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
                 if let NodeKind::Variable { sigil, name } = &lhs.kind
-                    && sigil == "@"
                 {
-                    match name.as_str() {
-                        "ISA" => self.extract_isa_from_node(rhs),
-                        "EXPORT" => {
-                            self.current_exports.extend(collect_symbol_names(rhs));
+                    if sigil == "@" {
+                        match name.as_str() {
+                            "ISA" => self.extract_isa_from_node(rhs),
+                            "EXPORT" => {
+                                self.current_exports.extend(collect_symbol_names(rhs));
+                            }
+                            "EXPORT_OK" => {
+                                self.current_export_ok.extend(collect_symbol_names(rhs));
+                            }
+                            _ => {}
                         }
-                        "EXPORT_OK" => {
-                            self.current_export_ok.extend(collect_symbol_names(rhs));
+                    } else if sigil == "%"
+                        && name == "EXPORT_TAGS"
+                    {
+                        for (tag, symbols) in collect_export_tag_entries(rhs) {
+                            self.current_export_tags.insert(tag, symbols);
                         }
-                        _ => {}
                     }
                 }
             }
@@ -1149,6 +1199,34 @@ impl ClassModelBuilder {
             _ => "expr".to_string(),
         }
     }
+
+    fn build_exporter_metadata(&mut self) -> Option<ExporterMetadata> {
+        let has_export_declarations = !self.current_exports.is_empty()
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
+        let inferred_exporter = self.current_uses_exporter
+            || self.current_parents.iter().any(|parent| parent == "Exporter")
+            || has_export_declarations;
+        if !inferred_exporter {
+            self.current_export_tags.clear();
+            return None;
+        }
+
+        let methods_by_name: HashMap<&str, SourceLocation> = self
+            .current_methods
+            .iter()
+            .map(|method| (method.name.as_str(), method.location))
+            .collect();
+
+        let export = resolve_exported_symbols(&self.current_exports, &methods_by_name);
+        let export_ok = resolve_exported_symbols(&self.current_export_ok, &methods_by_name);
+        let mut export_tags = BTreeMap::new();
+        for (tag, symbols) in std::mem::take(&mut self.current_export_tags) {
+            export_tags.insert(tag, resolve_exported_symbols(&symbols, &methods_by_name));
+        }
+
+        Some(ExporterMetadata { export, export_ok, export_tags })
+    }
 }
 
 // ---- Helper functions (parallel to SymbolExtractor's private helpers) ----
@@ -1162,6 +1240,34 @@ fn collect_symbol_names(node: &Node) -> Vec<String> {
         }
         _ => Vec::new(),
     }
+}
+
+fn collect_export_tag_entries(node: &Node) -> Vec<(String, Vec<String>)> {
+    let NodeKind::HashLiteral { pairs } = &node.kind else { return Vec::new() };
+    let mut tags = Vec::new();
+    for (key, value) in pairs {
+        let Some(tag_name) = collect_symbol_names(key).into_iter().next() else { continue };
+        let symbols = collect_symbol_names(value);
+        if symbols.is_empty() {
+            continue;
+        }
+        tags.push((tag_name, symbols));
+    }
+    tags
+}
+
+fn resolve_exported_symbols(
+    symbols: &[String],
+    methods_by_name: &HashMap<&str, SourceLocation>,
+) -> Vec<ExportedSymbol> {
+    symbols
+        .iter()
+        .map(|name| {
+            let bare_name = name.strip_prefix('&').unwrap_or(name.as_str());
+            let subroutine = methods_by_name.get(bare_name).copied();
+            ExportedSymbol { name: name.clone(), subroutine }
+        })
+        .collect()
 }
 
 fn collect_accessor_names(node: &Node) -> Vec<String> {
@@ -2050,16 +2156,25 @@ has 'level' => (is => 'ro');
 
     #[test]
     fn export_array_captured() {
-        let code = "package MyUtils;\nour @EXPORT = qw(foo bar);\nour @EXPORT_OK = qw(baz);\nsub foo {}\nsub bar {}\nsub baz {}\n1;";
+        let code = "package MyUtils;\nuse Exporter 'import';\nour @EXPORT = qw(foo bar);\nour @EXPORT_OK = qw(baz);\nsub foo {}\nsub bar {}\nsub baz {}\n1;";
         let models = build_models(code);
         let model = find_model(&models, "MyUtils").expect("MyUtils model");
         assert_eq!(model.exports, vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(model.export_ok, vec!["baz".to_string()]);
+        let metadata = model.exporter_metadata.as_ref().expect("export metadata");
+        assert!(
+            metadata.export.iter().all(|entry| entry.subroutine.is_some()),
+            "all @EXPORT entries should resolve to same-package subs"
+        );
+        assert!(
+            metadata.export_ok.iter().all(|entry| entry.subroutine.is_some()),
+            "all @EXPORT_OK entries should resolve to same-package subs"
+        );
     }
 
     #[test]
     fn export_non_oo_package_produces_model() {
-        let code = "package MyUtils;\nour @EXPORT = qw(helper);\nsub helper { 1 }\n1;";
+        let code = "package MyUtils;\nuse Exporter 'import';\nour @EXPORT = qw(helper);\nsub helper { 1 }\n1;";
         let models = build_models(code);
         assert!(
             find_model(&models, "MyUtils").is_some(),
@@ -2069,19 +2184,65 @@ has 'level' => (is => 'ro');
 
     #[test]
     fn export_ok_assignment_without_our() {
-        let code = "package MyLib;\n@EXPORT_OK = qw(util_a util_b);\n1;";
+        let code = "package MyLib;\nuse parent 'Exporter';\n@EXPORT_OK = qw(util_a util_b);\nsub util_a {}\nsub util_b {}\n1;";
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.export_ok, vec!["util_a".to_string(), "util_b".to_string()]);
+        let metadata = model.exporter_metadata.as_ref().expect("export metadata");
+        assert!(
+            metadata.export_ok.iter().all(|entry| entry.subroutine.is_some()),
+            "@EXPORT_OK entries should resolve when subroutines exist"
+        );
     }
 
     #[test]
     fn export_assignment_without_our() {
         // Symmetric to export_ok_assignment_without_our: bare `@EXPORT = qw(...)` form.
-        let code = "package MyLib;\n@EXPORT = qw(func_a func_b);\n1;";
+        let code =
+            "package MyLib;\nuse Exporter 'import';\n@EXPORT = qw(func_a func_b);\nsub func_a {}\nsub func_b {}\n1;";
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
+    #[test]
+    fn export_tags_are_captured_from_static_hash_literal() {
+        let code = r#"
+package Tagged;
+use Exporter 'import';
+our %EXPORT_TAGS = (
+    colors => [qw(red green)],
+    misc => ['rgb'],
+);
+sub red {}
+sub green {}
+sub rgb {}
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "Tagged").expect("Tagged model");
+        let metadata = model.exporter_metadata.as_ref().expect("export metadata");
+        let colors = metadata.export_tags.get("colors").expect("colors tag");
+        assert_eq!(colors.len(), 2);
+        assert!(colors.iter().all(|entry| entry.subroutine.is_some()));
+        let misc = metadata.export_tags.get("misc").expect("misc tag");
+        assert_eq!(misc.len(), 1);
+        assert_eq!(misc[0].name, "rgb");
+        assert!(misc[0].subroutine.is_some());
+    }
+
+    #[test]
+    fn missing_export_definition_is_unresolved_without_panicking() {
+        let code = "package Missing;\nuse Exporter 'import';\nour @EXPORT_OK = qw(found missing);\nsub found {}\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "Missing").expect("Missing model");
+        let metadata = model.exporter_metadata.as_ref().expect("export metadata");
+        let missing = metadata
+            .export_ok
+            .iter()
+            .find(|entry| entry.name == "missing")
+            .expect("missing export entry");
+        assert!(missing.subroutine.is_none());
     }
 
     // ---- Gap 2: push @ISA ----
