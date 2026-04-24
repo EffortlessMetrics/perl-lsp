@@ -59,6 +59,8 @@ pub use refactor::inline;
 pub use refactor::modernize;
 /// Enhanced code modernization with refactoring capabilities.
 pub use refactor::modernize_refactored;
+/// Module-move import rewrite helpers.
+pub use refactor::module_move_imports;
 pub use refactor::refactoring;
 #[cfg(not(target_arch = "wasm32"))]
 pub use refactor::workspace_refactor;
