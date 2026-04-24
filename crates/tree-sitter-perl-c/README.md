@@ -85,7 +85,36 @@ for snippet in &["my $x = 1;", "print $x;"] {
 ## Binaries
 
 - `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
-- `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
+- `bench_parser_c` — benchmark parse timing (requires `--features test-utils`)
+
+### `bench_parser_c` usage
+
+```bash
+cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- path/to/file.pl
+```
+
+Default behavior is a single **cold** parse (`mode=cold`, `iterations=1`, `input=str`).
+
+Options:
+
+- `--mode cold|warm`:
+  - `cold` = create/configure a parser for each iteration
+  - `warm` = reuse one configured parser across all iterations
+- `--iterations N` (or `-n N`) = run N parses
+- `--input str|bytes`:
+  - `str` = decode file as UTF-8 and parse as `&str`
+  - `bytes` = parse raw bytes directly
+
+Output format is stable `key=value` lines:
+
+```text
+mode=warm
+input=bytes
+iterations=100
+total_us=12345
+avg_us=123
+has_error=false
+```
 
 ## Build Requirements
 

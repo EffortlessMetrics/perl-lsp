@@ -33,6 +33,8 @@ Breaking changes will follow semver.
 
 - Periodic snapshot updates when upstream tree-sitter-perl releases new grammar versions.
 - Keep `tree-sitter` runtime dependency in sync with the workspace.
+- Keep `bench_parser_c` useful as a baseline tool (cold vs. warm parser reuse modes,
+  iteration loops, stable machine-readable output for run-to-run diffs).
 
 ### Not planned
 
@@ -46,4 +48,4 @@ Breaking changes will follow semver.
 
 [tree-sitter-perl]: https://github.com/tree-sitter-perl/tree-sitter-perl
 
-<!-- Last Updated: 2026-04-07 -->
+<!-- Last Updated: 2026-04-24 -->
