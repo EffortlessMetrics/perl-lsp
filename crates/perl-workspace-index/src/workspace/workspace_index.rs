@@ -937,6 +937,30 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+/// Stable symbol identity anchored to its definition location.
+pub struct StableSymbolIdentity {
+    /// Normalized symbol key used by cross-file query APIs.
+    pub key: SymbolKey,
+    /// Definition file URI for deterministic symbol identity.
+    pub definition_uri: Arc<str>,
+    /// Definition start line (0-based).
+    pub definition_line: u32,
+    /// Definition start character (0-based, UTF-16 code units).
+    pub definition_column: u32,
+}
+
+#[derive(Debug, Clone)]
+/// Deterministic cross-file symbol query result.
+pub struct CrossFileSymbolQuery {
+    /// Stable identity for downstream refactoring operations.
+    pub identity: StableSymbolIdentity,
+    /// Symbol definition location.
+    pub definition: Location,
+    /// Symbol reference locations across files (definition excluded).
+    pub references: Vec<Location>,
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -2687,6 +2711,99 @@ impl WorkspaceIndex {
         });
 
         all_refs
+    }
+
+    fn sort_locations_deterministic(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+                .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+        });
+    }
+
+    fn symbol_key_from_workspace_symbol(symbol: &WorkspaceSymbol) -> SymbolKey {
+        match symbol.kind {
+            SymbolKind::Variable(_) => {
+                let (sigil, bare_name) = normalize_var(&symbol.name);
+                let package = symbol.container_name.as_deref().unwrap_or("main");
+                SymbolKey {
+                    pkg: Arc::from(package),
+                    name: Arc::from(bare_name),
+                    sigil,
+                    kind: SymKind::Var,
+                }
+            }
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role => {
+                let package_name = symbol.qualified_name.as_deref().unwrap_or(symbol.name.as_str());
+                SymbolKey {
+                    pkg: Arc::from(package_name),
+                    name: Arc::from(symbol.name.as_str()),
+                    sigil: None,
+                    kind: SymKind::Pack,
+                }
+            }
+            _ => {
+                let qualified_name =
+                    symbol.qualified_name.as_deref().unwrap_or(symbol.name.as_str());
+                let (package, bare_name) =
+                    qualified_name.rsplit_once("::").unwrap_or(("main", symbol.name.as_str()));
+                SymbolKey {
+                    pkg: Arc::from(package),
+                    name: Arc::from(bare_name),
+                    sigil: None,
+                    kind: SymKind::Sub,
+                }
+            }
+        }
+    }
+
+    /// Resolve a stable symbol key for a symbol name from indexed workspace symbols.
+    ///
+    /// Returns `None` when the symbol does not exist in the current workspace index.
+    pub fn symbol_key_for(&self, symbol_name: &str) -> Option<SymbolKey> {
+        let definition = self.find_definition(symbol_name)?;
+        let files = self.files.read();
+        files.values().find_map(|file_index| {
+            file_index
+                .symbols
+                .iter()
+                .find(|symbol| {
+                    symbol.uri == definition.uri
+                        && symbol.range == definition.range
+                        && (symbol.name == symbol_name
+                            || symbol.qualified_name.as_deref() == Some(symbol_name))
+                })
+                .map(Self::symbol_key_from_workspace_symbol)
+        })
+    }
+
+    /// Query definition + cross-file references with deterministic ordering.
+    ///
+    /// Returns `None` when the requested symbol is not indexed.
+    pub fn query_symbol_across_files(&self, symbol_name: &str) -> Option<CrossFileSymbolQuery> {
+        let definition = self.find_definition(symbol_name)?;
+        let key = self.symbol_key_for(symbol_name)?;
+        let mut references = self.find_refs(&key);
+        Self::sort_locations_deterministic(&mut references);
+        references.dedup_by(|left, right| {
+            left.uri == right.uri
+                && left.range.start == right.range.start
+                && left.range.end == right.range.end
+        });
+
+        Some(CrossFileSymbolQuery {
+            identity: StableSymbolIdentity {
+                key,
+                definition_uri: Arc::from(definition.uri.as_str()),
+                definition_line: definition.range.start.line,
+                definition_column: definition.range.start.column,
+            },
+            definition,
+            references,
+        })
     }
 }
 
