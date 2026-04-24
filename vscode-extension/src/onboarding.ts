@@ -391,14 +391,23 @@ function defaultExecCheck(
 ): Promise<{ stdout: string; stderr: string }> {
   const initialInvocation = { command: cmd, args };
   return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
-    const fallbackInvocation = await resolveWindowsInvocationFallback(
+    const windowsFallback = await resolveWindowsInvocationFallback(
       initialInvocation,
       err,
     );
-    if (!fallbackInvocation) {
-      throw err;
+    if (windowsFallback) {
+      return runExecInvocation(windowsFallback);
     }
-    return runExecInvocation(fallbackInvocation);
+
+    const unixShellFallback = resolveUnixShellInvocationFallback(
+      initialInvocation,
+      err,
+    );
+    if (unixShellFallback) {
+      return runExecInvocation(unixShellFallback);
+    }
+
+    throw err;
   });
 }
 
@@ -461,6 +470,40 @@ function resolveWindowsCommandCandidate(command: string): Promise<string | null>
       resolve(selectWindowsCommandCandidate(stdout));
     });
   });
+}
+
+export function resolveUnixShellInvocationFallback(
+  invocation: ExecInvocation,
+  err: unknown,
+): ExecInvocation | null {
+  if (
+    process.platform === 'win32' ||
+    !isSpawnNotFound(err) ||
+    invocation.command.includes('/') ||
+    invocation.command.includes('\\')
+  ) {
+    return null;
+  }
+
+  const shell = process.env.SHELL?.trim();
+  if (!shell) {
+    return null;
+  }
+
+  return {
+    command: shell,
+    // Warp and other terminals often expose PATH/tooling via shell startup
+    // scripts; using login-shell exec improves compatibility for health checks.
+    args: ['-lc', toPosixShellCommand(invocation.command, invocation.args)],
+  };
+}
+
+export function toPosixShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(escapePosixShellArg).join(' ');
+}
+
+function escapePosixShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export function selectWindowsCommandCandidate(stdout: string): string | null {
