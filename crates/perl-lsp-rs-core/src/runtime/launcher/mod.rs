@@ -862,6 +862,40 @@ mod tests {
     }
 
     #[test]
+    fn mcp_alias_documented_consistently_across_surfaces() {
+        // Help text, every shell completion, and the CLI parser must all
+        // advertise --mcp. If any surface is forgotten when a future rename
+        // lands, this test catches it before users hit broken tab-completion
+        // or stale docs.
+        let help = super::help_text();
+        assert!(help.contains("--mcp"), "help_text is missing --mcp: {help}");
+        assert!(
+            help.contains("perl-lsp --mcp"),
+            "help_text examples are missing a --mcp invocation: {help}"
+        );
+
+        // Fish uses `-l mcp` (long-option form without double-dashes);
+        // other shells embed `--mcp` literally. Pick the right token per shell.
+        for (shell, needle) in [
+            ("bash", "--mcp"),
+            ("zsh", "--mcp"),
+            ("fish", "-l mcp"),
+            ("powershell", "--mcp"),
+        ] {
+            let script = super::shell_completion(shell)
+                .unwrap_or_else(|| panic!("missing completion for {shell}"));
+            assert!(
+                script.contains(needle),
+                "{shell} completion is missing {needle}: {script}"
+            );
+        }
+
+        // Parser side: --mcp must still resolve to stdio (alias semantics).
+        let plan = must(parse_args(["perl-lsp", "--mcp"]));
+        assert_eq!(plan.config.transport, TransportMode::Stdio);
+    }
+
+    #[test]
     fn parse_socket_and_port_options() {
         let plan = must(parse_args(["perl-lsp", "--socket", "--port", "8123"]));
         assert_eq!(plan.config.transport, TransportMode::Socket { port: 8123 });
