@@ -617,6 +617,34 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            // Legacy/alternative catch shape used by Error.pm style code:
+            //   catch Exception::Type with { ... }
+            // We do not currently model the exception type in the AST, but we
+            // should consume the optional matcher clause so the following block
+            // parses cleanly instead of reporting expected_left_brace.
+            if self.peek_kind() != Some(TokenKind::LeftBrace) {
+                while let Some(kind) = self.peek_kind() {
+                    if kind == TokenKind::LeftBrace {
+                        break;
+                    }
+
+                    if kind == TokenKind::Identifier && self.tokens.peek()?.text.as_ref() == "with" {
+                        self.consume_token()?; // consume 'with'
+                        break;
+                    }
+
+                    match kind {
+                        TokenKind::Catch
+                        | TokenKind::Finally
+                        | TokenKind::Semicolon
+                        | TokenKind::RightBrace => break,
+                        _ => {
+                            self.consume_token()?;
+                        }
+                    }
+                }
+            }
+
             let block = self.parse_block()?;
             catch_blocks.push((var, block));
         }
