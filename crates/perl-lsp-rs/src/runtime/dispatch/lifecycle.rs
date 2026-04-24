@@ -147,6 +147,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -178,5 +179,45 @@ mod tests {
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    proptest! {
+        #[test]
+        fn fuzz_set_trace_dispatch_never_rejects_input(raw in proptest::option::of(".*")) {
+            let server = LspServer::new();
+
+            let params = raw.as_ref().map(|value| json!({ "value": value }));
+            let result = server.handle_set_trace_dispatch(params);
+
+            prop_assert!(result.is_ok());
+            let level = server.trace_level.lock().clone();
+            prop_assert!(matches!(level.as_str(), "off" | "messages" | "verbose"));
+        }
+
+        #[test]
+        fn fuzz_initialize_lifecycle_transitions(actions in prop::collection::vec(0u8..=2, 0..64)) {
+            let server = LspServer::new();
+
+            for action in actions {
+                match action {
+                    0 => {
+                        let _ = server.handle_initialize(None);
+                    }
+                    1 => {
+                        let _ = server.handle_initialized_dispatch();
+                    }
+                    _ => {
+                        server.auto_initialize_for_compat("textDocument/hover");
+                    }
+                }
+
+                if !server.initialize_requested.load(Ordering::Acquire) {
+                    prop_assert!(
+                        !server.is_initialized(),
+                        "server cannot be initialized before initialize request"
+                    );
+                }
+            }
+        }
     }
 }
