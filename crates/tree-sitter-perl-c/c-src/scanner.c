@@ -261,6 +261,85 @@ static void skip_whitespace(TSLexer *lexer) {
   }
 }
 
+static void skip_line_comment(TSLexer *lexer, int32_t *c) {
+  if (*c != '#') return;
+  while (!lexer->eof(lexer) && *c != '\n') {
+    lexer->advance(lexer, false);
+    *c = lexer->lookahead;
+  }
+}
+
+// POD-like handling for autoquoted lookahead:
+// - If we see "=<alpha>" at column 0, treat it as a POD block and skip until a
+//   line starting with "=cut" (optionally followed by horizontal whitespace).
+// - If there is no terminating "=cut", we treat this as consuming to EOF.
+// Returns true if a POD block was skipped.
+static bool skip_pod_like_block(TSLexer *lexer, int32_t *c, bool *consumed_non_pod_equals) {
+  if (*c != '=' || lexer->get_column(lexer) != 0) return false;
+
+  lexer->advance(lexer, false);
+  *c = lexer->lookahead;
+  if (!iswalpha(*c)) {
+    *consumed_non_pod_equals = true;
+    return false;
+  }
+
+  // consume rest of the POD opener line first
+  while (!lexer->eof(lexer) && *c != '\n') {
+    lexer->advance(lexer, false);
+    *c = lexer->lookahead;
+  }
+  if (*c == '\n') {
+    lexer->advance(lexer, false);
+    *c = lexer->lookahead;
+  }
+
+  while (!lexer->eof(lexer)) {
+    if (lexer->get_column(lexer) == 0 && *c == '=') {
+      static const char *cut_marker = "cut";
+      int marker_i = 0;
+      lexer->advance(lexer, false);
+      *c = lexer->lookahead;
+      while (marker_i < 3 && *c == cut_marker[marker_i]) {
+        marker_i++;
+        lexer->advance(lexer, false);
+        *c = lexer->lookahead;
+      }
+      if (marker_i == 3 && (*c == '\n' || *c == '\r' || *c == ' ' || *c == '\t')) {
+        while (!lexer->eof(lexer) && *c != '\n') {
+          lexer->advance(lexer, false);
+          *c = lexer->lookahead;
+        }
+        if (*c == '\n') {
+          lexer->advance(lexer, false);
+          *c = lexer->lookahead;
+        }
+        return true;
+      }
+      while (!lexer->eof(lexer) && *c != '\n') {
+        lexer->advance(lexer, false);
+        *c = lexer->lookahead;
+      }
+      if (*c == '\n') {
+        lexer->advance(lexer, false);
+        *c = lexer->lookahead;
+      }
+      continue;
+    }
+
+    while (!lexer->eof(lexer) && *c != '\n') {
+      lexer->advance(lexer, false);
+      *c = lexer->lookahead;
+    }
+    if (*c == '\n') {
+      lexer->advance(lexer, false);
+      *c = lexer->lookahead;
+    }
+  }
+
+  return true;
+}
+
 static void skip_ws_to_eol(TSLexer *lexer) {
   while (1) {
     int32_t c = lexer->lookahead;
@@ -621,7 +700,7 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
     return false;
   }
 
-  if (valid_symbols[TOKEN_POD]) {
+  if (valid_symbols[TOKEN_POD] && !valid_symbols[TOKEN_FAT_COMMA_AUTOQUOTED]) {
     int column = lexer->get_column(lexer);
     if (column == 0 && c == '=') {
       DEBUG("POD started...\n", 0);
@@ -917,19 +996,37 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
 
     // NOTE - TS is annoying about skipping chars after you've hit done
     // mark_end, so we have to do the regular advance so our token actually shows up
-    while (is_tsp_whitespace(c) || c == '#') {
+    bool consumed_non_pod_equals = false;
+    while (1) {
+      bool skipped_gap = false;
+      int32_t ws_start = c;
       while (is_tsp_whitespace(c)) ADVANCE_C;
-      // now we need to skip comments - we get in a funny way if we have a quotelike
-      // operator followed by a comment as the quote char
-      if (c == '#') {
-        ADVANCE_C;
-        while (lexer->get_column(lexer)) ADVANCE_C;
-      }
+      if (ws_start != c) skipped_gap = true;
+      // we need to skip comments in this lookahead. this matters when a
+      // quote-like operator is followed by '#' as a delimiter/comment marker.
+      if (c == '#') skipped_gap = true;
+      skip_line_comment(lexer, &c);
       if (lexer->eof(lexer)) return false;
-      // TODO - in theory there could be POD here that we needa skip over (EYES ROLL)
+      // POD-like blocks can separate the identifier from the eventual operator.
+      // We intentionally treat them as ignorable gap text for this lookahead.
+      bool consumed_non_pod_equals_here = false;
+      if (skip_pod_like_block(lexer, &c, &consumed_non_pod_equals_here)) {
+        if (lexer->eof(lexer)) return false;
+        continue;
+      }
+      if (consumed_non_pod_equals_here) {
+        consumed_non_pod_equals = true;
+        break;
+      }
+      if (skipped_gap) continue;
+      break;
     }
-    c1 = lexer->lookahead;
-    ADVANCE_C;
+    if (consumed_non_pod_equals) {
+      c1 = '=';
+    } else {
+      c1 = lexer->lookahead;
+      ADVANCE_C;
+    }
     if (valid_symbols[TOKEN_FAT_COMMA_AUTOQUOTED]) {
       if (c1 == '=' && c == '>') TOKEN(TOKEN_FAT_COMMA_AUTOQUOTED);
     }
