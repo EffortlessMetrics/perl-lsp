@@ -448,6 +448,34 @@ fn test_bridge_adapter_multiple_instances() -> Result<()> {
     Ok(())
 }
 
+/// Test: proxy_messages requires an active bridge child process
+#[tokio::test]
+async fn test_bridge_proxy_messages_requires_spawn() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    let mut adapter = BridgeAdapter::new();
+    let err = match adapter.proxy_messages().await {
+        Ok(()) => anyhow::bail!("proxy_messages should fail when child process is not started"),
+        Err(err) => err,
+    };
+    assert!(
+        err.to_string().contains("Child process not spawned"),
+        "error should explain missing child process: {err}"
+    );
+    Ok(())
+}
+
+/// Test: bridge shutdown is safe and idempotent without a running child process
+#[tokio::test]
+async fn test_bridge_shutdown_without_spawn_is_idempotent() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    let mut adapter = BridgeAdapter::new();
+    adapter.shutdown().await?;
+    adapter.shutdown().await?;
+    Ok(())
+}
+
 /// Test: Empty environment variables are handled correctly
 #[tokio::test]
 async fn test_empty_environment_handling() -> Result<()> {

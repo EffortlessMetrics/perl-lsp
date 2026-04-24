@@ -16,7 +16,7 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::sync::mpsc::channel;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Test helper to create a valid TCP attach configuration
 fn create_valid_config() -> TcpAttachConfig {
@@ -277,4 +277,110 @@ fn test_tcp_attach_reader_handles_concatenated_frames() {
     }
 
     must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_reader_emits_stopped_event() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (mut socket, _) = must(listener.accept());
+        let stopped_event = serde_json::json!({
+            "type": "event",
+            "seq": 1,
+            "event": "stopped",
+            "body": {
+                "reason": "pause",
+                "threadId": 13
+            }
+        })
+        .to_string();
+
+        must(socket.write_all(&frame(stopped_event.as_bytes())));
+        must(socket.flush());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    let event = must(event_rx.recv_timeout(Duration::from_secs(2)));
+    match event {
+        DapEvent::Stopped { reason, thread_id } => {
+            assert_eq!(reason, "pause");
+            assert_eq!(thread_id, 13);
+        }
+        other => must(Err::<(), _>(format!("Expected Stopped event, got {other:?}"))),
+    }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_reader_emits_terminated_on_remote_close() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (_socket, _) = must(listener.accept());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    let terminated = must(event_rx.recv_timeout(Duration::from_secs(2)));
+    match terminated {
+        DapEvent::Terminated { reason } => assert_eq!(reason, "connection_closed"),
+        other => must(Err::<(), _>(format!("Expected Terminated event, got {other:?}"))),
+    }
+
+    assert!(!session.is_connected(), "Session should mark disconnected after EOF");
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_session_can_reconnect_after_remote_close() {
+    let listener1 = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port1 = must(listener1.local_addr()).port();
+    let server1 = thread::spawn(move || {
+        let (_socket, _) = must(listener1.accept());
+    });
+
+    let listener2 = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port2 = must(listener2.local_addr()).port();
+    let server2 = thread::spawn(move || {
+        let (_socket, _) = must(listener2.accept());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+
+    must(session.connect(&TcpAttachConfig::new("127.0.0.1".to_string(), port1).with_timeout(2000)));
+    must(session.start_reader());
+    let _ = must(event_rx.recv_timeout(Duration::from_secs(2)));
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while session.is_connected() && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!session.is_connected(), "Session should reset connected state after reader EOF");
+
+    must(session.connect(&TcpAttachConfig::new("127.0.0.1".to_string(), port2).with_timeout(2000)));
+    assert!(session.is_connected(), "Session should reconnect after a previous closure");
+    must(session.disconnect());
+    assert!(!session.is_connected(), "Disconnect should clear connected state");
+
+    must(server1.join().map_err(|_| "Server1 thread panicked".to_string()));
+    must(server2.join().map_err(|_| "Server2 thread panicked".to_string()));
 }

@@ -161,3 +161,110 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
     server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
     Ok(())
 }
+
+#[test]
+fn dap_attach_e2e_tcp_loopback_stop_on_entry() -> TestResult {
+    let listener = TcpListener::bind(("127.0.0.1", 0))?;
+    let port = listener.local_addr()?.port();
+
+    let server_handle = thread::spawn(move || {
+        let result = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
+            let (mut socket, _) = listener.accept()?;
+
+            let stopped_event = json!({
+                "type": "event",
+                "seq": 2,
+                "event": "stopped",
+                "body": {
+                    "reason": "step",
+                    "threadId": 99,
+                    "allThreadsStopped": true
+                }
+            })
+            .to_string();
+            socket.write_all(&frame(stopped_event.as_bytes()))?;
+            socket.flush()?;
+            Ok(())
+        })();
+
+        if let Err(err) = result {
+            panic!("fake TCP debugger server failed: {err}");
+        }
+    });
+
+    let timeout = smoke_timeout();
+    let mut adapter = DebugAdapter::new();
+    let (tx, rx) = channel();
+    adapter.set_event_sender(tx);
+
+    response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
+    let _initialized = wait_for_event(&rx, "initialized", timeout)?;
+
+    response_success(
+        adapter.handle_request(
+            2,
+            "attach",
+            Some(json!({
+                "host": "127.0.0.1",
+                "port": port,
+                "timeout": 2000,
+                "stopOnEntry": true
+            })),
+        ),
+        "attach",
+    )?;
+
+    let stopped_a = wait_for_event(&rx, "stopped", timeout)?;
+    let stopped_b = wait_for_event(&rx, "stopped", timeout)?;
+    let reasons = [
+        event_body(&stopped_a)
+            .and_then(|body| body.get("reason"))
+            .and_then(Value::as_str)
+            .ok_or("first stopped event missing reason")?,
+        event_body(&stopped_b)
+            .and_then(|body| body.get("reason"))
+            .and_then(Value::as_str)
+            .ok_or("second stopped event missing reason")?,
+    ];
+    assert!(reasons.contains(&"entry"), "one stopped event should be stopOnEntry");
+    assert!(reasons.contains(&"step"), "one stopped event should come from TCP debugger");
+
+    response_success(adapter.handle_request(3, "disconnect", Some(json!({}))), "disconnect")?;
+    let _terminated = wait_for_event(&rx, "terminated", timeout)?;
+
+    server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
+    Ok(())
+}
+
+#[test]
+fn dap_attach_e2e_tcp_timeout_error_includes_context() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
+
+    let attach = adapter.handle_request(
+        2,
+        "attach",
+        Some(json!({
+            "host": "203.0.113.1",
+            "port": 9,
+            "timeout": 50
+        })),
+    );
+
+    match attach {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "attach should fail for an unreachable target");
+            assert_eq!(command, "attach");
+            let details = message.ok_or("attach failure missing message")?;
+            assert!(
+                details.contains("Cannot attach to Perl debugger"),
+                "message should include attach failure context"
+            );
+            assert!(details.contains("50ms timeout"), "message should report timeout settings");
+            assert!(details.contains("203.0.113.1:9"), "message should include connection target");
+        }
+        _ => return Err("expected attach response".into()),
+    }
+
+    Ok(())
+}

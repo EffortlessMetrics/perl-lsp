@@ -151,9 +151,9 @@ impl TcpAttachSession {
     pub fn disconnect(&mut self) -> Result<()> {
         if let Some(stream) = self.stream.take() {
             stream.shutdown(std::net::Shutdown::Both)?;
-            *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
             tracing::info!("Disconnected from Perl debugger");
         }
+        *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
         Ok(())
     }
 
