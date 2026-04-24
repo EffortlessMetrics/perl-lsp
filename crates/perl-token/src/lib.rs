@@ -25,6 +25,16 @@
 //! assert_eq!(&*num.text, "42");
 //! ```
 //!
+//! Use a borrowed token view in allocation-sensitive paths:
+//!
+//! ```rust
+//! use perl_token::{Token, TokenKind, TokenRef};
+//!
+//! let borrowed = TokenRef::new(TokenKind::Identifier, "value", 0, 5);
+//! let owned: Token = borrowed.into();
+//! assert_eq!(owned.kind, TokenKind::Identifier);
+//! ```
+//!
 //! Use [`TokenKind::display_name`] for user-facing error messages:
 //!
 //! ```rust
@@ -47,6 +57,22 @@ pub struct Token {
     pub kind: TokenKind,
     /// Original source text for precise reconstruction
     pub text: Arc<str>,
+    /// Starting byte position for error reporting and location tracking
+    pub start: usize,
+    /// Ending byte position for span calculation and navigation
+    pub end: usize,
+}
+
+/// Borrowed token view for allocation-sensitive hot paths.
+///
+/// This mirrors [`Token`] but keeps token text as `&str`, avoiding any `Arc`
+/// allocation until ownership is explicitly requested.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenRef<'src> {
+    /// Token classification for parser decision making
+    pub kind: TokenKind,
+    /// Borrowed token text from source input
+    pub text: &'src str,
     /// Starting byte position for error reporting and location tracking
     pub start: usize,
     /// Ending byte position for span calculation and navigation
@@ -98,6 +124,59 @@ impl Token {
     /// ```
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Return token span as `(start, end)` byte offsets.
+    pub fn span(&self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return the human-readable token name for diagnostics.
+    pub fn display_name(&self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Return a borrowed token view that avoids additional allocation.
+    pub fn as_ref_token(&self) -> TokenRef<'_> {
+        TokenRef { kind: self.kind, text: self.text.as_ref(), start: self.start, end: self.end }
+    }
+}
+
+impl<'src> TokenRef<'src> {
+    /// Create a borrowed token view with the given kind, text, and byte span.
+    pub fn new(kind: TokenKind, text: &'src str, start: usize, end: usize) -> Self {
+        Self { kind, text, start, end }
+    }
+
+    /// Return the token span length in bytes.
+    pub fn len(&self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether the token span is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Return token span as `(start, end)` byte offsets.
+    pub fn span(&self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return the human-readable token name for diagnostics.
+    pub fn display_name(&self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Convert the borrowed token into an owned [`Token`].
+    pub fn to_owned_token(self) -> Token {
+        Token::new(self.kind, self.text, self.start, self.end)
+    }
+}
+
+impl From<TokenRef<'_>> for Token {
+    fn from(value: TokenRef<'_>) -> Self {
+        value.to_owned_token()
     }
 }
 
