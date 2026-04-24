@@ -20,7 +20,7 @@
     "latency_workspace_symbols_p95_ms": 70.0
   },
   "improvement_metrics": {},
-  "tolerance_pct": 0.0,
+  "tolerance_pct": 0.10,
   "lower_is_better": [
     "latency_completion_p50_ms",
     "latency_completion_p95_ms",

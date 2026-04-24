@@ -327,4 +327,139 @@ mod tests {
             assert_eq!(metrics.p95_ms, Some(40.0));
         }
     }
+
+    /// Verifies the full measurement→rows→latency pipeline produces consistent
+    /// values and that the artifact serialization round-trips without data loss.
+    #[test]
+    fn pipeline_round_trip_produces_correct_rows() {
+        let raw = vec![
+            ScenarioMeasurement {
+                scenario_id: "hover_test".to_string(),
+                hover_correct: Some(true),
+                completion_top1_correct: None,
+                completion_top5_correct: None,
+                definition_exact_hit: None,
+                symbol_correct: Some(true),
+                cross_file_success: None,
+                latency_ms_by_request: BTreeMap::from([
+                    ("hover".to_string(), vec![10, 20, 30]),
+                ]),
+            },
+            ScenarioMeasurement {
+                scenario_id: "completion_test".to_string(),
+                hover_correct: Some(false),
+                completion_top1_correct: Some(true),
+                completion_top5_correct: Some(true),
+                definition_exact_hit: None,
+                symbol_correct: Some(false),
+                cross_file_success: Some(true),
+                latency_ms_by_request: BTreeMap::from([
+                    ("completion".to_string(), vec![5, 15, 25]),
+                    ("hover".to_string(), vec![50, 60, 70]),
+                ]),
+            },
+        ];
+
+        // Correctness metrics via the ScenarioScore → aggregate path.
+        let scenarios = load_measurements(&raw);
+        let scorecard = aggregate_editor_ux_scorecard(&scenarios);
+
+        // hover_correct: true, false → 50%
+        assert_eq!(scorecard.hover_correctness_pct, Some(50.0));
+        // completion_top1: only scenario 2 measured → 100%
+        assert_eq!(scorecard.completion_top1_pct, Some(100.0));
+        // completion_top5: only scenario 2 measured → 100%
+        assert_eq!(scorecard.completion_top5_pct, Some(100.0));
+        // definition_exact_hit: neither scenario measured → None
+        assert_eq!(scorecard.definition_exact_hit_pct, None);
+        // cross_file_success: only scenario 2 measured → 100%
+        assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
+
+        // symbol_correct via the direct raw path.
+        let symbol_pct = percent_true(raw.iter().filter_map(|s| s.symbol_correct));
+        // true, false → 50%
+        assert_eq!(symbol_pct, Some(50.0));
+
+        // Latency via compute_latency_percentiles.
+        let latencies = compute_latency_percentiles(&raw);
+
+        // "hover" samples combined: [10, 20, 30, 50, 60, 70] sorted.
+        // p50: rank = (6-1)*0.50 = 2.5 → 3, samples[3]=50
+        // p95: rank = (6-1)*0.95 = 4.75 → 5, samples[5]=70
+        let hover_lat = latencies.get("hover").expect("hover latency present");
+        assert_eq!(hover_lat.p50_ms, Some(50.0));
+        assert_eq!(hover_lat.p95_ms, Some(70.0));
+
+        // "completion" samples: [5, 15, 25] sorted.
+        // p50: rank = (3-1)*0.50 = 1.0 → 1, samples[1]=15
+        // p95: rank = (3-1)*0.95 = 1.9 → 2, samples[2]=25
+        let comp_lat = latencies.get("completion").expect("completion latency present");
+        assert_eq!(comp_lat.p50_ms, Some(15.0));
+        assert_eq!(comp_lat.p95_ms, Some(25.0));
+
+        // Verify the artifact serialization round-trips: JSON → value → back.
+        let mut rows = BTreeMap::new();
+        rows.insert(
+            "hover_correctness_pct".to_string(),
+            PercentMetric { value: scorecard.hover_correctness_pct },
+        );
+        rows.insert("symbol_correctness_pct".to_string(), PercentMetric { value: symbol_pct });
+
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: scorecard.scenario_count,
+            rows,
+            latency_by_request_class: latencies,
+            provenance: serde_json::json!({"input": "fixture", "generator": "test"}),
+        };
+
+        let json_str = serde_json::to_string_pretty(&artifact)
+            .expect("artifact must serialize without error");
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json_str).expect("serialized artifact must parse back");
+
+        assert_eq!(parsed["schema_version"], 1);
+        assert_eq!(parsed["subsystem"], "editor_ux");
+        // PercentMetric serializes as {"value": <f64>}.
+        assert_eq!(
+            parsed["rows"]["hover_correctness_pct"]["value"],
+            serde_json::json!(50.0)
+        );
+        assert_eq!(
+            parsed["rows"]["symbol_correctness_pct"]["value"],
+            serde_json::json!(50.0)
+        );
+        // Latency is serialized nested under latency_by_request_class.
+        assert!(parsed["latency_by_request_class"]["hover"]["p50_ms"].is_number());
+        assert!(parsed["latency_by_request_class"]["completion"]["p95_ms"].is_number());
+    }
+
+    /// Ensures percent_true returns None when all metric observations are absent
+    /// (no scenario measured the metric at all).
+    #[test]
+    fn percent_true_returns_none_on_empty_iterator() {
+        let result = percent_true(std::iter::empty::<bool>());
+        assert_eq!(result, None);
+    }
+
+    /// Ensures a single-element latency vec produces identical p50 and p95.
+    #[test]
+    fn single_sample_latency_p50_equals_p95() {
+        let rows = vec![ScenarioMeasurement {
+            scenario_id: "single".to_string(),
+            hover_correct: None,
+            completion_top1_correct: None,
+            completion_top5_correct: None,
+            definition_exact_hit: None,
+            symbol_correct: None,
+            cross_file_success: None,
+            latency_ms_by_request: BTreeMap::from([("definition".to_string(), vec![42])]),
+        }];
+        let latency = compute_latency_percentiles(&rows);
+        let def = latency.get("definition").expect("definition present");
+        assert_eq!(def.p50_ms, Some(42.0));
+        assert_eq!(def.p95_ms, Some(42.0));
+    }
 }
