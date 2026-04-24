@@ -2130,6 +2130,63 @@ sub foo ($x) { $z = 1; }
 }
 
 #[test]
+fn signatures_with_lexical_no_strict_vars_still_flags_undeclared_in_signature_sub()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use feature 'signatures';
+{
+    no strict 'vars';
+    sub foo ($x) { $z = 1; }
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "z"),
+        "current downstream behavior: signatures strictness remains active even with lexical no strict 'vars'"
+    );
+    Ok(())
+}
+
+#[test]
+fn signatures_with_lexical_no_strict_subs_still_flags_barewords()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use feature 'signatures';
+{
+    no strict 'subs';
+    sub foo ($x) { print FOO; }
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "FOO"),
+        "current downstream behavior: signatures strictness remains active even with lexical no strict 'subs'"
+    );
+    Ok(())
+}
+
+#[test]
+fn eval_string_no_strict_does_not_disable_downstream_strict_vars_behavior()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+eval "no strict 'vars'";
+print $unknown_var;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "unknown_var"),
+        "eval STRING no strict should not disable strict-vars checks in downstream scope analysis"
+    );
+    Ok(())
+}
+
+#[test]
 fn signature_parameters_are_registered_as_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 sub add ($x, $y = 1, @rest) {
@@ -3916,7 +3973,7 @@ print func();
         issues.iter().any(|issue| {
             matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "func"
         }),
-        "require inside eval { } is runtime; should not suppress strict 'subs'"
+        "require inside eval {{ }} is runtime; should not suppress strict 'subs'"
     );
     Ok(())
 }

@@ -491,3 +491,77 @@ fn make_diagnostic_with_details(
         suggestion,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn version_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_version_compat(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn version_bundle_enables_say_without_pl900() {
+        let diags = version_diags("use v5.10;\nsay 'ok';\n");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL900")),
+            "use v5.10 bundle should enable say without PL900"
+        );
+    }
+
+    #[test]
+    fn explicit_feature_signatures_suppresses_signature_diagnostic_on_older_version() {
+        let diags = version_diags(
+            "use v5.20;\nuse feature 'signatures';\nsub greet ($name) { return $name; }\n",
+        );
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL900")),
+            "explicit feature signatures should suppress signature PL900 under use v5.20"
+        );
+    }
+
+    #[test]
+    fn lexical_no_feature_say_is_honored_inside_block_only() {
+        let diags = version_diags("use v5.40;\n{ no feature 'say'; say 'inner'; }\nsay 'outer';\n");
+        let say_diags: Vec<&Diagnostic> = diags
+            .iter()
+            .filter(|d| d.code.as_deref() == Some("PL900") && d.message.contains("'say'"))
+            .collect();
+        assert_eq!(say_diags.len(), 1, "lexical no feature say should affect only the inner block");
+    }
+
+    #[test]
+    fn builtin_named_import_suppresses_builtin_call_diagnostic() {
+        let diags = version_diags("use v5.36;\nuse builtin 'trim';\nbuiltin::trim('  x  ');\n");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL900")),
+            "named builtin import should suppress builtin::trim PL900 when version supports it"
+        );
+    }
+
+    #[test]
+    fn builtin_bundle_and_named_imports_are_distinguished() {
+        let diags =
+            version_diags("use v5.36;\nuse builtin 'trim';\nbuiltin::load_module('My::Thing');\n");
+        assert!(
+            diags.iter().any(|d| {
+                d.code.as_deref() == Some("PL900") && d.message.contains("builtin::load_module")
+            }),
+            "importing trim should not imply builtin bundle; load_module must still report PL900"
+        );
+    }
+
+    #[test]
+    fn eval_string_no_feature_does_not_disable_version_bundle_features() {
+        let diags = version_diags("use v5.40;\neval \"no feature 'say'\";\nsay 'ok';\n");
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL900")),
+            "eval STRING feature toggles should not alter compile-time version compatibility state"
+        );
+    }
+}

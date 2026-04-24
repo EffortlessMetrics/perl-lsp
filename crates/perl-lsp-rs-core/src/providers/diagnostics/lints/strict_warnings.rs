@@ -660,4 +660,44 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn package_scoped_pragmas_do_not_suppress_file_level_missing_diagnostics() {
+        let diags =
+            strict_warnings_diags("package Inner { use strict; use warnings; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "package-scoped strict must not suppress missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "package-scoped warnings must not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
+    fn package_scoped_no_strict_no_warnings_restore_to_top_level_state() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\npackage Inner { no strict; no warnings; }\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "package-scoped no strict/warnings must restore to outer top-level strict/warnings"
+        );
+    }
+
+    #[test]
+    fn conditional_no_if_pragmas_make_missing_diagnostics_observable() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\nno if 1, 'strict';\nno if 1, 'warnings';\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "conditional no-if strict should re-enable missing-strict diagnostic"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "conditional no-if warnings should re-enable missing-warnings diagnostic"
+        );
+    }
 }
