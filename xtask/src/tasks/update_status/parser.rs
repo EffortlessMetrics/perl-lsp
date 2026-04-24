@@ -24,6 +24,20 @@ pub(super) struct ParserMetrics {
     pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
+    /// Parser benchmark scorecard emitted by parser bench binaries.
+    pub performance_scorecard: Option<ParserPerformanceScorecard>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub(super) struct ParserPerformanceScorecard {
+    pub measured_at_unix_s: u64,
+    pub results: Vec<ParserPerformanceRow>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub(super) struct ParserPerformanceRow {
+    pub scenario: String,
+    pub median_ns: u64,
 }
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
@@ -41,6 +55,9 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         .ok(),
         common_corpus_receipt,
         common_corpus_pinned,
+        performance_scorecard: read_performance_scorecard(
+            &root.join("target/metrics/parser_performance_scorecard.json"),
+        ),
     }
 }
 
@@ -56,6 +73,11 @@ pub(super) fn count_common_corpus_pinned(root: &Path) -> usize {
 pub(super) fn read_sweep_report(
     path: &Path,
 ) -> Option<super::super::parser_corpus_sweep::SweepReport> {
+    let raw = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+pub(super) fn read_performance_scorecard(path: &Path) -> Option<ParserPerformanceScorecard> {
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()
 }
@@ -200,6 +222,29 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             )
         },
     );
+    let performance_row = metrics.performance_scorecard.as_ref().map_or_else(
+        || "| **Parser performance scorecard** | UNVERIFIED | Run parser benches to emit `target/metrics/parser_performance_scorecard.json` | `target/metrics/parser_performance_scorecard.json` |".to_string(),
+        |scorecard| {
+            let scenario_median = |name: &str| {
+                scorecard
+                    .results
+                    .iter()
+                    .find(|row| row.scenario == name)
+                    .map(|row| format!("{:.2} ms", row.median_ns as f64 / 1_000_000.0))
+                    .unwrap_or_else(|| "n/a".to_string())
+            };
+            format!(
+                "| **Parser performance scorecard** | cold={} / warm={} / inc-small={} / inc-multi={} / lexer={} / scope={} | snapshot at unix={} | `target/metrics/parser_performance_scorecard.json` |",
+                scenario_median("cold_parse"),
+                scenario_median("warm_reparse"),
+                scenario_median("incremental_small_edit"),
+                scenario_median("incremental_multiple_edits"),
+                scenario_median("lexer_only"),
+                scenario_median("scope_analysis"),
+                scorecard.measured_at_unix_s,
+            )
+        },
+    );
 
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
 
@@ -241,6 +286,12 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->",
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_PERFORMANCE_ROW -->",
+        "<!-- END: PARSER_PERFORMANCE_ROW -->",
+        &performance_row,
     )?;
     Ok(text)
 }
@@ -302,11 +353,13 @@ mod tests {
             project_corpus: Some(summary),
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_ROW -->\nold\n<!-- END: PARSER_PERFORMANCE_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
@@ -315,6 +368,10 @@ mod tests {
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"
+        );
+        assert!(
+            result.contains("Parser performance scorecard"),
+            "performance row should render in parser status"
         );
         assert!(!result.contains("10/10"), "strict-clean no-receipt row must not show 10/10");
         Ok(())
@@ -329,11 +386,13 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_ROW -->\nold\n<!-- END: PARSER_PERFORMANCE_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
@@ -378,11 +437,13 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_ROW -->\nold\n<!-- END: PARSER_PERFORMANCE_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
