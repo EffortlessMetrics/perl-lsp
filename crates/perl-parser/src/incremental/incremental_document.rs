@@ -92,11 +92,24 @@ impl IncrementalDocument {
         // Reset metrics for this parse cycle
         self.metrics = ParseMetrics::default();
 
+        let Some((start_byte, old_end_byte)) = Self::validated_edit_range(&self.source, &edit)
+        else {
+            debug!(
+                "Invalid incremental edit, falling back to full parse without applying edit: start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                self.source.len()
+            );
+            self.reparse_current_source()?;
+            self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+            return Ok(());
+        };
+
         // Apply the edit to the source
         let new_source = self.apply_edit_to_source(&edit);
 
         // Find affected subtrees
-        let affected_range = (edit.start_byte, edit.old_end_byte);
+        let affected_range = (start_byte, old_end_byte);
         let reusable_subtrees = self.find_reusable_subtrees(affected_range, &edit);
 
         // Incrementally parse with subtree reuse
@@ -132,12 +145,29 @@ impl IncrementalDocument {
         let mut sorted_edits = edits.edits.clone();
         sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
 
+        // Preflight validation. If any edit cannot be mapped safely to the current
+        // source, conservatively fall back to a full parse without mutating source.
+        if sorted_edits.iter().any(|edit| Self::validated_edit_range(&self.source, edit).is_none())
+        {
+            debug!(
+                "Invalid edit detected in batch; falling back to full parse without applying batch"
+            );
+            self.reparse_current_source()?;
+            self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+            return Ok(());
+        }
+
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                debug!("Edit became unmappable during batch apply; using conservative fallback");
+                self.reparse_current_source()?;
+                self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+                return Ok(());
+            }
         }
 
         // Find all affected ranges
@@ -172,39 +202,59 @@ impl IncrementalDocument {
 
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
-
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        // Ensure we're on UTF-8 boundaries
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+        if let Some((start, end)) = Self::validated_edit_range(source, edit) {
             result.push_str(&source[..start]);
             result.push_str(&edit.new_text);
             result.push_str(&source[end..]);
         } else {
             // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid edit for source: start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
             result.push_str(source);
         }
 
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
-        }
-
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        if let Some((start, end)) = Self::validated_edit_range(source, edit) {
             source.replace_range(start..end, &edit.new_text);
+            true
         } else {
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid edit during batch apply: start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            false
         }
+    }
+
+    fn validated_edit_range(source: &str, edit: &IncrementalEdit) -> Option<(usize, usize)> {
+        if edit.start_byte > source.len() || edit.old_end_byte > source.len() {
+            return None;
+        }
+        if edit.start_byte > edit.old_end_byte {
+            return None;
+        }
+        if !source.is_char_boundary(edit.start_byte) || !source.is_char_boundary(edit.old_end_byte)
+        {
+            return None;
+        }
+        Some((edit.start_byte, edit.old_end_byte))
+    }
+
+    fn reparse_current_source(&mut self) -> ParseResult<()> {
+        let mut parser = Parser::new(&self.source);
+        let root = parser.parse()?;
+        self.root = Arc::new(root);
+        self.cache_subtrees();
+        Ok(())
     }
 
     /// Find subtrees that can be reused (outside the edited range)
@@ -287,7 +337,7 @@ impl IncrementalDocument {
     /// Check if edit affects only a single token
     fn is_single_token_edit(&self, edit: &IncrementalEdit) -> bool {
         // Check if edit is small and contained within a single literal
-        if edit.old_end_byte - edit.start_byte > 100 {
+        if edit.old_end_byte.saturating_sub(edit.start_byte) > 100 {
             return false; // Too large
         }
 
@@ -1097,6 +1147,7 @@ impl SubtreeCache {
 mod tests {
     use super::super::incremental_edit::IncrementalEdit;
     use super::*;
+    use perl_parser_core::parser::Parser;
 
     #[test]
     fn test_incremental_single_token_edit() -> ParseResult<()> {
@@ -1405,6 +1456,109 @@ mod tests {
             })
             .count();
         assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_fallback_when_range_exceeds_source_length() -> ParseResult<()> {
+        let source = "my $x = 1;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+        let original_tree = format!("{:?}", doc.tree());
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(source.len() + 1, source.len() + 3, "2".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(doc.text(), source);
+        assert_eq!(format!("{:?}", doc.tree()), original_tree);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_fallback_when_start_is_after_end() -> ParseResult<()> {
+        let source = "my $x = 1;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(8, 4, "2".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(doc.text(), source);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_fallback_for_mid_codepoint_offsets() -> ParseResult<()> {
+        let source = "my $x = \"é\";";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+        let e_offset =
+            source.find('é').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain 'é'".to_string(),
+                location: 0,
+            })?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(e_offset + 1, e_offset + 1, "z".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(doc.text(), source);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_batch_with_unmappable_edit_uses_safe_fallback() -> ParseResult<()> {
+        let source = "my $x = 10; my $y = 20;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        let x_pos =
+            source.find("10").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '10'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(x_pos, x_pos + 2, "11".to_string()));
+        edits.add(IncrementalEdit::new(source.len() + 5, source.len() + 5, "boom".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        // Invalid batch should conservatively keep source unchanged.
+        assert_eq!(doc.text(), source);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_matches_fresh_parse_for_valid_batch() -> ParseResult<()> {
+        let source = "my $x = 10; my $y = 20;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        let x_pos =
+            source.find("10").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '10'".to_string(),
+                location: 0,
+            })?;
+        let y_pos =
+            source.find("20").ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '20'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(x_pos, x_pos + 2, "15".to_string()));
+        edits.add(IncrementalEdit::new(y_pos, y_pos + 2, "25".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        let mut parser = Parser::new(doc.text());
+        let full_root = parser.parse()?;
+
+        assert_eq!(format!("{:?}", doc.tree()), format!("{:?}", full_root));
 
         Ok(())
     }
