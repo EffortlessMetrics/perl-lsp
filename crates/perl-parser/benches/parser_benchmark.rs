@@ -7,6 +7,9 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
+use std::sync::OnceLock;
+
+mod scorecard;
 
 const SIMPLE_SCRIPT: &str = r#"
 my $x = 42;
@@ -71,7 +74,42 @@ sub fibonacci {
 1;
 "#;
 
+fn emit_parser_component_scorecard_once() {
+    static EMITTED: OnceLock<()> = OnceLock::new();
+    EMITTED.get_or_init(|| {
+        let lexer_only = scorecard::measure_iterations(80, || {
+            use perl_lexer::{PerlLexer, TokenType};
+            let mut lexer = PerlLexer::new(COMPLEX_SCRIPT);
+            let mut count = 0usize;
+            while let Some(token) = lexer.next_token() {
+                if matches!(token.token_type, TokenType::EOF) {
+                    break;
+                }
+                count += 1;
+            }
+            black_box(count);
+        });
+
+        let mut parser = Parser::new(COMPLEX_SCRIPT);
+        let ast = match parser.parse() {
+            Ok(ast) => ast,
+            Err(_) => return,
+        };
+        let analyzer = ScopeAnalyzer::new();
+        let pragma_map = vec![];
+        let scope_analysis = scorecard::measure_iterations(80, || {
+            analyzer.analyze(&ast, COMPLEX_SCRIPT, &pragma_map);
+        });
+
+        scorecard::write_scorecard(vec![
+            ("lexer_only", lexer_only),
+            ("scope_analysis", scope_analysis),
+        ]);
+    });
+}
+
 fn benchmark_simple_parsing(c: &mut Criterion) {
+    emit_parser_component_scorecard_once();
     c.bench_function("parse_simple_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(SIMPLE_SCRIPT));

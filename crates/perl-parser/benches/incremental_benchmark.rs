@@ -4,8 +4,105 @@ use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_tdd_support::{must, must_some};
 use std::hint::black_box;
+use std::sync::OnceLock;
+
+mod scorecard;
+
+fn emit_incremental_scorecard_once() {
+    static EMITTED: OnceLock<()> = OnceLock::new();
+    EMITTED.get_or_init(|| {
+        let source = r#"
+use strict;
+use warnings;
+
+sub process_data {
+    my ($data) = @_;
+
+    # Process each item
+    for my $item (@$data) {
+        my $result = transform($item);
+        print "Result: $result\n";
+    }
+
+    return 1;
+}
+
+sub transform {
+    my ($value) = @_;
+    return $value * 2;
+}
+
+my $items = [1, 2, 3, 4, 5];
+process_data($items);
+"#
+        .to_string();
+
+        let start = must_some(source.find("transform"));
+        let old_end = start + "transform".len();
+
+        let cold = scorecard::measure_iterations(60, || {
+            let state = IncrementalState::new(source.clone());
+            black_box(&state.ast);
+        });
+
+        let warm = scorecard::measure_iterations(60, || {
+            let mut state = IncrementalState::new(source.clone());
+            must(apply_edits(&mut state, &[]));
+            black_box(&state.ast);
+        });
+
+        let small = scorecard::measure_iterations(60, || {
+            let mut state = IncrementalState::new(source.clone());
+            let edit = Edit {
+                start_byte: start,
+                old_end_byte: old_end,
+                new_end_byte: start + "process".len(),
+                new_text: "process".to_string(),
+            };
+            must(apply_edits(&mut state, &[edit]));
+            black_box(&state.ast);
+        });
+
+        let small_multi_source = r#"
+my $x = 1;
+my $y = 2;
+my $z = 3;
+print "$x $y $z\n";
+"#
+        .to_string();
+        let pos_1 = must_some(small_multi_source.find("= 1")) + 2;
+        let pos_2 = must_some(small_multi_source.find("= 2")) + 2;
+        let multi = scorecard::measure_iterations(60, || {
+            let mut state = IncrementalState::new(small_multi_source.clone());
+            let edits = vec![
+                Edit {
+                    start_byte: pos_1,
+                    old_end_byte: pos_1 + 1,
+                    new_end_byte: pos_1 + 2,
+                    new_text: "10".to_string(),
+                },
+                Edit {
+                    start_byte: pos_2,
+                    old_end_byte: pos_2 + 1,
+                    new_end_byte: pos_2 + 2,
+                    new_text: "20".to_string(),
+                },
+            ];
+            must(apply_edits(&mut state, &edits));
+            black_box(&state.ast);
+        });
+
+        scorecard::write_scorecard(vec![
+            ("cold_parse", cold),
+            ("warm_reparse", warm),
+            ("incremental_small_edit", small),
+            ("incremental_multiple_edits", multi),
+        ]);
+    });
+}
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = r#"
 use strict;
 use warnings;
