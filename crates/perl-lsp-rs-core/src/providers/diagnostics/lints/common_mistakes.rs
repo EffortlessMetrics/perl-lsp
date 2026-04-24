@@ -89,11 +89,7 @@ fn check_bareword_filehandle(
     }
 
     let open_args: &[Node] = if args.len() == 1 {
-        if let NodeKind::ArrayLiteral { elements } = &args[0].kind {
-            elements
-        } else {
-            args
-        }
+        if let NodeKind::ArrayLiteral { elements } = &args[0].kind { elements } else { args }
     } else {
         args
     };
@@ -106,10 +102,7 @@ fn check_bareword_filehandle(
         return;
     };
 
-    if matches!(
-        name.as_str(),
-        "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA"
-    ) {
+    if matches!(name.as_str(), "STDIN" | "STDOUT" | "STDERR" | "ARGV" | "ARGVOUT" | "DATA") {
         return;
     }
 
@@ -120,8 +113,9 @@ fn check_bareword_filehandle(
         message: "Use lexical filehandles instead of bareword filehandles".to_string(),
         related_information: vec![RelatedInformation {
             location: (node.location.start, node.location.end),
-            message: "Bareword filehandles are global and can lead to accidental reuse across scopes"
-                .to_string(),
+            message:
+                "Bareword filehandles are global and can lead to accidental reuse across scopes"
+                    .to_string(),
         }],
         tags: Vec::new(),
         suggestion: Some("Use lexical filehandle: open(my $fh, ... )".to_string()),
