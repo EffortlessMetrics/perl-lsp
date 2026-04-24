@@ -1,0 +1,150 @@
+{
+  "name": "attach_lifecycle_sequence",
+  "description": "Attach lifecycle with response-shape and event-order expectations",
+  "messages": [
+    {
+      "type": "request",
+      "command": "initialize",
+      "arguments": {
+        "adapterID": "perl",
+        "linesStartAt1": true,
+        "columnsStartAt1": true
+      }
+    },
+    {
+      "type": "response",
+      "command": "initialize",
+      "success": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsSetVariable"
+      ]
+    },
+    {
+      "type": "event",
+      "event": "initialized"
+    },
+    {
+      "type": "request",
+      "command": "attach",
+      "arguments": {
+        "processId": 1,
+        "stopOnEntry": true
+      }
+    },
+    {
+      "type": "response",
+      "command": "attach",
+      "success": true,
+      "requiredBodyKeys": ["threadId", "processId", "mode"]
+    },
+    {
+      "type": "event",
+      "event": "stopped",
+      "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped"]
+    },
+    {
+      "type": "event",
+      "event": "stopped",
+      "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped", "description"]
+    },
+    {
+      "type": "request",
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {},
+        "breakpoints": []
+      }
+    },
+    {
+      "type": "response",
+      "command": "setBreakpoints",
+      "success": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "type": "request",
+      "command": "configurationDone",
+      "arguments": {}
+    },
+    {
+      "type": "response",
+      "command": "configurationDone",
+      "success": true
+    },
+    {
+      "type": "request",
+      "command": "continue",
+      "arguments": { "threadId": 1 }
+    },
+    {
+      "type": "response",
+      "command": "continue",
+      "success": true,
+      "requiredBodyKeys": ["allThreadsContinued"]
+    },
+    {
+      "type": "event",
+      "event": "continued",
+      "requiredBodyKeys": ["threadId", "allThreadsContinued"]
+    },
+    {
+      "type": "request",
+      "command": "stackTrace",
+      "arguments": { "threadId": 1 }
+    },
+    {
+      "type": "response",
+      "command": "stackTrace",
+      "success": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "type": "request",
+      "command": "scopes",
+      "arguments": { "frameId": 1 }
+    },
+    {
+      "type": "response",
+      "command": "scopes",
+      "success": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "type": "request",
+      "command": "variables",
+      "arguments": { "variablesReference": 11 }
+    },
+    {
+      "type": "response",
+      "command": "variables",
+      "success": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "type": "request",
+      "command": "evaluate",
+      "arguments": { "expression": "$x" }
+    },
+    {
+      "type": "response",
+      "command": "evaluate",
+      "success": false,
+      "requiredMessageContains": "processId attach"
+    },
+    {
+      "type": "request",
+      "command": "disconnect",
+      "arguments": {}
+    },
+    {
+      "type": "response",
+      "command": "disconnect",
+      "success": true
+    },
+    {
+      "type": "event",
+      "event": "terminated"
+    }
+  ]
+}

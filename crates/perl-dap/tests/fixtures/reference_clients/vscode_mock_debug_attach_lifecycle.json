@@ -1,0 +1,116 @@
+{
+  "client": "vscode-mock-debug",
+  "description": "Reference-client lifecycle sweep for attach mode with protocol-shape assertions",
+  "requests": [
+    {
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "mock",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "locale": "en-US"
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsSetVariable",
+        "supportsCompletionsRequest"
+      ],
+      "expectedEventsAfterRequest": [
+        {
+          "event": "initialized"
+        }
+      ]
+    },
+    {
+      "command": "attach",
+      "arguments": {
+        "processId": 1,
+        "stopOnEntry": true
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["threadId", "processId", "mode"],
+      "expectedEventsAfterRequest": [
+        {
+          "event": "stopped",
+          "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped"]
+        },
+        {
+          "event": "stopped",
+          "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped", "description"]
+        }
+      ]
+    },
+    {
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {},
+        "breakpoints": []
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "command": "configurationDone",
+      "expectSuccess": true
+    },
+    {
+      "command": "continue",
+      "arguments": {
+        "threadId": 1
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["allThreadsContinued"],
+      "expectedEventsAfterRequest": [
+        {
+          "event": "continued",
+          "requiredBodyKeys": ["threadId", "allThreadsContinued"]
+        }
+      ]
+    },
+    {
+      "command": "stackTrace",
+      "arguments": {
+        "threadId": 1
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "command": "scopes",
+      "arguments": {
+        "frameId": 1
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 11
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "command": "evaluate",
+      "arguments": {
+        "expression": "$x"
+      },
+      "expectSuccess": false,
+      "requiredMessageContains": "processId attach"
+    },
+    {
+      "command": "disconnect",
+      "expectSuccess": true,
+      "expectedEventsAfterRequest": [
+        {
+          "event": "terminated"
+        }
+      ]
+    }
+  ]
+}

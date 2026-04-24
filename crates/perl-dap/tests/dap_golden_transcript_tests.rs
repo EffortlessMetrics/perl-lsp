@@ -10,6 +10,7 @@ mod dap_golden_transcripts {
     use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
     use serde_json::{Value, json};
     use std::path::PathBuf;
+    use std::sync::mpsc::{Receiver, channel};
 
     fn transcript_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -62,6 +63,14 @@ mod dap_golden_transcripts {
             _ => anyhow::bail!("expected response for {command}"),
         }
         Ok(())
+    }
+
+    fn drain_events(rx: &Receiver<DapMessage>) -> Vec<DapMessage> {
+        let mut events = Vec::new();
+        while let Ok(event) = rx.try_recv() {
+            events.push(event);
+        }
+        events
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-hello-world-transcript
@@ -187,6 +196,183 @@ mod dap_golden_transcripts {
             }
             _ => anyhow::bail!("expected setBreakpoints response"),
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    // AC:13
+    async fn test_attach_lifecycle_golden_transcript_conformance() -> Result<()> {
+        let transcript = load_transcript("attach_lifecycle_sequence.json")?;
+        let messages = extract_messages(&transcript)?;
+
+        let mut adapter = DebugAdapter::new();
+        let (tx, rx) = channel();
+        adapter.set_event_sender(tx);
+
+        let mut request_seq = 1_i64;
+        let mut previous_response_seq = 0_i64;
+        let mut cursor = 0_usize;
+
+        while cursor < messages.len() {
+            let request = &messages[cursor];
+            if request["type"] != "request" {
+                anyhow::bail!("expected request at index {cursor}, got {:?}", request["type"]);
+            }
+
+            let command = request
+                .get("command")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("request at index {cursor} missing command"))?;
+            let arguments = request.get("arguments").cloned();
+            let response = adapter.handle_request(request_seq, command, arguments);
+            request_seq += 1;
+
+            cursor += 1;
+            let expected_response = messages
+                .get(cursor)
+                .ok_or_else(|| anyhow::anyhow!("missing expected response after {command}"))?;
+            if expected_response["type"] != "response" {
+                anyhow::bail!(
+                    "expected response after {command}, got {:?}",
+                    expected_response["type"]
+                );
+            }
+
+            match response {
+                DapMessage::Response {
+                    seq,
+                    request_seq: echoed_request_seq,
+                    success,
+                    command: echoed_command,
+                    body,
+                    message,
+                } => {
+                    if seq <= previous_response_seq {
+                        anyhow::bail!(
+                            "{command} response seq not monotonic: {seq} <= {previous_response_seq}"
+                        );
+                    }
+                    previous_response_seq = seq;
+
+                    if echoed_request_seq != request_seq - 1 {
+                        anyhow::bail!(
+                            "{command} echoed request_seq {} does not match expected {}",
+                            echoed_request_seq,
+                            request_seq - 1
+                        );
+                    }
+
+                    if echoed_command != command {
+                        anyhow::bail!(
+                            "{command} response command echo mismatch: got {echoed_command}"
+                        );
+                    }
+
+                    let expected_success =
+                        expected_response.get("success").and_then(Value::as_bool).unwrap_or(true);
+                    if success != expected_success {
+                        anyhow::bail!(
+                            "{command} success mismatch: expected {expected_success}, got {success} with message {message:?}"
+                        );
+                    }
+
+                    if let Some(required_keys) =
+                        expected_response.get("requiredBodyKeys").and_then(Value::as_array)
+                    {
+                        let body = body.ok_or_else(|| {
+                            anyhow::anyhow!("{command} response missing body for required keys")
+                        })?;
+                        if !body.is_object() {
+                            anyhow::bail!("{command} response body is malformed (must be object)");
+                        }
+                        for key in required_keys {
+                            let key = key.as_str().ok_or_else(|| {
+                                anyhow::anyhow!("requiredBodyKeys for {command} must be strings")
+                            })?;
+                            if body.get(key).is_none() {
+                                anyhow::bail!("{command} response body missing key: {key}");
+                            }
+                        }
+                    } else if let Some(body) = body
+                        && !body.is_object()
+                    {
+                        anyhow::bail!("{command} response body is malformed (must be object)");
+                    }
+
+                    if let Some(required_message_substring) =
+                        expected_response.get("requiredMessageContains").and_then(Value::as_str)
+                    {
+                        let message = message.unwrap_or_default();
+                        if !message.contains(required_message_substring) {
+                            anyhow::bail!(
+                                "{command} response message must contain '{required_message_substring}', got: {message}"
+                            );
+                        }
+                    }
+                }
+                other => anyhow::bail!("expected response for {command}, got {other:?}"),
+            }
+
+            cursor += 1;
+            let mut expected_events = Vec::new();
+            while let Some(next) = messages.get(cursor) {
+                if next["type"] != "event" {
+                    break;
+                }
+                expected_events.push(next);
+                cursor += 1;
+            }
+
+            let actual_events = drain_events(&rx);
+            if actual_events.len() != expected_events.len() {
+                anyhow::bail!(
+                    "{command} event count mismatch: expected {}, got {}",
+                    expected_events.len(),
+                    actual_events.len()
+                );
+            }
+
+            for (event_idx, (expected, actual)) in
+                expected_events.iter().zip(actual_events.iter()).enumerate()
+            {
+                let expected_name = expected
+                    .get("event")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow::anyhow!("expected event missing event name"))?;
+                match actual {
+                    DapMessage::Event { event, body, .. } => {
+                        if event != expected_name {
+                            anyhow::bail!(
+                                "{command} event ordering mismatch at index {event_idx}: expected {expected_name}, got {event}"
+                            );
+                        }
+                        if let Some(required_keys) =
+                            expected.get("requiredBodyKeys").and_then(Value::as_array)
+                        {
+                            let body = body.as_ref().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "{command} event '{event}' missing body for required keys"
+                                )
+                            })?;
+                            for key in required_keys {
+                                let key = key.as_str().ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "event requiredBodyKeys entries must be strings"
+                                    )
+                                })?;
+                                if body.get(key).is_none() {
+                                    anyhow::bail!(
+                                        "{command} event '{event}' missing body key: {key}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    other => anyhow::bail!("expected event, got {other:?}"),
+                }
+            }
+        }
+
         Ok(())
     }
 }
