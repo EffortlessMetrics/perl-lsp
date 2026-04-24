@@ -3,24 +3,30 @@
 //! This module has one responsibility: indexing symbol names for fast lookup
 //! across prefix and fuzzy query styles.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+const LEGACY_DOC_ID: &str = "__legacy_add_symbol__";
 
 /// Symbol index for fast lookups.
 ///
 /// Supports both prefix and fuzzy matching using a trie and inverted index.
 pub struct SymbolIndex {
-    /// Trie structure for prefix matching
+    /// Trie structure for prefix matching.
     trie: SymbolTrie,
-    /// Inverted index for fuzzy matching
-    inverted_index: HashMap<String, Vec<String>>,
+    /// Inverted index for fuzzy matching.
+    inverted_index: HashMap<String, HashSet<String>>,
+    /// Global symbol ref-count across all documents.
+    symbol_counts: HashMap<String, usize>,
+    /// Per-document symbols for replacement/removal.
+    document_symbols: HashMap<String, HashSet<String>>,
 }
 
-/// Trie data structure for efficient prefix matching
+/// Trie data structure for efficient prefix matching.
 struct SymbolTrie {
-    /// Child nodes indexed by character
+    /// Child nodes indexed by character.
     children: HashMap<char, Box<SymbolTrie>>,
-    /// Symbols stored at this node
-    symbols: Vec<String>,
+    /// Number of live symbols ending at this node.
+    terminal_count: usize,
 }
 
 impl Default for SymbolIndex {
@@ -33,26 +39,49 @@ impl SymbolIndex {
     /// Create a new empty symbol index.
     #[must_use]
     pub fn new() -> Self {
-        Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
+        Self {
+            trie: SymbolTrie::new(),
+            inverted_index: HashMap::new(),
+            symbol_counts: HashMap::new(),
+            document_symbols: HashMap::new(),
+        }
     }
 
-    /// Add a symbol to the index.
+    /// Add a symbol to the compatibility legacy document.
     ///
-    /// Indexes the symbol for both prefix and fuzzy matching.
-    /// Duplicate calls with the same symbol are idempotent: the symbol is
-    /// stored exactly once in both the trie and the inverted index.
+    /// Repeated calls with the same symbol remain idempotent.
     pub fn add_symbol(&mut self, symbol: String) {
-        // Add to trie for prefix matching; returns true only when newly inserted.
-        // Deduplication here prevents the inverted index from accumulating
-        // duplicate entries, which would inflate fuzzy-match scores.
-        if !self.trie.insert(&symbol) {
-            return;
+        self.add_symbols_to_document(LEGACY_DOC_ID, [symbol]);
+    }
+
+    /// Replace all indexed symbols for `doc_id` with `symbols`.
+    pub fn replace_document_symbols(
+        &mut self,
+        doc_id: &str,
+        symbols: impl IntoIterator<Item = String>,
+    ) {
+        let new_symbols: HashSet<String> = symbols.into_iter().collect();
+
+        let old_symbols = self.document_symbols.remove(doc_id).unwrap_or_default();
+        for symbol in old_symbols.difference(&new_symbols) {
+            self.remove_symbol_occurrence(symbol);
         }
 
-        // Add to inverted index for fuzzy matching
-        let tokens = Self::tokenize(&symbol);
-        for token in tokens {
-            self.inverted_index.entry(token).or_default().push(symbol.clone());
+        for symbol in new_symbols.difference(&old_symbols) {
+            self.add_symbol_occurrence(symbol);
+        }
+
+        if !new_symbols.is_empty() {
+            self.document_symbols.insert(doc_id.to_string(), new_symbols);
+        }
+    }
+
+    /// Remove all indexed symbols for `doc_id`.
+    pub fn remove_document(&mut self, doc_id: &str) {
+        if let Some(symbols) = self.document_symbols.remove(doc_id) {
+            for symbol in symbols {
+                self.remove_symbol_occurrence(&symbol);
+            }
         }
     }
 
@@ -70,25 +99,82 @@ impl SymbolIndex {
     #[must_use]
     pub fn search_fuzzy(&self, query: &str) -> Vec<String> {
         let tokens = Self::tokenize(query);
-        let mut results = HashMap::new();
+        let mut results: HashMap<&str, usize> = HashMap::new();
 
         for token in tokens {
             if let Some(symbols) = self.inverted_index.get(&token) {
                 for symbol in symbols {
-                    *results.entry(symbol.clone()).or_insert(0) += 1;
+                    *results.entry(symbol.as_str()).or_insert(0) += 1;
                 }
             }
         }
 
-        // Sort by relevance (number of matching tokens)
+        // Sort by relevance (number of matching tokens).
         let mut sorted: Vec<_> = results.into_iter().collect();
         sorted.sort_by(|(_, a), (_, b)| b.cmp(a));
 
-        sorted.into_iter().map(|(symbol, _)| symbol).collect()
+        sorted.into_iter().map(|(symbol, _)| symbol.to_string()).collect()
+    }
+
+    fn add_symbols_to_document(&mut self, doc_id: &str, symbols: impl IntoIterator<Item = String>) {
+        let existing = self.document_symbols.entry(doc_id.to_string()).or_default();
+        let mut added = Vec::new();
+        for symbol in symbols {
+            if existing.insert(symbol.clone()) {
+                added.push(symbol);
+            }
+        }
+
+        for symbol in added {
+            self.add_symbol_occurrence(&symbol);
+        }
+    }
+
+    fn add_symbol_occurrence(&mut self, symbol: &str) {
+        let count = self.symbol_counts.entry(symbol.to_string()).or_insert(0);
+        *count += 1;
+
+        if *count != 1 {
+            return;
+        }
+
+        self.trie.insert(symbol);
+
+        let tokens = Self::tokenize(symbol);
+        for token in tokens {
+            self.inverted_index.entry(token).or_default().insert(symbol.to_string());
+        }
+    }
+
+    fn remove_symbol_occurrence(&mut self, symbol: &str) {
+        let Some(count) = self.symbol_counts.get_mut(symbol) else {
+            return;
+        };
+
+        *count -= 1;
+        if *count != 0 {
+            return;
+        }
+
+        self.symbol_counts.remove(symbol);
+        self.trie.remove(symbol);
+
+        let tokens = Self::tokenize(symbol);
+        for token in tokens {
+            let mut should_remove_token = false;
+            if let Some(symbols) = self.inverted_index.get_mut(&token) {
+                symbols.remove(symbol);
+                should_remove_token = symbols.is_empty();
+            }
+
+            if should_remove_token {
+                self.inverted_index.remove(&token);
+            }
+        }
     }
 
     fn tokenize(s: &str) -> Vec<String> {
-        // Split on word boundaries and case changes
+        // Split on word boundaries and case changes.
         let mut tokens = Vec::new();
         let mut current = String::new();
         let mut prev_upper = false;
@@ -119,31 +205,37 @@ impl SymbolIndex {
 
 impl SymbolTrie {
     fn new() -> Self {
-        Self { children: HashMap::new(), symbols: Vec::new() }
+        Self { children: HashMap::new(), terminal_count: 0 }
     }
 
-    /// Insert `symbol` into the trie.
-    ///
-    /// Returns `true` if the symbol was newly inserted, `false` if it was
-    /// already present (duplicate).  Callers use this to gate inverted-index
-    /// updates so both structures stay in sync.
-    fn insert(&mut self, symbol: &str) -> bool {
+    fn insert(&mut self, symbol: &str) {
         let mut node = self;
 
         for ch in symbol.chars() {
             node = node.children.entry(ch).or_insert_with(|| Box::new(SymbolTrie::new()));
         }
 
-        // Deduplicate: workspace indexing may call add_symbol for the same
-        // qualified name multiple times during incremental re-index.  Storing
-        // duplicates causes search_prefix to return the same entry N times,
-        // which produces duplicate completions in the UI.
-        let owned = symbol.to_string();
-        if node.symbols.contains(&owned) {
-            return false;
+        node.terminal_count += 1;
+    }
+
+    fn remove(&mut self, symbol: &str) {
+        let chars: Vec<char> = symbol.chars().collect();
+        self.remove_internal(&chars, 0);
+    }
+
+    fn remove_internal(&mut self, chars: &[char], index: usize) -> bool {
+        if index == chars.len() {
+            if self.terminal_count > 0 {
+                self.terminal_count -= 1;
+            }
+        } else if let Some(child) = self.children.get_mut(&chars[index]) {
+            let remove_child = child.remove_internal(chars, index + 1);
+            if remove_child {
+                self.children.remove(&chars[index]);
+            }
         }
-        node.symbols.push(owned);
-        true
+
+        self.terminal_count == 0 && self.children.is_empty()
     }
 
     fn search_prefix(&self, prefix: &str) -> Vec<String> {
@@ -156,17 +248,21 @@ impl SymbolTrie {
             }
         }
 
-        // Collect all symbols from this node and descendants
         let mut results = Vec::new();
-        Self::collect_all(node, &mut results);
+        let mut symbol = prefix.to_string();
+        Self::collect_all(node, &mut symbol, &mut results);
         results
     }
 
-    fn collect_all(node: &SymbolTrie, results: &mut Vec<String>) {
-        results.extend(node.symbols.clone());
+    fn collect_all(node: &SymbolTrie, symbol: &mut String, results: &mut Vec<String>) {
+        if node.terminal_count > 0 {
+            results.push(symbol.clone());
+        }
 
-        for child in node.children.values() {
-            Self::collect_all(child, results);
+        for (ch, child) in &node.children {
+            symbol.push(*ch);
+            Self::collect_all(child, symbol, results);
+            symbol.pop();
         }
     }
 }
