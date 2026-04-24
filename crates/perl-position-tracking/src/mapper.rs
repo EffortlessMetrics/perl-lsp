@@ -137,8 +137,17 @@ impl PositionMapper {
             if utf16_offset >= pos.character {
                 break;
             }
+
             let ch_utf16_len = if ch as u32 > 0xFFFF { 2 } else { 1 };
-            utf16_offset += ch_utf16_len;
+            let next_utf16 = utf16_offset + ch_utf16_len;
+
+            // Clamp positions inside a surrogate pair to the start of the
+            // code point, matching `utf16_line_col_to_offset`.
+            if next_utf16 > pos.character {
+                break;
+            }
+
+            utf16_offset = next_utf16;
             byte_offset += ch.len_utf8();
         }
 
@@ -374,6 +383,15 @@ mod tests {
 
         // Convert back
         assert_eq!(mapper.byte_to_lsp_pos(10), Position { line: 0, character: 8 });
+    }
+
+    #[test]
+    fn test_utf16_positions_clamp_mid_surrogate_to_char_start() {
+        let text = "a😀b";
+        let mapper = PositionMapper::new(text);
+
+        // UTF-16 position 2 lands inside 😀 (which spans code units 1..3).
+        assert_eq!(mapper.lsp_pos_to_byte(Position { line: 0, character: 2 }), Some(1));
     }
 
     #[test]
