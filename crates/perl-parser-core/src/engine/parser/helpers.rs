@@ -742,6 +742,8 @@ impl<'a> Parser<'a> {
         matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
+                | Some(TokenKind::RightParen)
+                | Some(TokenKind::RightBracket)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::LeftBrace)
                 | Some(TokenKind::Eof)

@@ -286,6 +286,57 @@ fn missing_paren_at_eof_in_list_assignment_emits_recovered() {
     );
 }
 
+/// Missing `]` recovered when parser sees a `)` owned by the outer call.
+/// This prevents ownership loss in postfix-deref/call chains.
+#[test]
+fn missing_bracket_before_outer_paren_emits_recovered() {
+    assert_clean_parse("foo($arr[$i]);");
+
+    let src = "foo($arr[$i));";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_array_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArraySubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_array_recovery,
+        "Expected array-subscript InsertedCloser before outer ')', got: {:?}",
+        errors
+    );
+}
+
+/// Missing `)` in declaration list recovered when `]` closes an outer index.
+#[test]
+fn missing_paren_before_outer_bracket_emits_recovered() {
+    assert_clean_parse("my $x = $list[(foo($a))];");
+
+    let src = "my $x = $list[(foo($a)];";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_arg_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_arg_recovery,
+        "Expected arg-list InsertedCloser before outer ']', got: {:?}",
+        errors
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Regression: clean-parse inputs must produce zero Recovered errors
 // ---------------------------------------------------------------------------
