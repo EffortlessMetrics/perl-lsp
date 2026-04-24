@@ -863,6 +863,12 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// Consume a balanced segment, advancing past both delimiters.
+    ///
+    /// This is the general-purpose variant. For use inside double-quoted string
+    /// interpolation (where the outer `"` must be preserved as a recovery boundary),
+    /// use [`consume_balanced_segment_in_dq_interpolation`] instead.
+    #[allow(dead_code)]
     #[inline]
     fn consume_balanced_segment(&mut self, open: char, close: char) -> Option<usize> {
         if self.current_char() != Some(open) {
@@ -2856,7 +2862,11 @@ impl<'a> PerlLexer<'a> {
                     self.advance();
                     match self.current_char() {
                         Some('{') => {
-                            if let Some(end) = self.consume_balanced_segment('{', '}') {
+                            // Use the recovery-aware variant so an unclosed ${...}
+                            // expression doesn't swallow the enclosing string terminator.
+                            if let Some(end) =
+                                self.consume_balanced_segment_in_dq_interpolation('{', '}')
+                            {
                                 parts.push(StringPart::Expression(Arc::from(
                                     &self.input[part_start..end],
                                 )));
@@ -2915,7 +2925,10 @@ impl<'a> PerlLexer<'a> {
                                             )));
                                         }
                                         Some('(') => {
-                                            let _ = self.consume_balanced_segment('(', ')');
+                                            let _ = self
+                                                .consume_balanced_segment_in_dq_interpolation(
+                                                    '(', ')',
+                                                );
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2940,7 +2953,10 @@ impl<'a> PerlLexer<'a> {
                                                 }
                                             }
                                             if self.current_char() == Some('(') {
-                                                let _ = self.consume_balanced_segment('(', ')');
+                                                let _ = self
+                                                    .consume_balanced_segment_in_dq_interpolation(
+                                                        '(', ')',
+                                                    );
                                             }
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
