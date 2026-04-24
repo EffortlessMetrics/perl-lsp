@@ -24,14 +24,7 @@ include = [
 doctest = false
 
 [dependencies]
-perl-parser-core = { workspace = true }
-perl-lexer = { workspace = true }
-perl-line-index = { workspace = true }
-anyhow.workspace = true
-lsp-types.workspace = true
-ropey = "1.6.1"
-serde_json.workspace = true
-tracing.workspace = true
+perl-parser = { workspace = true, features = ["incremental"] }
 
 [features]
 default = []
@@ -39,7 +32,10 @@ default = []
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 criterion.workspace = true
-perl-parser = { workspace = true }
+lsp-types.workspace = true
+ropey = "1.6.1"
+serde_json.workspace = true
+perl-lexer = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
@@ -47,4 +43,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
-
