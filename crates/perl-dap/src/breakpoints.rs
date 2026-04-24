@@ -229,25 +229,27 @@ impl BreakpointStore {
             }
         };
 
-        // Get breakpoints array (empty if not provided)
-        let source_breakpoints = args.breakpoints.as_ref().map_or(Vec::new(), |bps| bps.clone());
-
-        // Lock stores for atomic operation
-        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
-        let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
-
-        // Clear existing breakpoints for this source (REPLACE semantics)
-        breakpoints_map.remove(&source_path);
+        // Get breakpoint request slice (empty if not provided)
+        let source_breakpoints = args.breakpoints.as_deref().unwrap_or(&[]);
 
         // Read source file and parse once for AST validation (AC7).
         let source_content = std::fs::read_to_string(&source_path).ok();
         let validator = source_content
             .as_ref()
             .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
+        let mut validation_cache: HashMap<(i64, Option<i64>), (bool, i64, Option<String>)> =
+            HashMap::new();
+
+        // Lock stores for atomic replacement + id allocation.
+        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
+        let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Clear existing breakpoints for this source (REPLACE semantics)
+        breakpoints_map.remove(&source_path);
 
         let mut records = Vec::new();
         // Create new breakpoint records
-        for bp in &source_breakpoints {
+        for bp in source_breakpoints {
             let id = *next_id;
             *next_id += 1;
 
@@ -324,16 +326,40 @@ impl BreakpointStore {
             }
 
             // AC7: AST-based breakpoint validation via `perl-dap-breakpoint` microcrate.
-            let (verified, resolved_line, message) = match &validator {
-                Some(Ok(v)) => {
-                    let result = v.validate_with_column(bp.line, bp.column);
-                    (result.verified, result.line, result.message)
+            let (verified, resolved_line, message) =
+                if let Some(cached) = validation_cache.get(&(bp.line, bp.column)) {
+                    cached.clone()
+                } else {
+                    let computed = match &validator {
+                        Some(Ok(v)) => {
+                            let result = v.validate_with_column(bp.line, bp.column);
+                            (result.verified, result.line, result.message)
+                        }
+                        Some(Err(error)) => (false, bp.line, Some(error.clone())),
+                        None => {
+                            // Can't read file - mark as unverified but still create breakpoint.
+                            (false, bp.line, Some("Unable to read source file".to_string()))
+                        }
+                    };
+                    validation_cache.insert((bp.line, bp.column), computed.clone());
+                    computed
+                };
+
+            let mut verified = verified;
+            let message = if verified
+                && bp.condition.is_some()
+                && let Some(Ok(v)) = &validator
+                && let Some(condition) = bp.condition.as_deref()
+            {
+                let condition_validation = v.validate_condition(resolved_line, condition);
+                if condition_validation.verified {
+                    message
+                } else {
+                    verified = false;
+                    Some("Conditional breakpoint expression is invalid".to_string())
                 }
-                Some(Err(error)) => (false, bp.line, Some(error.clone())),
-                None => {
-                    // Can't read file - mark as unverified but still create breakpoint.
-                    (false, bp.line, Some("Unable to read source file".to_string()))
-                }
+            } else {
+                message
             };
 
             let record = BreakpointRecord {

@@ -85,6 +85,44 @@ mod dap_performance {
         Ok(())
     }
 
+    /// Bulk breakpoint requests should stay stable across repeated REPLACE calls.
+    #[tokio::test]
+    // AC:15
+    async fn test_breakpoint_verification_latency_stability() -> Result<()> {
+        let mut fixture = NamedTempFile::new()?;
+        for i in 0..220 {
+            writeln!(fixture, "my $v{} = {};", i, i)?;
+        }
+        fixture.flush()?;
+        let fixture_path = fixture.path().to_string_lossy().to_string();
+
+        let mut adapter = DebugAdapter::new();
+        let payload = json!({
+            "source": { "path": fixture_path },
+            "breakpoints": (1..=100).map(|line| json!({ "line": line })).collect::<Vec<_>>()
+        });
+
+        let mut samples = Vec::new();
+        for seq in 1..=8 {
+            let start = Instant::now();
+            let response = adapter.handle_request(seq, "setBreakpoints", Some(payload.clone()));
+            let elapsed = start.elapsed();
+            match response {
+                DapMessage::Response { success, .. } => assert!(success),
+                _ => anyhow::bail!("expected setBreakpoints response"),
+            }
+            samples.push(elapsed);
+        }
+
+        let first = samples[0];
+        let p95_latency = p95(samples);
+        assert!(
+            p95_latency <= first.saturating_mul(3),
+            "breakpoint verification latency regressed across repeats: first={first:?}, p95={p95_latency:?}"
+        );
+        Ok(())
+    }
+
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac15-variable-expansion-latency
     #[tokio::test]
     // AC:15
