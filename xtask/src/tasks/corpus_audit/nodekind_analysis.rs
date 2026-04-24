@@ -7,6 +7,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+/// NodeKinds intentionally allowlisted from deterministic corpus coverage.
+///
+/// These variants are synthetic/recovery-only in normal parser operation, so
+/// they are not expected in the repository's clean deterministic corpus.
+const INTENTIONALLY_UNREACHABLE_NODEKINDS: &[(&str, &str)] = &[
+    ("MissingBlock", "Synthetic recovery node emitted only when parser inserts a missing block."),
+    (
+        "MissingIdentifier",
+        "Synthetic recovery node emitted only when parser inserts a missing identifier.",
+    ),
+    ("MissingStatement", "Synthetic recovery node emitted only when parser inserts a statement."),
+    (
+        "UnknownRest",
+        "Budget-exhaustion sentinel for partial parses; deterministic clean corpus should not hit parser budgets.",
+    ),
+];
+
 /// Statistics about NodeKind coverage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeKindStats {
@@ -14,14 +31,28 @@ pub struct NodeKindStats {
     pub total_count: usize,
     /// Number of NodeKinds that were seen in corpus
     pub covered_count: usize,
+    /// Number of NodeKinds observed directly in parsed corpus files.
+    pub observed_count: usize,
     /// Coverage percentage
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Explicit allowlist of intentionally unreachable NodeKinds.
+    #[serde(default)]
+    pub allowlisted_unreachable: Vec<AllowlistedNodeKind>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// A NodeKind intentionally excluded from deterministic corpus requirements.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this NodeKind is intentionally allowlisted
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -70,14 +101,21 @@ pub fn analyze_nodekind_coverage(
 
     // Get all NodeKinds from the parser
     let all_nodekinds = get_all_nodekinds();
+    let allowlisted_unreachable = get_allowlisted_unreachable();
+    let allowlisted_set: HashSet<String> =
+        allowlisted_unreachable.iter().map(|entry| entry.name.clone()).collect();
     let total_count = all_nodekinds.len();
-    let covered_count = nodekind_counts.len();
+    let observed_count = nodekind_counts.len();
+    let covered_count = observed_count + allowlisted_set.len();
     let coverage_percentage =
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
-        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let never_seen: Vec<String> = all_nodekinds
+        .iter()
+        .filter(|nk| !nodekind_counts.contains_key(*nk) && !allowlisted_set.contains(*nk))
+        .cloned()
+        .collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -100,8 +138,10 @@ pub fn analyze_nodekind_coverage(
     NodeKindStats {
         total_count,
         covered_count,
+        observed_count,
         coverage_percentage,
         never_seen,
+        allowlisted_unreachable,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -146,6 +186,16 @@ fn get_all_nodekinds() -> HashSet<String> {
     perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
+fn get_allowlisted_unreachable() -> Vec<AllowlistedNodeKind> {
+    INTENTIONALLY_UNREACHABLE_NODEKINDS
+        .iter()
+        .map(|(name, rationale)| AllowlistedNodeKind {
+            name: (*name).to_string(),
+            rationale: (*rationale).to_string(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +213,18 @@ mod tests {
         assert!(nodekinds.contains("ExpressionStatement"));
         assert!(nodekinds.contains("Binary"));
         assert!(nodekinds.contains("Subroutine"));
+    }
+
+    #[test]
+    fn test_allowlisted_unreachable_nodekinds_are_canonical() {
+        let all = get_all_nodekinds();
+        let allowlisted = get_allowlisted_unreachable();
+        assert!(!allowlisted.is_empty(), "allowlist should not be empty");
+
+        for entry in allowlisted {
+            assert!(all.contains(&entry.name), "allowlisted kind must be canonical: {}", entry.name);
+            assert!(!entry.rationale.trim().is_empty(), "allowlist rationale must be non-empty");
+        }
     }
 
     #[test]
