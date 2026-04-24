@@ -542,11 +542,11 @@ impl TokenKind {
             TokenKind::HeredocStart => "heredoc (<<)",
             TokenKind::HeredocBody => "heredoc body",
             TokenKind::FormatBody => "format body",
-            TokenKind::DataMarker => "__DATA__",
-            TokenKind::DataBody => "data section",
+            TokenKind::DataMarker => "data marker (__DATA__ or __END__)",
+            TokenKind::DataBody => "data section body",
             TokenKind::VString => "version string",
-            TokenKind::UnknownRest => "unparsed content",
-            TokenKind::HeredocDepthLimit => "heredoc depth limit",
+            TokenKind::UnknownRest => "unparsed remainder",
+            TokenKind::HeredocDepthLimit => "heredoc depth limit exceeded",
 
             // Identifiers and variables
             TokenKind::Identifier => "identifier",
