@@ -118,6 +118,18 @@ fn test_label_ternary_disambiguation_valid_return() {
     assert_clean_parse(r#"EXIT: return $result if defined $result;"#);
 }
 
+/// Token after colon is `;` — labeled empty statement. Valid Perl.
+///
+/// `LABEL: ;` is a legal labeled empty-statement in Perl.  Earlier versions of
+/// the heuristic incorrectly included `Semicolon` in the "cannot start a
+/// statement" set, which caused this pattern to fall through to expression
+/// parsing and produce a spurious parse error.
+#[test]
+fn test_label_ternary_disambiguation_valid_empty_statement() {
+    // `LABEL: ;` — label on an empty statement. is_label_start should return true.
+    assert_clean_parse(r#"EMPTY: ; print "after\n";"#);
+}
+
 // =============================================================================
 // Statement modifier edge cases
 // =============================================================================

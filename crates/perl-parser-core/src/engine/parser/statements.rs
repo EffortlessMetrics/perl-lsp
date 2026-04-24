@@ -1026,40 +1026,26 @@ impl<'a> Parser<'a> {
         })
     }
 
-    /// Check if we're at the start of a labeled statement (LABEL: ...)
+    /// Check if the token after `Identifier:` cannot start a Perl statement.
     ///
-    /// This function determines whether an `Identifier Colon` sequence starts
-    /// a label statement. We use 3-token lookahead to disambiguate label colons
-    /// from ternary/hash-constructor colons:
+    /// Returns `true` when the token kind belongs to the set of tokens that are
+    /// exclusive to expression contexts and can never begin a statement:
     ///
-    /// - `Identifier Colon ?` — ternary condition, not a label (e.g., `$x ? $y : $z`)
-    /// - `Identifier Colon :` — chained ternary else-part, not a label
-    /// - `Identifier Colon ;` — invalid (orphan semicolon after colon)
-    /// - `Identifier Colon ,` — expression continuation in list, not a label
-    /// - `Identifier Colon =>` — hash key-value, not a label
-    /// - `Identifier Colon )` — closing paren, not a label
-    /// - `Identifier Colon ]` — closing bracket, not a label
-    /// - `Identifier Colon }` — orphan closing brace, not a label
-    /// - `Identifier Colon EOF` — end of input, not a label
+    /// - `?` — ternary operator (requires a condition before it)
+    /// - `:` — ternary else-part (always follows the then-branch)
+    /// - `,` — comma separator (expression continuation)
+    /// - `=>` — fat arrow (hash key-value context)
+    /// - `)` / `]` / `}` — closing delimiters (orphan, not a statement)
+    /// - EOF — nothing follows the colon
     ///
-    /// Valid label patterns have a 3rd token that CAN start a statement:
-    /// - `Identifier Colon {` — block start (e.g., `LABEL: { ... }`)
-    /// - `Identifier Colon (` — parenthesized expression
-    /// - `Identifier Colon Keyword` — if, while, for, my, print, etc.
-    /// - `Identifier Colon Identifier` — print, return, etc.
-    ///
-    ///   Check if the 3rd token in a lookahead sequence cannot start a Perl statement.
-    ///
-    /// Tokens like `?`, `:`, `=>`, `;`, `,`, `)`, `]`, `}` are used in expression
-    /// contexts (ternary operators, hash constructors, list separators) and cannot
-    /// start a statement. When the token after `Identifier:` is one of these, the
-    /// colon belongs to a ternary/hash/label expression, not a label statement.
+    /// Notably absent: `TokenKind::Semicolon`.  In Perl, `LABEL: ;` is a valid
+    /// labeled empty-statement, so `;` as the third token must be allowed through
+    /// as a potential label start.
     fn third_token_cannot_start_statement(kind: TokenKind) -> bool {
         matches!(
             kind,
             TokenKind::Question      // ternary `?` operator
             | TokenKind::Colon       // chained ternary else-part
-            | TokenKind::Semicolon  // immediate statement end
             | TokenKind::Comma      // expression continuation
             | TokenKind::FatArrow   // hash key-value context
             | TokenKind::RightParen // closing paren
@@ -1069,6 +1055,23 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Check if we're at the start of a labeled statement (`LABEL: ...`).
+    ///
+    /// Uses 3-token lookahead to distinguish label colons from ternary and
+    /// hash-constructor colons.  A valid label must be an `Identifier` followed
+    /// by a single `:` (not `::`) followed by a token that can start a statement.
+    ///
+    /// Valid patterns (returns `true`):
+    /// - `LABEL: { ... }` — labeled block
+    /// - `LABEL: while (...) { }` — labeled loop
+    /// - `LABEL: print ...` — labeled expression statement
+    /// - `LABEL: ;` — labeled empty statement
+    ///
+    /// Invalid patterns (returns `false`):
+    /// - `foo: ?` — ternary operator after colon
+    /// - `foo: :` — chained ternary else-part
+    /// - `foo: ,` — expression continuation
+    /// - `foo: =>` — fat-arrow hash context
     fn is_label_start(&mut self) -> bool {
         // We need an identifier followed by a colon
         if self.peek_kind() != Some(TokenKind::Identifier) {
