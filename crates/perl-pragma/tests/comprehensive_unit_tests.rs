@@ -1636,3 +1636,143 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
     Ok(())
 }
+
+// ===========================================================================
+// PragmaTracker::final_state and state_for_offset_with_cursor (new APIs)
+// ===========================================================================
+
+/// `final_state` on an empty map must return default state (all flags off).
+#[test]
+fn final_state_empty_map_returns_default() -> Result<(), Box<dyn std::error::Error>> {
+    let map: Vec<_> = Vec::new();
+    let state = PragmaTracker::final_state(&map);
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    assert!(!state.warnings);
+    Ok(())
+}
+
+/// `final_state` must be equivalent to `state_for_offset(usize::MAX)` for any map.
+///
+/// This is the semantic guarantee the PR relies on when replacing the
+/// `usize::MAX` sentinel in `strict_warnings`.
+#[test]
+fn final_state_equals_state_for_offset_usize_max() -> Result<(), Box<dyn std::error::Error>> {
+    // Build: use strict; eval { no strict; }; (restore after eval block)
+    let no_strict = no_node("strict", &[], 20, 30);
+    let eval_block = eval_node(block(vec![no_strict], 15, 35), 10, 36);
+    let ast = program(vec![
+        use_node("strict", &[], 0, 10),
+        eval_block,
+        use_node("warnings", &[], 40, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let via_sentinel = PragmaTracker::state_for_offset(&map, usize::MAX);
+    let via_final = PragmaTracker::final_state(&map);
+
+    assert_eq!(
+        via_sentinel, via_final,
+        "final_state must produce identical result to state_for_offset(usize::MAX)"
+    );
+    assert!(via_final.strict_vars, "strict must be restored after eval block closes");
+    assert!(via_final.warnings, "warnings enabled by the trailing use warnings");
+    Ok(())
+}
+
+/// Cursor-based queries in monotonic (non-decreasing) order must produce the
+/// same result as the plain binary-search path.
+#[test]
+fn cursor_monotonic_matches_binary_search() -> Result<(), Box<dyn std::error::Error>> {
+    // use strict at 0; no strict at 30; use strict at 60
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &[], 30, 41),
+        use_node("strict", &[], 60, 72),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let offsets = [5usize, 20, 35, 50, 65, 80];
+    let mut cursor = 0usize;
+    for &offset in &offsets {
+        let via_cursor =
+            PragmaTracker::state_for_offset_with_cursor(&map, offset, &mut cursor);
+        let via_search = PragmaTracker::state_for_offset(&map, offset);
+        assert_eq!(
+            via_cursor, via_search,
+            "cursor query at offset {offset} diverged from binary search"
+        );
+    }
+    Ok(())
+}
+
+/// When the cursor receives a non-monotonic (backward) offset it must
+/// transparently fall back to binary search and return the correct state.
+#[test]
+fn cursor_non_monotonic_fallback_is_correct() -> Result<(), Box<dyn std::error::Error>> {
+    // use strict at 10; no strict at 50; use strict at 90
+    let ast = program(vec![
+        use_node("strict", &[], 10, 22),
+        no_node("strict", &[], 50, 61),
+        use_node("strict", &[], 90, 102),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = 0usize;
+    // Advance cursor to a high offset (strict disabled, past no-strict entry)
+    let _ = PragmaTracker::state_for_offset_with_cursor(&map, 70, &mut cursor);
+
+    // Now query a backward offset that is before the first use strict —
+    // should report default (no strict).
+    let backward = PragmaTracker::state_for_offset_with_cursor(&map, 5, &mut cursor);
+    let expected = PragmaTracker::state_for_offset(&map, 5);
+    assert_eq!(
+        backward, expected,
+        "non-monotonic backward query must fall back to binary search"
+    );
+    assert!(!backward.strict_vars, "offset 5 is before any use strict");
+
+    // A subsequent forward query after the fallback must also be correct.
+    let forward = PragmaTracker::state_for_offset_with_cursor(&map, 30, &mut cursor);
+    let expected_fwd = PragmaTracker::state_for_offset(&map, 30);
+    assert_eq!(
+        forward, expected_fwd,
+        "post-fallback forward query must be correct"
+    );
+    assert!(forward.strict_vars, "offset 30 is inside the use-strict zone");
+    Ok(())
+}
+
+/// Querying with offset exactly equal to a range start must behave identically
+/// with and without cursor (boundary condition).
+#[test]
+fn cursor_query_at_exact_range_boundary() -> Result<(), Box<dyn std::error::Error>> {
+    // use strict starts exactly at offset 10
+    let ast = program(vec![use_node("strict", &[], 10, 22)]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = 0usize;
+    let via_cursor = PragmaTracker::state_for_offset_with_cursor(&map, 10, &mut cursor);
+    let via_search = PragmaTracker::state_for_offset(&map, 10);
+    assert_eq!(
+        via_cursor, via_search,
+        "query at exact range start must agree with binary search"
+    );
+    Ok(())
+}
+
+/// Cursor initialized to `pragma_map.len() + 1` (stale/corrupted) must be
+/// clamped and not panic.
+#[test]
+fn cursor_out_of_bounds_is_clamped_and_correct() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12)]);
+    let map = PragmaTracker::build(&ast);
+
+    // Deliberately set cursor beyond the map length
+    let mut cursor = map.len() + 999;
+    let state = PragmaTracker::state_for_offset_with_cursor(&map, 5, &mut cursor);
+    let expected = PragmaTracker::state_for_offset(&map, 5);
+    assert_eq!(state, expected, "over-large cursor must be clamped to len and produce correct result");
+    Ok(())
+}
