@@ -1552,7 +1552,7 @@ impl WorkspaceIndex {
                         module_exports.entry(entry.module.clone()).or_default().push(entry.clone());
                     }
                     for (module, exports) in module_exports {
-                        export_table.insert(module, exports);
+                        export_table.entry(module).or_default().extend(exports);
                     }
                 }
             }

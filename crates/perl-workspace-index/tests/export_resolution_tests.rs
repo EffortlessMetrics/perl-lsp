@@ -503,3 +503,46 @@ sub tag_b { }
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Test: exports from two files contributing to the same package are not
+// overwritten when the second file is indexed.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_export_table_merges_entries_from_multiple_files_same_package(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+
+    // Two files that extend the same package namespace
+    let file_a_uri = file_url("/lib/MultiPkg/Part1.pm")?;
+    let file_a_code = r#"package MultiPkg;
+our @EXPORT = qw(from_part1);
+sub from_part1 { 1 }
+1;
+"#;
+    let file_b_uri = file_url("/lib/MultiPkg/Part2.pm")?;
+    let file_b_code = r#"package MultiPkg;
+our @EXPORT = qw(from_part2);
+sub from_part2 { 2 }
+1;
+"#;
+
+    index.index_file(file_a_uri, file_a_code.to_string())?;
+    index.index_file(file_b_uri, file_b_code.to_string())?;
+
+    // Both symbols must be present — second index must not overwrite first
+    let loc1 = index.find_export("MultiPkg", "from_part1");
+    let loc2 = index.find_export("MultiPkg", "from_part2");
+
+    assert!(
+        loc1.is_some(),
+        "from_part1 exported from Part1.pm must survive indexing Part2.pm"
+    );
+    assert!(
+        loc2.is_some(),
+        "from_part2 exported from Part2.pm must be present"
+    );
+
+    Ok(())
+}
