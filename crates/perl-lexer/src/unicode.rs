@@ -75,8 +75,12 @@ pub fn is_perl_identifier_continue(ch: char) -> bool {
             0x200C | 0x200D |
             // Standard variation selectors (e.g. U+FE0F) used to keep emoji presentation.
             0xFE00..=0xFE0F |
+            // Supplementary variation selectors.
+            0xE0100..=0xE01EF |
             // Fitzpatrick skin-tone modifiers.
-            0x1F3FB..=0x1F3FF
+            0x1F3FB..=0x1F3FF |
+            // Emoji tag sequence characters (used by some flag-like emoji sequences).
+            0xE0020..=0xE007F
         )
 }
 
@@ -139,8 +143,10 @@ mod tests {
         assert!(is_perl_identifier_continue('\u{200C}'));
         assert!(is_perl_identifier_continue('\u{200D}'));
         assert!(is_perl_identifier_continue('\u{FE0F}'));
+        assert!(is_perl_identifier_continue('\u{E0100}'));
         assert!(is_perl_identifier_continue('\u{1F3FB}'));
         assert!(is_perl_identifier_continue('\u{1F3FD}'));
+        assert!(is_perl_identifier_continue('\u{E0067}'));
         assert!(!is_perl_identifier_continue(' '));
         assert!(!is_perl_identifier_continue('-'));
     }

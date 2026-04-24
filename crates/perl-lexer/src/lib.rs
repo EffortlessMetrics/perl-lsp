@@ -338,6 +338,17 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// Ensure the internal byte offset points at a UTF-8 char boundary.
+    ///
+    /// This is a defensive guard against malformed intermediate offsets from
+    /// complex lookahead/backtracking paths so downstream slicing never panics.
+    #[inline]
+    fn normalize_char_boundary(&mut self) {
+        while self.position < self.input.len() && !self.input.is_char_boundary(self.position) {
+            self.position += 1;
+        }
+    }
+
     /// Set the lexer mode (for resetting state at statement boundaries)
     pub fn set_mode(&mut self, mode: LexerMode) {
         self.mode = mode;
@@ -400,6 +411,7 @@ impl<'a> PerlLexer<'a> {
         if self.position == 0 {
             self.normalize_file_start();
         }
+        self.normalize_char_boundary();
 
         // Loop to avoid recursion when processing heredocs
         loop {
@@ -814,6 +826,9 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
+            if !self.input.is_char_boundary(self.position) {
+                return None;
+            }
             // For ASCII, direct access is safe
             let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
@@ -830,6 +845,9 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn peek_char(&self, offset: usize) -> Option<char> {
         if offset > self.config.max_lookahead {
+            return None;
+        }
+        if !self.input.is_char_boundary(self.position) {
             return None;
         }
 
@@ -852,6 +870,10 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
+            if !self.input.is_char_boundary(self.position) {
+                self.normalize_char_boundary();
+                return;
+            }
             let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
                 // ASCII fast path

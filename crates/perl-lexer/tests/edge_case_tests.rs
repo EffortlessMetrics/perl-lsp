@@ -1019,6 +1019,41 @@ fn unicode_subroutine_name() -> R {
     Ok(())
 }
 
+#[test]
+fn unicode_emoji_identifier_with_joiners_is_single_token() -> R {
+    let input = "my $👩‍💻 = 1;";
+    assert_terminates(input);
+    let sig = significant(input);
+    let emoji_var = sig
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Identifier(id) if id.as_ref() == "$👩‍💻"))
+        .ok_or("expected emoji identifier token")?;
+
+    assert_eq!(emoji_var.text.as_ref(), "$👩‍💻");
+    assert_eq!(emoji_var.text.len(), emoji_var.end - emoji_var.start);
+    Ok(())
+}
+
+#[test]
+fn file_start_bom_is_skipped_and_does_not_shift_identifier_span() -> R {
+    let input = "\u{FEFF}my $name = 1;";
+    assert_terminates(input);
+    let sig = significant(input);
+    let my_kw = sig
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"))
+        .ok_or("expected my keyword token")?;
+    let id = sig
+        .iter()
+        .find(|t| matches!(&t.token_type, TokenType::Identifier(name) if name.as_ref() == "$name"))
+        .ok_or("expected $name identifier token")?;
+
+    assert_eq!(my_kw.start, 3, "keyword should begin after UTF-8 BOM bytes");
+    assert_eq!(id.text.as_ref(), "$name");
+    assert_eq!(id.text.len(), id.end - id.start);
+    Ok(())
+}
+
 // ===========================================================================
 // 6. Combined edge cases / integration-like tests
 // ===========================================================================
