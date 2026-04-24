@@ -1232,7 +1232,9 @@ use Overlay::Live;
             .map(|o| o.status.success())
             .unwrap_or(false);
         if !perl_available {
-            eprintln!("SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH");
+            eprintln!(
+                "SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH"
+            );
             return Ok(());
         }
 
