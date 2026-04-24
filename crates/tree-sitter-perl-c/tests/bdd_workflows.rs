@@ -139,6 +139,40 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bdd_parse_perl_file_missing_path_includes_context() {
+    let scenario = Scenario::new("parse perl file reports missing path context");
+    let missing_file = unique_temp_file("missing_file");
+
+    scenario.given("a Perl file path that does not exist");
+    scenario.when("parse_perl_file is invoked");
+    let err = parse_perl_file(&missing_file).expect_err("expected missing-file error");
+
+    scenario.then("the error should include path context for callers");
+    let error_message = err.to_string();
+    assert!(error_message.contains("failed to read Perl file"));
+    assert!(error_message.contains(&missing_file.display().to_string()));
+}
+
+#[test]
+fn bdd_parse_perl_file_directory_path_includes_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file reports unreadable path context");
+    let directory_path = unique_temp_file("directory_path");
+
+    scenario.given("a directory path that cannot be read as a file");
+    fs::create_dir(&directory_path)?;
+
+    scenario.when("parse_perl_file is invoked");
+    let err = parse_perl_file(&directory_path).expect_err("expected directory read error");
+
+    scenario.then("the error should include path context for callers");
+    let error_message = err.to_string();
+    assert!(error_message.contains("failed to read Perl file"));
+    assert!(error_message.contains(&directory_path.display().to_string()));
+    fs::remove_dir(&directory_path)?;
+    Ok(())
+}
+
+#[test]
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
