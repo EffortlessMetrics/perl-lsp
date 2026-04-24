@@ -10,7 +10,7 @@
 #![warn(clippy::all)]
 
 use std::fmt;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), windows))]
 use std::path::Path;
 
 /// Output from a subprocess execution
@@ -217,8 +217,13 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
             resolve_windows_program(program).unwrap_or_else(|| program.to_string());
 
         if windows_requires_cmd_shell(&resolved_program) {
-            let mut shell_args = vec!["/C".to_string(), resolved_program];
-            shell_args.extend(args.iter().map(|arg| (*arg).to_string()));
+            let command_line = std::iter::once(resolved_program.as_str())
+                .chain(args.iter().copied())
+                .map(windows_quote_for_cmd)
+                .collect::<Vec<_>>()
+                .join(" ");
+            let shell_args =
+                vec!["/D".to_string(), "/S".to_string(), "/C".to_string(), command_line];
             return ("cmd.exe".to_string(), shell_args);
         }
 
@@ -229,6 +234,25 @@ fn resolve_command_invocation(program: &str, args: &[&str]) -> (String, Vec<Stri
     {
         (program.to_string(), args.iter().map(|arg| (*arg).to_string()).collect())
     }
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_quote_for_cmd(arg: &str) -> String {
+    let mut escaped = String::with_capacity(arg.len() + 2);
+    escaped.push('"');
+    for ch in arg.chars() {
+        match ch {
+            '^' | '&' | '|' | '<' | '>' | '(' | ')' => {
+                escaped.push('^');
+                escaped.push(ch);
+            }
+            '%' => escaped.push_str("%%"),
+            '"' => escaped.push_str("\\\""),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped.push('"');
+    escaped
 }
 
 #[cfg(all(not(target_arch = "wasm32"), windows))]
@@ -486,12 +510,19 @@ mod tests {
         assert_eq!(
             args,
             vec![
+                "/D".to_string(),
+                "/S".to_string(),
                 "/C".to_string(),
-                r"C:\Strawberry\perl\bin\perltidy.bat".to_string(),
-                "-st".to_string(),
-                "-se".to_string(),
+                "\"C:\\Strawberry\\perl\\bin\\perltidy.bat\" \"-st\" \"-se\"".to_string(),
             ]
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_quote_for_cmd_escapes_metacharacters() {
+        let quoted = windows_quote_for_cmd(r#"profile&name|1>%TEMP%\"x""#);
+        assert_eq!(quoted, r#""profile^&name^|1^>%%TEMP%%\\\"x\"""#);
     }
 
     #[cfg(windows)]
