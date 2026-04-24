@@ -123,6 +123,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
                 false
             }
+            Some(TokenKind::Question) => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
