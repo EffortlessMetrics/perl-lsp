@@ -70,6 +70,20 @@ for snippet in &["my $x = 1;", "print $x;"] {
 }
 ```
 
+For typed error handling, prefer the `try_*` parse APIs:
+
+```rust
+use tree_sitter_perl_c::{try_parse_perl_file, ParsePerlError};
+
+match try_parse_perl_file("script.pl") {
+    Ok(tree) => println!("{}", tree.root_node().kind()),
+    Err(ParsePerlError::Io(error)) => eprintln!("could not read file: {error}"),
+    Err(ParsePerlError::LanguageSetup { message }) => eprintln!("parser setup failed: {message}"),
+    Err(ParsePerlError::ParseReturnedNone) => eprintln!("parse was cancelled or timed out"),
+    Err(_) => eprintln!("unexpected parse failure"),
+}
+```
+
 ## Public API
 
 | Function | Description |
@@ -77,9 +91,13 @@ for snippet in &["my $x = 1;", "print $x;"] {
 | `language()` | Returns the tree-sitter `Language` for Perl |
 | `try_create_parser()` | Creates a `tree_sitter::Parser` (returns `Result`) |
 | `create_parser()` | Creates a parser, silently ignoring language-set errors |
+| `try_parse_perl_bytes(code)` | Parses raw bytes with typed `ParsePerlError` failures |
+| `try_parse_perl_code(code)` | Parses `&str` with typed `ParsePerlError` failures |
+| `try_parse_perl_file(path)` | Reads + parses a file with typed `ParsePerlError` failures |
 | `parse_perl_bytes(code)` | Parses raw bytes (including non-UTF-8 Perl source) |
 | `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
 | `parse_perl_file(path)` | Reads and parses a file (non-UTF-8 safe) |
+| `ParsePerlError` | Typed parse error enum (`LanguageSetup`, `ParseReturnedNone`, `Io`) |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 
 ## Binaries
