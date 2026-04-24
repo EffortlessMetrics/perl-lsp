@@ -236,6 +236,29 @@ fn workspace_folder_module_not_on_disk_returns_not_found() -> Result<(), Box<dyn
 }
 
 #[test]
+fn whitespace_only_include_paths_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Norm/Whitespace.pm")?;
+
+    let result = resolve_module_uri(
+        "Norm::Whitespace",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "\t".to_string(), "lib".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("Norm/Whitespace.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn multiple_workspace_folders_searches_in_order() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
 
@@ -373,6 +396,43 @@ fn system_inc_missing_file_returns_not_found() {
     assert_eq!(result, ModuleUriResolution::NotFound);
 }
 
+#[test]
+fn duplicate_system_inc_entries_preserve_first_match_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let inc1 = temp.path().join("sys1");
+    std::fs::create_dir_all(&inc1)?;
+    std::fs::write(inc1.join("Dedup.pm"), "1;")?;
+
+    let inc2 = temp.path().join("sys2");
+    std::fs::create_dir_all(&inc2)?;
+    std::fs::write(inc2.join("Dedup.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "Dedup",
+        &[],
+        &[],
+        &[],
+        true,
+        &[
+            PathBuf::from(format!("{}  ", inc1.display())),
+            PathBuf::from(inc1.clone()),
+            PathBuf::from("."),
+            PathBuf::from(inc2),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("sys1"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
 // ===========================================================================
 // Search precedence: open docs > workspace > system @INC
 // ===========================================================================
@@ -426,6 +486,49 @@ fn workspace_beats_system_inc() -> Result<(), Box<dyn std::error::Error>> {
         ModuleUriResolution::Resolved(uri) => {
             // Workspace match should win; URI should reference the workspace path
             assert!(!uri.contains("inc"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn normalization_keeps_precedence_monotonic_across_sources()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let workspace = temp.path().join("workspace");
+    let ws_module = workspace.join("lib").join("Priority").join("Stable.pm");
+    std::fs::create_dir_all(must_some(ws_module.parent()))?;
+    std::fs::write(&ws_module, "1;")?;
+    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "workspace uri")?;
+
+    let inc1 = temp.path().join("sys_a");
+    std::fs::create_dir_all(inc1.join("Priority"))?;
+    std::fs::write(inc1.join("Priority").join("Stable.pm"), "1;")?;
+    let inc2 = temp.path().join("sys_b");
+    std::fs::create_dir_all(inc2.join("Priority"))?;
+    std::fs::write(inc2.join("Priority").join("Stable.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "Priority::Stable",
+        &[],
+        &[workspace_uri.to_string()],
+        &["   ".to_string(), "./lib".to_string(), "lib".to_string(), "lib/".to_string()],
+        true,
+        &[
+            PathBuf::from(" . "),
+            PathBuf::from(format!("{}/", inc1.display())),
+            PathBuf::from(inc1.clone()),
+            PathBuf::from(inc2),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("/workspace/"));
+            assert!(uri.ends_with("Priority/Stable.pm"));
         }
         other => return Err(format!("expected Resolved, got {other:?}").into()),
     }

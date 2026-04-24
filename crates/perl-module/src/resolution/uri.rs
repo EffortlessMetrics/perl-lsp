@@ -5,6 +5,7 @@
 use crate::path::module_name_to_path;
 use perl_parser_core::path_security::validate_workspace_path;
 use perl_workspace::folder::workspace_folder_to_path;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use url::Url;
@@ -65,8 +66,18 @@ pub fn resolve_module_uri(
     timeout: Duration,
 ) -> ModuleUriResolution {
     let mut effective_inc_roots = Vec::new();
-    for (idx, include_path) in include_paths.iter().enumerate() {
-        let path = PathBuf::from(include_path);
+    let mut include_seen = HashSet::new();
+    for include_path in include_paths {
+        let trimmed = include_path.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let path = normalize_for_dedupe(Path::new(trimmed));
+        if !include_seen.insert(path.clone()) {
+            continue;
+        }
+
         let kind = if path.is_absolute() {
             IncRootKind::ExternalAbsolute
         } else {
@@ -75,16 +86,27 @@ pub fn resolve_module_uri(
         effective_inc_roots.push(IncRoot {
             kind,
             path,
-            precedence: idx,
+            precedence: effective_inc_roots.len(),
             source: "includePaths".to_string(),
         });
     }
+
     if use_system_inc {
-        for (offset, path) in system_inc.iter().enumerate() {
+        let mut system_seen = HashSet::new();
+        for raw_path in system_inc {
+            let trimmed = raw_path.to_string_lossy().trim().to_string();
+            if trimmed.is_empty() || trimmed == "." {
+                continue;
+            }
+            let path = normalize_for_dedupe(Path::new(&trimmed));
+            if !system_seen.insert(path.clone()) {
+                continue;
+            }
+
             effective_inc_roots.push(IncRoot {
                 kind: IncRootKind::InterpreterStartup,
-                path: path.clone(),
-                precedence: include_paths.len() + offset,
+                path,
+                precedence: effective_inc_roots.len(),
                 source: "interpreter-startup-inc".to_string(),
             });
         }
@@ -193,4 +215,21 @@ fn full_path_for_root(
         | IncRootKind::InterpreterStartup
         | IncRootKind::RuntimeDerived => Some(inc_root.path.join(relative_path)),
     }
+}
+
+fn normalize_for_dedupe(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.push(component.as_os_str());
+            }
+            std::path::Component::RootDir
+            | std::path::Component::Prefix(_)
+            | std::path::Component::Normal(_) => normalized.push(component.as_os_str()),
+        }
+    }
+
+    if normalized.as_os_str().is_empty() { PathBuf::from(".") } else { normalized }
 }
