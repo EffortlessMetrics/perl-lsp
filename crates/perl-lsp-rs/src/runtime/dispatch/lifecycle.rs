@@ -147,6 +147,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -161,7 +162,7 @@ mod tests {
     #[test]
     fn initialized_can_only_be_sent_once() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
@@ -173,10 +174,67 @@ mod tests {
     #[test]
     fn auto_initialize_for_compat_promotes_initialized_state() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    proptest! {
+        #[test]
+        fn auto_initialize_for_compat_is_noop_before_initialize_request(
+            method in "[[:alnum:]_/]{1,64}"
+        ) {
+            let server = LspServer::new();
+
+            server.auto_initialize_for_compat(&method);
+
+            prop_assert!(!server.is_initialized());
+        }
+
+        #[test]
+        fn initialized_dispatch_obeys_lifecycle_state_machine(
+            actions in proptest::collection::vec(0u8..=2, 1..32)
+        ) {
+            let server = LspServer::new();
+            let mut initialize_requested = false;
+            let mut initialized = false;
+
+            for action in actions {
+                match action {
+                    // initialize request
+                    0 => {
+                        let result = server.handle_initialize(None);
+                        if initialize_requested {
+                            prop_assert!(result.is_err());
+                        } else {
+                            prop_assert!(result.is_ok());
+                            initialize_requested = true;
+                        }
+                    }
+                    // initialized notification
+                    1 => {
+                        let result = server.handle_initialized_dispatch();
+                        if !initialize_requested || initialized {
+                            prop_assert!(result.is_err());
+                        } else {
+                            prop_assert!(result.is_ok());
+                            initialized = true;
+                        }
+                    }
+                    // auto-initialize compatibility path
+                    2 => {
+                        server.auto_initialize_for_compat("textDocument/hover");
+                        if initialize_requested {
+                            initialized = true;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+
+                prop_assert_eq!(server.is_initialized(), initialized);
+            }
+        }
     }
 }
