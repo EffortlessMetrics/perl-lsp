@@ -20,6 +20,12 @@ fn token_signatures(state: &IncrementalState) -> Vec<String> {
         .collect()
 }
 
+/// Assert that the incremental state's token stream matches a fresh full lex of the same source.
+///
+/// Note: this checks token-stream equivalence (type, byte span, text), not AST structural
+/// equivalence. It is a sufficient regression guard for the incremental lexer sync path — if
+/// tokens diverge, the AST will diverge too. For AST-level coverage see the proptest in
+/// `perl_parser::incremental::tests::prop_incremental_apply_edits_matches_ground_truth`.
 fn assert_equivalent_to_full_parse(state: &IncrementalState) {
     let full = IncrementalState::new(state.source.clone());
     assert_eq!(state.source, full.source, "source diverged from full parse state");
@@ -136,20 +142,36 @@ fn batch_edits_with_independent_shifts_match_full_parse() -> TestResult {
 }
 
 #[test]
-fn unmappable_out_of_range_edit_falls_back_without_panicking() -> TestResult {
+fn out_of_range_edit_does_not_panic() -> TestResult {
+    // An edit whose start_byte and old_end_byte are both beyond the end of the
+    // source must be handled gracefully — no panic, no data loss.  Both byte
+    // values are clamped to source.len() inside apply_single_edit, turning this
+    // into an effective append.  The gap between start_byte and old_end_byte
+    // (1025 bytes) exceeds the 1024-byte single-edit fallback threshold, so the
+    // code path taken is: apply_single_edit (with clamped offsets) followed by
+    // full_reparse.
     let source = "my $x = 1;\n".to_string();
     let mut state = IncrementalState::new(source.clone());
     let append = "print $x;\n";
 
+    // start_byte = source.len(), old_end_byte = source.len() + 1025 so that
+    // touched_bytes = max(1025, append.len()) = 1025 > 1024, triggering the
+    // large-edit fallback in apply_edits.
     let edit = Edit {
-        start_byte: source.len() + 500,
-        old_end_byte: source.len() + 900,
-        new_end_byte: source.len() + 500 + append.len(),
+        start_byte: source.len(),
+        old_end_byte: source.len() + 1025,
+        new_end_byte: source.len() + append.len(),
         new_text: append.to_string(),
     };
 
-    let _ = apply_edits(&mut state, &[edit])?;
+    let result = apply_edits(&mut state, &[edit])?;
 
+    // Full reparse must have fired.
+    assert_eq!(
+        result.reparsed_bytes,
+        state.source.len(),
+        "large out-of-range edit should trigger full reparse fallback"
+    );
     assert_eq!(state.source, format!("{source}{append}"));
     assert_equivalent_to_full_parse(&state);
     Ok(())
