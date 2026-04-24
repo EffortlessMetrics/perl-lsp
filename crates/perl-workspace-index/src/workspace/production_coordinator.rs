@@ -44,8 +44,8 @@ use super::slo::{OperationResult, OperationType, SloConfig, SloTracker};
 use super::state_machine::{IndexState, IndexStateMachine, InvalidationReason, TransitionResult};
 use super::workspace_index::{IndexResourceLimits, WorkspaceIndex};
 use crate::position::{Position, Range};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use url::Url;
@@ -632,8 +632,8 @@ mod tests {
     }
 
     #[test]
-    fn test_coordinator_reuses_identical_file_contents_without_dropping_symbols(
-    ) -> Result<(), String> {
+    fn test_coordinator_reuses_identical_file_contents_without_dropping_symbols()
+    -> Result<(), String> {
         let coordinator = ProductionIndexCoordinator::new();
         coordinator.initialize()?;
 

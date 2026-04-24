@@ -16,8 +16,8 @@ fn query_symbol_references_returns_none_on_empty_index() {
 }
 
 #[test]
-fn query_symbol_references_definition_always_in_references(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn query_symbol_references_definition_always_in_references()
+-> Result<(), Box<dyn std::error::Error>> {
     // The spec says references includes the definition site even when there are no callers.
     let index = WorkspaceIndex::new();
     index.index_file(
@@ -25,9 +25,8 @@ fn query_symbol_references_definition_always_in_references(
         "package Standalone;\nsub lone_wolf { 1 }\n".to_string(),
     )?;
 
-    let query = index
-        .query_symbol_references("Standalone::lone_wolf")
-        .ok_or("query should resolve")?;
+    let query =
+        index.query_symbol_references("Standalone::lone_wolf").ok_or("query should resolve")?;
 
     assert!(
         query.references.iter().any(|loc| loc.uri == query.definition.uri),
@@ -70,8 +69,8 @@ fn query_symbol_references_is_stable_after_reindex() -> Result<(), Box<dyn std::
 // --- original builder tests ---
 
 #[test]
-fn query_symbol_references_returns_cross_file_definition_and_references(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn query_symbol_references_returns_cross_file_definition_and_references()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     let def_uri = file_url("/workspace/lib/Service.pm")?;
@@ -117,8 +116,8 @@ fn query_symbol_references_returns_none_for_not_found() -> Result<(), Box<dyn st
 }
 
 #[test]
-fn query_symbol_references_avoids_false_positives_for_ambiguous_bare_symbols(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn query_symbol_references_avoids_false_positives_for_ambiguous_bare_symbols()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     index.index_file(
