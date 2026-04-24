@@ -491,3 +491,58 @@ fn make_diagnostic_with_details(
         suggestion,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn version_compat_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = vec![];
+        check_version_compat(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn version_bundle_state_is_visible_to_downstream_feature_checks() {
+        let diags = version_compat_diags("use v5.36;\nsub greet ($name) { say $name; }\n");
+        assert!(
+            diags.is_empty(),
+            "use v5.36 feature bundle should satisfy signatures/say checks; got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_feature_state_is_visible_to_downstream_feature_checks() {
+        let diags =
+            version_compat_diags("use v5.20;\nuse feature 'signatures';\nsub greet ($name) { }\n");
+        assert!(
+            diags.is_empty(),
+            "explicit feature pragma should satisfy signatures check under lower declared versions; got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn builtin_named_import_is_distinct_from_builtin_bundle() {
+        let only_named_import = version_compat_diags(
+            "use v5.36;\nuse builtin 'true';\nmy $x = builtin::true();\nmy $y = builtin::inf();\n",
+        );
+        assert!(
+            only_named_import.iter().any(|d| d.message.contains("builtin::inf")),
+            "named import should not act like the full builtin bundle; expected builtin::inf warning, got: {only_named_import:?}"
+        );
+        assert!(
+            only_named_import.iter().all(|d| !d.message.contains("builtin::true")),
+            "named import should satisfy builtin::true call; got: {only_named_import:?}"
+        );
+
+        let bundle_decl =
+            version_compat_diags("use v5.36;\nuse builtin;\nmy $x = builtin::inf();\n");
+        assert!(
+            bundle_decl.iter().any(|d| d.message.contains("'use builtin' requires Perl v5.40+")),
+            "bundle import should be validated separately and warn below v5.40; got: {bundle_decl:?}"
+        );
+    }
+}

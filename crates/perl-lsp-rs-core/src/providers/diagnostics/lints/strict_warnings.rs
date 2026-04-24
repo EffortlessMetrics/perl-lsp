@@ -660,4 +660,23 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn lexical_no_inside_eval_package_and_phase_restores_file_scope_state() {
+        let diags = strict_warnings_diags(
+            "use strict;\n\
+             use warnings;\n\
+             eval { no strict; no warnings; };\n\
+             package Inner {\n\
+                 no strict;\n\
+                 no warnings;\n\
+             }\n\
+             BEGIN { no strict; no warnings; }\n\
+             my $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "lexical no strict/warnings in eval/package/BEGIN should restore and preserve top-level pragma state; got: {diags:?}"
+        );
+    }
 }
