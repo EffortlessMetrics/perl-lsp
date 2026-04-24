@@ -459,6 +459,24 @@ fn use_encoding_tracks_active_source_encoding() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn use_encoding_normalizes_gb18030_aliases() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("encoding", &["'GB-18030'"], 0, 23)]);
+    let map = PragmaTracker::build(&ast);
+
+    assert_eq!(map[0].1.encoding.as_deref(), Some("gb18030"));
+    Ok(())
+}
+
+#[test]
+fn use_if_encoding_normalizes_gb18030_aliases() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$cond", "encoding", "'GB_18030'"], 0, 38)]);
+    let map = PragmaTracker::build(&ast);
+
+    assert_eq!(map[0].1.encoding.as_deref(), Some("gb18030"));
+    Ok(())
+}
+
+#[test]
 fn use_locale_tracks_scope_and_clears_on_no_locale() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![
         use_node("locale", &["':not_characters'"], 0, 28),
