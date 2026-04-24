@@ -1699,7 +1699,8 @@ mod tests {
         // EnvironmentInfo, AgentReceipt, …) by hand.  compare_receipts only
         // reads receipt.gates and receipt.metadata.timestamp, so the rest can
         // be placeholder values.
-        let mut receipt: Receipt = serde_json::from_str(r#"{
+        let mut receipt: Receipt = serde_json::from_str(
+            r#"{
             "schema_version": "1",
             "metadata": {
                 "timestamp": "2026-04-23T00:00:00Z",
@@ -1734,7 +1735,9 @@ mod tests {
                 "baselines": [],
                 "next_actions": []
             }
-        }"#).expect("minimal receipt JSON is valid");
+        }"#,
+        )
+        .expect("minimal receipt JSON is valid");
         receipt.gates.push(GateResult {
             gate_name: "tests".to_string(),
             tier: "pr_fast".to_string(),
