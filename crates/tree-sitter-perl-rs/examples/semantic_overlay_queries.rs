@@ -8,7 +8,10 @@ fn main() {
     };
 
     let overlay = tree.semantic_overlay();
-    let offset = source.find("$value +").unwrap_or(0);
+    let Some(offset) = source.find("$value +") else {
+        eprintln!("pattern not found in source");
+        return;
+    };
 
     if let Some(definition) = overlay.definition_at_offset(offset) {
         println!(

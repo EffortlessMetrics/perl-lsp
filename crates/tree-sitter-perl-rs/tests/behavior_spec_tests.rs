@@ -185,3 +185,46 @@ fn when_querying_pragma_state_overlay_then_effective_state_matches_offset() {
     assert!(!state.strict_refs);
     assert!(state.warnings);
 }
+
+#[test]
+fn when_source_starts_with_use_then_visible_imports_byte_range_is_exact_statement_span() {
+    // Regression: a source that starts with `use` caused the Program root node's text
+    // to be parsed as an import with statement_end_byte = source.len() rather than
+    // the end of the actual `use` statement. This test locks the correct byte range.
+    let source = "use strict;\nmy $x = 1;\n";
+    let tree = parse(source);
+    let overlay = tree.semantic_overlay();
+    let offset = must_some(source.find("my $x"));
+
+    let imports = overlay.visible_imports_at_offset(offset);
+
+    assert_eq!(imports.len(), 1, "expected exactly one import");
+    let strict_import = &imports[0];
+    assert_eq!(strict_import.module, "strict");
+    // statement_end_byte must be strictly less than source.len() — it points to the
+    // end of the Use AST node (at or before the semicolon), not to end-of-file.
+    assert!(
+        strict_import.statement_end_byte < source.len(),
+        "statement_end_byte ({}) must not equal source.len() ({}) — \
+         this indicates the Program root node was mistakenly used as the statement span",
+        strict_import.statement_end_byte,
+        source.len()
+    );
+    assert_eq!(strict_import.statement_start_byte, 0);
+}
+
+#[test]
+fn when_querying_visible_imports_then_no_module_is_excluded() {
+    // `no` statements are NOT module imports — they disable pragmas.
+    // visible_imports_at_offset must not include `no strict` as a visible import.
+    let source = "no strict;\nuse warnings;\nmy $x = 1;\n";
+    let tree = parse(source);
+    let overlay = tree.semantic_overlay();
+    let offset = must_some(source.find("my $x"));
+
+    let imports = overlay.visible_imports_at_offset(offset);
+    let modules: Vec<_> = imports.iter().map(|i| i.module.as_str()).collect();
+
+    assert!(!modules.contains(&"strict"), "no strict must not appear as a visible import");
+    assert!(modules.contains(&"warnings"), "use warnings must appear as a visible import");
+}

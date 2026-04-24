@@ -52,7 +52,7 @@
     clippy::missing_panics_doc
 )]
 
-use perl_ast::Node as AstNode;
+use perl_ast::{Node as AstNode, NodeKind};
 use perl_module::parse_module_import_head;
 use perl_parser_core::Parser as CoreParser;
 use perl_pragma::{PragmaState, PragmaTracker};
@@ -609,24 +609,21 @@ fn collect_visible_use_imports(
     offset: usize,
     out: &mut Vec<VisibleImport>,
 ) {
-    if node.location.start <= offset {
+    // Only attempt import extraction on Use AST nodes. Container nodes (Program,
+    // Block, Subroutine, etc.) span large source ranges that may accidentally start
+    // with a `use` token, producing imports with incorrect statement byte ranges.
+    // Use nodes have no children (for_each_child is a no-op), so they are visited
+    // exactly once per tree traversal — no inner dedup needed.
+    if matches!(node.kind, NodeKind::Use { .. }) && node.location.start <= offset {
         let start = node.location.start.min(source.len());
         let end = node.location.end.min(source.len());
         let statement_text = &source[start..end];
         if let Some(import_head) = parse_module_import_head(statement_text) {
-            let candidate = VisibleImport {
+            out.push(VisibleImport {
                 module: import_head.token.to_string(),
                 statement_start_byte: start,
                 statement_end_byte: end,
-            };
-            let already_present = out.iter().any(|existing| {
-                existing.module == candidate.module
-                    && existing.statement_start_byte == candidate.statement_start_byte
-                    && existing.statement_end_byte == candidate.statement_end_byte
             });
-            if !already_present {
-                out.push(candidate);
-            }
         }
     }
 
