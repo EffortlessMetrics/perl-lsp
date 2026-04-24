@@ -312,12 +312,7 @@ impl<'a> TokenStream<'a> {
                 LexerTokenType::Whitespace | LexerTokenType::Newline => continue,
                 LexerTokenType::Comment(_) => continue,
                 LexerTokenType::EOF => {
-                    return Ok(Token {
-                        kind: TokenKind::Eof,
-                        text: String::new().into(),
-                        start: lexer_token.start,
-                        end: lexer_token.end,
-                    });
+                    return Ok(Token::eof(lexer_token.start, lexer_token.end));
                 }
                 _ => {
                     return Ok(Self::convert_lexer_token(lexer_token));
@@ -333,7 +328,7 @@ impl<'a> TokenStream<'a> {
             // Synthesise an EOF at position 0 when the buffer is exhausted.
             // The caller (parser) makes EOF sticky so position doesn't matter
             // for correctness; using 0 is safe.
-            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+            None => Ok(Token::eof(0, 0)),
         }
     }
 

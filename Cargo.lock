@@ -1766,6 +1766,7 @@ dependencies = [
 name = "perl-parser-core"
 version = "0.12.4"
 dependencies = [
+ "criterion",
  "perl-ast",
  "perl-ast-v2",
  "perl-lexer",
