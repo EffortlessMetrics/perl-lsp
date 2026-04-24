@@ -9,8 +9,6 @@ use perl_parser_core::ast::{Node, NodeKind};
 #[cfg(feature = "lsp-compat")]
 use lsp_types::LocationLink;
 #[cfg(feature = "lsp-compat")]
-use perl_parser_core::source_file::is_binary_content;
-#[cfg(feature = "lsp-compat")]
 use std::collections::HashMap;
 #[cfg(feature = "lsp-compat")]
 use std::str::FromStr;
@@ -79,9 +77,6 @@ impl TypeDefinitionProvider {
         let mut locations = Vec::new();
 
         for (doc_uri, source_text) in documents {
-            if !Self::should_parse_document(source_text) {
-                continue;
-            }
             if let Ok(ast) = perl_parser_core::Parser::new(source_text).parse() {
                 self.find_package_in_node(&ast, package_name, doc_uri, source_text, &mut locations);
             }
@@ -105,9 +100,6 @@ impl TypeDefinitionProvider {
         let mut locations = Vec::new();
 
         for (doc_uri, source_text) in documents {
-            if !Self::should_parse_document(source_text) {
-                continue;
-            }
             if let Ok(ast) = perl_parser_core::Parser::new(source_text).parse() {
                 self.find_custom_type_in_node(
                     &ast,
@@ -124,13 +116,6 @@ impl TypeDefinitionProvider {
         }
 
         if !locations.is_empty() { Some(locations) } else { None }
-    }
-
-    /// Keep type-definition cross-document parsing aligned with runtime text-sync safeguards.
-    #[cfg(feature = "lsp-compat")]
-    fn should_parse_document(source_text: &str) -> bool {
-        source_text.len() <= crate::runtime::limits::max_file_size_bytes()
-            && !is_binary_content(source_text)
     }
 
     /// Extract type name from a node
@@ -566,87 +551,7 @@ impl TypeDefinitionProvider {
     where
         F: FnMut(&Node),
     {
-        match &node.kind {
-            NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                for stmt in statements {
-                    f(stmt);
-                }
-            }
-            NodeKind::Package { block: Some(b), .. } => {
-                f(b);
-            }
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                f(variable);
-                if let Some(init) = initializer {
-                    f(init);
-                }
-            }
-            NodeKind::Assignment { lhs, rhs, .. } => {
-                f(lhs);
-                f(rhs);
-            }
-            NodeKind::Binary { left, right, .. } => {
-                f(left);
-                f(right);
-            }
-            NodeKind::MethodCall { object, args, .. } => {
-                f(object);
-                for arg in args {
-                    f(arg);
-                }
-            }
-            NodeKind::FunctionCall { args, .. } => {
-                for arg in args {
-                    f(arg);
-                }
-            }
-            NodeKind::HashLiteral { pairs } => {
-                for (key, value) in pairs {
-                    f(key);
-                    f(value);
-                }
-            }
-            NodeKind::Subroutine { body, .. } => {
-                f(body);
-            }
-            NodeKind::ExpressionStatement { expression } => {
-                f(expression);
-            }
-            NodeKind::If { condition, then_branch, else_branch, .. } => {
-                f(condition);
-                f(then_branch);
-                if let Some(else_b) = else_branch {
-                    f(else_b);
-                }
-            }
-            NodeKind::While { condition, body, .. } => {
-                f(condition);
-                f(body);
-            }
-            NodeKind::For { init, condition, update, body, .. } => {
-                if let Some(i) = init {
-                    f(i);
-                }
-                if let Some(c) = condition {
-                    f(c);
-                }
-                if let Some(upd) = update {
-                    f(upd);
-                }
-                f(body);
-            }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
-                f(variable);
-                f(list);
-                f(body);
-                if let Some(cb) = continue_block {
-                    f(cb);
-                }
-            }
-            _ => {
-                // Other node types don't have children we need to traverse
-            }
-        }
+        node.for_each_child(&mut f);
     }
 
     /// Find node at the given position
@@ -810,94 +715,5 @@ $obj->method();
         assert!(locations.is_some(), "Should find type definition for MyClass->new()");
         let locs = must_some(locations);
         assert_eq!(locs.len(), 1, "Should find exactly one definition");
-    }
-
-    #[test]
-    fn test_find_package_definition_in_docs_skips_oversized_documents() {
-        let provider = TypeDefinitionProvider::new();
-        let mut documents = HashMap::new();
-        let large_source = format!(
-            "package Huge::Type;\n{}\n",
-            "x".repeat(crate::runtime::limits::max_file_size_bytes() + 1),
-        );
-        documents.insert("file:///large.pl".to_string(), large_source);
-
-        let locations =
-            provider.find_package_definition_in_docs("Huge::Type", "file:///origin.pl", &documents);
-        assert!(locations.is_none());
-    }
-
-    #[test]
-    fn test_find_package_definition_in_docs_skips_binary_documents() {
-        let provider = TypeDefinitionProvider::new();
-        let mut documents = HashMap::new();
-        documents.insert(
-            "file:///binary.pl".to_string(),
-            "package Binary::Type;\0not perl text".to_string(),
-        );
-
-        let locations = provider.find_package_definition_in_docs(
-            "Binary::Type",
-            "file:///origin.pl",
-            &documents,
-        );
-        assert!(locations.is_none());
-    }
-
-    #[test]
-    fn test_find_package_definition_in_docs_at_cap_is_parsed() {
-        // A document of exactly max_file_size_bytes must still be scanned.
-        let provider = TypeDefinitionProvider::new();
-        let mut documents = HashMap::new();
-        let cap = crate::runtime::limits::max_file_size_bytes();
-        // Build a source that is exactly `cap` bytes: header + padding.
-        let header = "package AtCap::Type;\n";
-        let padding = "x".repeat(cap.saturating_sub(header.len()));
-        let at_cap_source = format!("{header}{padding}");
-        assert_eq!(at_cap_source.len(), cap, "test setup: source must be exactly cap bytes");
-        documents.insert("file:///at_cap.pl".to_string(), at_cap_source);
-
-        let locations = provider.find_package_definition_in_docs(
-            "AtCap::Type",
-            "file:///origin.pl",
-            &documents,
-        );
-        // At-cap documents must be parsed — guard is `<=`, not `<`.
-        assert!(locations.is_some(), "document at exactly max_file_size_bytes must be scanned");
-    }
-
-    #[test]
-    fn test_find_custom_type_definition_in_docs_skips_oversized_documents() {
-        let provider = TypeDefinitionProvider::new();
-        let mut documents = HashMap::new();
-        let large_source = format!(
-            "type HugeCustom => ...\n{}\n",
-            "x".repeat(crate::runtime::limits::max_file_size_bytes() + 1),
-        );
-        documents.insert("file:///large_custom.pl".to_string(), large_source);
-
-        let locations = provider.find_custom_type_definition_in_docs(
-            "HugeCustom",
-            "file:///origin.pl",
-            &documents,
-        );
-        assert!(locations.is_none(), "oversized documents must be skipped by custom type scan");
-    }
-
-    #[test]
-    fn test_find_custom_type_definition_in_docs_skips_binary_documents() {
-        let provider = TypeDefinitionProvider::new();
-        let mut documents = HashMap::new();
-        documents.insert(
-            "file:///binary_custom.pl".to_string(),
-            "type BinaryCustom => ...\0not perl text".to_string(),
-        );
-
-        let locations = provider.find_custom_type_definition_in_docs(
-            "BinaryCustom",
-            "file:///origin.pl",
-            &documents,
-        );
-        assert!(locations.is_none(), "binary documents must be skipped by custom type scan");
     }
 }

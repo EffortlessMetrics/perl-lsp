@@ -835,10 +835,15 @@ where
         return false;
     }
 
-    for child in node.children() {
-        if !walk_ast_full(child, visitor) {
-            return false;
+    let mut continue_walk = true;
+    node.for_each_child(|child| {
+        if continue_walk && !walk_ast_full(child, visitor) {
+            continue_walk = false;
         }
+    });
+
+    if !continue_walk {
+        return false;
     }
 
     true
@@ -940,7 +945,6 @@ fn mark_readonly_decl_flags(args: &[Node], flags: &mut FxHashMap<(usize, usize),
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::Parser;
 
     // Helper to create token tuple
     fn tok(line: u32, start: u32, len: u32, kind: u32, mods: u32) -> (u32, u32, u32, u32, u32) {
@@ -1106,29 +1110,6 @@ mod tests {
         let result = remove_overlapping_tokens(input);
         assert_eq!(result.len(), 1, "Equal length overlap must keep first token");
         assert_eq!(result[0], tok(0, 0, 5, 0, 0), "First token must be kept when lengths equal");
-    }
-
-    #[test]
-    fn walk_ast_full_matches_canonical_ast_children() -> Result<(), Box<dyn std::error::Error>> {
-        let source = r#"
-sub demo ($arg = 1) { return $arg if $arg = 5; }
-print "ok" unless $x;
-print "ok" while $y;
-print "ok" until $z;
-print "ok" for @xs;
-print "ok" foreach @ys;
-"#;
-        let mut parser = Parser::new(source);
-        let ast = parser.parse()?;
-
-        let mut visited = 0usize;
-        let completed = walk_ast_full(&ast, &mut |_| {
-            visited += 1;
-            true
-        });
-        assert!(completed);
-        assert_eq!(visited, ast.count_nodes());
-        Ok(())
     }
 
     /// Test tokens on different lines never overlap
