@@ -1,0 +1,170 @@
+{
+  "name": "attach_rich_session_sequence",
+  "description": "Attach handshake with stack/scopes/variables/evaluate plus continued/terminated events",
+  "expectedEventOrder": ["initialized", "stopped", "continued", "terminated"],
+  "messages": [
+    {
+      "seq": 1,
+      "type": "request",
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "perl",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true
+      }
+    },
+    {
+      "seq": 1,
+      "type": "response",
+      "request_seq": 1,
+      "success": true,
+      "command": "initialize",
+      "requiredBodyKeys": ["supportsConfigurationDoneRequest", "supportsEvaluateForHovers"]
+    },
+    {
+      "seq": 2,
+      "type": "request",
+      "command": "attach",
+      "arguments": {
+        "processId": 4242,
+        "stopOnEntry": false
+      }
+    },
+    {
+      "seq": 2,
+      "type": "response",
+      "request_seq": 2,
+      "success": true,
+      "command": "attach",
+      "requiredBodyKeys": ["threadId", "processId", "mode"]
+    },
+    {
+      "seq": 3,
+      "type": "request",
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [
+          { "line": 9 }
+        ]
+      }
+    },
+    {
+      "seq": 3,
+      "type": "response",
+      "request_seq": 3,
+      "success": true,
+      "command": "setBreakpoints",
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "seq": 4,
+      "type": "request",
+      "command": "configurationDone"
+    },
+    {
+      "seq": 4,
+      "type": "response",
+      "request_seq": 4,
+      "success": true,
+      "command": "configurationDone"
+    },
+    {
+      "seq": 5,
+      "type": "request",
+      "command": "stackTrace",
+      "arguments": {
+        "threadId": 4242
+      }
+    },
+    {
+      "seq": 5,
+      "type": "response",
+      "request_seq": 5,
+      "success": true,
+      "command": "stackTrace",
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "seq": 6,
+      "type": "request",
+      "command": "scopes",
+      "arguments": {
+        "frameId": 4242
+      }
+    },
+    {
+      "seq": 6,
+      "type": "response",
+      "request_seq": 6,
+      "success": true,
+      "command": "scopes",
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "seq": 7,
+      "type": "request",
+      "command": "variables",
+      "arguments": {
+        "variablesReference": 42421
+      }
+    },
+    {
+      "seq": 7,
+      "type": "response",
+      "request_seq": 7,
+      "success": true,
+      "command": "variables",
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "seq": 8,
+      "type": "request",
+      "command": "evaluate",
+      "arguments": {
+        "expression": "$x"
+      }
+    },
+    {
+      "seq": 8,
+      "type": "response",
+      "request_seq": 8,
+      "success": false,
+      "command": "evaluate"
+    },
+    {
+      "seq": 9,
+      "type": "request",
+      "command": "continue",
+      "arguments": {
+        "threadId": 4242
+      }
+    },
+    {
+      "seq": 9,
+      "type": "response",
+      "request_seq": 9,
+      "success": true,
+      "command": "continue",
+      "requiredBodyKeys": ["allThreadsContinued"]
+    },
+    {
+      "seq": 10,
+      "type": "request",
+      "command": "disconnect",
+      "arguments": {}
+    },
+    {
+      "seq": 10,
+      "type": "response",
+      "request_seq": 10,
+      "success": true,
+      "command": "disconnect"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "client": "vscode-mock-debug",
+  "description": "Reference-client attach flow with response and event conformance checks",
+  "expectedEventOrder": ["initialized", "stopped", "continued", "terminated"],
+  "requests": [
+    {
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "mock",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "locale": "en-US"
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsSetVariable",
+        "supportsCompletionsRequest",
+        "supportsLoadedSourcesRequest"
+      ],
+      "expectedEvents": [
+        {
+          "event": "initialized"
+        }
+      ]
+    },
+    {
+      "command": "attach",
+      "arguments": {
+        "processId": 4242,
+        "stopOnEntry": false
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["threadId", "processId", "mode"],
+      "expectedEvents": [
+        {
+          "event": "stopped",
+          "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped"],
+          "requiredBodyFieldEquals": {
+            "reason": "attach"
+          }
+        }
+      ]
+    },
+    {
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {},
+        "breakpoints": []
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "command": "configurationDone",
+      "expectSuccess": true
+    },
+    {
+      "command": "stackTrace",
+      "arguments": { "threadId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "command": "scopes",
+      "arguments": { "frameId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "command": "variables",
+      "arguments": { "variablesReference": 42421 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "command": "evaluate",
+      "arguments": { "expression": "$x" },
+      "expectSuccess": false,
+      "requiredMessageContains": "Evaluate is unavailable for processId attach"
+    },
+    {
+      "command": "continue",
+      "arguments": { "threadId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["allThreadsContinued"],
+      "expectedEvents": [
+        {
+          "event": "continued",
+          "requiredBodyKeys": ["threadId", "allThreadsContinued"]
+        }
+      ]
+    },
+    {
+      "command": "disconnect",
+      "expectSuccess": true,
+      "expectedEvents": [
+        {
+          "event": "terminated"
+        }
+      ]
+    }
+  ]
+}

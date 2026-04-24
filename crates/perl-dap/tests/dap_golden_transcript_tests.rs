@@ -6,10 +6,11 @@
 
 #[cfg(feature = "dap-phase2")]
 mod dap_golden_transcripts {
-    use anyhow::Result;
+    use anyhow::{Result, anyhow};
     use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
     use serde_json::{Value, json};
     use std::path::PathBuf;
+    use std::sync::mpsc::{Receiver, channel};
 
     fn transcript_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -62,6 +63,14 @@ mod dap_golden_transcripts {
             _ => anyhow::bail!("expected response for {command}"),
         }
         Ok(())
+    }
+
+    fn drain_events(receiver: &Receiver<DapMessage>) -> Vec<DapMessage> {
+        let mut events = Vec::new();
+        while let Ok(message) = receiver.try_recv() {
+            events.push(message);
+        }
+        events
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac13-hello-world-transcript
@@ -187,6 +196,152 @@ mod dap_golden_transcripts {
             }
             _ => anyhow::bail!("expected setBreakpoints response"),
         }
+        Ok(())
+    }
+
+    /// Tests richer event/response conformance with an attach-driven session flow.
+    #[tokio::test]
+    // AC:13
+    async fn test_attach_rich_session_golden_transcript() -> Result<()> {
+        let transcript = load_transcript("attach_rich_session_sequence.json")?;
+        let messages = extract_messages(&transcript)?;
+
+        let required_commands = [
+            "initialize",
+            "attach",
+            "setBreakpoints",
+            "configurationDone",
+            "stackTrace",
+            "scopes",
+            "variables",
+            "evaluate",
+            "continue",
+            "disconnect",
+        ];
+
+        for command in required_commands {
+            assert!(
+                messages.iter().any(|m| m["type"] == "request" && m["command"] == command),
+                "transcript should contain request command '{command}'"
+            );
+        }
+
+        let mut adapter = DebugAdapter::new();
+        let (event_sender, event_receiver) = channel::<DapMessage>();
+        adapter.set_event_sender(event_sender);
+
+        let mut request_seq = 1_i64;
+        let mut prev_response_seq = 0_i64;
+        let mut event_log = Vec::new();
+
+        for message in messages {
+            if message.get("type").and_then(Value::as_str) != Some("request") {
+                continue;
+            }
+
+            let command = message
+                .get("command")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow!("request entry missing command"))?;
+            let arguments = message.get("arguments").cloned().map(|v| resolve_workspace_vars(&v));
+
+            let response = adapter.handle_request(request_seq, command, arguments);
+            match response {
+                DapMessage::Response {
+                    seq,
+                    request_seq: echoed_request_seq,
+                    success,
+                    command: echoed_command,
+                    body,
+                    ..
+                } => {
+                    assert!(seq > prev_response_seq, "response seq must increase for {command}");
+                    prev_response_seq = seq;
+                    assert_eq!(
+                        echoed_request_seq, request_seq,
+                        "request_seq mismatch for {command}"
+                    );
+                    assert_eq!(echoed_command, command, "command echo mismatch for {command}");
+
+                    let serialized = serde_json::to_value(&DapMessage::Response {
+                        seq,
+                        request_seq: echoed_request_seq,
+                        success,
+                        command: echoed_command.clone(),
+                        body: body.clone(),
+                        message: None,
+                    })?;
+                    let object = serialized
+                        .as_object()
+                        .ok_or_else(|| anyhow!("{command} response should serialize as object"))?;
+                    for key in ["type", "seq", "request_seq", "success", "command"] {
+                        assert!(object.contains_key(key), "{command} response missing key '{key}'");
+                    }
+
+                    if let Some(expected_response) = messages.iter().find(|candidate| {
+                        candidate["type"] == "response"
+                            && candidate["command"] == command
+                            && candidate["request_seq"] == request_seq
+                    }) {
+                        let expected_success =
+                            expected_response["success"].as_bool().unwrap_or(success);
+                        assert_eq!(
+                            success, expected_success,
+                            "success mismatch for {command}; expected transcript {expected_success}, got {success}"
+                        );
+
+                        if let Some(required_body_keys) =
+                            expected_response.get("requiredBodyKeys").and_then(Value::as_array)
+                        {
+                            let response_body = body
+                                .as_ref()
+                                .ok_or_else(|| anyhow!("{command} expected response body"))?;
+                            for key in required_body_keys {
+                                let key = key.as_str().ok_or_else(|| {
+                                    anyhow!("requiredBodyKeys entry must be a string")
+                                })?;
+                                assert!(
+                                    response_body.get(key).is_some(),
+                                    "{command} response body missing key '{key}'"
+                                );
+                            }
+                        }
+                    }
+                }
+                other => anyhow::bail!("expected response for {command}, got {other:?}"),
+            }
+
+            for event in drain_events(&event_receiver) {
+                if let DapMessage::Event { event, .. } = event {
+                    event_log.push(event);
+                }
+            }
+            request_seq += 1;
+        }
+
+        let expected_event_order =
+            transcript["expectedEventOrder"].as_array().ok_or_else(|| {
+                anyhow!("attach_rich_session_sequence transcript missing expectedEventOrder")
+            })?;
+        let expected_event_order = expected_event_order
+            .iter()
+            .map(|event| {
+                event.as_str().ok_or_else(|| anyhow!("expectedEventOrder entries must be strings"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let mut cursor = 0_usize;
+        for expected_event in expected_event_order {
+            let Some(position) =
+                event_log[cursor..].iter().position(|event| event == expected_event)
+            else {
+                anyhow::bail!(
+                    "expected event '{expected_event}' not found in event log: {event_log:?}"
+                );
+            };
+            cursor += position + 1;
+        }
+
         Ok(())
     }
 }
