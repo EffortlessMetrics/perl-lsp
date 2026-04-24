@@ -139,6 +139,50 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bdd_parse_perl_file_missing_path_reports_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file missing path reports context");
+    let file = unique_temp_file("missing_file");
+    let file_display = file.display().to_string();
+
+    scenario.given("a missing Perl source path");
+    scenario.when("parse_perl_file is invoked");
+    let error = match parse_perl_file(&file) {
+        Ok(_) => return Err("expected parse_perl_file to fail for missing file".into()),
+        Err(error) => error,
+    };
+
+    scenario.then("the error message should contain the path and the reason");
+    let message = error.to_string();
+    assert!(message.contains(&file_display));
+    assert!(message.contains("failed to parse Perl file"));
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_perl_file_unreadable_path_reports_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file unreadable path reports context");
+    let directory = unique_temp_file("unreadable_path");
+    let directory_display = directory.display().to_string();
+
+    scenario.given("a directory path where a file is expected");
+    fs::create_dir(&directory)?;
+
+    scenario.when("parse_perl_file is invoked");
+    let error = match parse_perl_file(&directory) {
+        Ok(_) => return Err("expected parse_perl_file to fail for directory path".into()),
+        Err(error) => error,
+    };
+
+    scenario.then("the error message should contain the path and parse context");
+    let message = error.to_string();
+    assert!(message.contains(&directory_display));
+    assert!(message.contains("failed to parse Perl file"));
+
+    fs::remove_dir(&directory)?;
+    Ok(())
+}
+
+#[test]
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";

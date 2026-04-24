@@ -39,8 +39,26 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::path::Path;
+use std::{fmt, path::Path};
 use tree_sitter::{Language, Parser};
+
+#[derive(Debug)]
+struct ParsePerlFileError {
+    path: std::path::PathBuf,
+    source: Box<dyn std::error::Error>,
+}
+
+impl fmt::Display for ParsePerlFileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to parse Perl file '{}': {}", self.path.display(), self.source)
+    }
+}
+
+impl std::error::Error for ParsePerlFileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.as_ref())
+    }
+}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -162,8 +180,20 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read(path)?;
-    parse_perl_bytes(&code)
+    let path = path.as_ref();
+    let code = std::fs::read(path).map_err(|source| {
+        Box::new(ParsePerlFileError {
+            path: path.to_path_buf(),
+            source: Box::new(source),
+        }) as Box<dyn std::error::Error>
+    })?;
+
+    parse_perl_bytes(&code).map_err(|source| {
+        Box::new(ParsePerlFileError {
+            path: path.to_path_buf(),
+            source,
+        }) as Box<dyn std::error::Error>
+    })
 }
 
 /// Returns the scanner backend identifier for this crate.
