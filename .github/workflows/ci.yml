@@ -64,9 +64,9 @@ jobs:
         id: check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          CURRENT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          BRANCH="${{ github.head_ref || github.ref_name }}"
-          CURRENT="${{ github.event.pull_request.head.sha || github.sha }}"
           LATEST=$(git ls-remote "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" "refs/heads/${BRANCH}" | awk '{print $1}')
           if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
             echo "is_latest=true" >> "$GITHUB_OUTPUT"
