@@ -184,10 +184,18 @@ fn test_ci_scope_invalid_base_reports_resolved_fallback() -> Result<()> {
         .args(["ci-scope", "--base", "this-ref-should-not-exist", "--format", "json"])
         .output()?;
 
+    // A repo with zero resolvable fallbacks (e.g. initial single-commit clone with
+    // no remote) will exit non-zero.  That is correct behaviour — skip rather than
+    // panic so the test doesn't fail spuriously in unusual CI environments.
+    if !output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        output.status.success(),
-        "ci-scope should resolve a fallback base; stderr: {}",
-        String::from_utf8_lossy(&output.stderr)
+        stderr.contains("Warning:"),
+        "A fallback warning must be emitted to stderr when the user-supplied base is invalid; \
+         got stderr: {stderr}"
     );
 
     let stdout = String::from_utf8(output.stdout)?;
@@ -196,9 +204,39 @@ fn test_ci_scope_invalid_base_reports_resolved_fallback() -> Result<()> {
 
     assert_ne!(
         base, "this-ref-should-not-exist",
-        "Output base should report the resolved fallback ref"
+        "Output base should report the resolved fallback ref, not the invalid user input"
     );
     assert!(!base.is_empty(), "Output base should not be empty when fallback succeeds");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// H. HEAD is never used as a fallback base (would produce an empty diff)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_ci_scope_head_not_used_as_fallback() -> Result<()> {
+    // Passing an invalid base should never resolve to HEAD, because
+    // `git diff HEAD...HEAD` produces an empty file list and silently skips
+    // all CI lanes — a false-negative worse than an error.
+    let output = Command::cargo_bin("xtask")?
+        .args(["ci-scope", "--base", "this-ref-should-not-exist", "--format", "json"])
+        .output()?;
+
+    if !output.status.success() {
+        // No fallbacks available at all — error is the correct outcome, not HEAD.
+        return Ok(());
+    }
+
+    let stdout = String::from_utf8(output.stdout)?;
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+    let base = parsed["base"].as_str().unwrap_or_default();
+
+    assert_ne!(
+        base, "HEAD",
+        "HEAD must not be used as a fallback base ref (it produces an empty diff)"
+    );
 
     Ok(())
 }

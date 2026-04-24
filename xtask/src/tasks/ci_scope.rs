@@ -769,7 +769,11 @@ fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
         return Ok(base.to_string());
     }
 
-    let fallback_candidates = ["origin/main", "origin/master", "main", "master", "HEAD~1", "HEAD"];
+    // NOTE: HEAD is intentionally excluded from the fallback chain.
+    // Using HEAD as a base ref causes `git diff HEAD...HEAD` to return an
+    // empty file list, which silently reports zero changed files and causes
+    // all CI lanes to be skipped — a false-negative worse than an error.
+    let fallback_candidates = ["origin/main", "origin/master", "main", "master", "HEAD~1"];
     for candidate in fallback_candidates {
         if ref_exists(candidate, root)? {
             eprintln!("Warning: base ref '{}' not found; using fallback '{}'", base, candidate);
@@ -777,8 +781,9 @@ fn resolve_base_ref(base: &str, root: &Path) -> Result<String> {
         }
     }
 
-    Err(color_eyre::eyre::eyre!(
-        "Could not resolve base ref '{}' and no fallback refs were available",
+    Err(eyre!(
+        "Could not resolve base ref '{}'. Tried origin/main, origin/master, main, master, and HEAD~1. \
+         Ensure the repository has at least one commit and the remote is reachable.",
         base
     ))
 }
