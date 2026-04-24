@@ -149,34 +149,118 @@ mod tests {
     use super::*;
 
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn bdd_given_no_initialize_request_when_initialized_notification_then_server_not_initialized_error()
+     {
+        // Given a fresh server with no initialize request
         let server = LspServer::new();
 
+        // When the client sends initialized
         let result = server.handle_initialized_dispatch();
 
+        // Then the server rejects it as not initialized yet
         assert!(result.is_err(), "initialized before initialize must error");
+        let error_code = result.err().map(|error| error.code);
+        assert_eq!(error_code, Some(-32002), "must return ServerNotInitialized error code");
         assert!(!server.is_initialized(), "server must remain uninitialized");
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn bdd_given_initialized_server_when_initialized_notification_repeated_then_invalid_request_error()
+    -> Result<(), JsonRpcError> {
+        // Given a server that has completed initialize + initialized once
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
 
+        // When initialized is sent for the first and second time
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
+        // Then first succeeds, second fails with InvalidRequest
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        let error_code = second.err().map(|error| error.code);
+        assert_eq!(error_code, Some(-32600), "must return InvalidRequest error code");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn bdd_given_initialize_requested_when_compat_request_arrives_then_server_auto_initializes()
+    -> Result<(), JsonRpcError> {
+        // Given initialize was requested, but initialized notification was skipped
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
+        assert!(!server.is_initialized(), "server must not be initialized yet");
 
+        // When a normal request is dispatched through compatibility path
         server.auto_initialize_for_compat("textDocument/hover");
 
+        // Then initialized state is promoted automatically
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn bdd_given_no_initialize_request_when_compat_request_arrives_then_server_stays_uninitialized()
+    {
+        // Given initialize was never requested
+        let server = LspServer::new();
+        assert!(!server.initialize_requested.load(Ordering::Acquire));
+
+        // When compatibility path is called
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        // Then server should remain uninitialized
+        assert!(!server.is_initialized());
+    }
+
+    #[test]
+    fn bdd_given_cancelled_requests_when_shutdown_dispatch_then_state_is_cleared_and_shutdown_set()
+    {
+        // Given pending cancelled request ids
+        let server = LspServer::new();
+        server.cancelled.lock().insert(json!(1));
+        server.cancelled.lock().insert(json!("abc"));
+        assert_eq!(server.cancelled.lock().len(), 2);
+
+        // When shutdown is handled
+        let result = server.handle_shutdown_dispatch();
+
+        // Then cancelled state is cleared and shutdown is marked
+        assert!(result.is_ok(), "shutdown dispatch should succeed");
+        assert_eq!(result.ok(), Some(Some(json!(null))));
+        assert!(server.cancelled.lock().is_empty(), "shutdown must clear cancelled ids");
+        assert!(server.shutdown_received.load(Ordering::Acquire), "shutdown flag must be set");
+    }
+
+    #[test]
+    fn bdd_given_trace_level_messages_when_set_trace_verbose_then_level_updates() {
+        // Given trace level is messages
+        let server = LspServer::new();
+        *server.trace_level.lock() = "messages".to_string();
+
+        // When client sets trace to verbose
+        let result = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
+
+        // Then level is updated to verbose and call succeeds
+        assert!(result.is_ok(), "setTrace should succeed");
+        assert_eq!(result.ok(), Some(None));
+        assert_eq!(server.trace_level.lock().as_str(), "verbose");
+    }
+
+    #[test]
+    fn bdd_given_trace_level_verbose_when_set_trace_invalid_then_level_defaults_to_off() {
+        // Given trace level is verbose
+        let server = LspServer::new();
+        *server.trace_level.lock() = "verbose".to_string();
+
+        // When client sends invalid trace value
+        let result = server.handle_set_trace_dispatch(Some(json!({ "value": "invalid-level" })));
+
+        // Then level falls back to off per spec
+        assert!(result.is_ok(), "invalid setTrace should still succeed");
+        assert_eq!(result.ok(), Some(None));
+        assert_eq!(server.trace_level.lock().as_str(), "off");
     }
 }
