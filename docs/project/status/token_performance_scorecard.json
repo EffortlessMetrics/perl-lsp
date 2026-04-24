@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "generated_at_epoch_s": 1777040511,
+  "metrics": {
+    "eof_and_synthetic_token_construction": {
+      "name": "eof_and_synthetic_token_construction",
+      "iterations": 100,
+      "median_ns": 154,
+      "p95_ns": 158,
+      "mean_ns": 153
+    },
+    "lexer_to_parser_token_conversion": {
+      "name": "lexer_to_parser_token_conversion",
+      "iterations": 50,
+      "median_ns": 1526,
+      "p95_ns": 1581,
+      "mean_ns": 1921
+    },
+    "token_clone": {
+      "name": "token_clone",
+      "iterations": 100,
+      "median_ns": 77,
+      "p95_ns": 84,
+      "mean_ns": 78
+    },
+    "token_equality": {
+      "name": "token_equality",
+      "iterations": 100,
+      "median_ns": 51,
+      "p95_ns": 53,
+      "mean_ns": 51
+    },
+    "token_new_long": {
+      "name": "token_new_long",
+      "iterations": 80,
+      "median_ns": 118,
+      "p95_ns": 132,
+      "mean_ns": 118
+    },
+    "token_new_short": {
+      "name": "token_new_short",
+      "iterations": 80,
+      "median_ns": 112,
+      "p95_ns": 130,
+      "mean_ns": 117
+    },
+    "tokenkind_category_predicates": {
+      "name": "tokenkind_category_predicates",
+      "iterations": 100,
+      "median_ns": 54,
+      "p95_ns": 55,
+      "mean_ns": 53
+    },
+    "tokenkind_display_name": {
+      "name": "tokenkind_display_name",
+      "iterations": 100,
+      "median_ns": 57,
+      "p95_ns": 59,
+      "mean_ns": 57
+    }
+  }
+}

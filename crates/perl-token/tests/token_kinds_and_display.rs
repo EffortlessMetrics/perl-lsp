@@ -177,6 +177,16 @@ fn is_special(kind: TokenKind) -> bool {
     matches!(kind, TokenKind::Eof | TokenKind::Unknown)
 }
 
+#[test]
+fn tokenkind_category_predicates_match_reference_classification() {
+    for kind in all_kinds() {
+        assert_eq!(kind.is_keyword(), is_keyword(kind), "keyword mismatch for {kind:?}");
+        assert_eq!(kind.is_operator(), is_operator(kind), "operator mismatch for {kind:?}");
+        assert_eq!(kind.is_delimiter(), is_delimiter(kind), "delimiter mismatch for {kind:?}");
+        assert_eq!(kind.is_literal(), is_literal(kind), "literal mismatch for {kind:?}");
+    }
+}
+
 /// Every variant in TokenKind, including Field and Goto.
 fn all_kinds() -> Vec<TokenKind> {
     vec![
