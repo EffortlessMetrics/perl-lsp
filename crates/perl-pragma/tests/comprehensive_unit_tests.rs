@@ -207,6 +207,32 @@ fn use_strict_quoted_args_double_quotes() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn use_strict_qw_list_args_are_normalized() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw(vars refs)"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn no_strict_mixed_grouped_and_quoted_args_are_normalized() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["qw(vars refs)", "'subs'"], 13, 48),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    Ok(())
+}
+
+#[test]
 fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
     let map = PragmaTracker::build(&ast);
@@ -1418,6 +1444,87 @@ fn use_builtin_tracks_lexical_imports_only() -> Result<(), Box<dyn std::error::E
         !state.has_feature("builtin"),
         "lexical builtin imports should stay separate from version-implied features"
     );
+    Ok(())
+}
+
+#[test]
+fn use_feature_all_enables_known_feature_set() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &[":all"], 0, 18)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("builtin"));
+    assert!(state.unicode_strings);
+    Ok(())
+}
+
+#[test]
+fn no_feature_all_clears_version_bundle_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("v5.40", &[], 0, 12), no_node("feature", &[":all"], 13, 31)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("signatures"));
+    assert!(!state.has_feature("builtin"));
+    assert!(!state.unicode_strings);
+    Ok(())
+}
+
+#[test]
+fn no_feature_bundle_then_use_feature_bundle_reenables_expected_subset()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 12),
+        no_node("feature", &[":5.36"], 13, 33),
+        use_node("feature", &[":5.36"], 34, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[2].1;
+
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("defer"));
+    assert!(state.has_feature("isa"));
+    assert!(state.has_feature("builtin"), "v5.40-only features should stay enabled");
+    Ok(())
+}
+
+#[test]
+fn no_builtin_removes_selected_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false ceil)"], 0, 30),
+        no_node("builtin", &["'false'"], 31, 49),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(state.has_builtin_import("ceil"));
+    Ok(())
+}
+
+#[test]
+fn no_builtin_without_args_clears_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast =
+        program(vec![use_node("builtin", &["'true'"], 0, 20), no_node("builtin", &[], 21, 31)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.builtin_imports.is_empty());
+    Ok(())
+}
+
+#[test]
+fn no_if_builtin_conditionally_clears_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["'true'", "'ceil'"], 0, 28),
+        no_node("if", &["$debug", "'builtin'", "'ceil'"], 29, 60),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("ceil"));
     Ok(())
 }
 

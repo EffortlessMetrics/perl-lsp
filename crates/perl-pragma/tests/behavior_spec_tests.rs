@@ -177,6 +177,33 @@ fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_
 }
 
 #[test]
+fn given_use_feature_all_then_no_feature_all_when_querying_after_disable_then_features_are_cleared()
+{
+    let ast =
+        program(vec![use_node("feature", &[":all"], 0, 18), no_node("feature", &[":all"], 19, 36)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 30);
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("signatures"));
+    assert!(!state.has_feature("builtin"));
+}
+
+#[test]
+fn given_use_builtin_then_no_builtin_when_querying_after_disable_then_imports_are_removed() {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false ceil)"], 0, 30),
+        no_node("builtin", &["'false'"], 31, 49),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(state.has_builtin_import("ceil"));
+}
+
+#[test]
 fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
  {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);

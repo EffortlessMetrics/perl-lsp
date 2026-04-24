@@ -250,6 +250,26 @@ fn known_feature_name(name: &str) -> Option<&'static str> {
     }
 }
 
+const KNOWN_FEATURE_NAMES: &[&str] = &[
+    "say",
+    "state",
+    "switch",
+    "unicode_strings",
+    "unicode_eval",
+    "evalbytes",
+    "current_sub",
+    "fc",
+    "postfix_deref",
+    "try",
+    "signatures",
+    "defer",
+    "isa",
+    "class",
+    "field",
+    "method",
+    "builtin",
+];
+
 fn enable_feature_name(state: &mut PragmaState, name: &str) -> bool {
     if name == "signatures" {
         state.signatures_strict = true;
@@ -299,6 +319,13 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
 
     for arg in args {
         for item in feature_items(arg) {
+            if enabled && item == ":all" {
+                for feature in KNOWN_FEATURE_NAMES {
+                    changed |= enable_feature_name(state, feature);
+                }
+                continue;
+            }
+
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -356,6 +383,19 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     }
 }
 
+fn remove_builtin_imports(state: &mut PragmaState, args: &[String]) {
+    if args.is_empty() {
+        state.builtin_imports.clear();
+        return;
+    }
+
+    for arg in args {
+        for name in builtin_import_names(arg) {
+            state.builtin_imports.retain(|import| import != &name);
+        }
+    }
+}
+
 fn pragma_arg_items(arg: &str) -> Vec<String> {
     let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
 
@@ -364,6 +404,26 @@ fn pragma_arg_items(arg: &str) -> Vec<String> {
     }
 
     vec![trimmed.to_string()]
+}
+
+fn apply_strict_args(state: &mut PragmaState, args: &[String], enabled: bool) {
+    if args.is_empty() {
+        state.strict_vars = enabled;
+        state.strict_subs = enabled;
+        state.strict_refs = enabled;
+        return;
+    }
+
+    for arg in args {
+        for item in pragma_arg_items(arg) {
+            match item.as_str() {
+                "vars" => state.strict_vars = enabled,
+                "subs" => state.strict_subs = enabled,
+                "refs" => state.strict_refs = enabled,
+                _ => {}
+            }
+        }
+    }
 }
 
 fn normalized_pragma_token(arg: &str) -> &str {
@@ -394,7 +454,9 @@ fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
             tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
         }
         "feature" => !tail.is_empty(),
-        "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
+        "builtin" => {
+            tail.is_empty() || tail.iter().any(|arg| !builtin_import_names(arg).is_empty())
+        }
         _ => false,
     }
 }
@@ -483,20 +545,7 @@ impl PragmaTracker {
                 {
                     match conditional_module {
                         "strict" => {
-                            if conditional_args.is_empty() {
-                                current_state.strict_vars = true;
-                                current_state.strict_subs = true;
-                                current_state.strict_refs = true;
-                            } else {
-                                for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = true,
-                                        "subs" => current_state.strict_subs = true,
-                                        "refs" => current_state.strict_refs = true,
-                                        _ => {}
-                                    }
-                                }
-                            }
+                            apply_strict_args(current_state, conditional_args, true);
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -574,28 +623,7 @@ impl PragmaTracker {
                 // Handle use statements
                 match module.as_str() {
                     "strict" => {
-                        if args.is_empty() {
-                            // use strict; enables all categories
-                            current_state.strict_vars = true;
-                            current_state.strict_subs = true;
-                            current_state.strict_refs = true;
-                        } else {
-                            // Parse specific categories
-                            for arg in args {
-                                match arg.as_str() {
-                                    "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = true
-                                    }
-                                    "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = true
-                                    }
-                                    "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = true
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                        apply_strict_args(current_state, args, true);
 
                         // Record the state change at this location
                         ranges
@@ -660,20 +688,7 @@ impl PragmaTracker {
                 {
                     match conditional_module {
                         "strict" => {
-                            if conditional_args.is_empty() {
-                                current_state.strict_vars = false;
-                                current_state.strict_subs = false;
-                                current_state.strict_refs = false;
-                            } else {
-                                for arg in conditional_args {
-                                    match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = false,
-                                        "subs" => current_state.strict_subs = false,
-                                        "refs" => current_state.strict_refs = false,
-                                        _ => {}
-                                    }
-                                }
-                            }
+                            apply_strict_args(current_state, conditional_args, false);
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -738,6 +753,14 @@ impl PragmaTracker {
                             }
                             return;
                         }
+                        "builtin" => {
+                            remove_builtin_imports(current_state, conditional_args);
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
                         _ => return,
                     }
                 }
@@ -745,28 +768,7 @@ impl PragmaTracker {
                 // Handle no statements
                 match module.as_str() {
                     "strict" => {
-                        if args.is_empty() {
-                            // no strict; disables all categories
-                            current_state.strict_vars = false;
-                            current_state.strict_subs = false;
-                            current_state.strict_refs = false;
-                        } else {
-                            // Parse specific categories
-                            for arg in args {
-                                match arg.as_str() {
-                                    "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = false
-                                    }
-                                    "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = false
-                                    }
-                                    "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = false
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
+                        apply_strict_args(current_state, args, false);
 
                         // Record the state change at this location
                         ranges
@@ -822,6 +824,11 @@ impl PragmaTracker {
                                 current_state.clone(),
                             ));
                         }
+                    }
+                    "builtin" => {
+                        remove_builtin_imports(current_state, args);
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {}
                 }
