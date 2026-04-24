@@ -54,6 +54,11 @@
 
 use perl_ast::Node as AstNode;
 use perl_parser_core::Parser as CoreParser;
+use perl_pragma::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::semantic::SemanticModel;
+use perl_semantic_analyzer::symbol::{ScopeId, Symbol, SymbolKind, VarKind};
+use std::collections::HashMap;
+use std::ops::Range;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -239,6 +244,243 @@ impl Tree {
     /// `tree.root_node().walk()`.
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
+    }
+
+    /// Build a semantic overlay with ergonomic query helpers.
+    ///
+    /// # Stability
+    ///
+    /// This API is intentionally small and currently in development. It is focused on
+    /// high-signal read-only queries and may evolve before broader compatibility
+    /// guarantees are made.
+    pub fn semantic_overlay(&self) -> SemanticOverlay<'_> {
+        SemanticOverlay::new(&self.root, &self.source)
+    }
+}
+
+/// In-development semantic query facade over the parsed tree.
+///
+/// This overlay intentionally keeps a narrow surface and delegates semantic
+/// analysis to lower-level crates.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct SemanticOverlay<'tree> {
+    model: SemanticModel,
+    pragma_map: Vec<(Range<usize>, PragmaState)>,
+    source_len: usize,
+    _marker: std::marker::PhantomData<&'tree AstNode>,
+}
+
+impl<'tree> SemanticOverlay<'tree> {
+    fn new(root: &'tree AstNode, source: &str) -> Self {
+        let model = SemanticModel::build(root, source);
+        let pragma_map = PragmaTracker::build(root);
+        Self { model, pragma_map, source_len: source.len(), _marker: std::marker::PhantomData }
+    }
+
+    /// Return the package declaration active at `offset`, if any.
+    pub fn package_declaration_at(&self, offset: usize) -> Option<SemanticSymbol> {
+        self.most_specific_symbol_at_kind(offset, SymbolKind::Package).map(SemanticSymbol::from)
+    }
+
+    /// Return the most specific declaration node containing `offset`, if any.
+    pub fn declaration_at(&self, offset: usize) -> Option<SemanticSymbol> {
+        self.most_specific_symbol_at(offset).map(SemanticSymbol::from)
+    }
+
+    /// Resolve the definition target for the symbol at `offset`.
+    pub fn definition_at(&self, offset: usize) -> Option<SemanticSymbol> {
+        self.model.definition_at(offset).map(SemanticSymbol::from)
+    }
+
+    /// Resolve the definition target for the given syntax node.
+    pub fn definition_for_node(&self, node: &Node<'_>) -> Option<SemanticSymbol> {
+        self.definition_at(node.start_byte())
+    }
+
+    /// Return imports visible at `offset` from lexical scope.
+    pub fn visible_imports_at(&self, offset: usize) -> Vec<SemanticSymbol> {
+        let clamped = offset.min(self.source_len);
+        let scopes = self.visible_scope_chain(clamped);
+        let mut by_name: HashMap<String, SemanticSymbol> = HashMap::new();
+
+        for scope_id in scopes {
+            for symbols in self.model.symbol_table().symbols.values() {
+                for symbol in symbols {
+                    if symbol.kind == SymbolKind::Import
+                        && symbol.scope_id == scope_id
+                        && symbol.location.start <= clamped
+                    {
+                        by_name
+                            .entry(symbol.qualified_name.clone())
+                            .or_insert_with(|| SemanticSymbol::from(symbol));
+                    }
+                }
+            }
+        }
+
+        let mut imports: Vec<_> = by_name.into_values().collect();
+        if imports.is_empty() {
+            let pragma_state = PragmaTracker::state_for_offset(&self.pragma_map, clamped);
+            imports.extend(pragma_state.builtin_imports.iter().map(|name| SemanticSymbol {
+                name: name.clone(),
+                qualified_name: format!("builtin::{name}"),
+                kind: SemanticSymbolKind::Import,
+                declaration: Some("use builtin".to_string()),
+                start_byte: 0,
+                end_byte: 0,
+            }));
+        }
+        imports.sort_by_key(|symbol| symbol.start_byte);
+        imports
+    }
+
+    /// Return the effective pragma state at `offset`.
+    pub fn effective_pragma_state_at(&self, offset: usize) -> PragmaState {
+        PragmaTracker::state_for_offset(&self.pragma_map, offset.min(self.source_len))
+    }
+
+    fn most_specific_symbol_at(&self, offset: usize) -> Option<&Symbol> {
+        let mut best: Option<&Symbol> = None;
+        let mut best_span = usize::MAX;
+        let clamped = offset.min(self.source_len);
+
+        for symbols in self.model.symbol_table().symbols.values() {
+            for symbol in symbols {
+                if symbol.location.start <= clamped && symbol.location.end >= clamped {
+                    let span = symbol.location.end.saturating_sub(symbol.location.start);
+                    if span < best_span {
+                        best = Some(symbol);
+                        best_span = span;
+                    }
+                }
+            }
+        }
+        best
+    }
+
+    fn most_specific_symbol_at_kind(&self, offset: usize, kind: SymbolKind) -> Option<&Symbol> {
+        let mut best: Option<&Symbol> = None;
+        let mut best_span = usize::MAX;
+        let clamped = offset.min(self.source_len);
+
+        for symbols in self.model.symbol_table().symbols.values() {
+            for symbol in symbols {
+                if symbol.kind == kind
+                    && symbol.location.start <= clamped
+                    && symbol.location.end >= clamped
+                {
+                    let span = symbol.location.end.saturating_sub(symbol.location.start);
+                    if span < best_span {
+                        best = Some(symbol);
+                        best_span = span;
+                    }
+                }
+            }
+        }
+        best
+    }
+
+    fn visible_scope_chain(&self, offset: usize) -> Vec<ScopeId> {
+        let table = self.model.symbol_table();
+        let current_scope = table
+            .scopes
+            .values()
+            .filter(|scope| scope.location.start <= offset && scope.location.end >= offset)
+            .min_by_key(|scope| scope.location.end.saturating_sub(scope.location.start))
+            .map(|scope| scope.id)
+            .unwrap_or(0);
+
+        let mut chain = Vec::new();
+        let mut scope_cursor = Some(current_scope);
+        while let Some(scope_id) = scope_cursor {
+            chain.push(scope_id);
+            scope_cursor = table.scopes.get(&scope_id).and_then(|scope| scope.parent);
+        }
+        chain
+    }
+}
+
+/// Read-only semantic symbol view returned by [`SemanticOverlay`] queries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SemanticSymbol {
+    /// Unqualified symbol name.
+    pub name: String,
+    /// Qualified symbol name when available (`Package::name`).
+    pub qualified_name: String,
+    /// Semantic symbol classification.
+    pub kind: SemanticSymbolKind,
+    /// Perl declaration keyword if known (`my`, `our`, `state`, ...).
+    pub declaration: Option<String>,
+    /// Start byte offset in source.
+    pub start_byte: usize,
+    /// End byte offset in source.
+    pub end_byte: usize,
+}
+
+impl From<&Symbol> for SemanticSymbol {
+    fn from(value: &Symbol) -> Self {
+        Self {
+            name: value.name.clone(),
+            qualified_name: value.qualified_name.clone(),
+            kind: SemanticSymbolKind::from(value.kind),
+            declaration: value.declaration.clone(),
+            start_byte: value.location.start,
+            end_byte: value.location.end,
+        }
+    }
+}
+
+/// Stable subset of symbol kinds exposed by the semantic overlay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SemanticSymbolKind {
+    /// Package declaration (`package Foo;`).
+    Package,
+    /// Class declaration.
+    Class,
+    /// Role declaration.
+    Role,
+    /// Subroutine declaration.
+    Subroutine,
+    /// Method declaration.
+    Method,
+    /// Scalar variable declaration (`$x`).
+    VariableScalar,
+    /// Array variable declaration (`@x`).
+    VariableArray,
+    /// Hash variable declaration (`%x`).
+    VariableHash,
+    /// Constant declaration.
+    Constant,
+    /// Imported symbol/module.
+    Import,
+    /// Exported symbol.
+    Export,
+    /// Label declaration.
+    Label,
+    /// Format declaration.
+    Format,
+}
+
+impl From<SymbolKind> for SemanticSymbolKind {
+    fn from(value: SymbolKind) -> Self {
+        match value {
+            SymbolKind::Package => Self::Package,
+            SymbolKind::Class => Self::Class,
+            SymbolKind::Role => Self::Role,
+            SymbolKind::Subroutine => Self::Subroutine,
+            SymbolKind::Method => Self::Method,
+            SymbolKind::Variable(VarKind::Scalar) => Self::VariableScalar,
+            SymbolKind::Variable(VarKind::Array) => Self::VariableArray,
+            SymbolKind::Variable(VarKind::Hash) => Self::VariableHash,
+            SymbolKind::Constant => Self::Constant,
+            SymbolKind::Import => Self::Import,
+            SymbolKind::Export => Self::Export,
+            SymbolKind::Label => Self::Label,
+            SymbolKind::Format => Self::Format,
+        }
     }
 }
 
@@ -965,10 +1207,14 @@ mod tests {
         while cursor.goto_next_sibling() {
             count += 1;
         }
+        assert!(count >= 1, "should visit at least one sibling node");
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
-        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+        assert!(
+            !node.kind().is_empty(),
+            "cursor should remain at valid node after exhausting siblings"
+        );
     }
 
     #[test]
@@ -1009,11 +1255,7 @@ mod tests {
 
         // reset() should bring us back to root
         cursor.reset();
-        assert_eq!(
-            cursor.node().grammar_kind(),
-            "source_file",
-            "reset must return cursor to root"
-        );
+        assert_eq!(cursor.node().grammar_kind(), "source_file", "reset must return cursor to root");
     }
 
     #[test]
@@ -1073,10 +1315,7 @@ mod tests {
             sibling_count += 1;
         }
 
-        assert_eq!(
-            sibling_count, child_count,
-            "sibling count should match root.child_count()"
-        );
+        assert_eq!(sibling_count, child_count, "sibling count should match root.child_count()");
     }
 
     #[test]
@@ -1213,5 +1452,57 @@ mod tests {
         // Should be back at root
         assert_eq!(cursor.node().grammar_kind(), "source_file");
         assert_eq!(depth, 0, "should have gone back up to root (depth 0)");
+    }
+
+    #[test]
+    fn test_semantic_overlay_package_declaration_lookup() {
+        let mut parser = Parser::new();
+        let source = "package Demo::Pkg; sub run { return 1; }";
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+        let pkg_offset = source.find("Demo::Pkg").unwrap_or(0);
+
+        let package = must_some(overlay.package_declaration_at(pkg_offset));
+        assert_eq!(package.name, "Demo::Pkg");
+        assert_eq!(package.kind, SemanticSymbolKind::Package);
+    }
+
+    #[test]
+    fn test_semantic_overlay_definition_lookup_by_node() {
+        let mut parser = Parser::new();
+        let source = "my $x = 1; $x += 2;";
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+        let root = tree.root_node();
+        let first_statement = must_some(root.child(0));
+        let second_statement = must_some(root.child(1));
+        let reference_node = must_some(second_statement.child(0));
+        let definition = overlay.definition_for_node(&reference_node);
+        let declaration = must_some(definition);
+
+        assert_eq!(declaration.name, "x");
+        assert_eq!(declaration.kind, SemanticSymbolKind::VariableScalar);
+        assert!(declaration.start_byte <= source.find("$x").unwrap_or(0));
+        assert_eq!(first_statement.grammar_kind(), "my_declaration");
+    }
+
+    #[test]
+    fn test_semantic_overlay_visible_imports_and_pragma_state() {
+        let mut parser = Parser::new();
+        let source =
+            "use strict; use warnings; use builtin qw(blessed); sub run { return blessed({}); }";
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+        let offset = source.find("blessed({})").unwrap_or(source.len());
+
+        let imports = overlay.visible_imports_at(offset);
+        assert!(
+            imports.iter().any(|symbol| symbol.qualified_name.contains("builtin::blessed")),
+            "expected builtin import in visible imports"
+        );
+
+        let pragma = overlay.effective_pragma_state_at(offset);
+        assert!(pragma.strict_vars, "strict should be enabled at callsite");
+        assert!(pragma.warnings, "warnings should be enabled at callsite");
     }
 }

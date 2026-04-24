@@ -58,6 +58,11 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Node::is_leaf() -> bool` | `true` if the node has no children |
 | `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
+| `Tree::semantic_overlay() -> SemanticOverlay<'_>` | Build in-development semantic query facade |
+| `SemanticOverlay::package_declaration_at(offset)` | Package declaration lookup at byte offset |
+| `SemanticOverlay::definition_at(offset)` / `definition_for_node(node)` | Definition lookup by offset or node |
+| `SemanticOverlay::visible_imports_at(offset)` | Lexically visible imports at byte offset |
+| `SemanticOverlay::effective_pragma_state_at(offset)` | Effective pragma state at byte offset |
 
 ## Error tolerance
 
@@ -72,6 +77,7 @@ This means you can pipe any Perl source through this parser and rely on getting 
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
 - `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
+- `SemanticOverlay` is intentionally in-development and read-only; the surface is limited to a few high-value queries while semantics mature.
 
 ## Backlog roadmap
 

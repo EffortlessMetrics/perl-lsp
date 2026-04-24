@@ -3157,6 +3157,8 @@ dependencies = [
  "perl-ast",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
  "perl-tdd-support",
 ]
 
