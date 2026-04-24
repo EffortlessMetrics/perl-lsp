@@ -151,17 +151,15 @@ impl IncrementalDocument {
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
 
-        // Parse with reuse when possible, then validate against a fresh parse.
-        // If reuse produces a divergent tree, conservatively fall back to
-        // the fresh parse result.
-        let reused_root = if !reusable.is_empty() {
-            Some(self.parse_with_reuse(&new_source, reusable)?)
-        } else {
-            None
-        };
-        let mut parser = Parser::new(&new_source);
-        let fresh_root = parser.parse()?;
-        let new_root = if let Some(reused_root) = reused_root {
+        // Parse with reuse when possible. When reuse was attempted, validate
+        // the grafted tree against a fresh parse to catch divergence. When no
+        // reuse candidates exist, skip the second parse entirely.
+        let new_root = if !reusable.is_empty() {
+            let reused_root = self.parse_with_reuse(&new_source, reusable)?;
+            // parse_with_reuse already ran a full parse internally; run a second
+            // one only to verify the graft produced a consistent tree.
+            let mut parser = Parser::new(&new_source);
+            let fresh_root = parser.parse()?;
             if Self::nodes_match(&reused_root, &fresh_root) {
                 reused_root
             } else {
@@ -169,7 +167,8 @@ impl IncrementalDocument {
                 fresh_root
             }
         } else {
-            fresh_root
+            let mut parser = Parser::new(&new_source);
+            parser.parse()?
         };
 
         // Update state
