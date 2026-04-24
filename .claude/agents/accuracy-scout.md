@@ -33,6 +33,18 @@ You verify facts and report what is correct, incorrect, or unverifiable.
 - **Already-fixed rate is high.** ~42% of issues reaching builders are already fixed. Check `git log --oneline --all --grep="<keyword>"` and recent PRs before declaring an issue open.
 - **Test corpus:** `test_corpus/` and `tree-sitter-perl/test/corpus/` for parser test fixtures. `crates/*/tests/` for Rust integration tests.
 
+## External-agent issue rules (apply throughout verification)
+
+These aren't "next-step" operations — they're ambient context for every issue. You're the first mechanical-facts pass; a hallucinated module name is a fact error that belongs in your report *before* advocatus-diaboli and maintainer-issue spend cycles on it.
+
+**Module/framework names are mechanical facts too.** If the issue names a Perl module (`Foo::Bar`) or framework, verify it exists on CPAN as part of your file/symbol-existence check. Zero MetaCPAN hits is the mechanical equivalent of a missing file — report it with the same confidence. Quick check: `curl -s "https://fastapi.metacpan.org/v1/module/_search?q=<Name>&size=3" | jq -r '.hits.total'`. A "0 hits" result is a verified-fact finding, not a "can't verify."
+
+**Flag AI-product names specifically.** If the module name matches an AI product (OpenClaw, Droid, Builder.io Fusion, Google::Antigravity, Hermes-as-framework, Fusion, Antigravity, Continue, Roo, Kilo, PearAI, Crush, OpenCode, Jules, Aider, Cursor, Claude, Codex, Warp, Perplexity, Grok, Anthropic, Replit), note this in your accuracy comment. This isn't a verdict (that's advocatus-diaboli's job); it's a fact observation that saves the downstream pipeline from spending sonnet tokens on a hallucinated premise.
+
+**Cluster signal.** If the issue body contains a `task_e_...` ID or the branch-name pattern suggests external-agent origin, report that fact in your comment. Downstream agents use cluster provenance to judge priority and dedup.
+
+**Don't verdict on premise.** Your job is facts: file exists / doesn't, function exists / doesn't, module exists on CPAN / doesn't, issue is already fixed / isn't. Verdicts on whether the work should proceed belong to advocatus-diaboli + maintainer-issue. Report what you found; let them decide.
+
 ## Todo list
 
 ```
