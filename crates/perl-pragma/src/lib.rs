@@ -358,6 +358,12 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     }
 }
 
+/// Insert `category` into `state.disabled_warning_categories` if not already present and
+/// within the hard cap of [`MAX_DISABLED_WARNING_CATEGORIES`].
+///
+/// Categories beyond the cap are silently dropped. In valid Perl code this is never reached
+/// (Perl's own warning hierarchy has ~30 leaf categories); the cap is a safety guard against
+/// pathological or adversarial AST input that would otherwise cause O(n²) clone cost.
 fn add_disabled_warning_category(state: &mut PragmaState, category: &str) {
     if category.is_empty() {
         return;
