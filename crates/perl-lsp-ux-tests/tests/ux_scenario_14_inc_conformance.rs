@@ -3,8 +3,9 @@
 
 //! Scenario 14 — `@INC` consumer-consistency conformance harness.
 //!
-//! For each resolution mode, verifies that the PL701 diagnostic, goto-definition,
-//! and hover **all agree** on whether a module reference resolves to a file.
+//! For each resolution mode, verifies that the PL701 diagnostic, completion,
+//! goto-definition, and hover **all agree** on whether a module reference resolves
+//! to a file.
 //!
 //! ## Resolution modes exercised
 //!
@@ -114,6 +115,20 @@ fn print_conformance(mode: &str, pl701_ok: bool, def_ok: bool, hover_ok: bool) {
     );
 }
 
+fn completion_labels(items: &[serde_json::Value]) -> Vec<String> {
+    items
+        .iter()
+        .filter_map(|item| item.get("label").and_then(|label| label.as_str()).map(str::to_owned))
+        .collect()
+}
+
+fn completion_has_module(items: &[serde_json::Value], module_name: &str) -> bool {
+    items.iter().any(|item| {
+        item.get("label").and_then(|label| label.as_str()) == Some(module_name)
+            || item.get("insertText").and_then(|text| text.as_str()) == Some(module_name)
+    })
+}
+
 // =============================================================================
 // Fixture 1: workspace-relative includePaths
 // =============================================================================
@@ -142,6 +157,12 @@ sub hello {\n\
 }\n\
 \n\
 1;\n\
+";
+
+const RELATIVE_INCLUDE_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Gre\n\
 ";
 
 #[test]
@@ -212,6 +233,68 @@ fn scenario_14_relative_include_path() {
             hover
         );
     }
+
+    harness.assert_no_crash();
+}
+
+#[test]
+fn scenario_14_include_path_completion_external_module() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_include_path_completion_external_module: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)
+            .with_file("lib/GreetModule.pm", RELATIVE_INCLUDE_MODULE),
+    )
+    .expect("Failed to create UX harness");
+
+    send_include_paths(&harness, &["lib"]);
+    harness
+        .open_file("fixture.pl", RELATIVE_INCLUDE_COMPLETION_SOURCE)
+        .expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let completions = harness.completion("fixture.pl", 2, 7).expect("completion must not error");
+    let completion_has_greet = completion_has_module(&completions, "GreetModule");
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+
+    assert!(
+        completion_has_greet,
+        "Expected completion to include GreetModule via includePaths=['lib']; labels={:?}",
+        completion_labels(&completions)
+    );
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve GreetModule from completion scenario; defs={:?}",
+        defs
+    );
+    if hover_result.is_some() {
+        assert!(
+            def_resolves,
+            "Consumer inconsistency (completion_external_module): hover resolved while goto-definition did not.\n\
+             hover={:?}\n\
+             defs={:?}",
+            hover_result, defs
+        );
+    }
+    assert_eq!(
+        completion_has_greet,
+        def_resolves,
+        "Consumer inconsistency (completion_external_module): completion and goto-definition disagree.\n\
+         labels={:?}\n\
+         defs={:?}",
+        completion_labels(&completions),
+        defs
+    );
 
     harness.assert_no_crash();
 }
@@ -763,6 +846,12 @@ use MissingFromInclude;\n\
 print \"still running\\n\";\n\
 ";
 
+const INCLUDE_MISSING_COMPLETION_SOURCE: &str = "\
+use strict;\n\
+use warnings;\n\
+use Gree\n\
+";
+
 #[test]
 fn scenario_14_include_path_missing_module_consistency() {
     if !binary_available() {
@@ -819,6 +908,142 @@ fn scenario_14_include_path_missing_module_consistency() {
         "Expected PL701 for MissingFromInclude when module does not exist.\n\
          diagnostics: {:?}",
         diags
+    );
+
+    harness.assert_no_crash();
+}
+
+#[test]
+fn scenario_14_include_path_missing_module_completion_consistency() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_include_path_missing_module_completion_consistency: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", INCLUDE_MISSING_COMPLETION_SOURCE),
+    )
+    .expect("Failed to create UX harness");
+
+    send_include_paths(&harness, &["lib"]);
+    harness
+        .open_file("fixture.pl", INCLUDE_MISSING_COMPLETION_SOURCE)
+        .expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    let completions = harness.completion("fixture.pl", 2, 8).expect("completion must not error");
+    let completion_has_greet = completion_has_module(&completions, "GreetModule");
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+
+    assert!(
+        !completion_has_greet,
+        "Expected completion to keep missing external module absent when includePaths has no lib module; labels={:?}",
+        completion_labels(&completions)
+    );
+    assert!(
+        !def_resolves,
+        "Expected goto-definition to remain missing for unresolved include-path module, got defs={:?}",
+        defs
+    );
+    if hover_result.is_some() {
+        assert!(
+            !def_resolves,
+            "Consumer inconsistency (completion_missing_module): hover resolved while goto-definition did not.\n\
+             hover={:?}\n\
+             defs={:?}",
+            hover_result, defs
+        );
+    }
+    assert_eq!(
+        completion_has_greet,
+        def_resolves,
+        "Consumer inconsistency (completion_missing_module): completion and goto-definition disagree.\n\
+         labels={:?}\n\
+         defs={:?}",
+        completion_labels(&completions),
+        defs
+    );
+
+    harness.assert_no_crash();
+}
+
+#[test]
+fn scenario_14_system_inc_completion_opt_in_enabled() {
+    if !binary_available() {
+        eprintln!(
+            "SKIP scenario_14_system_inc_completion_opt_in_enabled: perl-lsp binary not found"
+        );
+        return;
+    }
+
+    let system_dir = tempfile::tempdir().expect("Failed to create system tempdir");
+    let module_path = system_dir.path().join("SystemModule.pm");
+    std::fs::write(&module_path, SYSTEM_MODULE).expect("Failed to write SystemModule.pm");
+    let perl5lib_value = system_dir.path().to_string_lossy().to_string();
+
+    let harness = UxHarness::new(
+        ScenarioConfig { timeout: Duration::from_secs(20), ..Default::default() }
+            .with_file("fixture.pl", "use strict;\nuse warnings;\nuse Sys\n")
+            .env("PERL5LIB", &perl5lib_value),
+    )
+    .expect("Failed to create UX harness");
+
+    harness
+        .open_file("fixture.pl", "use strict;\nuse warnings;\nuse Sys\n")
+        .expect("didOpen should succeed");
+    std::thread::sleep(Duration::from_millis(500));
+
+    send_use_system_inc(&harness, false);
+    let before = harness.completion("fixture.pl", 2, 7).expect("completion before opt-in");
+    let before_has_system_module = completion_has_module(&before, "SystemModule");
+
+    send_use_system_inc(&harness, true);
+    let after = harness.completion("fixture.pl", 2, 7).expect("completion after opt-in");
+    let after_has_system_module = completion_has_module(&after, "SystemModule");
+
+    let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
+    let def_resolves = !defs.is_empty();
+    let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
+
+    assert!(
+        !before_has_system_module,
+        "Expected SystemModule to be absent from completion before useSystemInc opt-in; labels={:?}",
+        completion_labels(&before)
+    );
+    assert!(
+        after_has_system_module,
+        "Expected SystemModule in completion after useSystemInc opt-in; labels={:?}",
+        completion_labels(&after)
+    );
+    assert!(
+        def_resolves,
+        "Expected goto-definition to resolve SystemModule after opt-in; defs={:?}",
+        defs
+    );
+    if hover_result.is_some() {
+        assert!(
+            def_resolves,
+            "Consumer inconsistency (system_inc_completion_opt_in_enabled): hover resolved while goto-definition did not.\n\
+             hover={:?}\n\
+             defs={:?}",
+            hover_result, defs
+        );
+    }
+    assert_eq!(
+        after_has_system_module,
+        def_resolves,
+        "Consumer inconsistency (system_inc_completion_opt_in_enabled): completion and goto-definition disagree after opt-in.\n\
+         labels={:?}\n\
+         defs={:?}",
+        completion_labels(&after),
+        defs
     );
 
     harness.assert_no_crash();
