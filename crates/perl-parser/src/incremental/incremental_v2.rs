@@ -1267,6 +1267,23 @@ mod tests {
         budget
     }
 
+    fn replacement_edit(
+        start_byte: usize,
+        old_len: usize,
+        new_len: usize,
+        line: usize,
+        column: usize,
+    ) -> Edit {
+        Edit::new(
+            start_byte,
+            start_byte + old_len,
+            start_byte + new_len,
+            Position::new(start_byte, line, column as u32),
+            Position::new(start_byte + old_len, line, (column + old_len) as u32),
+            Position::new(start_byte + new_len, line, (column + new_len) as u32),
+        )
+    }
+
     #[test]
     fn test_basic_compilation() {
         let parser = IncrementalParserV2::new();
@@ -1490,6 +1507,77 @@ mod tests {
             }
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_edits_improve_shifted_reuse() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $alpha = 10;\nmy $beta = 20;\nmy $gamma = 30;\n";
+        parser.parse(source1)?;
+
+        let alpha_start = source1
+            .find("alpha")
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedToken("alpha".to_string()))?;
+        parser.edit(replacement_edit(alpha_start, "alpha".len(), "alphaz".len(), 1, 5));
+
+        let first_shift = "alphaz".len() as isize - "alpha".len() as isize;
+        let thirty_start = source1
+            .rfind("30")
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedToken("30".to_string()))?;
+        let shifted_thirty_start = (thirty_start as isize + first_shift) as usize;
+        parser.edit(replacement_edit(shifted_thirty_start, "30".len(), "3000".len(), 3, 13));
+
+        let source2 = "my $alphaz = 10;\nmy $beta = 20;\nmy $gamma = 3000;\n";
+        let incremental_tree = parser.parse(source2)?;
+        let mut fresh_parser = Parser::new(source2);
+        let fresh_tree = fresh_parser.parse()?;
+
+        assert_eq!(incremental_tree, fresh_tree);
+        assert!(
+            parser.reused_nodes >= 7,
+            "Expected improved reuse for non-overlapping edits, got {}",
+            parser.reused_nodes
+        );
+        assert!(parser.used_advanced_reuse(), "Expected advanced reuse path to run");
+        Ok(())
+    }
+
+    #[test]
+    fn test_separate_whitespace_comment_edits_shift_reuse_and_preserve_ast() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 1;\nmy $y = 2;\nmy $z = 3;\n";
+        parser.parse(source1)?;
+
+        // Insert extra spaces after first semicolon.
+        let first_semicolon = source1
+            .find(';')
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedToken(";".to_string()))?;
+        parser.edit(replacement_edit(first_semicolon + 1, 0, 3, 1, 11));
+
+        // Insert trailing comment on line 2 (position includes prior +3 shift).
+        let second_line = source1.find("my $y = 2;").ok_or(
+            perl_parser_core::error::ParseError::UnexpectedToken("my $y = 2;".to_string()),
+        )?;
+        let second_semicolon = second_line + "my $y = 2".len();
+        parser.edit(replacement_edit(second_semicolon + 1 + 3, 0, " # keep".len(), 2, 11));
+
+        let source2 = "my $x = 1;   \nmy $y = 2; # keep\nmy $z = 3;\n";
+        let incremental_tree = parser.parse(source2)?;
+        let mut fresh_parser = Parser::new(source2);
+        let fresh_tree = fresh_parser.parse()?;
+        assert_eq!(incremental_tree, fresh_tree);
+
+        let analysis = parser.get_last_reuse_analysis().ok_or(
+            perl_parser_core::error::ParseError::UnexpectedToken(
+                "reuse analysis missing".to_string(),
+            ),
+        )?;
+        assert!(
+            analysis.analysis_stats.position_adjustments > 0,
+            "Expected shifted matches for separated non-structural edits"
+        );
+        assert!(parser.reused_nodes > parser.reparsed_nodes);
         Ok(())
     }
 

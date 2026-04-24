@@ -157,15 +157,18 @@ impl AdvancedReuseAnalyzer {
         // Strategy 1: Direct structural matching
         self.find_direct_structural_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
-        // Strategy 2: Position-shifted matching
+        // Strategy 2: Edit-aware position-shifted matching
+        self.find_edit_shifted_matches(&old_analysis, &new_analysis, edits, &mut reuse_map, config);
+
+        // Strategy 3: Generic position-shifted matching
         self.find_position_shifted_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
-        // Strategy 3: Content-updated matching
+        // Strategy 4: Content-updated matching
         if config.enable_content_reuse {
             self.find_content_updated_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
         }
 
-        // Strategy 4: Aggressive structural matching
+        // Strategy 5: Aggressive structural matching
         if config.aggressive_structural_matching {
             self.find_aggressive_structural_matches(
                 &old_analysis,
@@ -371,8 +374,8 @@ impl AdvancedReuseAnalyzer {
         config: &ReuseConfig,
     ) {
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            // Skip already matched or directly affected nodes
+            if reuse_map.contains_key(old_pos) || self.affected_nodes.contains(old_pos) {
                 continue;
             }
 
@@ -400,6 +403,77 @@ impl AdvancedReuseAnalyzer {
                     }
                 }
             }
+        }
+    }
+
+    /// Find shifted matches using edit-derived expected positions.
+    ///
+    /// This improves matching for multiple non-overlapping edits where many
+    /// unaffected nodes are only shifted by cumulative byte deltas.
+    fn find_edit_shifted_matches(
+        &mut self,
+        old_analysis: &TreeAnalysis,
+        new_analysis: &TreeAnalysis,
+        edits: &EditSet,
+        reuse_map: &mut HashMap<usize, ReuseStrategy>,
+        config: &ReuseConfig,
+    ) {
+        for (old_pos, old_info) in &old_analysis.node_info {
+            if reuse_map.contains_key(old_pos) || self.affected_nodes.contains(old_pos) {
+                continue;
+            }
+
+            let expected_new_pos = self.expected_shifted_position(edits, *old_pos);
+            let Some(new_pos) = expected_new_pos else {
+                continue;
+            };
+
+            let Some(new_info) = new_analysis.node_info.get(&new_pos) else {
+                continue;
+            };
+
+            if old_info.structural_hash != new_info.structural_hash
+                || old_info.children_count != new_info.children_count
+            {
+                continue;
+            }
+
+            let confidence = (self.calculate_match_confidence(old_info, new_info) + 0.05).min(1.0);
+            if confidence < config.min_confidence {
+                continue;
+            }
+
+            reuse_map.insert(
+                *old_pos,
+                ReuseStrategy {
+                    target_position: new_pos,
+                    reuse_type: ReuseType::PositionShift,
+                    confidence_score: confidence,
+                    position_adjustment: (new_pos as isize) - (*old_pos as isize),
+                },
+            );
+            self.analysis_stats.position_adjustments += 1;
+        }
+    }
+
+    fn expected_shifted_position(&self, edits: &EditSet, old_position: usize) -> Option<usize> {
+        let mut cumulative_shift = 0isize;
+
+        for edit in edits.edits() {
+            let shifted_old_end = (edit.old_end_byte as isize).checked_sub(cumulative_shift)?;
+            let shifted_old_end = usize::try_from(shifted_old_end).ok()?;
+
+            if shifted_old_end <= old_position {
+                cumulative_shift += edit.byte_shift();
+            } else {
+                break;
+            }
+        }
+
+        if cumulative_shift >= 0 {
+            old_position.checked_add(cumulative_shift as usize)
+        } else {
+            old_position.checked_sub((-cumulative_shift) as usize)
         }
     }
 
@@ -969,5 +1043,34 @@ mod tests {
 
         assert!(analyzer.affected_nodes.contains(&0));
         assert!(!analyzer.affected_nodes.contains(&20));
+    }
+
+    #[test]
+    fn test_expected_shifted_position_with_multiple_edits() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(perl_parser_core::edit::Edit::new(
+            4,
+            9,
+            10,
+            Position::new(4, 1, 5),
+            Position::new(9, 1, 10),
+            Position::new(10, 1, 11),
+        ));
+        edits.add(perl_parser_core::edit::Edit::new(
+            22,
+            24,
+            26,
+            Position::new(22, 2, 7),
+            Position::new(24, 2, 9),
+            Position::new(26, 2, 11),
+        ));
+
+        // Node before edits is unchanged.
+        assert_eq!(analyzer.expected_shifted_position(&edits, 2), Some(2));
+        // Node after first edit shifts by +1.
+        assert_eq!(analyzer.expected_shifted_position(&edits, 15), Some(16));
+        // Node after both edits shifts by +3 cumulative bytes.
+        assert_eq!(analyzer.expected_shifted_position(&edits, 30), Some(33));
     }
 }
