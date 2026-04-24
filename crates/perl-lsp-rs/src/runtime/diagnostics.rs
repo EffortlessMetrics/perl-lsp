@@ -11,6 +11,50 @@ use crate::features::diagnostics::{
 };
 use perl_diagnostics::codes::DiagnosticCode;
 
+#[cfg(not(target_arch = "wasm32"))]
+fn resolve_configured_profile_path(
+    configured_profile: &str,
+    workspace_root: Option<&std::path::Path>,
+    file_path: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let profile_path = std::path::Path::new(configured_profile);
+    if profile_path.is_absolute() {
+        return profile_path.exists().then(|| profile_path.to_path_buf());
+    }
+
+    let file_dir = file_path.parent();
+    [
+        Some(profile_path.to_path_buf()),
+        workspace_root.map(|root| root.join(profile_path)),
+        file_dir.map(|dir| dir.join(profile_path)),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|candidate| candidate.exists())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn find_workspace_perlcritic_profile(
+    workspace_root: Option<&std::path::Path>,
+    file_path: &std::path::Path,
+) -> Option<String> {
+    let mut dir = file_path.parent().map(|p| p.to_path_buf());
+    while let Some(current) = dir {
+        for profile_name in [".perlcriticrc", "perlcriticrc"] {
+            let candidate = current.join(profile_name);
+            if candidate.exists() {
+                return candidate.to_str().map(|s| s.to_string());
+            }
+        }
+
+        if workspace_root == Some(current.as_path()) || current.parent().is_none() {
+            break;
+        }
+        dir = current.parent().map(|p| p.to_path_buf());
+    }
+    None
+}
+
 /// Orchestrator for pull diagnostics operations.
 ///
 /// Coordinates between LspServer state and the pure-logic PullDiagnosticsProvider.
@@ -125,10 +169,16 @@ impl PullDiagnosticsOrchestrator {
             return;
         }
 
-        // Validate configured profile if present
-        if let Some(ref configured_profile) = profile {
-            let profile_path = std::path::Path::new(configured_profile);
-            if !profile_path.exists() {
+        let workspace_root = server.root_path.lock().clone();
+
+        // Validate configured profile if present.
+        let resolved_configured_profile = if let Some(ref configured_profile) = profile {
+            let resolved = resolve_configured_profile_path(
+                configured_profile,
+                workspace_root.as_deref(),
+                &file_path,
+            );
+            if resolved.is_none() {
                 self.emit_warning(
                     server,
                     format!("missing-profile:{configured_profile}"),
@@ -138,30 +188,22 @@ impl PullDiagnosticsOrchestrator {
                 );
                 return;
             }
-        }
+            resolved
+        } else {
+            None
+        };
 
         // Lazy-init the CriticAnalyzer
         {
             let mut guard = self.critic_analyzer.lock();
             if guard.is_none() {
-                // Walk up directory tree looking for .perlcriticrc
-                let resolved_profile = profile.or_else(|| {
-                    let workspace_root = server.root_path.lock().clone();
-                    let mut dir = file_path.parent().map(|p| p.to_path_buf());
-                    while let Some(current) = dir {
-                        let candidate = current.join(".perlcriticrc");
-                        if candidate.exists() {
-                            return candidate.to_str().map(|s| s.to_string());
-                        }
-                        if workspace_root.as_deref() == Some(current.as_path())
-                            || current.parent().is_none()
-                        {
-                            break;
-                        }
-                        dir = current.parent().map(|p| p.to_path_buf());
-                    }
-                    None
-                });
+                // Walk up directory tree looking for .perlcriticrc / perlcriticrc.
+                let resolved_profile = resolved_configured_profile
+                    .as_ref()
+                    .and_then(|p| p.to_str().map(|s| s.to_string()))
+                    .or_else(|| {
+                        find_workspace_perlcritic_profile(workspace_root.as_deref(), &file_path)
+                    });
 
                 let critic_config =
                     CriticConfig { severity, profile: resolved_profile, ..Default::default() };
@@ -1292,9 +1334,14 @@ impl LspServer {
             return;
         }
 
-        if let Some(ref configured_profile) = profile {
-            let profile_path = std::path::Path::new(configured_profile);
-            if !profile_path.exists() {
+        let workspace_root = self.root_path.lock().clone();
+        let resolved_configured_profile = if let Some(ref configured_profile) = profile {
+            let resolved = resolve_configured_profile_path(
+                configured_profile,
+                workspace_root.as_deref(),
+                &file_path,
+            );
+            if resolved.is_none() {
                 self.emit_perlcritic_workspace_warning(
                     format!("missing-profile:{configured_profile}"),
                     &format!(
@@ -1303,7 +1350,10 @@ impl LspServer {
                 );
                 return;
             }
-        }
+            resolved
+        } else {
+            None
+        };
 
         // Lazy-init the shared CriticAnalyzer.  If the profile or severity
         // changed, `didChangeConfiguration` has already reset the field to
@@ -1319,24 +1369,12 @@ impl LspServer {
                 // workspace root looking for `.perlcriticrc`.  Ensures that a
                 // repo-root config is found even when the file lives in a
                 // sub-directory.  Only runs when the analyzer needs (re-)init.
-                let resolved_profile = profile.or_else(|| {
-                    let workspace_root = self.root_path.lock().clone();
-                    let mut dir = file_path.parent().map(|p| p.to_path_buf());
-                    while let Some(current) = dir {
-                        let candidate = current.join(".perlcriticrc");
-                        if candidate.exists() {
-                            return candidate.to_str().map(|s| s.to_string());
-                        }
-                        // Stop at the workspace root or the filesystem root.
-                        if workspace_root.as_deref() == Some(current.as_path())
-                            || current.parent().is_none()
-                        {
-                            break;
-                        }
-                        dir = current.parent().map(|p| p.to_path_buf());
-                    }
-                    None
-                });
+                let resolved_profile = resolved_configured_profile
+                    .as_ref()
+                    .and_then(|p| p.to_str().map(|s| s.to_string()))
+                    .or_else(|| {
+                        find_workspace_perlcritic_profile(workspace_root.as_deref(), &file_path)
+                    });
                 let critic_config = crate::perl_critic::CriticConfig {
                     severity,
                     profile: resolved_profile,
