@@ -238,7 +238,8 @@ impl LspServer {
         // even if client responses are slow or missing.
         if pending.len() >= 10 {
             let to_remove = pending.len() - 9;
-            let mut entries: Vec<_> = pending.iter().map(|(id, req)| (*id, req.created_at)).collect();
+            let mut entries: Vec<_> =
+                pending.iter().map(|(id, req)| (*id, req.created_at)).collect();
             entries.sort_by_key(|(_, created_at)| *created_at);
             for (id, _) in entries.iter().take(to_remove) {
                 tracing::debug!(
