@@ -263,6 +263,9 @@ jobs:
           shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
 
       - name: Run full ci-gate with receipts
+        env:
+          CI_IS_LATEST: ${{ needs.preflight-latest-check.outputs.is_latest }}
+          GATE_TIER: merge_gate
         run: just gates
 
       - name: Release history drift check
