@@ -25,6 +25,7 @@ mod refresh;
 pub mod routing;
 pub(crate) mod scheduler;
 mod serving;
+mod source_decoding;
 pub(crate) mod stream_session;
 mod symbol_extraction;
 mod test_api;

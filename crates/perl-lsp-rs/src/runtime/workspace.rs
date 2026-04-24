@@ -11,6 +11,8 @@
 use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+#[cfg(feature = "workspace")]
+use crate::runtime::source_decoding::read_source_file;
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -897,7 +899,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_source_file(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -928,7 +930,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_source_file(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1046,7 +1048,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_source_file(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1297,7 +1299,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_source_file(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1370,7 +1372,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_source_file(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1620,7 +1622,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_source_file(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1863,7 +1865,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_source_file(&path).ok())
     }
 }
 
