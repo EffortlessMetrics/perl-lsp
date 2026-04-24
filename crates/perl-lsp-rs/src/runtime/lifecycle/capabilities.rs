@@ -277,7 +277,7 @@ impl LspServer {
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
-        // would be inaccurate — we do not maintain incremental AST state between
+        // would be inaccurate â€” we do not maintain incremental AST state between
         // edits; we rebuild the entire AST from the complete document text each time.
         let sync_kind = 1;
 
@@ -497,7 +497,7 @@ mod tests {
             assert!(
                 !still_all,
                 "feature ID '{id}' emitted by to_feature_ids() has no match arm in \
-                 apply_disabled_feature_id — add one to keep the two in sync"
+                 apply_disabled_feature_id â€” add one to keep the two in sync"
             );
         }
     }
@@ -601,6 +601,28 @@ mod tests {
             folders[0].uri,
             expected_uri.unwrap_or_default(),
             "workspace folder should match current directory fallback URI"
+        );
+    }
+
+    /// Guard: cwd fallback must NOT fire when a top-level rootUri is present.
+    #[test]
+    fn initialize_cwd_fallback_not_used_when_root_uri_present() {
+        let server = LspServer::new();
+        let params = json!({
+            "rootUri": "file:///explicit-workspace"
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders.len(),
+            1,
+            "must create exactly one workspace folder from rootUri"
+        );
+        assert_eq!(
+            folders[0].uri, "file:///explicit-workspace",
+            "cwd fallback must not override an explicitly provided rootUri"
         );
     }
 }
