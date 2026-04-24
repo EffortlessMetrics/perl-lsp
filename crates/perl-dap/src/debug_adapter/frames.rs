@@ -16,64 +16,77 @@ impl DebugAdapter {
             args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
         let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
         let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
-        let mut framed_output_lines = None;
+        let mut framed_output_lines: Option<Vec<String>> = None;
+        let mut session_fallback_frames: Option<Vec<StackFrame>> = None;
 
-        // Ask the debugger for an explicit stack snapshot when a live session is present.
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
-            && let Some(stdin) = session.process.stdin.as_mut()
-        {
-            let commands = vec!["T".to_string()];
-            match self.send_framed_debugger_commands(stdin, &commands) {
-                Ok((begin, end)) => {
-                    framed_output_lines = self.capture_framed_debugger_output(
-                        &begin,
-                        &end,
-                        DEBUGGER_QUERY_WAIT_MS * 8,
-                    );
-                }
-                Err(error) => {
-                    tracing::warn!(%error, "Failed to send framed stackTrace command, falling back");
-                    let _ = stdin.write_all(b"T\n");
-                    let _ = stdin.flush();
-                    Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+            if let Some(cached_frames) = session.stack_trace_cache.clone() {
+                let stack_frames =
+                    Self::paginate_stack_frames(cached_frames, start_frame, requested_count);
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "stackTrace".to_string(),
+                    body: Some(json!({
+                        "stackFrames": stack_frames,
+                        "totalFrames": stack_frames.len()
+                    })),
+                    message: None,
+                };
+            }
+
+            session_fallback_frames =
+                Some(Self::filter_user_visible_frames(session.stack_frames.clone()));
+
+            // Ask the debugger for an explicit stack snapshot when a live session is present.
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                let commands = vec!["T".to_string()];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok((begin, end)) => {
+                        framed_output_lines = self.capture_framed_debugger_output(
+                            &begin,
+                            &end,
+                            DEBUGGER_QUERY_WAIT_MS * 8,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "Failed to send framed stackTrace command, falling back");
+                        let _ = stdin.write_all(b"T\n");
+                        let _ = stdin.flush();
+                        Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
+                    }
                 }
             }
         }
 
-        let parsed_frames = if let Some(lines) = framed_output_lines.as_ref() {
-            let output = lines.join("\n");
-            let framed_frames =
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
-            if framed_frames.is_empty() {
-                let output_lines = self.snapshot_recent_output_lines();
-                if output_lines.is_empty() {
-                    Vec::new()
-                } else {
-                    let output = output_lines.join("\n");
-                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-                }
-            } else {
-                framed_frames
-            }
-        } else {
-            let output_lines = self.snapshot_recent_output_lines();
-            if output_lines.is_empty() {
-                Vec::new()
-            } else {
-                let output = output_lines.join("\n");
+        let mut parsed_frames = framed_output_lines
+            .as_ref()
+            .map(|lines| {
+                let output = lines.join("\n");
                 Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
+            })
+            .unwrap_or_default();
+
+        // Fall back to parsing broader output only when framed output is empty or malformed.
+        if parsed_frames.is_empty() || !Self::has_structurally_valid_stack_frames(&parsed_frames) {
+            let output_lines = self.snapshot_recent_output_lines();
+            if !output_lines.is_empty() {
+                let output = output_lines.join("\n");
+                parsed_frames =
+                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
             }
-        };
+        }
 
         let stack_frames = if !parsed_frames.is_empty() {
-            // Keep parsed frames as best-effort latest snapshot.
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             {
                 session.stack_frames = parsed_frames.clone();
+                session.stack_trace_cache = Some(parsed_frames.clone());
             }
             parsed_frames
-        } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            Self::filter_user_visible_frames(session.stack_frames.clone())
+        } else if let Some(frames) = session_fallback_frames {
+            frames
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
             vec![StackFrame {
@@ -184,6 +197,12 @@ impl DebugAdapter {
 }
 
 impl DebugAdapter {
+    fn has_structurally_valid_stack_frames(frames: &[StackFrame]) -> bool {
+        frames.iter().any(|frame| {
+            !frame.name.trim().is_empty() && frame.line > 0 && !frame.source.path.trim().is_empty()
+        })
+    }
+
     fn paginate_stack_frames(
         stack_frames: Vec<StackFrame>,
         start_frame: usize,

@@ -365,6 +365,7 @@ impl DebugAdapter {
                     process: child,
                     state: DebugState::Running,
                     stack_frames: Vec::new(),
+                    stack_trace_cache: None,
                     variables: HashMap::new(),
                     thread_id,
                     last_resume_mode: ResumeMode::Unknown,
@@ -719,6 +720,7 @@ impl DebugAdapter {
                                             end_line: None,
                                             end_column: None,
                                         }];
+                                        s.stack_trace_cache = None;
                                     }
 
                                     if matches!(s.state, DebugState::Running) {
@@ -862,6 +864,7 @@ impl DebugAdapter {
                                             end_column: None,
                                         };
                                         s.stack_frames = vec![frame];
+                                        s.stack_trace_cache = None;
                                     } else {
                                         // Provide a fallback frame for when we don't have perfect context
                                         let frame = StackFrame {
@@ -878,6 +881,7 @@ impl DebugAdapter {
                                             end_column: None,
                                         };
                                         s.stack_frames = vec![frame];
+                                        s.stack_trace_cache = None;
                                     }
                                     s.state = DebugState::Stopped;
                                     s.thread_id

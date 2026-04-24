@@ -451,6 +451,8 @@ struct DebugSession {
     state: DebugState,
     /// Stack frames
     stack_frames: Vec<StackFrame>,
+    /// Cached user-visible stack trace for the current paused state.
+    stack_trace_cache: Option<Vec<StackFrame>>,
     /// Variables in current scope
     variables: HashMap<i32, Vec<Variable>>,
     /// Thread ID
