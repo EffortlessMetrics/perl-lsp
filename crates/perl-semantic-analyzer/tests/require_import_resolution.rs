@@ -138,7 +138,8 @@ load_data();
 
 #[test]
 fn module_runtime_alias_then_import_resolves_pkg() {
-    let code = r#"my $loader = use_module('My::Loader');
+    let code = r#"use Module::Runtime qw(use_module);
+my $loader = use_module('My::Loader');
 $loader->import('load_data');
 load_data();
 "#;
@@ -147,5 +148,36 @@ load_data();
         pkg.as_deref(),
         Some("My::Loader"),
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_require_module_then_import_resolves_pkg() {
+    let code = r#"use Module::Runtime qw(require_module);
+require_module('My::Loader');
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "load_data() should resolve via require_module()+import(), got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_dynamic_name_stays_unresolved() {
+    let code = r#"use Module::Runtime qw(use_module);
+my $name = 'My::Loader';
+my $loader = use_module($name);
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "dynamic module names should remain conservative and unresolved"
     );
 }

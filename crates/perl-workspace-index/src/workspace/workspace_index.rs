@@ -2696,6 +2696,7 @@ struct IndexVisitor {
     uri: String,
     current_package: Option<String>,
     workspace_folder_uri: Option<String>,
+    has_module_runtime_manual_import: bool,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2742,6 +2743,7 @@ impl IndexVisitor {
             uri,
             current_package: Some("main".to_string()),
             workspace_folder_uri,
+            has_module_runtime_manual_import: false,
         }
     }
 
@@ -2988,6 +2990,30 @@ impl IndexVisitor {
                     }
                 }
 
+                let module_runtime_call = match name.as_str() {
+                    "Module::Runtime::use_module" | "Module::Runtime::require_module" => true,
+                    "use_module" | "require_module" => self.has_module_runtime_manual_import,
+                    _ => false,
+                };
+                if module_runtime_call {
+                    file_index
+                        .dependencies
+                        .insert(normalize_dependency_module_name("Module::Runtime"));
+                    if let Some(Node {
+                        kind: NodeKind::String { value, .. },
+                        ..
+                    }) = args.first()
+                    {
+                        for module_name in
+                            extract_module_names_from_use_args(std::slice::from_ref(value))
+                        {
+                            file_index
+                                .dependencies
+                                .insert(normalize_dependency_module_name(&module_name));
+                        }
+                    }
+                }
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node(arg, file_index);
@@ -2997,6 +3023,9 @@ impl IndexVisitor {
             NodeKind::Use { module, args, .. } => {
                 let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
+                if module == "Module::Runtime" && has_module_runtime_loader_import(args) {
+                    self.has_module_runtime_manual_import = true;
+                }
 
                 // Also track actual parent/base class names for dependency discovery.
                 // `use parent 'Foo::Bar'` stores module="parent" and args=["'Foo::Bar'"],
@@ -3436,6 +3465,19 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn has_module_runtime_loader_import(args: &[String]) -> bool {
+    args.iter().any(|arg| {
+        let (qw_words, remainder) = extract_qw_words(arg);
+        qw_words
+            .iter()
+            .any(|word| matches!(word.as_str(), "use_module" | "require_module"))
+            || remainder.split(|c: char| c.is_whitespace() || c == ',').any(|token| {
+                let trimmed = token.trim_matches('\'').trim_matches('"').trim();
+                matches!(trimmed, "use_module" | "require_module")
+            })
+    })
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {

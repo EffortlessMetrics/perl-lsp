@@ -1373,6 +1373,41 @@ fn test_find_dependents() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_module_runtime_literal_loader_creates_dependency() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/runtime_dep.pl")?;
+    let uri_str = uri.to_string();
+    index.index_file(
+        uri,
+        "use Module::Runtime qw(use_module require_module);\nmy $m = use_module('Foo::Bar');\nrequire_module('Other::Base');"
+            .to_string(),
+    )?;
+
+    let deps = index.file_dependencies(&uri_str);
+    assert!(deps.contains("Module::Runtime"));
+    assert!(deps.contains("Foo::Bar"));
+    assert!(deps.contains("Other::Base"));
+    Ok(())
+}
+
+#[test]
+fn test_module_runtime_dynamic_loader_stays_conservative() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/runtime_dynamic.pl")?;
+    let uri_str = uri.to_string();
+    index.index_file(
+        uri,
+        "use Module::Runtime qw(use_module);\nmy $name = 'Foo::Bar';\nmy $m = use_module($name);"
+            .to_string(),
+    )?;
+
+    let deps = index.file_dependencies(&uri_str);
+    assert!(deps.contains("Module::Runtime"));
+    assert!(!deps.contains("Foo::Bar"));
+    Ok(())
+}
+
 // =========================================================================
 // WorkspaceIndex – clear_file / clear_file_url
 // =========================================================================

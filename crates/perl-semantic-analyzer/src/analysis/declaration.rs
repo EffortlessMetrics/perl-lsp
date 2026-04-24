@@ -1544,7 +1544,63 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             }
         }
 
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+        fn parse_module_runtime_import_token(token: &str, target: &str) -> bool {
+            if token == target {
+                return true;
+            }
+
+            if token.starts_with("qw") {
+                let content = token
+                    .trim_start_matches("qw")
+                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                    .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                return content.split_whitespace().any(|part| part == target);
+            }
+
+            token.trim().trim_matches('\'').trim_matches('"').trim() == target
+        }
+
+        fn has_module_runtime_manual_import(stmts: &[Node]) -> bool {
+            stmts.iter().any(|stmt| {
+                let NodeKind::Use { module, args, .. } = &inner_expr(stmt).kind else {
+                    return false;
+                };
+                if module != "Module::Runtime" {
+                    return false;
+                }
+                args.iter().any(|arg| {
+                    parse_module_runtime_import_token(arg, "use_module")
+                        || parse_module_runtime_import_token(arg, "require_module")
+                })
+            })
+        }
+
+        fn module_runtime_call_module(call_node: &Node, allow_bare_runtime_calls: bool) -> Option<String> {
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            let is_runtime_loader = matches!(
+                name.as_str(),
+                "Module::Runtime::use_module" | "Module::Runtime::require_module"
+            ) || (allow_bare_runtime_calls && matches!(name.as_str(), "use_module" | "require_module"));
+            if !is_runtime_loader {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some(module.to_string())
+        }
+
+        fn module_runtime_alias(
+            expr: &Node,
+            allow_bare_runtime_calls: bool,
+        ) -> Option<(String, String)> {
             let (alias_name, call_node) = match &expr.kind {
                 NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
                     let NodeKind::Variable { name, .. } = &lhs.kind else {
@@ -1561,27 +1617,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 _ => return None,
             };
 
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
+            let module = module_runtime_call_module(call_node, allow_bare_runtime_calls)?;
+            Some((alias_name.to_string(), module))
         }
 
         /// Unwrap an ExpressionStatement to its inner expression, or return
@@ -1600,13 +1637,23 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// be adjacent — the import just needs to appear anywhere in the same
         /// statement list after (or even before) the require.
         fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
+            let allow_bare_runtime_calls = has_module_runtime_manual_import(stmts);
             // Collect all `require Module` names present in this block.
             let mut required_modules: Vec<String> =
                 stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
             let mut aliases: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
             for stmt in stmts {
-                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                if let Some(module) =
+                    module_runtime_call_module(inner_expr(stmt), allow_bare_runtime_calls)
+                {
+                    if !required_modules.contains(&module) {
+                        required_modules.push(module);
+                    }
+                }
+                if let Some((alias, module)) =
+                    module_runtime_alias(inner_expr(stmt), allow_bare_runtime_calls)
+                {
                     aliases.insert(alias, module.clone());
                     if !required_modules.contains(&module) {
                         required_modules.push(module);
