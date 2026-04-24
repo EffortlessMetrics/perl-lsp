@@ -340,6 +340,15 @@ fn parse_value_leading_dot_number() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn renderer_children_zero_count_returns_empty() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = PerlVariableRenderer::new();
+    let val = PerlValue::Array((0..10).map(PerlValue::Integer).collect());
+    let children = renderer.render_children(&val, 0, 0);
+    assert!(children.is_empty());
+    Ok(())
+}
+
 // ── parse_value: strings ──
 
 #[test]

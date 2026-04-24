@@ -71,6 +71,28 @@ mod deep_truncation_tests {
     }
 
     #[test]
+    fn test_500element_array_pagination_pages_do_not_overlap() {
+        let renderer = PerlVariableRenderer::new();
+        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let page_size = 64;
+        let first = renderer.render_children(&value, 0, page_size);
+        let second = renderer.render_children(&value, page_size, page_size);
+        let third = renderer.render_children(&value, page_size * 2, page_size);
+
+        assert_eq!(first.len(), page_size);
+        assert_eq!(second.len(), page_size);
+        assert_eq!(third.len(), page_size);
+        assert_eq!(first[0].name, "[0]");
+        assert_eq!(second[0].name, "[64]");
+        assert_eq!(third[0].name, "[128]");
+        assert_eq!(first[page_size - 1].name, "[63]");
+        assert_eq!(second[page_size - 1].name, "[127]");
+        assert_eq!(third[page_size - 1].name, "[191]");
+    }
+
+    #[test]
     fn test_cyclic_reference_rendering() {
         let renderer = PerlVariableRenderer::new();
 

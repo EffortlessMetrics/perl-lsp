@@ -187,6 +187,22 @@ fn array_children_pagination_past_end() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[test]
+fn array_children_pagination_is_stable_across_repeated_queries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let renderer = PerlVariableRenderer::new();
+    let val = PerlValue::Array((0..20).map(PerlValue::Integer).collect());
+
+    let first = renderer.render_children(&val, 5, 7);
+    let second = renderer.render_children(&val, 5, 7);
+
+    assert_eq!(first, second);
+    assert_eq!(first.len(), 7);
+    assert_eq!(first[0].name, "[5]");
+    assert_eq!(first[6].name, "[11]");
+    Ok(())
+}
+
+#[test]
 fn array_children_with_mixed_types() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Array(vec![

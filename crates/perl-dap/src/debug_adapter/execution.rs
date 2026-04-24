@@ -171,10 +171,14 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
-        let success = if let Some(ref session) =
-            *lock_or_recover(&self.session, "debug_adapter.session")
-        {
-            let pid = session.process.id();
+        let session_pid = {
+            let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            session_guard.as_mut().map(|session| {
+                session.variables.clear();
+                session.process.id()
+            })
+        };
+        let success = if let Some(pid) = session_pid {
             self.send_interrupt_signal(pid)
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {

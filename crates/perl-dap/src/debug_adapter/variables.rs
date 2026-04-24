@@ -3,6 +3,40 @@
 use super::*;
 
 impl DebugAdapter {
+    const VARIABLE_CACHE_PARSE_LIMIT: usize = 256;
+
+    fn slice_cached_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
+        variables.iter().skip(start).take(count).cloned().collect()
+    }
+
+    fn request_scope_variables_lines(
+        &self,
+        session: &mut DebugSession,
+        variables_ref: i32,
+    ) -> Option<Vec<String>> {
+        let frame_id = variables_ref / 10;
+        let scope_selector = match variables_ref % 10 {
+            1 => ".",
+            2 => "::",
+            3 => "*",
+            _ => return None,
+        };
+        let stdin = session.process.stdin.as_mut()?;
+        let command = format!("V {frame_id} {scope_selector}");
+        match self.send_framed_debugger_commands(stdin, &[command]) {
+            Ok((begin, end)) => {
+                self.capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS * 8)
+            }
+            Err(error) => {
+                tracing::warn!(%error, "Failed to send framed variables command, falling back");
+                let fallback_command = format!("V {frame_id} {scope_selector}\n");
+                let _ = stdin.write_all(fallback_command.as_bytes());
+                let _ = stdin.flush();
+                None
+            }
+        }
+    }
+
     /// Handle variables request
     pub(super) fn handle_variables(
         &self,
@@ -50,7 +84,6 @@ impl DebugAdapter {
         let variables_ref = args.variables_reference as i32;
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
-        let can_use_root_cache = start == 0 && args.count.is_none();
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -63,124 +96,99 @@ impl DebugAdapter {
             };
         }
 
-        // AC8.4: Render scalars/arrays/hashes with lazy child expansion.
-        let parsed_from_output;
-        let mut parsed_child_cache = HashMap::new();
-        let mut used_session_cache = false;
-
+        let mut cached_response = None;
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            // Return cached variables first for stable references and fast repeated expansion.
-            if can_use_root_cache && let Some(vars) = session.variables.get(&variables_ref) {
-                used_session_cache = true;
-                parsed_from_output = vars.clone();
-            } else {
-                let mut framed_scope_lines = None;
+            if let Some(vars) = session.variables.get(&variables_ref) {
+                cached_response = Some(Self::slice_cached_variables(vars, start, count));
+            }
+        }
 
-                // Request fresh scope output from Perl debugger for scope roots only.
-                let frame_id = variables_ref / 10;
-                match variables_ref % 10 {
-                    1 => {
-                        if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} .", frame_id)];
-                            match self.send_framed_debugger_commands(stdin, &commands) {
-                                Ok((begin, end)) => {
-                                    framed_scope_lines = self.capture_framed_debugger_output(
-                                        &begin,
-                                        &end,
-                                        DEBUGGER_QUERY_WAIT_MS * 8,
-                                    );
-                                }
-                                Err(error) => {
-                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} .\n", frame_id);
-                                    let _ = stdin.write_all(cmd.as_bytes());
-                                    let _ = stdin.flush();
-                                }
-                            }
-                        }
-                    }
-                    2 => {
-                        if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} ::", frame_id)];
-                            match self.send_framed_debugger_commands(stdin, &commands) {
-                                Ok((begin, end)) => {
-                                    framed_scope_lines = self.capture_framed_debugger_output(
-                                        &begin,
-                                        &end,
-                                        DEBUGGER_QUERY_WAIT_MS * 8,
-                                    );
-                                }
-                                Err(error) => {
-                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} ::\n", frame_id);
-                                    let _ = stdin.write_all(cmd.as_bytes());
-                                    let _ = stdin.flush();
-                                }
-                            }
-                        }
-                    }
-                    3 => {
-                        if let Some(stdin) = session.process.stdin.as_mut() {
-                            let commands = vec![format!("V {} *", frame_id)];
-                            match self.send_framed_debugger_commands(stdin, &commands) {
-                                Ok((begin, end)) => {
-                                    framed_scope_lines = self.capture_framed_debugger_output(
-                                        &begin,
-                                        &end,
-                                        DEBUGGER_QUERY_WAIT_MS * 8,
-                                    );
-                                }
-                                Err(error) => {
-                                    tracing::warn!(%error, "Failed to send framed variables command, falling back");
-                                    let cmd = format!("V {} *\n", frame_id);
-                                    let _ = stdin.write_all(cmd.as_bytes());
-                                    let _ = stdin.flush();
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
-                }
+        if let Some(variables) = cached_response {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "variables".to_string(),
+                body: Some(json!({
+                    "variables": variables
+                })),
+                message: None,
+            };
+        }
 
-                let (vars, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
-                    let (framed_vars, framed_child_cache) =
-                        Self::parse_scope_variables_from_lines(lines, variables_ref, start, count);
+        // Parse and cache full root/child vectors so repeated and paged expansions are local.
+        let uncached_variables = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            let framed_scope_lines = self.request_scope_variables_lines(session, variables_ref);
+
+            let (parsed_full_variables, parsed_child_cache) =
+                if let Some(lines) = framed_scope_lines.as_ref() {
+                    let (framed_vars, framed_child_cache) = Self::parse_scope_variables_from_lines(
+                        lines,
+                        variables_ref,
+                        0,
+                        Self::VARIABLE_CACHE_PARSE_LIMIT,
+                    );
                     if framed_vars.is_empty() {
                         Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                        self.parse_scope_variables_from_output(variables_ref, start, count)
+                        self.parse_scope_variables_from_output(
+                            variables_ref,
+                            0,
+                            Self::VARIABLE_CACHE_PARSE_LIMIT,
+                        )
                     } else {
                         (framed_vars, framed_child_cache)
                     }
                 } else {
                     Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                    self.parse_scope_variables_from_output(variables_ref, start, count)
+                    self.parse_scope_variables_from_output(
+                        variables_ref,
+                        0,
+                        Self::VARIABLE_CACHE_PARSE_LIMIT,
+                    )
                 };
 
-                parsed_from_output = vars;
-                parsed_child_cache = child_cache;
-            }
-        } else {
-            let (vars, _child_cache) =
-                self.parse_scope_variables_from_output(variables_ref, start, count);
-            parsed_from_output = vars;
-        }
+            let full_variables = if parsed_full_variables.is_empty() {
+                if variables_ref % 10 == 1 || variables_ref % 10 == 2 || variables_ref % 10 == 3 {
+                    Self::fallback_scope_variables(
+                        variables_ref,
+                        0,
+                        Self::VARIABLE_CACHE_PARSE_LIMIT,
+                    )
+                } else {
+                    Vec::new()
+                }
+            } else {
+                parsed_full_variables
+            };
 
-        let variables = if parsed_from_output.is_empty() {
-            Self::fallback_scope_variables(variables_ref, start, count)
+            session.variables.insert(variables_ref, full_variables.clone());
+            for (child_ref, children) in parsed_child_cache {
+                session.variables.insert(child_ref, children);
+            }
+            Self::slice_cached_variables(&full_variables, start, count)
         } else {
-            parsed_from_output
+            let (parsed_full_variables, _child_cache) = self.parse_scope_variables_from_output(
+                variables_ref,
+                0,
+                Self::VARIABLE_CACHE_PARSE_LIMIT,
+            );
+            let full_variables = if parsed_full_variables.is_empty() {
+                if variables_ref % 10 == 1 || variables_ref % 10 == 2 || variables_ref % 10 == 3 {
+                    Self::fallback_scope_variables(
+                        variables_ref,
+                        0,
+                        Self::VARIABLE_CACHE_PARSE_LIMIT,
+                    )
+                } else {
+                    Vec::new()
+                }
+            } else {
+                parsed_full_variables
+            };
+            Self::slice_cached_variables(&full_variables, start, count)
         };
-
-        // Cache parsed variables and generated child references for expansion requests.
-        if !used_session_cache
-            && can_use_root_cache
-            && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
-        {
-            session.variables.insert(variables_ref, variables.clone());
-            for (reference, children) in parsed_child_cache {
-                session.variables.insert(reference, children);
-            }
-        }
 
         DapMessage::Response {
             seq,
@@ -188,7 +196,7 @@ impl DebugAdapter {
             success: true,
             command: "variables".to_string(),
             body: Some(json!({
-                "variables": variables
+                "variables": uncached_variables
             })),
             message: None,
         }

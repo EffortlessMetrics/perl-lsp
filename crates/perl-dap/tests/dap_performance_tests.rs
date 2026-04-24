@@ -121,10 +121,32 @@ mod dap_performance {
             first_elapsed
         );
 
+        let cached_start = Instant::now();
+        let cached = adapter.handle_request(
+            2,
+            "variables",
+            Some(json!({
+                "variablesReference": 11,
+                "start": 0,
+                "count": 50
+            })),
+        );
+        let cached_elapsed = cached_start.elapsed();
+        match cached {
+            DapMessage::Response { success, .. } => assert!(success),
+            _ => anyhow::bail!("expected cached variables response"),
+        }
+        assert!(
+            cached_elapsed <= first_elapsed.saturating_mul(2),
+            "cached variables request regressed: first {:?}, cached {:?}",
+            first_elapsed,
+            cached_elapsed
+        );
+
         if child_ref > 0 {
             let child_start = Instant::now();
             let child = adapter.handle_request(
-                2,
+                3,
                 "variables",
                 Some(json!({
                     "variablesReference": child_ref,
