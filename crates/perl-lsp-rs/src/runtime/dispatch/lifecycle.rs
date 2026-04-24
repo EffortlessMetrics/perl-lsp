@@ -315,7 +315,9 @@ mod tests {
                     LifecycleAction::Initialize => {
                         let actual = server.handle_initialize(None).map(|_| ());
                         let expected = model.initialize();
-                        assert_eq!(
+                        // Use prop_assert_eq! (not assert_eq!) throughout so proptest can
+                        // shrink failing sequences rather than panicking on first mismatch.
+                        prop_assert_eq!(
                             actual.is_ok(),
                             expected.is_ok(),
                             "initialize result should match model"
@@ -327,7 +329,7 @@ mod tests {
                     LifecycleAction::InitializedNotification => {
                         let actual = server.handle_initialized_dispatch().map(|_| ());
                         let expected = model.initialized_notification();
-                        assert_eq!(
+                        prop_assert_eq!(
                             actual.is_ok(),
                             expected.is_ok(),
                             "initialized notification result should match model"
@@ -342,7 +344,17 @@ mod tests {
                     }
                 }
 
-                prop_assert_eq!(server.is_initialized(), model.initialized);
+                // Assert both observable state fields against the model after every action.
+                prop_assert_eq!(
+                    server.initialize_requested.load(Ordering::Acquire),
+                    model.initialize_requested,
+                    "initialize_requested flag must track model"
+                );
+                prop_assert_eq!(
+                    server.is_initialized(),
+                    model.initialized,
+                    "initialized flag must track model"
+                );
             }
         }
     }
