@@ -4,12 +4,16 @@
 //! (`scanner.c`) via the `cc` crate and exposes the resulting static
 //! library as `tree-sitter-perl-c`.
 //!
-//! The C sources live under `c-src/` and are a snapshot of the upstream
-//! tree-sitter Perl grammar. The `c-src/` directory IS the canonical source
-//! of truth within this repository; this crate carries its own copy so the
-//! published package is self-contained and does not need paths outside the
-//! crate directory. (The old `tree-sitter-perl-rs` harness has been archived
-//! to `archive/crates/tree-sitter-perl-rs/`.)
+//! The C sources live under `c-src/` and are vendored upstream artifacts.
+//! Local Rust wrapper code (`build.rs`, `src/lib.rs`, tests, bins) is
+//! maintained separately from those vendored C files.
+//!
+//! Snapshot provenance (upstream repo/ref, generator version, fingerprints,
+//! and refresh workflow) is tracked in `UPSTREAM_SNAPSHOT.md`.
+//!
+//! The `c-src/` directory IS the canonical source of truth within this
+//! repository; this crate carries its own copy so the published package is
+//! self-contained and does not need paths outside the crate directory.
 //!
 //! No bindgen is involved: the single symbol we need from the C library
 //! (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.

@@ -17,6 +17,28 @@ The crate is self-contained: the C sources live under `c-src/` and are shipped
 in the published package. There is no `bindgen` or `libclang` dependency — the
 single symbol we need (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.
 
+## Snapshot Provenance and Refresh
+
+The vendored grammar snapshot is tracked in [`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+That file is the audit source for:
+
+- upstream repository URL
+- pinned upstream ref/commit (or explicit legacy-unknown status)
+- tree-sitter generator version used for `parser.c`
+- reproducible refresh procedure and validation checklist
+
+### Vendored vs local code ownership
+
+| Path | Ownership | Notes |
+|---|---|---|
+| `c-src/parser.c` | Vendored upstream artifact | Generated C parser (do not hand-edit) |
+| `c-src/scanner.c` | Vendored upstream artifact | External scanner C code (do not hand-edit) |
+| `c-src/bsearch.h`, `c-src/tsp_unicode.h` | Vendored upstream artifacts | Scanner support headers |
+| `c-src/tree_sitter/*.h` | Vendored upstream runtime headers | Required to compile parser/scanner |
+| `build.rs` | Local wrapper code | Compiles vendored C with `cc` |
+| `src/lib.rs` | Local wrapper code | Rust API + FFI declaration for `tree_sitter_perl` |
+| `tests/`, `src/bin/` | Local wrapper code | Behavior tests, parser/benchmark binaries |
+
 ## This crate vs. `tree-sitter-perl-rs`
 
 | | `tree-sitter-perl-c` (this crate) | `tree-sitter-perl-rs` |
