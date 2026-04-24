@@ -169,3 +169,78 @@ Surfaced during reviews but left for follow-up scouts:
 ---
 
 _Forensic captured during the session for future-session substrate. Paired with `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` and `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md`._
+
+---
+
+## Windows 3 + 4 — agent saturation + Codex hallucination triage
+
+Two more 5h windows ran in this session after the log above was captured.
+
+### Window 3 — agent saturation experiment
+
+**Claude 18% → 52% session / Codex ~21% → ~30% spent weekly / Weekly Claude 82% → 87%**
+
+~55 agents dispatched across three overlapping 20-agent waves (ops drain, rebase, Haiku review, deep-review, diff-audit, research-verify, refactor-plan, maintainer-pr, scout, docs-review, CI flake, RC1 punch list, retrospective). Observation: at 20+ agents in flight, orchestrator context cost is almost entirely agent-dispatch metadata + return summaries — not code reading. Orchestrator is a pure router.
+
+Merge-ready queue built up: 15+ deep-reviewed PRs awaiting ci-green + diff-audited. 172 total open PRs. RC1 punch list landed as PR #5497.
+
+### Window 4 — master bit-rot cascade + Codex hallucination triage
+
+**Claude 52% → 66% session / Codex ~88% remaining session / Weekly Claude 87% → 97%, Codex 70% remaining weekly**
+
+**Master bit-rot cascade — six pre-existing breaks surfaced by tier-wiring expansion:**
+
+1. `#5494` — `scope_and_symbol_tests.rs:1737` `${Foo::name}` parsed as invalid format string (introduced PR #5090)
+2. `#5495` — `mojolicious_navigation_tests.rs:417` stray duplicate close (merge artifact, PR #5288)
+3. **xtask/lsp_stats.rs** — `last_run` + `run.completion_rate()` + missing `load_last_run` helper (incomplete #5303 refactor)
+4. **xtask fmt drift** — `lsp_stats.rs` multi-line `assert!` blocks
+5. **hash_key_bareword_tests.rs** — 22 type errors `expected &Arc<Node>, found &Node` (API signature drift)
+6. **perl-regex/tests/comprehensive_unit_tests.rs:366** — fmt drift on function signature
+
+All fixed via four-commit stack on PR #5501 (`fix/mojolicious-stray-close`). Windows Guardrails module-separator-regressions (`#5593`) — separate pre-existing Windows 8.3 path-canonicalization issue, filed as follow-up for `dunce::canonicalize` work.
+
+Every fire-fix exposed the next. Classic "Tier-wiring noise is bit-rot signal" (memory entry). `--lib`-only push CI hid these for weeks; `cargo check --workspace --all-targets` is the right gate. Scout issue #4507 covers this — sprint evidence added as comment.
+
+**Codex hallucination triage — NEW failure mode:**
+
+Codex generated 10 PRs adding Perl framework detection for names it encountered in training-data periphery:
+
+- **OpenClaw** (agentic editor): #5631–5634 closed — added `WebFrameworkKind::OpenClaw`, `.claw` as Perl source extension, Moo-family aliases
+- **Droid / Droid::Factory** (Factory.ai terminal agent): #5619, #5641 closed — added web-route detection + `IMPLICIT_STRICT_MODULES` entry
+- **Builder::IO::Fusion** (builder.io JS visual AI): #5627–5630 closed — conflated with real `Plack::Builder`
+- **Google::Antigravity** (Google agentic browser): #5592 closed — added to Tier-1 completion suggestions
+
+Pattern: 3–4 cross-crate PRs all reinforcing the same fictional framework (parser ext + semantic detection + completion tier + go-to-impl skip). Each individual PR is coherent, tested, and clippy-clean — only MetaCPAN verification distinguishes hallucination from real.
+
+**Legitimate-but-poisoned example:** #5591 Mojolicious whitespace-in-controller-name fix was real but used `google antigravity#launch` as the only fixture. Comment posted to replace fixture; feature stays.
+
+**Separately verified legitimate:** All 19 editor-integration docs PRs (Trae, Kiro, PearAI, Eclipse, Windsurf, Notepad++, JetBrains, Cursor, Zed, Roo Code, Kilo Code, Warp, Aider, Claude Code, Factory Droid host-detection, MCP/Hermes) target real products with LSP support. Codex editor-docs have high fidelity; the hallucination pattern is isolated to **framework-detection code**.
+
+Memory: `feedback_codex_framework_hallucination.md` — prescribes MetaCPAN pre-filter before approving any PR adding entries to `WebFrameworkKind`, `IMPLICIT_STRICT_MODULES`, `IMPLICIT_EXPORT_SKIP_LIST`, `COMMON_MODULES_TIER_1`, or `PERL_SOURCE_EXTENSIONS`.
+
+### Cross-window economic observations
+
+- **Sprint-attributable weekly movement:** ~100%. Claude 76% → 97% weekly is sprint-driven.
+- **Codex cheaper than Claude 20× by weekly burn:** confirmed again. Codex 70% remaining weekly at session close (~30% spent across four windows generating 250+ PRs including the hallucination batch). In the same span Claude went 76% → 97% weekly (~21% spent). **Codex delivered ~8× the PR output for ~1.4× the relative budget spend** — the spray-and-filter asymmetry is stable.
+- **Orchestrator cost floor at saturation ≈ agent-dispatch metadata.** 20 agents in flight costs ~4-6% session for return-summary rollup; not for code reading (which lives in children).
+- **Fire-fix cascade is higher per-cycle cost than review passes.** Each master-red fix exposes the next; investigator dispatches cost ~1-2% session each because they pull CI job logs.
+- **Research-verify is the correct filter for hallucinations.** Haiku standards-review passed #5619/#5627/#5631 as "clean" — they are clean by banned-pattern check, but the code is for nonexistent frameworks. Only web-verified research catches this. Adding a MetaCPAN pre-gate to standards-review (or making research-verifier a required stage for semantic-analyzer additions) would close the loop.
+- **`git reset --hard` blocked by safety hook** — working as intended. Several agents needed alternative paths (`checkout -B`, `checkout -- file`) to recover from CRLF contamination. Hook-level enforcement is the right layer for destructive ops protection.
+
+### Follow-ups explicitly deferred to next session
+
+- **Master may still be red at session close:** fire-fix-wave-4 was still running when the user called end-of-session. #5501 needs ops-merge attention once CI settles.
+- **#5593:** Windows 8.3 short-path canonicalization in perl-module — `dunce::canonicalize` work; pre-existing, independent of RC1 Linux shape.
+- **Green-refactor pass:** nine deep-reviewed PRs have `refactor-planner-reviewed` but haven't executed; queued for post-master-green cycle.
+- **Merge-queue drain:** 15+ PRs have `deep-reviewed + ci-green + diff-audited` — waiting on master green to merge.
+- **Scenario-number collisions:** #5268/#5381 both assigned slot 20; #5252/#5401 both assigned slot 21 by overlapping rebase waves. First-to-merge wins; losers re-renumber on conflict.
+- **3 impl branches ready for red-TDD:** `impl/5496-parser-unclosed-delimiters`, `impl/5498-dap-function-breakpoints`, `impl/5499-completion-scope-distance` — spec-planner created; red-TDD needs to add failing tests next session.
+
+### Artifacts added this pair of windows
+
+- **Memory files added:** `feedback_codex_framework_hallucination.md`
+- **Issues filed:** #5494, #5495, #5496, #5498, #5499, #5593, #5653 (inlayHint resolve), #5658 (DAP pagination nested) + comments adding sprint evidence to #4507
+- **PRs opened:** #5497 (RC1 punch list), #5500 (superseded by #5501), #5501 (combined master fire-fix, 4 commits)
+- **Editor PRs triaged:** 19 verified legitimate, 10 hallucinated closed, 1 poisoned-example flagged
+- **Clusters closed as dupes:** Zed 3-of-4, ts-perl-c re-reversed (#5075/#5076 closed, #5386/#5387/#5388 reopened after catching wrong consolidation), metrics-receipt (#5460/#5461 → #5462), editor-docs (#5580 → #5581), vscode package.json (#5587/#5588 → #5586), Trae 3-of-4 (#5582/#5583/#5585 → #5584)
+- **Deep-review fix-forwards:** 10+ real bugs caught + pushed on PR branches (including cancellation-cache invalidation #5428, missing tree-sitter-language dep #5489, FindBin word-boundary #5392, scenario 18→19 line-9-vs-10 coord bug #5327, workspace_rename 2 bugs #5434, nvim lspconfig silent no-op #5442, Zed config wrong schema #5470, emacs perl-ts-mode overclaim #5444, #5476 checked_sub dead code, #5487 missing mojolicious test)

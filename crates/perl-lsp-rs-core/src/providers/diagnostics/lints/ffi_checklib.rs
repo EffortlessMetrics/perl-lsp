@@ -224,21 +224,39 @@ fn default_search_paths() -> Vec<PathBuf> {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn common_unix_search_paths() -> Vec<&'static str> {
+    common_unix_search_paths_for_arch(std::env::consts::ARCH)
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn common_unix_search_paths_for_arch(arch: &str) -> Vec<&'static str> {
     let mut paths =
         vec!["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/opt/local/lib"];
 
-    #[cfg(target_arch = "x86_64")]
-    paths.extend(["/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu"]);
-    #[cfg(target_arch = "aarch64")]
-    paths.extend(["/lib/aarch64-linux-gnu", "/usr/lib/aarch64-linux-gnu"]);
-    #[cfg(target_arch = "arm")]
-    paths.extend(["/lib/arm-linux-gnueabihf", "/usr/lib/arm-linux-gnueabihf"]);
-    #[cfg(target_arch = "x86")]
-    paths.extend(["/lib/i386-linux-gnu", "/usr/lib/i386-linux-gnu"]);
-    #[cfg(target_arch = "powerpc64")]
-    paths.extend(["/lib/powerpc64le-linux-gnu", "/usr/lib/powerpc64le-linux-gnu"]);
-    #[cfg(target_arch = "s390x")]
-    paths.extend(["/lib/s390x-linux-gnu", "/usr/lib/s390x-linux-gnu"]);
+    match arch {
+        "x86_64" => paths.extend(["/lib/x86_64-linux-gnu", "/usr/lib/x86_64-linux-gnu"]),
+        "aarch64" | "arm64" => paths.extend([
+            "/lib/aarch64-linux-gnu",
+            "/usr/lib/aarch64-linux-gnu",
+            "/lib/aarch64-linux-musl",
+            "/usr/lib/aarch64-linux-musl",
+        ]),
+        "arm" | "armv7" | "armv7l" | "armv6" | "armv6l" => paths.extend([
+            "/lib/arm-linux-gnueabihf",
+            "/usr/lib/arm-linux-gnueabihf",
+            "/lib/arm-linux-gnueabi",
+            "/usr/lib/arm-linux-gnueabi",
+            "/lib/arm-linux-musleabihf",
+            "/usr/lib/arm-linux-musleabihf",
+            "/lib/arm-linux-musleabi",
+            "/usr/lib/arm-linux-musleabi",
+        ]),
+        "x86" => paths.extend(["/lib/i386-linux-gnu", "/usr/lib/i386-linux-gnu"]),
+        "powerpc64" => {
+            paths.extend(["/lib/powerpc64le-linux-gnu", "/usr/lib/powerpc64le-linux-gnu"])
+        }
+        "s390x" => paths.extend(["/lib/s390x-linux-gnu", "/usr/lib/s390x-linux-gnu"]),
+        _ => {}
+    }
 
     paths
 }
@@ -474,5 +492,25 @@ mod tests {
             search_paths.contains(&PathBuf::from("/usr/lib/x86_64-linux-gnu")),
             "expected default search paths to include Debian/Ubuntu x86_64 multiarch dirs"
         );
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn arm_arches_include_gnu_and_musl_multiarch_roots() {
+        let armv7_paths = common_unix_search_paths_for_arch("armv7l");
+
+        assert!(armv7_paths.contains(&"/usr/lib/arm-linux-gnueabihf"));
+        assert!(armv7_paths.contains(&"/usr/lib/arm-linux-gnueabi"));
+        assert!(armv7_paths.contains(&"/usr/lib/arm-linux-musleabihf"));
+        assert!(armv7_paths.contains(&"/usr/lib/arm-linux-musleabi"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn aarch64_includes_musl_multiarch_roots() {
+        let paths = common_unix_search_paths_for_arch("aarch64");
+
+        assert!(paths.contains(&"/usr/lib/aarch64-linux-gnu"));
+        assert!(paths.contains(&"/usr/lib/aarch64-linux-musl"));
     }
 }

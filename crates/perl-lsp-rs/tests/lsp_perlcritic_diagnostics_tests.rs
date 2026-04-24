@@ -356,6 +356,92 @@ fn test_f_missing_configured_profile_skips_subprocess_and_diagnostics() {
 }
 
 #[test]
+fn test_f2_relative_configured_profile_resolves_from_workspace_root() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let cfg_dir = root.join("config");
+    fs::create_dir_all(&cfg_dir).expect("create config/");
+
+    let profile_path = cfg_dir.join("perlcriticrc");
+    fs::write(&profile_path, "severity = 3\n").expect("write profile");
+
+    let module_path = root.join("RelativeProfile.pm");
+    fs::write(&module_path, "package RelativeProfile;\n1;\n").expect("write module");
+
+    let server = LspServer::new();
+    server.test_set_root_path(root.clone());
+    server.test_configure_perlcritic(true, 3, Some("config/perlcriticrc".to_string()));
+    server.test_bypass_perlcritic_command_check();
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    pull_diagnostics(&server, &uri, "package RelativeProfile;\n1;\n");
+
+    let invocations = runtime.invocations();
+    assert!(
+        !invocations.is_empty(),
+        "expected perlcritic subprocess invocation; got: {invocations:?}"
+    );
+
+    let expected_profile = profile_path.to_string_lossy().to_string();
+    let profile_arg = format!("--profile={expected_profile}");
+    assert!(
+        invocations.last().is_some_and(|invocation| invocation.args.contains(&profile_arg)),
+        "relative configured profile should resolve from workspace root; args: {:?}",
+        invocations.last().map(|invocation| &invocation.args)
+    );
+}
+
+#[test]
+fn test_f3_walkup_finds_perlcriticrc_without_dot_prefix() {
+    use std::fs;
+    use tempfile::TempDir;
+
+    let tmp = TempDir::new().expect("tempdir");
+    let root = tmp.path().to_path_buf();
+    let lib_dir = root.join("lib");
+    fs::create_dir_all(&lib_dir).expect("create lib/");
+
+    let rc_path = root.join("perlcriticrc");
+    fs::write(&rc_path, "severity = 3\n").expect("write perlcriticrc");
+
+    let module_path = lib_dir.join("NoDotRc.pm");
+    fs::write(&module_path, "package NoDotRc;\n1;\n").expect("write module");
+
+    let server = LspServer::new();
+    server.test_configure_perlcritic(true, 3, None);
+    server.test_set_root_path(root.clone());
+    server.test_bypass_perlcritic_command_check();
+
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+    server.test_install_mock_critic_runtime(runtime.clone());
+
+    let uri = url::Url::from_file_path(&module_path).expect("file url").to_string();
+    pull_diagnostics(&server, &uri, "package NoDotRc;\n1;\n");
+
+    let invocations = runtime.invocations();
+    assert!(
+        !invocations.is_empty(),
+        "expected perlcritic subprocess invocation; got: {invocations:?}"
+    );
+
+    let expected_profile = rc_path.to_string_lossy().to_string();
+    let profile_arg = format!("--profile={expected_profile}");
+    assert!(
+        invocations.last().is_some_and(|invocation| invocation.args.contains(&profile_arg)),
+        "walk-up should discover workspace perlcriticrc without dot; args: {:?}",
+        invocations.last().map(|invocation| &invocation.args)
+    );
+}
+
+#[test]
 fn test_g_did_change_configuration_resets_pull_perlcritic_analyzer() {
     use std::fs;
     use tempfile::TempDir;
