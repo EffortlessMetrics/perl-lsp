@@ -188,66 +188,6 @@ impl DocumentHighlightProvider {
     /// Get children of a node
     fn get_children<'a>(&self, node: &'a Node) -> Option<Vec<&'a Node>> {
         match &node.kind {
-            NodeKind::Program { statements } => Some(statements.iter().collect()),
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                let mut children = vec![variable.as_ref()];
-                if let Some(init) = initializer {
-                    children.push(init.as_ref());
-                }
-                Some(children)
-            }
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-                let mut children: Vec<&Node> = variables.iter().collect();
-                if let Some(init) = initializer {
-                    children.push(init.as_ref());
-                }
-                Some(children)
-            }
-            NodeKind::Assignment { lhs, rhs, .. } => Some(vec![lhs.as_ref(), rhs.as_ref()]),
-            NodeKind::Binary { left, right, .. } => Some(vec![left.as_ref(), right.as_ref()]),
-            NodeKind::Unary { operand, .. } => Some(vec![operand.as_ref()]),
-            NodeKind::MethodCall { object, args, .. } => {
-                let mut children = vec![object.as_ref()];
-                children.extend(args.iter().map(|a| a as &Node));
-                Some(children)
-            }
-            NodeKind::FunctionCall { args, .. } => Some(args.iter().collect()),
-            NodeKind::Block { statements } => Some(statements.iter().collect()),
-            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                let mut children = vec![condition.as_ref(), then_branch.as_ref()];
-                for (cond, branch) in elsif_branches {
-                    children.push(cond.as_ref());
-                    children.push(branch.as_ref());
-                }
-                if let Some(else_b) = else_branch {
-                    children.push(else_b.as_ref());
-                }
-                Some(children)
-            }
-            NodeKind::For { init, condition, update, body, .. } => {
-                let mut children = Vec::new();
-                if let Some(i) = init {
-                    children.push(i.as_ref());
-                }
-                if let Some(c) = condition {
-                    children.push(c.as_ref());
-                }
-                if let Some(u) = update {
-                    children.push(u.as_ref());
-                }
-                children.push(body.as_ref());
-                Some(children)
-            }
-            NodeKind::Foreach { variable, list, body, continue_block } => {
-                if let Some(cb) = continue_block {
-                    Some(vec![variable.as_ref(), list.as_ref(), body.as_ref(), cb.as_ref()])
-                } else {
-                    Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
-                }
-            }
-            NodeKind::While { condition, body, .. } => {
-                Some(vec![condition.as_ref(), body.as_ref()])
-            }
             NodeKind::Subroutine { body, signature, .. } => {
                 let mut children = Vec::new();
                 if let Some(sig) = signature {
@@ -261,50 +201,6 @@ impl DocumentHighlightProvider {
                 children.push(body.as_ref());
                 Some(children)
             }
-            NodeKind::Return { value } => value.as_ref().map(|v| vec![v.as_ref()]),
-            NodeKind::ArrayLiteral { elements } => Some(elements.iter().collect()),
-            NodeKind::HashLiteral { pairs } => {
-                let mut children = Vec::new();
-                for (k, v) in pairs {
-                    children.push(k);
-                    children.push(v);
-                }
-                Some(children)
-            }
-            NodeKind::Ternary { condition, then_expr, else_expr } => {
-                Some(vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()])
-            }
-            NodeKind::VariableWithAttributes { variable, .. } => Some(vec![variable.as_ref()]),
-            NodeKind::ExpressionStatement { expression } => Some(vec![expression.as_ref()]),
-            // Statement modifiers (Issue #191)
-            NodeKind::StatementModifier { statement, condition, .. } => {
-                Some(vec![statement.as_ref(), condition.as_ref()])
-            }
-            // Regex operations - only expr is a child node, patterns are strings (Issue #191)
-            NodeKind::Match { expr, .. }
-            | NodeKind::Substitution { expr, .. }
-            | NodeKind::Transliteration { expr, .. } => Some(vec![expr.as_ref()]),
-            // Control flow (Issue #191)
-            NodeKind::Given { expr, body } => Some(vec![expr.as_ref(), body.as_ref()]),
-            NodeKind::When { condition, body } => Some(vec![condition.as_ref(), body.as_ref()]),
-            NodeKind::Default { body } => Some(vec![body.as_ref()]),
-            NodeKind::LabeledStatement { statement, .. } => Some(vec![statement.as_ref()]),
-            // Code evaluation (Issue #191)
-            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
-                Some(vec![block.as_ref()])
-            }
-            // Error handling (Issue #191)
-            NodeKind::Try { body, catch_blocks, finally_block } => {
-                let mut children = vec![body.as_ref()];
-                for (_, catch_body) in catch_blocks {
-                    children.push(catch_body.as_ref());
-                }
-                if let Some(finally) = finally_block {
-                    children.push(finally.as_ref());
-                }
-                Some(children)
-            }
-            // Method declarations (Issue #191)
             NodeKind::Method { body, signature, .. } => {
                 let mut children = Vec::new();
                 if let Some(sig) = signature {
@@ -318,23 +214,10 @@ impl DocumentHighlightProvider {
                 children.push(body.as_ref());
                 Some(children)
             }
-            // Indirect calls (Issue #191)
-            NodeKind::IndirectCall { object, args, .. } => {
-                let mut children = vec![object.as_ref()];
-                children.extend(args.iter());
-                Some(children)
+            _ => {
+                let children = node.children();
+                if children.is_empty() { None } else { Some(children) }
             }
-            // Class declarations (Issue #191)
-            NodeKind::Class { body, .. } => Some(vec![body.as_ref()]),
-            // Signature and parameter types (Issue #191)
-            NodeKind::Signature { parameters } => Some(parameters.iter().collect()),
-            NodeKind::MandatoryParameter { variable } => Some(vec![variable.as_ref()]),
-            NodeKind::OptionalParameter { variable, default_value } => {
-                Some(vec![variable.as_ref(), default_value.as_ref()])
-            }
-            NodeKind::SlurpyParameter { variable } => Some(vec![variable.as_ref()]),
-            NodeKind::NamedParameter { variable } => Some(vec![variable.as_ref()]),
-            _ => None,
         }
     }
 
