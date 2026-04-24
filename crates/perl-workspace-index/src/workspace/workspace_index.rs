@@ -989,6 +989,18 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone)]
+/// Preflight result for symbol-safe deletion planning.
+pub enum SafeDeletePreflight {
+    /// No external references were found, so deletion can proceed.
+    SafeToDelete,
+    /// References in other files were found, so deletion should be blocked.
+    Blocked {
+        /// Reference locations outside the defining file.
+        external_references: Vec<Location>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -2688,6 +2700,26 @@ impl WorkspaceIndex {
 
         all_refs
     }
+
+    /// Run safe-delete preflight by checking for external references.
+    ///
+    /// Returns [`SafeDeletePreflight::Blocked`] when references to the symbol
+    /// exist outside the defining file; otherwise returns
+    /// [`SafeDeletePreflight::SafeToDelete`].
+    pub fn preflight_safe_delete(&self, key: &SymbolKey) -> SafeDeletePreflight {
+        let refs = self.find_refs(key);
+        let external_references = if let Some(definition) = self.find_def(key) {
+            refs.into_iter().filter(|reference| reference.uri != definition.uri).collect()
+        } else {
+            refs
+        };
+
+        if external_references.is_empty() {
+            SafeDeletePreflight::SafeToDelete
+        } else {
+            SafeDeletePreflight::Blocked { external_references }
+        }
+    }
 }
 
 /// AST visitor for extracting symbols and references
@@ -3971,6 +4003,90 @@ UsageDemo::helper();
         assert!(
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
+        );
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_blocks_when_external_references_exist() {
+        let index = WorkspaceIndex::new();
+        must(
+            index.index_file(
+                must(url::Url::parse("file:///lib/DeleteDemo.pm")),
+                r#"
+package DeleteDemo;
+sub helper {
+    return 1;
+}
+1;
+"#
+                .to_string(),
+            ),
+        );
+        must(
+            index.index_file(
+                must(url::Url::parse("file:///lib/Caller.pm")),
+                r#"
+package Caller;
+DeleteDemo::helper();
+1;
+"#
+                .to_string(),
+            ),
+        );
+
+        let key = SymbolKey {
+            pkg: Arc::from("DeleteDemo"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+        let preflight = index.preflight_safe_delete(&key);
+
+        assert!(matches!(preflight, SafeDeletePreflight::Blocked { .. }));
+        if let SafeDeletePreflight::Blocked { external_references } = preflight {
+            assert_eq!(
+                external_references.len(),
+                1,
+                "expected one external reference in Caller.pm"
+            );
+            assert!(
+                external_references
+                    .iter()
+                    .any(|reference| reference.uri == "file:///lib/Caller.pm")
+            );
+        }
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_allows_when_no_external_references_exist() {
+        let index = WorkspaceIndex::new();
+        must(
+            index.index_file(
+                must(url::Url::parse("file:///lib/DeleteLocal.pm")),
+                r#"
+package DeleteLocal;
+sub helper {
+    return 1;
+}
+
+helper();
+1;
+"#
+                .to_string(),
+            ),
+        );
+
+        let key = SymbolKey {
+            pkg: Arc::from("DeleteLocal"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+        let preflight = index.preflight_safe_delete(&key);
+
+        assert!(
+            matches!(preflight, SafeDeletePreflight::SafeToDelete),
+            "expected safe-delete preflight to allow deletion when only local references exist"
         );
     }
 

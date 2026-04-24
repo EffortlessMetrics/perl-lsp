@@ -439,6 +439,14 @@ impl ProductionIndexCoordinator {
         result
     }
 
+    /// Preflight safe-delete validation for a normalized symbol key.
+    pub fn preflight_safe_delete(
+        &self,
+        key: &super::workspace_index::SymbolKey,
+    ) -> super::workspace_index::SafeDeletePreflight {
+        self.index.preflight_safe_delete(key)
+    }
+
     /// Invalidate the index.
     ///
     /// # Arguments
