@@ -98,15 +98,19 @@ fn missing_paren_before_semicolon_emits_recovered() {
 }
 
 /// `$hash{$key` — missing `}` before `;`.
-/// Note: hash subscripts use `expect()` not `expect_closing_delimiter()`, so
-/// this path does not emit `ParseError::Recovered { InsertedCloser }` yet
-/// (that is a Phase 1 extension beyond this function).  We verify that the
-/// parser does not crash and produces a partial AST.
+/// Hash subscripts in postfix parsing now use `expect_closing_delimiter()`,
+/// so this should emit `InsertedCloser` and continue.
 #[test]
-fn missing_hash_brace_before_semicolon_does_not_crash() {
+fn missing_hash_brace_before_semicolon_emits_recovered() {
     let src = "$hash{$key; my $x = 1;";
-    let (ast, _errors) = parse_errors(src);
-    // Parser must return a Program node (not panic or produce Err)
+    let (ast, errors) = parse_errors(src);
+    let recovered = count_inserted_closer(&errors);
+    assert!(
+        recovered >= 1,
+        "Expected InsertedCloser for missing '}}' before ';' in '{}', got errors: {:?}",
+        src,
+        errors
+    );
     assert!(
         matches!(ast.kind, NodeKind::Program { .. }),
         "Parser must return a Program node for '{}' (partial parse is OK)",
@@ -229,6 +233,52 @@ fn recovered_error_has_correct_site_for_array_subscript() {
     assert!(
         has_array_recovery,
         "Expected Recovered {{ site: ArraySubscript, kind: InsertedCloser }} for '{}', got: {:?}",
+        src, errors
+    );
+}
+
+/// Missing `}` before postfix `->` in deref chains should recover so the chain can continue.
+#[test]
+fn missing_hash_brace_before_arrow_emits_recovered() {
+    let src = "$obj->{key->method();";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_hash_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::HashSubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_hash_recovery,
+        "Expected HashSubscript InsertedCloser for '{}', got: {:?}",
+        src, errors
+    );
+}
+
+/// Missing `)` before fat-arrow in declaration/hash-list style input should recover.
+#[test]
+fn missing_paren_before_fat_arrow_emits_recovered() {
+    let src = "my %h = (foo($x => 1);";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_arg_list_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_arg_list_recovery,
+        "Expected ArgList InsertedCloser for '{}', got: {:?}",
         src, errors
     );
 }

@@ -703,7 +703,7 @@ impl<'a> Parser<'a> {
             self.consume_token()?;
             return Ok(());
         }
-        if self.is_delimiter_recovery_point() {
+        if self.is_delimiter_recovery_point(kind) {
             let pos = self.current_position();
             let site = Self::recovery_site_for_closer(kind);
             self.errors.push(ParseError::Recovered {
@@ -738,8 +738,8 @@ impl<'a> Parser<'a> {
     /// `peek_kind()` returns `Some(TokenKind::Eof)` at end-of-input (the EOF
     /// token is sticky) so we match it explicitly alongside `None` (which covers
     /// the case where the lexer itself returns an error).
-    fn is_delimiter_recovery_point(&mut self) -> bool {
-        matches!(
+    fn is_delimiter_recovery_point(&mut self, expected: TokenKind) -> bool {
+        let at_statement_boundary = matches!(
             self.peek_kind(),
             Some(TokenKind::Semicolon)
                 | Some(TokenKind::RightBrace)
@@ -761,7 +761,44 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::For)
                 | Some(TokenKind::Foreach)
                 | None
-        )
+        );
+        if at_statement_boundary {
+            return true;
+        }
+
+        // Owner-aware followers:
+        // - `)` can close an outer arg list when an inner `]`/`}` was omitted.
+        // - `]`/`}` can close an outer subscript when an inner delimiter was omitted.
+        // - `->` often follows subscripts in postfix chains; if closer is missing,
+        //   insert it and continue chaining.
+        // - `=>` frequently follows declaration/hash-list items where a closer was omitted.
+        match expected {
+            TokenKind::RightParen => matches!(
+                self.peek_kind(),
+                Some(TokenKind::RightBracket | TokenKind::RightParen | TokenKind::FatArrow)
+            ),
+            TokenKind::RightBracket => matches!(
+                self.peek_kind(),
+                Some(
+                    TokenKind::Arrow
+                        | TokenKind::RightParen
+                        | TokenKind::RightBracket
+                        | TokenKind::RightBrace
+                        | TokenKind::FatArrow
+                )
+            ),
+            TokenKind::RightBrace => matches!(
+                self.peek_kind(),
+                Some(
+                    TokenKind::Arrow
+                        | TokenKind::RightParen
+                        | TokenKind::RightBracket
+                        | TokenKind::RightBrace
+                        | TokenKind::FatArrow
+                )
+            ),
+            _ => false,
+        }
     }
 
     /// Check if current token is a synchronization point for error recovery
