@@ -143,10 +143,15 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     };
 
     let pragma_map = PragmaTracker::build(node);
+    let mut pragma_cursor = 0usize;
 
     // Second pass: walk AST for version-gated constructs.
     walk_node(node, &mut |n| {
-        let pragma_state = PragmaTracker::state_for_offset(&pragma_map, n.location.start);
+        let pragma_state = PragmaTracker::state_for_offset_monotonic(
+            &pragma_map,
+            n.location.start,
+            &mut pragma_cursor,
+        );
 
         match &n.kind {
             // `class Foo { }` — requires v5.38

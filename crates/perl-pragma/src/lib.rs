@@ -436,12 +436,50 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        // Find the last pragma state that starts before this offset.
-        // pragma_map is sorted by start offset (guaranteed by build()).
-        // We use partition_point to find the first element where start > offset,
-        // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
+        Self::effective_state_at_index(pragma_map, idx)
+    }
 
+    /// Get the pragma state at EOF / after all lexical scopes have unwound.
+    #[must_use]
+    pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
+        Self::effective_state_at_index(pragma_map, pragma_map.len())
+    }
+
+    /// Monotonic pragma lookup using a caller-owned cursor.
+    ///
+    /// `cursor` stores the first map index whose range start is greater than the
+    /// previous query offset. For monotonically increasing offsets this avoids
+    /// repeated binary searches and advances in O(1) amortized time.
+    ///
+    /// If offsets move backwards, this gracefully falls back to a binary search
+    /// and resets the cursor.
+    #[must_use]
+    pub fn state_for_offset_monotonic(
+        pragma_map: &[(Range<usize>, PragmaState)],
+        offset: usize,
+        cursor: &mut usize,
+    ) -> PragmaState {
+        if *cursor > pragma_map.len() {
+            *cursor = pragma_map.len();
+        }
+
+        if *cursor > 0 && pragma_map[*cursor - 1].0.start > offset {
+            *cursor = pragma_map.partition_point(|(range, _)| range.start <= offset);
+            return Self::effective_state_at_index(pragma_map, *cursor);
+        }
+
+        while *cursor < pragma_map.len() && pragma_map[*cursor].0.start <= offset {
+            *cursor += 1;
+        }
+
+        Self::effective_state_at_index(pragma_map, *cursor)
+    }
+
+    fn effective_state_at_index(
+        pragma_map: &[(Range<usize>, PragmaState)],
+        idx: usize,
+    ) -> PragmaState {
         let mut state =
             if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
 

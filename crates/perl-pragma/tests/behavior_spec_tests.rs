@@ -74,6 +74,39 @@ fn given_fresh_file_when_no_pragmas_then_default_state_applies() {
 }
 
 #[test]
+fn given_scoped_inner_changes_when_querying_final_state_then_outer_state_is_returned() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 15, 31)], 13, 33),
+        use_node("warnings", &[], 34, 49),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+}
+
+#[test]
+fn given_monotonic_queries_when_reading_multiple_offsets_then_states_match_binary_search() {
+    let ast = program(vec![
+        use_node("strict", &["refs"], 0, 17),
+        no_node("strict", &["refs"], 18, 34),
+        use_node("warnings", &[], 35, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let mut cursor = 0usize;
+
+    for offset in [0usize, 10, 20, 40, 60] {
+        let monotonic = PragmaTracker::state_for_offset_monotonic(&map, offset, &mut cursor);
+        let baseline = PragmaTracker::state_for_offset(&map, offset);
+        assert_eq!(monotonic, baseline);
+    }
+}
+
+#[test]
 fn given_use_strict_when_querying_after_statement_then_all_strict_modes_are_enabled() {
     let ast = program(vec![use_node("strict", &[], 0, 12)]);
     let map = PragmaTracker::build(&ast);
