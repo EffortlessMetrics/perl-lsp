@@ -753,32 +753,27 @@ fn run_gates(
 /// keep this as a stable, minimal JSON slice consumed by CI artifacts.
 fn build_agent_receipt(root: &Path, results: &[GateResult], tier: &GateTier) -> AgentReceipt {
     let scope_output = compute_scope_output(root).ok();
-    let gate_status_by_name: HashMap<String, String> = results
-        .iter()
-        .map(|result| (result.gate_name.clone(), result.status.clone()))
-        .collect();
+    let gate_status_by_name: HashMap<String, String> =
+        results.iter().map(|result| (result.gate_name.clone(), result.status.clone())).collect();
     let selected_lanes = scope_output
         .as_ref()
         .map(|scope| {
-            let standard = scope
-                .selected_lanes
-                .iter()
-                .map(|lane| {
-                    let explanation = scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
-                    let reason = if explanation.is_empty() {
-                        lane.reason.clone()
-                    } else {
-                        format!("{} — {}", lane.reason, explanation)
-                    };
-                    AgentLane {
-                        name: lane.lane.clone(),
-                        reason,
-                        status: gate_status_by_name
-                            .get(&lane.lane)
-                            .cloned()
-                            .unwrap_or_else(|| "not_run".to_string()),
-                    }
-                });
+            let standard = scope.selected_lanes.iter().map(|lane| {
+                let explanation = scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                let reason = if explanation.is_empty() {
+                    lane.reason.clone()
+                } else {
+                    format!("{} — {}", lane.reason, explanation)
+                };
+                AgentLane {
+                    name: lane.lane.clone(),
+                    reason,
+                    status: gate_status_by_name
+                        .get(&lane.lane)
+                        .cloned()
+                        .unwrap_or_else(|| "not_run".to_string()),
+                }
+            });
             let heavy = scope.selected_heavy_lanes.iter().map(|lane| AgentLane {
                 name: lane.lane.clone(),
                 reason: lane.reason.clone(),
@@ -846,13 +841,14 @@ fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) 
 }
 
 fn is_latest_commit(root: &Path) -> bool {
-    let upstream = match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-        .dir(root)
-        .read()
-    {
-        Ok(value) => value.trim().to_string(),
-        Err(_) => return true,
-    };
+    let upstream =
+        match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+            .dir(root)
+            .read()
+        {
+            Ok(value) => value.trim().to_string(),
+            Err(_) => return true,
+        };
     let head = cmd("git", ["rev-parse", "HEAD"]).dir(root).read().ok();
     let upstream_sha = cmd("git", ["rev-parse", &upstream]).dir(root).read().ok();
     match (head, upstream_sha) {
@@ -1778,7 +1774,8 @@ mod tests {
         assert_eq!(ar.suggested_next_actions.len(), 2);
 
         // Confirm backward compatibility: a receipt WITHOUT agent_receipt deserializes to None.
-        let old_receipt: Receipt = serde_json::from_str(r#"{
+        let old_receipt: Receipt = serde_json::from_str(
+            r#"{
             "schema_version": "1.0.0",
             "metadata": {
                 "timestamp": "2026-04-23T00:00:00Z",
@@ -1799,7 +1796,8 @@ mod tests {
                 "total_duration_ms": 10,
                 "overall_status": "pass"
             }
-        }"#)
+        }"#,
+        )
         .expect("receipt without agent_receipt should deserialize for backward compat");
         assert!(
             old_receipt.agent_receipt.is_none(),
