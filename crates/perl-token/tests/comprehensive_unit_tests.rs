@@ -51,6 +51,13 @@ fn token_new_empty_text() {
 }
 
 #[test]
+fn token_eof_reuses_empty_text_arc() {
+    let a = Token::eof(100, 100);
+    let b = Token::eof(200, 200);
+    assert!(Arc::ptr_eq(&a.text, &b.text));
+}
+
+#[test]
 fn token_new_zero_length_span() {
     let t = Token::new(TokenKind::Semicolon, ";", 42, 42);
     assert_eq!(t.start, t.end);

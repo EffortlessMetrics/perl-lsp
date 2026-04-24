@@ -35,7 +35,12 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+fn empty_token_text() -> Arc<str> {
+    static EMPTY_TOKEN_TEXT: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY_TOKEN_TEXT.get_or_init(|| Arc::<str>::from("")).clone()
+}
 
 /// Token produced by the lexer and consumed by the parser.
 ///
@@ -67,6 +72,11 @@ impl Token {
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
+    }
+
+    /// Create an EOF token with shared empty text storage.
+    pub fn eof(start: usize, end: usize) -> Self {
+        Token { kind: TokenKind::Eof, text: empty_token_text(), start, end }
     }
 
     /// Return the token span length in bytes.
