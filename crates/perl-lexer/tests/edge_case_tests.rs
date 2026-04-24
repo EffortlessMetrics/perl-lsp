@@ -200,6 +200,34 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_quoted_and_unquoted_labels_are_distinct() -> R {
+    let quoted = significant("<<\"EOF\"\nbody\nEOF\n");
+    let bare = significant("<<EOF\nbody\nEOF\n");
+    let q = quoted.first().ok_or("no tokens for quoted heredoc")?;
+    let b = bare.first().ok_or("no tokens for bare heredoc")?;
+
+    assert!(matches!(q.token_type, TokenType::HeredocStart));
+    assert!(matches!(b.token_type, TokenType::HeredocStart));
+    assert_eq!(q.text.as_ref(), "<<\"EOF\"");
+    assert_eq!(b.text.as_ref(), "<<EOF");
+    Ok(())
+}
+
+#[test]
+fn heredoc_indented_backtick_label() -> R {
+    let input = "<<~`CMD`\n\t echo hello\n\t CMD\nmy $x = 1;\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(matches!(first.token_type, TokenType::HeredocStart));
+    assert_eq!(first.text.as_ref(), "<<~`CMD`");
+    let has_my =
+        sig.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
+    assert!(has_my, "expected lexer to resume after <<~ backtick heredoc");
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================

@@ -1,4 +1,4 @@
-use perl_lexer::PerlLexer;
+use perl_lexer::{PerlLexer, TokenType};
 
 #[test]
 fn lexer_terminates_on_backtick_heredoc_with_cr() {
@@ -83,5 +83,36 @@ fn lexer_handles_malformed_heredoc_gracefully() {
             break;
         }
         assert!(token_count < 20, "Too many tokens, possible infinite loop");
+    }
+}
+
+#[test]
+fn lexer_rejects_unclosed_backtick_heredoc_label() {
+    let input = "<<`CMD\rprint 1;\r";
+    let toks = PerlLexer::new(input).collect_tokens();
+    assert!(
+        toks.iter().all(|t| !matches!(t.token_type, TokenType::HeredocStart)),
+        "unterminated backtick heredoc label must not be accepted"
+    );
+    assert!(
+        toks.iter().any(|t| matches!(t.token_type, TokenType::EOF)),
+        "lexer should still terminate after malformed heredoc label"
+    );
+}
+
+#[test]
+fn data_marker_line_with_crlf_transitions_cleanly() {
+    let input = "my $x = 1;\r\n__DATA__\r\npayload\r\n";
+    let toks = PerlLexer::new(input).collect_tokens();
+    let marker = toks.iter().find(|t| matches!(t.token_type, TokenType::DataMarker(_)));
+    let body = toks.iter().find(|t| matches!(t.token_type, TokenType::DataBody(_)));
+
+    assert!(marker.is_some(), "expected __DATA__ marker token");
+    assert!(body.is_some(), "expected data body token");
+    if let Some(marker) = marker {
+        assert_eq!(marker.text.as_ref(), "__DATA__");
+    }
+    if let Some(body) = body {
+        assert_eq!(body.text.as_ref(), "payload\r\n");
     }
 }

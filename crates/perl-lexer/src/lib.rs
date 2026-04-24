@@ -173,6 +173,7 @@ struct HeredocSpec {
 // about truncation but won't crash or hang.
 const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns
 const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
+const MAX_HEREDOC_LABEL_BYTES: usize = 4096; // Avoid runaway scans on malformed delimiters
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
 const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
 const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
@@ -1130,66 +1131,30 @@ impl<'a> PerlLexer<'a> {
             match self.current_char() {
                 Some('"') if !backslashed => {
                     // Double-quoted delimiter
-                    text.push('"');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '"' {
-                                text.push('"');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
+                    if let Some(delim) = self.parse_heredoc_quoted_label(&mut text, '"') {
+                        delim
+                    } else {
+                        self.position = start;
+                        return None;
                     }
-                    delim
                 }
                 Some('\'') if !backslashed => {
                     // Single-quoted delimiter
-                    text.push('\'');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '\'' {
-                                text.push('\'');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
+                    if let Some(delim) = self.parse_heredoc_quoted_label(&mut text, '\'') {
+                        delim
+                    } else {
+                        self.position = start;
+                        return None;
                     }
-                    delim
                 }
                 Some('`') if !backslashed => {
                     // Backtick delimiter
-                    text.push('`');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '`' {
-                                text.push('`');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
+                    if let Some(delim) = self.parse_heredoc_quoted_label(&mut text, '`') {
+                        delim
+                    } else {
+                        self.position = start;
+                        return None;
                     }
-                    delim
                 }
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
@@ -1197,6 +1162,9 @@ impl<'a> PerlLexer<'a> {
                     while self.position < self.input.len() {
                         if let Some(c) = self.current_char() {
                             if is_perl_identifier_continue(c) {
+                                if delim.len() >= MAX_HEREDOC_LABEL_BYTES {
+                                    break;
+                                }
                                 delim.push(c);
                                 text.push(c);
                                 self.advance();
@@ -1221,6 +1189,11 @@ impl<'a> PerlLexer<'a> {
             self.position = start;
             return None;
         };
+
+        if delimiter.is_empty() {
+            self.position = start;
+            return None;
+        }
 
         // For now, return a placeholder token
         // The actual heredoc body would be parsed later when we encounter it
@@ -1249,6 +1222,33 @@ impl<'a> PerlLexer<'a> {
             start,
             end: self.position,
         })
+    }
+
+    fn parse_heredoc_quoted_label(
+        &mut self,
+        token_text: &mut String,
+        quote: char,
+    ) -> Option<String> {
+        token_text.push(quote);
+        self.advance();
+
+        let mut delim = String::new();
+        while self.position < self.input.len() {
+            let ch = self.current_char()?;
+            if ch == quote {
+                token_text.push(quote);
+                self.advance();
+                return Some(delim);
+            }
+            // Quoted heredoc labels cannot cross lines.
+            if ch == '\n' || ch == '\r' || delim.len() >= MAX_HEREDOC_LABEL_BYTES {
+                return None;
+            }
+            delim.push(ch);
+            token_text.push(ch);
+            self.advance();
+        }
+        None
     }
 
     fn try_string(&mut self) -> Option<Token> {
@@ -2030,14 +2030,11 @@ impl<'a> PerlLexer<'a> {
                         // Consume the rest of the line (the marker line)
                         while self.position < self.input.len()
                             && self.input_bytes[self.position] != b'\n'
+                            && self.input_bytes[self.position] != b'\r'
                         {
                             self.advance();
                         }
-                        if self.position < self.input.len()
-                            && self.input_bytes[self.position] == b'\n'
-                        {
-                            self.advance();
-                        }
+                        self.consume_newline();
 
                         // Switch to data section mode
                         self.mode = LexerMode::InDataSection;
