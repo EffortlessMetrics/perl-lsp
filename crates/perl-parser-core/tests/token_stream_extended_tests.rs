@@ -1,4 +1,4 @@
-use perl_parser_core::token_stream::TokenStream;
+use perl_parser_core::token_stream::{Token, TokenKind, TokenStream};
 
 #[test]
 fn on_stmt_boundary_resets_peek() -> Result<(), Box<dyn std::error::Error>> {
@@ -54,5 +54,20 @@ fn enter_format_mode_does_not_crash() -> Result<(), Box<dyn std::error::Error>> 
     if let Ok(token) = stream.peek() {
         let _ = format!("{:?}", token.kind);
     }
+    Ok(())
+}
+
+#[test]
+fn from_vec_synthesized_eof_uses_last_token_end() -> Result<(), Box<dyn std::error::Error>> {
+    let tokens =
+        vec![Token::new(TokenKind::My, "my", 0, 2), Token::new(TokenKind::Identifier, "x", 3, 4)];
+    let mut stream = TokenStream::from_vec(tokens);
+    let _ = stream.next()?;
+    let _ = stream.next()?;
+    let eof = stream.next()?;
+
+    assert_eq!(eof.kind, TokenKind::Eof);
+    assert_eq!(eof.start, 4);
+    assert_eq!(eof.end, 4);
     Ok(())
 }

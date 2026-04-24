@@ -35,7 +35,63 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
+
+/// Span invariant error returned by checked token constructors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenSpanError {
+    /// Starting byte offset that failed validation.
+    pub start: usize,
+    /// Ending byte offset that failed validation.
+    pub end: usize,
+}
+
+impl std::fmt::Display for TokenSpanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid token span: start {} is greater than end {}", self.start, self.end)
+    }
+}
+
+impl std::error::Error for TokenSpanError {}
+
+/// Typed byte span for token boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenSpan {
+    /// Inclusive start byte offset.
+    pub start: usize,
+    /// Exclusive end byte offset.
+    pub end: usize,
+}
+
+impl TokenSpan {
+    /// Create a checked span (`start <= end`).
+    pub fn try_new(start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        if end < start {
+            return Err(TokenSpanError { start, end });
+        }
+        Ok(Self { start, end })
+    }
+
+    /// Create a checked span (`start <= end`).
+    pub fn new_checked(start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        Self::try_new(start, end)
+    }
+
+    /// Return the span length in bytes.
+    pub fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether this span is empty.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Convert to `std::ops::Range<usize>`.
+    pub fn range(self) -> Range<usize> {
+        self.start..self.end
+    }
+}
 
 /// Token produced by the lexer and consumed by the parser.
 ///
@@ -67,6 +123,67 @@ impl Token {
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
+    }
+
+    /// Create a token while enforcing span invariants.
+    ///
+    /// Invariants:
+    /// - `start <= end`
+    /// - empty spans are allowed for [`TokenKind::Eof`] and synthetic
+    ///   [`TokenKind::Unknown`] tokens
+    pub fn try_new(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let span = TokenSpan::try_new(start, end)?;
+        if span.is_empty() && !matches!(kind, TokenKind::Eof | TokenKind::Unknown) {
+            return Err(TokenSpanError { start, end });
+        }
+        Ok(Self { kind, text: text.into(), start, end })
+    }
+
+    /// Create a token while enforcing span invariants.
+    pub fn new_checked(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        Self::try_new(kind, text, start, end)
+    }
+
+    /// Create an EOF token located at a specific byte position.
+    pub fn eof_at(pos: usize) -> Self {
+        Self::new(TokenKind::Eof, "", pos, pos)
+    }
+
+    /// Create an `Unknown` token at the given byte span.
+    ///
+    /// This helper is intended for synthetic/error-recovery token creation.
+    pub fn unknown_at(text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
+        Self::new(TokenKind::Unknown, text, start, end)
+    }
+
+    /// Return this token's span as a typed helper.
+    pub fn span(&self) -> TokenSpan {
+        TokenSpan { start: self.start, end: self.end }
+    }
+
+    /// Return this token span as a `Range<usize>`.
+    pub fn range(&self) -> Range<usize> {
+        self.start..self.end
+    }
+
+    /// Return a clone of this token with a new span.
+    pub fn with_span(self, span: TokenSpan) -> Self {
+        Self { start: span.start, end: span.end, ..self }
+    }
+
+    /// Return a clone of this token with a different kind.
+    pub fn with_kind(self, kind: TokenKind) -> Self {
+        Self { kind, ..self }
     }
 
     /// Return the token span length in bytes.
