@@ -5,7 +5,9 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaMap, PragmaState, PragmaTracker, features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1008,6 +1010,59 @@ fn state_for_offset_between_two_pragmas() -> Result<(), Box<dyn std::error::Erro
     let state = PragmaTracker::state_for_offset(&map, 50);
     assert!(state.strict_vars);
     assert!(!state.warnings);
+    Ok(())
+}
+
+#[test]
+fn pragma_map_final_state_matches_end_of_file_state() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let query = PragmaTracker::build_map(&ast);
+
+    let final_state = query.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+    Ok(())
+}
+
+#[test]
+fn pragma_map_cursor_tracks_state_across_ordered_offsets() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 13, 29),
+        use_node("warnings", &[], 30, 45),
+    ]);
+    let query = PragmaTracker::build_map(&ast);
+    let mut cursor = query.cursor();
+
+    let start_state = cursor.state_at(5);
+    assert!(start_state.strict_refs);
+    assert!(!start_state.warnings);
+
+    let middle_state = cursor.state_at(20);
+    assert!(!middle_state.strict_refs);
+    assert!(!middle_state.warnings);
+
+    let end_state = cursor.state_at(40);
+    assert!(!end_state.strict_refs);
+    assert!(end_state.warnings);
+    Ok(())
+}
+
+#[test]
+fn compatibility_wrapper_state_for_offset_matches_query_surface()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["'signatures'"], 0, 24)]);
+    let legacy = PragmaTracker::build(&ast);
+    let query = PragmaMap::from_ranges(legacy.clone());
+
+    let from_legacy = PragmaTracker::state_for_offset(&legacy, 12);
+    let from_query = query.state_at(12);
+
+    assert_eq!(from_legacy, *from_query);
+    assert!(from_query.strict_vars && from_query.strict_subs && from_query.strict_refs);
     Ok(())
 }
 

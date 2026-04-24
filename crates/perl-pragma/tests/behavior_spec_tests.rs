@@ -267,6 +267,18 @@ fn given_end_block_with_use_warnings_when_querying_after_block_then_warnings_is_
 }
 
 #[test]
+fn given_top_level_pragmas_when_querying_final_state_then_no_sentinel_offset_is_required() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let map = PragmaTracker::build_map(&ast);
+
+    let final_state = map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+}
+
+#[test]
 fn given_init_block_with_use_strict_when_querying_after_block_then_strict_is_not_active() {
     let ast = program(vec![phase_block(
         "INIT",

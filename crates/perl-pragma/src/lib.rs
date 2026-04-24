@@ -416,42 +416,162 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
+/// Owned query map for efficient repeated pragma-state lookups.
+#[derive(Debug, Clone, Default)]
+pub struct PragmaMap {
+    ranges: Vec<(Range<usize>, PragmaState)>,
+    starts: Vec<usize>,
+    effective_states: Vec<PragmaState>,
+    default_state: PragmaState,
+    final_state: PragmaState,
+}
+
+impl PragmaMap {
+    /// Build a query map from precomputed pragma ranges.
+    #[must_use]
+    pub fn from_ranges(mut ranges: Vec<(Range<usize>, PragmaState)>) -> Self {
+        ranges.sort_by_key(|(range, _)| range.start);
+
+        let starts = ranges.iter().map(|(range, _)| range.start).collect();
+        let effective_states =
+            ranges.iter().map(|(_, state)| effective_state(state)).collect::<Vec<_>>();
+        let default_state = PragmaState::default();
+        let final_state = effective_states.last().cloned().unwrap_or_default();
+
+        Self { ranges, starts, effective_states, default_state, final_state }
+    }
+
+    /// Returns an immutable view of the underlying range/state entries.
+    #[must_use]
+    pub fn ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.ranges
+    }
+
+    /// Returns the number of tracked pragma transitions.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.ranges.len()
+    }
+
+    /// Returns true when there are no pragma transitions in this map.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.ranges.is_empty()
+    }
+
+    /// Consume the map and return its owned range/state entries.
+    #[must_use]
+    pub fn into_ranges(self) -> Vec<(Range<usize>, PragmaState)> {
+        self.ranges
+    }
+
+    /// Return the effective pragma state at a byte offset.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> &PragmaState {
+        let idx = self.starts.partition_point(|start| *start <= offset);
+        if idx == 0 { &self.default_state } else { &self.effective_states[idx - 1] }
+    }
+
+    /// Return the final (top-level end-of-file) effective pragma state.
+    #[must_use]
+    pub fn final_state(&self) -> &PragmaState {
+        &self.final_state
+    }
+
+    /// Create a cursor optimized for repeated ordered queries.
+    #[must_use]
+    pub fn cursor(&self) -> PragmaCursor<'_> {
+        PragmaCursor::new(self)
+    }
+}
+
+/// Cursor-style state query helper that can avoid repeated binary searches.
+#[derive(Debug)]
+pub struct PragmaCursor<'a> {
+    map: &'a PragmaMap,
+    current_index: Option<usize>,
+}
+
+impl<'a> PragmaCursor<'a> {
+    #[must_use]
+    pub fn new(map: &'a PragmaMap) -> Self {
+        Self { map, current_index: None }
+    }
+
+    /// Return the effective pragma state at a byte offset.
+    #[must_use]
+    pub fn state_at(&mut self, offset: usize) -> &'a PragmaState {
+        if self.map.starts.is_empty() {
+            return &self.map.default_state;
+        }
+
+        let idx = match self.current_index {
+            Some(current) if self.map.starts[current] <= offset => {
+                let mut next = current;
+                while next + 1 < self.map.starts.len() && self.map.starts[next + 1] <= offset {
+                    next += 1;
+                }
+                next
+            }
+            _ => {
+                let partition = self.map.starts.partition_point(|start| *start <= offset);
+                if partition == 0 {
+                    self.current_index = None;
+                    return &self.map.default_state;
+                }
+                partition - 1
+            }
+        };
+
+        self.current_index = Some(idx);
+        &self.map.effective_states[idx]
+    }
+
+    /// Return the final (top-level end-of-file) effective pragma state.
+    #[must_use]
+    pub fn final_state(&self) -> &'a PragmaState {
+        self.map.final_state()
+    }
+}
+
+fn effective_state(state: &PragmaState) -> PragmaState {
+    let mut effective = state.clone();
+    if effective.signatures_strict {
+        effective.strict_vars = true;
+        effective.strict_subs = true;
+        effective.strict_refs = true;
+    }
+    effective
+}
+
 impl PragmaTracker {
-    /// Build a range-indexed pragma map from an AST
-    pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
+    /// Build an owned pragma query map from an AST.
+    #[must_use]
+    pub fn build_map(ast: &Node) -> PragmaMap {
         let mut ranges = Vec::new();
         let mut current_state = PragmaState::default();
 
         // Build the pragma map by walking the AST
         Self::build_ranges(ast, &mut current_state, &mut ranges);
 
-        // Sort by start offset
-        ranges.sort_by_key(|(range, _)| range.start);
+        PragmaMap::from_ranges(ranges)
+    }
 
-        ranges
+    /// Build a range-indexed pragma map from an AST
+    ///
+    /// Compatibility wrapper around [`Self::build_map`].
+    pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
+        Self::build_map(ast).into_ranges()
     }
 
     /// Get the pragma state at a specific byte offset
+    ///
+    /// Compatibility wrapper around [`PragmaMap::state_at`].
     pub fn state_for_offset(
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        // Find the last pragma state that starts before this offset.
-        // pragma_map is sorted by start offset (guaranteed by build()).
-        // We use partition_point to find the first element where start > offset,
-        // then take the element before it.
-        let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
-
-        let mut state =
-            if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
-
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
-        }
-
-        state
+        PragmaMap::from_ranges(pragma_map.to_vec()).state_at(offset).clone()
     }
 
     /// Process a lexically scoped body and then restore the caller state.
