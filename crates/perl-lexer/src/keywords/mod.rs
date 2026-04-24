@@ -149,7 +149,11 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "async",
     "await",
     "blessed",
+    "catch",
+    "class",
     "cmp",
+    "default",
+    "defer",
     "defined",
     "die",
     "do",
@@ -158,9 +162,12 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "eq",
     "eval",
     "exit",
+    "field",
+    "finally",
     "for",
     "foreach",
     "ge",
+    "given",
     "goto",
     "gt",
     "if",
@@ -168,6 +175,7 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "le",
     "local",
     "lt",
+    "method",
     "my",
     "ne",
     "next",
@@ -182,12 +190,14 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "scalar",
     "state",
     "sub",
+    "try",
     "undef",
     "unless",
     "until",
     "use",
     "wantarray",
     "warn",
+    "when",
     "while",
     "xor",
 ];
@@ -371,6 +381,16 @@ mod tests {
         assert!(is_keyword("print"));
         assert!(is_keyword("__PACKAGE__"));
         assert!(!is_keyword("definitely_not_a_perl_keyword"));
+    }
+
+    #[test]
+    fn lsp_completion_includes_modern_perl_keywords() {
+        for keyword in [
+            "catch", "class", "default", "defer", "field", "finally", "given", "method", "try",
+            "when",
+        ] {
+            assert!(is_lsp_completion_keyword(keyword), "missing {keyword} in LSP completion");
+        }
     }
 
     #[test]
