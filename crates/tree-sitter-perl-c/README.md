@@ -87,6 +87,33 @@ for snippet in &["my $x = 1;", "print $x;"] {
 - `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
 - `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
 
+## Snapshot provenance and refresh
+
+Snapshot provenance and the refresh workflow are tracked in
+[`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+
+That document records:
+
+- upstream repository/reference
+- generator version used for `parser.c`
+- file fingerprints for auditability
+- the exact local refresh + validation checklist
+
+## Vendored files vs local wrapper code
+
+**Vendored from upstream snapshot (`c-src/`):**
+
+- `parser.c`, `scanner.c`
+- `bsearch.h`, `tsp_unicode.h`
+- `tree_sitter/{parser.h,array.h,alloc.h}`
+
+**Maintained locally in this crate:**
+
+- `src/lib.rs` (Rust FFI wrapper + helpers)
+- `build.rs` (C compilation/link wiring)
+- `tests/` and `src/bin/` (integration and sanity tooling)
+- crate docs (`README.md`, `ROADMAP.md`, `UPSTREAM_SNAPSHOT.md`)
+
 ## Build Requirements
 
 Only a C compiler is required. No `libclang` or other FFI-generator toolchain
