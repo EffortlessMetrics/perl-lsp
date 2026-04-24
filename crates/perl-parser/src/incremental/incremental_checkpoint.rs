@@ -215,7 +215,29 @@ impl TokenCache {
     /// * `start` - Start byte position of the range to invalidate.
     /// * `end` - End byte position of the range to invalidate.
     fn invalidate_range(&mut self, start: usize, end: usize) {
-        self.segments.retain(|seg| !seg.overlaps(start, end));
+        let mut updated = Vec::new();
+
+        for segment in self.segments.drain(..) {
+            if !segment.overlaps(start, end) {
+                updated.push(segment);
+                continue;
+            }
+
+            let left_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.end <= start).cloned().collect();
+            if let (Some(first), Some(last)) = (left_tokens.first(), left_tokens.last()) {
+                updated.push(TokenSegment::new(first.start, last.end, left_tokens));
+            }
+
+            let right_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.start >= end).cloned().collect();
+            if let (Some(first), Some(last)) = (right_tokens.first(), right_tokens.last()) {
+                updated.push(TokenSegment::new(first.start, last.end, right_tokens));
+            }
+        }
+
+        updated.sort_by_key(|seg| seg.start);
+        self.segments = updated;
     }
 
     /// Adjust segment positions after an edit.
@@ -258,15 +280,9 @@ impl TokenCache {
     /// A slice of tokens starting at or after `position`, or `None` if no
     /// cached tokens exist in that range.
     fn get_tokens_from(&self, position: usize) -> Option<Vec<Token>> {
-        let segments = self.get_segments_after(position);
-        if segments.is_empty() {
-            return None;
-        }
-
-        // Collect all tokens from segments after position
+        // Segments may straddle `position`, so filter at token granularity.
         let mut all_tokens = Vec::new();
-        for segment in segments {
-            // Filter tokens within the segment that start at or after position
+        for segment in &self.segments {
             for token in &segment.tokens {
                 if token.start >= position {
                     all_tokens.push(token.clone());
@@ -291,15 +307,9 @@ impl TokenCache {
     /// A slice of tokens ending at or before `position`, or `None` if no
     /// cached tokens exist in that range.
     fn get_tokens_before(&self, position: usize) -> Option<Vec<Token>> {
-        let segments = self.get_segments_before(position);
-        if segments.is_empty() {
-            return None;
-        }
-
-        // Collect all tokens from segments before position
+        // Segments may straddle `position`, so filter at token granularity.
         let mut all_tokens = Vec::new();
-        for segment in segments {
-            // Filter tokens within the segment that end at or before position
+        for segment in &self.segments {
             for token in &segment.tokens {
                 if token.end <= position {
                     all_tokens.push(token.clone());
@@ -347,6 +357,10 @@ pub struct IncrementalStats {
     pub right_checkpoint_distance: usize,
     /// Total bytes relexed during incremental parsing
     pub bytes_relexed: usize,
+    /// Bytes relexed in fallback tail lexing when suffix cache is unavailable
+    pub tail_bytes_relexed: usize,
+    /// Size of the most recent checkpoint relex window
+    pub last_relex_window_bytes: usize,
     /// Count of segments reused before the edit (cache efficiency metric)
     pub segments_reused_before: usize,
     /// Count of segments reused after the edit (cache efficiency metric)
@@ -370,6 +384,8 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
         writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
         writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
+        writeln!(f, "  Tail bytes relexed: {}", self.tail_bytes_relexed)?;
+        writeln!(f, "  Last relex window: {} bytes", self.last_relex_window_bytes)?;
         writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
@@ -586,11 +602,16 @@ impl CheckpointedIncrementalParser {
     ) -> ParseResult<Node> {
         // Calculate relex bounds using checkpoint positions
         let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
+        let mut relex_end =
             right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
 
-        // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
+        if relex_end < edit_end {
+            relex_end = edit_end;
+        }
+        self.stats.last_relex_window_bytes = relex_end.saturating_sub(relex_start);
+
+        // Track checkpoint distances for statistics
         if edit.start >= relex_start {
             self.stats.left_checkpoint_distance = edit.start - relex_start;
         }
@@ -685,8 +706,11 @@ impl CheckpointedIncrementalParser {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                let token_len = token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
+                self.stats.bytes_relexed += token_len;
+                self.stats.tail_bytes_relexed += token_len;
             }
             parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
@@ -829,6 +853,41 @@ mod tests {
 
         let mut full = CheckpointedIncrementalParser::new();
         let full_tree = must(full.parse(expected_source));
+        assert_eq!(
+            format!("{incremental_tree:?}"),
+            format!("{full_tree:?}"),
+            "incremental tree diverged from fresh full parse"
+        );
+    }
+
+    #[test]
+    fn test_interior_edit_reuses_prefix_and_tracks_relex_bytes() {
+        let mut parser = CheckpointedIncrementalParser::new();
+
+        let source = "my $x = 1;\n".repeat(120);
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 140, end: 141, new_text: "1234".to_string() };
+        let incremental_tree = must(parser.apply_edit(&edit));
+
+        let mut expected_source = source;
+        expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+
+        let mut full = CheckpointedIncrementalParser::new();
+        let full_tree = must(full.parse(expected_source));
+
+        let stats = parser.stats();
+        assert!(stats.cache_hits > 0, "expected prefix or suffix cache reuse, got {stats:?}");
+        assert!(stats.bytes_relexed > 0, "expected relexed-byte accounting, got {stats:?}");
+        assert!(
+            stats.bytes_relexed >= stats.tail_bytes_relexed,
+            "total relexed bytes must include tail bytes, got {stats:?}"
+        );
+        assert!(
+            stats.last_relex_window_bytes <= parser.source.len(),
+            "window bytes should stay bounded by source length, got {stats:?}"
+        );
+
         assert_eq!(
             format!("{incremental_tree:?}"),
             format!("{full_tree:?}"),
