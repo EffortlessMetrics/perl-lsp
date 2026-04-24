@@ -53,14 +53,14 @@ Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/re
 
 ```bash
 # Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
-tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perllsp-0.12.4-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perllsp-0.12.4-x86_64-unknown-linux-gnu.tar.gz
+sudo mv perllsp /usr/local/bin/
 
 # macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
-tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perllsp-0.12.4-aarch64-apple-darwin.tar.gz
+tar xzf perllsp-0.12.4-aarch64-apple-darwin.tar.gz
+sudo mv perllsp /usr/local/bin/
 ```
 
 #### Option 3: Build from Source
@@ -79,7 +79,7 @@ perllsp --version
 
 # Quick health check
 perllsp --health
-# Should output: ok 0.10.0
+# Should output: ok 0.12.4
 ```
 
 ### Install coc.nvim
@@ -135,7 +135,7 @@ Create `~/.vim/coc-settings.json` (or `~/.config/nvim/coc-settings.json` for Neo
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
@@ -188,7 +188,7 @@ Add to `~/.vim/coc-settings.json`:
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
@@ -605,7 +605,7 @@ nnoremap <silent> <space>y  :<C-u>CocList -A --normal yank<cr>
 
 1. **Verify binary is in PATH**:
    ```vim
-   :!which perl-lsp
+   :!which perllsp
    ```
 
 2. **Check coc.nvim info**:
@@ -986,7 +986,7 @@ autocmd FileType perl :CocCommand workspace.toggleDiagnostics
 {
   "languageserver": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "filetypes": ["perl"],
       "rootPatterns": ["Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
