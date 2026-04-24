@@ -47,6 +47,48 @@ fn unique_temp_file(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("tree_sitter_perl_c_{name}_{nanos}.pl"))
 }
 
+fn collect_autoquoted_barewords(source: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let tree = parse_perl_code(source)?;
+    let query = Query::new(&language(), "(autoquoted_bareword) @aq")?;
+    let mut cursor = QueryCursor::new();
+
+    let mut captures = Vec::new();
+    let mut matches = cursor.matches(&query, tree.root_node(), source.as_bytes());
+    while let Some(m) = matches.next() {
+        for capture in m.captures {
+            if let Ok(text) = capture.node.utf8_text(source.as_bytes()) {
+                captures.push(text.to_owned());
+            }
+        }
+    }
+
+    Ok(captures)
+}
+
+fn collect_node_kinds_for_text(source: &str, needle: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    let tree = parse_perl_code(source)?;
+    let mut cursor = tree.root_node().walk();
+    let mut stack = vec![tree.root_node()];
+    let mut kinds = Vec::new();
+
+    while let Some(node) = stack.pop() {
+        if let Ok(text) = node.utf8_text(source.as_bytes())
+            && text == needle
+        {
+            kinds.push(node.kind().to_owned());
+        }
+
+        if node.child_count() > 0 {
+            for child in node.children(&mut cursor) {
+                stack.push(child);
+            }
+        }
+    }
+
+    kinds.sort();
+    Ok(kinds)
+}
+
 #[test]
 fn bdd_language_binding_reports_node_kinds() {
     let scenario = Scenario::new("language binding reports node kinds");
@@ -229,4 +271,63 @@ fn bdd_scanner_configuration_is_stable() {
     scenario.given("the crate backend is queried for scanner metadata");
     scenario.then("the backend should report the C scanner");
     assert_eq!(get_scanner_config(), "c-scanner");
+}
+
+#[test]
+fn bdd_autoquote_scanner_skips_line_comments_between_bareword_and_fat_comma()
+-> Result<(), Box<dyn Error>> {
+    let scenario =
+        Scenario::new("autoquote scanner treats comment-delimited fat comma as non-autoquoted");
+    let source = "my %h = (foo # comment\n=> 1);\n";
+
+    scenario.given("a fat-comma pair with a comment after a bareword key");
+    scenario.when("the Perl source is parsed");
+    let comment_kinds = collect_node_kinds_for_text(source, "foo")?;
+
+    scenario.then("the bareword should not be autoquoted across a line comment boundary");
+    assert!(comment_kinds.is_empty());
+    Ok(())
+}
+
+#[test]
+fn bdd_autoquote_scanner_skips_pod_blocks_before_fat_comma() -> Result<(), Box<dyn Error>> {
+    let scenario =
+        Scenario::new("autoquote scanner treats pod-delimited fat comma as non-autoquoted");
+    let source = "my %h = (foo\n=pod\nintervening docs\n=cut\n=> 1);\n";
+
+    scenario.given("a POD block between a bareword key and fat comma");
+    scenario.when("the Perl source is parsed");
+    let pod_kinds = collect_node_kinds_for_text(source, "foo")?;
+
+    scenario.then("the bareword should not be autoquoted across POD content");
+    assert!(pod_kinds.is_empty());
+    Ok(())
+}
+
+#[test]
+fn bdd_autoquote_scanner_skips_line_comments_before_brace_close() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("autoquote scanner skips comments before brace close");
+    let source = "my $h = {};\n$h->{foo # trailing comment\n};\n";
+
+    scenario.given("a brace-autoquoted bareword followed by a line comment");
+    scenario.when("the Perl source is parsed");
+    let autoquoted = collect_autoquoted_barewords(source)?;
+
+    scenario.then("the brace key should still be tokenized as autoquoted");
+    assert!(autoquoted.iter().any(|entry| entry == "foo"));
+    Ok(())
+}
+
+#[test]
+fn bdd_autoquote_scanner_skips_pod_blocks_before_brace_close() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("autoquote scanner skips pod before brace close");
+    let source = "my $h = {};\n$h->{foo\n=pod\nintervening docs\n=cut\n};\n";
+
+    scenario.given("a brace-autoquoted bareword followed by POD and a closing brace");
+    scenario.when("the Perl source is parsed");
+    let autoquoted = collect_autoquoted_barewords(source)?;
+
+    scenario.then("the brace key should still be tokenized as autoquoted after POD trivia");
+    assert!(autoquoted.iter().any(|entry| entry == "foo"));
+    Ok(())
 }

@@ -917,19 +917,85 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
 
     // NOTE - TS is annoying about skipping chars after you've hit done
     // mark_end, so we have to do the regular advance so our token actually shows up
-    while (is_tsp_whitespace(c) || c == '#') {
+    bool has_two_char_lookahead = false;
+    while (1) {
       while (is_tsp_whitespace(c)) ADVANCE_C;
       // now we need to skip comments - we get in a funny way if we have a quotelike
       // operator followed by a comment as the quote char
       if (c == '#') {
         ADVANCE_C;
         while (lexer->get_column(lexer)) ADVANCE_C;
+        continue;
       }
+
+      // POD directives are line-oriented and only begin at column 0. We treat POD-like
+      // blocks as trivia for this lookahead so barewords before => or } still autoquote.
+      // If we see '=cut' without a preceding POD start, we do not treat it as trivia.
+      if (c == '=' && lexer->get_column(lexer) == 0) {
+        int pod_word_len = 0;
+        int32_t pod_word[3] = {0};
+
+        ADVANCE_C;
+        if (c == '>') {
+          c1 = '=';
+          has_two_char_lookahead = true;
+          break;
+        }
+
+        if (!isidfirst(c)) return false;
+
+        while (isidcont(c)) {
+          if (pod_word_len < 3) pod_word[pod_word_len] = c;
+          pod_word_len++;
+          ADVANCE_C;
+        }
+
+        bool is_cut_directive = pod_word_len == 3 && pod_word[0] == 'c' && pod_word[1] == 'u' &&
+                                pod_word[2] == 't';
+        if (is_cut_directive) return false;
+
+        while (c && c != '\n') ADVANCE_C;
+        if (c == '\n') ADVANCE_C;
+
+        bool saw_cut = false;
+        while (!lexer->eof(lexer)) {
+          if (c == '=' && lexer->get_column(lexer) == 0) {
+            int cut_word_len = 0;
+            int32_t cut_word[3] = {0};
+
+            ADVANCE_C;
+            if (isidfirst(c)) {
+              while (isidcont(c)) {
+                if (cut_word_len < 3) cut_word[cut_word_len] = c;
+                cut_word_len++;
+                ADVANCE_C;
+              }
+
+              saw_cut = cut_word_len == 3 && cut_word[0] == 'c' && cut_word[1] == 'u' &&
+                        cut_word[2] == 't' && (c == 0 || c == '\n' || c == '\t' || c == ' ');
+            }
+
+            while (c && c != '\n') ADVANCE_C;
+            if (c == '\n') ADVANCE_C;
+
+            if (saw_cut) break;
+            continue;
+          }
+
+          ADVANCE_C;
+        }
+
+        if (!saw_cut && lexer->eof(lexer)) return false;
+        continue;
+      }
+
       if (lexer->eof(lexer)) return false;
-      // TODO - in theory there could be POD here that we needa skip over (EYES ROLL)
+      break;
     }
-    c1 = lexer->lookahead;
-    ADVANCE_C;
+    if (!has_two_char_lookahead) {
+      c1 = lexer->lookahead;
+      ADVANCE_C;
+    }
     if (valid_symbols[TOKEN_FAT_COMMA_AUTOQUOTED]) {
       if (c1 == '=' && c == '>') TOKEN(TOKEN_FAT_COMMA_AUTOQUOTED);
     }
