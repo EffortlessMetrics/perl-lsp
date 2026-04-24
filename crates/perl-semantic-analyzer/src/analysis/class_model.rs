@@ -6,7 +6,7 @@
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Which OO framework a package uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +199,21 @@ pub struct ClassModel {
     pub exports: Vec<String>,
     /// Names available for explicit import via `@EXPORT_OK`
     pub export_ok: Vec<String>,
+    /// Straightforward static Exporter metadata for this package/file.
+    pub exporter_metadata: Option<ExporterMetadata>,
+}
+
+/// Per-file/package metadata extracted from straightforward `Exporter` usage.
+#[derive(Debug, Clone, Default)]
+pub struct ExporterMetadata {
+    /// Names exported by default (`@EXPORT`)
+    pub exports: Vec<String>,
+    /// Names exported on request (`@EXPORT_OK`)
+    pub export_ok: Vec<String>,
+    /// Names grouped into `%EXPORT_TAGS`
+    pub export_tags: BTreeMap<String, Vec<String>>,
+    /// Exported symbol names that map to same-package subroutine definitions.
+    pub subroutine_exports: BTreeMap<String, SourceLocation>,
 }
 
 impl ClassModel {
@@ -228,6 +243,8 @@ pub struct ClassModelBuilder {
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
     current_export_ok: Vec<String>,
+    current_export_tags: BTreeMap<String, Vec<String>>,
+    exporter_import_detected: bool,
     current_package_aliases: HashSet<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
@@ -256,6 +273,8 @@ impl ClassModelBuilder {
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
             current_export_ok: Vec::new(),
+            current_export_tags: BTreeMap::new(),
+            exporter_import_detected: false,
             current_package_aliases: HashSet::new(),
             framework_map: HashMap::new(),
         }
@@ -278,8 +297,10 @@ impl ClassModelBuilder {
             || !self.current_parents.is_empty()
             || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
-            || !self.current_export_ok.is_empty();
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
         if has_oo_indicator {
+            let exporter_metadata = self.build_exporter_metadata();
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
@@ -293,6 +314,7 @@ impl ClassModelBuilder {
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
                 export_ok: std::mem::take(&mut self.current_export_ok),
+                exporter_metadata,
             };
             self.models.push(model);
             self.current_package_aliases.clear();
@@ -308,6 +330,8 @@ impl ClassModelBuilder {
             self.current_modifiers.clear();
             self.current_exports.clear();
             self.current_export_ok.clear();
+            self.current_export_tags.clear();
+            self.exporter_import_detected = false;
             self.current_package_aliases.clear();
         }
     }
@@ -345,6 +369,7 @@ impl ClassModelBuilder {
 
             NodeKind::Use { module, args, .. } => {
                 self.detect_framework(module, args);
+                self.detect_exporter_usage(module, args);
             }
 
             NodeKind::No { module, .. } if module == "mro" => {
@@ -375,30 +400,60 @@ impl ClassModelBuilder {
                             _ => {}
                         }
                     }
+
+                    if sigil == "%"
+                        && name == "EXPORT_TAGS"
+                        && let Some(init) = initializer
+                    {
+                        self.merge_export_tags(init);
+                    }
                 }
             }
 
             // `@ISA = qw(...);` / `@EXPORT = qw(...);` / `@EXPORT_OK = qw(...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
-                if let NodeKind::Variable { sigil, name } = &lhs.kind
-                    && sigil == "@"
-                {
-                    match name.as_str() {
-                        "ISA" => self.extract_isa_from_node(rhs),
-                        "EXPORT" => {
-                            self.current_exports.extend(collect_symbol_names(rhs));
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if sigil == "@" {
+                        match name.as_str() {
+                            "ISA" => self.extract_isa_from_node(rhs),
+                            "EXPORT" => {
+                                self.current_exports.extend(collect_symbol_names(rhs));
+                            }
+                            "EXPORT_OK" => {
+                                self.current_export_ok.extend(collect_symbol_names(rhs));
+                            }
+                            _ => {}
                         }
-                        "EXPORT_OK" => {
-                            self.current_export_ok.extend(collect_symbol_names(rhs));
-                        }
-                        _ => {}
+                    } else if sigil == "%" && name == "EXPORT_TAGS" {
+                        self.merge_export_tags(rhs);
                     }
                 }
             }
-
-            // `push @ISA, 'Parent';` or `push @ISA, 'Base1', 'Base2';`
-            // Also recurse into the inner expression so that assignments like
-            // `@EXPORT_OK = qw(...)` (wrapped in ExpressionStatement) are still handled.
+            NodeKind::HashLiteral { pairs } => {
+                for (_, value) in pairs {
+                    if let NodeKind::HashLiteral { .. } = value.kind {
+                        self.visit_node(value);
+                    } else {
+                        self.visit_children(value);
+                    }
+                }
+            }
+            NodeKind::FunctionCall { name, args } => {
+                if name == "Exporter::import" {
+                    self.exporter_import_detected = true;
+                }
+                for arg in args {
+                    self.visit_node(arg);
+                }
+            }
+            NodeKind::MethodCall { method, args, .. } => {
+                if method == "import" {
+                    self.exporter_import_detected = true;
+                }
+                for arg in args {
+                    self.visit_node(arg);
+                }
+            }
             NodeKind::ExpressionStatement { expression } => {
                 if let NodeKind::FunctionCall { name, args } = &expression.kind
                     && name == "push"
@@ -451,6 +506,49 @@ impl ClassModelBuilder {
                 self.visit_children(node);
             }
         }
+    }
+
+    fn detect_exporter_usage(&mut self, module: &str, args: &[String]) {
+        if module == "Exporter" && args.iter().any(|arg| arg.contains("import")) {
+            self.exporter_import_detected = true;
+        }
+    }
+
+    fn merge_export_tags(&mut self, node: &Node) {
+        for (tag, members) in collect_export_tags(node) {
+            self.current_export_tags.entry(tag).or_default().extend(members);
+        }
+    }
+
+    fn build_exporter_metadata(&mut self) -> Option<ExporterMetadata> {
+        if !self.exporter_import_detected
+            && self.current_exports.is_empty()
+            && self.current_export_ok.is_empty()
+            && self.current_export_tags.is_empty()
+        {
+            return None;
+        }
+
+        let mut sub_map = BTreeMap::new();
+        for symbol in self.current_exports.iter().chain(self.current_export_ok.iter()) {
+            if let Some(method) = self.current_methods.iter().find(|m| m.name == *symbol) {
+                sub_map.insert(symbol.clone(), method.location);
+            }
+        }
+        for members in self.current_export_tags.values() {
+            for symbol in members {
+                if let Some(method) = self.current_methods.iter().find(|m| m.name == *symbol) {
+                    sub_map.insert(symbol.clone(), method.location);
+                }
+            }
+        }
+
+        Some(ExporterMetadata {
+            exports: self.current_exports.clone(),
+            export_ok: self.current_export_ok.clone(),
+            export_tags: self.current_export_tags.clone(),
+            subroutine_exports: sub_map,
+        })
     }
 
     fn visit_children(&mut self, node: &Node) {
@@ -1162,6 +1260,22 @@ fn collect_symbol_names(node: &Node) -> Vec<String> {
         }
         _ => Vec::new(),
     }
+}
+
+fn collect_export_tags(node: &Node) -> BTreeMap<String, Vec<String>> {
+    let mut tags: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    if let NodeKind::HashLiteral { pairs } = &node.kind {
+        for (key, value) in pairs {
+            let Some(tag_name) = collect_symbol_names(key).into_iter().next() else {
+                continue;
+            };
+            let members = collect_symbol_names(value);
+            if !members.is_empty() {
+                tags.entry(tag_name).or_default().extend(members);
+            }
+        }
+    }
+    tags
 }
 
 fn collect_accessor_names(node: &Node) -> Vec<String> {
@@ -2055,6 +2169,12 @@ has 'level' => (is => 'ro');
         let model = find_model(&models, "MyUtils").expect("MyUtils model");
         assert_eq!(model.exports, vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(model.export_ok, vec!["baz".to_string()]);
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+        assert_eq!(metadata.exports, vec!["foo".to_string(), "bar".to_string()]);
+        assert_eq!(metadata.export_ok, vec!["baz".to_string()]);
+        assert!(metadata.subroutine_exports.contains_key("foo"));
+        assert!(metadata.subroutine_exports.contains_key("bar"));
+        assert!(metadata.subroutine_exports.contains_key("baz"));
     }
 
     #[test]
@@ -2082,6 +2202,33 @@ has 'level' => (is => 'ro');
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
+    #[test]
+    fn export_tags_captured_from_hash_literal() {
+        let code = "package MyColors;\nuse Exporter 'import';\nour @EXPORT_OK = qw(red green blue rgb);\nour %EXPORT_TAGS = ( primary => [qw(red green blue)], all => [\"rgb\", 'red'] );\nsub red {}\nsub green {}\nsub blue {}\nsub rgb {}\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "MyColors").expect("MyColors model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+        assert_eq!(
+            metadata.export_tags.get("primary").cloned().unwrap_or_default(),
+            vec!["red".to_string(), "green".to_string(), "blue".to_string()]
+        );
+        assert_eq!(
+            metadata.export_tags.get("all").cloned().unwrap_or_default(),
+            vec!["rgb".to_string(), "red".to_string()]
+        );
+        assert!(metadata.subroutine_exports.contains_key("rgb"));
+    }
+
+    #[test]
+    fn missing_export_definition_is_ignored_without_panic() {
+        let code = "package MyUtils;\nuse Exporter 'import';\nour @EXPORT = qw(existing missing_sym);\nour %EXPORT_TAGS = ( all => [qw(existing missing_sym)] );\nsub existing { 1 }\n1;";
+        let models = build_models(code);
+        let model = find_model(&models, "MyUtils").expect("MyUtils model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+        assert!(metadata.subroutine_exports.contains_key("existing"));
+        assert!(!metadata.subroutine_exports.contains_key("missing_sym"));
     }
 
     // ---- Gap 2: push @ISA ----
