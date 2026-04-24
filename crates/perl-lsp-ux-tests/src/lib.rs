@@ -728,6 +728,14 @@ pub fn normalize_lsp_payload(payload: &Value, workspace_root: &Path) -> Value {
 }
 
 fn normalize_uri_for_expectations(uri: &str, workspace_root: &Path) -> String {
+    // Short-circuit: sentinel tokens already contain "$WORKSPACE" and must be returned
+    // verbatim.  On Windows the url crate interprets "$WORKSPACE" as a UNC host and
+    // Url::to_file_path() succeeds, producing a mangled path like `\\$workspace\foo`.
+    // Checking up-front is both correct and cheaper than parsing.
+    if uri.contains("$WORKSPACE") {
+        return uri.to_string();
+    }
+
     let Ok(parsed) = Url::parse(uri) else {
         return uri.replace('\\', "/");
     };
@@ -827,4 +835,175 @@ pub fn find_perltidy() -> Option<String> {
 /// Utility: find `perlcritic` on PATH, returning its path or `None`.
 pub fn find_perlcritic() -> Option<String> {
     which::which("perlcritic").ok().map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod normalize_tests {
+    use super::{normalize_lsp_payload, normalize_uri_for_expectations};
+    use serde_json::{Value, json};
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    // ── normalize_uri_for_expectations ────────────────────────────────────────
+
+    #[test]
+    fn non_file_uri_passes_through_unchanged() {
+        let root = Path::new("/tmp/workspace");
+        let result = normalize_uri_for_expectations("untitled:foo.pl", root);
+        assert_eq!(result, "untitled:foo.pl");
+    }
+
+    #[test]
+    fn malformed_uri_has_backslashes_replaced() {
+        let root = Path::new("/tmp/workspace");
+        // Not a valid URI — Url::parse will fail, so backslash-replace branch runs.
+        let result = normalize_uri_for_expectations("not a uri \\path", root);
+        assert_eq!(result, "not a uri /path");
+    }
+
+    #[test]
+    fn workspace_file_uri_becomes_dollar_workspace_token() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("lib/Foo.pm")).unwrap().to_string();
+        let result = normalize_uri_for_expectations(&file_uri, root);
+        assert_eq!(result, "file://$WORKSPACE/lib/Foo.pm");
+    }
+
+    #[test]
+    fn workspace_root_uri_itself_becomes_dollar_workspace_slash() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let root_uri = url::Url::from_file_path(root).unwrap().to_string();
+        let result = normalize_uri_for_expectations(&root_uri, root);
+        // strip_prefix of root against itself gives "" -> "file://$WORKSPACE/"
+        assert_eq!(result, "file://$WORKSPACE/");
+    }
+
+    #[test]
+    fn non_workspace_file_uri_preserved_with_forward_slashes() {
+        let root = Path::new("/tmp/workspace");
+        // A system path outside the workspace should not be rewritten as $WORKSPACE.
+        let result = normalize_uri_for_expectations("file:///usr/share/perl5/strict.pm", root);
+        assert_eq!(result, "file:///usr/share/perl5/strict.pm");
+    }
+
+    #[test]
+    fn directory_uri_with_trailing_slash_normalizes_correctly() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        // Url::from_directory_path produces a trailing slash.
+        // to_file_path() strips it, so strip_prefix sees "svc-a" (no slash).
+        // The result must NOT have a trailing slash in the sentinel form.
+        let dir_uri = url::Url::from_directory_path(root.join("svc-a")).unwrap().to_string();
+        assert!(dir_uri.ends_with('/'), "directory URI should end with /");
+        let result = normalize_uri_for_expectations(&dir_uri, root);
+        assert_eq!(result, "file://$WORKSPACE/svc-a");
+    }
+
+    // ── normalize_lsp_payload ─────────────────────────────────────────────────
+
+    #[test]
+    fn null_value_passes_through() {
+        let dir = TempDir::new().unwrap();
+        let result = normalize_lsp_payload(&Value::Null, dir.path());
+        assert_eq!(result, Value::Null);
+    }
+
+    #[test]
+    fn scalar_values_pass_through() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(normalize_lsp_payload(&json!(42), dir.path()), json!(42));
+        assert_eq!(normalize_lsp_payload(&json!(true), dir.path()), json!(true));
+        assert_eq!(normalize_lsp_payload(&json!("hello"), dir.path()), json!("hello"));
+    }
+
+    #[test]
+    fn uri_key_in_object_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("foo.pl")).unwrap().to_string();
+        let payload =
+            json!({ "uri": file_uri, "range": { "start": { "line": 0, "character": 0 } } });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+        // Range should be preserved unchanged.
+        assert_eq!(result["range"]["start"]["line"], 0);
+    }
+
+    #[test]
+    fn target_uri_key_in_object_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("bar.pm")).unwrap().to_string();
+        let payload = json!({ "targetUri": file_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["targetUri"], "file://$WORKSPACE/bar.pm");
+    }
+
+    #[test]
+    fn workspace_folder_uri_key_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let folder_uri = url::Url::from_directory_path(root.join("svc-a")).unwrap().to_string();
+        let payload = json!({ "workspaceFolderUri": folder_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        // The value should start with file://$WORKSPACE/svc-a regardless of trailing slash.
+        let normalized = result["workspaceFolderUri"].as_str().unwrap();
+        assert!(
+            normalized.starts_with("file://$WORKSPACE/svc-a"),
+            "Expected svc-a token, got: {normalized}"
+        );
+    }
+
+    #[test]
+    fn non_uri_key_string_value_is_not_rewritten() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("foo.pl")).unwrap().to_string();
+        // A key named "someOtherField" holding a file URI should NOT be normalized.
+        let payload = json!({ "someOtherField": file_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["someOtherField"].as_str().unwrap(), file_uri.as_str());
+    }
+
+    #[test]
+    fn array_of_locations_normalizes_each_entry() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let uri_a = url::Url::from_file_path(root.join("a.pl")).unwrap().to_string();
+        let uri_b = url::Url::from_file_path(root.join("b.pm")).unwrap().to_string();
+        let payload = json!([
+            { "uri": uri_a },
+            { "uri": uri_b },
+        ]);
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result[0]["uri"], "file://$WORKSPACE/a.pl");
+        assert_eq!(result[1]["uri"], "file://$WORKSPACE/b.pm");
+    }
+
+    #[test]
+    fn nested_uri_in_object_is_normalized_recursively() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("deep.pl")).unwrap().to_string();
+        // URI nested inside a non-uri-keyed wrapper should still be normalized.
+        let payload = json!({ "location": { "uri": file_uri } });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["location"]["uri"], "file://$WORKSPACE/deep.pl");
+    }
+
+    #[test]
+    fn dollar_workspace_token_in_expected_passes_through_unchanged() {
+        // assert_normalized_eq normalizes BOTH sides. A literal "$WORKSPACE" token
+        // in the expected side must survive the round-trip unchanged, so it can
+        // match the normalized actual side.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let expected_payload = json!({ "uri": "file://$WORKSPACE/foo.pl" });
+        let result = normalize_lsp_payload(&expected_payload, root);
+        // Url::parse("file://$WORKSPACE/foo.pl") treats $WORKSPACE as host and
+        // to_file_path() fails -> backslash-replace branch returns string unchanged.
+        assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+    }
 }
