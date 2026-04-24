@@ -205,6 +205,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
 
     let parser_coverage_bullets = format!(
         "- **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.\n\
+         - **Closeout ratchets**: CI blocks regressions on system/CPAN clean rate, ERROR-node totals, strict-clean pinned modules, valid parser gaps, node-kind coverage, and recovery-salvage rate.\n\
          - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.\n\
          - **Fixture bank**: `tree-sitter-perl/test/corpus` contributes ~{} focused syntax sections for targeted parser cases.\n\
          - **CPAN install hygiene**: `cargo xtask cpan-corpus install` reuses `target/cpan-corpus/.cpanm`; pass `--reset` only for a cold rebuild.",

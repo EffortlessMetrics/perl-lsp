@@ -9,7 +9,7 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -286,34 +286,38 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     println!("\n🔬 Validating report for CI gate...");
 
     let mut failures = Vec::new();
+    let root = crate::utils::project_root()?;
+    let parser_baseline = crate::tasks::metrics::ratchet::load_baseline(&root, "parser")?;
+    let mut current_floor_metrics: BTreeMap<String, Option<f64>> = BTreeMap::new();
 
-    // Parse error ratchet: read baseline and compare (Issue #180)
-    let baseline_path = std::path::Path::new("ci/parse_errors_baseline.txt");
-    let current_errors = report.parse_outcomes.error;
-
-    if baseline_path.exists() {
-        let baseline_str =
-            fs::read_to_string(baseline_path).context("Failed to read parse errors baseline")?;
-        let baseline: usize =
-            baseline_str.trim().parse().context("Failed to parse baseline as number")?;
-
-        println!("   Parse errors: {} (baseline: {})", current_errors, baseline);
-
-        if current_errors > baseline {
-            failures.push(format!(
-                "Parse error regression: {} > {} baseline. Fix parser or update baseline.",
-                current_errors, baseline
-            ));
-        } else if current_errors < baseline {
-            println!(
-                "   📉 IMPROVEMENT: {} fewer errors! Update baseline: echo {} > ci/parse_errors_baseline.txt",
-                baseline - current_errors,
-                current_errors
-            );
-        }
+    let nodekind_coverage = if report.nodekind_coverage.total_count == 0 {
+        0.0
     } else {
-        // No baseline file - just report the count
-        println!("   Parse errors: {} (no baseline file)", current_errors);
+        report.nodekind_coverage.covered_count as f64 / report.nodekind_coverage.total_count as f64
+    };
+    let recovery_salvage_rate = if report.parse_outcomes.total == 0 {
+        1.0
+    } else {
+        report.parse_outcomes.ok as f64 / report.parse_outcomes.total as f64
+    };
+
+    current_floor_metrics
+        .insert("valid_parser_gap_count".to_string(), Some(report.parse_outcomes.error as f64));
+    current_floor_metrics.insert("node_kind_coverage".to_string(), Some(nodekind_coverage));
+    current_floor_metrics.insert("recovery_salvage_rate".to_string(), Some(recovery_salvage_rate));
+
+    let metric_violations = crate::tasks::metrics::ratchet::check_floor_metrics(
+        &parser_baseline,
+        &current_floor_metrics,
+    );
+    for violation in metric_violations {
+        failures.push(format!(
+            "Metric regression: {} baseline={:.4}, current={:.4} ({:.2}% regression)",
+            violation.metric,
+            violation.baseline_value,
+            violation.current_value,
+            violation.regression_pct * 100.0
+        ));
     }
 
     // Timeouts should always be zero
@@ -347,7 +351,7 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     }
 
     // Print error category breakdown if there are errors (Issue #180)
-    if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
+    if report.parse_outcomes.error > 0 && !report.parse_outcomes.error_by_category.is_empty() {
         println!("\n   Error breakdown by category:");
         let mut categories: Vec<_> = report.parse_outcomes.error_by_category.iter().collect();
         categories.sort_by(|a, b| b.1.cmp(a.1)); // Sort by count descending

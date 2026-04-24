@@ -269,6 +269,29 @@ gates:
       - common
       - strict
 
+  - name: parser_accuracy_closeout
+    tier: merge_gate
+    description: "Parser closeout ratchets: system/CPAN clean baselines + project gap/coverage floors"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt &&
+      cargo run --locked -p xtask
+      -- cpan-corpus sweep --enforce &&
+      cargo run --locked -p xtask --no-default-features
+      -- corpus-audit --fresh --corpus-path . --check
+    timeout_seconds: 900
+    retry_count: 0
+    budgets:
+      max_duration_ms: 840000
+    quarantine: false
+    tags:
+      - parser
+      - corpus
+      - ratchet
+      - closeout
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"

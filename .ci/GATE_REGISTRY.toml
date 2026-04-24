@@ -91,6 +91,22 @@ cost_tier = "low"  # seconds
 failure_impact = "medium"
 
 [[gate]]
+id = "parser-accuracy-closeout"
+name = "Parser Accuracy Closeout Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 900
+command = "cargo run -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt && cargo run -p xtask -- cpan-corpus sweep --enforce && cargo run -p xtask --no-default-features -- corpus-audit --fresh --corpus-path . --check"
+evidence_pattern = "Ratchet|clean"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents parser clean-rate, gap-count, node-kind-coverage, and ERROR-node regressions after closeout"
+docs_url = "docs/project/status/parser.md"
+cost_tier = "high"
+failure_impact = "critical"
+
+[[gate]]
 id = "workflow-audit"
 name = "CI Workflow Spend Audit"
 type = "governance"
