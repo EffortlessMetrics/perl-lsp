@@ -503,6 +503,65 @@ fn test_class_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
+#[test]
+fn test_format_produces_symbol_decl() {
+    // format STDOUT = ...
+    let fmt = Node::new(
+        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+        loc(0, 20),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![fmt] }, loc(0, 20));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let d = &decls[0];
+    assert_eq!(d.kind, SymbolKind::Format);
+    assert_eq!(d.name, "STDOUT");
+    assert_eq!(d.qualified_name, "STDOUT");
+    assert_eq!(d.full_span, (0, 20));
+    assert!(d.anchor_span.is_none());
+}
+
+#[test]
+fn test_label_produces_symbol_decl_and_walks_statement() {
+    // LOOP: sub worker { }
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(16, 19));
+    let sub = Node::new(
+        NodeKind::Subroutine {
+            name: Some("worker".to_string()),
+            name_span: Some(loc(9, 15)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(body),
+        },
+        loc(5, 19),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "LOOP".to_string(), statement: Box::new(sub) },
+        loc(0, 19),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 19));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+    let label_decl = decls.iter().find(|d| d.kind == SymbolKind::Label);
+    assert!(label_decl.is_some(), "label declaration should be projected");
+    if let Some(label_decl) = label_decl {
+        assert_eq!(label_decl.name, "LOOP");
+        assert_eq!(label_decl.qualified_name, "LOOP");
+        assert!(label_decl.anchor_span.is_none());
+    }
+
+    let sub_decl = decls.iter().find(|d| d.kind == SymbolKind::Subroutine);
+    assert!(sub_decl.is_some(), "nested statement should still be walked");
+    if let Some(sub_decl) = sub_decl {
+        assert_eq!(sub_decl.name, "worker");
+    }
+}
+
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]

@@ -80,6 +80,8 @@ pub struct SymbolDecl {
 /// | `Class { name, .. }` | `Class` |
 /// | `Subroutine { name: Some(..), .. }` | `Subroutine` |
 /// | `Method { name, .. }` | `Method` |
+/// | `Format { name, .. }` | `Format` |
+/// | `LabeledStatement { label, .. }` | `Label` |
 /// | `VariableDeclaration { variable, .. }` | `Variable(VarKind)` |
 /// | `Use { module: "constant", args, .. }` | `Constant` |
 ///
@@ -206,6 +208,39 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 declarator: None,
             });
             walk(body, ctx, out);
+        }
+
+        // ── Format ─────────────────────────────────────────────────────────
+        NodeKind::Format { name, .. } => {
+            if !is_blank_name(name) {
+                let container = ctx.current_package.clone();
+                out.push(SymbolDecl {
+                    kind: SymbolKind::Format,
+                    name: name.clone(),
+                    qualified_name: ctx.qualify(name),
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: None, // Format has no name_span in current AST
+                    container,
+                    declarator: None,
+                });
+            }
+        }
+
+        // ── Label ──────────────────────────────────────────────────────────
+        NodeKind::LabeledStatement { label, statement } => {
+            if !is_blank_name(label) {
+                let container = ctx.current_package.clone();
+                out.push(SymbolDecl {
+                    kind: SymbolKind::Label,
+                    name: label.clone(),
+                    qualified_name: ctx.qualify(label),
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: None, // LabeledStatement has no label span in current AST
+                    container,
+                    declarator: None,
+                });
+            }
+            walk(statement, ctx, out);
         }
 
         // ── Variable declarations ──────────────────────────────────────────
@@ -356,6 +391,10 @@ fn push_unique(names: &mut Vec<String>, name: String) {
     if !names.iter().any(|existing| existing == &name) {
         names.push(name);
     }
+}
+
+fn is_blank_name(name: &str) -> bool {
+    name.trim().is_empty()
 }
 
 fn push_const_fast_decl(arg: &Node, call_node: &Node, ctx: &WalkCtx, out: &mut Vec<SymbolDecl>) {

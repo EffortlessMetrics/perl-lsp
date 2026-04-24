@@ -286,6 +286,45 @@ fn edge_case_cursor_on_sigil_itself_extracts_following_name() -> Result<()> {
 }
 
 #[test]
+fn edge_case_surface_skips_blank_format_and_label_names() -> Result<()> {
+    let blank_format = Node::new(
+        NodeKind::Format { name: "   ".to_string(), body: "@<<<".to_string() },
+        SourceLocation { start: 0, end: 14 },
+    );
+    let labeled_stmt = Node::new(
+        NodeKind::LabeledStatement {
+            label: "".to_string(),
+            statement: Box::new(Node::new(
+                NodeKind::Subroutine {
+                    name: Some("inner".to_string()),
+                    name_span: Some(SourceLocation { start: 22, end: 27 }),
+                    prototype: None,
+                    signature: None,
+                    attributes: vec![],
+                    body: Box::new(Node::new(
+                        NodeKind::Block { statements: vec![] },
+                        SourceLocation { start: 28, end: 31 },
+                    )),
+                },
+                SourceLocation { start: 18, end: 31 },
+            )),
+        },
+        SourceLocation { start: 15, end: 31 },
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![blank_format, labeled_stmt] },
+        SourceLocation { start: 0, end: 31 },
+    );
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1, "blank names should be skipped conservatively");
+    assert_eq!(decls[0].kind, SymbolKind::Subroutine);
+    assert_eq!(decls[0].name, "inner");
+    Ok(())
+}
+
+#[test]
 fn edge_case_cursor_sigil_only_no_identifier_returns_none() -> Result<()> {
     // Lone sigil with no following identifier chars.
     assert!(extract_symbol_from_source(0, "$").is_none());
