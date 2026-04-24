@@ -1,24 +1,30 @@
 # perl-incremental-parsing
 
-Incremental parsing infrastructure for efficient re-parsing of Perl source code in response to document edits, designed for LSP integration.
+Compatibility shim for incremental parsing APIs that are now owned by `perl-parser`.
 
 ## Overview
 
-This crate provides multiple incremental parsing strategies that minimize re-parsing overhead by reusing unaffected AST subtrees when documents change. It converts LSP `textDocument/didChange` events into efficient partial re-parses using lexer checkpoints, subtree caching with LRU eviction, and content-based node hashing.
+This crate no longer maintains an independent incremental implementation.
+It re-exports `perl_parser::incremental` so existing imports continue to work while
+keeping one source of truth for correctness and performance fixes.
 
-## Key Types
+## Migration
 
-- **`IncrementalState`** -- Rope-backed document state with lexer/parse checkpoints and the `apply_edits` entry point
-- **`IncrementalDocument`** -- `Arc<Node>`-based document with subtree cache, priority-aware eviction, and per-cycle `ParseMetrics`
-- **`SimpleIncrementalParser`** -- Lightweight parser tracking reused vs. reparsed node counts
-- **`CheckpointedIncrementalParser`** -- Lexer-checkpoint-driven parser with token cache reuse
-- **`AdvancedReuseAnalyzer`** -- Multi-strategy reuse analyzer (structural, position-shifted, content-updated, aggressive matching)
-- **`DocumentParser`** -- Enum wrapper (`Full` | `Incremental`) for transparent LSP integration
-- **`IncrementalEdit` / `IncrementalEditSet`** -- Edit representation with byte-shift arithmetic and batch application
+Prefer importing from `perl-parser` directly:
+
+```rust
+use perl_parser::incremental::{IncrementalState, Edit, apply_edits};
+```
+
+This shim remains available for backward compatibility:
+
+```rust
+use perl_incremental_parsing::{IncrementalState, Edit, apply_edits};
+```
 
 ## Part of the `perl-lsp` Workspace
 
-This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. It depends on `perl-parser-core`, `perl-edit`, and `perl-lexer`.
+This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 
