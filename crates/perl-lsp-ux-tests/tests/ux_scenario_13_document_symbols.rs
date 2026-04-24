@@ -57,7 +57,7 @@ fn scenario_13_document_symbol_does_not_error() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_fixture("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -85,7 +85,7 @@ fn scenario_13_returned_symbols_have_valid_shape() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_fixture("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 
@@ -108,6 +108,12 @@ fn scenario_13_returned_symbols_have_valid_shape() {
              (SymbolInformation), got: {:?}",
             sym
         );
+        if let Some(location_uri) = sym.pointer("/location/uri") {
+            harness.assert_normalized_response(
+                &serde_json::json!({ "uri": location_uri.clone() }),
+                &serde_json::json!({ "uri": "$WORKSPACE/Greeter.pm" }),
+            );
+        }
     }
 
     harness.assert_no_crash();
@@ -126,7 +132,7 @@ fn scenario_13_rich_file_returns_known_sub_names() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
+    harness.open_fixture("Greeter.pm", SYMBOLS_SOURCE).expect("didOpen should succeed");
 
     std::thread::sleep(Duration::from_millis(300));
 

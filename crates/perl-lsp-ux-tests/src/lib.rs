@@ -57,6 +57,7 @@ pub use workspace::FakeWorkspace;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -157,6 +158,14 @@ pub struct UxHarness {
     document_versions: Mutex<HashMap<String, i32>>,
 }
 
+/// Cursor location in a workspace document.
+#[derive(Debug, Clone)]
+pub struct CursorPosition {
+    pub relative_path: String,
+    pub line: u32,
+    pub character: u32,
+}
+
 impl UxHarness {
     /// Spawn a fresh LSP server and set up a clean workspace.
     pub fn new(config: ScenarioConfig) -> Result<Self> {
@@ -188,6 +197,16 @@ impl UxHarness {
         self.client.did_open(&uri, content)?;
         self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
         Ok(())
+    }
+
+    /// Open fixture content in the workspace and send `didOpen`.
+    pub fn open_fixture(&self, relative_path: &str, content: &str) -> Result<()> {
+        self.open_file(relative_path, content)
+    }
+
+    /// Create a reusable cursor position for editor-facing requests.
+    pub fn cursor(&self, relative_path: &str, line: u32, character: u32) -> CursorPosition {
+        CursorPosition { relative_path: relative_path.to_string(), line, character }
     }
 
     /// Apply a full-document text replacement and send `textDocument/didChange`.
@@ -238,6 +257,11 @@ impl UxHarness {
         Ok(Some(resp["result"].clone()))
     }
 
+    /// Request hover information at a previously built cursor position.
+    pub fn hover_at(&self, position: &CursorPosition) -> Result<Option<Value>> {
+        self.hover(&position.relative_path, position.line, position.character)
+    }
+
     /// Request completion at `(line, character)`.
     pub fn completion(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
@@ -260,6 +284,11 @@ impl UxHarness {
                 None => Ok(Vec::new()),
             },
         }
+    }
+
+    /// Request completion at a previously built cursor position.
+    pub fn completion_at(&self, position: &CursorPosition) -> Result<Vec<Value>> {
+        self.completion(&position.relative_path, position.line, position.character)
     }
 
     /// Request document formatting.
@@ -461,6 +490,70 @@ impl UxHarness {
         }
     }
 
+    /// Request go-to-definition at a previously built cursor position.
+    pub fn definition_at(&self, position: &CursorPosition) -> Result<Vec<Value>> {
+        self.definition(&position.relative_path, position.line, position.character)
+    }
+
+    /// Request references at a previously built cursor position.
+    pub fn references_at(&self, position: &CursorPosition) -> Result<Vec<Value>> {
+        self.references(&position.relative_path, position.line, position.character)
+    }
+
+    /// Request references.
+    pub fn references(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": true }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Apply an edit and wait for diagnostics update for that file.
+    pub fn apply_edit_and_collect_diagnostics(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        timeout: Duration,
+    ) -> Result<Vec<Value>> {
+        self.change_file_full(relative_path, updated_content)?;
+        Ok(self.wait_for_diagnostics(relative_path, timeout))
+    }
+
+    /// Normalize an LSP response payload for platform-stable comparisons.
+    pub fn normalize_response(&self, value: &Value) -> Value {
+        normalize_value(value, &self.workspace.root_uri)
+    }
+
+    /// Compare normalized response payload to normalized expectation.
+    pub fn assert_normalized_response(&self, actual: &Value, expected: &Value) {
+        let normalized_actual = self.normalize_response(actual);
+        let normalized_expected = self.normalize_response(expected);
+        assert_eq!(
+            normalized_actual, normalized_expected,
+            "Normalized response mismatch.\nactual={:?}\nexpected={:?}",
+            normalized_actual, normalized_expected
+        );
+    }
+
     /// Request go-to-declaration.
     pub fn declaration(
         &self,
@@ -584,6 +677,66 @@ impl UxHarness {
     /// Returns the root URI of the workspace (useful for the `rootUri` initialize param).
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
+    }
+}
+
+fn normalize_value(value: &Value, root_uri: &str) -> Value {
+    match value {
+        Value::Array(items) => {
+            let mut normalized =
+                items.iter().map(|item| normalize_value(item, root_uri)).collect::<Vec<Value>>();
+            normalized.sort_by_key(|entry| entry.to_string());
+            Value::Array(normalized)
+        }
+        Value::Object(map) => {
+            let mut normalized = serde_json::Map::new();
+            for (key, val) in map {
+                let normalized_value =
+                    if matches!(key.as_str(), "uri" | "targetUri" | "workspaceFolderUri") {
+                        normalize_uri_like_value(val, root_uri)
+                    } else {
+                        normalize_value(val, root_uri)
+                    };
+                normalized.insert(key.clone(), normalized_value);
+            }
+            Value::Object(normalized)
+        }
+        Value::String(text) => {
+            if text.starts_with("file://") {
+                normalize_uri_like_value(value, root_uri)
+            } else {
+                Value::String(text.replace("\\", "/"))
+            }
+        }
+        _ => value.clone(),
+    }
+}
+
+fn normalize_uri_like_value(value: &Value, root_uri: &str) -> Value {
+    match value {
+        Value::String(uri) => {
+            let slash_uri = uri.replace('\\', "/");
+            let slash_root = root_uri.replace('\\', "/");
+            let mut replaced_root = slash_uri.replace(&slash_root, "$WORKSPACE");
+            if let Some(rest) = replaced_root.strip_prefix("$WORKSPACE")
+                && !rest.is_empty()
+                && !rest.starts_with('/')
+            {
+                replaced_root = format!("$WORKSPACE/{rest}");
+            }
+            if replaced_root.starts_with("$WORKSPACE") {
+                Value::String(replaced_root.trim_end_matches('/').to_string())
+            } else if let Some(stripped) = replaced_root.strip_prefix("file://") {
+                let filename = Path::new(stripped)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| stripped.to_string());
+                Value::String(filename)
+            } else {
+                Value::String(replaced_root)
+            }
+        }
+        _ => normalize_value(value, root_uri),
     }
 }
 

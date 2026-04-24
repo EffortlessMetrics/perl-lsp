@@ -112,5 +112,19 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
         folder_uris
     );
 
+    let normalized_folder_uris = run_symbols
+        .iter()
+        .filter_map(|symbol| symbol.get("workspaceFolderUri"))
+        .map(|uri| harness.normalize_response(uri))
+        .filter_map(|uri| uri.as_str().map(ToOwned::to_owned))
+        .collect::<BTreeSet<String>>();
+    let expected_folder_uris =
+        BTreeSet::from(["$WORKSPACE/svc-a".to_string(), "$WORKSPACE/svc-b".to_string()]);
+    assert!(
+        expected_folder_uris.is_subset(&normalized_folder_uris),
+        "Expected normalized workspace folder URIs to include svc-a and svc-b, got {:?}",
+        normalized_folder_uris
+    );
+
     harness.assert_no_crash();
 }

@@ -48,12 +48,13 @@ fn scenario_10_definition_request_does_not_error() {
     .expect("Failed to create UX harness");
 
     harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    let call_site = harness.cursor("greet.pl", 8, 0);
 
     // Allow the server to index the file.
     std::thread::sleep(Duration::from_millis(500));
 
     // Request definition on the call site `greet('World')` — line 8, char 0.
-    let result = harness.definition("greet.pl", 8, 0);
+    let result = harness.definition_at(&call_site);
     assert!(
         result.is_ok(),
         "textDocument/definition must not return a JSON-RPC error — feature grid regression: {:?}",
@@ -76,11 +77,12 @@ fn scenario_10_definition_result_is_location_or_empty() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    harness.open_fixture("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    let call_site = harness.cursor("greet.pl", 8, 0);
 
     std::thread::sleep(Duration::from_millis(500));
 
-    let defs = harness.definition("greet.pl", 8, 0).expect("definition must not error");
+    let defs = harness.definition_at(&call_site).expect("definition must not error");
 
     // If results are returned they must be well-formed Location objects.
     for loc in &defs {
@@ -90,11 +92,9 @@ fn scenario_10_definition_result_is_location_or_empty() {
             loc
         );
         // The location must point to our file (not some unrelated URI).
-        let uri = loc["uri"].as_str().unwrap_or("");
-        assert!(
-            uri.ends_with("greet.pl"),
-            "Definition location should point to greet.pl, got uri={:?}",
-            uri
+        harness.assert_normalized_response(
+            &serde_json::json!({ "uri": loc["uri"].clone() }),
+            &serde_json::json!({ "uri": "$WORKSPACE/greet.pl" }),
         );
     }
 
@@ -113,10 +113,11 @@ fn scenario_10_definition_on_unknown_position_returns_empty() {
         .expect("Failed to create UX harness");
 
     harness.open_file("simple.pl", source).expect("didOpen should succeed");
+    let unknown_position = harness.cursor("simple.pl", 0, 5);
 
     // Position in middle of `strict` string literal — no definition expected.
     let defs = harness
-        .definition("simple.pl", 0, 5)
+        .definition_at(&unknown_position)
         .expect("definition must not error on arbitrary position");
 
     // Empty is fine; what we are testing is that no crash or error occurs.
