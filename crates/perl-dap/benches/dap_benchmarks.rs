@@ -37,9 +37,11 @@ use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
+use perl_lsp_rs_core::transport::framing::frame;
 use serde_json::json;
 use std::collections::HashMap;
 use std::hint::black_box;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -285,6 +287,73 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     group.finish();
 }
 
+// ========== Phase 3: Transport/Output Benchmarks ==========
+
+fn write_framed_payload<W: Write>(writer: &mut W, payload: &[u8]) {
+    write!(writer, "Content-Length: {}\r\n\r\n", payload.len()).ok();
+    writer.write_all(payload).ok();
+}
+
+fn benchmark_transport_output(c: &mut Criterion) {
+    let mut group = c.benchmark_group("transport_output");
+    group.measurement_time(Duration::from_secs(8));
+
+    let message = json!({
+        "type": "event",
+        "event": "output",
+        "body": {
+            "category": "stdout",
+            "output": "benchmark payload line from transport benchmark\n"
+        }
+    });
+    let Ok(payload) = serde_json::to_vec(&message) else {
+        return;
+    };
+
+    group.bench_function("framed_output_legacy_allocating", |b| {
+        b.iter(|| {
+            let mut out = Vec::with_capacity(1024);
+            let framed = frame(black_box(&payload));
+            out.write_all(black_box(&framed)).ok();
+            out.flush().ok();
+            black_box(out.len());
+        })
+    });
+
+    group.bench_function("framed_output_direct_header_write", |b| {
+        b.iter(|| {
+            let mut out = Vec::with_capacity(1024);
+            write_framed_payload(&mut out, black_box(&payload));
+            out.flush().ok();
+            black_box(out.len());
+        })
+    });
+
+    group.bench_function("event_flush_per_message", |b| {
+        b.iter(|| {
+            let mut out = BufWriter::new(Vec::with_capacity(16 * 1024));
+            for _ in 0..8 {
+                write_framed_payload(&mut out, black_box(&payload));
+                out.flush().ok();
+            }
+            black_box(out.get_ref().len());
+        })
+    });
+
+    group.bench_function("event_single_flush_per_batch", |b| {
+        b.iter(|| {
+            let mut out = BufWriter::new(Vec::with_capacity(16 * 1024));
+            for _ in 0..8 {
+                write_framed_payload(&mut out, black_box(&payload));
+            }
+            out.flush().ok();
+            black_box(out.get_ref().len());
+        })
+    });
+
+    group.finish();
+}
+
 // ========== Benchmark Groups ==========
 
 criterion_group!(configuration_benches, benchmark_launch_config_validation);
@@ -349,5 +418,6 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
 }
 
 criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+criterion_group!(transport_benches, benchmark_transport_output);
 
-criterion_main!(configuration_benches, platform_benches, session_benches);
+criterion_main!(configuration_benches, platform_benches, session_benches, transport_benches);

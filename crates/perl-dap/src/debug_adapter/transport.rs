@@ -29,9 +29,9 @@ impl DebugAdapter {
         R: Read,
         W: Write + Send + 'static,
     {
-        // Create a shared writer to prevent interleaving between the main loop
-        // and the event handler thread.
-        let shared_writer: Arc<Mutex<W>> = Arc::new(Mutex::new(output));
+        // Create a shared buffered writer to prevent interleaving between the main loop
+        // and the event handler thread while reducing small write overhead.
+        let shared_writer: Arc<Mutex<BufWriter<W>>> = Arc::new(Mutex::new(BufWriter::new(output)));
         let event_writer = Arc::clone(&shared_writer);
 
         // Create channel for asynchronous events.
@@ -39,22 +39,30 @@ impl DebugAdapter {
         self.event_sender = Some(tx.clone());
 
         thread::spawn(move || {
-            while let Ok(msg) = rx.recv() {
-                let framed = match serde_json::to_vec(&msg) {
-                    Ok(payload) => frame(&payload),
-                    Err(e) => {
-                        tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
-                        continue;
-                    }
-                };
+            while let Ok(first_msg) = rx.recv() {
+                let mut pending = vec![first_msg];
+                while let Ok(msg) = rx.try_recv() {
+                    pending.push(msg);
+                }
 
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(&framed) {
-                    tracing::error!(error = %e, "Failed to write DAP frame in event handler");
-                    continue;
+                for msg in pending {
+                    let payload = match serde_json::to_vec(&msg) {
+                        Ok(payload) => payload,
+                        Err(e) => {
+                            tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
+                            continue;
+                        }
+                    };
+
+                    if let Err(e) = write_framed_payload(&mut *writer, &payload) {
+                        tracing::error!(error = %e, "Failed to write DAP frame in event handler");
+                        break;
+                    }
                 }
+
                 if let Err(e) = writer.flush() {
-                    tracing::error!(error = %e, "Failed to flush DAP frame in event handler");
+                    tracing::error!(error = %e, "Failed to flush DAP frames in event handler");
                 }
             }
             tracing::debug!("Event handler thread terminating - channel closed");
@@ -103,9 +111,8 @@ impl DebugAdapter {
                     }
                 };
 
-                let framed = frame(&payload);
                 let mut writer = lock_or_recover(&shared_writer, "response_writer");
-                writer.write_all(&framed)?;
+                write_framed_payload(&mut *writer, &payload)?;
                 writer.flush()?;
 
                 // DAP requires this event only after initialize response is sent.
@@ -117,4 +124,9 @@ impl DebugAdapter {
             }
         }
     }
+}
+
+fn write_framed_payload<W: Write>(writer: &mut W, payload: &[u8]) -> io::Result<()> {
+    write!(writer, "Content-Length: {}\r\n\r\n", payload.len())?;
+    writer.write_all(payload)
 }
