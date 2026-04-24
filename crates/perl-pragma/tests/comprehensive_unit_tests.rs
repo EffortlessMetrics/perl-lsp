@@ -5,7 +5,9 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaCursor, PragmaMap, PragmaState, PragmaTracker, features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1634,5 +1636,54 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    Ok(())
+}
+
+#[test]
+fn pragma_map_final_state_matches_top_level_without_sentinel_offset()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let query_map = PragmaMap::build(&ast);
+
+    let final_state = query_map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+    Ok(())
+}
+
+#[test]
+fn pragma_map_state_at_matches_compatibility_wrapper() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 15, 31)], 13, 33),
+        use_node("warnings", &[], 34, 49),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let query_map = PragmaMap::from_ranges(map.clone());
+
+    let via_tracker = PragmaTracker::state_for_offset(&map, 40);
+    let via_query = query_map.state_at(40);
+    assert_eq!(via_query, via_tracker);
+    Ok(())
+}
+
+#[test]
+fn pragma_cursor_supports_repeated_queries() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 13, 29),
+        use_node("warnings", &[], 30, 45),
+    ]);
+    let query_map = PragmaMap::build(&ast);
+    let mut cursor: PragmaCursor<'_> = query_map.cursor();
+
+    let first = cursor.state_at(10);
+    let second = cursor.state_at(35);
+
+    assert!(first.strict_refs);
+    assert!(!second.strict_refs);
+    assert!(second.warnings);
     Ok(())
 }

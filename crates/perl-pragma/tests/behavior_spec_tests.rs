@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_pragma::{PragmaMap, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -312,4 +312,16 @@ fn given_unitcheck_block_with_use_strict_when_querying_after_block_then_strict_i
     assert!(!after_unitcheck.strict_vars);
     assert!(!after_unitcheck.strict_subs);
     assert!(!after_unitcheck.strict_refs);
+}
+
+#[test]
+fn given_top_level_pragmas_when_querying_final_state_then_no_max_offset_is_needed() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let query_map = PragmaMap::build(&ast);
+
+    let final_state = query_map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
 }

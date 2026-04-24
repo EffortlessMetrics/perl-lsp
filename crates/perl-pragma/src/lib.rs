@@ -413,6 +413,105 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
     })
 }
 
+/// Owned, query-oriented pragma state map.
+///
+/// This wraps the raw range/state entries with precomputed lookup data so
+/// repeated `state_at` queries avoid rebuilding search inputs and post-query
+/// fixups.
+#[derive(Debug, Clone, Default)]
+pub struct PragmaMap {
+    ranges: Vec<(Range<usize>, PragmaState)>,
+    starts: Vec<usize>,
+    effective_states: Vec<PragmaState>,
+    final_state: PragmaState,
+}
+
+impl PragmaMap {
+    /// Build a query map directly from an AST.
+    #[must_use]
+    pub fn build(ast: &Node) -> Self {
+        Self::from_ranges(PragmaTracker::build(ast))
+    }
+
+    /// Build a query map from a precomputed range/state vector.
+    #[must_use]
+    pub fn from_ranges(ranges: Vec<(Range<usize>, PragmaState)>) -> Self {
+        let starts: Vec<usize> = ranges.iter().map(|(range, _)| range.start).collect();
+        let effective_states: Vec<PragmaState> =
+            ranges.iter().map(|(_, state)| effective_state(state)).collect();
+        let final_state = effective_states.last().cloned().unwrap_or_else(PragmaState::default);
+
+        Self { ranges, starts, effective_states, final_state }
+    }
+
+    /// Return the effective pragma state at `offset`.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> PragmaState {
+        let idx = self.starts.partition_point(|start| *start <= offset);
+        if idx > 0 { self.effective_states[idx - 1].clone() } else { PragmaState::default() }
+    }
+
+    /// Return the effective top-level/final state after all tracked directives.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaState {
+        self.final_state.clone()
+    }
+
+    /// Create a cursor for repeated queries.
+    #[must_use]
+    pub fn cursor(&self) -> PragmaCursor<'_> {
+        PragmaCursor { map: self, idx: 0 }
+    }
+
+    /// Return raw ranges for compatibility callers that still need them.
+    #[must_use]
+    pub fn ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.ranges
+    }
+}
+
+/// Cursor-style query helper that can reuse the last lookup position.
+#[derive(Debug, Clone)]
+pub struct PragmaCursor<'a> {
+    map: &'a PragmaMap,
+    idx: usize,
+}
+
+impl PragmaCursor<'_> {
+    /// Return the effective pragma state at `offset` and advance internal hints.
+    #[must_use]
+    pub fn state_at(&mut self, offset: usize) -> PragmaState {
+        while self.idx < self.map.starts.len() && self.map.starts[self.idx] <= offset {
+            self.idx += 1;
+        }
+        while self.idx > 0 && self.map.starts[self.idx - 1] > offset {
+            self.idx -= 1;
+        }
+
+        if self.idx > 0 {
+            self.map.effective_states[self.idx - 1].clone()
+        } else {
+            PragmaState::default()
+        }
+    }
+
+    /// Return the effective final state of the map.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaState {
+        self.map.final_state()
+    }
+}
+
+fn effective_state(state: &PragmaState) -> PragmaState {
+    let mut effective = state.clone();
+    if effective.signatures_strict {
+        effective.strict_vars = true;
+        effective.strict_subs = true;
+        effective.strict_refs = true;
+    }
+    effective
+}
+
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
@@ -436,22 +535,12 @@ impl PragmaTracker {
         pragma_map: &[(Range<usize>, PragmaState)],
         offset: usize,
     ) -> PragmaState {
-        // Find the last pragma state that starts before this offset.
-        // pragma_map is sorted by start offset (guaranteed by build()).
-        // We use partition_point to find the first element where start > offset,
-        // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
-
-        let mut state =
-            if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
-
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
+        if idx > 0 {
+            effective_state(&pragma_map[idx - 1].1)
+        } else {
+            PragmaState::default()
         }
-
-        state
     }
 
     /// Process a lexically scoped body and then restore the caller state.
