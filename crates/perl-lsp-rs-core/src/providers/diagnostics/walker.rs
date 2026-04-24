@@ -3,7 +3,7 @@
 //! This module provides a generic AST walker function for traversing
 //! Perl AST nodes and applying diagnostic checks.
 
-use perl_parser_core::ast::{Node, NodeKind};
+use perl_parser_core::ast::Node;
 
 /// Walk the AST and call a function for each node
 ///
@@ -16,130 +16,104 @@ where
 {
     func(node);
 
-    // Visit children based on node kind
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                walk_node(stmt, func);
-            }
+    node.for_each_child(|child| walk_node(child, func));
+}
+
+#[cfg(test)]
+mod tests {
+    use perl_parser_core::SourceLocation;
+    use perl_parser_core::ast::{Node, NodeKind};
+
+    use super::walk_node;
+
+    fn loc() -> SourceLocation {
+        SourceLocation { start: 0, end: 1 }
+    }
+
+    fn id(name: &str) -> Node {
+        Node::new(NodeKind::Identifier { name: name.to_string() }, loc())
+    }
+
+    fn number(value: &str) -> Node {
+        Node::new(NodeKind::Number { value: value.to_string() }, loc())
+    }
+
+    fn stmt_mod(modifier: &str, statement: Node, condition: Node) -> Node {
+        Node::new(
+            NodeKind::StatementModifier {
+                statement: Box::new(statement),
+                modifier: modifier.to_string(),
+                condition: Box::new(condition),
+            },
+            loc(),
+        )
+    }
+
+    fn canonical_count(node: &Node) -> usize {
+        1 + node.children().into_iter().map(canonical_count).sum::<usize>()
+    }
+
+    #[test]
+    fn walks_statement_modifier_statement_and_condition() {
+        let ast = stmt_mod(
+            "if",
+            Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(Node::new(
+                        NodeKind::FunctionCall { name: "print".to_string(), args: vec![id("ok")] },
+                        loc(),
+                    )),
+                },
+                loc(),
+            ),
+            Node::new(
+                NodeKind::ExpressionStatement {
+                    expression: Box::new(Node::new(
+                        NodeKind::Assignment {
+                            lhs: Box::new(Node::new(
+                                NodeKind::Variable {
+                                    sigil: "$".to_string(),
+                                    name: "x".to_string(),
+                                },
+                                loc(),
+                            )),
+                            op: "=".to_string(),
+                            rhs: Box::new(number("5")),
+                        },
+                        loc(),
+                    )),
+                },
+                loc(),
+            ),
+        );
+
+        let mut visited_kinds = Vec::new();
+        walk_node(&ast, &mut |node| visited_kinds.push(node.kind.kind_name().to_string()));
+
+        assert!(visited_kinds.iter().any(|kind| kind == "FunctionCall"));
+        assert!(visited_kinds.iter().any(|kind| kind == "Assignment"));
+    }
+
+    #[test]
+    fn walks_nested_statement_modifiers_for_all_supported_modifiers() {
+        let modifiers = ["if", "unless", "while", "until", "for", "foreach"];
+        let mut current = Node::new(
+            NodeKind::ExpressionStatement {
+                expression: Box::new(Node::new(
+                    NodeKind::FunctionCall { name: "print".to_string(), args: vec![id("ok")] },
+                    loc(),
+                )),
+            },
+            loc(),
+        );
+
+        for modifier in modifiers {
+            current = stmt_mod(modifier, current, id(modifier));
         }
-        NodeKind::Block { statements } => {
-            for stmt in statements {
-                walk_node(stmt, func);
-            }
-        }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-            walk_node(condition, func);
-            walk_node(then_branch, func);
-            for (cond, branch) in elsif_branches {
-                walk_node(cond, func);
-                walk_node(branch, func);
-            }
-            if let Some(branch) = else_branch {
-                walk_node(branch, func);
-            }
-        }
-        NodeKind::While { condition, body, .. } => {
-            walk_node(condition, func);
-            walk_node(body, func);
-        }
-        NodeKind::Binary { left, right, .. } => {
-            walk_node(left, func);
-            walk_node(right, func);
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::IndirectCall { object, args, .. } => {
-            walk_node(object, func);
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::ExpressionStatement { expression } => {
-            walk_node(expression, func);
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            walk_node(lhs, func);
-            walk_node(rhs, func);
-        }
-        NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
-            walk_node(init, func);
-        }
-        NodeKind::VariableListDeclaration { initializer: Some(init), .. } => {
-            walk_node(init, func);
-        }
-        NodeKind::PhaseBlock { block, .. } => {
-            walk_node(block, func);
-        }
-        NodeKind::Eval { block } | NodeKind::Defer { block } => {
-            walk_node(block, func);
-        }
-        NodeKind::Class { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
-            walk_node(body, func);
-            for (_, catch_body) in catch_blocks {
-                walk_node(catch_body, func);
-            }
-            if let Some(finally) = finally_block {
-                walk_node(finally, func);
-            }
-        }
-        NodeKind::Given { expr, body } => {
-            walk_node(expr, func);
-            walk_node(body, func);
-        }
-        NodeKind::When { condition, body } => {
-            walk_node(condition, func);
-            walk_node(body, func);
-        }
-        NodeKind::Default { body } => {
-            walk_node(body, func);
-        }
-        NodeKind::Unary { operand, .. } => {
-            walk_node(operand, func);
-        }
-        NodeKind::Package { block: Some(blk), .. } => {
-            walk_node(blk, func);
-        }
-        NodeKind::Subroutine { body, .. } | NodeKind::Method { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::For { body, .. } | NodeKind::Foreach { body, .. } => {
-            walk_node(body, func);
-        }
-        NodeKind::MethodCall { object, args, .. } => {
-            walk_node(object, func);
-            for arg in args {
-                walk_node(arg, func);
-            }
-        }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
-            walk_node(condition, func);
-            walk_node(then_expr, func);
-            walk_node(else_expr, func);
-        }
-        NodeKind::Return { value: Some(v) } => {
-            walk_node(v, func);
-        }
-        NodeKind::LabeledStatement { statement, .. } => {
-            walk_node(statement, func);
-        }
-        NodeKind::HashLiteral { pairs } => {
-            for (key, value) in pairs {
-                walk_node(key, func);
-                walk_node(value, func);
-            }
-        }
-        NodeKind::ArrayLiteral { elements } => {
-            for elem in elements {
-                walk_node(elem, func);
-            }
-        }
-        _ => {} // Other nodes don't have children or are handled differently
+
+        let expected = canonical_count(&current);
+        let mut actual = 0usize;
+        walk_node(&current, &mut |_| actual += 1);
+        assert_eq!(actual, expected);
     }
 }

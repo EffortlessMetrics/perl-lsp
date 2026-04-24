@@ -1047,8 +1047,12 @@ impl SymbolExtractor {
             }
 
             _ => {
-                // For any unhandled node types, log a warning
-                tracing::warn!(kind = ?node.kind, "Unhandled node type in symbol extractor");
+                // Keep traversal contract aligned with the canonical AST child
+                // graph so new child-bearing node kinds are still descended into
+                // even before symbol-specific handling is added.
+                for child in node.children() {
+                    self.visit_node(child);
+                }
             }
         }
     }
