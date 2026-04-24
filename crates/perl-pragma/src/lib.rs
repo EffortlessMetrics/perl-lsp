@@ -223,10 +223,6 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     state.signatures_strict = false;
 }
 
-fn feature_items(arg: &str) -> Vec<String> {
-    pragma_arg_items(arg)
-}
-
 fn known_feature_name(name: &str) -> Option<&'static str> {
     match name {
         "say" => Some("say"),
@@ -298,7 +294,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
     let mut changed = false;
 
     for arg in args {
-        for item in feature_items(arg) {
+        for_each_pragma_arg_item(arg, |item| {
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -306,7 +302,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
                 state.unicode_strings = false;
                 state.signatures_strict = false;
                 changed |= had_features;
-                continue;
+                return;
             }
 
             if let Some(version) = item.strip_prefix(':').and_then(parse_perl_version) {
@@ -317,53 +313,59 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
                         disable_feature_name(state, feature)
                     };
                 }
-                continue;
+                return;
             }
 
             changed |= if enabled {
-                enable_feature_name(state, &item)
+                enable_feature_name(state, item)
             } else {
-                disable_feature_name(state, &item)
+                disable_feature_name(state, item)
             };
-        }
+        });
     }
 
     changed
 }
 
-fn builtin_import_names(arg: &str) -> Vec<String> {
+fn for_each_builtin_import_name(arg: &str, mut f: impl FnMut(&str)) {
     let trimmed = arg.trim();
 
     if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        return inner
-            .split_whitespace()
-            .filter(|name| !name.is_empty())
-            .map(|name| name.trim_matches('\'').trim_matches('"').to_string())
-            .collect();
+        for name in inner.split_whitespace() {
+            if !name.is_empty() {
+                f(name.trim_matches('\'').trim_matches('"'));
+            }
+        }
+        return;
     }
 
     let name = trimmed.trim_matches('\'').trim_matches('"');
-    if name.is_empty() { Vec::new() } else { vec![name.to_string()] }
+    if !name.is_empty() {
+        f(name);
+    }
 }
 
 fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     for arg in args {
-        for name in builtin_import_names(arg) {
-            if !state.builtin_imports.iter().any(|import| import == &name) {
-                state.builtin_imports.push(name);
+        for_each_builtin_import_name(arg, |name| {
+            if !state.builtin_imports.iter().any(|import| import == name) {
+                state.builtin_imports.push(name.to_string());
             }
-        }
+        });
     }
 }
 
-fn pragma_arg_items(arg: &str) -> Vec<String> {
+fn for_each_pragma_arg_item(arg: &str, mut f: impl FnMut(&str)) {
     let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
 
     if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        return inner.split_whitespace().map(|item| item.to_string()).collect();
+        for item in inner.split_whitespace() {
+            f(item);
+        }
+        return;
     }
 
-    vec![trimmed.to_string()]
+    f(trimmed);
 }
 
 fn normalized_pragma_token(arg: &str) -> &str {
@@ -375,9 +377,15 @@ fn is_tracked_pragma_module(module: &str) -> bool {
 }
 
 fn valid_strict_args(args: &[String]) -> bool {
-    args.iter()
-        .flat_map(|arg| pragma_arg_items(arg))
-        .all(|item| matches!(item.as_str(), "vars" | "subs" | "refs"))
+    args.iter().all(|arg| {
+        let mut valid = true;
+        for_each_pragma_arg_item(arg, |item| {
+            if !matches!(item, "vars" | "subs" | "refs") {
+                valid = false;
+            }
+        });
+        valid
+    })
 }
 
 fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
@@ -394,7 +402,13 @@ fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
             tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
         }
         "feature" => !tail.is_empty(),
-        "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
+        "builtin" => tail.iter().any(|arg| {
+            let mut has_import = false;
+            for_each_builtin_import_name(arg, |_| {
+                has_import = true;
+            });
+            has_import
+        }),
         _ => false,
     }
 }
@@ -425,8 +439,11 @@ impl PragmaTracker {
         // Build the pragma map by walking the AST
         Self::build_ranges(ast, &mut current_state, &mut ranges);
 
-        // Sort by start offset
-        ranges.sort_by_key(|(range, _)| range.start);
+        // Most AST traversals append ranges in source order. Avoid an O(n log n)
+        // sort in the common case and only sort if we detect out-of-order inserts.
+        if ranges.windows(2).any(|window| window[0].0.start > window[1].0.start) {
+            ranges.sort_by_key(|(range, _)| range.start);
+        }
 
         ranges
     }
