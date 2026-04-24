@@ -1548,8 +1548,10 @@ impl CompletionProvider {
             let after_brace = &before[brace_pos + 1..];
             // Prefix is the alphanumeric+_ run from after `{` to position
             let non_ident = after_brace
-                .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-                .map(|p| p + 1)
+                .char_indices()
+                .rev()
+                .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+                .map(|(p, c)| p + c.len_utf8())
                 .unwrap_or(0);
             after_brace[non_ident..].to_string()
         };
@@ -1576,8 +1578,10 @@ impl CompletionProvider {
         // Variable name ends right before the `{`, scan back for `$`.
         let var_end = before_brace.len();
         let var_name_start = before_brace
-            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-            .map(|p| p + 1)
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !c.is_alphanumeric() && *c != '_')
+            .map(|(p, c)| p + c.len_utf8())
             .unwrap_or(0);
         let var_name = &before_brace[var_name_start..var_end];
         if var_name.is_empty() {
@@ -4038,5 +4042,19 @@ sub run {
             "keys from %%other must not leak into %%config completions; got: {:?}",
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_after_brace_no_panic() {
+        let source = "$config{☃ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_non_ident_before_var_no_panic() {
+        let source = "☃config{ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
     }
 }
