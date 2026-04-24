@@ -1,24 +1,26 @@
 # perl-incremental-parsing
 
-Incremental parsing infrastructure for efficient re-parsing of Perl source code in response to document edits, designed for LSP integration.
+Compatibility shim for incremental parsing APIs.
 
 ## Overview
 
-This crate provides multiple incremental parsing strategies that minimize re-parsing overhead by reusing unaffected AST subtrees when documents change. It converts LSP `textDocument/didChange` events into efficient partial re-parses using lexer checkpoints, subtree caching with LRU eviction, and content-based node hashing.
+`perl-parser` is the source of truth for incremental parsing. This crate re-exports
+`perl_parser::incremental` so existing callers can migrate gradually without
+behavior changes.
 
-## Key Types
+## Migration
 
-- **`IncrementalState`** -- Rope-backed document state with lexer/parse checkpoints and the `apply_edits` entry point
-- **`IncrementalDocument`** -- `Arc<Node>`-based document with subtree cache, priority-aware eviction, and per-cycle `ParseMetrics`
-- **`SimpleIncrementalParser`** -- Lightweight parser tracking reused vs. reparsed node counts
-- **`CheckpointedIncrementalParser`** -- Lexer-checkpoint-driven parser with token cache reuse
-- **`AdvancedReuseAnalyzer`** -- Multi-strategy reuse analyzer (structural, position-shifted, content-updated, aggressive matching)
-- **`DocumentParser`** -- Enum wrapper (`Full` | `Incremental`) for transparent LSP integration
-- **`IncrementalEdit` / `IncrementalEditSet`** -- Edit representation with byte-shift arithmetic and batch application
+Prefer importing directly from `perl-parser`:
 
-## Part of the `perl-lsp` Workspace
+```rust
+use perl_parser::incremental::{apply_edits, Edit, IncrementalState};
+```
 
-This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. It depends on `perl-parser-core`, `perl-edit`, and `perl-lexer`.
+The legacy path remains available:
+
+```rust
+use perl_incremental_parsing::incremental::{apply_edits, Edit, IncrementalState};
+```
 
 ## License
 
