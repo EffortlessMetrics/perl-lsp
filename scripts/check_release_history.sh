@@ -6,7 +6,7 @@
 # Exemptions:
 #   - Prerelease tags (v*-rc*) are ignored entirely
 #   - (CL) entries in RELEASE_HISTORY.md have no tag and are scope markers (not releases)
-#   - Grandfathered gaps: tags with "—" in the Notes file column of RELEASE_HISTORY.md
+#   - Grandfathered gaps: tags in RELEASE_HISTORY.md without a [n-X.Y.Z]: link
 #     (e.g., v0.7.2, v0.7.3, v0.8.0, v0.8.2, v0.5.0, v0.1.0-pest)
 
 set -euo pipefail
