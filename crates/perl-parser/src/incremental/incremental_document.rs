@@ -92,6 +92,19 @@ impl IncrementalDocument {
         // Reset metrics for this parse cycle
         self.metrics = ParseMetrics::default();
 
+        if Self::mapped_edit_range(&self.source, &edit).is_none() {
+            debug!(
+                "Single edit is unmappable at {}..{}; using conservative full parse",
+                edit.start_byte, edit.old_end_byte
+            );
+            let mut parser = Parser::new(&self.source);
+            let root = parser.parse()?;
+            self.root = Arc::new(root);
+            self.cache_subtrees();
+            self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+            return Ok(());
+        }
+
         // Apply the edit to the source
         let new_source = self.apply_edit_to_source(&edit);
 
@@ -128,32 +141,34 @@ impl IncrementalDocument {
         // Reset metrics for this batch of edits
         self.metrics = ParseMetrics::default();
 
+        let Some(normalized_edits) = edits.normalized_non_overlapping() else {
+            debug!("Batch contains overlapping or backwards ranges; using conservative fallback");
+            return self.fallback_batch_parse(edits, start);
+        };
+
         // Sort edits by position (reverse order for correct application)
-        let mut sorted_edits = edits.edits.clone();
-        sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+        let mut sorted_edits = normalized_edits;
+        sorted_edits.sort_by_key(|edit| std::cmp::Reverse(edit.start_byte));
 
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                debug!(
+                    "Batch contains unmappable edit at {}..{}; using conservative fallback",
+                    edit.start_byte, edit.old_end_byte
+                );
+                return self.fallback_batch_parse(edits, start);
+            }
         }
 
-        // Find all affected ranges
-        let affected_ranges: Vec<_> =
-            sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
-
-        // Collect reusable subtrees outside affected ranges
-        let reusable = self.find_reusable_for_ranges(&affected_ranges);
-
-        // Parse with reuse when possible
-        let new_root = if !reusable.is_empty() {
-            self.parse_with_reuse(&new_source, reusable)?
-        } else {
-            let mut parser = Parser::new(&new_source);
-            parser.parse()?
-        };
+        // Batch edits run through a conservative full parse after safe
+        // application, avoiding optimistic subtree stitching when many ranges
+        // changed at once.
+        let mut parser = Parser::new(&new_source);
+        let new_root = parser.parse()?;
 
         // Update state
         self.source = new_source;
@@ -171,40 +186,58 @@ impl IncrementalDocument {
     }
 
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
+        let Some((start, end)) = Self::mapped_edit_range(source, edit) else {
+            return source.to_string();
+        };
+
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
-
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        // Ensure we're on UTF-8 boundaries
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            result.push_str(&source[..start]);
-            result.push_str(&edit.new_text);
-            result.push_str(&source[end..]);
-        } else {
-            // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
-            result.push_str(source);
-        }
-
+        result.push_str(&source[..start]);
+        result.push_str(&edit.new_text);
+        result.push_str(&source[end..]);
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        let Some((start, end)) = Self::mapped_edit_range(source, edit) else {
+            return false;
+        };
 
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
+        source.replace_range(start..end, &edit.new_text);
+        true
+    }
+
+    fn mapped_edit_range(source: &str, edit: &IncrementalEdit) -> Option<(usize, usize)> {
+        let start = edit.start_byte;
+        let end = edit.old_end_byte;
+
+        if start > end || end > source.len() {
+            debug!("Invalid edit bounds: start={}, end={}, len={}", start, end, source.len());
+            return None;
         }
 
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            source.replace_range(start..end, &edit.new_text);
-        } else {
+        if !source.is_char_boundary(start) || !source.is_char_boundary(end) {
             debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            return None;
         }
+
+        Some((start, end))
+    }
+
+    fn fallback_batch_parse(
+        &mut self,
+        edits: &IncrementalEditSet,
+        start: Instant,
+    ) -> ParseResult<()> {
+        let fallback_source = edits.apply_to_string(&self.source);
+        let mut parser = Parser::new(&fallback_source);
+        let new_root = parser.parse()?;
+
+        self.source = fallback_source;
+        self.root = Arc::new(new_root);
+        self.cache_subtrees();
+        self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+        Ok(())
     }
 
     /// Find subtrees that can be reused (outside the edited range)
@@ -230,28 +263,6 @@ impl IncrementalDocument {
                     self.metrics.cache_hits += 1;
                     self.metrics.nodes_reused += self.count_nodes(node);
                 }
-            } else {
-                self.metrics.cache_misses += 1;
-            }
-        }
-
-        reusable
-    }
-
-    /// Find reusable subtrees for multiple affected ranges
-    fn find_reusable_for_ranges(&mut self, ranges: &[(usize, usize)]) -> Vec<Arc<Node>> {
-        let mut reusable = Vec::new();
-
-        for ((start, end), node) in &self.subtree_cache.by_range {
-            let affected = ranges.iter().any(|(r_start, r_end)| {
-                // Check if this subtree overlaps with any affected range
-                *start < *r_end && *end > *r_start
-            });
-
-            if !affected {
-                reusable.push(node.clone());
-                self.metrics.cache_hits += 1;
-                self.metrics.nodes_reused += self.count_nodes(node);
             } else {
                 self.metrics.cache_misses += 1;
             }

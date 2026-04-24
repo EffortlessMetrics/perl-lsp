@@ -67,6 +67,11 @@ impl IncrementalEdit {
     pub fn is_after(&self, pos: usize) -> bool {
         self.start_byte >= pos
     }
+
+    /// Returns true when the edit has a non-backwards range.
+    pub fn has_valid_range(&self) -> bool {
+        self.start_byte <= self.old_end_byte
+    }
 }
 
 /// Collection of incremental edits
@@ -106,22 +111,49 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
+    /// Normalize edits for deterministic batch processing.
+    ///
+    /// Returns edits sorted by ascending start position when all edits are
+    /// non-backwards and non-overlapping in original-source coordinates.
+    pub fn normalized_non_overlapping(&self) -> Option<Vec<IncrementalEdit>> {
+        let mut normalized = self.edits.clone();
+        normalized.sort_by_key(|edit| (edit.start_byte, edit.old_end_byte));
+
+        let mut last_end = 0usize;
+        let mut initialized = false;
+        for edit in &normalized {
+            if !edit.has_valid_range() {
+                return None;
+            }
+
+            if initialized && edit.start_byte < last_end {
+                return None;
+            }
+
+            last_end = edit.old_end_byte;
+            initialized = true;
+        }
+
+        Some(normalized)
+    }
+
     /// Apply edits to a string
     pub fn apply_to_string(&self, source: &str) -> String {
         if self.edits.is_empty() {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start
-        let mut sorted_edits = self.edits.clone();
+        let Some(mut sorted_edits) = self.normalized_non_overlapping() else {
+            return source.to_string();
+        };
+        // Apply from end to start to preserve original offsets.
         sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            let start = edit.start_byte.min(result.len());
-            let end = edit.old_end_byte.min(result.len());
-
-            if start > end {
+            let start = edit.start_byte;
+            let end = edit.old_end_byte;
+            if end > result.len() {
                 continue;
             }
 
