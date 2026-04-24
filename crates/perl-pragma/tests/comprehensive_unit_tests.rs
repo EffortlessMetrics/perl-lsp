@@ -207,6 +207,17 @@ fn use_strict_quoted_args_double_quotes() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn use_strict_qw_args_enable_multiple_categories() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw(vars refs)"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
 fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
     let map = PragmaTracker::build(&ast);
@@ -1198,6 +1209,21 @@ fn use_strict_multiple_categories_at_once() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn no_strict_mixed_list_forms_disable_expected_categories() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["qw(vars refs)", "\"subs\""], 13, 46),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    Ok(())
+}
+
+#[test]
 fn no_strict_multiple_categories_at_once() -> Result<(), Box<dyn std::error::Error>> {
     let ast =
         program(vec![use_node("strict", &[], 0, 12), no_node("strict", &["vars", "subs"], 13, 35)]);
@@ -1418,6 +1444,85 @@ fn use_builtin_tracks_lexical_imports_only() -> Result<(), Box<dyn std::error::E
         !state.has_feature("builtin"),
         "lexical builtin imports should stay separate from version-implied features"
     );
+    Ok(())
+}
+
+#[test]
+fn no_builtin_without_args_clears_all_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false floor)"], 0, 35),
+        no_node("builtin", &[], 36, 48),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.builtin_imports.is_empty());
+    Ok(())
+}
+
+#[test]
+fn no_builtin_with_args_removes_only_requested_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false floor)"], 0, 35),
+        no_node("builtin", &["qw(false)"], 36, 56),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(state.has_builtin_import("floor"));
+    Ok(())
+}
+
+#[test]
+fn no_if_builtin_conditionally_removes_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false floor)"], 0, 35),
+        no_node("if", &["$cond", "builtin", "qw(false floor)"], 36, 74),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 60);
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(!state.has_builtin_import("floor"));
+    Ok(())
+}
+
+#[test]
+fn use_feature_all_enables_all_known_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["':all'"], 0, 20)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("class"));
+    assert!(state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
+fn no_feature_all_clears_version_implied_bundle_features() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![use_node("v5.40", &[], 0, 10), no_node("feature", &["':all'"], 11, 31)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.has_feature("say"));
+    assert!(!state.has_feature("signatures"));
+    assert!(!state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
+fn feature_bundle_can_be_disabled_then_reenabled_after_version_bundle()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 10),
+        no_node("feature", &["':5.36'"], 11, 33),
+        use_node("feature", &["':5.36'"], 34, 56),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[2].1;
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("isa"));
+    assert!(state.has_feature("builtin"), "higher bundle features should remain enabled");
     Ok(())
 }
 

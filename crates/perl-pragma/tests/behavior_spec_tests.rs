@@ -142,6 +142,20 @@ fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available
 }
 
 #[test]
+fn given_use_builtin_then_no_builtin_when_querying_scope_then_imports_are_cleared() {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false ceil)"], 0, 30),
+        no_node("builtin", &[], 31, 43),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(!state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(!state.has_builtin_import("ceil"));
+}
+
+#[test]
 fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_strings_are_enabled()
  {
     let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 41)]);
@@ -163,6 +177,18 @@ fn given_use_if_feature_bundle_when_querying_state_then_bundle_features_are_reco
     assert!(state.has_feature("say"));
     assert!(state.has_feature("signatures"));
     assert!(state.has_feature("isa"));
+}
+
+#[test]
+fn given_use_feature_all_when_querying_state_then_full_known_feature_set_is_enabled() {
+    let ast = program(vec![use_node("feature", &["':all'"], 0, 20)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 10);
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("signatures"));
+    assert!(state.has_feature("class"));
+    assert!(state.has_feature("builtin"));
 }
 
 #[test]
