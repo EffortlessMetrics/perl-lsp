@@ -315,6 +315,9 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if !is_valid_quote_delimiter(delimiter) {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -361,9 +364,13 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
 
         (body, &rest1[end_pos..])
     } else if is_paired {
-        if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
-            let repl_closing = get_closing_delimiter(repl_delimiter);
-            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+        if let Some(repl_delimiter) = rest2.chars().next() {
+            if is_valid_quote_delimiter(repl_delimiter) {
+                let repl_closing = get_closing_delimiter(repl_delimiter);
+                extract_delimited_content(rest2, repl_delimiter, repl_closing)
+            } else {
+                (String::new(), rest2)
+            }
         } else {
             (String::new(), rest2)
         }
@@ -409,6 +416,9 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if !is_valid_quote_delimiter(delimiter) {
+        return Err(TransliterationError::MissingDelimiter);
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -428,7 +438,10 @@ pub fn extract_transliteration_parts_strict(
         (body, rest, found_closing)
     } else {
         let trimmed = rest1.trim_start();
-        if let Some(repl_delimiter) = starts_with_paired_delimiter(trimmed) {
+        if let Some(repl_delimiter) = trimmed.chars().next() {
+            if !is_valid_quote_delimiter(repl_delimiter) {
+                return Err(TransliterationError::MissingReplacement);
+            }
             let repl_closing = get_closing_delimiter(repl_delimiter);
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
@@ -468,6 +481,10 @@ fn get_closing_delimiter(open: char) -> char {
         '<' => '>',
         _ => open,
     }
+}
+
+fn is_valid_quote_delimiter(delimiter: char) -> bool {
+    !delimiter.is_ascii_alphanumeric() && !delimiter.is_whitespace() && delimiter != '\\'
 }
 
 fn is_paired_open(ch: char) -> bool {
