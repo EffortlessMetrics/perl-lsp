@@ -226,17 +226,32 @@ impl LspServer {
                             })
                         })
                     };
+                    if symbol_key.is_none() {
+                        return Err(JsonRpcError {
+                            code: -32803,
+                            message:
+                                "Rename refused: symbol identity is ambiguous for workspace-wide rename"
+                                    .to_string(),
+                            data: None,
+                        });
+                    }
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
                             if let (Some(coordinator), Some(key)) =
                                 (self.coordinator(), symbol_key.as_ref())
                             {
-                                let edits = crate::workspace_rename::build_rename_edit(
+                                let Ok(edits) = crate::workspace_rename::build_rename_edit_strict(
                                     coordinator.index(),
                                     key,
                                     new_name,
-                                );
+                                ) else {
+                                    return Err(JsonRpcError {
+                                        code: -32803,
+                                        message: "Rename refused: symbol identity is ambiguous for workspace-wide rename".to_string(),
+                                        data: None,
+                                    });
+                                };
                                 if !edits.is_empty() {
                                     tracing::debug!(
                                         count = edits.len(),
@@ -263,8 +278,14 @@ impl LspServer {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                let edits = crate::workspace_rename::build_rename_edit_strict(
+                                    idx, key, new_name,
+                                )
+                                .map_err(|_| JsonRpcError {
+                                    code: -32803,
+                                    message: "Rename refused: symbol identity is ambiguous for workspace-wide rename".to_string(),
+                                    data: None,
+                                })?;
                                 let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
                                 return Ok(Some(ws_edit));
                             }

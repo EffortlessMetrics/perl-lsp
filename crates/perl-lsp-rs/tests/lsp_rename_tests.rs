@@ -302,3 +302,71 @@ fn test_rename_out_of_bounds() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_workspace_rename_updates_all_touched_files() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let module_uri = "file:///workspace/lib/Greeter.pm";
+    let main_uri = "file:///workspace/main.pl";
+
+    harness.open(
+        module_uri,
+        r#"package Greeter;
+sub greet_user {
+    return "hi";
+}
+1;
+"#,
+    )?;
+    harness.open(
+        main_uri,
+        r#"use Greeter;
+print Greeter::greet_user();
+"#,
+    )?;
+
+    let response = harness
+        .request(
+            "textDocument/rename",
+            json!({
+                "textDocument": { "uri": module_uri },
+                "position": { "line": 1, "character": 6 },
+                "newName": "welcome_user"
+            }),
+        )
+        .ok_or("rename request should return a workspace edit")?;
+
+    let changes = response
+        .get("changes")
+        .and_then(|value| value.as_object())
+        .ok_or("rename response must include changes map")?;
+
+    assert!(changes.contains_key(module_uri), "module file should be edited");
+    assert!(changes.contains_key(main_uri), "main file should be edited");
+
+    let module_edits = changes
+        .get(module_uri)
+        .and_then(|value| value.as_array())
+        .ok_or("module edits should be an array")?;
+    let main_edits = changes
+        .get(main_uri)
+        .and_then(|value| value.as_array())
+        .ok_or("main edits should be an array")?;
+
+    assert!(
+        module_edits
+            .iter()
+            .any(|edit| edit["newText"].as_str() == Some("welcome_user")),
+        "module edits should rename declaration"
+    );
+    assert!(
+        main_edits
+            .iter()
+            .any(|edit| edit["newText"].as_str() == Some("Greeter::welcome_user")),
+        "main edits should rename qualified call site"
+    );
+
+    Ok(())
+}

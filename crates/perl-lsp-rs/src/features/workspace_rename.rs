@@ -29,18 +29,23 @@ pub struct RenameEdit {
 /// Build a rename edit across the workspace.
 ///
 /// Finds all references to the given symbol and builds text edits to rename them.
-pub fn build_rename_edit(
+pub fn build_rename_edit_strict(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
     new_name_bare: &str,
-) -> Vec<RenameEdit> {
+) -> Result<Vec<RenameEdit>, String> {
     // 1) Get all references across the workspace
+    let Some(definition) = idx.find_def(key) else {
+        return Err(format!(
+            "workspace rename refused: unresolved symbol identity for {}::{}",
+            key.pkg, key.name
+        ));
+    };
+
     let mut locs = idx.find_refs(key);
 
     // 2) Also include the definition itself
-    if let Some(def) = idx.find_def(key) {
-        locs.push(def);
-    }
+    locs.push(definition);
 
     // 3) Group edits by URI and compute replacement text
     let mut grouped: BTreeMap<String, Vec<TextEdit>> = BTreeMap::new();
@@ -50,6 +55,53 @@ pub fn build_rename_edit(
         let start_char = loc.range.start.column;
         let end_line = loc.range.end.line;
         let end_char = loc.range.end.column;
+
+        let Some(doc) = idx.document_store().get(&loc.uri) else {
+            return Err(format!(
+                "workspace rename refused: missing indexed text for {}",
+                loc.uri
+            ));
+        };
+        let Some(start_off) = doc.line_index.position_to_offset(start_line, start_char) else {
+            return Err(format!(
+                "workspace rename refused: invalid edit start {}:{} in {}",
+                start_line, start_char, loc.uri
+            ));
+        };
+        let Some(end_off) = doc.line_index.position_to_offset(end_line, end_char) else {
+            return Err(format!(
+                "workspace rename refused: invalid edit end {}:{} in {}",
+                end_line, end_char, loc.uri
+            ));
+        };
+        let Some(original) = doc.text.get(start_off..end_off) else {
+            return Err(format!(
+                "workspace rename refused: invalid source span {}..{} in {}",
+                start_off, end_off, loc.uri
+            ));
+        };
+
+        if key.kind == SymKind::Sub && !original.ends_with(key.name.as_ref()) {
+            return Err(format!(
+                "workspace rename refused: unresolved symbol identity for sub span `{original}` in {}",
+                loc.uri
+            ));
+        }
+        if key.kind == SymKind::Var {
+            let expected = format!("{}{}", key.sigil.unwrap_or('$'), key.name);
+            if original != expected {
+                return Err(format!(
+                    "workspace rename refused: unresolved symbol identity for variable span `{original}` in {}",
+                    loc.uri
+                ));
+            }
+        }
+        if key.kind == SymKind::Pack && original != key.pkg.as_ref() && original != key.name.as_ref() {
+            return Err(format!(
+                "workspace rename refused: unresolved symbol identity for package span `{original}` in {}",
+                loc.uri
+            ));
+        }
 
         if key.kind == SymKind::Sub
             && key.pkg.as_ref() != "main"
@@ -71,17 +123,8 @@ pub fn build_rename_edit(
                 // For subroutines, preserve any existing package qualifier
                 let mut replacement = new_name_bare.to_string();
 
-                if let Some(doc) = idx.document_store().get(&loc.uri) {
-                    if let (Some(start_off), Some(end_off)) = (
-                        doc.line_index.position_to_offset(start_line, start_char),
-                        doc.line_index.position_to_offset(end_line, end_char),
-                    ) {
-                        if let Some(original) = doc.text.get(start_off..end_off) {
-                            if let Some((qual, _)) = original.rsplit_once("::") {
-                                replacement = format!("{}::{}", qual, new_name_bare);
-                            }
-                        }
-                    }
+                if let Some((qual, _)) = original.rsplit_once("::") {
+                    replacement = format!("{}::{}", qual, new_name_bare);
                 }
 
                 replacement
@@ -100,7 +143,12 @@ pub fn build_rename_edit(
     }
 
     // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    Ok(grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect())
+}
+
+/// Backward-compatible non-failing wrapper.
+pub fn build_rename_edit(idx: &WorkspaceIndex, key: &SymbolKey, new_name_bare: &str) -> Vec<RenameEdit> {
+    build_rename_edit_strict(idx, key, new_name_bare).unwrap_or_default()
 }
 
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
@@ -336,7 +384,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "renamed_target");
+        let edits = build_rename_edit_strict(&idx, &key, "renamed_target")?;
 
         // The rename must produce at least one edit (for the definition in A.pm)
         assert!(
@@ -434,6 +482,27 @@ $var;
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn rename_refuses_when_definition_is_missing() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+        index_text(&idx, "file:///main.pl", "say maybe_target();\n")?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Missing"),
+            name: Arc::from("maybe_target"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let err = build_rename_edit_strict(&idx, &key, "renamed_target")
+            .expect_err("rename should refuse unresolved symbol identity");
+        assert!(
+            err.contains("unresolved symbol identity"),
+            "expected unresolved-identity refusal, got: {err}"
+        );
         Ok(())
     }
 }
