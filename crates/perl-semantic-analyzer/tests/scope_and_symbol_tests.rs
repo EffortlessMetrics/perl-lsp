@@ -3916,7 +3916,7 @@ print func();
         issues.iter().any(|issue| {
             matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "func"
         }),
-        "require inside eval { } is runtime; should not suppress strict 'subs'"
+        "require inside eval {{ }} is runtime; should not suppress strict 'subs'"
     );
     Ok(())
 }

@@ -60,11 +60,10 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
 
     let pragma_map = PragmaTracker::build(node);
     // Query the top-level pragma state (after all scoped blocks have exited).
-    // Using usize::MAX ensures we get the last entry, which reflects the
-    // restored top-level state after any eval/sub/block scopes have closed.
-    // This avoids the false-negative from .any() which sees eval-interior ranges.
+    // This reflects the restored top-level state after any eval/sub/block
+    // scopes have closed and avoids false-negatives from eval-interior ranges.
     // signatures_strict is included to honour `use feature 'signatures'` (#4038).
-    let top_level_state = PragmaTracker::state_for_offset(&pragma_map, usize::MAX);
+    let top_level_state = PragmaTracker::final_state(&pragma_map);
     let mut has_strict = top_level_state.strict_vars
         || top_level_state.strict_subs
         || top_level_state.strict_refs
@@ -589,7 +588,8 @@ mod tests {
     #[test]
     fn eval_then_top_level_strict_then_eval_no_strict_restores_correctly() {
         // eval { no strict; } after top-level use strict.
-        // usize::MAX must land on the restore entry (strict=true), not the inner no-strict.
+        // Final-state lookup must land on the restore entry (strict=true),
+        // not the inner no-strict.
         let diags =
             strict_warnings_diags("use strict;\nuse warnings;\neval { no strict; };\nmy $x = 1;\n");
         assert!(

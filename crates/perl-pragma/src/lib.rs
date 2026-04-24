@@ -442,6 +442,45 @@ impl PragmaTracker {
         // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
+        Self::normalized_state_for_index(pragma_map, idx)
+    }
+
+    /// Get the pragma state at a specific byte offset using a caller-owned cursor.
+    ///
+    /// This method is optimized for monotonic (non-decreasing) offset queries:
+    /// the cursor advances as offsets increase, avoiding repeated binary searches.
+    /// For non-monotonic queries, this method transparently falls back to a
+    /// binary search and realigns the cursor.
+    pub fn state_for_offset_with_cursor(
+        pragma_map: &[(Range<usize>, PragmaState)],
+        offset: usize,
+        cursor: &mut usize,
+    ) -> PragmaState {
+        if *cursor > pragma_map.len() {
+            *cursor = pragma_map.len();
+        }
+
+        if *cursor > 0 && offset < pragma_map[*cursor - 1].0.start {
+            *cursor = pragma_map.partition_point(|(range, _)| range.start <= offset);
+            return Self::normalized_state_for_index(pragma_map, *cursor);
+        }
+
+        while *cursor < pragma_map.len() && pragma_map[*cursor].0.start <= offset {
+            *cursor += 1;
+        }
+
+        Self::normalized_state_for_index(pragma_map, *cursor)
+    }
+
+    /// Get the effective final pragma state after all lexical scopes are closed.
+    pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
+        Self::normalized_state_for_index(pragma_map, pragma_map.len())
+    }
+
+    fn normalized_state_for_index(
+        pragma_map: &[(Range<usize>, PragmaState)],
+        idx: usize,
+    ) -> PragmaState {
         let mut state =
             if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
 

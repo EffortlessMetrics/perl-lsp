@@ -567,8 +567,18 @@ impl ScopeAnalyzer {
         let mut ancestors: Vec<&Node> = Vec::new();
 
         let context = AnalysisContext::new(ast, code, pragma_map);
+        let mut pragma_cursor = 0usize;
+        let mut pragma_last_offset = None;
 
-        self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, &context);
+        self.analyze_node(
+            ast,
+            &root_scope,
+            &mut ancestors,
+            &mut issues,
+            &context,
+            &mut pragma_cursor,
+            &mut pragma_last_offset,
+        );
 
         // Collect all unused variables from all scopes
         self.collect_unused_variables(&root_scope, &mut issues, &context);
@@ -583,9 +593,20 @@ impl ScopeAnalyzer {
         ancestors: &mut Vec<&'a Node>,
         issues: &mut Vec<ScopeIssue>,
         context: &AnalysisContext<'a>,
+        pragma_cursor: &mut usize,
+        pragma_last_offset: &mut Option<usize>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
+        let pragma_state = if pragma_last_offset.is_some_and(|last| node.location.start < last) {
+            PragmaTracker::state_for_offset(context.pragma_map, node.location.start)
+        } else {
+            PragmaTracker::state_for_offset_with_cursor(
+                context.pragma_map,
+                node.location.start,
+                pragma_cursor,
+            )
+        };
+        *pragma_last_offset = Some(node.location.start);
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {
@@ -607,10 +628,10 @@ impl ScopeAnalyzer {
                     // `variable` as an Assignment node rather than in `initializer`.  Walk the
                     // variable node's children to pick up any RHS expressions.
                     if let Some(init) = initializer {
-                        self.analyze_node(init, scope, ancestors, issues, context);
+                        self.analyze_node(init, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                     }
                     if let NodeKind::Assignment { rhs, .. } = &variable.kind {
-                        self.analyze_node(rhs, scope, ancestors, issues, context);
+                        self.analyze_node(rhs, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                     }
                     return;
                 }
@@ -620,7 +641,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, context);
+                    self.analyze_node(init, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 if let Some(issue_kind) = self.declare_variable_parts_in_context(
@@ -674,7 +695,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, context);
+                    self.analyze_node(init, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 for variable in variables {
@@ -879,7 +900,7 @@ impl ScopeAnalyzer {
                 ancestors.push(node);
                 let declaration_arg_positions = builtin_declaration_arg_positions(name);
                 for (arg_index, arg) in args.iter().enumerate() {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
+                    self.analyze_node(arg, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                     if declaration_arg_positions.contains(&arg_index) {
                         self.mark_builtin_declaration_arg_consumed(arg, scope, context);
                     }
@@ -888,7 +909,7 @@ impl ScopeAnalyzer {
             }
             NodeKind::MethodCall { object, method, args } => {
                 ancestors.push(node);
-                self.analyze_node(object, scope, ancestors, issues, context);
+                self.analyze_node(object, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 if let Some((sigil, var_name)) = self.extract_method_name_variable(method) {
                     self.record_variable_use(
                         scope,
@@ -901,13 +922,13 @@ impl ScopeAnalyzer {
                     );
                 }
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
+                    self.analyze_node(arg, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 ancestors.pop();
             }
             NodeKind::Unary { op: _, operand } => {
                 ancestors.push(node);
-                self.analyze_node(operand, scope, ancestors, issues, context);
+                self.analyze_node(operand, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
             }
             NodeKind::String { value, interpolated } => {
@@ -928,7 +949,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, ancestors, issues, context);
+                self.analyze_node(rhs, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
 
                 // Optimization: Handle simple scalar assignment directly to avoid double lookup
                 // (mark_initialized + analyze_node both perform lookups)
@@ -949,25 +970,25 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, ancestors, issues, context);
+                self.analyze_node(lhs, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
             }
 
             NodeKind::Tie { variable, package, args } => {
                 ancestors.push(node);
                 // Analyze arguments first
-                self.analyze_node(package, scope, ancestors, issues, context);
+                self.analyze_node(package, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, context);
+                    self.analyze_node(arg, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
                     // Must analyze declaration FIRST to declare it, then mark initialized
-                    self.analyze_node(variable, scope, ancestors, issues, context);
+                    self.analyze_node(variable, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                     self.mark_initialized(variable, scope, context);
                 } else {
                     // For existing variables, mark initialized then analyze (usage)
                     self.mark_initialized(variable, scope, context);
-                    self.analyze_node(variable, scope, ancestors, issues, context);
+                    self.analyze_node(variable, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 ancestors.pop();
@@ -975,7 +996,7 @@ impl ScopeAnalyzer {
 
             NodeKind::Untie { variable } => {
                 ancestors.push(node);
-                self.analyze_node(variable, scope, ancestors, issues, context);
+                self.analyze_node(variable, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
             }
 
@@ -1004,15 +1025,15 @@ impl ScopeAnalyzer {
                 // We don't need special handling for {} and [] here because NodeKind::Variable
                 // will handle the context-sensitive lookup (checking ancestors).
                 ancestors.push(node);
-                self.analyze_node(left, scope, ancestors, issues, context);
-                self.analyze_node(right, scope, ancestors, issues, context);
+                self.analyze_node(left, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
+                self.analyze_node(right, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
             }
 
             NodeKind::ArrayLiteral { elements } => {
                 ancestors.push(node);
                 for element in elements {
-                    self.analyze_node(element, scope, ancestors, issues, context);
+                    self.analyze_node(element, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 ancestors.pop();
             }
@@ -1021,7 +1042,7 @@ impl ScopeAnalyzer {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 ancestors.push(node);
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, ancestors, issues, context);
+                    self.analyze_node(stmt, &block_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 ancestors.pop();
                 self.collect_unused_variables(&block_scope, issues, context);
@@ -1030,7 +1051,7 @@ impl ScopeAnalyzer {
             NodeKind::PhaseBlock { block, .. } => {
                 let phase_scope = Rc::new(Scope::with_parent(scope.clone()));
                 ancestors.push(node);
-                self.analyze_node(block, &phase_scope, ancestors, issues, context);
+                self.analyze_node(block, &phase_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
                 self.collect_unused_variables(&phase_scope, issues, context);
             }
@@ -1041,15 +1062,15 @@ impl ScopeAnalyzer {
                 ancestors.push(node);
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, ancestors, issues, context);
+                    self.analyze_node(init_node, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, ancestors, issues, context);
+                    self.analyze_node(cond, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, ancestors, issues, context);
+                    self.analyze_node(upd, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
-                self.analyze_node(body, &loop_scope, ancestors, issues, context);
+                self.analyze_node(body, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
 
                 ancestors.pop();
 
@@ -1063,12 +1084,12 @@ impl ScopeAnalyzer {
 
                 // Declare the loop variable and immediately mark it initialized — the list
                 // provides its value at runtime so there is no uninitialized window.
-                self.analyze_node(variable, &loop_scope, ancestors, issues, context);
+                self.analyze_node(variable, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 self.mark_initialized(variable, &loop_scope, context);
-                self.analyze_node(list, &loop_scope, ancestors, issues, context);
-                self.analyze_node(body, &loop_scope, ancestors, issues, context);
+                self.analyze_node(list, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
+                self.analyze_node(body, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 if let Some(cb) = continue_block {
-                    self.analyze_node(cb, &loop_scope, ancestors, issues, context);
+                    self.analyze_node(cb, &loop_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 ancestors.pop();
@@ -1142,7 +1163,7 @@ impl ScopeAnalyzer {
                 }
 
                 ancestors.push(node);
-                self.analyze_node(body, &sub_scope, ancestors, issues, context);
+                self.analyze_node(body, &sub_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
 
                 // Check for unused parameters
@@ -1190,7 +1211,7 @@ impl ScopeAnalyzer {
 
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 ancestors.push(node);
-                self.analyze_node(body, scope, ancestors, issues, context);
+                self.analyze_node(body, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
 
                 for (catch_var, catch_body) in catch_blocks {
                     let catch_scope = Rc::new(Scope::with_parent(scope.clone()));
@@ -1240,12 +1261,14 @@ impl ScopeAnalyzer {
                         ancestors,
                         issues,
                         context,
+                        pragma_cursor,
+                        pragma_last_offset,
                     );
                     self.collect_unused_variables(&catch_scope, issues, context);
                 }
 
                 if let Some(finally) = finally_block {
-                    self.analyze_node(finally, scope, ancestors, issues, context);
+                    self.analyze_node(finally, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
 
                 ancestors.pop();
@@ -1263,7 +1286,7 @@ impl ScopeAnalyzer {
 
                     let pkg_scope = Rc::new(Scope::with_parent(scope.clone()));
                     ancestors.push(node);
-                    self.analyze_node(block_node, &pkg_scope, ancestors, issues, context);
+                    self.analyze_node(block_node, &pkg_scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                     ancestors.pop();
                     self.collect_unused_variables(&pkg_scope, issues, context);
 
@@ -1279,14 +1302,14 @@ impl ScopeAnalyzer {
             NodeKind::Match { expr, .. } => {
                 scope.has_regex_match.set(true);
                 ancestors.push(node);
-                self.analyze_node(expr, scope, ancestors, issues, context);
+                self.analyze_node(expr, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
             }
 
             NodeKind::Substitution { expr, .. } => {
                 scope.has_regex_match.set(true);
                 ancestors.push(node);
-                self.analyze_node(expr, scope, ancestors, issues, context);
+                self.analyze_node(expr, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 ancestors.pop();
             }
 
@@ -1299,7 +1322,7 @@ impl ScopeAnalyzer {
                 // Recursively analyze children
                 ancestors.push(node);
                 for child in node.children() {
-                    self.analyze_node(child, scope, ancestors, issues, context);
+                    self.analyze_node(child, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
                 }
                 ancestors.pop();
             }
@@ -1546,15 +1569,17 @@ impl ScopeAnalyzer {
         ancestors: &mut Vec<&'a Node>,
         issues: &mut Vec<ScopeIssue>,
         context: &AnalysisContext<'a>,
+        pragma_cursor: &mut usize,
+        pragma_last_offset: &mut Option<usize>,
     ) {
         if let NodeKind::Block { statements } = &node.kind {
             ancestors.push(node);
             for stmt in statements {
-                self.analyze_node(stmt, scope, ancestors, issues, context);
+                self.analyze_node(stmt, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
             }
             ancestors.pop();
         } else {
-            self.analyze_node(node, scope, ancestors, issues, context);
+            self.analyze_node(node, scope, ancestors, issues, context, pragma_cursor, pragma_last_offset);
         }
     }
 
