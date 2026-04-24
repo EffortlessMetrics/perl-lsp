@@ -5,16 +5,47 @@ use super::*;
 /// Try to detect the Perl interpreter available on the system and return a human-readable
 /// summary string.
 ///
-/// Uses `resolve_perl_path_with_toolchain()` to find Perl (checks perlbrew, plenv, then PATH),
+/// Uses cached `resolve_perl_path_with_toolchain_cached()` lookup to find Perl
+/// (checks perlbrew, plenv, then PATH),
 /// then runs `perl -e 'print $]'` to get the version number.  Returns a string describing what
 /// was found, or a "not found" / install-hint message suitable for inclusion in error messages.
 fn detect_perl_info() -> String {
-    match crate::platform::resolve_perl_path_with_toolchain() {
+    fn cached_perl_version(perl_path: &Path) -> Option<String> {
+        #[derive(Clone)]
+        struct CachedPerlVersion {
+            perl_path: PathBuf,
+            version: Option<String>,
+        }
+
+        static PERL_VERSION_CACHE: std::sync::LazyLock<
+            std::sync::Mutex<Option<CachedPerlVersion>>,
+        > = std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+
+        let mut cache = match PERL_VERSION_CACHE.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if let Some(entry) = cache.as_ref()
+            && entry.perl_path == perl_path
+        {
+            return entry.version.clone();
+        }
+
+        let version =
+            Command::new(perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
+                if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
+            });
+        *cache = Some(CachedPerlVersion {
+            perl_path: perl_path.to_path_buf(),
+            version: version.clone(),
+        });
+        version
+    }
+
+    match crate::platform::resolve_perl_path_with_toolchain_cached() {
         Ok(perl_path) => {
-            let version_output =
-                Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
-                    if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
-                });
+            let version_output = cached_perl_version(&perl_path);
 
             match version_output {
                 Some(v) if !v.trim().is_empty() => {

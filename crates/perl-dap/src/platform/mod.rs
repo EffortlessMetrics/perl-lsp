@@ -16,6 +16,7 @@ pub use perl_lsp_rs_core::platform::{
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
 
 #[cfg(windows)]
 const PATH_SEPARATOR: char = ';';
@@ -187,6 +188,46 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     }
 
     PerlInterpreterResult::NotFound { searched }
+}
+
+#[derive(Clone)]
+struct CachedPerlPath {
+    cache_key: String,
+    result: Result<PathBuf, String>,
+}
+
+static RESOLVED_PERL_PATH_CACHE: LazyLock<Mutex<Option<CachedPerlPath>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn perl_discovery_cache_key() -> String {
+    let path = env::var("PATH").unwrap_or_default();
+    let perlbrew_root = env::var("PERLBREW_ROOT").unwrap_or_default();
+    let perlbrew_perl = env::var("PERLBREW_PERL").unwrap_or_default();
+    let plenv_root = env::var("PLENV_ROOT").unwrap_or_default();
+    let plenv_version = env::var("PLENV_VERSION").unwrap_or_default();
+    format!("{path}\n{perlbrew_root}\n{perlbrew_perl}\n{plenv_root}\n{plenv_version}")
+}
+
+/// Resolve Perl path with process-local caching keyed by interpreter-relevant environment.
+///
+/// This avoids repeated `PATH` scans during repeated launch failures while still
+/// recomputing when interpreter-selection env vars change.
+pub fn resolve_perl_path_with_toolchain_cached() -> anyhow::Result<PathBuf> {
+    let cache_key = perl_discovery_cache_key();
+    let mut cache = match RESOLVED_PERL_PATH_CACHE.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if let Some(entry) = cache.as_ref()
+        && entry.cache_key == cache_key
+    {
+        return entry.result.clone().map_err(anyhow::Error::msg);
+    }
+
+    let resolved = resolve_perl_path_with_toolchain().map_err(|error| error.to_string());
+    *cache = Some(CachedPerlPath { cache_key, result: resolved.clone() });
+    resolved.map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
