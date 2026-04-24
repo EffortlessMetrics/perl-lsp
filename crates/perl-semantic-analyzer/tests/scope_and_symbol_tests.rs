@@ -2129,6 +2129,28 @@ sub foo ($x) { $z = 1; }
     Ok(())
 }
 
+
+#[test]
+fn signatures_feature_alone_activates_strict_vars_check()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Positive control: without no feature the undeclared var must be flagged.
+    // This ensures the two disable-tests below are non-vacuous.
+    let code = r#"
+use feature 'signatures';
+sub foo ($x) {
+    $inside_strict = 1;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$inside_strict"
+        }),
+        "use feature signatures must activate strict vars mode"
+    );
+    Ok(())
+}
+
 #[test]
 fn signatures_lexical_no_feature_disables_strict_vars_checks()
 -> Result<(), Box<dyn std::error::Error>> {
