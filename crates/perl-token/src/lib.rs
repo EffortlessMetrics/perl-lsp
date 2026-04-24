@@ -37,6 +37,39 @@
 
 use std::sync::Arc;
 
+/// Byte span for a token in source text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenSpan {
+    /// Starting byte offset, inclusive.
+    pub start: usize,
+    /// Ending byte offset, exclusive.
+    pub end: usize,
+}
+
+impl TokenSpan {
+    /// Create a checked token span.
+    pub fn new(start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        if end < start {
+            return Err(TokenSpanError::InvertedSpan { start, end });
+        }
+        Ok(Self { start, end })
+    }
+
+    /// Return this span as a `start..end` range.
+    pub fn range(self) -> std::ops::Range<usize> {
+        self.start..self.end
+    }
+}
+
+/// Error returned by checked token/span constructors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenSpanError {
+    /// Span had `end < start`.
+    InvertedSpan { start: usize, end: usize },
+    /// Empty span is only valid for EOF or explicitly synthetic tokens.
+    EmptySpanDisallowed { kind: TokenKind, start: usize, end: usize },
+}
+
 /// Token produced by the lexer and consumed by the parser.
 ///
 /// Stores the token kind, original source text, and byte span. The text is kept
@@ -67,6 +100,60 @@ impl Token {
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
+    }
+
+    /// Try to create a token while validating span invariants.
+    pub fn try_new(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let span = TokenSpan::new(start, end)?;
+        if span.start == span.end && !matches!(kind, TokenKind::Eof | TokenKind::Unknown) {
+            return Err(TokenSpanError::EmptySpanDisallowed { kind, start, end });
+        }
+        Ok(Self::new(kind, text, start, end))
+    }
+
+    /// Checked constructor alias for [`Self::try_new`].
+    pub fn new_checked(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        Self::try_new(kind, text, start, end)
+    }
+
+    /// Construct an EOF token at a specific byte position.
+    pub fn eof_at(pos: usize) -> Self {
+        Self::new(TokenKind::Eof, "", pos, pos)
+    }
+
+    /// Construct an explicit synthetic unknown token.
+    pub fn unknown_at(text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
+        Self::new(TokenKind::Unknown, text, start, end)
+    }
+
+    /// Return this token's byte span.
+    pub fn span(&self) -> TokenSpan {
+        TokenSpan { start: self.start, end: self.end }
+    }
+
+    /// Return this token's byte span as `start..end`.
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.span().range()
+    }
+
+    /// Return a copy with a different span.
+    pub fn with_span(self, span: TokenSpan) -> Self {
+        Self { start: span.start, end: span.end, ..self }
+    }
+
+    /// Return a copy with a different kind.
+    pub fn with_kind(self, kind: TokenKind) -> Self {
+        Self { kind, ..self }
     }
 
     /// Return the token span length in bytes.

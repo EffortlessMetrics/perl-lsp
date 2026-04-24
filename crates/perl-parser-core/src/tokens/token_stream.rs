@@ -59,6 +59,7 @@ enum TokenStreamInner<'a> {
 /// and statement-boundary state management used by the recursive-descent parser.
 pub struct TokenStream<'a> {
     inner: TokenStreamInner<'a>,
+    eof_pos: usize,
     peeked: Option<Token>,
     peeked_second: Option<Token>,
     peeked_third: Option<Token>,
@@ -69,6 +70,7 @@ impl<'a> TokenStream<'a> {
     pub fn new(input: &'a str) -> Self {
         TokenStream {
             inner: TokenStreamInner::Lexer(PerlLexer::new(input)),
+            eof_pos: 0,
             peeked: None,
             peeked_second: None,
             peeked_third: None,
@@ -107,8 +109,10 @@ impl<'a> TokenStream<'a> {
     /// assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
     /// ```
     pub fn from_vec(tokens: Vec<Token>) -> Self {
+        let eof_pos = tokens.last().map_or(0, |token| token.end);
         TokenStream {
             inner: TokenStreamInner::Buffered(VecDeque::from(tokens)),
+            eof_pos,
             peeked: None,
             peeked_second: None,
             peeked_third: None,
@@ -298,7 +302,7 @@ impl<'a> TokenStream<'a> {
     fn next_token(&mut self) -> ParseResult<Token> {
         match &mut self.inner {
             TokenStreamInner::Lexer(lexer) => Self::next_token_from_lexer(lexer),
-            TokenStreamInner::Buffered(buf) => Self::next_token_from_buf(buf),
+            TokenStreamInner::Buffered(buf) => Self::next_token_from_buf(buf, &mut self.eof_pos),
         }
     }
 
@@ -312,12 +316,7 @@ impl<'a> TokenStream<'a> {
                 LexerTokenType::Whitespace | LexerTokenType::Newline => continue,
                 LexerTokenType::Comment(_) => continue,
                 LexerTokenType::EOF => {
-                    return Ok(Token {
-                        kind: TokenKind::Eof,
-                        text: String::new().into(),
-                        start: lexer_token.start,
-                        end: lexer_token.end,
-                    });
+                    return Ok(Token::eof_at(lexer_token.start));
                 }
                 _ => {
                     return Ok(Self::convert_lexer_token(lexer_token));
@@ -327,13 +326,13 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Return the next token from the pre-lexed buffer.
-    fn next_token_from_buf(buf: &mut VecDeque<Token>) -> ParseResult<Token> {
+    fn next_token_from_buf(buf: &mut VecDeque<Token>, eof_pos: &mut usize) -> ParseResult<Token> {
         match buf.pop_front() {
-            Some(token) => Ok(token),
-            // Synthesise an EOF at position 0 when the buffer is exhausted.
-            // The caller (parser) makes EOF sticky so position doesn't matter
-            // for correctness; using 0 is safe.
-            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+            Some(token) => {
+                *eof_pos = token.end;
+                Ok(token)
+            }
+            None => Ok(Token::eof_at(*eof_pos)),
         }
     }
 
