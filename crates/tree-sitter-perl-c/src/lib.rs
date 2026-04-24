@@ -39,8 +39,51 @@
 //! [`perl-parser`]: https://docs.rs/perl-parser
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
-use std::path::Path;
+use std::{fmt, path::Path};
 use tree_sitter::{Language, Parser};
+
+/// Typed parse errors emitted by the `try_*` parsing APIs.
+#[derive(Debug)]
+pub enum ParsePerlError {
+    /// Parser language setup failed due to an ABI/version mismatch.
+    LanguageSetup(tree_sitter::LanguageError),
+    /// The parser returned `None` (for example due to cancellation/timeout).
+    ParseReturnedNone,
+    /// Reading source bytes from disk failed.
+    Io(std::io::Error),
+}
+
+impl fmt::Display for ParsePerlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LanguageSetup(err) => write!(f, "failed to configure Perl language: {err}"),
+            Self::ParseReturnedNone => write!(f, "parser returned no syntax tree"),
+            Self::Io(err) => write!(f, "failed to read Perl source from disk: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for ParsePerlError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::LanguageSetup(err) => Some(err),
+            Self::Io(err) => Some(err),
+            Self::ParseReturnedNone => None,
+        }
+    }
+}
+
+impl From<tree_sitter::LanguageError> for ParsePerlError {
+    fn from(value: tree_sitter::LanguageError) -> Self {
+        Self::LanguageSetup(value)
+    }
+}
+
+impl From<std::io::Error> for ParsePerlError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -89,6 +132,12 @@ pub fn try_create_parser() -> Result<Parser, tree_sitter::LanguageError> {
     Ok(parser)
 }
 
+fn parse_tree_or_error(
+    tree: Option<tree_sitter::Tree>,
+) -> Result<tree_sitter::Tree, ParsePerlError> {
+    tree.ok_or(ParsePerlError::ParseReturnedNone)
+}
+
 /// Creates a [`tree_sitter::Parser`] configured for Perl, silently ignoring
 /// language-set errors.
 ///
@@ -127,11 +176,13 @@ pub fn create_parser() -> Parser {
 /// Returns an error if the parser cannot be initialised (version mismatch) or
 /// if tree-sitter returns `None` from `parse` (cancelled or timed out).
 pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = try_create_parser()?;
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    try_parse_perl_bytes(code).map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+}
+
+/// Parses Perl source bytes and returns typed parse errors.
+pub fn try_parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, ParsePerlError> {
+    let mut parser = try_create_parser().map_err(ParsePerlError::LanguageSetup)?;
+    parse_tree_or_error(parser.parse(code, None))
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
@@ -150,7 +201,12 @@ pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::e
 /// assert!(!tree.root_node().has_error());
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    parse_perl_bytes(code.as_bytes())
+    try_parse_perl_code(code).map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+}
+
+/// Parses a Perl source string and returns typed parse errors.
+pub fn try_parse_perl_code(code: &str) -> Result<tree_sitter::Tree, ParsePerlError> {
+    try_parse_perl_bytes(code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -162,8 +218,13 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read(path)?;
-    parse_perl_bytes(&code)
+    try_parse_perl_file(path).map_err(|err| Box::new(err) as Box<dyn std::error::Error>)
+}
+
+/// Reads a file from `path` and parses it as Perl source using typed parse errors.
+pub fn try_parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, ParsePerlError> {
+    let code = std::fs::read(path).map_err(ParsePerlError::Io)?;
+    try_parse_perl_bytes(&code)
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -179,6 +240,7 @@ pub fn get_scanner_config() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
     use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
     const INJECTIONS_QUERY: &str = include_str!("../../../tree-sitter-perl/queries/injections.scm");
@@ -281,6 +343,31 @@ mod tests {
     fn test_parse_bytes_empty_source() -> Result<(), Box<dyn std::error::Error>> {
         let tree = parse_perl_bytes(b"")?;
         assert_eq!(tree.root_node().kind(), "source_file");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tree_or_error_none_is_typed_variant() {
+        let result = parse_tree_or_error(None);
+        assert!(matches!(result, Err(ParsePerlError::ParseReturnedNone)));
+    }
+
+    #[test]
+    fn test_parse_error_language_setup_variant_is_distinguishable() {
+        let err = ParsePerlError::from(tree_sitter::LanguageError::Version(0));
+        assert!(matches!(
+            err,
+            ParsePerlError::LanguageSetup(tree_sitter::LanguageError::Version(0))
+        ));
+    }
+
+    #[test]
+    fn test_try_parse_perl_file_emits_io_variant() -> Result<(), Box<dyn std::error::Error>> {
+        let missing_path = std::env::temp_dir().join("tree_sitter_perl_c_missing_file.pl");
+        let result = try_parse_perl_file(&missing_path);
+        assert!(
+            matches!(result, Err(ParsePerlError::Io(err)) if err.kind() == io::ErrorKind::NotFound)
+        );
         Ok(())
     }
 }
