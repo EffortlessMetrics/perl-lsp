@@ -399,6 +399,152 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// Convert a canonical Perl keyword spelling into a [`TokenKind`].
+    ///
+    /// This mapping is intentionally case-sensitive.
+    #[must_use]
+    pub fn from_keyword(spelling: &str) -> Option<TokenKind> {
+        Some(match spelling {
+            "my" => TokenKind::My,
+            "our" => TokenKind::Our,
+            "local" => TokenKind::Local,
+            "state" => TokenKind::State,
+            "sub" => TokenKind::Sub,
+            "if" => TokenKind::If,
+            "elsif" => TokenKind::Elsif,
+            "else" => TokenKind::Else,
+            "unless" => TokenKind::Unless,
+            "while" => TokenKind::While,
+            "until" => TokenKind::Until,
+            "for" => TokenKind::For,
+            "foreach" => TokenKind::Foreach,
+            "return" => TokenKind::Return,
+            "package" => TokenKind::Package,
+            "use" => TokenKind::Use,
+            "no" => TokenKind::No,
+            "BEGIN" => TokenKind::Begin,
+            "END" => TokenKind::End,
+            "CHECK" => TokenKind::Check,
+            "INIT" => TokenKind::Init,
+            "UNITCHECK" => TokenKind::Unitcheck,
+            "eval" => TokenKind::Eval,
+            "do" => TokenKind::Do,
+            "given" => TokenKind::Given,
+            "when" => TokenKind::When,
+            "default" => TokenKind::Default,
+            "try" => TokenKind::Try,
+            "catch" => TokenKind::Catch,
+            "finally" => TokenKind::Finally,
+            "continue" => TokenKind::Continue,
+            "next" => TokenKind::Next,
+            "last" => TokenKind::Last,
+            "redo" => TokenKind::Redo,
+            "goto" => TokenKind::Goto,
+            "class" => TokenKind::Class,
+            "method" => TokenKind::Method,
+            "field" => TokenKind::Field,
+            "format" => TokenKind::Format,
+            "undef" => TokenKind::Undef,
+            "defer" => TokenKind::Defer,
+            "and" => TokenKind::WordAnd,
+            "or" => TokenKind::WordOr,
+            "not" => TokenKind::WordNot,
+            "xor" => TokenKind::WordXor,
+            "cmp" => TokenKind::StringCompare,
+            _ => return None,
+        })
+    }
+
+    /// Convert a canonical Perl operator spelling into a [`TokenKind`].
+    #[must_use]
+    pub fn from_operator(spelling: &str) -> Option<TokenKind> {
+        Some(match spelling {
+            "=" => TokenKind::Assign,
+            "+" => TokenKind::Plus,
+            "-" => TokenKind::Minus,
+            "*" => TokenKind::Star,
+            "/" => TokenKind::Slash,
+            "%" => TokenKind::Percent,
+            "**" => TokenKind::Power,
+            "<<" => TokenKind::LeftShift,
+            ">>" => TokenKind::RightShift,
+            "&" => TokenKind::BitwiseAnd,
+            "|" => TokenKind::BitwiseOr,
+            "^" => TokenKind::BitwiseXor,
+            "~" => TokenKind::BitwiseNot,
+            "+=" => TokenKind::PlusAssign,
+            "-=" => TokenKind::MinusAssign,
+            "*=" => TokenKind::StarAssign,
+            "/=" => TokenKind::SlashAssign,
+            "%=" => TokenKind::PercentAssign,
+            ".=" => TokenKind::DotAssign,
+            "&=" => TokenKind::AndAssign,
+            "|=" => TokenKind::OrAssign,
+            "^=" => TokenKind::XorAssign,
+            "**=" => TokenKind::PowerAssign,
+            "<<=" => TokenKind::LeftShiftAssign,
+            ">>=" => TokenKind::RightShiftAssign,
+            "&&=" => TokenKind::LogicalAndAssign,
+            "||=" => TokenKind::LogicalOrAssign,
+            "//=" => TokenKind::DefinedOrAssign,
+            "==" => TokenKind::Equal,
+            "!=" => TokenKind::NotEqual,
+            "=~" => TokenKind::Match,
+            "!~" => TokenKind::NotMatch,
+            "~~" => TokenKind::SmartMatch,
+            "<" => TokenKind::Less,
+            ">" => TokenKind::Greater,
+            "<=" => TokenKind::LessEqual,
+            ">=" => TokenKind::GreaterEqual,
+            "<=>" => TokenKind::Spaceship,
+            "&&" => TokenKind::And,
+            "||" => TokenKind::Or,
+            "!" => TokenKind::Not,
+            "//" => TokenKind::DefinedOr,
+            "->" => TokenKind::Arrow,
+            "=>" => TokenKind::FatArrow,
+            "." => TokenKind::Dot,
+            ".." => TokenKind::Range,
+            "..." => TokenKind::Ellipsis,
+            "++" => TokenKind::Increment,
+            "--" => TokenKind::Decrement,
+            "::" => TokenKind::DoubleColon,
+            "?" => TokenKind::Question,
+            ":" => TokenKind::Colon,
+            "\\" => TokenKind::Backslash,
+            _ => return None,
+        })
+    }
+
+    /// Convert delimiter punctuation into a [`TokenKind`].
+    #[must_use]
+    pub fn from_delimiter(spelling: &str) -> Option<TokenKind> {
+        Some(match spelling {
+            "(" => TokenKind::LeftParen,
+            ")" => TokenKind::RightParen,
+            "{" => TokenKind::LeftBrace,
+            "}" => TokenKind::RightBrace,
+            "[" => TokenKind::LeftBracket,
+            "]" => TokenKind::RightBracket,
+            ";" => TokenKind::Semicolon,
+            "," => TokenKind::Comma,
+            _ => return None,
+        })
+    }
+
+    /// Convert sigil spellings into a [`TokenKind`].
+    #[must_use]
+    pub fn from_sigil(spelling: &str) -> Option<TokenKind> {
+        Some(match spelling {
+            "$" => TokenKind::ScalarSigil,
+            "@" => TokenKind::ArraySigil,
+            "%" => TokenKind::HashSigil,
+            "&" => TokenKind::SubSigil,
+            "*" => TokenKind::GlobSigil,
+            _ => return None,
+        })
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.
