@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -169,6 +170,8 @@ pub struct CompletionProvider {
     class_models: Vec<ClassModel>,
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    include_roots: Vec<PathBuf>,
+    system_inc_roots: Vec<PathBuf>,
     import_map: ImportMap,
 }
 
@@ -249,6 +252,23 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a new completion provider with workspace and external module roots.
+    pub fn new_with_index_and_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_roots: Vec<PathBuf>,
+        system_inc_roots: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +278,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            include_roots,
+            system_inc_roots,
+            import_map,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +802,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_roots,
+                &self.system_inc_roots,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,7 +2177,9 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
     use std::sync::Arc;
+    use tempfile::TempDir;
     use url::Url;
 
     #[test]
@@ -3556,6 +3588,76 @@ sub helper { }
         assert_eq!(
             myapp_count, 1,
             "Duplicate package declarations should produce exactly one completion"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_completion_includes_configured_include_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let include_dir = TempDir::new()?;
+        fs::create_dir_all(include_dir.path().join("DB"))?;
+        fs::write(include_dir.path().join("DB").join("Schema.pm"), "package DB::Schema;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            None,
+            vec![include_dir.path().to_path_buf()],
+            Vec::new(),
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions
+                .iter()
+                .any(|c| c.label == "DB::Schema" && c.kind == CompletionItemKind::Module),
+            "use DB should surface DB::Schema from configured include roots; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind, &c.detail)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_workspace_precedence_and_external_dedupe()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let include_dir = TempDir::new()?;
+        fs::create_dir_all(include_dir.path().join("My"))?;
+        fs::write(include_dir.path().join("My").join("App.pm"), "package My::App;\n1;\n")?;
+
+        let system_dir = TempDir::new()?;
+        fs::create_dir_all(system_dir.path().join("My"))?;
+        fs::write(system_dir.path().join("My").join("App.pm"), "package My::App;\n1;\n")?;
+
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/lib/My/App.pm")?,
+            "package My::App;\n1;\n".to_string(),
+        )?;
+
+        let code = "use My::A";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![include_dir.path().to_path_buf()],
+            vec![system_dir.path().to_path_buf()],
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        let matching: Vec<_> = completions.iter().filter(|c| c.label == "My::App").collect();
+        assert_eq!(matching.len(), 1, "My::App should be deduplicated across all module sources");
+        assert_eq!(
+            matching.first().and_then(|item| item.detail.as_deref()),
+            Some("module"),
+            "workspace module should win precedence over include/system roots"
         );
         Ok(())
     }
