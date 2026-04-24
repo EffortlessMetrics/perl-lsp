@@ -302,19 +302,23 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if !is_valid_quote_delimiter(delimiter) {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -409,6 +413,9 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if !is_valid_quote_delimiter(delimiter) {
+        return Err(TransliterationError::MissingDelimiter);
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -480,6 +487,10 @@ fn starts_with_paired_delimiter(text: &str) -> Option<char> {
         Some(ch) if is_paired_open(ch) => Some(ch),
         _ => None,
     }
+}
+
+fn is_valid_quote_delimiter(ch: char) -> bool {
+    !ch.is_ascii_alphanumeric() && !ch.is_whitespace() && ch != '\\'
 }
 
 /// Extract content between delimiters and return (content, rest)
