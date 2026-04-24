@@ -571,10 +571,7 @@ impl DebugAdapter {
                                 &recent_output,
                                 "debug_adapter.recent_output_reader",
                             );
-                            if output.len() >= RECENT_OUTPUT_MAX_LINES {
-                                let _ = output.pop_front();
-                            }
-                            output.push_back(text.clone());
+                            Self::append_recent_output_line_locked(&mut output, &text);
                         }
 
                         // Send all output to client with error handling
