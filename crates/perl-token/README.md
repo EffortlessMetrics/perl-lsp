@@ -12,6 +12,8 @@ dependencies (only `std::sync::Arc`).
 
 - **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
 - **`TokenKind`** -- enum classifying every Perl token: keywords, operators, delimiters, literals, sigils, and special tokens
+- **`TokenKindInfo`** -- centralized metadata row for each token kind (display name, category, canonical lexeme, keyword/operator spellings)
+- **`TokenCategory`** -- executable category taxonomy (`Keyword`, `Operator`, `Delimiter`, `Literal`, `Identifier`, `Sigil`, `Special`)
 
 ## Usage
 
@@ -20,6 +22,8 @@ use perl_token::{Token, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+assert_eq!(tok.kind.category(), perl_token::TokenCategory::Identifier);
+assert_eq!(tok.kind.display_name(), "identifier");
 ```
 
 ## Workspace Role
