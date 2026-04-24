@@ -657,6 +657,45 @@ fn q_with_escaped_delimiter() -> R {
     Ok(())
 }
 
+#[test]
+fn quote_like_optional_whitespace_before_paired_delimiter() -> R {
+    let input = "qq {hello {nested} world}";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteDouble),
+        "Expected QuoteDouble for qq {{...}}, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "qq {hello {nested} world}");
+    Ok(())
+}
+
+#[test]
+fn substitution_with_whitespace_and_mixed_paired_delimiters() -> R {
+    let input = "s {old} [new]ge";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for s {{...}} [...], got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s {old} [new]ge");
+    Ok(())
+}
+
+#[test]
+fn malformed_quote_like_constructs_do_not_panic() -> R {
+    let cases = ["q{unterminated", "s{a}{b", "tr{a}[b", "qr{foo"];
+    for case in cases {
+        assert_terminates(case);
+    }
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Special variables
 // ===========================================================================
