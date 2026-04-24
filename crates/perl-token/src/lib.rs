@@ -399,166 +399,727 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    /// Return a user-friendly display name for this token kind.
-    ///
-    /// These names appear in parser error messages shown in the editor.
-    /// They use the actual Perl syntax (e.g. `}` instead of `RightBrace`)
-    /// so users can immediately understand what the parser expected.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use perl_token::TokenKind;
-    ///
-    /// assert_eq!(TokenKind::Semicolon.display_name(), "';'");
-    /// assert_eq!(TokenKind::Sub.display_name(), "'sub'");
-    /// assert_eq!(TokenKind::Number.display_name(), "number");
-    /// ```
-    pub fn display_name(self) -> &'static str {
-        match self {
-            // Keywords
-            TokenKind::My => "'my'",
-            TokenKind::Our => "'our'",
-            TokenKind::Local => "'local'",
-            TokenKind::State => "'state'",
-            TokenKind::Sub => "'sub'",
-            TokenKind::If => "'if'",
-            TokenKind::Elsif => "'elsif'",
-            TokenKind::Else => "'else'",
-            TokenKind::Unless => "'unless'",
-            TokenKind::While => "'while'",
-            TokenKind::Until => "'until'",
-            TokenKind::For => "'for'",
-            TokenKind::Foreach => "'foreach'",
-            TokenKind::Return => "'return'",
-            TokenKind::Package => "'package'",
-            TokenKind::Use => "'use'",
-            TokenKind::No => "'no'",
-            TokenKind::Begin => "'BEGIN'",
-            TokenKind::End => "'END'",
-            TokenKind::Check => "'CHECK'",
-            TokenKind::Init => "'INIT'",
-            TokenKind::Unitcheck => "'UNITCHECK'",
-            TokenKind::Eval => "'eval'",
-            TokenKind::Do => "'do'",
-            TokenKind::Given => "'given'",
-            TokenKind::When => "'when'",
-            TokenKind::Default => "'default'",
-            TokenKind::Try => "'try'",
-            TokenKind::Catch => "'catch'",
-            TokenKind::Finally => "'finally'",
-            TokenKind::Continue => "'continue'",
-            TokenKind::Next => "'next'",
-            TokenKind::Last => "'last'",
-            TokenKind::Redo => "'redo'",
-            TokenKind::Goto => "'goto'",
-            TokenKind::Class => "'class'",
-            TokenKind::Method => "'method'",
-            TokenKind::Field => "'field'",
-            TokenKind::Format => "'format'",
-            TokenKind::Undef => "'undef'",
-            TokenKind::Defer => "'defer'",
-
-            // Operators
-            TokenKind::Assign => "'='",
-            TokenKind::Plus => "'+'",
-            TokenKind::Minus => "'-'",
-            TokenKind::Star => "'*'",
-            TokenKind::Slash => "'/'",
-            TokenKind::Percent => "'%'",
-            TokenKind::Power => "'**'",
-            TokenKind::LeftShift => "'<<'",
-            TokenKind::RightShift => "'>>'",
-            TokenKind::BitwiseAnd => "'&'",
-            TokenKind::BitwiseOr => "'|'",
-            TokenKind::BitwiseXor => "'^'",
-            TokenKind::BitwiseNot => "'~'",
-            TokenKind::PlusAssign => "'+='",
-            TokenKind::MinusAssign => "'-='",
-            TokenKind::StarAssign => "'*='",
-            TokenKind::SlashAssign => "'/='",
-            TokenKind::PercentAssign => "'%='",
-            TokenKind::DotAssign => "'.='",
-            TokenKind::AndAssign => "'&='",
-            TokenKind::OrAssign => "'|='",
-            TokenKind::XorAssign => "'^='",
-            TokenKind::PowerAssign => "'**='",
-            TokenKind::LeftShiftAssign => "'<<='",
-            TokenKind::RightShiftAssign => "'>>='",
-            TokenKind::LogicalAndAssign => "'&&='",
-            TokenKind::LogicalOrAssign => "'||='",
-            TokenKind::DefinedOrAssign => "'//='",
-            TokenKind::Equal => "'=='",
-            TokenKind::NotEqual => "'!='",
-            TokenKind::Match => "'=~'",
-            TokenKind::NotMatch => "'!~'",
-            TokenKind::SmartMatch => "'~~'",
-            TokenKind::Less => "'<'",
-            TokenKind::Greater => "'>'",
-            TokenKind::LessEqual => "'<='",
-            TokenKind::GreaterEqual => "'>='",
-            TokenKind::Spaceship => "'<=>'",
-            TokenKind::StringCompare => "'cmp'",
-            TokenKind::And => "'&&'",
-            TokenKind::Or => "'||'",
-            TokenKind::Not => "'!'",
-            TokenKind::DefinedOr => "'//'",
-            TokenKind::WordAnd => "'and'",
-            TokenKind::WordOr => "'or'",
-            TokenKind::WordNot => "'not'",
-            TokenKind::WordXor => "'xor'",
-            TokenKind::Arrow => "'->'",
-            TokenKind::FatArrow => "'=>'",
-            TokenKind::Dot => "'.'",
-            TokenKind::Range => "'..'",
-            TokenKind::Ellipsis => "'...'",
-            TokenKind::Increment => "'++'",
-            TokenKind::Decrement => "'--'",
-            TokenKind::DoubleColon => "'::'",
-            TokenKind::Question => "'?'",
-            TokenKind::Colon => "':'",
-            TokenKind::Backslash => "'\\'",
-
-            // Delimiters
-            TokenKind::LeftParen => "'('",
-            TokenKind::RightParen => "')'",
-            TokenKind::LeftBrace => "'{'",
-            TokenKind::RightBrace => "'}'",
-            TokenKind::LeftBracket => "'['",
-            TokenKind::RightBracket => "']'",
-            TokenKind::Semicolon => "';'",
-            TokenKind::Comma => "','",
-
-            // Literals
-            TokenKind::Number => "number",
-            TokenKind::String => "string",
-            TokenKind::Regex => "regex",
-            TokenKind::Substitution => "substitution (s///)",
-            TokenKind::Transliteration => "transliteration (tr///)",
-            TokenKind::QuoteSingle => "q// string",
-            TokenKind::QuoteDouble => "qq// string",
-            TokenKind::QuoteWords => "qw() word list",
-            TokenKind::QuoteCommand => "qx// command",
-            TokenKind::HeredocStart => "heredoc (<<)",
-            TokenKind::HeredocBody => "heredoc body",
-            TokenKind::FormatBody => "format body",
-            TokenKind::DataMarker => "__DATA__",
-            TokenKind::DataBody => "data section",
-            TokenKind::VString => "version string",
-            TokenKind::UnknownRest => "unparsed content",
-            TokenKind::HeredocDepthLimit => "heredoc depth limit",
-
-            // Identifiers and variables
-            TokenKind::Identifier => "identifier",
-            TokenKind::ScalarSigil => "'$'",
-            TokenKind::ArraySigil => "'@'",
-            TokenKind::HashSigil => "'%'",
-            TokenKind::SubSigil => "'&'",
-            TokenKind::GlobSigil => "'*'",
-
-            // Special
-            TokenKind::Eof => "end of input",
-            TokenKind::Unknown => "unknown token",
+    /// Return metadata for this token kind.
+    pub fn metadata(self) -> &'static TokenKindMetadata {
+        for metadata in &TOKEN_KIND_METADATA {
+            if metadata.kind == self {
+                return metadata;
+            }
         }
+
+        &UNKNOWN_TOKEN_KIND_METADATA
+    }
+
+    /// Return every known token kind in declaration order.
+    pub fn all() -> &'static [TokenKind] {
+        static ALL_TOKEN_KINDS: std::sync::LazyLock<Vec<TokenKind>> =
+            std::sync::LazyLock::new(|| {
+                TOKEN_KIND_METADATA.iter().map(|metadata| metadata.kind).collect()
+            });
+
+        ALL_TOKEN_KINDS.as_slice()
+    }
+
+    /// Return metadata for every known token kind.
+    pub fn all_metadata() -> &'static [TokenKindMetadata] {
+        &TOKEN_KIND_METADATA
+    }
+
+    /// Return a user-friendly display name for this token kind.
+    pub fn display_name(self) -> &'static str {
+        self.metadata().display_name
+    }
+
+    /// Return the coarse token category used by conformance tests and docs.
+    pub fn category(self) -> TokenCategory {
+        self.metadata().category
     }
 }
+
+/// Coarse groups used for token metadata and conformance checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenCategory {
+    Keyword,
+    Operator,
+    Delimiter,
+    Literal,
+    IdentifierOrSigil,
+    Special,
+}
+
+/// Stable metadata record for every [`TokenKind`] variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenKindMetadata {
+    pub kind: TokenKind,
+    pub display_name: &'static str,
+    pub category: TokenCategory,
+}
+
+const UNKNOWN_TOKEN_KIND_METADATA: TokenKindMetadata = TokenKindMetadata {
+    kind: TokenKind::Unknown,
+    display_name: "unknown token",
+    category: TokenCategory::Special,
+};
+
+const TOKEN_KIND_METADATA: [TokenKindMetadata; 132] = [
+    TokenKindMetadata {
+        kind: TokenKind::My,
+        display_name: "'my'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Our,
+        display_name: "'our'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Local,
+        display_name: "'local'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::State,
+        display_name: "'state'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Sub,
+        display_name: "'sub'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::If,
+        display_name: "'if'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Elsif,
+        display_name: "'elsif'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Else,
+        display_name: "'else'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Unless,
+        display_name: "'unless'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::While,
+        display_name: "'while'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Until,
+        display_name: "'until'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::For,
+        display_name: "'for'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Foreach,
+        display_name: "'foreach'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Return,
+        display_name: "'return'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Package,
+        display_name: "'package'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Use,
+        display_name: "'use'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::No,
+        display_name: "'no'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Begin,
+        display_name: "'BEGIN'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::End,
+        display_name: "'END'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Check,
+        display_name: "'CHECK'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Init,
+        display_name: "'INIT'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Unitcheck,
+        display_name: "'UNITCHECK'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Eval,
+        display_name: "'eval'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Do,
+        display_name: "'do'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Given,
+        display_name: "'given'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::When,
+        display_name: "'when'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Default,
+        display_name: "'default'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Try,
+        display_name: "'try'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Catch,
+        display_name: "'catch'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Finally,
+        display_name: "'finally'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Continue,
+        display_name: "'continue'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Next,
+        display_name: "'next'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Last,
+        display_name: "'last'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Redo,
+        display_name: "'redo'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Goto,
+        display_name: "'goto'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Class,
+        display_name: "'class'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Method,
+        display_name: "'method'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Field,
+        display_name: "'field'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Format,
+        display_name: "'format'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Undef,
+        display_name: "'undef'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Defer,
+        display_name: "'defer'",
+        category: TokenCategory::Keyword,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Assign,
+        display_name: "'='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Plus,
+        display_name: "'+'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Minus,
+        display_name: "'-'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Star,
+        display_name: "'*'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Slash,
+        display_name: "'/'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Percent,
+        display_name: "'%'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Power,
+        display_name: "'**'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LeftShift,
+        display_name: "'<<'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::RightShift,
+        display_name: "'>>'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::BitwiseAnd,
+        display_name: "'&'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::BitwiseOr,
+        display_name: "'|'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::BitwiseXor,
+        display_name: "'^'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::BitwiseNot,
+        display_name: "'~'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::PlusAssign,
+        display_name: "'+='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::MinusAssign,
+        display_name: "'-='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::StarAssign,
+        display_name: "'*='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::SlashAssign,
+        display_name: "'/='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::PercentAssign,
+        display_name: "'%='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DotAssign,
+        display_name: "'.='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::AndAssign,
+        display_name: "'&='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::OrAssign,
+        display_name: "'|='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::XorAssign,
+        display_name: "'^='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::PowerAssign,
+        display_name: "'**='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LeftShiftAssign,
+        display_name: "'<<='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::RightShiftAssign,
+        display_name: "'>>='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LogicalAndAssign,
+        display_name: "'&&='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LogicalOrAssign,
+        display_name: "'||='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DefinedOrAssign,
+        display_name: "'//='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Equal,
+        display_name: "'=='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::NotEqual,
+        display_name: "'!='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Match,
+        display_name: "'=~'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::NotMatch,
+        display_name: "'!~'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::SmartMatch,
+        display_name: "'~~'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Less,
+        display_name: "'<'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Greater,
+        display_name: "'>'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LessEqual,
+        display_name: "'<='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::GreaterEqual,
+        display_name: "'>='",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Spaceship,
+        display_name: "'<=>'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::StringCompare,
+        display_name: "'cmp'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::And,
+        display_name: "'&&'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Or,
+        display_name: "'||'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Not,
+        display_name: "'!'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DefinedOr,
+        display_name: "'//'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::WordAnd,
+        display_name: "'and'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::WordOr,
+        display_name: "'or'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::WordNot,
+        display_name: "'not'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::WordXor,
+        display_name: "'xor'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Arrow,
+        display_name: "'->'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::FatArrow,
+        display_name: "'=>'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Dot,
+        display_name: "'.'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Range,
+        display_name: "'..'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Ellipsis,
+        display_name: "'...'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Increment,
+        display_name: "'++'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Decrement,
+        display_name: "'--'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DoubleColon,
+        display_name: "'::'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Question,
+        display_name: "'?'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Colon,
+        display_name: "':'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Backslash,
+        display_name: "'\\'",
+        category: TokenCategory::Operator,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LeftParen,
+        display_name: "'('",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::RightParen,
+        display_name: "')'",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LeftBrace,
+        display_name: "'{'",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::RightBrace,
+        display_name: "'}'",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::LeftBracket,
+        display_name: "'['",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::RightBracket,
+        display_name: "']'",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Semicolon,
+        display_name: "';'",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Comma,
+        display_name: "','",
+        category: TokenCategory::Delimiter,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Number,
+        display_name: "number",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::String,
+        display_name: "string",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Regex,
+        display_name: "regex",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Substitution,
+        display_name: "substitution (s///)",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Transliteration,
+        display_name: "transliteration (tr///)",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::QuoteSingle,
+        display_name: "q// string",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::QuoteDouble,
+        display_name: "qq// string",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::QuoteWords,
+        display_name: "qw() word list",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::QuoteCommand,
+        display_name: "qx// command",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::HeredocStart,
+        display_name: "heredoc (<<)",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::HeredocBody,
+        display_name: "heredoc body",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::FormatBody,
+        display_name: "format body",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DataMarker,
+        display_name: "__DATA__",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::DataBody,
+        display_name: "data section",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::VString,
+        display_name: "version string",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::UnknownRest,
+        display_name: "unparsed content",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::HeredocDepthLimit,
+        display_name: "heredoc depth limit",
+        category: TokenCategory::Literal,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Identifier,
+        display_name: "identifier",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::ScalarSigil,
+        display_name: "'$'",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::ArraySigil,
+        display_name: "'@'",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::HashSigil,
+        display_name: "'%'",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::SubSigil,
+        display_name: "'&'",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::GlobSigil,
+        display_name: "'*'",
+        category: TokenCategory::IdentifierOrSigil,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Eof,
+        display_name: "end of input",
+        category: TokenCategory::Special,
+    },
+    TokenKindMetadata {
+        kind: TokenKind::Unknown,
+        display_name: "unknown token",
+        category: TokenCategory::Special,
+    },
+];

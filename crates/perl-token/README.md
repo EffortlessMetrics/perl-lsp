@@ -22,6 +22,15 @@ let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
 ```
 
+## API Stability and Leaf-Crate Guardrails
+
+`perl-token` is intentionally a tiny leaf crate:
+
+- Runtime dependencies are disallowed (only `std` is permitted).
+- `Token` and `TokenKind` source compatibility is guarded by conformance tests.
+- `TokenKind` metadata must stay exhaustive and synchronized with `TokenKind::all()`.
+- **TokenKind variant count: 132** (update README, ROADMAP, metadata, and conformance tests when this changes).
+
 ## Workspace Role
 
 Foundational crate consumed by `perl-lexer`, `perl-tokenizer`, `perl-parser-core`,

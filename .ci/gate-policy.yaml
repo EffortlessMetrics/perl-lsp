@@ -171,6 +171,23 @@ gates:
       - test
       - unit
 
+
+  - name: perl_token_leaf_contract
+    tier: pr_fast
+    description: "Enforce perl-token leaf runtime dependencies and API/metadata conformance"
+    required: true
+    command: bash ./.ci/scripts/check-perl-token-leaf.sh
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - policy
+      - perl-token
+      - api
+      - dependencies
+
   # ===========================================================================
   # Tier: merge_gate
   # ===========================================================================

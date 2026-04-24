@@ -9,6 +9,12 @@ Token definitions for Perl parser
 - **Status:** Initial Public Alpha
 - **Integration:** Part of the `perl-lsp` workspace.
 
+## Stability Ratchet (Leaf Crate)
+- Keep `perl-token` dependency-free at runtime (`std` only).
+- Preserve `Token` and `TokenKind` source compatibility unless an intentional semver-scoped change is approved.
+- Require `TokenKind` metadata, README/ROADMAP notes, and conformance tests to be updated together when variants change.
+- **TokenKind variant count: 132**.
+
 ## Future Milestones
 
 ### Hardening
