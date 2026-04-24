@@ -147,6 +147,27 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    #[derive(Debug)]
+    struct XorShift64 {
+        state: u64,
+    }
+
+    impl XorShift64 {
+        fn new(seed: u64) -> Self {
+            Self { state: seed }
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            let mut value = self.state;
+            value ^= value << 13;
+            value ^= value >> 7;
+            value ^= value << 17;
+            self.state = value;
+            value
+        }
+    }
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -161,7 +182,7 @@ mod tests {
     #[test]
     fn initialized_can_only_be_sent_once() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
@@ -173,10 +194,45 @@ mod tests {
     #[test]
     fn auto_initialize_for_compat_promotes_initialized_state() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    #[test]
+    fn fuzz_set_trace_dispatch_keeps_trace_level_in_known_domain() {
+        let server = LspServer::new();
+        let mut rng = XorShift64::new(0xC0DE_CAFE_F00D_BAAD);
+        let candidates =
+            ["off", "messages", "verbose", "invalid", "", "OFF", "verbose\0tail", "messages\nnext"];
+
+        for _ in 0..2_500 {
+            let selector = (rng.next_u64() as usize) % 5;
+            let params = match selector {
+                0 => None,
+                1 => Some(json!({})),
+                2 => Some(
+                    json!({ "value": candidates[(rng.next_u64() as usize) % candidates.len()] }),
+                ),
+                3 => Some(json!({ "value": rng.next_u64() })),
+                _ => Some(json!({
+                    "value": {
+                        "nested": candidates[(rng.next_u64() as usize) % candidates.len()],
+                        "flip": (rng.next_u64() & 1) == 1
+                    }
+                })),
+            };
+
+            let dispatch_result = server.handle_set_trace_dispatch(params);
+            assert!(dispatch_result.is_ok(), "setTrace is notification-shaped");
+
+            let trace_level = server.trace_level.lock().clone();
+            assert!(
+                matches!(trace_level.as_str(), "off" | "messages" | "verbose"),
+                "trace level must remain in supported domain"
+            );
+        }
     }
 }
