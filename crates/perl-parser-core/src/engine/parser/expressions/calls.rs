@@ -377,6 +377,7 @@ impl<'a> Parser<'a> {
                         | TokenKind::RightBrace
                         | TokenKind::RightParen
                         | TokenKind::RightBracket
+                        | TokenKind::Question
                 )
             )
         {
