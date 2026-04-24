@@ -806,6 +806,33 @@ fn line_index_multi_line() {
 }
 
 #[test]
+fn line_index_handles_crlf_line_endings() {
+    let idx = LineIndex::new("abc\r\ndef".to_string());
+    let (line, col) = idx.offset_to_position(5); // 'd'
+    assert_eq!(line, 1);
+    assert_eq!(col, 0);
+
+    let off = must_some(idx.position_to_offset(1, 1));
+    assert_eq!(off, 6); // 'e'
+}
+
+#[test]
+fn line_index_handles_cr_line_endings() {
+    let idx = LineIndex::new("abc\rdef".to_string());
+    let (line, col) = idx.offset_to_position(4); // 'd'
+    assert_eq!(line, 1);
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn line_index_clamps_offset_past_end() {
+    let idx = LineIndex::new("abc\ndef".to_string());
+    let (line, col) = idx.offset_to_position(1000);
+    assert_eq!(line, 1);
+    assert_eq!(col, 3);
+}
+
+#[test]
 fn line_index_position_to_offset_valid() {
     let idx = LineIndex::new("abc\ndef\n".to_string());
     let off = must_some(idx.position_to_offset(1, 2));
