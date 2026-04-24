@@ -32,6 +32,7 @@
 //! ```
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use perl_dap::BridgeAdapter;
 use perl_dap::configuration::LaunchConfiguration;
 use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
@@ -42,6 +43,7 @@ use std::collections::HashMap;
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::runtime::Runtime;
 
 // ========== Configuration Benchmarks (AC14) ==========
 
@@ -285,6 +287,47 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark bridge adapter startup/shutdown lifecycle costs.
+fn benchmark_bridge_lifecycle(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bridge_lifecycle");
+    group.measurement_time(Duration::from_secs(5));
+
+    let Ok(runtime) = Runtime::new() else {
+        group.finish();
+        return;
+    };
+
+    group.bench_function("bridge_new_shutdown_no_spawn", |b| {
+        b.iter(|| {
+            runtime.block_on(async {
+                let mut adapter = BridgeAdapter::new();
+                let _ = adapter.shutdown().await;
+            });
+        })
+    });
+
+    let spawn_supported = runtime.block_on(async {
+        let mut adapter = BridgeAdapter::new();
+        let spawn_result = adapter.spawn_pls_dap().await;
+        let _ = adapter.shutdown().await;
+        spawn_result.is_ok()
+    });
+
+    if spawn_supported {
+        group.bench_function("bridge_spawn_shutdown", |b| {
+            b.iter(|| {
+                runtime.block_on(async {
+                    let mut adapter = BridgeAdapter::new();
+                    let _ = adapter.spawn_pls_dap().await;
+                    let _ = adapter.shutdown().await;
+                });
+            })
+        });
+    }
+
+    group.finish();
+}
+
 // ========== Benchmark Groups ==========
 
 criterion_group!(configuration_benches, benchmark_launch_config_validation);
@@ -294,7 +337,8 @@ criterion_group!(
     benchmark_perl_path_resolution,
     benchmark_path_normalization,
     benchmark_environment_setup,
-    benchmark_arg_formatting
+    benchmark_arg_formatting,
+    benchmark_bridge_lifecycle
 );
 
 // ========== Phase 2: Session Management Benchmarks (AC5.2) ==========

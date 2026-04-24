@@ -448,6 +448,19 @@ fn test_bridge_adapter_multiple_instances() -> Result<()> {
     Ok(())
 }
 
+/// Test: Bridge adapter spawn/shutdown lifecycle is stable when perl is available
+#[tokio::test]
+async fn test_bridge_adapter_spawn_shutdown_lifecycle() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    let mut adapter = BridgeAdapter::new();
+    if adapter.spawn_pls_dap().await.is_ok() {
+        adapter.shutdown().await?;
+    }
+
+    Ok(())
+}
+
 /// Test: Empty environment variables are handled correctly
 #[tokio::test]
 async fn test_empty_environment_handling() -> Result<()> {

@@ -160,6 +160,21 @@ async fn test_repeated_lifecycle_cycles() -> Result<()> {
     Ok(())
 }
 
+/// Spawning twice should cleanly replace the previous child process.
+#[tokio::test]
+async fn test_spawn_twice_replaces_previous_process() -> Result<()> {
+    let mut adapter = BridgeAdapter::new();
+
+    if adapter.spawn_pls_dap().await.is_err() {
+        return Ok(());
+    }
+
+    // A second spawn should implicitly shut down any existing child first.
+    adapter.spawn_pls_dap().await?;
+    adapter.shutdown().await?;
+    Ok(())
+}
+
 /// Multiple adapters can be created sequentially without interference.
 /// This verifies no global state leaks between adapter instances.
 #[tokio::test]

@@ -39,6 +39,7 @@ use tokio::time::sleep;
 
 const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
 const PLS_SHUTDOWN_POLL_MS: u64 = 25;
+const PLS_SHUTDOWN_KILL_WAIT_MS: u64 = 1000;
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
@@ -106,6 +107,7 @@ impl BridgeAdapter {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
+            .kill_on_drop(true)
             .spawn()
             .context("Failed to spawn Perl::LanguageServer DAP process")?;
 
@@ -181,8 +183,22 @@ impl BridgeAdapter {
         // if the client closes its input, we want to continue proxying
         // any remaining output from the server.
         let (res1, res2) = tokio::join!(client_to_server, server_to_client);
-        res1?;
-        res2?;
+        let copy_result = match (res1, res2) {
+            (Err(e), _) => Err(e),
+            (_, Err(e)) => Err(e),
+            (Ok(()), Ok(())) => Ok(()),
+        };
+
+        if let Some(child) = self.child_process.as_mut() {
+            if !Self::wait_for_child_exit(child, Duration::from_millis(PLS_SHUTDOWN_GRACE_MS)).await
+            {
+                tracing::warn!(
+                    "Perl::LanguageServer process is still running after proxy stream shutdown"
+                );
+            }
+        }
+
+        copy_result?;
 
         Ok(())
     }
@@ -193,7 +209,7 @@ impl BridgeAdapter {
     /// It should be used for cleanup in async contexts.
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
-            if !Self::wait_for_child_exit(&mut child, Duration::from_millis(0)).await {
+            if !Self::wait_for_child_exit(&mut child, Duration::ZERO).await {
                 #[cfg(unix)]
                 {
                     if let Some(pid) = child.id() {
@@ -210,14 +226,16 @@ impl BridgeAdapter {
                     }
                 }
 
-                let _ = child.kill().await;
+                let _ = child.start_kill();
                 if !Self::wait_for_child_exit(
                     &mut child,
-                    Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
+                    Duration::from_millis(PLS_SHUTDOWN_KILL_WAIT_MS),
                 )
                 .await
                 {
-                    let _ = child.wait().await?;
+                    tracing::warn!(
+                        "Timed out waiting for Perl::LanguageServer process to terminate"
+                    );
                 }
             }
         }
@@ -233,7 +251,11 @@ impl BridgeAdapter {
         while Instant::now() < deadline {
             match child.try_wait() {
                 Ok(Some(_)) => return true,
-                Ok(None) => sleep(Duration::from_millis(PLS_SHUTDOWN_POLL_MS)).await,
+                Ok(None) => {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    let delay = remaining.min(Duration::from_millis(PLS_SHUTDOWN_POLL_MS));
+                    sleep(delay).await;
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to poll Perl::LanguageServer process");
                     return false;
