@@ -22,6 +22,8 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -56,6 +58,65 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
+    fn module_completion_roots_for_doc(&self, uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
+        let mut include_paths: Vec<PathBuf> = Vec::new();
+        let mut seen_include: HashSet<PathBuf> = HashSet::new();
+        let mut system_inc_paths: Vec<PathBuf> = Vec::new();
+        let mut seen_system: HashSet<PathBuf> = HashSet::new();
+        let mut include_system_inc = false;
+
+        // Resolve the folder root once for relative-path resolution.
+        let folder_root = self
+            .folder_for_doc_uri(uri)
+            .and_then(|folder| super::super::workspace_folder_path(&folder));
+
+        // Read effective include paths from the config clone (PERL5LIB + workspace paths).
+        // The clone is lightweight — it does not trigger the system @INC subprocess.
+        if let Some(config) = self.config_for_doc(uri) {
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+            let effective_paths = config.effective_include_paths(&perl5lib_paths);
+            include_system_inc = config.use_system_inc;
+
+            for path in effective_paths {
+                let resolved = {
+                    let p = PathBuf::from(&path);
+                    if p.is_absolute() {
+                        p
+                    } else if let Some(root) = folder_root.as_ref() {
+                        root.join(p)
+                    } else {
+                        PathBuf::from(path)
+                    }
+                };
+                if seen_include.insert(resolved.clone()) {
+                    include_paths.push(resolved);
+                }
+            }
+        }
+
+        // For system @INC, call get_system_inc() through the locked folder so the lazy
+        // subprocess result is written back to the authoritative cache and not discarded
+        // when the clone is dropped.  Without this, every completion request with
+        // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
+        if include_system_inc {
+            let mut folders = self.workspace_folders.lock();
+            if let Some(folder) = folders
+                .iter_mut()
+                .find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
+            {
+                for path in folder.effective_workspace_config.get_system_inc() {
+                    if seen_system.insert(path.clone()) {
+                        system_inc_paths.push(path.clone());
+                    }
+                }
+            }
+        }
+
+        (include_paths, system_inc_paths, include_system_inc)
+    }
+
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
         match chars.next() {
@@ -323,6 +384,8 @@ impl LspServer {
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let (include_paths, system_inc_paths, include_system_inc) =
+                        self.module_completion_roots_for_doc(uri);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -332,15 +395,24 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
+                        include_system_inc,
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths,
+                        system_inc_paths,
+                        include_system_inc,
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -565,6 +637,8 @@ impl LspServer {
 
                 // Get completions with optimized cancellation support
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let (include_paths, system_inc_paths, include_system_inc) =
+                        self.module_completion_roots_for_doc(uri);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -574,14 +648,23 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
+                        include_system_inc,
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths,
+                        system_inc_paths,
+                        include_system_inc,
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
