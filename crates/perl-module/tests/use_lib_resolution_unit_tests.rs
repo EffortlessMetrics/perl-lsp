@@ -42,6 +42,44 @@ fn findbin_dot_segment_is_normalized_inside_workspace() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn absolute_use_lib_path_outside_workspace_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside-lib");
+    std::fs::create_dir_all(&workspace)?;
+    std::fs::create_dir_all(&outside)?;
+
+    let outside_path = outside.to_string_lossy().to_string();
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: outside_path, from_findbin: false }],
+        &workspace,
+        None,
+    );
+
+    assert!(resolved.is_empty(), "absolute outside-workspace paths should be dropped");
+    Ok(())
+}
+
+#[test]
+fn absolute_use_lib_path_inside_workspace_is_normalized_to_relative(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let inside = workspace.join("lib").join("Nested");
+    std::fs::create_dir_all(&inside)?;
+
+    let inside_path = inside.to_string_lossy().to_string();
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: inside_path, from_findbin: false }],
+        &workspace,
+        None,
+    );
+
+    assert_eq!(resolved, vec!["lib/Nested".to_string()]);
+    Ok(())
+}
+
+#[test]
 fn use_and_no_lib_operations_are_extracted_in_order() {
     let source = "\
 use lib 'first';\n\

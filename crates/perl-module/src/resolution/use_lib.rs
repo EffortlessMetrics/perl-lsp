@@ -78,7 +78,7 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
 
 /// Resolve `use lib` paths against a workspace root and optional file directory.
 ///
-/// - Absolute paths are returned as-is (if they exist).
+/// - Absolute paths are accepted only when they stay under `workspace_root`.
 /// - `$FindBin::Bin`-relative paths are resolved against `file_dir` (or `workspace_root` if absent).
 /// - Other relative paths are resolved against `workspace_root`.
 pub fn resolve_use_lib_paths(
@@ -107,8 +107,9 @@ pub fn resolve_use_lib_paths(
         } else {
             let p = Path::new(path_str);
             if p.is_absolute() {
-                let s = normalize_relative_path_string(path_str);
-                if !result.contains(&s) {
+                if let Some(s) = path_to_relative_string(p, workspace_root)
+                    && !result.contains(&s)
+                {
                     result.push(s);
                 }
             } else {
@@ -324,6 +325,8 @@ fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String>
     if let Ok(rel) = path.strip_prefix(workspace_root) {
         let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
         if s.is_empty() { Some(".".to_string()) } else { Some(s) }
+    } else if path.is_absolute() {
+        None
     } else {
         let s = normalize_relative_path_string(path.to_string_lossy().as_ref());
         Some(s)
