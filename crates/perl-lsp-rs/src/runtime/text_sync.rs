@@ -14,6 +14,7 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
+use std::collections::HashSet;
 use std::path::Path;
 
 const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
@@ -37,12 +38,27 @@ fn is_perl_language_id(language_id: &str) -> bool {
     )
 }
 
+fn symbol_names_for_index(ast: &Node, source: &str) -> Vec<String> {
+    let extractor = crate::symbol::SymbolExtractor::new_with_source(source);
+    let table = extractor.extract(ast);
+    let mut seen = HashSet::new();
+    let mut names = Vec::new();
+
+    for name in table.symbols.keys() {
+        if seen.insert(name.clone()) {
+            names.push(name.clone());
+        }
+    }
+
+    names
+}
+
 #[cfg(feature = "incremental")]
 fn build_incremental_edit_set(
     original_rope: &ropey::Rope,
     lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
 ) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
-    use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
+    use crate::textdoc::{range_to_bytes, range_to_chars, PosEnc};
     use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 
     let mut working_rope = original_rope.clone();
@@ -83,7 +99,11 @@ fn build_incremental_edit_set(
             change.text.len() as isize - (evolving_end as isize - evolving_start as isize);
     }
 
-    if edit_set.is_empty() { None } else { Some(edit_set) }
+    if edit_set.is_empty() {
+        None
+    } else {
+        Some(edit_set)
+    }
 }
 
 impl LspServer {
@@ -372,32 +392,18 @@ impl LspServer {
                 },
             );
 
+            // Keep runtime symbol index in sync with this document.
+            if let Some(ref ast) = ast_arc {
+                let symbol_names = symbol_names_for_index(ast, text);
+                self.symbol_index.lock().index_document(uri, symbol_names);
+            } else {
+                self.symbol_index.lock().remove_document(uri);
+            }
+
             // Index symbols for workspace search
             // Note: Indexing is a MUTATION operation - use coordinator.index() directly
             // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
             if let Some(ref _ast) = ast_arc {
-                // Update the fast symbol index with symbols from workspace index
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
-                    let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols
-                        .into_iter()
-                        .filter(|s| s.uri == uri)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut index = self.symbol_index.lock();
-                    for symbol in symbols {
-                        index.add_symbol(symbol);
-                    }
-                }
-                #[cfg(not(feature = "workspace"))]
-                {
-                    let _index = self.symbol_index.lock();
-                    // Just ensure the index exists even without workspace feature
-                }
-
                 // Update the workspace-wide index for cross-file features.
                 // Indexing runs in a background task so the handler returns
                 // immediately without blocking on file I/O or symbol extraction.
@@ -592,7 +598,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{Doc, PosEnc, apply_changes};
+                use crate::textdoc::{apply_changes, Doc, PosEnc};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
@@ -879,7 +885,7 @@ impl LspServer {
                 #[cfg(feature = "incremental")]
                 let incremental_state = {
                     use perl_parser::incremental::{
-                        Edit as IncEdit, IncrementalState, apply_edits as inc_apply_edits,
+                        apply_edits as inc_apply_edits, Edit as IncEdit, IncrementalState,
                     };
                     let code_text = crate::util::code_slice(&text);
                     match (doc_state.incremental_state.take(), &incremental_edits_opt_clone) {
@@ -964,6 +970,14 @@ impl LspServer {
 
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
+
+                // Keep runtime symbol index in sync with this document.
+                if let Some(ref ast) = ast_arc {
+                    let symbol_names = symbol_names_for_index(ast, &text);
+                    self.symbol_index.lock().index_document(uri, symbol_names);
+                } else {
+                    self.symbol_index.lock().remove_document(uri);
+                }
 
                 // Index symbols for workspace search.
                 // Indexing runs in a background task so the handler returns
@@ -1056,6 +1070,9 @@ impl LspServer {
             // Remove from documents
             let mut documents = self.documents.lock();
             documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
+
+            // Remove document symbols from runtime index to avoid stale candidates.
+            self.symbol_index.lock().remove_document(uri);
 
             // Cancel any in-progress parse and clean up the cancellation flag.
             {
@@ -1518,8 +1535,8 @@ mod tests {
     }
 
     #[test]
-    fn test_did_change_ranged_edit_ignored_for_unopened_document()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_change_ranged_edit_ignored_for_unopened_document(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///not-opened.pl";
 
@@ -1579,8 +1596,8 @@ mod tests {
     /// but 4+ UTF-8 bytes. The byte offset calculation must account for this.
     #[cfg(feature = "incremental")]
     #[test]
-    fn test_incremental_utf16_multi_byte_character_positions()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_incremental_utf16_multi_byte_character_positions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_inc_utf16.pl";
         // Line 0: "my $emoji = 😀;\n" (😀 is U+1F600, takes 2 UTF-16 units, 4 UTF-8 bytes)
@@ -1817,13 +1834,77 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn did_change_replaces_runtime_symbol_index_entries() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let uri = "file:///symbol_replace.pl";
+
+        server.handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub alpha { 1 }\n"
+            }
+        })))?;
+
+        server.handle_did_change(Some(json!({
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": [{"text": "sub omega { 2 }\n"}]
+        })))?;
+
+        let index = server.symbol_index.lock();
+        assert!(
+            index.search_prefix("alpha").is_empty(),
+            "stale symbols from previous content must be removed"
+        );
+        assert!(
+            index.search_prefix("omega").contains(&"omega".to_string()),
+            "new symbols must be indexed"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn did_close_removes_document_symbols_from_runtime_index(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///symbol_close.pl";
+
+        server.handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub ephemeral { 1 }\n"
+            }
+        })))?;
+
+        assert!(server
+            .symbol_index
+            .lock()
+            .search_prefix("ephem")
+            .contains(&"ephemeral".to_string()));
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        assert!(
+            server.symbol_index.lock().search_prefix("ephem").is_empty(),
+            "did_close must remove symbols for closed documents"
+        );
+
+        Ok(())
+    }
+
     /// didClose must clear diagnostics using the client-provided URI string.
     ///
     /// This preserves exact URI identity for clients that key diagnostics by
     /// the original URI representation rather than normalized equivalents.
     #[test]
-    fn test_did_close_clears_diagnostics_with_original_uri()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_close_clears_diagnostics_with_original_uri(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
         let uri = "FILE:///test_close_uri_identity.pl";
 
@@ -1845,8 +1926,8 @@ mod tests {
 
     /// didSave must publish diagnostics using the original URI string.
     #[test]
-    fn test_did_save_publishes_diagnostics_with_original_uri()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_save_publishes_diagnostics_with_original_uri(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (server, buf) = make_server_with_capture();
         let uri = "FILE:///test_save_uri_identity.pl";
 
@@ -1883,10 +1964,10 @@ mod tests {
     /// A parse cancelled via a pre-set flag must return Ok(()) and not store
     /// a document, so the caller behaves as if the parse simply didn't happen.
     #[test]
-    fn test_cancelled_open_returns_ok_without_storing_document()
-    -> Result<(), Box<dyn std::error::Error>> {
-        use std::sync::Arc;
+    fn test_cancelled_open_returns_ok_without_storing_document(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
 
         let server = LspServer::new();
         let uri = "file:///test_cancelled_open.pl";
@@ -1954,8 +2035,8 @@ mod tests {
 
     /// Binary content guard — a single null byte is sufficient to trigger the guard.
     #[test]
-    fn test_binary_file_guard_single_null_byte_triggers_guard()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_binary_file_guard_single_null_byte_triggers_guard(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_null.pl";
         let content_with_null = "#!/usr/bin/perl\nmy $x = 1;\x00\n";
@@ -2039,8 +2120,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_skips_parse_for_non_perl_language_id()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_skips_parse_for_non_perl_language_id(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2065,8 +2146,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_persists_across_did_change()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_persists_across_did_change(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2096,8 +2177,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_parses_embedded_perl_language_id()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_parses_embedded_perl_language_id(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/welcome.html.ep";
 
@@ -2120,8 +2201,8 @@ mod tests {
     }
 
     #[test]
-    fn test_template_file_guard_parses_mojolicious_language_id()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_template_file_guard_parses_mojolicious_language_id(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///app/templates/index.html.ep";
 
@@ -2147,8 +2228,8 @@ mod tests {
     /// same document text must reuse the cached SemanticAnalyzer rather than
     /// constructing a fresh one.
     #[test]
-    fn test_semantic_analyzer_cache_reuses_entry_on_same_version()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_reuses_entry_on_same_version(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_hover.pl";
         let text = "my $x = 1;\nmy $y = 2;\n";
@@ -2183,8 +2264,8 @@ mod tests {
     /// The semantic analyzer cache must be cleared for a URI when the document
     /// changes (textDocument/didChange), so stale analysis is never served.
     #[test]
-    fn test_semantic_analyzer_cache_invalidated_on_did_change()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_invalidated_on_did_change(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_invalidate_change.pl";
         let text = "my $x = 1;\n";
@@ -2223,8 +2304,8 @@ mod tests {
     /// The semantic analyzer cache must be cleared for a URI when the document
     /// is closed (textDocument/didClose), preventing stale memory retention.
     #[test]
-    fn test_semantic_analyzer_cache_invalidated_on_did_close()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_invalidated_on_did_close(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_invalidate_close.pl";
         let text = "my $x = 1;\n";
@@ -2260,8 +2341,8 @@ mod tests {
     /// A new document version must produce a distinct cache entry (different
     /// content hash) while the old version's entry is evicted on didChange.
     #[test]
-    fn test_semantic_analyzer_cache_separates_document_versions()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_semantic_analyzer_cache_separates_document_versions(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///test_cache_versions.pl";
         let text_v1 = "my $x = 1;\n";
@@ -2463,8 +2544,8 @@ mod tests {
 
     /// didChange without a version field should still be applied for compatibility.
     #[test]
-    fn handle_did_change_without_version_uses_next_version()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn handle_did_change_without_version_uses_next_version(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
         let uri = "file:///missing_version.pl";
 

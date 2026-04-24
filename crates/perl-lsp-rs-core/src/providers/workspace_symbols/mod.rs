@@ -68,7 +68,7 @@
 use crate::providers::symbol_query::{compare_names_by_query, matches_query};
 use perl_module::path::normalize_package_separator;
 use perl_parser_core::qualified_name::container_name;
-use perl_parser_core::{SourceLocation, ast::Node};
+use perl_parser_core::{ast::Node, SourceLocation};
 use perl_position_tracking::{WireLocation, WireRange};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
 use serde::{Deserialize, Serialize};
@@ -113,6 +113,8 @@ struct SymbolInfo {
 pub struct WorkspaceSymbolsProvider {
     /// Map of document URI to its extracted symbols.
     documents: HashMap<String, Vec<SymbolInfo>>,
+    /// Lowercased symbol name to symbol occurrences across documents.
+    symbols_by_name: HashMap<String, Vec<(String, SymbolInfo)>>,
 }
 
 impl Default for WorkspaceSymbolsProvider {
@@ -125,7 +127,7 @@ impl WorkspaceSymbolsProvider {
     /// Creates a new empty workspace symbols provider.
     #[must_use]
     pub fn new() -> Self {
-        Self { documents: HashMap::new() }
+        Self { documents: HashMap::new(), symbols_by_name: HashMap::new() }
     }
 
     /// Indexes all symbols from a parsed document.
@@ -133,6 +135,8 @@ impl WorkspaceSymbolsProvider {
     /// Extracts symbols from the AST and stores them for later search queries.
     /// Replaces any previously indexed symbols for the same URI.
     pub fn index_document(&mut self, uri: &str, ast: &Node, source: &str) {
+        self.remove_document(uri);
+
         let extractor = SymbolExtractor::new_with_source(source);
         let table = extractor.extract(ast);
 
@@ -143,12 +147,19 @@ impl WorkspaceSymbolsProvider {
             for symbol in symbol_list {
                 let container = container_name(&symbol.qualified_name).map(str::to_string);
 
-                symbols.push(SymbolInfo {
+                let symbol_info = SymbolInfo {
                     name: name.clone(),
                     kind: symbol.kind,
                     location: symbol.location,
                     container,
-                });
+                };
+
+                self.symbols_by_name
+                    .entry(name.to_lowercase())
+                    .or_default()
+                    .push((uri.to_string(), symbol_info.clone()));
+
+                symbols.push(symbol_info);
             }
         }
 
@@ -160,6 +171,10 @@ impl WorkspaceSymbolsProvider {
     /// Called when a file is deleted or closed in the workspace.
     pub fn remove_document(&mut self, uri: &str) {
         self.documents.remove(uri);
+        for symbols in self.symbols_by_name.values_mut() {
+            symbols.retain(|(entry_uri, _)| entry_uri != uri);
+        }
+        self.symbols_by_name.retain(|_, symbols| !symbols.is_empty());
     }
 
     /// Returns all indexed symbols as LSP WorkspaceSymbols.
@@ -204,22 +219,24 @@ impl WorkspaceSymbolsProvider {
     ) -> Vec<WorkspaceSymbol> {
         let mut results = Vec::new();
 
-        // Create a set of candidate names for fast lookup
-        let candidate_set: std::collections::HashSet<_> =
-            candidates.iter().map(|s| s.to_lowercase()).collect();
-
-        for (uri, symbols) in &self.documents {
-            // Get source for this document to convert offsets
-            let source = match source_map.get(uri) {
-                Some(s) => s,
-                None => continue,
+        let mut visited = std::collections::HashSet::new();
+        for candidate in candidates {
+            let lower_candidate = candidate.to_lowercase();
+            let Some(symbols) = self.symbols_by_name.get(&lower_candidate) else {
+                continue;
             };
 
-            for symbol in symbols {
-                // Check if this symbol is in our candidate set
-                if candidate_set.contains(&symbol.name.to_lowercase())
-                    && matches_query(&symbol.name, query)
-                {
+            for (uri, symbol) in symbols {
+                if !matches_query(&symbol.name, query) {
+                    continue;
+                }
+
+                let Some(source) = source_map.get(uri) else {
+                    continue;
+                };
+
+                let key = (uri.clone(), symbol.location.start, symbol.location.end);
+                if visited.insert(key) {
                     results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
                 }
             }
@@ -766,6 +783,37 @@ sub get_log { 3 }
 
         assert!(names.contains(&"alpha"), "alpha is a candidate match");
         assert!(!names.contains(&"apex"), "apex is not in candidate set");
+    }
+
+    #[test]
+    fn reindex_document_removes_old_name_from_candidate_lookup() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let first_source = "sub alpha { 1 }\n";
+        let second_source = "sub omega { 2 }\n";
+
+        source_map.insert("file:///reindex.pl".to_string(), second_source.to_string());
+
+        let mut parser = Parser::new(first_source);
+        let first_ast = must(parser.parse());
+        provider.index_document("file:///reindex.pl", &first_ast, first_source);
+
+        let mut parser = Parser::new(second_source);
+        let second_ast = must(parser.parse());
+        provider.index_document("file:///reindex.pl", &second_ast, second_source);
+
+        let stale_candidates = vec!["alpha".to_string()];
+        assert!(
+            provider.search_with_candidates("alpha", &source_map, &stale_candidates).is_empty(),
+            "reindexed document should not return stale symbols"
+        );
+
+        let fresh_candidates = vec!["omega".to_string()];
+        assert_eq!(
+            provider.search_with_candidates("omega", &source_map, &fresh_candidates).len(),
+            1
+        );
     }
 
     #[test]

@@ -10,7 +10,7 @@
 
 use super::*;
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 use crate::state::workspace_symbol_cap;
 use perl_module::path::file_path_to_module_name;
 use perl_module::rename::{apply_module_rename_edits, plan_module_rename_edits};
@@ -436,6 +436,9 @@ impl LspServer {
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
         let mut all_symbols = Vec::new();
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
 
         // Collect lightweight snapshots without holding lock during iteration.
         // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
@@ -444,9 +447,6 @@ impl LspServer {
             let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
-
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
 
         for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
             // Cooperative yield every 8 documents
@@ -459,23 +459,46 @@ impl LspServer {
                 break;
             }
 
-            if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
+            source_map.insert(uri.clone(), text.clone());
 
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
+            if let Some(ast) = ast {
+                provider.index_document(uri, ast, text);
             } else {
                 // Text-based fallback when AST is not available
                 let text_symbols = self.extract_text_based_symbols(text, uri, query);
                 let remaining = cap.saturating_sub(all_symbols.len());
                 all_symbols.extend(text_symbols.into_iter().take(remaining));
             }
+        }
+
+        if all_symbols.len() < cap {
+            let candidates = {
+                let index = self.symbol_index.lock();
+                if query.is_empty() {
+                    index.search_prefix("")
+                } else {
+                    let mut names = index.search_prefix(query);
+                    names.extend(index.search_fuzzy(query));
+                    let mut dedup = std::collections::HashSet::new();
+                    names.into_iter().filter(|name| dedup.insert(name.clone())).collect()
+                }
+            };
+
+            let ast_symbols = if candidates.is_empty() && !query.is_empty() {
+                provider.search(query, &source_map)
+            } else {
+                provider.search_with_candidates(query, &source_map, &candidates)
+            };
+            let remaining = cap.saturating_sub(all_symbols.len());
+            all_symbols.extend(ast_symbols.into_iter().take(remaining).map(|sym| {
+                LspWorkspaceSymbol {
+                    name: sym.name,
+                    kind: u32::try_from(sym.kind).unwrap_or(0),
+                    location: sym.location,
+                    container_name: sym.container_name,
+                    workspace_folder_uri: None,
+                }
+            }));
         }
 
         // Truncate to cap in case we went slightly over
@@ -528,7 +551,23 @@ impl LspServer {
             source_map.insert(uri.clone(), text.clone());
         }
 
-        let mut symbols = provider.search(query, &source_map);
+        let candidates = {
+            let index = self.symbol_index.lock();
+            if query.is_empty() {
+                index.search_prefix("")
+            } else {
+                let mut names = index.search_prefix(query);
+                names.extend(index.search_fuzzy(query));
+                let mut dedup = std::collections::HashSet::new();
+                names.into_iter().filter(|name| dedup.insert(name.clone())).collect()
+            }
+        };
+
+        let mut symbols = if candidates.is_empty() && !query.is_empty() {
+            provider.search(query, &source_map)
+        } else {
+            provider.search_with_candidates(query, &source_map, &candidates)
+        };
         symbols.truncate(cap);
 
         tracing::debug!(count = symbols.len(), cap, "Found symbols total");
@@ -2141,7 +2180,7 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 mod tests {
     #[cfg(feature = "workspace")]
     use super::read_text_with_encoding_fallback;
-    use super::{LspServer, module_name_appears_in_text};
+    use super::{module_name_appears_in_text, LspServer};
     use serde_json::json;
     #[cfg(feature = "workspace")]
     use std::io::Write;
@@ -2225,8 +2264,8 @@ mod tests {
 
     #[cfg(feature = "workspace")]
     #[test]
-    fn read_text_with_encoding_fallback_decodes_utf16le_bom()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn read_text_with_encoding_fallback_decodes_utf16le_bom(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("utf16le.pm");
         let text = "my $x = \"π\";";
@@ -2260,8 +2299,8 @@ mod tests {
     /// reasonable to index.
     #[cfg(feature = "workspace")]
     #[test]
-    fn read_text_with_encoding_fallback_handles_odd_length_utf16le()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16le(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("odd_utf16le.pm");
         // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
@@ -2278,8 +2317,8 @@ mod tests {
     /// bytes must not panic or silently truncate.
     #[cfg(feature = "workspace")]
     #[test]
-    fn read_text_with_encoding_fallback_handles_odd_length_utf16be()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16be(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("odd_utf16be.pm");
         // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
@@ -2293,8 +2332,8 @@ mod tests {
     /// Edge case: empty file should decode to an empty string without panic.
     #[cfg(feature = "workspace")]
     #[test]
-    fn read_text_with_encoding_fallback_handles_empty_file()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn read_text_with_encoding_fallback_handles_empty_file(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("empty.pm");
         std::fs::write(&path, [])?;
@@ -2308,8 +2347,8 @@ mod tests {
     /// to an empty string (BOM is stripped, nothing remains).
     #[cfg(feature = "workspace")]
     #[test]
-    fn read_text_with_encoding_fallback_handles_bom_only_file()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn read_text_with_encoding_fallback_handles_bom_only_file(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("bom_only.pm");
         std::fs::write(&path, [0xEF, 0xBB, 0xBF])?;
