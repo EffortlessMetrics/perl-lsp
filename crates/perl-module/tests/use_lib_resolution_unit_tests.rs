@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use perl_module::resolution::use_lib::{
-    UseLibAction, UseLibPath, extract_use_lib_operations, resolve_use_lib_paths,
-    resolve_use_lib_paths_from_source_at_offset,
+    UseLibAction, UseLibPath, extract_use_lib_operations, extract_use_lib_paths,
+    resolve_use_lib_paths, resolve_use_lib_paths_from_source_at_offset,
 };
 
 #[test]
@@ -146,5 +146,69 @@ fn braced_short_findbin_exports_are_treated_as_findbin_paths() {
             path: "../lib".to_string(),
             from_findbin: true,
         }]),]
+    );
+}
+
+#[test]
+fn multiline_use_lib_is_extracted() {
+    let source = "\
+use lib (
+    'first',
+    \"second\"
+);
+";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "first".to_string(), from_findbin: false },
+            UseLibPath { path: "second".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn multiline_use_and_no_lib_are_ordered() {
+    let source = "\
+use lib (
+    'first',
+    'second'
+);
+no lib (
+    'first'
+);
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![
+                UseLibPath { path: "first".to_string(), from_findbin: false },
+                UseLibPath { path: "second".to_string(), from_findbin: false },
+            ]),
+            UseLibAction::Remove(vec![UseLibPath {
+                path: "first".to_string(),
+                from_findbin: false,
+            }]),
+        ]
+    );
+}
+
+#[test]
+fn quoted_semicolon_does_not_split_statement() {
+    let source = "use lib ('alpha;beta', 'gamma');";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "alpha;beta".to_string(), from_findbin: false },
+            UseLibPath { path: "gamma".to_string(), from_findbin: false },
+        ]
     );
 }
