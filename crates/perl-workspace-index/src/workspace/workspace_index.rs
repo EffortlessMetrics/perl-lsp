@@ -989,6 +989,30 @@ pub struct Location {
     pub range: Range,
 }
 
+/// Stable symbol identity for cross-file reference queries.
+#[derive(Debug, Clone)]
+pub struct SymbolIdentity {
+    /// Canonical symbol key used for cross-file lookups.
+    ///
+    /// Prefer a fully-qualified name (`Package::name`) when available.
+    pub stable_key: String,
+    /// Bare symbol name without package qualification.
+    pub bare_name: String,
+    /// Fully-qualified symbol name when available.
+    pub qualified_name: Option<String>,
+}
+
+/// Result for workspace-wide definition + references lookup.
+#[derive(Debug, Clone)]
+pub struct CrossFileReferenceQuery {
+    /// Stable identity of the queried symbol.
+    pub symbol: SymbolIdentity,
+    /// Definition location for the symbol.
+    pub definition: Location,
+    /// Reference locations (definition excluded), sorted deterministically.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1153,62 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_key(location: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            &location.uri,
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line,
+            location.range.end.column,
+        )
+    }
+
+    fn sort_dedup_locations(mut locations: Vec<Location>) -> Vec<Location> {
+        locations.sort_by(|left, right| Self::location_key(left).cmp(&Self::location_key(right)));
+        locations.dedup_by(|left, right| Self::location_key(left) == Self::location_key(right));
+        locations
+    }
+
+    fn resolve_symbol_identity(&self, definition: &Location) -> Option<SymbolIdentity> {
+        let files = self.files.read();
+        let file_index = files.values().find(|fi| fi.source_uri == definition.uri)?;
+        let definition_symbol =
+            file_index.symbols.iter().find(|symbol| symbol.range == definition.range)?;
+
+        let qualified_name = definition_symbol.qualified_name.clone();
+        let stable_key = qualified_name.clone().unwrap_or_else(|| definition_symbol.name.clone());
+        Some(SymbolIdentity {
+            stable_key,
+            bare_name: definition_symbol.name.clone(),
+            qualified_name,
+        })
+    }
+
+    fn collect_exact_references(
+        &self,
+        keys: &[String],
+        definition: &Location,
+        include_definition: bool,
+    ) -> Vec<Location> {
+        let global_refs = self.global_references.read();
+        let mut references: Vec<Location> = Vec::new();
+        for key in keys {
+            if let Some(locations) = global_refs.get(key) {
+                for location in locations {
+                    let candidate = Location { uri: location.uri.clone(), range: location.range };
+                    if !include_definition
+                        && Self::location_key(&candidate) == Self::location_key(definition)
+                    {
+                        continue;
+                    }
+                    references.push(candidate);
+                }
+            }
+        }
+
+        Self::sort_dedup_locations(references)
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -2022,6 +2102,37 @@ impl WorkspaceIndex {
         }
 
         None
+    }
+
+    /// Query definition + references for statically-resolved cross-file symbol lookups.
+    ///
+    /// This foundation API intentionally prefers exact symbol keys to avoid
+    /// false positives from ambiguous bare-name matching. It is designed for
+    /// workspace rename/safe-delete planning, where conservative accuracy is
+    /// preferred over speculative matches.
+    pub fn query_cross_file_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<CrossFileReferenceQuery> {
+        let definition = self.find_definition(symbol_name)?;
+        let symbol = self.resolve_symbol_identity(&definition).unwrap_or_else(|| {
+            let bare_name = symbol_name
+                .rsplit_once("::")
+                .map_or(symbol_name.to_string(), |(_, bare)| bare.to_string());
+            SymbolIdentity {
+                stable_key: symbol_name.to_string(),
+                bare_name,
+                qualified_name: symbol_name.contains("::").then(|| symbol_name.to_string()),
+            }
+        });
+
+        let mut lookup_keys = vec![symbol.stable_key.clone()];
+        if symbol_name != symbol.stable_key {
+            lookup_keys.push(symbol_name.to_string());
+        }
+
+        let references = self.collect_exact_references(&lookup_keys, &definition, false);
+        Some(CrossFileReferenceQuery { symbol, definition, references })
     }
 
     /// Get all symbols in the workspace

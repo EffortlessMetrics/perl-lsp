@@ -439,6 +439,21 @@ impl ProductionIndexCoordinator {
         result
     }
 
+    /// Query definition + references with a stable symbol identity.
+    pub fn query_cross_file_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<super::workspace_index::CrossFileReferenceQuery> {
+        let start = self.slo_tracker.start_operation(OperationType::FindReferences);
+        let result = self.index.query_cross_file_references(symbol_name);
+        self.slo_tracker.record_operation_type(
+            OperationType::FindReferences,
+            start,
+            OperationResult::Success,
+        );
+        result
+    }
+
     /// Invalidate the index.
     ///
     /// # Arguments
