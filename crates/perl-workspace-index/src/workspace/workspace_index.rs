@@ -82,6 +82,7 @@ pub use crate::workspace::monitoring::{
     IndexMetrics, IndexPerformanceCaps, IndexPhase, IndexPhaseTransition, IndexResourceLimits,
     IndexStateKind, IndexStateTransition, ResourceKind,
 };
+use perl_symbol::surface::decl::extract_symbol_decls;
 
 // Re-export URI utilities for backward compatibility
 #[cfg(not(target_arch = "wasm32"))]
@@ -1044,15 +1045,6 @@ fn default_has_body() -> bool {
 // Re-export the unified symbol types from perl-symbol
 /// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol::{SymbolKind, VarKind};
-
-/// Helper function to convert sigil to VarKind
-fn sigil_to_var_kind(sigil: &str) -> VarKind {
-    match sigil {
-        "@" => VarKind::Array,
-        "%" => VarKind::Hash,
-        _ => VarKind::Scalar, // Default to scalar for $ and unknown
-    }
-}
 
 #[derive(Debug, Clone)]
 /// Reference to a symbol for Navigate/Analyze workflows.
@@ -2903,7 +2895,44 @@ impl IndexVisitor {
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
+        self.project_symbol_declarations(node, file_index);
         self.visit_node(node, file_index);
+    }
+
+    fn project_symbol_declarations(&self, node: &Node, file_index: &mut FileIndex) {
+        for decl in extract_symbol_decls(node, self.current_package.as_deref()) {
+            let (start, end) = match decl.kind {
+                SymbolKind::Variable(_) => decl.anchor_span.unwrap_or(decl.full_span),
+                _ => decl.full_span,
+            };
+            let ((start_line, start_col), (end_line, end_col)) =
+                self.document.line_index.range(start, end);
+            let range = Range {
+                start: Position { byte: start, line: start_line, column: start_col },
+                end: Position { byte: end, line: end_line, column: end_col },
+            };
+
+            let symbol_name = symbol_decl_name(&decl.kind, &decl.name);
+            let qualified_name = (!decl.qualified_name.is_empty()).then_some(decl.qualified_name);
+
+            file_index.symbols.push(WorkspaceSymbol {
+                name: symbol_name.clone(),
+                kind: decl.kind,
+                uri: self.uri.clone(),
+                range,
+                qualified_name,
+                documentation: None,
+                container_name: decl.container,
+                has_body: true,
+                workspace_folder_uri: self.workspace_folder_uri.clone(),
+            });
+
+            file_index.references.entry(symbol_name).or_default().push(SymbolReference {
+                uri: self.uri.clone(),
+                range,
+                kind: ReferenceKind::Definition,
+            });
+        }
     }
 
     fn record_interpolated_variable_references(
@@ -2973,124 +3002,21 @@ impl IndexVisitor {
 
                 // Update the current package (replaces the previous one, not a stack)
                 self.current_package = Some(package_name.clone());
-
-                file_index.symbols.push(WorkspaceSymbol {
-                    name: package_name.clone(),
-                    kind: SymbolKind::Package,
-                    uri: self.uri.clone(),
-                    range: self.node_to_range(node),
-                    qualified_name: Some(package_name),
-                    documentation: None,
-                    container_name: None,
-                    has_body: true,
-                    workspace_folder_uri: self.workspace_folder_uri.clone(),
-                });
             }
 
-            NodeKind::Subroutine { name, body, .. } => {
-                if let Some(name_str) = name.clone() {
-                    let qualified_name = if let Some(ref pkg) = self.current_package {
-                        format!("{}::{}", pkg, name_str)
-                    } else {
-                        name_str.clone()
-                    };
-
-                    // Check if this is a forward declaration or update to existing symbol
-                    let existing_symbol_idx = file_index.symbols.iter().position(|s| {
-                        s.name == name_str && s.container_name == self.current_package
-                    });
-
-                    if let Some(idx) = existing_symbol_idx {
-                        // Update existing forward declaration with body
-                        file_index.symbols[idx].range = self.node_to_range(node);
-                    } else {
-                        // New symbol
-                        file_index.symbols.push(WorkspaceSymbol {
-                            name: name_str.clone(),
-                            kind: SymbolKind::Subroutine,
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(node),
-                            qualified_name: Some(qualified_name),
-                            documentation: None,
-                            container_name: self.current_package.clone(),
-                            has_body: true, // Subroutine node always has body
-                            workspace_folder_uri: self.workspace_folder_uri.clone(),
-                        });
-                    }
-
-                    // Mark as definition
-                    file_index.references.entry(name_str.clone()).or_default().push(
-                        SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(node),
-                            kind: ReferenceKind::Definition,
-                        },
-                    );
-                }
-
+            NodeKind::Subroutine { body, .. } => {
                 // Visit body
                 self.visit_node(body, file_index);
             }
 
-            NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                if let NodeKind::Variable { sigil, name } = &variable.kind {
-                    let var_name = format!("{}{}", sigil, name);
-
-                    file_index.symbols.push(WorkspaceSymbol {
-                        name: var_name.clone(),
-                        kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(variable),
-                        qualified_name: None,
-                        documentation: None,
-                        container_name: self.current_package.clone(),
-                        has_body: true, // Variables always have body
-                        workspace_folder_uri: self.workspace_folder_uri.clone(),
-                    });
-
-                    // Mark as definition
-                    file_index.references.entry(var_name.clone()).or_default().push(
-                        SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(variable),
-                            kind: ReferenceKind::Definition,
-                        },
-                    );
-                }
-
+            NodeKind::VariableDeclaration { initializer, .. } => {
                 // Visit initializer
                 if let Some(init) = initializer {
                     self.visit_node(init, file_index);
                 }
             }
 
-            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
-                // Handle each variable in the list declaration
-                for var in variables {
-                    if let NodeKind::Variable { sigil, name } = &var.kind {
-                        let var_name = format!("{}{}", sigil, name);
-
-                        file_index.symbols.push(WorkspaceSymbol {
-                            name: var_name.clone(),
-                            kind: SymbolKind::Variable(sigil_to_var_kind(sigil)),
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(var),
-                            qualified_name: None,
-                            documentation: None,
-                            container_name: self.current_package.clone(),
-                            has_body: true,
-                            workspace_folder_uri: self.workspace_folder_uri.clone(),
-                        });
-
-                        // Mark as definition
-                        file_index.references.entry(var_name).or_default().push(SymbolReference {
-                            uri: self.uri.clone(),
-                            range: self.node_to_range(var),
-                            kind: ReferenceKind::Definition,
-                        });
-                    }
-                }
-
+            NodeKind::VariableListDeclaration { initializer, .. } => {
                 // Visit the initializer
                 if let Some(init) = initializer {
                     self.visit_node(init, file_index);
@@ -3167,35 +3093,6 @@ impl IndexVisitor {
                 if module == "parent" || module == "base" {
                     for name in extract_module_names_from_use_args(args) {
                         file_index.dependencies.insert(normalize_dependency_module_name(&name));
-                    }
-                }
-
-                // Index `use constant` declarations as subroutine-like symbols so that
-                // fully-qualified constant references (e.g. `My::Config::PI`) resolve
-                // via the workspace index just like subroutines.
-                if module == "constant" {
-                    let pkg = self.current_package.as_deref().unwrap_or("main").to_string();
-                    let const_node_range = self.node_to_range(node);
-                    for const_name in extract_constant_names_from_use_args(args) {
-                        let qualified_name = format!("{pkg}::{const_name}");
-                        file_index.symbols.push(WorkspaceSymbol {
-                            name: const_name.clone(),
-                            kind: SymbolKind::Subroutine,
-                            uri: self.uri.clone(),
-                            range: const_node_range,
-                            qualified_name: Some(qualified_name),
-                            documentation: None,
-                            container_name: Some(pkg.clone()),
-                            has_body: true,
-                            workspace_folder_uri: self.workspace_folder_uri.clone(),
-                        });
-                        file_index.references.entry(const_name).or_default().push(
-                            SymbolReference {
-                                uri: self.uri.clone(),
-                                range: self.node_to_range(node),
-                                kind: ReferenceKind::Definition,
-                            },
-                        );
                     }
                 }
 
@@ -3347,42 +3244,10 @@ impl IndexVisitor {
             }
 
             NodeKind::Class { name, .. } => {
-                let class_name = name.clone();
-                self.current_package = Some(class_name.clone());
-
-                file_index.symbols.push(WorkspaceSymbol {
-                    name: class_name.clone(),
-                    kind: SymbolKind::Class,
-                    uri: self.uri.clone(),
-                    range: self.node_to_range(node),
-                    qualified_name: Some(class_name),
-                    documentation: None,
-                    container_name: None,
-                    has_body: true,
-                    workspace_folder_uri: self.workspace_folder_uri.clone(),
-                });
+                self.current_package = Some(name.clone());
             }
 
-            NodeKind::Method { name, body, signature, .. } => {
-                let method_name = name.clone();
-                let qualified_name = if let Some(ref pkg) = self.current_package {
-                    format!("{}::{}", pkg, method_name)
-                } else {
-                    method_name.clone()
-                };
-
-                file_index.symbols.push(WorkspaceSymbol {
-                    name: method_name.clone(),
-                    kind: SymbolKind::Method,
-                    uri: self.uri.clone(),
-                    range: self.node_to_range(node),
-                    qualified_name: Some(qualified_name),
-                    documentation: None,
-                    container_name: self.current_package.clone(),
-                    has_body: true,
-                    workspace_folder_uri: self.workspace_folder_uri.clone(),
-                });
-
+            NodeKind::Method { body, signature, .. } => {
                 // Visit params
                 if let Some(sig) = signature {
                     if let NodeKind::Signature { parameters } = &sig.kind {
@@ -3528,6 +3393,15 @@ impl IndexVisitor {
             start: Position { byte: node.location.start, line: start_line, column: start_col },
             end: Position { byte: node.location.end, line: end_line, column: end_col },
         }
+    }
+}
+
+fn symbol_decl_name(kind: &SymbolKind, name: &str) -> String {
+    match kind {
+        SymbolKind::Variable(VarKind::Scalar) => format!("${name}"),
+        SymbolKind::Variable(VarKind::Array) => format!("@{name}"),
+        SymbolKind::Variable(VarKind::Hash) => format!("%{name}"),
+        _ => name.to_string(),
     }
 }
 
@@ -3786,6 +3660,7 @@ fn extract_manual_import_symbols(args: &[Node]) -> Vec<String> {
 ///   → Words inside the qw list are constant names.
 ///
 /// Returns a deduplicated list of bare constant names (e.g. `["FOO", "BAR"]`).
+#[cfg(test)]
 fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
     use std::collections::HashSet;
 
@@ -3982,7 +3857,7 @@ mod tests {
     use perl_tdd_support::{must, must_some};
 
     #[test]
-    fn test_use_constant_indexed_as_subroutine() {
+    fn test_use_constant_indexed_as_constant_symbol() {
         let index = WorkspaceIndex::new();
         let uri = "file:///lib/My/Config.pm";
         let code = r#"package My::Config;
@@ -3997,16 +3872,16 @@ use constant {
 
         let symbols = index.file_symbols(uri);
         assert!(
-            symbols.iter().any(|s| s.name == "PI" && s.kind == SymbolKind::Subroutine),
-            "PI should be indexed as a Subroutine symbol; got: {:?}",
+            symbols.iter().any(|s| s.name == "PI" && s.kind == SymbolKind::Constant),
+            "PI should be indexed as a Constant symbol; got: {:?}",
             symbols.iter().map(|s| (&s.name, &s.kind)).collect::<Vec<_>>()
         );
         assert!(
-            symbols.iter().any(|s| s.name == "MAX_RETRIES" && s.kind == SymbolKind::Subroutine),
+            symbols.iter().any(|s| s.name == "MAX_RETRIES" && s.kind == SymbolKind::Constant),
             "MAX_RETRIES should be indexed"
         );
         assert!(
-            symbols.iter().any(|s| s.name == "TIMEOUT" && s.kind == SymbolKind::Subroutine),
+            symbols.iter().any(|s| s.name == "TIMEOUT" && s.kind == SymbolKind::Constant),
             "TIMEOUT should be indexed"
         );
 
@@ -5761,8 +5636,8 @@ sub other_sub {
     // ========================================================================
 
     #[test]
-    fn test_require_with_variable_target_is_not_indexed()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_with_variable_target_is_not_indexed() -> Result<(), Box<dyn std::error::Error>>
+    {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/require-var.pl"));
         let src = r#"package Test;
@@ -5780,8 +5655,7 @@ require $loader;
     }
 
     #[test]
-    fn test_multiple_import_calls_on_same_module()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_multiple_import_calls_on_same_module() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/multi-import.pl"));
         let src = r#"package Test;
@@ -5801,8 +5675,7 @@ Toolkit->import(qw(func_b func_c));
     }
 
     #[test]
-    fn test_require_string_vs_bareword_normalization()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_string_vs_bareword_normalization() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/require-string.pl"));
         let src = r#"package Consumer;
@@ -5846,8 +5719,7 @@ orphaned();
     }
 
     #[test]
-    fn test_nested_blocks_preserve_require_scope()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_nested_blocks_preserve_require_scope() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/nested.pl"));
         let src = r#"package Test;
@@ -5871,8 +5743,7 @@ orphaned();
     }
 
     #[test]
-    fn test_require_path_without_pm_extension()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_path_without_pm_extension() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/no-ext.pl"));
         let src = r#"package Test;
@@ -5890,8 +5761,7 @@ My::Module->import('func');
     }
 
     #[test]
-    fn test_qw_with_bracket_delimiters()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_qw_with_bracket_delimiters() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/qw-delim.pl"));
         let src = r#"package Test;
@@ -5905,15 +5775,15 @@ DelimModule->import(qw{sym3 sym4});
             let refs = index.find_references(symbol);
             assert!(
                 !refs.is_empty(),
-                "symbols from qw with bracket delimiters should be indexed: {}", symbol
+                "symbols from qw with bracket delimiters should be indexed: {}",
+                symbol
             );
         }
         Ok(())
     }
 
     #[test]
-    fn test_array_literal_import_args()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_array_literal_import_args() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/array-import.pl"));
         let src = r#"package Test;
@@ -5926,7 +5796,8 @@ ArrayModule->import(['sym_x', 'sym_y']);
             let refs = index.find_references(symbol);
             assert!(
                 !refs.is_empty(),
-                "symbols from array literal import should be indexed: {}", symbol
+                "symbols from array literal import should be indexed: {}",
+                symbol
             );
         }
         Ok(())
@@ -5956,8 +5827,7 @@ if (1) {
     }
 
     #[test]
-    fn test_mixed_string_and_bareword_imports()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_mixed_string_and_bareword_imports() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/mixed-import.pl"));
         let src = r#"package Test;
@@ -5971,10 +5841,7 @@ MixedMod->import(qw(qw_one qw_two));
         assert!(deps.contains("MixedMod"), "require should register dependency");
         for symbol in &["string_sym", "qw_one", "qw_two"] {
             let refs = index.find_references(symbol);
-            assert!(
-                !refs.is_empty(),
-                "all import forms should index symbols: {}", symbol
-            );
+            assert!(!refs.is_empty(), "all import forms should index symbols: {}", symbol);
         }
         Ok(())
     }
