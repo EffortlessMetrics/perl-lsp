@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-24T05:47:12.587449060+00:00",
+  "subsystem": "editor_ux",
+  "commit": "3d21531",
+  "floor_metrics": {
+    "completion_top1_pct": 66.66666666666666,
+    "completion_top5_pct": 100.0,
+    "cross_file_success_pct": 83.33333333333334,
+    "definition_exact_hit_pct": 83.33333333333334,
+    "hover_correctness_pct": 83.33333333333334,
+    "latency_completion_p50_ms": 24.0,
+    "latency_completion_p95_ms": 34.0,
+    "latency_definition_p50_ms": 28.0,
+    "latency_definition_p95_ms": 41.0,
+    "latency_document_symbols_p50_ms": 18.0,
+    "latency_document_symbols_p95_ms": 27.0,
+    "latency_hover_p50_ms": 14.0,
+    "latency_hover_p95_ms": 20.0,
+    "latency_workspace_symbols_p50_ms": 33.0,
+    "latency_workspace_symbols_p95_ms": 46.0,
+    "symbol_correctness_pct": 83.33333333333334
+  },
+  "improvement_metrics": {},
+  "tolerance_pct": 0.0,
+  "lower_is_better": [
+    "latency_completion_p50_ms",
+    "latency_completion_p95_ms",
+    "latency_definition_p50_ms",
+    "latency_definition_p95_ms",
+    "latency_document_symbols_p50_ms",
+    "latency_document_symbols_p95_ms",
+    "latency_hover_p50_ms",
+    "latency_hover_p95_ms",
+    "latency_workspace_symbols_p50_ms",
+    "latency_workspace_symbols_p95_ms"
+  ]
+}

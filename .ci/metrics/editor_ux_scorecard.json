@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-24T05:59:26.035884926+00:00",
+  "subsystem": "editor_ux",
+  "fixture_source": "/workspace/perl-lsp/crates/perl-lsp-ux-tests/fixtures/editor_ux_scorecard_fixture.json",
+  "scenario_count": 6,
+  "scenario_ids": [
+    "simple_file_smoke",
+    "multi_file_workspace",
+    "goto_definition",
+    "hover_regression_guard",
+    "symbol_navigation",
+    "cross_file_edge_case"
+  ],
+  "metrics": {
+    "hover_correctness_pct": 83.33333333333334,
+    "completion_top1_pct": 66.66666666666666,
+    "completion_top5_pct": 100.0,
+    "definition_exact_hit_pct": 83.33333333333334,
+    "symbol_correctness_pct": 83.33333333333334,
+    "cross_file_success_pct": 83.33333333333334,
+    "latency_ms_by_request": {
+      "completion": {
+        "p50_ms": 24,
+        "p95_ms": 34,
+        "samples": 30
+      },
+      "definition": {
+        "p50_ms": 28,
+        "p95_ms": 41,
+        "samples": 30
+      },
+      "document_symbols": {
+        "p50_ms": 18,
+        "p95_ms": 27,
+        "samples": 10
+      },
+      "hover": {
+        "p50_ms": 14,
+        "p95_ms": 20,
+        "samples": 30
+      },
+      "workspace_symbols": {
+        "p50_ms": 33,
+        "p95_ms": 46,
+        "samples": 20
+      }
+    }
+  }
+}

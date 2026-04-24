@@ -957,6 +957,13 @@ enum Commands {
     /// Check that test-bearing Rust files are reachable from their module tree.
     CheckTestWiring,
 
+    /// Publish editor UX scorecard metrics from canonical harness fixtures.
+    UxScorecard {
+        /// Output format.
+        #[arg(long, value_enum, default_value_t = tasks::ux_scorecard::OutputFormat::Table)]
+        format: tasks::ux_scorecard::OutputFormat,
+    },
+
     /// Emit per-subsystem engineering-health metrics.
     Metrics {
         #[command(subcommand)]
@@ -1578,6 +1585,7 @@ fn main() -> Result<()> {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
         Commands::CheckTestWiring => check_test_wiring::run(),
+        Commands::UxScorecard { format } => tasks::ux_scorecard::run(format),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
             MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),

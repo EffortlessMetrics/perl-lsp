@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "subsystem": "editor_ux",
+  "source": "canonical_harness_fixtures",
+  "scenarios": [
+    {
+      "id": "simple_file_smoke",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_ms_by_request": {
+        "hover": [10, 12, 13, 15, 17],
+        "completion": [18, 20, 22, 24, 26],
+        "definition": [21, 25, 27, 30, 33],
+        "document_symbols": [14, 16, 17, 19, 21]
+      }
+    },
+    {
+      "id": "multi_file_workspace",
+      "hover_correct": true,
+      "completion_top1_correct": false,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_ms_by_request": {
+        "hover": [11, 13, 14, 16, 19],
+        "completion": [21, 23, 24, 28, 31],
+        "definition": [24, 27, 29, 34, 36],
+        "workspace_symbols": [28, 30, 34, 37, 41]
+      }
+    },
+    {
+      "id": "goto_definition",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_ms_by_request": {
+        "hover": [9, 11, 12, 14, 16],
+        "completion": [17, 19, 21, 23, 27],
+        "definition": [19, 22, 26, 28, 31],
+        "workspace_symbols": [24, 27, 29, 33, 39]
+      }
+    },
+    {
+      "id": "hover_regression_guard",
+      "hover_correct": false,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_ms_by_request": {
+        "hover": [12, 14, 15, 19, 20],
+        "completion": [19, 22, 24, 27, 33],
+        "definition": [22, 24, 27, 31, 38],
+        "document_symbols": [17, 18, 21, 23, 27]
+      }
+    },
+    {
+      "id": "symbol_navigation",
+      "hover_correct": true,
+      "completion_top1_correct": false,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": false,
+      "cross_file_success": true,
+      "latency_ms_by_request": {
+        "hover": [10, 13, 14, 17, 18],
+        "completion": [20, 22, 25, 29, 34],
+        "definition": [23, 26, 29, 32, 40],
+        "workspace_symbols": [26, 29, 32, 36, 45]
+      }
+    },
+    {
+      "id": "cross_file_edge_case",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": false,
+      "symbol_correct": true,
+      "cross_file_success": false,
+      "latency_ms_by_request": {
+        "hover": [13, 14, 16, 18, 22],
+        "completion": [21, 24, 26, 31, 36],
+        "definition": [26, 29, 35, 41, 52],
+        "workspace_symbols": [31, 35, 41, 46, 57]
+      }
+    }
+  ]
+}
