@@ -16,6 +16,7 @@ pub use perl_lsp_rs_core::platform::{
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
 
 #[cfg(windows)]
 const PATH_SEPARATOR: char = ';';
@@ -43,6 +44,23 @@ pub enum PerlInterpreterResult {
     /// No Perl interpreter found anywhere.
     /// Carries the list of locations searched, for use in an error message.
     NotFound { searched: Vec<String> },
+}
+
+static PERL_INTERPRETER_CACHE: LazyLock<Mutex<Option<(String, PerlInterpreterResult)>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn perl_discovery_cache_key(configured_path: Option<&str>) -> String {
+    let path_env = env::var("PATH").unwrap_or_default();
+    let perlbrew_perl = env::var("PERLBREW_PERL").unwrap_or_default();
+    let perlbrew_root = env::var("PERLBREW_ROOT").unwrap_or_default();
+    let plenv_root = env::var("PLENV_ROOT").unwrap_or_default();
+    let plenv_version = env::var("PLENV_VERSION").unwrap_or_default();
+    let home = env::var("HOME").unwrap_or_default();
+
+    format!(
+        "cfg={};path={path_env};perlbrew_perl={perlbrew_perl};perlbrew_root={perlbrew_root};plenv_root={plenv_root};plenv_version={plenv_version};home={home}",
+        configured_path.unwrap_or_default()
+    )
 }
 
 /// Rank a Perl binary path for preference on Windows.
@@ -187,6 +205,28 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     }
 
     PerlInterpreterResult::NotFound { searched }
+}
+
+/// Cached variant of [`find_perl_interpreter`].
+///
+/// This avoids repeated PATH/toolchain scans during repeated launch failures in
+/// the same environment while still invalidating when key discovery inputs
+/// (PATH/toolchain environment/configured path) change.
+pub fn find_perl_interpreter_cached(configured_path: Option<&str>) -> PerlInterpreterResult {
+    let cache_key = perl_discovery_cache_key(configured_path);
+
+    if let Ok(cache) = PERL_INTERPRETER_CACHE.lock()
+        && let Some((cached_key, cached_result)) = cache.as_ref()
+        && *cached_key == cache_key
+    {
+        return cached_result.clone();
+    }
+
+    let resolved = find_perl_interpreter(configured_path);
+    if let Ok(mut cache) = PERL_INTERPRETER_CACHE.lock() {
+        *cache = Some((cache_key, resolved.clone()));
+    }
+    resolved
 }
 
 #[cfg(test)]

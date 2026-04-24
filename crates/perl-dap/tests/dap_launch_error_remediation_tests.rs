@@ -77,6 +77,37 @@ fn launch_error_includes_perl_detection_info() {
     }
 }
 
+/// Repeated launch failures should preserve the same actionable remediation text.
+#[test]
+fn repeated_launch_failures_keep_actionable_guidance() {
+    let mut adapter = DebugAdapter::new();
+    let arguments = Some(json!({
+        "program": "/nonexistent/path/to/script.pl"
+    }));
+
+    let first = adapter.handle_request(1, "launch", arguments.clone());
+    let second = adapter.handle_request(2, "launch", arguments);
+
+    match (first, second) {
+        (
+            DapMessage::Response { success: false, message: Some(first_msg), .. },
+            DapMessage::Response { success: false, message: Some(second_msg), .. },
+        ) => {
+            assert!(
+                first_msg.contains("perl-lsp.perl.path"),
+                "first error should include config guidance, got: {first_msg}"
+            );
+            assert!(
+                second_msg.contains("perl-lsp.perl.path"),
+                "second error should include config guidance, got: {second_msg}"
+            );
+        }
+        other => {
+            panic!("expected two launch error responses, got: {other:?}");
+        }
+    }
+}
+
 /// On Windows with no Perl available, the launch error should link to strawberryperl.com.
 ///
 /// This test only asserts when Perl is actually absent — if Perl is found on the system
