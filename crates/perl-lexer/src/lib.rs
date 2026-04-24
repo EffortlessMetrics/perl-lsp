@@ -1595,6 +1595,11 @@ impl<'a> PerlLexer<'a> {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
+                        // A standalone sigil token before `{` starts a dereference
+                        // sequence (e.g. `${$ref}` / `@{$aref}` / `%{$href}`).
+                        // Mark it as subscript-capable so `{` increments brace depth
+                        // and the closing `}` can enable chained `{...}` subscripts.
+                        self.after_var_subscript = true;
 
                         return Some(Token {
                             token_type: TokenType::Identifier(Arc::from(text)),
@@ -1671,6 +1676,8 @@ impl<'a> PerlLexer<'a> {
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
+                            // Same as above: sigil-only token means a dereference opener.
+                            self.after_var_subscript = true;
 
                             return Some(Token {
                                 token_type: TokenType::Identifier(Arc::from(text)),
