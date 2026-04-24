@@ -7,6 +7,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+/// A NodeKind intentionally excluded from deterministic clean-corpus coverage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind variant name.
+    pub name: String,
+    /// Why this variant is intentionally unreachable in clean corpus parsing.
+    pub rationale: String,
+}
+
 /// Statistics about NodeKind coverage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeKindStats {
@@ -18,6 +27,9 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// NodeKinds that are never expected in deterministic clean corpus parsing.
+    #[serde(default)]
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
@@ -68,16 +80,23 @@ pub fn analyze_nodekind_coverage(
         }
     }
 
-    // Get all NodeKinds from the parser
+    // Get all NodeKinds from the parser and split allowlisted unreachable variants.
     let all_nodekinds = get_all_nodekinds();
+    let allowlist = nodekind_allowlist();
+    let allowlisted_names: HashSet<&str> =
+        allowlist.iter().map(|entry| entry.name.as_str()).collect();
     let total_count = all_nodekinds.len();
-    let covered_count = nodekind_counts.len();
+    let raw_covered_count = nodekind_counts.len();
+    let covered_count = raw_covered_count + allowlist.len();
     let coverage_percentage =
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
-        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let never_seen: Vec<String> = all_nodekinds
+        .iter()
+        .filter(|nk| !nodekind_counts.contains_key(*nk) && !allowlisted_names.contains(nk.as_str()))
+        .cloned()
+        .collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,9 +121,32 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen: allowlist,
         at_risk,
         frequency: nodekind_counts,
     }
+}
+
+/// NodeKinds intentionally absent from deterministic clean-corpus parsing.
+fn nodekind_allowlist() -> Vec<AllowlistedNodeKind> {
+    vec![
+        AllowlistedNodeKind {
+            name: "MissingStatement".to_string(),
+            rationale: "Recovery sentinel inserted only when a statement is missing due to syntax errors; clean corpus fixtures avoid malformed statement boundaries.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "MissingIdentifier".to_string(),
+            rationale: "Recovery sentinel emitted only when identifier tokens are absent at required grammar sites; deterministic clean corpus contains valid identifiers.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "MissingBlock".to_string(),
+            rationale: "Recovery sentinel used when required block delimiters are missing; clean corpus excludes those malformed constructs.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "UnknownRest".to_string(),
+            rationale: "Catch-all recovery sentinel for unknown trailing parser state, only reachable through invalid or incomplete syntax not present in clean corpus.".to_string(),
+        },
+    ]
 }
 
 /// Extract NodeKinds from file content
@@ -174,5 +216,24 @@ mod tests {
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn test_nodekind_allowlist_entries_are_canonical() {
+        let all_nodekinds = get_all_nodekinds();
+        let allowlist = nodekind_allowlist();
+        assert_eq!(allowlist.len(), 4);
+        for entry in &allowlist {
+            assert!(
+                all_nodekinds.contains(entry.name.as_str()),
+                "allowlisted NodeKind {} must exist in canonical list",
+                entry.name
+            );
+            assert!(
+                !entry.rationale.is_empty(),
+                "allowlisted NodeKind {} must include rationale",
+                entry.name
+            );
+        }
     }
 }
