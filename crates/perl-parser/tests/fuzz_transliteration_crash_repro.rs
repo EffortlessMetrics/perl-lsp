@@ -28,11 +28,25 @@ fn fuzz_transliteration_regression_suite() {
 
 #[test]
 fn malformed_transliteration_never_panics() {
-    let malformed_inputs =
-        ["tr", "trabc", "tr/unterminated", "tr{abc}{xyz", "tr{abc}xyz}", "y\\abc\\xyz\\"];
+    // Each entry: (input, expected_search, expected_replace, expected_modifiers)
+    // Backslash is an invalid delimiter, so the y\\ inputs return all-empty.
+    let cases: &[(&str, &str, &str, &str)] = &[
+        ("tr", "", "", ""),
+        ("trabc", "", "", ""),          // alphanumeric delimiter rejected
+        ("tr/unterminated", "unterminated", "", ""),  // missing replacement closure
+        ("tr{abc}{xyz", "abc", "xyz", ""),  // unclosed replacement
+        ("tr{abc}xyz}", "abc", "", ""),     // replacement doesn't start with paired open
+        ("y\\abc\\xyz\\", "", "", ""),      // backslash is invalid delimiter
+    ];
 
-    for input in malformed_inputs {
+    for (input, exp_search, exp_replace, exp_mods) in cases {
         let result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
         assert!(result.is_ok(), "extract_transliteration_parts panicked for {input}");
+        let (search, replace, mods) = result.unwrap();
+        assert_eq!(
+            (search.as_str(), replace.as_str(), mods.as_str()),
+            (*exp_search, *exp_replace, *exp_mods),
+            "value mismatch for malformed input {input}"
+        );
     }
 }
