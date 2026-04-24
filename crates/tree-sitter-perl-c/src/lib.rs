@@ -128,6 +128,23 @@ pub fn create_parser() -> Parser {
 /// if tree-sitter returns `None` from `parse` (cancelled or timed out).
 pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     let mut parser = try_create_parser()?;
+    parse_perl_bytes_with_parser(&mut parser, code)
+}
+
+/// Parses Perl source bytes using an existing configured [`Parser`].
+///
+/// This is useful for performance-sensitive paths that parse repeatedly and
+/// want to reuse one parser instance instead of constructing a new parser per
+/// parse.
+///
+/// # Errors
+///
+/// Returns an error if tree-sitter returns `None` from `parse` (cancelled or
+/// timed out).
+pub fn parse_perl_bytes_with_parser(
+    parser: &mut Parser,
+    code: &[u8],
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
         None => Err("Failed to parse code".into()),
@@ -150,7 +167,24 @@ pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::e
 /// assert!(!tree.root_node().has_error());
 /// ```
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    parse_perl_bytes(code.as_bytes())
+    let mut parser = try_create_parser()?;
+    parse_perl_code_with_parser(&mut parser, code)
+}
+
+/// Parses a Perl source string using an existing configured [`Parser`].
+///
+/// This is the string convenience variant of [`parse_perl_bytes_with_parser`]
+/// and allows callers to reuse one parser instance across many snippets.
+///
+/// # Errors
+///
+/// Returns an error if tree-sitter returns `None` from `parse` (cancelled or
+/// timed out).
+pub fn parse_perl_code_with_parser(
+    parser: &mut Parser,
+    code: &str,
+) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
+    parse_perl_bytes_with_parser(parser, code.as_bytes())
 }
 
 /// Reads a file from `path` and parses it as Perl source.
@@ -281,6 +315,23 @@ mod tests {
     fn test_parse_bytes_empty_source() -> Result<(), Box<dyn std::error::Error>> {
         let tree = parse_perl_bytes(b"")?;
         assert_eq!(tree.root_node().kind(), "source_file");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_reuse_parser_across_multiple_snippets() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut parser = try_create_parser()?;
+
+        let first = parse_perl_code_with_parser(&mut parser, "my $x = 1;")?;
+        assert!(!first.root_node().has_error());
+
+        let second = parse_perl_bytes_with_parser(&mut parser, b"print $x;")?;
+        assert!(!second.root_node().has_error());
+
+        let third = parse_perl_code_with_parser(&mut parser, "my $y = $x + 2;")?;
+        assert!(!third.root_node().has_error());
+
         Ok(())
     }
 }
