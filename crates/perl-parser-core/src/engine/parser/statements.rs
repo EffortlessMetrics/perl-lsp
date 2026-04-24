@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
                     // Collect peek_kind before mutable borrow in recover_from_error
                     let peek_display = self.peek_kind()
                         .map(|k| k.display_name())
-                        .unwrap_or("end of input");
+                        .unwrap_or(TokenKind::Eof.display_name());
                     let error_node = self.recover_from_error(
                         error_msg,
                         "statement".to_string(),
@@ -1006,7 +1006,7 @@ impl<'a> Parser<'a> {
                         // Collect peek_kind before mutable borrow in recover_from_error
                         let peek_display = s.peek_kind()
                             .map(|k| k.display_name())
-                            .unwrap_or("end of input");
+                            .unwrap_or(TokenKind::Eof.display_name());
                         let error_node = s.recover_from_error(
                             error_msg,
                             "statement".to_string(),

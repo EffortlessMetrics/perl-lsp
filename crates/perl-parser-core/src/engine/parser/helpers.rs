@@ -716,7 +716,7 @@ impl<'a> Parser<'a> {
         let pos = self.current_position();
         Err(ParseError::unexpected(
             kind.display_name(),
-            self.peek_kind().map(|k| k.display_name()).unwrap_or("end of input"),
+            self.peek_kind().map(|k| k.display_name()).unwrap_or(TokenKind::Eof.display_name()),
             pos,
         ))
     }

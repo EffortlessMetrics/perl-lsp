@@ -46,7 +46,7 @@ impl<'a> Parser<'a> {
                     found: self
                         .peek_kind()
                         .map(|kind| kind.display_name().to_string())
-                        .unwrap_or_else(|| "EOF".to_string()),
+                        .unwrap_or_else(|| TokenKind::Eof.display_name().to_string()),
                     location: self.current_position(),
                 });
             }
