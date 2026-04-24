@@ -147,6 +147,12 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
         start -= 1;
     }
 
+    // When the cursor is directly on a sigil character, step `end` past it so
+    // the following identifier walk can collect the name (`$foo` → `$foo`, not empty).
+    if end < bytes.len() && matches!(bytes[end], b'$' | b'@' | b'%' | b'&' | b'*') {
+        end += 1;
+    }
+
     while end < bytes.len() && is_modchar(bytes[end]) {
         end += 1;
     }
@@ -192,6 +198,13 @@ mod tests {
     fn token_under_cursor_supports_cursor_after_symbol() {
         let text = "use Demo::Worker\n";
         assert_eq!(token_under_cursor(text, 0, 16), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_on_sigil() {
+        // Cursor directly ON the `$` sigil (col 3) must still extract `$value`.
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 0, 3), Some("$value".to_string()));
     }
 
     #[test]
