@@ -1,7 +1,9 @@
 //! High-performance incremental document parsing with subtree reuse
 //!
-//! This module provides true incremental parsing that achieves <1ms updates
-//! by reusing unchanged subtrees and only reparsing affected regions.
+//! This module provides incremental parsing with subtree reuse.  Single-edit
+//! fast-path updates target <1ms; batch edits (`apply_edits`) always perform
+//! a fresh parse for correctness validation, so batch latency scales with
+//! document size rather than edit size.
 
 use super::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_parser_core::{

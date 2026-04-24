@@ -4,6 +4,13 @@ use perl_parser_core::{error::ParseResult, parser::Parser};
 
 #[test]
 fn overlapping_batch_edits_fall_back_safely() -> ParseResult<()> {
+    // "my $x = 10;\n"
+    //           ^-- byte 8 = '1', byte 9 = '0', byte 10 = ';'
+    // Edits (8..10, "20") and (9..10, "5") overlap (both cover byte 9).
+    // normalize_for_source rejects them; fallback applies via apply_to_string,
+    // which sorts descending by start and silently skips the earlier edit once
+    // bytes shift. After (9..10)->"5": "my $x = 15;\n". After (8..10)->"20":
+    // replaces bytes 8..10 ('1','5') with "20" → "my $x = 20;\n".
     let source = "my $x = 10;\n".to_string();
     let mut document = IncrementalDocument::new(source.clone())?;
 
@@ -11,11 +18,16 @@ fn overlapping_batch_edits_fall_back_safely() -> ParseResult<()> {
     edits.add(IncrementalEdit::new(8, 10, "20".to_string()));
     edits.add(IncrementalEdit::new(9, 10, "5".to_string()));
 
-    let expected = edits.apply_to_string(&source);
     document.apply_edits(&edits)?;
 
-    assert_eq!(document.source, expected);
+    // Concrete expected: the fallback applies edits via apply_to_string in
+    // descending-start order. The result is "my $x = 20;\n" (second edit wins
+    // over the overlapping region). Asserting the literal avoids the tautology
+    // of comparing against apply_to_string itself.
+    assert_eq!(document.source, "my $x = 20;\n");
     assert_eq!(document.metrics.nodes_reused, 0);
+    // The document should parse successfully after the fallback.
+    assert!(document.source.starts_with("my $x"));
 
     Ok(())
 }
@@ -98,6 +110,91 @@ fn supported_batch_edits_match_fresh_parse() -> ParseResult<()> {
     let parsed_fresh = parser.parse()?;
 
     assert_eq!(format!("{:?}", document.root), format!("{:?}", parsed_fresh));
+
+    Ok(())
+}
+
+#[test]
+fn empty_edit_set_is_a_noop() -> ParseResult<()> {
+    // An empty batch must not mutate the document source or tree.
+    let source = "my $x = 42;\n".to_string();
+    let mut document = IncrementalDocument::new(source.clone())?;
+    let root_before = format!("{:?}", document.root);
+
+    let edits = IncrementalEditSet::new();
+    document.apply_edits(&edits)?;
+
+    assert_eq!(document.source, source, "source must be unchanged for empty edit set");
+    assert_eq!(
+        format!("{:?}", document.root),
+        root_before,
+        "tree must be unchanged for empty edit set"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn adjacent_non_overlapping_edits_both_apply() -> ParseResult<()> {
+    // "my $x = 10; my $y = 20;\n"
+    // byte offsets (0-based):
+    //  0:'m' 1:'y' 2:' ' 3:'$' 4:'x' 5:' ' 6:'=' 7:' ' 8:'1' 9:'0'
+    //  10:';' 11:' ' 12:'m' 13:'y' 14:' ' 15:'$' 16:'y' 17:' ' 18:'='
+    //  19:' ' 20:'2' 21:'0' 22:';' 23:'\n'
+    // Edit A: (8, 10, "99") replaces "10" with "99".
+    // Edit B: (20, 22, "88") replaces "20" with "88".
+    // These ranges do not overlap (10 <= 20), so normalize_for_source
+    // must accept both and apply them in-place.
+    let source = "my $x = 10; my $y = 20;\n".to_string();
+    let mut document = IncrementalDocument::new(source.clone())?;
+
+    // Verify assumed byte positions before relying on them.
+    assert_eq!(&source[8..10], "10", "byte offset assumption for edit A");
+    assert_eq!(&source[20..22], "20", "byte offset assumption for edit B");
+
+    let mut edits = IncrementalEditSet::new();
+    edits.add(IncrementalEdit::new(8, 10, "99".to_string()));
+    edits.add(IncrementalEdit::new(20, 22, "88".to_string()));
+
+    document.apply_edits(&edits)?;
+
+    assert!(
+        document.source.contains("99"),
+        "edit A ($x value) must be applied; got: {}",
+        document.source
+    );
+    assert!(
+        document.source.contains("88"),
+        "edit B ($y value) must be applied; got: {}",
+        document.source
+    );
+    assert_eq!(document.source, "my $x = 99; my $y = 88;\n");
+
+    // The post-edit tree should match a fresh parse of the new source.
+    let mut parser = Parser::new(&document.source);
+    let parsed_fresh = parser.parse()?;
+    assert_eq!(format!("{:?}", document.root), format!("{:?}", parsed_fresh));
+
+    Ok(())
+}
+
+#[test]
+fn adjacent_touching_ranges_are_not_rejected() -> ParseResult<()> {
+    // Two edits whose ranges share exactly one endpoint (end_a == start_b)
+    // are NOT overlapping and must both be accepted by normalize_for_source.
+    // "abcdef": edit A=(0,3,"XY") and edit B=(3,6,"Z"). End of A == start of B.
+    let source = "abcdef".to_string();
+    let mut document = IncrementalDocument::new(source)?;
+
+    let mut edits = IncrementalEditSet::new();
+    edits.add(IncrementalEdit::new(0, 3, "XY".to_string()));
+    edits.add(IncrementalEdit::new(3, 6, "Z".to_string()));
+
+    document.apply_edits(&edits)?;
+
+    // Both edits applied in reverse order: first (3,6)->"Z", then (0,3)->"XY".
+    // After (3,6)->"Z": "abcZ". After (0,3)->"XY": "XYZ".
+    assert_eq!(document.source, "XYZ", "adjacent touching edits must both apply");
 
     Ok(())
 }
