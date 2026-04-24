@@ -193,17 +193,17 @@ mod tests {
 
     #[test]
     fn test_risk_level_ord() {
-        assert!(RiskLevel::Critical < RiskLevel::High);
-        assert!(RiskLevel::High < RiskLevel::Medium);
+        assert!(RiskLevel::Critical < RiskLevel::High, "Critical must be less than High");
+        assert!(RiskLevel::High < RiskLevel::Medium, "High must be less than Medium");
     }
 
     #[test]
     fn test_get_all_nodekinds() {
         let nodekinds = get_all_nodekinds();
-        assert!(nodekinds.len() > 50);
-        assert!(nodekinds.contains("ExpressionStatement"));
-        assert!(nodekinds.contains("Binary"));
-        assert!(nodekinds.contains("Subroutine"));
+        assert!(nodekinds.len() > 50, "should have more than 50 NodeKinds");
+        assert!(nodekinds.contains("ExpressionStatement"), "should contain ExpressionStatement");
+        assert!(nodekinds.contains("Binary"), "should contain Binary");
+        assert!(nodekinds.contains("Subroutine"), "should contain Subroutine");
     }
 
     #[test]
@@ -213,16 +213,16 @@ mod tests {
         writeln!(tmp, "my $x = 1;\nprint $x;\nsub foo {{ return 42; }}")?;
         let path = PathBuf::from(tmp.path());
         let nodekinds = extract_nodekinds_from_content(&path);
-        assert!(!nodekinds.is_empty());
+        assert!(!nodekinds.is_empty(), "should extract at least one NodeKind");
         Ok(())
     }
 
     #[test]
     fn test_recovery_allowlist_contains_known_kinds() {
         let allowlist = recovery_kind_allowlist();
-        assert!(allowlist.contains_key("MissingStatement"));
-        assert!(allowlist.contains_key("MissingIdentifier"));
-        assert!(allowlist.contains_key("MissingBlock"));
-        assert!(allowlist.contains_key("UnknownRest"));
+        assert!(allowlist.contains_key("MissingStatement"), "allowlist should contain MissingStatement");
+        assert!(allowlist.contains_key("MissingIdentifier"), "allowlist should contain MissingIdentifier");
+        assert!(allowlist.contains_key("MissingBlock"), "allowlist should contain MissingBlock");
+        assert!(allowlist.contains_key("UnknownRest"), "allowlist should contain UnknownRest");
     }
 }
