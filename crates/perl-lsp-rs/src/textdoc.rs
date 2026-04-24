@@ -29,7 +29,7 @@ pub struct Doc {
 
 /// Position encoding format for LSP compatibility
 ///
-/// LSP uses UTF-16 code units for positions, while Rust strings are UTF-8.
+/// LSP uses UTF-16 code units for positions by default, while Rust strings are UTF-8.
 /// This enum determines how position conversions are performed.
 #[derive(Clone, Copy)]
 pub enum PosEnc {
@@ -37,6 +37,8 @@ pub enum PosEnc {
     Utf16,
     /// UTF-8 encoding (Rust native) - counts UTF-8 bytes
     Utf8,
+    /// UTF-32 encoding - counts Unicode scalar values (Rust `char`s)
+    Utf32,
 }
 
 /// Convert LSP position to char index with UTF-16/UTF-8 encoding support
@@ -91,6 +93,12 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
                 char_idx += 1;
             }
             char_idx
+        }
+        PosEnc::Utf32 => {
+            // UTF-32: pos.character is scalar value offset
+            // Rope indices are scalar-value-based chars, so this is direct clamping.
+            let line_chars = line_slice.chars().count();
+            (pos.character as usize).min(line_chars)
         }
     };
 
@@ -149,6 +157,10 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
             // UTF-16: return UTF-16 code unit count from start of line
             let line_slice = rope.line(line);
             line_slice.chars().take(col_chars).map(|c| c.len_utf16() as u32).sum()
+        }
+        PosEnc::Utf32 => {
+            // UTF-32: return scalar value count from start of line
+            col_chars as u32
         }
     };
 
