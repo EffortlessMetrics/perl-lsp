@@ -32,6 +32,7 @@
 //! ```
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use perl_dap::BridgeAdapter;
 use perl_dap::configuration::LaunchConfiguration;
 use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
@@ -348,6 +349,49 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+/// Benchmark bridge spawn/shutdown lifecycle when bridge mode is available.
+fn benchmark_bridge_lifecycle(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bridge_lifecycle");
+    group.measurement_time(Duration::from_secs(10));
+
+    let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            group.finish();
+            return;
+        }
+    };
+
+    let bridge_available = runtime.block_on(async {
+        let mut adapter = BridgeAdapter::new();
+        let spawn_ok = adapter.spawn_pls_dap().await.is_ok();
+        let _ = adapter.shutdown().await;
+        spawn_ok
+    });
+
+    if !bridge_available {
+        group.finish();
+        return;
+    }
+
+    group.bench_function("bridge_spawn_shutdown", |b| {
+        b.iter(|| {
+            runtime.block_on(async {
+                let mut adapter = BridgeAdapter::new();
+                let _ = adapter.spawn_pls_dap().await;
+                let _ = adapter.shutdown().await;
+            });
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    session_benches,
+    benchmark_dap_initialization,
+    benchmark_dap_dispatch,
+    benchmark_bridge_lifecycle
+);
 
 criterion_main!(configuration_benches, platform_benches, session_benches);

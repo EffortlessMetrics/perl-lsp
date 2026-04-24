@@ -14,6 +14,9 @@
 
 use anyhow::Result;
 use perl_dap::BridgeAdapter;
+use std::process::Stdio;
+use tokio::process::Command;
+use tokio::time::{Duration, timeout};
 
 /// New adapter starts with no child process; shutdown is a harmless no-op.
 #[tokio::test]
@@ -172,5 +175,40 @@ async fn test_sequential_adapters_are_independent() -> Result<()> {
     let result = second.proxy_messages().await;
     assert!(result.is_err(), "second adapter should still require spawn before proxy_messages");
     second.shutdown().await?;
+    Ok(())
+}
+
+/// proxy_messages should not hang when the child exits and client stdin stays open.
+#[cfg(unix)]
+#[tokio::test]
+async fn test_proxy_messages_returns_after_child_exit() -> Result<()> {
+    let child = Command::new("sh")
+        .arg("-c")
+        .arg("exit 0")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut adapter = BridgeAdapter::from_spawned_child(child);
+    timeout(Duration::from_secs(1), adapter.proxy_messages()).await??;
+    adapter.shutdown().await?;
+    Ok(())
+}
+
+/// shutdown should return quickly for a child that is still running.
+#[cfg(unix)]
+#[tokio::test]
+async fn test_shutdown_terminates_running_child() -> Result<()> {
+    let child = Command::new("sh")
+        .arg("-c")
+        .arg("sleep 5")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+
+    let mut adapter = BridgeAdapter::from_spawned_child(child);
+    timeout(Duration::from_secs(2), adapter.shutdown()).await??;
     Ok(())
 }

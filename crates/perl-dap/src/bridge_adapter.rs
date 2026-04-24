@@ -37,7 +37,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
 use tokio::time::sleep;
 
-const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
+const PLS_SHUTDOWN_GRACE_MS: u64 = 500;
 const PLS_SHUTDOWN_POLL_MS: u64 = 25;
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
@@ -64,6 +64,14 @@ impl BridgeAdapter {
     /// ```
     pub fn new() -> Self {
         Self { child_process: None }
+    }
+
+    /// Create a bridge adapter around an already spawned process.
+    ///
+    /// This constructor is mainly intended for deterministic lifecycle testing.
+    #[doc(hidden)]
+    pub fn from_spawned_child(child: Child) -> Self {
+        Self { child_process: Some(child) }
     }
 
     /// Spawn Perl::LanguageServer in DAP mode
@@ -158,31 +166,55 @@ impl BridgeAdapter {
 
         // Create bidirectional copy tasks
         // Task 1: Client (Parent Stdin) -> Server (Child Stdin)
-        let client_to_server = async move {
+        let mut client_to_server = tokio::spawn(async move {
             tokio::io::copy(&mut parent_stdin, &mut child_stdin)
                 .await
                 .context("Error copying from client to server")?;
             // Shut down child_stdin to signal EOF to the server
             let _ = child_stdin.shutdown().await;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
         // Task 2: Server (Child Stdout) -> Client (Parent Stdout)
-        let server_to_client = async move {
+        let mut server_to_client = tokio::spawn(async move {
             tokio::io::copy(&mut child_stdout, &mut parent_stdout)
                 .await
                 .context("Error copying from server to client")?;
             parent_stdout.flush().await.context("Error flushing to client")?;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
-        // Run both tasks concurrently and wait for both to finish.
-        // We use join instead of select to ensure graceful shutdown:
-        // if the client closes its input, we want to continue proxying
-        // any remaining output from the server.
-        let (res1, res2) = tokio::join!(client_to_server, server_to_client);
-        res1?;
-        res2?;
+        // Avoid hanging forever when the child exits but client stdin remains open.
+        // If the child exits first, we abort the client->server copy task.
+        tokio::select! {
+            status = child.wait() => {
+                status.context("Failed waiting for Perl::LanguageServer process")?;
+                client_to_server.abort();
+                let _ = client_to_server.await;
+                match server_to_client.await {
+                    Ok(result) => result?,
+                    Err(join_err) => anyhow::bail!("Server-to-client proxy task failed: {join_err}"),
+                }
+            }
+            res2 = &mut server_to_client => {
+                match res2 {
+                    Ok(result) => result?,
+                    Err(join_err) => anyhow::bail!("Server-to-client proxy task failed: {join_err}"),
+                }
+                client_to_server.abort();
+                let _ = client_to_server.await;
+            }
+            res1 = &mut client_to_server => {
+                match res1 {
+                    Ok(result) => result?,
+                    Err(join_err) => anyhow::bail!("Client-to-server proxy task failed: {join_err}"),
+                }
+                match server_to_client.await {
+                    Ok(result) => result?,
+                    Err(join_err) => anyhow::bail!("Server-to-client proxy task failed: {join_err}"),
+                }
+            }
+        }
 
         Ok(())
     }
@@ -194,6 +226,10 @@ impl BridgeAdapter {
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
             if !Self::wait_for_child_exit(&mut child, Duration::from_millis(0)).await {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.shutdown().await;
+                }
+
                 #[cfg(unix)]
                 {
                     if let Some(pid) = child.id() {
@@ -229,6 +265,10 @@ impl BridgeAdapter {
             return true;
         }
 
+        if timeout.is_zero() {
+            return false;
+        }
+
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             match child.try_wait() {
@@ -241,7 +281,7 @@ impl BridgeAdapter {
             }
         }
 
-        false
+        matches!(child.try_wait(), Ok(Some(_)))
     }
 }
 
