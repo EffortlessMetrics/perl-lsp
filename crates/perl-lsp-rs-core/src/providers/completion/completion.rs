@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_roots: Vec<PathBuf>,
+    system_inc_roots: Vec<PathBuf>,
 }
 
 impl CompletionProvider {
@@ -249,6 +252,26 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_source_and_inc_roots(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a completion provider with workspace index and explicit include roots.
+    ///
+    /// `include_roots` and `system_inc_roots` are used for module-name completion in
+    /// `use` / `require` contexts and are scanned for `.pm` files.
+    pub fn new_with_index_source_and_inc_roots(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_roots: Vec<PathBuf>,
+        system_inc_roots: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +281,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_roots,
+            system_inc_roots,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +805,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_roots,
+                &self.system_inc_roots,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,8 +2180,22 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use url::Url;
+
+    fn make_temp_test_dir(prefix: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "perl_lsp_rs_core_{prefix}_{}_{}",
+            std::process::id(),
+            stamp
+        ));
+        fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
 
     #[test]
     fn test_variable_completion() {
@@ -3581,6 +3628,81 @@ sub helper { }
             !completions.iter().any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
             "Module-priority sort_text should only appear in use context"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_completion_scans_include_roots() -> Result<(), Box<dyn std::error::Error>> {
+        let include_root = make_temp_test_dir("include_scan")?;
+        let nested = include_root.join("DBD");
+        fs::create_dir_all(&nested)?;
+        fs::write(nested.join("SQLite.pm"), "package DBD::SQLite;\n1;\n")?;
+
+        let code = "use DBD::SQ";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_source_and_inc_roots(
+            &ast,
+            code,
+            None,
+            vec![include_root.clone()],
+            Vec::new(),
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions
+                .iter()
+                .any(|c| c.label == "DBD::SQLite" && c.kind == CompletionItemKind::Module),
+            "include roots should contribute module completions for use/require context; got: {:?}",
+            completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+
+        fs::remove_dir_all(include_root)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_workspace_precedence_and_dedupe_with_include_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/lib/DBI.pm")?,
+            "package DBI;\n1;\n".to_string(),
+        )?;
+
+        let include_root_1 = make_temp_test_dir("include_precedence_a")?;
+        let include_root_2 = make_temp_test_dir("include_precedence_b")?;
+        fs::write(include_root_1.join("DBI.pm"), "package DBI;\n1;\n")?;
+        fs::write(include_root_2.join("DBI.pm"), "package DBI;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_source_and_inc_roots(
+            &ast,
+            code,
+            Some(index),
+            vec![include_root_1.clone()],
+            vec![include_root_2.clone()],
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        let dbi_items: Vec<&CompletionItem> =
+            completions.iter().filter(|item| item.label == "DBI").collect();
+        assert_eq!(
+            dbi_items.len(),
+            1,
+            "DBI should be deduplicated across workspace/include/system roots"
+        );
+        assert_eq!(
+            dbi_items[0].detail.as_deref(),
+            Some("module"),
+            "workspace result should win precedence"
+        );
+
+        fs::remove_dir_all(include_root_1)?;
+        fs::remove_dir_all(include_root_2)?;
         Ok(())
     }
 

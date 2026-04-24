@@ -14,6 +14,8 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -240,55 +242,130 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_roots: &[PathBuf],
+    system_inc_roots: &[PathBuf],
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    if let Some(index) = workspace_index
+        && index.has_symbols()
+    {
+        // Search for package symbols matching the prefix
+        let all_symbols = if context.prefix.is_empty() {
+            index.all_symbols()
+        } else {
+            index.find_symbols(&context.prefix)
+        };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
+        for symbol in all_symbols {
+            if symbol.kind != WsSymbolKind::Package {
+                continue;
+            }
+
+            // Match against the module name prefix
+            if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            if !seen.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let name = &symbol.name;
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module".to_string()),
+                documentation: symbol
+                    .documentation
+                    .clone()
+                    .or_else(|| Some(format!("Package `{name}`"))),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
+        }
+    }
+
+    // Include roots and system @INC are appended after workspace symbols.
+    // Dedup by module name keeps workspace-first precedence.
+    for (root_kind, module_name) in scan_modules_from_roots(include_roots)
+        .into_iter()
+        .map(|module| ("include root", module))
+        .chain(
+            scan_modules_from_roots(system_inc_roots)
+                .into_iter()
+                .map(|module| ("system @INC", module)),
+        )
+    {
+        if !context.prefix.is_empty() && !module_name.starts_with(&context.prefix) {
+            continue;
+        }
+        if !seen.insert(module_name.clone()) {
             continue;
         }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
-        }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
         completions.push(CompletionItem {
-            label: name.clone(),
+            label: module_name.clone(),
             kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
+            detail: Some(format!("module ({root_kind})")),
+            documentation: Some(format!("Module `{module_name}` from {root_kind}.")),
+            insert_text: Some(module_name.clone()),
+            sort_text: Some(format!("1{}_{module_name}", module_sort_tier(&module_name))),
+            filter_text: Some(module_name),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
         });
     }
+}
+
+fn scan_modules_from_roots(roots: &[PathBuf]) -> Vec<String> {
+    let mut modules: Vec<String> = Vec::new();
+    for root in roots {
+        let mut stack = vec![root.clone()];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().is_some_and(|ext| ext == "pm")
+                    && let Ok(relative) = path.strip_prefix(root)
+                    && let Some(module_name) = path_to_module_name(relative)
+                {
+                    modules.push(module_name);
+                }
+            }
+        }
+    }
+    modules
+}
+
+fn path_to_module_name(relative_path: &Path) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    for component in relative_path.components() {
+        let segment = component.as_os_str().to_string_lossy();
+        if segment.is_empty() {
+            continue;
+        }
+        parts.push(segment.to_string());
+    }
+
+    let file_name = parts.pop()?;
+    let module_stem = file_name.strip_suffix(".pm")?;
+    if module_stem.is_empty() {
+        return None;
+    }
+    parts.push(module_stem.to_string());
+    Some(parts.join("::"))
 }
 
 /// Add import completions for symbols inside `use Module qw(...)`.
