@@ -73,7 +73,7 @@ fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
 
     match parsed.host_str() {
         None | Some("") | Some("localhost") => Some(PathBuf::from(path)),
-        Some(host) => Some(PathBuf::from(format!("//{host}{path}"))),
+        Some(_) => None,
     }
 }
 
@@ -244,5 +244,12 @@ mod tests {
         let parsed = workspace_folder_to_path("file://localhost/tmp/project");
         assert!(parsed.to_string_lossy().contains("tmp"));
         assert!(parsed.to_string_lossy().contains("project"));
+    }
+
+    #[test]
+    fn does_not_generate_unc_path_for_non_local_file_uri_host() {
+        let parsed = workspace_folder_to_path("file://evil.example.com/share/project");
+        let path = parsed.to_string_lossy();
+        assert!(!path.starts_with("//evil.example.com"));
     }
 }
