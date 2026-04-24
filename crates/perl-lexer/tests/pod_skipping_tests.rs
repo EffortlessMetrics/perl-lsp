@@ -198,3 +198,13 @@ fn pod_with_multibyte_utf8_content() -> R {
     assert_eq!(my_count, 2, "Should have two 'my' keywords: {texts:?}");
     Ok(())
 }
+
+#[test]
+fn uppercase_encoding_directive_with_utf7_is_skipped() -> R {
+    let code = "my $x = 1;\n=ENCODING UTF-7\n=head1 NAME\nDemo\n=CUT\nmy $y = 2;";
+    let toks = significant(code);
+    let texts: Vec<&str> = toks.iter().map(|t| t.text.as_ref()).collect();
+    let my_count = texts.iter().filter(|&&t| t == "my").count();
+    assert_eq!(my_count, 2, "Should have two 'my' keywords: {texts:?}");
+    Ok(())
+}

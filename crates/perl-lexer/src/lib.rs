@@ -290,6 +290,33 @@ pub struct PerlLexer<'a> {
 }
 
 impl<'a> PerlLexer<'a> {
+    #[inline]
+    fn is_pod_start_directive_at_line_start(remaining: &[u8]) -> bool {
+        const POD_STARTS: [&[u8]; 9] = [
+            b"=pod",
+            b"=head",
+            b"=over",
+            b"=item",
+            b"=back",
+            b"=begin",
+            b"=end",
+            b"=for",
+            b"=encoding",
+        ];
+
+        POD_STARTS.iter().any(|directive| {
+            remaining.len() >= directive.len()
+                && remaining[..directive.len()].eq_ignore_ascii_case(directive)
+        })
+    }
+
+    #[inline]
+    fn is_cut_directive_at_line_start(remaining: &[u8]) -> bool {
+        let directive = b"=cut";
+        remaining.len() >= directive.len()
+            && remaining[..directive.len()].eq_ignore_ascii_case(directive)
+    }
+
     /// Create a new lexer for the given input
     pub fn new(input: &'a str) -> Self {
         Self::with_config(input, LexerConfig::default())
@@ -1010,16 +1037,7 @@ impl<'a> PerlLexer<'a> {
                     // Check if this starts a POD section (=pod, =head, =over, etc.)
                     // Use byte-safe checks — avoid slicing &str at arbitrary byte positions
                     let remaining = &self.input_bytes[self.position..];
-                    if remaining.starts_with(b"=pod")
-                        || remaining.starts_with(b"=head")
-                        || remaining.starts_with(b"=over")
-                        || remaining.starts_with(b"=item")
-                        || remaining.starts_with(b"=back")
-                        || remaining.starts_with(b"=begin")
-                        || remaining.starts_with(b"=end")
-                        || remaining.starts_with(b"=for")
-                        || remaining.starts_with(b"=encoding")
-                    {
+                    if Self::is_pod_start_directive_at_line_start(remaining) {
                         // Scan forward for \n=cut (end of POD block)
                         let search_start = self.position;
                         let mut found_cut = false;
@@ -1028,7 +1046,7 @@ impl<'a> PerlLexer<'a> {
                         while i < bytes.len() {
                             // Look for =cut at the start of a line
                             if (i == 0 || matches!(bytes[i - 1], b'\n' | b'\r'))
-                                && bytes[i..].starts_with(b"=cut")
+                                && Self::is_cut_directive_at_line_start(&bytes[i..])
                             {
                                 i += 4; // Skip "=cut"
                                 // Skip rest of the =cut line

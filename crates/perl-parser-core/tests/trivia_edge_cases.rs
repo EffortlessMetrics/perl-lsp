@@ -203,6 +203,28 @@ my $x = 1;
 }
 
 #[test]
+fn test_uppercase_encoding_utf7_pod_commands() {
+    let source = r#"=ENCODING UTF-7
+
+=HEAD1 NAME
+
+Demo::UTF7
+
+=CUT
+
+my $x = 1;
+"#
+    .to_string();
+
+    let parser = TriviaPreservingParser::new(source);
+    let result = parser.parse();
+
+    let pod_count =
+        result.leading_trivia.iter().filter(|t| matches!(&t.trivia, Trivia::PodComment(_))).count();
+    assert!(pod_count >= 1, "Should detect uppercase POD directives for UTF-7 blocks");
+}
+
+#[test]
 fn test_hash_in_string_not_comment() {
     // Edge case: Hash character in string should not be treated as comment
     // This tests the parser's ability to distinguish context

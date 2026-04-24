@@ -12,6 +12,23 @@ use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
+fn starts_with_pod_directive(line: &str, directive: &str) -> bool {
+    let line_bytes = line.as_bytes();
+    let directive_bytes = directive.as_bytes();
+    line_bytes.len() >= directive_bytes.len()
+        && line_bytes[..directive_bytes.len()].eq_ignore_ascii_case(directive_bytes)
+}
+
+fn is_pod_start(line: &str) -> bool {
+    starts_with_pod_directive(line, "=head")
+        || starts_with_pod_directive(line, "=pod")
+        || starts_with_pod_directive(line, "=over")
+        || starts_with_pod_directive(line, "=begin")
+        || starts_with_pod_directive(line, "=for")
+        || starts_with_pod_directive(line, "=encoding")
+        || starts_with_pod_directive(line, "=item")
+}
+
 /// Extracted POD documentation from a Perl module.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PodDoc {
@@ -57,14 +74,7 @@ pub fn extract_pod(source: &str) -> PodDoc {
 
     for line in source.lines() {
         // Detect POD start directives
-        if line.starts_with("=head")
-            || line.starts_with("=pod")
-            || line.starts_with("=over")
-            || line.starts_with("=begin")
-            || line.starts_with("=for")
-            || line.starts_with("=encoding")
-            || line.starts_with("=item")
-        {
+        if is_pod_start(line) {
             in_pod = true;
         }
 
@@ -73,7 +83,7 @@ pub fn extract_pod(source: &str) -> PodDoc {
         }
 
         // =cut ends POD
-        if line.starts_with("=cut") {
+        if starts_with_pod_directive(line, "=cut") {
             flush_section(&mut doc, &current_section, &body, in_over);
             current_section = None;
             body.clear();
@@ -83,17 +93,17 @@ pub fn extract_pod(source: &str) -> PodDoc {
         }
 
         // =over / =item / =back for lists
-        if line.starts_with("=over") {
+        if starts_with_pod_directive(line, "=over") {
             in_over = true;
             body.push('\n');
             continue;
         }
-        if line.starts_with("=back") {
+        if starts_with_pod_directive(line, "=back") {
             in_over = false;
             body.push('\n');
             continue;
         }
-        if line.starts_with("=item") {
+        if starts_with_pod_directive(line, "=item") {
             let item_text = line.strip_prefix("=item").map(str::trim).unwrap_or("");
             if !body.is_empty() {
                 body.push('\n');
@@ -105,7 +115,11 @@ pub fn extract_pod(source: &str) -> PodDoc {
         }
 
         // New head1 section
-        if let Some(heading) = line.strip_prefix("=head1") {
+        if let Some(heading) = line
+            .get(0..6)
+            .filter(|prefix| prefix.eq_ignore_ascii_case("=head1"))
+            .and_then(|_| line.get(6..))
+        {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
             let heading = heading.trim();
@@ -119,7 +133,11 @@ pub fn extract_pod(source: &str) -> PodDoc {
         }
 
         // New head2 section — treated as method documentation
-        if let Some(heading) = line.strip_prefix("=head2") {
+        if let Some(heading) = line
+            .get(0..6)
+            .filter(|prefix| prefix.eq_ignore_ascii_case("=head2"))
+            .and_then(|_| line.get(6..))
+        {
             flush_section(&mut doc, &current_section, &body, false);
             body.clear();
             let heading = heading.trim().to_string();
@@ -128,11 +146,11 @@ pub fn extract_pod(source: &str) -> PodDoc {
         }
 
         // Skip other directives
-        if line.starts_with("=pod")
-            || line.starts_with("=encoding")
-            || line.starts_with("=begin")
-            || line.starts_with("=end")
-            || line.starts_with("=for")
+        if starts_with_pod_directive(line, "=pod")
+            || starts_with_pod_directive(line, "=encoding")
+            || starts_with_pod_directive(line, "=begin")
+            || starts_with_pod_directive(line, "=end")
+            || starts_with_pod_directive(line, "=for")
         {
             continue;
         }

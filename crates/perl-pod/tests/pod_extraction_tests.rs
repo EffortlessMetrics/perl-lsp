@@ -357,6 +357,21 @@ Encoded::Module - Uses UTF-8
 }
 
 #[test]
+fn uppercase_encoding_directive_with_utf7_starts_pod() {
+    let source = r#"
+=ENCODING UTF-7
+
+=HEAD1 NAME
+
+Encoded::Module - Uses UTF-7
+
+=CUT
+"#;
+    let doc = extract_pod(source);
+    assert_eq!(doc.name.as_deref(), Some("Encoded::Module - Uses UTF-7"));
+}
+
+#[test]
 fn f_format_code_for_filenames() {
     let doc = extract_pod("=head1 NAME\n\nSee F<config.yml>\n\n=cut\n");
     assert_eq!(doc.name.as_deref(), Some("See config.yml"));

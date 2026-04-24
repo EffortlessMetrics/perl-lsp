@@ -40,6 +40,22 @@ struct PositionTracker {
     line_starts: Vec<usize>,
 }
 
+#[inline]
+fn is_pod_start_directive_at_line_start(remaining: &str) -> bool {
+    const POD_STARTS: [&str; 9] =
+        ["=pod", "=head", "=over", "=item", "=back", "=begin", "=end", "=for", "=encoding"];
+    POD_STARTS.iter().any(|directive| {
+        remaining.len() >= directive.len()
+            && remaining[..directive.len()].eq_ignore_ascii_case(directive)
+    })
+}
+
+#[inline]
+fn is_cut_directive_at_line_start(remaining: &str) -> bool {
+    const CUT: &str = "=cut";
+    remaining.len() >= CUT.len() && remaining[..CUT.len()].eq_ignore_ascii_case(CUT)
+}
+
 impl PositionTracker {
     fn new(source: &str) -> Self {
         let mut line_starts = vec![0];
@@ -211,16 +227,7 @@ impl TriviaParserContext {
                 b'=' if *position == 0 || (*position > 0 && bytes[*position - 1] == b'\n') => {
                     // Check if this starts a POD section
                     let remaining = &source[*position..];
-                    if remaining.starts_with("=pod")
-                        || remaining.starts_with("=head")
-                        || remaining.starts_with("=over")
-                        || remaining.starts_with("=item")
-                        || remaining.starts_with("=back")
-                        || remaining.starts_with("=begin")
-                        || remaining.starts_with("=end")
-                        || remaining.starts_with("=for")
-                        || remaining.starts_with("=encoding")
-                    {
+                    if is_pod_start_directive_at_line_start(remaining) {
                         let pod_start = *position;
 
                         // Edge case fix: Find =cut at start of line (including position 0 or after newline)
@@ -228,7 +235,7 @@ impl TriviaParserContext {
                         while *position < source.len() {
                             // Check for =cut at the start of a line
                             if (*position == 0 || (*position > 0 && bytes[*position - 1] == b'\n'))
-                                && source[*position..].starts_with("=cut")
+                                && is_cut_directive_at_line_start(&source[*position..])
                             {
                                 *position += 4; // Skip "=cut"
                                 // Skip to end of line
