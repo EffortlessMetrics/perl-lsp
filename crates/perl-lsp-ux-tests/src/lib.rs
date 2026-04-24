@@ -753,7 +753,9 @@ fn normalize_uri_for_expectations(uri: &str, workspace_root: &Path) -> String {
         return format!("file://$WORKSPACE/{}", relative.trim_start_matches('/'));
     }
 
-    format!("file://{}", path.to_string_lossy().replace('\\', "/"))
+    // Non-workspace file URI: return the url crate's canonical form, which already
+    // handles Windows drive letters correctly (file:///C:/...) without reconstruction.
+    parsed.to_string()
 }
 
 /// Outcome of a formatting request.
