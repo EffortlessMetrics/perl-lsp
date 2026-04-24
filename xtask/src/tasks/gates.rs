@@ -209,7 +209,8 @@ pub struct Receipt {
     pub metadata: ReceiptMetadata,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
-    pub agent_receipt: AgentReceipt,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_receipt: Option<AgentReceipt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
 }
@@ -736,7 +737,7 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
-    let agent_receipt = build_agent_receipt(&root, &results, &config.tier);
+    let agent_receipt = Some(build_agent_receipt(&root, &results, &config.tier));
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
@@ -1711,7 +1712,11 @@ mod tests {
     }
 
     #[test]
-    fn agent_receipt_json_shape_has_phase1_fields() {
+    fn agent_receipt_phase1_fields_roundtrip_with_correct_values() {
+        // Verify that the phase-1 agent receipt shape deserializes correctly
+        // and that values survive the serde round-trip unchanged.
+        // Uses Option<AgentReceipt> to confirm old receipts without the field
+        // still deserialize successfully (backward compat).
         let receipt: Receipt = serde_json::from_str(r#"{
             "schema_version": "1.0.0",
             "metadata": {
@@ -1734,30 +1739,101 @@ mod tests {
                 "overall_status": "pass"
             },
             "agent_receipt": {
-                "sha": "abc123",
-                "is_latest": true,
-                "tier": "merge_gate",
+                "sha": "deadbeef1234567890abcdef1234567890abcdef",
+                "is_latest": false,
+                "tier": "pr_fast",
                 "scope": {
-                    "direct_crates": ["xtask"],
-                    "reverse_deps": [],
-                    "risk_tags": ["ci_policy"]
+                    "direct_crates": ["xtask", "perl-parser"],
+                    "reverse_deps": ["perl-lsp-rs"],
+                    "risk_tags": ["ci_policy", "parser_recovery"]
                 },
-                "selected_lanes": [{"name":"clippy_scoped","reason":"direct_crate_change","status":"not_run"}],
-                "failures": [{"lane":"clippy","summary":"Gate failed","repro":"cargo clippy"}],
-                "suggested_next_actions": ["rerun lane"]
+                "selected_lanes": [
+                    {"name":"clippy_scoped","reason":"direct_crate_change","status":"passed"},
+                    {"name":"test_scoped","reason":"direct_crate_change","status":"not_run"}
+                ],
+                "failures": [{"lane":"clippy","summary":"clippy found 3 warnings","repro":"cargo clippy -p xtask"}],
+                "suggested_next_actions": ["fix clippy warnings", "rerun gate"]
             }
         }"#)
         .expect("phase-1 agent receipt shape should deserialize");
-        let json = serde_json::to_value(receipt.agent_receipt).expect("serialize agent receipt");
-        assert!(json.get("sha").is_some());
-        assert!(json.get("is_latest").is_some());
-        assert!(json.get("tier").is_some());
-        assert!(json["scope"].get("direct_crates").is_some());
-        assert!(json["scope"].get("reverse_deps").is_some());
-        assert!(json["scope"].get("risk_tags").is_some());
-        assert!(json.get("selected_lanes").is_some());
-        assert!(json.get("failures").is_some());
-        assert!(json.get("suggested_next_actions").is_some());
+
+        // agent_receipt must be present (Some, not None)
+        let ar = receipt.agent_receipt.expect("agent_receipt should be Some when present in JSON");
+
+        // Verify field values, not just key presence — these would fail if
+        // a field were silently dropped or misnamed in the struct definition.
+        assert_eq!(ar.sha, "deadbeef1234567890abcdef1234567890abcdef");
+        assert!(!ar.is_latest, "is_latest should be false");
+        assert_eq!(ar.tier, "pr_fast");
+        assert_eq!(ar.scope.direct_crates, vec!["xtask", "perl-parser"]);
+        assert_eq!(ar.scope.reverse_deps, vec!["perl-lsp-rs"]);
+        assert_eq!(ar.scope.risk_tags, vec!["ci_policy", "parser_recovery"]);
+        assert_eq!(ar.selected_lanes.len(), 2);
+        assert_eq!(ar.selected_lanes[0].name, "clippy_scoped");
+        assert_eq!(ar.selected_lanes[0].status, "passed");
+        assert_eq!(ar.selected_lanes[1].status, "not_run");
+        assert_eq!(ar.failures.len(), 1);
+        assert_eq!(ar.failures[0].lane, "clippy");
+        assert_eq!(ar.failures[0].repro, "cargo clippy -p xtask");
+        assert_eq!(ar.suggested_next_actions.len(), 2);
+
+        // Confirm backward compatibility: a receipt WITHOUT agent_receipt deserializes to None.
+        let old_receipt: Receipt = serde_json::from_str(r#"{
+            "schema_version": "1.0.0",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            }
+        }"#)
+        .expect("receipt without agent_receipt should deserialize for backward compat");
+        assert!(
+            old_receipt.agent_receipt.is_none(),
+            "receipt without agent_receipt field must deserialize to None"
+        );
+    }
+
+    #[test]
+    fn failure_guidance_with_no_gates_produces_proceed_action() {
+        // Edge case: no gates ran at all (empty results slice).
+        let (failures, next_actions) = failure_guidance(&[]);
+        assert!(failures.is_empty(), "no failures expected when no gates ran");
+        assert_eq!(next_actions.len(), 1);
+        assert!(
+            next_actions[0].contains("No blocking failures"),
+            "expected proceed action, got: {:?}",
+            next_actions[0]
+        );
+    }
+
+    #[test]
+    fn failure_guidance_all_required_and_failing_each_gets_action() {
+        // Multiple blocking failures — each should produce its own next_action entry.
+        let results = vec![
+            gate_result("fmt", "fail", true),
+            gate_result("clippy", "error", true),
+            gate_result("tests", "timeout", true),
+        ];
+        let (failures, next_actions) = failure_guidance(&results);
+        assert_eq!(failures.len(), 3, "all three blocking gates should appear in failures");
+        assert_eq!(next_actions.len(), 3, "each failure gets one next_action");
+        // Repro command must include the gate's command string
+        assert!(failures[0].repro.contains("fmt"), "repro should reference the gate");
+        assert!(failures[2].summary.contains("timeout"), "summary should mention the status");
     }
 
     fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
