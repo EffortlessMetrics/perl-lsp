@@ -181,8 +181,26 @@ fn test_core_grep_with_regex() {
 }
 
 #[test]
+fn test_core_grep_with_regex_statement_start() {
+    let source = r#"CORE::grep /foo/, @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_core_sort_with_block() {
     let source = r#"my @sorted = CORE::sort { $a <=> $b } @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_subname_list_statement_start() {
+    let source = r#"sort by_name @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_sort_subname_list_statement_start() {
+    let source = r#"CORE::sort by_name @list;"#;
     assert_clean_parse(source);
 }
 

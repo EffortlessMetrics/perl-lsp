@@ -733,7 +733,10 @@ impl<'a> Parser<'a> {
                 }
                 // Generic builtin functions that can take arguments without parens.
                 // Uses the canonical builtin registry in `perl-builtins-phf`.
-                name if Self::is_builtin_function(name) => {
+                name
+                    if Self::is_builtin_function(name)
+                        || Self::core_qualified_builtin_name(name).is_some() =>
+                {
                     let start = token_start;
                     // We need to clone the text to check for indirect call pattern because
                     // is_indirect_call_pattern borrows self mutably to peek ahead
@@ -747,6 +750,8 @@ impl<'a> Parser<'a> {
                     // Consume the function name token
                     let token = self.consume_token()?;
                     let func_name = token.text;
+                    let bare_func_name =
+                        Self::core_qualified_builtin_name(func_name.as_ref()).unwrap_or(&func_name);
 
                     // We're consuming the function name, no longer at statement start
                     self.mark_not_stmt_start();
@@ -784,11 +789,11 @@ impl<'a> Parser<'a> {
                             //
                             // When called WITH parens we fall through — parens already delimit.
                             if self.peek_kind() != Some(TokenKind::LeftParen)
-                                && Self::is_optional_arg_builtin(func_name.as_ref())
+                                && Self::is_optional_arg_builtin(bare_func_name)
                             {
                                 return self.parse_named_unary_statement_call(
                                     start,
-                                    func_name.as_ref(),
+                                    bare_func_name,
                                     true,
                                 );
                             }
@@ -808,14 +813,14 @@ impl<'a> Parser<'a> {
                                     || self.peek_kind() == Some(TokenKind::State))
                             {
                                 args.push(self.parse_variable_declaration()?);
-                            } else if Self::is_block_list_func(func_name.as_ref())
+                            } else if Self::is_block_list_func(bare_func_name)
                                 && self.peek_kind() == Some(TokenKind::LeftBrace)
                             {
                                 // Special handling for map/grep/sort/first/any/all/etc.
                                 // with block first argument
                                 args.push(self.parse_builtin_block()?);
                                 parsed_block_arg = true;
-                            } else if matches!(func_name.as_ref(), "split" | "grep" | "map" | "sort")
+                            } else if matches!(bare_func_name, "split" | "grep" | "map" | "sort")
                                 && self.peek_kind() == Some(TokenKind::Slash)
                             {
                                 // For `split /regex/, ...` and `grep /regex/, @list`,
@@ -825,9 +830,9 @@ impl<'a> Parser<'a> {
                                 self.tokens.relex_as_term();
                                 args.push(self.parse_assignment()?);
                             } else if self.peek_kind() == Some(TokenKind::LeftParen)
-                                && (Self::is_block_list_func(func_name.as_ref())
+                                && (Self::is_block_list_func(bare_func_name)
                                     || matches!(
-                                        func_name.as_ref(),
+                                        bare_func_name,
                                         "exec" | "system" | "print" | "say" | "printf" | "send"
                                     ))
                             {
@@ -838,7 +843,7 @@ impl<'a> Parser<'a> {
                                 // For print/say/printf, use the filehandle-aware variant so
                                 // that `print( $fh EXPR )` works with no comma after $fh.
                                 let paren_args = if matches!(
-                                    func_name.as_ref(),
+                                    bare_func_name,
                                     "print" | "say" | "printf" | "send"
                                 ) {
                                     self.parse_print_parens_args()?
@@ -873,7 +878,7 @@ impl<'a> Parser<'a> {
                             // Word operators (or, and, xor, not) terminate the argument list
                             // because they bind less tightly than list operators.
                             // e.g., `sort @list or die` => (sort @list) or (die)
-                            if Self::is_block_list_func(func_name.as_ref()) {
+                            if Self::is_block_list_func(bare_func_name) {
                                 while !self.is_at_statement_end()
                                     && !matches!(
                                         self.peek_kind(),
