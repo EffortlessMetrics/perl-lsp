@@ -329,6 +329,7 @@ fn constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
 fn qw_names(arg: &str) -> Option<Vec<String>> {
     let content = arg.strip_prefix("qw").and_then(|rest| {
+        let rest = rest.trim_start();
         rest.strip_prefix('(')
             .and_then(|s| s.strip_suffix(')'))
             .or_else(|| rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')))
@@ -521,6 +522,7 @@ mod tests {
         assert_eq!(qw_names("qw[one two]"), Some(vec!["one".to_string(), "two".to_string()]));
         assert_eq!(qw_names("qw{one two}"), Some(vec!["one".to_string(), "two".to_string()]));
         assert_eq!(qw_names("qw<one two>"), Some(vec!["one".to_string(), "two".to_string()]));
+        assert_eq!(qw_names("qw [one two]"), Some(vec!["one".to_string(), "two".to_string()]));
     }
 
     #[test]
