@@ -131,6 +131,8 @@ struct TokenCache {
 }
 
 impl TokenCache {
+    const SEGMENT_TOKEN_CHUNK_SIZE: usize = 64;
+
     /// Create a new empty token cache.
     fn new() -> Self {
         TokenCache { segments: Vec::new() }
@@ -321,13 +323,16 @@ impl TokenCache {
     /// * `start` - Start byte position of the segment.
     /// * `end` - End byte position of the segment.
     /// * `tokens` - Parser tokens for this segment.
-    fn cache_tokens(&mut self, start: usize, end: usize, tokens: Vec<Token>) {
+    fn cache_tokens(&mut self, tokens: Vec<Token>) {
         if tokens.is_empty() {
             return;
         }
 
-        let segment = TokenSegment::new(start, end, tokens);
-        self.add_segment(segment);
+        for chunk in tokens.chunks(Self::SEGMENT_TOKEN_CHUNK_SIZE) {
+            if let (Some(first), Some(last)) = (chunk.first(), chunk.last()) {
+                self.add_segment(TokenSegment::new(first.start, last.end, chunk.to_vec()));
+            }
+        }
     }
 }
 
@@ -355,6 +360,8 @@ pub struct IncrementalStats {
     pub segments_invalidated: usize,
     /// Count of times we had to relex the entire tail (cache coverage gaps)
     pub full_tail_fallbacks: usize,
+    /// Total bytes relexed while taking a tail fallback.
+    pub tail_fallback_bytes: usize,
 }
 
 impl std::fmt::Display for IncrementalStats {
@@ -374,6 +381,7 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
         writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
+        writeln!(f, "  Tail fallback bytes: {}", self.tail_fallback_bytes)?;
         Ok(())
     }
 }
@@ -440,13 +448,6 @@ impl CheckpointedIncrementalParser {
         let new_content = &edit.new_text;
         self.source.replace_range(edit.start..edit.end, new_content);
 
-        // Track segments that will be invalidated before invalidating
-        let invalidated_segments = self.token_cache.get_segments_in_range(edit.start, edit.end);
-        self.stats.segments_invalidated += invalidated_segments.len();
-
-        // Invalidate token cache for edited range
-        self.token_cache.invalidate_range(edit.start, edit.end);
-
         // Update checkpoint cache
         let old_len = edit.end - edit.start;
         let new_len = new_content.len();
@@ -486,16 +487,17 @@ impl CheckpointedIncrementalParser {
 
         let mut lexer = PerlLexer::new(&self.source);
         let mut raw_tokens = Vec::new();
-        let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
+        const CHECKPOINT_STRIDE: usize = 256;
 
         // Collect raw lexer tokens and save checkpoints at specific positions
-        let mut position = 0;
+        let mut position = 0usize;
+        let mut next_checkpoint_position = 0usize;
         while let Some(token) = lexer.next_token() {
-            // Save checkpoint at specific positions
-            if checkpoint_positions.first() == Some(&position) {
-                checkpoint_positions.remove(0);
+            // Save checkpoints at stable token boundaries with a fixed stride.
+            if position >= next_checkpoint_position {
                 let checkpoint = lexer.checkpoint();
                 self.checkpoint_cache.add(checkpoint);
+                next_checkpoint_position = position + CHECKPOINT_STRIDE;
             }
 
             position = token.end;
@@ -512,11 +514,7 @@ impl CheckpointedIncrementalParser {
         // and cache them for reuse in incremental reparses.
         let parser_tokens = TokenStream::lexer_tokens_to_parser_tokens(raw_tokens);
 
-        if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
-            let start = first.start;
-            let end = last.end;
-            self.token_cache.cache_tokens(start, end, parser_tokens);
-        }
+        self.token_cache.cache_tokens(parser_tokens);
 
         // Full parse from source — this initial parse still uses the lexer
         // directly so that context-sensitive constructs (e.g. regex vs division)
@@ -589,6 +587,11 @@ impl CheckpointedIncrementalParser {
         let relex_end =
             right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
 
+        // Invalidate exactly the relex window and keep the rest of the cache.
+        let invalidated_segments = self.token_cache.get_segments_in_range(relex_start, relex_end);
+        self.stats.segments_invalidated += invalidated_segments.len();
+        self.token_cache.invalidate_range(relex_start, relex_end);
+
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
         if edit.start >= relex_start {
@@ -652,13 +655,13 @@ impl CheckpointedIncrementalParser {
         self.stats.bytes_relexed += bytes_relexed_this_phase;
 
         let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
-        parser_tokens.extend(converted);
+        parser_tokens.extend(converted.iter().cloned());
 
         // --- Phase 3: reuse cached tokens after the right checkpoint ---
         let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
 
-        let segments_after = self.token_cache.get_segments_after(relex_end);
-        self.stats.segments_reused_after += segments_after.len();
+        let segments_after_count = self.token_cache.get_segments_after(relex_end).len();
+        self.stats.segments_reused_after += segments_after_count;
 
         if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
             self.stats.cache_hits += 1;
@@ -675,28 +678,24 @@ impl CheckpointedIncrementalParser {
             }
         } else {
             self.stats.cache_misses += 1;
-            // Track full tail fallback when no segments are found after relex_end
-            if segments_after.is_empty() {
-                self.stats.full_tail_fallbacks += 1;
-            }
+            self.stats.full_tail_fallbacks += 1;
             // No cache hit — lex the remainder of the source.
             let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
+            let mut tail_fallback_bytes = 0usize;
             while let Some(token) = lexer.next_token() {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                tail_fallback_bytes += token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
+            self.stats.tail_fallback_bytes += tail_fallback_bytes;
             parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
-        // Update token cache with the final merged token list.
-        if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
-            let start = first.start;
-            let end = last.end;
-            self.token_cache.cache_tokens(start, end, parser_tokens.clone());
-        }
+        // Update token cache with newly re-lexed material only.
+        self.token_cache.cache_tokens(converted);
 
         // Drive the parse from the pre-assembled token stream — no re-lexing.
         let mut parser = Parser::from_tokens(parser_tokens, &self.source);
@@ -862,5 +861,46 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_segment_invalidation_is_granular_for_small_edit() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $value = 1;\n".repeat(300);
+        must(parser.parse(source.clone()));
+
+        let total_segments_before = parser.token_cache.segments.len();
+        assert!(total_segments_before > 1, "expected chunked cache segments");
+
+        let edit = SimpleEdit { start: 25, end: 26, new_text: "42".to_string() };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(stats.segments_invalidated > 0, "expected invalidated segments for edit");
+        assert!(
+            stats.segments_invalidated < total_segments_before,
+            "small edit should invalidate fewer than all cached segments"
+        );
+    }
+
+    #[test]
+    fn test_mid_file_edit_relexes_less_than_full_source() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $item = 12345;\n".repeat(250);
+        let source_len = source.len();
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit {
+            start: source_len / 2,
+            end: source_len / 2 + 3,
+            new_text: "9".to_string(),
+        };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(
+            stats.bytes_relexed < source_len,
+            "checkpoint window should avoid relexing the entire source: {stats:?}"
+        );
     }
 }
