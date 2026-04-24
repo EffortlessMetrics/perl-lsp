@@ -37,6 +37,8 @@ pub enum PosEnc {
     Utf16,
     /// UTF-8 encoding (Rust native) - counts UTF-8 bytes
     Utf8,
+    /// UTF-32 encoding (Unicode scalar values) - counts Unicode code points
+    Utf32,
 }
 
 /// Convert LSP position to char index with UTF-16/UTF-8 encoding support
@@ -91,6 +93,11 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
                 char_idx += 1;
             }
             char_idx
+        }
+        PosEnc::Utf32 => {
+            // UTF-32: pos.character is Unicode scalar value offset
+            let requested = usize::try_from(pos.character).unwrap_or(usize::MAX);
+            requested.min(line_slice.chars().count())
         }
     };
 
@@ -150,6 +157,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
             let line_slice = rope.line(line);
             line_slice.chars().take(col_chars).map(|c| c.len_utf16() as u32).sum()
         }
+        PosEnc::Utf32 => col_chars as u32,
     };
 
     Position { line: line as u32, character }
@@ -310,5 +318,16 @@ mod tests {
         assert_eq!(pos2.line, 1);
         let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
         assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+
+    #[test]
+    fn test_utf32_position_with_emoji() {
+        let rope = Rope::from_str("a😀b\n");
+
+        let pos = Position { line: 0, character: 2 };
+        let byte = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+        let roundtrip = byte_to_lsp_pos(&rope, byte, PosEnc::Utf32);
+
+        assert_eq!(roundtrip, pos);
     }
 }

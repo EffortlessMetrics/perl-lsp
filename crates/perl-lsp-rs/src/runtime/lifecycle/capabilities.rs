@@ -6,6 +6,33 @@ use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
+fn parse_position_encoding(params: &Value) -> crate::textdoc::PosEnc {
+    let Some(encodings) =
+        params.pointer("/capabilities/general/positionEncodings").and_then(|v| v.as_array())
+    else {
+        return crate::textdoc::PosEnc::Utf16;
+    };
+
+    for encoding in encodings.iter().filter_map(|value| value.as_str()) {
+        match encoding {
+            "utf-8" => return crate::textdoc::PosEnc::Utf8,
+            "utf-16" => return crate::textdoc::PosEnc::Utf16,
+            "utf-32" => return crate::textdoc::PosEnc::Utf32,
+            _ => {}
+        }
+    }
+
+    crate::textdoc::PosEnc::Utf16
+}
+
+fn position_encoding_label(enc: crate::textdoc::PosEnc) -> &'static str {
+    match enc {
+        crate::textdoc::PosEnc::Utf8 => "utf-8",
+        crate::textdoc::PosEnc::Utf16 => "utf-16",
+        crate::textdoc::PosEnc::Utf32 => "utf-32",
+    }
+}
+
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
@@ -27,6 +54,8 @@ impl LspServer {
 
         // Parse client capabilities
         if let Some(params) = &params {
+            *self.position_encoding.lock() = parse_position_encoding(params);
+
             // Take lock once to write all capabilities
             {
                 let mut caps = self.client_capabilities.lock();
@@ -298,7 +327,8 @@ impl LspServer {
         })?;
 
         // Add fields not yet in lsp-types 0.97
-        capabilities["positionEncoding"] = json!("utf-16");
+        capabilities["positionEncoding"] =
+            json!(position_encoding_label(*self.position_encoding.lock()));
         if features.declaration {
             capabilities["declarationProvider"] = json!(true);
         }
@@ -428,8 +458,9 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use crate::textdoc::PosEnc;
+    use crate::LspServer;
     use serde_json::json;
 
     #[test]
@@ -570,5 +601,28 @@ mod tests {
         let caps = server.client_capabilities.lock();
         assert!(caps.snippet_support);
         assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_negotiates_utf32_position_encoding() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-32"]
+                }
+            }
+        });
+
+        let result = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf32));
+
+        let advertised = result
+            .and_then(|value| value.get("capabilities").cloned())
+            .and_then(|caps| caps.get("positionEncoding").cloned())
+            .and_then(|enc| enc.as_str().map(ToOwned::to_owned))
+            .expect("initialize response should include positionEncoding");
+        assert_eq!(advertised, "utf-32");
     }
 }

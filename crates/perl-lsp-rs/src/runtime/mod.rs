@@ -218,6 +218,8 @@ pub struct LspServer {
     outbound_writer_handle: Option<std::thread::JoinHandle<()>>,
     /// Client capabilities (behind mutex for interior mutability — written once during initialize)
     client_capabilities: Mutex<ClientCapabilities>,
+    /// Negotiated LSP position encoding from initialize (defaults to UTF-16).
+    pub(crate) position_encoding: Mutex<crate::textdoc::PosEnc>,
     /// Cancelled request IDs
     cancelled: Arc<Mutex<HashSet<Value>>>,
     /// Workspace folders with full state representation

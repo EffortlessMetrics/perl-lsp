@@ -41,8 +41,9 @@ fn is_perl_language_id(language_id: &str) -> bool {
 fn build_incremental_edit_set(
     original_rope: &ropey::Rope,
     lsp_changes: &[lsp_types::TextDocumentContentChangeEvent],
+    enc: crate::textdoc::PosEnc,
 ) -> Option<perl_parser::incremental::incremental_edit::IncrementalEditSet> {
-    use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
+    use crate::textdoc::{range_to_bytes, range_to_chars};
     use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 
     let mut working_rope = original_rope.clone();
@@ -62,7 +63,7 @@ fn build_incremental_edit_set(
         // Measure byte positions against the evolving rope so that the
         // character-to-byte mapping for this edit is correct (the working rope
         // already reflects all preceding edits in this notification batch).
-        let (evolving_start, evolving_end) = range_to_bytes(&working_rope, range, PosEnc::Utf16);
+        let (evolving_start, evolving_end) = range_to_bytes(&working_rope, range, enc);
 
         // Map back to original-document space by undoing the byte shift that
         // prior edits introduced into the working rope.
@@ -72,7 +73,7 @@ fn build_incremental_edit_set(
 
         // Apply this edit to the working rope so the next iteration's
         // `range_to_bytes` / `range_to_chars` calls see the correct document.
-        let (start_char, end_char) = range_to_chars(&working_rope, range, PosEnc::Utf16);
+        let (start_char, end_char) = range_to_chars(&working_rope, range, enc);
         if start_char <= end_char {
             working_rope.remove(start_char..end_char);
             working_rope.insert(start_char, &change.text);
@@ -592,7 +593,7 @@ impl LspServer {
                 let target_version = version;
 
                 // Apply incremental changes with UTF-16 aware mapping
-                use crate::textdoc::{Doc, PosEnc, apply_changes};
+                use crate::textdoc::{Doc, apply_changes};
                 use lsp_types::TextDocumentContentChangeEvent;
 
                 let mut doc = Doc { rope: doc_state.rope.clone(), version };
@@ -619,13 +620,15 @@ impl LspServer {
 
                 // Build incremental edits from the OLD source BEFORE mutating the rope.
                 // UTF-16 line/char → byte conversion must use the pre-change line index.
+                let position_encoding = *self.position_encoding.lock();
+
                 #[cfg(feature = "incremental")]
                 let incremental_edits_opt: Option<
                     perl_parser::incremental::incremental_edit::IncrementalEditSet,
-                > = build_incremental_edit_set(&doc_state.rope, &lsp_changes);
+                > = build_incremental_edit_set(&doc_state.rope, &lsp_changes, position_encoding);
 
-                // Apply changes with UTF-16 encoding (as advertised in initialize)
-                apply_changes(&mut doc, &lsp_changes, PosEnc::Utf16);
+                // Apply changes with negotiated position encoding from initialize.
+                apply_changes(&mut doc, &lsp_changes, position_encoding);
 
                 let text = doc.rope.to_string();
                 tracing::debug!("Document changed: {} (version {})", uri, version);
@@ -1329,7 +1332,8 @@ mod tests {
         ];
 
         let edit_set =
-            build_incremental_edit_set(&original, &changes).expect("expected ranged edit set");
+            build_incremental_edit_set(&original, &changes, crate::textdoc::PosEnc::Utf16)
+                .expect("expected ranged edit set");
         assert_eq!(edit_set.edits.len(), 2);
 
         // Edit 0 is a pure insertion — original-space offsets are 1..1.
