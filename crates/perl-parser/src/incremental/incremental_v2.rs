@@ -1267,6 +1267,11 @@ mod tests {
         budget
     }
 
+    fn parse_fresh(source: &str) -> ParseResult<Node> {
+        let mut parser = Parser::new(source);
+        parser.parse()
+    }
+
     #[test]
     fn test_basic_compilation() {
         let parser = IncrementalParserV2::new();
@@ -2122,6 +2127,97 @@ if ($condition) {
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
         assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_value_edits_improve_shifted_reuse() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $a = 10;\nmy $b = 20;\nmy $c = 30;\n";
+        parser.parse(source1)?;
+
+        let first_start =
+            source1.find("10").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        parser.edit(Edit::new(
+            first_start,
+            first_start + 2,
+            first_start + 4,
+            Position::new(first_start, 1, 1),
+            Position::new(first_start + 2, 1, 3),
+            Position::new(first_start + 4, 1, 5),
+        ));
+
+        let third_start =
+            source1.rfind("30").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)? + 2;
+        parser.edit(Edit::new(
+            third_start,
+            third_start + 2,
+            third_start + 3,
+            Position::new(third_start, 1, 1),
+            Position::new(third_start + 2, 1, 3),
+            Position::new(third_start + 3, 1, 4),
+        ));
+
+        let source2 = "my $a = 1000;\nmy $b = 20;\nmy $c = 300;\n";
+        let incremental_tree = parser.parse(source2)?;
+        let full_tree = parse_fresh(source2)?;
+
+        assert_eq!(incremental_tree, full_tree);
+        assert!(parser.reused_nodes >= 6, "expected strong subtree reuse for shifted nodes");
+        assert!(
+            parser
+                .last_reuse_analysis
+                .as_ref()
+                .is_some_and(|analysis| { analysis.analysis_stats.position_adjustments > 0 }),
+            "expected shifted-node matching to contribute position adjustments",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_whitespace_and_comment_edits_reuse_with_equivalence() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 1;\n# keep this\nmy $y = 2;\n";
+        parser.parse(source1)?;
+
+        let whitespace_insertion =
+            source1.find("= 1").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)? + 1;
+        parser.edit(Edit::new(
+            whitespace_insertion,
+            whitespace_insertion,
+            whitespace_insertion + 2,
+            Position::new(whitespace_insertion, 1, 1),
+            Position::new(whitespace_insertion, 1, 1),
+            Position::new(whitespace_insertion + 2, 1, 3),
+        ));
+
+        let comment_text_start =
+            source1.find("keep this").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?
+                + 2;
+        parser.edit(Edit::new(
+            comment_text_start,
+            comment_text_start + 8,
+            comment_text_start + 12,
+            Position::new(comment_text_start, 2, 1),
+            Position::new(comment_text_start + 8, 2, 9),
+            Position::new(comment_text_start + 12, 2, 13),
+        ));
+
+        let source2 = "my $x  = 1;\n# keep this note\nmy $y = 2;\n";
+        let incremental_tree = parser.parse(source2)?;
+        let full_tree = parse_fresh(source2)?;
+
+        assert_eq!(incremental_tree, full_tree);
+        assert!(parser.reused_nodes > parser.reparsed_nodes);
+        assert!(
+            parser
+                .last_reuse_analysis
+                .as_ref()
+                .is_some_and(|analysis| { analysis.reuse_percentage >= 60.0 }),
+            "expected meaningful reuse for separated non-structural edits",
+        );
+
         Ok(())
     }
 }

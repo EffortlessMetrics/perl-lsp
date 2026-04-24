@@ -158,7 +158,13 @@ impl AdvancedReuseAnalyzer {
         self.find_direct_structural_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
         // Strategy 2: Position-shifted matching
-        self.find_position_shifted_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
+        self.find_position_shifted_matches(
+            &old_analysis,
+            &new_analysis,
+            edits,
+            &mut reuse_map,
+            config,
+        );
 
         // Strategy 3: Content-updated matching
         if config.enable_content_reuse {
@@ -367,40 +373,91 @@ impl AdvancedReuseAnalyzer {
         &mut self,
         old_analysis: &TreeAnalysis,
         new_analysis: &TreeAnalysis,
+        edits: &EditSet,
         reuse_map: &mut HashMap<usize, ReuseStrategy>,
         config: &ReuseConfig,
     ) {
+        let mut used_targets: HashSet<usize> =
+            reuse_map.values().map(|strategy| strategy.target_position).collect();
+
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            // Skip if already matched
+            if reuse_map.contains_key(old_pos) {
                 continue;
             }
 
-            // Look for content matches that may have shifted position
-            for (new_pos, new_info) in &new_analysis.node_info {
+            let Some(expected_position) = self.project_position_through_edits(*old_pos, edits)
+            else {
+                continue;
+            };
+
+            let mut best_match: Option<(usize, f64)> = None;
+
+            // Prefer exact expected position to maximize safe shifted reuse.
+            if let Some(new_info) = new_analysis.node_info.get(&expected_position) {
                 if old_info.content_hash == new_info.content_hash
                     && old_info.structural_hash == new_info.structural_hash
+                    && !used_targets.contains(&expected_position)
                 {
+                    let confidence =
+                        self.calculate_match_confidence(old_info, new_info).min(1.0) * 0.95;
+                    best_match = Some((expected_position, confidence));
+                }
+            }
+
+            // Fall back to nearest structurally equivalent position when exact mapping is absent.
+            if best_match.is_none() {
+                for (new_pos, new_info) in &new_analysis.node_info {
+                    if old_info.content_hash != new_info.content_hash
+                        || old_info.structural_hash != new_info.structural_hash
+                        || used_targets.contains(new_pos)
+                    {
+                        continue;
+                    }
+
                     let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
-                    if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
-                        if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
-                        }
+                    if position_shift > config.max_position_shift {
+                        continue;
+                    }
+
+                    let expected_distance =
+                        (*new_pos as isize - expected_position as isize).unsigned_abs() as f64;
+                    let distance_penalty =
+                        (expected_distance / config.max_position_shift.max(1) as f64).min(1.0);
+                    let confidence = self.calculate_match_confidence(old_info, new_info)
+                        * 0.9
+                        * (1.0 - distance_penalty * 0.5);
+
+                    if best_match.as_ref().is_none_or(|(_, best_conf)| confidence > *best_conf) {
+                        best_match = Some((*new_pos, confidence));
                     }
                 }
             }
+
+            if let Some((new_pos, confidence)) = best_match {
+                if confidence >= config.min_confidence {
+                    reuse_map.insert(
+                        *old_pos,
+                        ReuseStrategy {
+                            target_position: new_pos,
+                            reuse_type: ReuseType::PositionShift,
+                            confidence_score: confidence,
+                            position_adjustment: (new_pos as isize) - (*old_pos as isize),
+                        },
+                    );
+                    used_targets.insert(new_pos);
+                    self.analysis_stats.position_adjustments += 1;
+                }
+            }
         }
+    }
+
+    fn project_position_through_edits(
+        &self,
+        old_position: usize,
+        edits: &EditSet,
+    ) -> Option<usize> {
+        edits.apply_to_position(Position::new(old_position, 0, 0)).map(|position| position.byte)
     }
 
     /// Find content-updated matches (structure same, values changed)
