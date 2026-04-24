@@ -585,8 +585,8 @@ impl ScopeAnalyzer {
     ) {
         // Get effective pragma state at this node's location
         let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
-        let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
-        let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
+        let strict_vars_mode = pragma_state.is_strict_vars_active();
+        let strict_subs_mode = pragma_state.is_strict_subs_active();
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
                 let extracted = self.extract_variable_name(variable);

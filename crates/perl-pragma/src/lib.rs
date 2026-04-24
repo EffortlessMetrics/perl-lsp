@@ -99,6 +99,24 @@ impl PragmaState {
         self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
     }
 
+    /// Returns `true` if strict-vars checks should be enforced at this point.
+    #[must_use]
+    pub fn is_strict_vars_active(&self) -> bool {
+        self.strict_vars || self.signatures_strict
+    }
+
+    /// Returns `true` if strict-subs checks should be enforced at this point.
+    #[must_use]
+    pub fn is_strict_subs_active(&self) -> bool {
+        self.strict_subs || self.signatures_strict
+    }
+
+    /// Returns `true` if any strict category is active at this point.
+    #[must_use]
+    pub fn is_any_strict_active(&self) -> bool {
+        self.is_strict_vars_active() || self.is_strict_subs_active() || self.strict_refs
+    }
+
     /// Returns `true` if the given feature name is currently enabled.
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {

@@ -65,10 +65,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     // This avoids the false-negative from .any() which sees eval-interior ranges.
     // signatures_strict is included to honour `use feature 'signatures'` (#4038).
     let top_level_state = PragmaTracker::state_for_offset(&pragma_map, usize::MAX);
-    let mut has_strict = top_level_state.strict_vars
-        || top_level_state.strict_subs
-        || top_level_state.strict_refs
-        || top_level_state.signatures_strict;
+    let mut has_strict = top_level_state.is_any_strict_active();
     let mut has_warnings = top_level_state.warnings;
 
     // OO frameworks that implicitly provide strict+warnings

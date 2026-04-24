@@ -1878,6 +1878,49 @@ print PL_sv_undef;
 }
 
 #[test]
+fn strict_subs_restored_after_eval_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+eval { no strict 'subs'; print FOO; };
+print BAR;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues
+            .iter()
+            .any(|i| { matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "BAR" }),
+        "strict subs should be restored after eval scope exits"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_vars_restored_after_nested_block_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'vars';
+{
+    {
+        no strict 'vars';
+        print $inner;
+    }
+}
+print $outer;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "inner"),
+        "nested no strict 'vars' should suppress undeclared variable diagnostics only in that scope"
+    );
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "outer"),
+        "strict vars should be restored after nested blocks"
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_subs_allows_qw_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'subs';
