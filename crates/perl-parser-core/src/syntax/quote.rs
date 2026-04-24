@@ -301,79 +301,61 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
-    // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    // Skip `tr` or `y` prefix, then allow optional whitespace before delimiter.
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
-    // Get delimiter - content must be non-empty to have a delimiter
+    // Get delimiter.
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+
+    // Obvious malformed forms like `trabc` or `tr a b` have no delimiter.
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
+
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
-    // Parse first body (search pattern)
-    let (search, rest1) = extract_delimited_content(content, delimiter, closing);
+    // Parse first body (search).
+    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
 
-    // For paired delimiters, skip whitespace and allow any paired opening delimiter for the
-    // replacement list. Perl accepts forms like tr[abc]{xyz} in addition to tr[abc][xyz].
-    let rest2_owned;
-    let rest2 = if is_paired {
-        rest1.trim_start()
-    } else {
-        rest2_owned = format!("{}{}", delimiter, rest1);
-        &rest2_owned
-    };
-
-    // Parse second body (replacement pattern)
-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
-        // Manually parse the replacement for non-paired delimiters
-        let chars = rest1.char_indices();
-        let mut body = String::new();
-        let mut escaped = false;
-        let mut end_pos = rest1.len();
-
-        for (i, ch) in chars {
-            if escaped {
-                body.push(ch);
-                escaped = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    body.push(ch);
-                    escaped = true;
-                }
-                c if c == closing => {
-                    end_pos = i + ch.len_utf8();
-                    break;
-                }
-                _ => body.push(ch),
-            }
+    // Parse second body (replacement).
+    let (replacement, modifiers_str) = if !is_paired {
+        if rest1.is_empty() {
+            (String::new(), "")
+        } else {
+            let (body, rest, _replacement_closed) = extract_unpaired_body_skip_strings(rest1, closing);
+            (body, rest)
         }
-
-        (body, &rest1[end_pos..])
     } else if is_paired {
+        let rest2 = rest1.trim_start();
         if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
-            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+            let (body, rest, _replacement_closed) =
+                extract_delimited_content_strict(rest2, repl_delimiter, repl_closing);
+            (body, rest)
         } else {
-            (String::new(), rest2)
+            (String::new(), "")
         }
     } else {
         (String::new(), rest1)
     };
 
-    // Extract and validate only valid transliteration modifiers
-    // Security fix: Apply consistent validation for all delimiter types
-    let modifiers = modifiers_str
+    // If the first body wasn't closed, keep malformed input non-panicking and avoid
+    // treating trailing body text as modifiers.
+    let modifiers_input = if search_closed { modifiers_str } else { "" };
+
+    // Extract and validate only valid transliteration modifiers.
+    let modifiers = modifiers_input
         .chars()
         .take_while(|c| c.is_ascii_alphabetic())
         .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
