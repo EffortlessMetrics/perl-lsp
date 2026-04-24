@@ -346,6 +346,47 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         ));
     }
 
+    // Parser closeout ratchets from committed scorecard baseline.
+    // These checks intentionally use committed baselines so parser-audit can
+    // fail fast on local regressions before CI runs the larger corpus sweeps.
+    let parser_baseline_path = std::path::Path::new(".ci/metrics/baselines/parser.json");
+    if parser_baseline_path.exists() {
+        let baseline_raw = fs::read_to_string(parser_baseline_path)
+            .context("Failed to read parser scorecard baseline")?;
+        let baseline: serde_json::Value =
+            serde_json::from_str(&baseline_raw).context("Failed to parse parser baseline JSON")?;
+
+        let nodekind_floor = baseline
+            .get("floor_metrics")
+            .and_then(|v| v.get("node_kind_coverage"))
+            .and_then(serde_json::Value::as_f64);
+
+        if let Some(floor) = nodekind_floor {
+            let current = report.nodekind_coverage.coverage_percentage / 100.0;
+            if current + f64::EPSILON < floor {
+                failures.push(format!(
+                    "NodeKind coverage regression: {:.4} < {:.4} floor",
+                    current, floor
+                ));
+            }
+        }
+
+        let valid_gap_floor = baseline
+            .get("floor_metrics")
+            .and_then(|v| v.get("valid_parser_gap_count"))
+            .and_then(serde_json::Value::as_f64);
+
+        if let Some(max_gap_count) = valid_gap_floor {
+            let current_gap_count = report.parse_outcomes.error as f64;
+            if current_gap_count > max_gap_count {
+                failures.push(format!(
+                    "Valid parser gap regression: {:.0} > {:.0} floor",
+                    current_gap_count, max_gap_count
+                ));
+            }
+        }
+    }
+
     // Print error category breakdown if there are errors (Issue #180)
     if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
         println!("\n   Error breakdown by category:");

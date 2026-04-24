@@ -144,6 +144,38 @@ docs_url = "justfile#ci-check-no-nested-lock"
 cost_tier = "low"  # <1 second
 failure_impact = "medium"
 
+[[gate]]
+id = "system-corpus-ratchet"
+name = "System Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo run --locked -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Parser accuracy ratchet on Ubuntu system Perl corpus (clean-rate + ERROR-node regression guards)"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "critical"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "CPAN Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 900
+command = "cargo run --locked -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Parser accuracy ratchet on CPAN top-1000 baseline with strict known-clean manifest"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "critical"
+
 # ============================================================================
 # Extended Gates (RECOMMENDED for large changes, ci-full)
 # ============================================================================
