@@ -53,7 +53,13 @@
 )]
 
 use perl_ast::Node as AstNode;
+use perl_ast::NodeKind as AstNodeKind;
 use perl_parser_core::Parser as CoreParser;
+use perl_pragma::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::analysis::declaration::{current_package_at, symbol_at_cursor};
+use perl_semantic_analyzer::analysis::semantic::SemanticModel;
+use perl_semantic_analyzer::symbol::Symbol;
+use perl_semantic_analyzer::workspace_index::SymbolKey;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -240,6 +246,89 @@ impl Tree {
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
     }
+
+    /// Builds an experimental semantic overlay for ergonomic read-only queries.
+    ///
+    /// # Stability
+    ///
+    /// This API is intentionally limited and in development. It exposes a thin
+    /// tree-sitter-style query surface over the existing semantic and pragma
+    /// engines; method names and return shapes may evolve.
+    pub fn semantic_overlay(&self) -> SemanticOverlay<'_> {
+        SemanticOverlay::new(self)
+    }
+}
+
+/// A first-pass semantic overlay over [`Tree`].
+///
+/// This facade is intentionally thin and read-only. It layers ergonomic query
+/// methods on top of existing semantic analysis components without duplicating
+/// semantic logic.
+pub struct SemanticOverlay<'tree> {
+    tree: &'tree Tree,
+    semantic_model: SemanticModel,
+    pragma_map: Vec<(std::ops::Range<usize>, PragmaState)>,
+}
+
+impl<'tree> SemanticOverlay<'tree> {
+    fn new(tree: &'tree Tree) -> Self {
+        let semantic_model = SemanticModel::build(&tree.root, tree.source());
+        let pragma_map = PragmaTracker::build(&tree.root);
+        Self { tree, semantic_model, pragma_map }
+    }
+
+    /// Returns the effective package name at `offset`.
+    pub fn package_at_offset(&self, offset: usize) -> &'tree str {
+        current_package_at(&self.tree.root, offset)
+    }
+
+    /// Returns the declaration key at `offset`, if one can be resolved.
+    ///
+    /// This follows the same declaration lookup logic used by the semantic
+    /// analyzer's cursor-based declaration resolver.
+    pub fn declaration_at_offset(&self, offset: usize) -> Option<SymbolKey> {
+        let package = self.package_at_offset(offset);
+        symbol_at_cursor(&self.tree.root, offset, package)
+    }
+
+    /// Returns the resolved definition target for `offset`.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<&Symbol> {
+        self.semantic_model.definition_at(offset)
+    }
+
+    /// Returns the resolved definition target for a syntax [`Node`].
+    ///
+    /// Uses the node start byte as the lookup position.
+    pub fn definition_for_node(&self, node: Node<'_>) -> Option<&Symbol> {
+        self.definition_at_offset(node.start_byte())
+    }
+
+    /// Returns imports visible up to `offset`.
+    ///
+    /// Includes `use` statements that begin at or before `offset` in lexical
+    /// traversal order.
+    pub fn visible_imports_at(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut imports = Vec::new();
+        collect_visible_imports(&self.tree.root, offset, &mut imports);
+        imports
+    }
+
+    /// Returns the effective pragma state at `offset`.
+    pub fn effective_pragma_state_at(&self, offset: usize) -> PragmaState {
+        PragmaTracker::state_for_offset(&self.pragma_map, offset).clone()
+    }
+}
+
+/// Read-only import entry reported by [`SemanticOverlay::visible_imports_at`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Imported module or pragma name.
+    pub module: String,
+    /// Import arguments captured from the `use` statement.
+    pub args: Vec<String>,
+    /// Byte range of the full `use` statement.
+    pub span: std::ops::Range<usize>,
 }
 
 /// A borrowed reference to a node in the syntax tree.
@@ -512,6 +601,22 @@ fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
         idx += 1;
     });
     found
+}
+
+fn collect_visible_imports(node: &AstNode, offset: usize, imports: &mut Vec<VisibleImport>) {
+    if node.location.start > offset {
+        return;
+    }
+
+    if let AstNodeKind::Use { module, args, .. } = &node.kind {
+        imports.push(VisibleImport {
+            module: module.clone(),
+            args: args.clone(),
+            span: node.location.start..node.location.end,
+        });
+    }
+
+    node.for_each_child(|child| collect_visible_imports(child, offset, imports));
 }
 
 // Invariant: TreeCursor path is constructed by the traversal that just yielded this
