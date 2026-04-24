@@ -40,10 +40,7 @@ fn transliteration_regression_bank_malformed_never_panics() {
 #[test]
 fn transliteration_regression_bank_escaped_delimiter_in_search() {
     // Backslash-escaped delimiter inside search body must be preserved, not treated as closing.
-    let cases = [
-        ("tr/a\\/b/c/", ("a\\/b", "c", "")),
-        ("tr/x\\/y\\/z/w/", ("x\\/y\\/z", "w", "")),
-    ];
+    let cases = [("tr/a\\/b/c/", ("a\\/b", "c", "")), ("tr/x\\/y\\/z/w/", ("x\\/y\\/z", "w", ""))];
 
     for (input, expected) in cases {
         let actual = extract_transliteration_parts(input);
@@ -68,11 +65,8 @@ fn transliteration_regression_bank_unicode_content() {
 #[test]
 fn transliteration_regression_bank_empty_bodies_with_modifiers() {
     // tr with empty search and replace but valid modifiers should extract them correctly.
-    let cases = [
-        ("tr///cds", ("", "", "cds")),
-        ("tr|||rs", ("", "", "rs")),
-        ("y<><>d", ("", "", "d")),
-    ];
+    let cases =
+        [("tr///cds", ("", "", "cds")), ("tr|||rs", ("", "", "rs")), ("y<><>d", ("", "", "d"))];
 
     for (input, expected) in cases {
         let actual = extract_transliteration_parts(input);
