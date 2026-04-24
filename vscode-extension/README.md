@@ -83,6 +83,10 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # VSCodium / Open VSX
 codium --install-extension EffortlessMetrics.perl-lsp-rs
+
+# PearAI (VS Code-compatible)
+# Install from Open VSX inside PearAI's Extensions view:
+# EffortlessMetrics.perl-lsp-rs
 ```
 
 The extension automatically downloads the correct `perllsp` binary for your platform on first activation:
@@ -199,6 +203,7 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 |--------|---------------|
 | **VS Code / VSCodium** | This extension (auto-configured) |
 | **Cursor** | This extension |
+| **PearAI** | This extension (install from Open VSX) |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |
 | **Helix** | `languages.toml` with `perllsp --stdio` |

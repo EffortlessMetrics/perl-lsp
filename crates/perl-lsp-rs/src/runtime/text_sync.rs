@@ -2136,10 +2136,7 @@ mod tests {
 
         let docs = server.documents.lock();
         let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
-        assert!(
-            doc.ast.is_some(),
-            "template with mojolicious languageId should be parsed as Perl"
-        );
+        assert!(doc.ast.is_some(), "template with mojolicious languageId should be parsed as Perl");
         Ok(())
     }
 
