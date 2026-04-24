@@ -318,11 +318,21 @@ fn perl_statements(source: &str) -> Vec<&str> {
     let mut statements = Vec::new();
     let mut start = 0;
     let mut quote: Option<u8> = None;
+    let mut in_comment = false;
     let bytes = source.as_bytes();
     let mut i = 0;
 
     while i < bytes.len() {
         let b = bytes[i];
+
+        if in_comment {
+            // Comments run to end of line; a `\n` terminates them.
+            if b == b'\n' {
+                in_comment = false;
+            }
+            i += 1;
+            continue;
+        }
 
         match quote {
             Some(q) => {
@@ -335,7 +345,9 @@ fn perl_statements(source: &str) -> Vec<&str> {
                 }
             }
             None => {
-                if b == b'\'' || b == b'"' {
+                if b == b'#' {
+                    in_comment = true;
+                } else if b == b'\'' || b == b'"' {
                     quote = Some(b);
                 } else if b == b';' {
                     if let Some(stmt) = source.get(start..=i) {
