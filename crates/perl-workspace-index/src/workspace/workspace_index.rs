@@ -2696,6 +2696,7 @@ struct IndexVisitor {
     uri: String,
     current_package: Option<String>,
     workspace_folder_uri: Option<String>,
+    module_runtime_imports: HashSet<String>,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2742,6 +2743,7 @@ impl IndexVisitor {
             uri,
             current_package: Some("main".to_string()),
             workspace_folder_uri,
+            module_runtime_imports: HashSet::new(),
         }
     }
 
@@ -2811,6 +2813,15 @@ impl IndexVisitor {
 
     fn visit_node(&mut self, node: &Node, file_index: &mut FileIndex) {
         match &node.kind {
+            NodeKind::Program { statements } => {
+                let prior_imports = self.module_runtime_imports.clone();
+                self.module_runtime_imports = collect_module_runtime_imports(statements);
+                for stmt in statements {
+                    self.visit_node(stmt, file_index);
+                }
+                self.module_runtime_imports = prior_imports;
+            }
+
             NodeKind::Package { name, .. } => {
                 let package_name = name.clone();
 
@@ -2986,6 +2997,11 @@ impl IndexVisitor {
                             .dependencies
                             .insert(normalize_dependency_module_name(&module_name));
                     }
+                }
+                if let Some(module_name) =
+                    module_runtime_literal_dependency(name, args, &self.module_runtime_imports)
+                {
+                    file_index.dependencies.insert(normalize_dependency_module_name(&module_name));
                 }
 
                 // Visit arguments
@@ -3436,6 +3452,66 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn parse_qw_items(raw: &str) -> Vec<&str> {
+    if !raw.starts_with("qw") {
+        return Vec::new();
+    }
+    let content = raw
+        .trim_start_matches("qw")
+        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+    content.split_whitespace().collect()
+}
+
+fn collect_module_runtime_imports(statements: &[Node]) -> HashSet<String> {
+    let mut imports = HashSet::new();
+    for stmt in statements {
+        let NodeKind::Use { module, args, .. } = &stmt.kind else {
+            continue;
+        };
+        if module != "Module::Runtime" {
+            continue;
+        }
+        for arg in args {
+            let bare = arg.trim().trim_matches(',').trim_matches('\'').trim_matches('"').trim();
+            if bare == "use_module" || bare == "require_module" {
+                imports.insert(bare.to_string());
+                continue;
+            }
+            for item in parse_qw_items(bare) {
+                if item == "use_module" || item == "require_module" {
+                    imports.insert(item.to_string());
+                }
+            }
+        }
+    }
+    imports
+}
+
+fn module_runtime_literal_dependency(
+    name: &str,
+    args: &[Node],
+    imported_runtime_calls: &HashSet<String>,
+) -> Option<String> {
+    let is_runtime_loader = match name {
+        "Module::Runtime::use_module" | "Module::Runtime::require_module" => true,
+        "use_module" | "require_module" => imported_runtime_calls.contains(name),
+        _ => false,
+    };
+    if !is_runtime_loader {
+        return None;
+    }
+    let first = args.first()?;
+    let NodeKind::String { value, .. } = &first.kind else {
+        return None;
+    };
+    let module_name = value.trim_matches('\'').trim_matches('"').trim();
+    if module_name.is_empty() {
+        return None;
+    }
+    Some(module_name.to_string())
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {
@@ -4997,6 +5073,44 @@ Utils::process_data();
 
         let deps = index.file_dependencies(consumer_url.as_str());
         assert!(deps.contains("My::App::Role"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_module_runtime_literal_loader()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/runtime-loader.pl"));
+        let src = r#"use Module::Runtime qw(use_module require_module);
+my $a = use_module('My::Runtime::One');
+my $b = require_module('My::Runtime::Two');
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("My::Runtime::One"));
+        assert!(deps.contains("My::Runtime::Two"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_module_runtime_dynamic_loader_stays_conservative()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/runtime-loader-dynamic.pl"));
+        let src = r#"use Module::Runtime qw(use_module);
+my $name = 'My::Runtime::Dynamic';
+my $mod = use_module($name);
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            !deps.contains("My::Runtime::Dynamic"),
+            "dynamic loader argument should not be indexed as dependency, got {deps:?}"
+        );
         Ok(())
     }
 
