@@ -20,21 +20,26 @@
 <!-- BEGIN: DAP_TEST_COUNTS -->
 | Suite | Count |
 |---|---|
-| Integration tests (`perl-dap`) | 21 test targets |
+| Integration tests (`perl-dap`) | 58 test targets |
 | Scorecard fixtures | 5 |
 <!-- END: DAP_TEST_COUNTS -->
 
-## Deferred Metrics
+## Runtime Scorecard (Real Session)
 
-The following metrics are defined in #4069 but deferred to follow-up PRs:
+<!-- BEGIN: DAP_RUNTIME_SCORECARD -->
+| Metric | Value | Target | Status |
+|---|---|---|---|
+| Attach success rate | 3/3 (100 %) | ≥ 80 % | PASS |
+| Variables pane correctness (real session) | FAIL | PASS required | FAIL |
+| Evaluate correctness (real session) | PASS | PASS required | PASS |
+| Deep truncation/pagination correctness | FAIL | PASS required | FAIL |
+| Memory footprint baseline (best-effort) | 5644 KiB -> 11016 KiB (delta +5372 KiB) | baseline-only | BASELINE |
+<!-- END: DAP_RUNTIME_SCORECARD -->
 
-| Metric | Issue | Reason |
-|---|---|---|
-| Attach success rate | #4069 | Requires live Perl process on TCP socket — deferred post-alpha |
-| Variables pane correctness | #3487 | Needs integration test with real `perl -d` variables |
-| Evaluate correctness (session) | #3481 | Existing mocked tests; real-session E2E deferred |
-| Truncation/pagination on deep data | #3487 | No test with 200+ array elements yet |
-| Memory footprint baseline | #4069 | OS-level RSS measurement non-trivial to make portable |
+Current harness behavior:
+- Always measures launch and attach success rates.
+- Measures variables/evaluate/pagination in a real `perl -d` session and reports PASS/FAIL without hard-failing the harness yet.
+- Emits a Linux `VmRSS` best-effort baseline from `/proc/self/status`; non-Linux platforms report SKIP.
 
 ## How to Update
 
