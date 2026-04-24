@@ -161,3 +161,119 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
     server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
     Ok(())
 }
+
+#[test]
+fn dap_attach_e2e_stop_on_entry_and_terminate() -> TestResult {
+    let listener = TcpListener::bind(("127.0.0.1", 0))?;
+    let port = listener.local_addr()?.port();
+
+    let server_handle = thread::spawn(move || {
+        let result = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
+            let (mut socket, _) = listener.accept()?;
+
+            let stopped_event = json!({
+                "type": "event",
+                "seq": 1,
+                "event": "stopped",
+                "body": {
+                    "reason": "step",
+                    "threadId": 12,
+                    "allThreadsStopped": true
+                }
+            })
+            .to_string();
+            socket.write_all(&frame(stopped_event.as_bytes()))?;
+            socket.flush()?;
+
+            let mut buf = [0u8; 256];
+            loop {
+                match socket.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(_) => continue,
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(err) => return Err(Box::new(err)),
+                }
+            }
+            Ok(())
+        })();
+
+        if let Err(err) = result {
+            panic!("fake TCP debugger server failed: {err}");
+        }
+    });
+
+    let timeout = smoke_timeout();
+    let mut adapter = DebugAdapter::new();
+    let (tx, rx) = channel();
+    adapter.set_event_sender(tx);
+
+    response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
+    let _initialized = wait_for_event(&rx, "initialized", timeout)?;
+
+    response_success(
+        adapter.handle_request(
+            2,
+            "attach",
+            Some(json!({
+                "host": "127.0.0.1",
+                "port": port,
+                "timeout": 2000,
+                "stopOnEntry": true
+            })),
+        ),
+        "attach",
+    )?;
+
+    let entry_stopped = wait_for_event(&rx, "stopped", timeout)?;
+    let entry_stopped_body =
+        event_body(&entry_stopped).ok_or("entry stopped event missing body")?;
+    assert_eq!(entry_stopped_body.get("reason").and_then(Value::as_str), Some("entry"));
+
+    let remote_stopped = wait_for_event(&rx, "stopped", timeout)?;
+    let remote_stopped_body =
+        event_body(&remote_stopped).ok_or("remote stopped event missing body")?;
+    assert_eq!(remote_stopped_body.get("reason").and_then(Value::as_str), Some("step"));
+    assert_eq!(remote_stopped_body.get("threadId").and_then(Value::as_i64), Some(12));
+
+    response_success(adapter.handle_request(3, "terminate", Some(json!({}))), "terminate")?;
+    let _terminated = wait_for_event(&rx, "terminated", timeout)?;
+
+    server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
+    Ok(())
+}
+
+#[test]
+fn dap_attach_e2e_timeout_reports_attach_failure() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    let (tx, _rx) = channel();
+    adapter.set_event_sender(tx);
+
+    response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
+
+    let response = adapter.handle_request(
+        2,
+        "attach",
+        Some(json!({
+            "host": "203.0.113.1",
+            "port": 9,
+            "timeout": 25
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "attach");
+            assert!(!success);
+            let text = message.unwrap_or_default().to_lowercase();
+            assert!(text.contains("cannot attach"));
+            assert!(
+                text.contains("timeout")
+                    || text.contains("timed out")
+                    || text.contains("unreachable")
+            );
+        }
+        other => return Err(format!("expected attach failure response, got {other:?}").into()),
+    }
+
+    Ok(())
+}

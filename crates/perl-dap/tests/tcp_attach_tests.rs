@@ -12,7 +12,7 @@
 use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_lsp_rs_core::transport::framing::frame;
 use perl_tdd_support::must;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -275,6 +275,97 @@ fn test_tcp_attach_reader_handles_concatenated_frames() {
         }
         other => must(Err::<(), _>(format!("Expected Continued event, got {other:?}"))),
     }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_reader_emits_stopped_and_terminated_events() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (mut socket, _) = must(listener.accept());
+
+        let stopped_event = serde_json::json!({
+            "type": "event",
+            "seq": 1,
+            "event": "stopped",
+            "body": {
+                "reason": "breakpoint",
+                "threadId": 41
+            }
+        })
+        .to_string();
+        let terminated_event = serde_json::json!({
+            "type": "event",
+            "seq": 2,
+            "event": "terminated",
+            "body": {
+                "reason": "completed"
+            }
+        })
+        .to_string();
+
+        let mut bytes = frame(stopped_event.as_bytes());
+        bytes.extend_from_slice(&frame(terminated_event.as_bytes()));
+        must(socket.write_all(&bytes));
+        must(socket.flush());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    match must(event_rx.recv_timeout(Duration::from_secs(2))) {
+        DapEvent::Stopped { reason, thread_id } => {
+            assert_eq!(reason, "breakpoint");
+            assert_eq!(thread_id, 41);
+        }
+        other => must(Err::<(), _>(format!("Expected Stopped event, got {other:?}"))),
+    }
+
+    match must(event_rx.recv_timeout(Duration::from_secs(2))) {
+        DapEvent::Terminated { reason } => {
+            assert_eq!(reason, "completed");
+        }
+        other => must(Err::<(), _>(format!("Expected Terminated event, got {other:?}"))),
+    }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_disconnect_after_start_reader_clears_connection_state() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (mut socket, _) = must(listener.accept());
+        let mut buf = [0u8; 8];
+        loop {
+            match socket.read(&mut buf) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+    });
+
+    let mut session = TcpAttachSession::new();
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+    must(session.connect(&config));
+    assert!(session.is_connected());
+
+    must(session.start_reader());
+    assert!(session.is_connected());
+
+    must(session.disconnect());
+    assert!(!session.is_connected());
 
     must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
 }

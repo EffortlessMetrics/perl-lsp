@@ -122,6 +122,7 @@ impl TcpAttachSession {
     /// Connect to the debugger via TCP
     pub fn connect(&mut self, config: &TcpAttachConfig) -> Result<()> {
         config.validate()?;
+        let _ = self.disconnect();
 
         let address = format!("{}:{}", config.host, config.port);
         tracing::info!(address, "Connecting to Perl debugger");
@@ -149,9 +150,10 @@ impl TcpAttachSession {
 
     /// Disconnect from the debugger
     pub fn disconnect(&mut self) -> Result<()> {
+        *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
+
         if let Some(stream) = self.stream.take() {
             stream.shutdown(std::net::Shutdown::Both)?;
-            *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
             tracing::info!("Disconnected from Perl debugger");
         }
         Ok(())
