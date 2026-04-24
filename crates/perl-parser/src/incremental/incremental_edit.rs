@@ -4,6 +4,32 @@
 //! being inserted, enabling efficient incremental parsing with subtree reuse.
 
 use perl_parser_core::position::Position;
+use std::cmp::Reverse;
+
+/// Validation/normalization options for edit batches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IncrementalEditNormalizationOptions {
+    /// When true, overlap validation is skipped.
+    pub allow_overlaps: bool,
+    /// When true, obvious no-op edits are removed.
+    pub filter_obvious_noops: bool,
+}
+
+/// Validation failure for a malformed edit batch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IncrementalEditBatchError {
+    /// An edit with `start_byte > old_end_byte`.
+    InvalidRange { index: usize, start_byte: usize, old_end_byte: usize },
+    /// Two edits overlap in old-source byte space.
+    OverlappingEdits {
+        first_index: usize,
+        second_index: usize,
+        first_start_byte: usize,
+        first_old_end_byte: usize,
+        second_start_byte: usize,
+        second_old_end_byte: usize,
+    },
+}
 
 /// Enhanced edit with text content for incremental parsing
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +76,7 @@ impl IncrementalEdit {
 
     /// Calculate the byte shift caused by this edit
     pub fn byte_shift(&self) -> isize {
-        self.new_text.len() as isize - (self.old_end_byte - self.start_byte) as isize
+        self.new_text.len() as isize - (self.old_end_byte as isize - self.start_byte as isize)
     }
 
     /// Check if this edit overlaps with a byte range
@@ -93,7 +119,71 @@ impl IncrementalEditSet {
 
     /// Sort edits in reverse order (for applying from end to start)
     pub fn sort_reverse(&mut self) {
-        self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        self.edits.sort_by_key(|e| Reverse(e.start_byte));
+    }
+
+    /// Return a deterministically normalized copy suitable for reverse application.
+    ///
+    /// The resulting order is descending by `start_byte`, then descending by
+    /// `old_end_byte`, with stable input index as final tie-breaker.
+    fn normalized_for_reverse_application(
+        &self,
+        options: IncrementalEditNormalizationOptions,
+    ) -> Vec<(usize, IncrementalEdit)> {
+        let mut indexed_edits: Vec<(usize, IncrementalEdit)> = self
+            .edits
+            .iter()
+            .cloned()
+            .enumerate()
+            .filter(|(_, edit)| {
+                !options.filter_obvious_noops
+                    || !(edit.start_byte == edit.old_end_byte && edit.new_text.is_empty())
+            })
+            .collect();
+
+        indexed_edits.sort_by_key(|(index, edit)| {
+            (Reverse(edit.start_byte), Reverse(edit.old_end_byte), *index)
+        });
+        indexed_edits
+    }
+
+    /// Normalize edit order and validate batch shape.
+    ///
+    /// This function does not inspect source content or UTF-8 boundaries.
+    pub fn normalize_and_validate(
+        &self,
+        options: IncrementalEditNormalizationOptions,
+    ) -> Result<IncrementalEditSet, IncrementalEditBatchError> {
+        let normalized = self.normalized_for_reverse_application(options);
+
+        for (index, edit) in &normalized {
+            if edit.start_byte > edit.old_end_byte {
+                return Err(IncrementalEditBatchError::InvalidRange {
+                    index: *index,
+                    start_byte: edit.start_byte,
+                    old_end_byte: edit.old_end_byte,
+                });
+            }
+        }
+
+        if !options.allow_overlaps {
+            for window in normalized.windows(2) {
+                let (left_index, left) = (&window[0].0, &window[0].1);
+                let (right_index, right) = (&window[1].0, &window[1].1);
+                if right.old_end_byte > left.start_byte {
+                    return Err(IncrementalEditBatchError::OverlappingEdits {
+                        first_index: *left_index,
+                        second_index: *right_index,
+                        first_start_byte: left.start_byte,
+                        first_old_end_byte: left.old_end_byte,
+                        second_start_byte: right.start_byte,
+                        second_old_end_byte: right.old_end_byte,
+                    });
+                }
+            }
+        }
+
+        Ok(IncrementalEditSet { edits: normalized.into_iter().map(|(_, edit)| edit).collect() })
     }
 
     /// Check if the edit set is empty
@@ -114,7 +204,7 @@ impl IncrementalEditSet {
 
         // Sort edits in reverse order to apply from end to start
         let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        sorted_edits.sort_by_key(|e| Reverse(e.start_byte));
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
@@ -139,6 +229,7 @@ impl IncrementalEditSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Error;
 
     #[test]
     fn test_incremental_edit_basic() {
@@ -177,5 +268,87 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_normalize_unsorted_batch_for_reverse_application()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(0, 2, "AA".to_string()));
+        edits.add(IncrementalEdit::new(10, 11, "Z".to_string()));
+        edits.add(IncrementalEdit::new(4, 4, "++".to_string()));
+
+        let normalized =
+            edits.normalize_and_validate(IncrementalEditNormalizationOptions::default()).map_err(
+                |err| Error::other(format!("unsorted but valid batch should normalize: {err:?}")),
+            )?;
+
+        let starts: Vec<usize> = normalized.edits.iter().map(|edit| edit.start_byte).collect();
+        assert_eq!(starts, vec![10, 4, 0]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_normalize_rejects_overlapping_edits() -> Result<(), Box<dyn std::error::Error>> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 5, "ab".to_string()));
+        edits.add(IncrementalEdit::new(3, 7, "cd".to_string()));
+
+        let err = edits
+            .normalize_and_validate(IncrementalEditNormalizationOptions::default())
+            .err()
+            .ok_or_else(|| Error::other("overlapping ranges should fail validation"))?;
+
+        assert!(matches!(err, IncrementalEditBatchError::OverlappingEdits { .. }));
+        Ok(())
+    }
+
+    #[test]
+    fn test_normalize_rejects_backward_range() -> Result<(), Box<dyn std::error::Error>> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(8, 2, "bad".to_string()));
+
+        let err = edits
+            .normalize_and_validate(IncrementalEditNormalizationOptions::default())
+            .err()
+            .ok_or_else(|| Error::other("backward ranges should fail validation"))?;
+
+        assert!(matches!(err, IncrementalEditBatchError::InvalidRange { .. }));
+        Ok(())
+    }
+
+    #[test]
+    fn test_normalize_accepts_zero_width_insertion() -> Result<(), Box<dyn std::error::Error>> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(3, 3, "insert".to_string()));
+
+        let normalized =
+            edits.normalize_and_validate(IncrementalEditNormalizationOptions::default()).map_err(
+                |err| Error::other(format!("zero-width insertion should be valid: {err:?}")),
+            )?;
+
+        assert_eq!(normalized.edits.len(), 1);
+        assert_eq!(normalized.edits[0].start_byte, 3);
+        assert_eq!(normalized.edits[0].old_end_byte, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_total_byte_shift_unchanged_after_normalization()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(5, 9, "xy".to_string())); // -2
+        edits.add(IncrementalEdit::new(1, 1, "abc".to_string())); // +3
+        edits.add(IncrementalEdit::new(12, 14, "Q".to_string())); // -1
+
+        let before = edits.total_byte_shift();
+        let normalized = edits
+            .normalize_and_validate(IncrementalEditNormalizationOptions::default())
+            .map_err(|err| Error::other(format!("valid batch should normalize: {err:?}")))?;
+        let after = normalized.total_byte_shift();
+
+        assert_eq!(before, 0);
+        assert_eq!(after, 0);
+        Ok(())
     }
 }
