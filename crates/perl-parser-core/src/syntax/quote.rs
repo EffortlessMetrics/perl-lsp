@@ -315,6 +315,9 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -332,12 +335,13 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     };
 
     // Parse second body (replacement pattern)
-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
+    let (replacement, modifiers_str, replacement_closed) = if !is_paired && !rest1.is_empty() {
         // Manually parse the replacement for non-paired delimiters
         let chars = rest1.char_indices();
         let mut body = String::new();
         let mut escaped = false;
         let mut end_pos = rest1.len();
+        let mut found_closing = false;
 
         for (i, ch) in chars {
             if escaped {
@@ -353,31 +357,38 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
                 }
                 c if c == closing => {
                     end_pos = i + ch.len_utf8();
+                    found_closing = true;
                     break;
                 }
                 _ => body.push(ch),
             }
         }
 
-        (body, &rest1[end_pos..])
+        (body, &rest1[end_pos..], found_closing)
     } else if is_paired {
         if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
-            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+            let (body, rest, found_closing) =
+                extract_delimited_content_strict(rest2, repl_delimiter, repl_closing);
+            (body, rest, found_closing)
         } else {
-            (String::new(), rest2)
+            (String::new(), "", false)
         }
     } else {
-        (String::new(), rest1)
+        (String::new(), "", false)
     };
 
-    // Extract and validate only valid transliteration modifiers
-    // Security fix: Apply consistent validation for all delimiter types
-    let modifiers = modifiers_str
-        .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
-        .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
-        .collect();
+    // Extract and validate only valid transliteration modifiers. Only consume
+    // modifiers after a complete replacement section is parsed.
+    let modifiers = if replacement_closed {
+        modifiers_str
+            .chars()
+            .take_while(|c| c.is_ascii_alphabetic())
+            .filter(|&c| matches!(c, 'c' | 'd' | 's' | 'r'))
+            .collect()
+    } else {
+        String::new()
+    };
 
     (search, replacement, modifiers)
 }
