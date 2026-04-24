@@ -148,35 +148,123 @@ impl LspServer {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), String>;
+
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn given_fresh_server_when_initialized_notification_arrives_then_server_not_initialized_error_returned()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
 
+        // When
         let result = server.handle_initialized_dispatch();
 
-        assert!(result.is_err(), "initialized before initialize must error");
+        // Then
+        let error =
+            result.err().ok_or("expected initialized to fail, but it succeeded".to_string())?;
+        assert_eq!(error.code, -32002, "must be ServerNotInitialized");
         assert!(!server.is_initialized(), "server must remain uninitialized");
+        Ok(())
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn given_initialized_server_when_initialized_notification_sent_twice_then_second_request_is_invalid()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
 
+        // When
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
+        // Then
         assert!(first.is_ok(), "first initialized must succeed");
-        assert!(second.is_err(), "second initialized must error");
+        let second_error = second
+            .err()
+            .ok_or("expected second initialized to fail, but it succeeded".to_string())?;
+        assert_eq!(second_error.code, -32600, "must be InvalidRequest");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn given_initialize_request_without_initialized_when_compat_mode_runs_then_server_becomes_initialized()
+    -> TestResult {
+        // Given
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
 
+        // When
         server.auto_initialize_for_compat("textDocument/hover");
 
+        // Then
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn given_server_not_in_initialize_phase_when_compat_mode_runs_then_server_stays_uninitialized()
+    {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        // Then
+        assert!(!server.is_initialized(), "compat mode should no-op before initialize");
+    }
+
+    #[test]
+    fn given_server_receives_shutdown_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        let response = server
+            .handle_shutdown_dispatch()
+            .map_err(|e| format!("shutdown should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(response, Some(json!(null)), "shutdown returns JSON null");
+        assert!(server.shutdown_received.load(Ordering::Acquire), "shutdown flag should be set");
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_unknown_level_when_set_trace_dispatch_runs_then_trace_defaults_to_off()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "unexpected"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(server.trace_level.lock().as_str(), "off");
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_verbose_level_when_set_trace_dispatch_runs_then_trace_level_is_updated()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "verbose"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(server.trace_level.lock().as_str(), "verbose");
+        Ok(())
     }
 }
