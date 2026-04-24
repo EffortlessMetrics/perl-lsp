@@ -714,7 +714,6 @@ mod tests {
     use super::*;
     use perl_parser_core::NodeKind;
     use perl_parser_core::token_stream::TokenKind;
-    use perl_parser_core::NodeKind;
     use perl_tdd_support::must;
 
     #[test]
