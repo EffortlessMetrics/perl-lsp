@@ -149,6 +149,47 @@ fn is_permission_denied_error(e: &std::io::Error) -> bool {
     false
 }
 
+/// Read source text from disk with basic encoding fallbacks.
+///
+/// Behavior:
+/// - UTF-8 BOM (`EF BB BF`) is removed.
+/// - UTF-16 LE/BE with BOM is decoded.
+/// - Other content first tries strict UTF-8, then falls back to lossy UTF-8.
+///
+/// Odd-length payloads after a UTF-16 BOM fall back to lossy UTF-8 decoding
+/// of the original bytes rather than silently dropping the trailing byte.
+#[cfg(feature = "workspace")]
+fn read_text_with_encoding_fallback(path: &Path) -> std::io::Result<String> {
+    let bytes = std::fs::read(path)?;
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        return Ok(String::from_utf8_lossy(&bytes[3..]).into_owned());
+    }
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        let payload = &bytes[2..];
+        if !payload.len().is_multiple_of(2) {
+            // Odd-length UTF-16 payload; fall back to lossy UTF-8 of the
+            // full original bytes rather than truncating the trailing byte.
+            return Ok(String::from_utf8_lossy(&bytes).into_owned());
+        }
+        let units: Vec<u16> =
+            payload.chunks_exact(2).map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])).collect();
+        return Ok(String::from_utf16_lossy(&units));
+    }
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        let payload = &bytes[2..];
+        if !payload.len().is_multiple_of(2) {
+            return Ok(String::from_utf8_lossy(&bytes).into_owned());
+        }
+        let units: Vec<u16> =
+            payload.chunks_exact(2).map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]])).collect();
+        return Ok(String::from_utf16_lossy(&units));
+    }
+    match String::from_utf8(bytes) {
+        Ok(text) => Ok(text),
+        Err(err) => Ok(String::from_utf8_lossy(&err.into_bytes()).into_owned()),
+    }
+}
+
 /// RAII guard that clears the `indexing_in_progress` flag on drop.
 ///
 /// Ensures the flag is always cleared, even if the indexing thread panics.
@@ -903,7 +944,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -934,7 +975,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_with_encoding_fallback(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1052,7 +1093,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_text_with_encoding_fallback(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1303,7 +1344,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1376,7 +1417,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_with_encoding_fallback(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1626,7 +1667,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_text_with_encoding_fallback(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1869,7 +1910,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
     }
 }
 
@@ -2084,8 +2125,12 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "workspace")]
+    use super::read_text_with_encoding_fallback;
     use super::{LspServer, module_name_appears_in_text};
     use serde_json::json;
+    #[cfg(feature = "workspace")]
+    use std::io::Write;
 
     #[test]
     fn test_module_name_appears_exact_match() {
@@ -2162,5 +2207,101 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_decodes_utf16le_bom()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("utf16le.pm");
+        let text = "my $x = \"π\";";
+        let mut bytes = vec![0xFF, 0xFE];
+        for unit in text.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+        std::fs::File::create(&path)?.write_all(&bytes)?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, text);
+        Ok(())
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_strips_utf8_bom() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("utf8_bom.pm");
+        std::fs::write(&path, [0xEF, 0xBB, 0xBF, b'p', b'a', b'c', b'k', b'a', b'g', b'e'])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "package");
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 LE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate. We fall back to lossy
+    /// UTF-8 of the original bytes so the caller still gets something
+    /// reasonable to index.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16le()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16le.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFF, 0xFE, 0x6D, 0x00, 0x79])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        // Must return something (not panic) — the replacement string is
+        // lossy but deterministic.
+        assert!(!read.is_empty());
+        Ok(())
+    }
+
+    /// Regression: a UTF-16 BE BOM followed by an odd number of payload
+    /// bytes must not panic or silently truncate.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_odd_length_utf16be()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("odd_utf16be.pm");
+        // BOM (2 bytes) + 3 payload bytes = odd-length UTF-16 payload.
+        std::fs::write(&path, [0xFE, 0xFF, 0x00, 0x6D, 0x00])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert!(!read.is_empty());
+        Ok(())
+    }
+
+    /// Edge case: empty file should decode to an empty string without panic.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_empty_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("empty.pm");
+        std::fs::write(&path, [])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "Empty file should decode to empty string");
+        Ok(())
+    }
+
+    /// Edge case: file with only a UTF-8 BOM and no content should decode
+    /// to an empty string (BOM is stripped, nothing remains).
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_bom_only_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("bom_only.pm");
+        std::fs::write(&path, [0xEF, 0xBB, 0xBF])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "BOM-only file should decode to empty string after BOM strip");
+        Ok(())
     }
 }

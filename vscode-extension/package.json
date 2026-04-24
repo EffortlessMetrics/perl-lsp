@@ -26,7 +26,9 @@
     "code-completion",
     "diagnostics",
     "vscodium",
-    "open-vsx"
+    "open-vsx",
+    "kilo-code",
+    "kilo code"
   ],
   "extensionKind": [
     "workspace"
@@ -869,21 +871,21 @@
         }
       ],
       "editor/context": [
-      {
-        "command": "perl-lsp.runTests",
-        "when": "editorLangId == perl",
-        "group": "navigation"
-      },
-      {
-        "command": "perl-lsp.runTestAtCursor",
-        "when": "editorLangId == perl",
-        "group": "navigation"
-      },
-      {
-        "command": "perl-lsp.runPerlCritic",
-        "when": "editorLangId == perl",
-        "group": "navigation"
-      }
+        {
+          "command": "perl-lsp.runTests",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.runTestAtCursor",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        },
+        {
+          "command": "perl-lsp.runPerlCritic",
+          "when": "editorLangId == perl",
+          "group": "navigation"
+        }
       ]
     },
     "keybindings": [
@@ -1009,7 +1011,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.perlcritic.enabled` and `perl-lsp.perlcritic.severity` for quick local Perl::Critic tuning, or run the `Perl: Run PerlCritic` / `Perl: Set PerlCritic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) \u2014 open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. Use `perl-lsp.perlcritic.enabled` and `perl-lsp.perlcritic.severity` for quick local Perl::Critic tuning, or run the `Perl: Run PerlCritic` / `Perl: Set PerlCritic Severity` commands from the palette. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) \u2014 place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` \u2014 module search paths\n- `[diagnostics] perlcritic = true` \u2014 enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` \u2014 toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"
