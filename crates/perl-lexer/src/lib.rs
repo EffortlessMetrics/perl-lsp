@@ -1934,22 +1934,13 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if !self.after_arrow
-                && self.hash_brace_depth == 0
-                && ch == 's'
-                && self.peek_char(1) == Some('\'')
-            {
+            if !self.after_arrow && ch == 's' && self.peek_char(1) == Some('\'') {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if !self.after_arrow
-                && self.hash_brace_depth == 0
-                && ch == 'y'
-                && self.peek_char(1) == Some('\'')
-            {
+            } else if !self.after_arrow && ch == 'y' && self.peek_char(1) == Some('\'') {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
             } else if !self.after_arrow
-                && self.hash_brace_depth == 0
                 && ch == 't'
                 && self.peek_char(1) == Some('r')
                 && self.peek_char(2) == Some('\'')
@@ -2055,41 +2046,39 @@ impl<'a> PerlLexer<'a> {
             // Check for substitution/transliteration operators
             // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y")
-            {
-                let immediate = self.current_char();
-                let (candidate, char_after_next, has_whitespace) =
-                    if immediate.is_some_and(|c| c.is_whitespace()) {
-                        let (nc, ca) = self.peek_nonspace_and_following();
-                        (nc, ca, true)
-                    } else {
-                        let following = immediate.and_then(|c| {
-                            let j = self.position + c.len_utf8();
-                            self.input.get(j..).and_then(|s| s.chars().next())
-                        });
-                        (immediate, following, false)
-                    };
-
-                if let Some(next) = candidate {
-                    // `s => 1` should remain a fat-arrow hash key, not quote op.
-                    let is_fat_arrow = next == '=' && char_after_next == Some('>');
-                    let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
-                    let is_quote_char = matches!(next, '\'' | '"') && text != "s";
-                    let transliteration_allows_whitespace = text == "tr" || text == "y";
-                    let substitution_disallows_whitespace = text == "s" && has_whitespace;
-                    let is_valid_delim = Self::is_quote_delim(next)
-                        && !is_fat_arrow
-                        && !substitution_disallows_whitespace
-                        && (!has_whitespace
-                            || is_paired_delim
-                            || is_quote_char
-                            || transliteration_allows_whitespace);
-
-                    if is_valid_delim {
+            if !self.after_arrow && matches!(text, "s" | "tr" | "y") {
+                if let Some(next) = self.current_char() {
+                    // Check if followed by a delimiter
+                    if matches!(
+                        next,
+                        '/' | '|'
+                            | '\''
+                            | '{'
+                            | '['
+                            | '('
+                            | '<'
+                            | '!'
+                            | '#'
+                            | '@'
+                            | '$'
+                            | '%'
+                            | '^'
+                            | '&'
+                            | '*'
+                            | '+'
+                            | '='
+                            | '~'
+                            | '`'
+                    ) {
                         match text {
-                            "s" => return self.parse_substitution(start),
-                            "tr" | "y" => return self.parse_transliteration(start),
+                            "s" => {
+                                return self.parse_substitution(start);
+                            }
+                            "tr" | "y" => {
+                                return self.parse_transliteration(start);
+                            }
                             unexpected => {
+                                // Return diagnostic token instead of panicking
                                 return Some(Token {
                                     token_type: TokenType::Error(Arc::from(format!(
                                         "Unexpected substitution operator '{}': expected 's', 'tr', or 'y' at position {}",
@@ -3271,10 +3260,6 @@ impl<'a> PerlLexer<'a> {
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 'tr' or 'y'
-        while self.current_char().is_some_and(char::is_whitespace) {
-            self.advance();
-        }
-
         let delimiter = self.current_char()?;
         self.advance(); // Skip delimiter
 

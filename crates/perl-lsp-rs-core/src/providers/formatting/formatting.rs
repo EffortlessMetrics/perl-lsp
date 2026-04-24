@@ -9,8 +9,8 @@ pub use perl_lsp_perltidy::PerlTidyConfig;
 
 /// Count the number of UTF-16 code units in `s`.
 ///
-/// LSP positions use UTF-16 code units (see Language Server Protocol spec Â§3.1).
-/// Characters in the Basic Multilingual Plane (U+0000â€“U+FFFF) count as 1 unit;
+/// LSP positions use UTF-16 code units (see Language Server Protocol spec §3.1).
+/// Characters in the Basic Multilingual Plane (U+0000–U+FFFF) count as 1 unit;
 /// supplementary-plane characters (U+10000 and above) count as 2 units.
 fn utf16_len(s: &str) -> usize {
     s.chars().map(|c| if c as u32 >= 0x10000 { 2 } else { 1 }).sum()
@@ -27,7 +27,7 @@ pub enum FormattingError {
 
     /// Error occurred during perltidy execution.
     ///
-    /// This usually means perltidy ran but reported a problem â€” check that the
+    /// This usually means perltidy ran but reported a problem — check that the
     /// Perl code is syntactically valid, or inspect the perltidy output below.
     #[error("perltidy error (check Perl syntax): {0}")]
     PerltidyError(String),
@@ -88,18 +88,7 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         content: &str,
         options: &FormattingOptions,
     ) -> Result<FormattedDocument, FormattingError> {
-        let formatted = match self.run_perltidy(content, options) {
-            Ok(formatted) => formatted,
-            Err(FormattingError::PerltidyNotFound(message)) => {
-                let rust_only_formatted = apply_lsp_whitespace_options(content, options);
-                if rust_only_formatted == content {
-                    return Err(FormattingError::PerltidyNotFound(message));
-                }
-                rust_only_formatted
-            }
-            Err(other) => return Err(other),
-        };
-        let formatted = apply_lsp_whitespace_options(&formatted, options);
+        let formatted = self.run_perltidy(content, options)?;
 
         if formatted == content {
             return Ok(FormattedDocument { text: formatted, edits: vec![] });
@@ -224,109 +213,5 @@ impl<R: perl_subprocess_runtime::SubprocessRuntime> FormattingProvider<R> {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    }
-}
-
-fn apply_lsp_whitespace_options(content: &str, options: &FormattingOptions) -> String {
-    let mut output = content.to_string();
-
-    if options.trim_trailing_whitespace.unwrap_or(false) {
-        output = trim_trailing_whitespace(&output);
-    }
-
-    if options.trim_final_newlines.unwrap_or(false) {
-        while output.ends_with('\n') {
-            output.pop();
-        }
-    }
-
-    if options.insert_final_newline.unwrap_or(false) && !output.ends_with('\n') {
-        output.push('\n');
-    }
-
-    output
-}
-
-fn trim_trailing_whitespace(content: &str) -> String {
-    let mut result = String::with_capacity(content.len());
-    for line in content.split_inclusive('\n') {
-        if let Some(without_nl) = line.strip_suffix('\n') {
-            let trimmed = without_nl.trim_end_matches([' ', '\t']);
-            result.push_str(trimmed);
-            result.push('\n');
-        } else {
-            result.push_str(line.trim_end_matches([' ', '\t']));
-        }
-    }
-    result
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow::Result;
-    use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
-
-    struct MissingPerltidyRuntime;
-
-    impl SubprocessRuntime for MissingPerltidyRuntime {
-        fn run_command(
-            &self,
-            _program: &str,
-            _args: &[&str],
-            _stdin: Option<&[u8]>,
-        ) -> std::result::Result<SubprocessOutput, SubprocessError> {
-            Err(SubprocessError::new("perltidy missing"))
-        }
-    }
-
-    #[test]
-    fn format_document_uses_rust_whitespace_fallback_when_perltidy_missing() -> Result<()> {
-        let provider = FormattingProvider::new(MissingPerltidyRuntime);
-        let options = FormattingOptions {
-            tab_size: 4,
-            insert_spaces: true,
-            trim_trailing_whitespace: Some(true),
-            insert_final_newline: Some(true),
-            trim_final_newlines: Some(true),
-        };
-
-        let formatted = provider.format_document("my $x = 1;   \n\n\n", &options)?;
-        assert_eq!(formatted.edits.len(), 1);
-        assert_eq!(formatted.edits[0].new_text, "my $x = 1;\n");
-        Ok(())
-    }
-
-    #[test]
-    fn format_document_keeps_perltidy_not_found_error_when_no_rust_fallback_changes() {
-        let provider = FormattingProvider::new(MissingPerltidyRuntime);
-        let options = FormattingOptions {
-            tab_size: 4,
-            insert_spaces: true,
-            trim_trailing_whitespace: None,
-            insert_final_newline: None,
-            trim_final_newlines: None,
-        };
-
-        let result = provider.format_document("my $x = 1;\n", &options);
-        assert!(matches!(result, Err(FormattingError::PerltidyNotFound(_))));
-    }
-    #[test]
-    fn apply_lsp_whitespace_options_trim_final_newlines_removes_all_trailing_newlines() {
-        // Regression: previous implementation used `ends_with("\n\n")` which left
-        // one trailing newline. LSP trimFinalNewlines must remove ALL trailing newlines.
-        let options = FormattingOptions {
-            tab_size: 4,
-            insert_spaces: true,
-            trim_trailing_whitespace: None,
-            insert_final_newline: None,
-            trim_final_newlines: Some(true),
-        };
-        let r = apply_lsp_whitespace_options("content\n", &options);
-        assert_eq!(r, "content");
-        let r = apply_lsp_whitespace_options("content\n\n", &options);
-        assert_eq!(r, "content");
-        let r = apply_lsp_whitespace_options("content\n\n\n", &options);
-        assert_eq!(r, "content");
     }
 }

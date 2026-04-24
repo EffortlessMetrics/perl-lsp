@@ -4,7 +4,6 @@
 //! `perl-lsp-rs-core::uri` in Wave G3 (#4535).
 
 use lsp_types::Uri;
-use url::Url;
 
 fn fallback_uri() -> Uri {
     for candidate in ["file:///unknown", "file:///", "about:blank", "urn:perl-lsp:unknown"] {
@@ -31,9 +30,6 @@ fn fallback_uri() -> Uri {
 pub fn parse_uri(s: &str) -> Uri {
     match s.parse::<Uri>() {
         Ok(uri) => uri,
-        Err(_) => Url::parse(s)
-            .ok()
-            .and_then(|url| url.as_str().parse::<Uri>().ok())
-            .unwrap_or_else(fallback_uri),
+        Err(_) => fallback_uri(),
     }
 }

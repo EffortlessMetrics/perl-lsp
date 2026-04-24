@@ -134,59 +134,6 @@ fn reject_class_declaration_with_trailing_separator() -> Result<(), Box<dyn std:
 }
 
 #[test]
-fn parse_package_declaration_with_trailing_separator() -> Result<(), Box<dyn std::error::Error>> {
-    let mut parser = Parser::new("package My::App::;");
-    let ast = must(parser.parse());
-
-    match &ast.kind {
-        V1NodeKind::Program { statements } => {
-            let Some(package_node) = statements.first() else {
-                return Err("expected a package statement".into());
-            };
-
-            match &package_node.kind {
-                V1NodeKind::Package { name, block, .. } => {
-                    assert_eq!(name, "My::App::");
-                    assert!(block.is_none(), "package statement form should not have a block");
-                }
-                other => return Err(format!("expected Package node, got {:?}", other).into()),
-            }
-        }
-        other => return Err(format!("expected Program, got {:?}", other).into()),
-    }
-
-    assert!(parser.errors().is_empty(), "unexpected parser errors: {:?}", parser.errors());
-    Ok(())
-}
-
-#[test]
-fn parse_package_declaration_with_trailing_separator_and_block()
--> Result<(), Box<dyn std::error::Error>> {
-    let mut parser = Parser::new("package My::App:: { my $x = 1; }");
-    let ast = must(parser.parse());
-
-    match &ast.kind {
-        V1NodeKind::Program { statements } => {
-            let Some(package_node) = statements.first() else {
-                return Err("expected a package statement".into());
-            };
-
-            match &package_node.kind {
-                V1NodeKind::Package { name, block, .. } => {
-                    assert_eq!(name, "My::App::");
-                    assert!(block.is_some(), "package block form should include a block node");
-                }
-                other => return Err(format!("expected Package node, got {:?}", other).into()),
-            }
-        }
-        other => return Err(format!("expected Program, got {:?}", other).into()),
-    }
-
-    assert!(parser.errors().is_empty(), "unexpected parser errors: {:?}", parser.errors());
-    Ok(())
-}
-
-#[test]
 fn parse_multiple_statements() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my $x = 1; my $y = 2; my $z = 3;");
     let ast = must(parser.parse());

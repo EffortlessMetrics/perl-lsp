@@ -57,7 +57,7 @@ impl CriticAnalyzer {
 
     /// Parse perlcritic output
     fn parse_output(&self, output: &[u8], file_path: &str) -> Result<Vec<Violation>, String> {
-        let output_str = decode_perlcritic_output(output);
+        let output_str = String::from_utf8_lossy(output);
         Ok(parse_perlcritic_output(&output_str)
             .into_iter()
             .map(|parsed| Violation {
@@ -150,72 +150,4 @@ fn build_perlcritic_args(config: &CriticConfig, path_str: &str) -> Vec<String> {
     args.push("--".to_string());
     args.push(path_str.to_string());
     args
-}
-
-fn decode_perlcritic_output(output: &[u8]) -> String {
-    if let Ok(valid) = std::str::from_utf8(output) {
-        return valid.to_string();
-    }
-
-    decode_windows_1252(output)
-}
-
-fn decode_windows_1252(bytes: &[u8]) -> String {
-    bytes
-        .iter()
-        .map(|byte| char::from_u32(windows_1252_codepoint(*byte)).unwrap_or('\u{FFFD}'))
-        .collect()
-}
-
-fn windows_1252_codepoint(byte: u8) -> u32 {
-    match byte {
-        0x80 => 0x20AC,
-        0x82 => 0x201A,
-        0x83 => 0x0192,
-        0x84 => 0x201E,
-        0x85 => 0x2026,
-        0x86 => 0x2020,
-        0x87 => 0x2021,
-        0x88 => 0x02C6,
-        0x89 => 0x2030,
-        0x8A => 0x0160,
-        0x8B => 0x2039,
-        0x8C => 0x0152,
-        0x8E => 0x017D,
-        0x91 => 0x2018,
-        0x92 => 0x2019,
-        0x93 => 0x201C,
-        0x94 => 0x201D,
-        0x95 => 0x2022,
-        0x96 => 0x2013,
-        0x97 => 0x2014,
-        0x98 => 0x02DC,
-        0x99 => 0x2122,
-        0x9A => 0x0161,
-        0x9B => 0x203A,
-        0x9C => 0x0153,
-        0x9E => 0x017E,
-        0x9F => 0x0178,
-        _ => u32::from(byte),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::decode_perlcritic_output;
-
-    #[test]
-    fn decode_perlcritic_output_preserves_utf8() {
-        let original = "critic: café — naïve";
-        let decoded = decode_perlcritic_output(original.as_bytes());
-        assert_eq!(decoded, original);
-    }
-
-    #[test]
-    fn decode_perlcritic_output_falls_back_to_windows_1252() {
-        // "café — test" encoded as CP-1252 bytes.
-        let bytes = b"caf\xe9 \x97 test";
-        let decoded = decode_perlcritic_output(bytes);
-        assert_eq!(decoded, "café — test");
-    }
 }

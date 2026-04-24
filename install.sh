@@ -13,13 +13,7 @@ NC='\033[0m' # No Color
 
 # Default values
 VERSION="${1:-latest}"
-if [ "${2:-}" != "" ]; then
-    INSTALL_DIR="$2"
-elif [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
-    INSTALL_DIR="/data/data/com.termux/files/usr/bin"
-else
-    INSTALL_DIR="$HOME/.local/bin"
-fi
+INSTALL_DIR="${2:-$HOME/.local/bin}"
 REPO="EffortlessMetrics/perl-lsp"
 NAME="perl-lsp"
 
@@ -45,11 +39,6 @@ write_error() {
 detect_system() {
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
-    IS_TERMUX=0
-
-    if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux/files/usr/bin" ]; then
-        IS_TERMUX=1
-    fi
     
     case $OS in
         linux)
@@ -64,19 +53,11 @@ detect_system() {
     esac
     
     case $ARCH in
-        x86_64|amd64|x64)
+        x86_64)
             ARCH="x86_64"
             ;;
         aarch64|arm64)
             ARCH="aarch64"
-            ;;
-        armv7l|armv7|armv6l|armhf)
-            write_error "Detected 32-bit ARM architecture ($ARCH). Prebuilt releases are currently available for ARM64 only.
-
-Try one of:
-  1) Install from source on this device:
-     cargo install perllsp --locked --target armv7-unknown-linux-gnueabihf
-  2) Use an ARM64 (aarch64) OS/device to install prebuilt binaries."
             ;;
         *)
             write_error "Unsupported architecture: $ARCH"
@@ -84,16 +65,11 @@ Try one of:
     esac
     
     TARGET="$ARCH-unknown-$OS-gnu"
-    if [ "$OS" = "linux" ] && [ "$IS_TERMUX" = "1" ]; then
-        TARGET="$ARCH-unknown-linux-musl"
-    elif [ "$OS" = "darwin" ]; then
+    if [ "$OS" = "darwin" ]; then
         TARGET="$ARCH-apple-darwin"
     fi
     
     write_info "Detected system: $OS ($ARCH) - $TARGET"
-    if [ "$IS_TERMUX" = "1" ]; then
-        write_info "Termux environment detected; defaulting install path to $INSTALL_DIR"
-    fi
 }
 
 # Get version information

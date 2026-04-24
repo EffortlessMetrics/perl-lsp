@@ -12,7 +12,7 @@ jest.mock('vscode-languageclient/node', () => ({
   },
 }));
 
-import { formatIssueDiagnosticInfo, getLanguageServerLaunchArgs } from '../extension';
+import { getLanguageServerLaunchArgs } from '../extension';
 
 describe('language client launch args', () => {
   beforeEach(() => {
@@ -36,34 +36,5 @@ describe('language client launch args', () => {
 
     expect(getLanguageServerLaunchArgs(false)).toEqual(['--feature-profile=prod']);
     expect(getLanguageServerLaunchArgs(true)).toEqual(['--log', '--feature-profile=prod']);
-  });
-});
-
-
-describe('issue diagnostic formatting', () => {
-  test('uses the provided editor name for non-VS Code hosts', () => {
-    const info = formatIssueDiagnosticInfo({
-      serverVersion: 'perllsp 0.12.4',
-      extensionVersion: '0.12.4',
-      editorVersion: '1.99.0',
-      platform: 'linux',
-      arch: 'x64',
-      editorName: 'Kilo Code',
-    });
-
-    expect(info).toContain('Kilo Code: 1.99.0');
-    expect(info).not.toContain('VS Code: 1.99.0');
-  });
-
-  test('falls back to VS Code when editor name is missing', () => {
-    const info = formatIssueDiagnosticInfo({
-      serverVersion: 'perllsp 0.12.4',
-      extensionVersion: '0.12.4',
-      editorVersion: '1.99.0',
-      platform: 'linux',
-      arch: 'x64',
-    });
-
-    expect(info).toContain('VS Code: 1.99.0');
   });
 });

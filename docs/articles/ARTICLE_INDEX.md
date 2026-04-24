@@ -50,7 +50,6 @@ Articles from the Wave G1 collapse session — 5 PRs merged, 74 → 49 published
 | [WINDOWS_HARNESS_GAPS.md](WINDOWS_HARNESS_GAPS.md) | "Five Windows Harness Gaps in One Session" | Five distinct platform-specific bugs; systemic fix via migration to `xtask`. |
 | [MEMORY_COMPOUNDS_WITHIN_SESSION.md](MEMORY_COMPOUNDS_WITHIN_SESSION.md) | "Memory Compounds Within a Session" | Memory writes as context-window extensions within a single long session. |
 | [CODERABBIT_INVERSE_SAFETY.md](CODERABBIT_INVERSE_SAFETY.md) | "CodeRabbit Skips Big PRs" | Inverse safety pattern — automated review thins out when human review should thicken. |
-| [PIPELINE_STATE_MACHINE.md](PIPELINE_STATE_MACHINE.md) | "Pipeline State Machine" | Label-driven state machine reference: sign-off labels, state labels, routing labels, invariants, transition diagrams for issue / build / PR pipelines. |
 
 ---
 

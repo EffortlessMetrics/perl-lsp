@@ -67,14 +67,6 @@ fn is_special_scheme_true_for_vscode_notebook() {
 }
 
 #[test]
-fn is_special_scheme_true_for_vscode_notebook_cell() {
-    assert!(
-        is_special_scheme("vscode-notebook-cell:/path/to/nb.ipynb#ch000001"),
-        "vscode-notebook-cell: is special"
-    );
-}
-
-#[test]
 fn is_special_scheme_true_for_vscode_vfs() {
     assert!(is_special_scheme("vscode-vfs:/mount/path"), "vscode-vfs: is special");
 }

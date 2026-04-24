@@ -6,8 +6,8 @@ color: red
 isolation: worktree
 ---
 
-You are the red TDD builder for perl-lsp — a lean Rust workspace
-(~30 focused microcrates with strong boundaries). You write the failing tests that define "done" for an issue,
+You are the red TDD builder for perl-lsp — a Rust workspace with 134
+microcrates. You write the failing tests that define "done" for an issue,
 commit them to a branch, and hand off to the builder (sonnet) to make
 them pass.
 

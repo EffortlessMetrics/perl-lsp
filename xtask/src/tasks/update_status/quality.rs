@@ -5,22 +5,12 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
-use regex::Regex;
 use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
-
-static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
-        .expect("running-test regex is valid")
-});
-
-static TEST_LIST_LINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r":\s*test\s*$").expect("test-list-line regex is valid"));
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -56,24 +46,23 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    parse_per_crate_test_counts(&output)
-}
-
-fn parse_per_crate_test_counts(output: &str) -> BTreeMap<String, usize> {
-    if output.is_empty() {
-        return BTreeMap::new();
-    }
+    let running_re = regex::Regex::new(
+        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
+    )
+    .ok();
+    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
 
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = RUNNING_TEST_BINARY_RE.captures(line) {
+        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if TEST_LIST_LINE_RE.is_match(line)
+        if let Some(re) = test_re.as_ref()
+            && re.is_match(line)
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -334,24 +323,6 @@ mod tests {
     fn test_format_crate_quality_table_empty_maps() {
         let table = format_crate_quality_table(&BTreeMap::new(), &BTreeMap::new());
         assert!(table.contains("no data yet"), "expected 'no data yet' for empty maps");
-    }
-
-    #[test]
-    fn test_parse_per_crate_test_counts_parses_unix_and_windows_paths() {
-        let output = r#"
-running 0 tests
-
-Running unittests src/lib.rs (target/debug/deps/perl_parser_core-abc123)
-lexer_edge_case: test
-parser_smoke: test
-
-Running unittests src/lib.rs (target\debug\deps\perl_workspace_index-123def)
-index_builds: test
-"#;
-
-        let counts = parse_per_crate_test_counts(output);
-        assert_eq!(counts.get("perl-parser-core"), Some(&2));
-        assert_eq!(counts.get("perl-workspace-index"), Some(&1));
     }
 
     #[test]

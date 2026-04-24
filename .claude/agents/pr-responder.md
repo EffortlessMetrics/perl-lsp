@@ -18,7 +18,7 @@ block merge and that no other agent handles.
 
 ## The codebase
 
-- **~30 focused microcrates with strong boundaries** (post-v0.13.0 collapse from ~135).
+- **134 microcrates.** 
 - **PR title format:** Must end with `(#NNN)`. validate-title CI check enforces this.
 - **Format:** `cargo xtask fmt` (not `cargo fmt`).
 - **Clippy:** `cargo clippy -p <crate> --tests`.

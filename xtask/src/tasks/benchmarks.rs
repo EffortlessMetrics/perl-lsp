@@ -412,11 +412,14 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
             .components()
             .map(|part| part.as_os_str().to_string_lossy().to_string())
             .collect();
-        let Some((group, bench_name)) = parse_criterion_identity(&parts) else {
+        if parts.len() < 3 {
             eprintln!("Warning: unexpected criterion path {}", path.display());
             continue;
-        };
-        let category = categorize_benchmark(&group, &bench_name);
+        }
+
+        let group = parts[0].as_str();
+        let bench_name = parts[1].as_str();
+        let category = categorize_benchmark(group, bench_name);
 
         let file_content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -452,38 +455,13 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
         entry.insert("unit".to_string(), Value::String(unit));
         entry.insert("display".to_string(), Value::String(display));
 
-        by_category.entry(category).or_default().insert(bench_name, Value::Object(entry));
+        by_category
+            .entry(category)
+            .or_default()
+            .insert(bench_name.to_string(), Value::Object(entry));
     }
 
     Ok(by_category)
-}
-
-fn parse_criterion_identity(parts: &[String]) -> Option<(String, String)> {
-    if parts.len() < 3 || parts.last().is_none_or(|part| part != "estimates.json") {
-        return None;
-    }
-
-    // Ignore Criterion comparison-diff directories. We only want direct run output.
-    if parts.iter().any(|part| part == "change") {
-        return None;
-    }
-
-    let marker = parts.get(parts.len().saturating_sub(2)).map(String::as_str);
-    if matches!(marker, Some("base")) {
-        return None;
-    }
-
-    if matches!(marker, Some("new")) && parts.len() >= 4 {
-        let bench_name = parts[parts.len() - 3].clone();
-        let group = parts[..parts.len() - 3].join("/");
-        let group = if group.is_empty() { "unknown".to_string() } else { group };
-        return Some((group, bench_name));
-    }
-
-    let bench_name = parts[parts.len() - 2].clone();
-    let group = parts[..parts.len() - 2].join("/");
-    let group = if group.is_empty() { "unknown".to_string() } else { group };
-    Some((group, bench_name))
 }
 
 fn categorize_benchmark(group: &str, bench_name: &str) -> String {
@@ -590,113 +568,5 @@ fn run_python_script(script: &Path, args: &[&str], label: &str) -> Result<()> {
         Ok(())
     } else {
         bail!("python benchmark task failed: {}", label);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[test]
-    fn parse_criterion_identity_handles_new_layout() {
-        let parts = vec![
-            "parser".to_string(),
-            "large_file".to_string(),
-            "new".to_string(),
-            "estimates.json".to_string(),
-        ];
-        let result = parse_criterion_identity(&parts);
-        assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
-    }
-
-    #[test]
-    fn parse_criterion_identity_supports_nested_group_names() {
-        let parts = vec![
-            "lsp".to_string(),
-            "rope".to_string(),
-            "position_conversion".to_string(),
-            "new".to_string(),
-            "estimates.json".to_string(),
-        ];
-        let result = parse_criterion_identity(&parts);
-        assert_eq!(result, Some(("lsp/rope".to_string(), "position_conversion".to_string())));
-    }
-
-    #[test]
-    fn parse_criterion_identity_rejects_too_few_parts() {
-        assert_eq!(parse_criterion_identity(&[]), None);
-        assert_eq!(parse_criterion_identity(&["estimates.json".to_string()]), None);
-        assert_eq!(
-            parse_criterion_identity(&["group".to_string(), "estimates.json".to_string()]),
-            None
-        );
-    }
-
-    #[test]
-    fn parse_criterion_identity_rejects_base_runs() {
-        let parts = vec![
-            "parser".to_string(),
-            "large_file".to_string(),
-            "base".to_string(),
-            "estimates.json".to_string(),
-        ];
-        assert_eq!(parse_criterion_identity(&parts), None);
-    }
-
-    #[test]
-    fn parse_criterion_identity_rejects_change_dirs() {
-        let parts = vec![
-            "parser".to_string(),
-            "large_file".to_string(),
-            "change".to_string(),
-            "estimates.json".to_string(),
-        ];
-        assert_eq!(parse_criterion_identity(&parts), None);
-    }
-
-    #[test]
-    fn parse_criterion_identity_handles_plain_layout_without_new_subdir() {
-        // Older Criterion versions write estimates.json directly under bench_name/
-        let parts = vec![
-            "parser".to_string(),
-            "large_file".to_string(),
-            "estimates.json".to_string(),
-        ];
-        let result = parse_criterion_identity(&parts);
-        assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
-    }
-
-    #[test]
-    fn parse_criterion_results_excludes_base_and_change_results() -> Result<()> {
-        let dir = TempDir::new()?;
-        let root = dir.path();
-
-        let include_path = root.join("parser").join("parse_simple").join("new");
-        fs::create_dir_all(&include_path)?;
-        fs::write(
-            include_path.join("estimates.json"),
-            r#"{"mean":{"point_estimate":1000.0,"confidence_interval":{"lower_bound":900.0,"upper_bound":1100.0}}}"#,
-        )?;
-
-        let base_path = root.join("parser").join("parse_simple").join("base");
-        fs::create_dir_all(&base_path)?;
-        fs::write(base_path.join("estimates.json"), r#"{"mean":{"point_estimate":5000.0}}"#)?;
-
-        let change_path = root.join("parser").join("parse_simple").join("change");
-        fs::create_dir_all(&change_path)?;
-        fs::write(change_path.join("estimates.json"), r#"{"mean":{"point_estimate":8000.0}}"#)?;
-
-        let results = parse_criterion_results(root)?;
-        let parser = results
-            .get("parser")
-            .ok_or_else(|| color_eyre::eyre::eyre!("missing parser category"))?;
-        let parse_simple = parser
-            .get("parse_simple")
-            .and_then(Value::as_object)
-            .ok_or_else(|| color_eyre::eyre::eyre!("missing parse_simple benchmark"))?;
-        assert_eq!(parse_simple.get("mean_ns"), Some(&Value::from(1000_u64)));
-        Ok(())
     }
 }

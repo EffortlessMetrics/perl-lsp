@@ -121,12 +121,9 @@ use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use crate::fallback::text::extract_text_based_symbols;
 
 pub(super) fn source_path_from_uri(uri: &str) -> Option<PathBuf> {
-    if let Ok(value) = Url::parse(uri) {
-        return if value.scheme() == "file" { value.to_file_path().ok() } else { None };
-    }
-
-    let path = Path::new(uri);
-    if path.is_absolute() { Some(path.to_path_buf()) } else { None }
+    Url::parse(uri)
+        .ok()
+        .and_then(|value| if value.scheme() == "file" { value.to_file_path().ok() } else { None })
 }
 
 fn workspace_folder_path(folder: &WorkspaceFolderState) -> Option<PathBuf> {
@@ -865,21 +862,6 @@ mod tests {
             &folder,
             "vscode-remote://ssh-remote+dev/workspace-other/lib/Foo.pm"
         ));
-    }
-
-    #[test]
-    fn source_path_from_uri_accepts_absolute_filesystem_paths()
-    -> Result<(), Box<dyn std::error::Error>> {
-        let path = std::env::current_dir()?.join("lib/Foo.pm");
-        let raw_path = path.to_string_lossy();
-
-        assert_eq!(source_path_from_uri(raw_path.as_ref()), Some(path));
-        Ok(())
-    }
-
-    #[test]
-    fn source_path_from_uri_rejects_relative_filesystem_paths() {
-        assert_eq!(source_path_from_uri("lib/Foo.pm"), None);
     }
 
     #[test]

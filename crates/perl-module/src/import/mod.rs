@@ -195,12 +195,17 @@ fn parse_require_head(line: &str) -> Option<ModuleImportHead<'_>> {
     let rest_trimmed = rest.trim_start();
     let quote_offset = rest.len() - rest_trimmed.len();
 
-    if let Some(quote_char) = rest_trimmed.chars().next().filter(|ch| *ch == '"' || *ch == '\'') {
-        let quoted = &rest_trimmed[quote_char.len_utf8()..];
-        let close_idx = quoted.find(quote_char)?;
-        let inner = &quoted[..close_idx];
-
-        let token_start = after_keyword + quote_offset + quote_char.len_utf8();
+    if let Some(inner) = rest_trimmed
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"').or_else(|| s.split('"').next()))
+        .or_else(|| {
+            rest_trimmed
+                .strip_prefix('\'')
+                .and_then(|s| s.strip_suffix('\'').or_else(|| s.split('\'').next()))
+        })
+    {
+        let quote_char_len = 1usize;
+        let token_start = after_keyword + quote_offset + quote_char_len;
         let token_end = token_start + inner.len();
         return Some(ModuleImportHead {
             kind: ModuleImportKind::Require,

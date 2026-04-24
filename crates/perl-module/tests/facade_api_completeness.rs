@@ -118,12 +118,13 @@ fn test_import_module_types_are_accessible() {
 
 /// Verify parse_module_import_head works correctly (end-to-end).
 #[test]
-fn test_parse_module_import_head_function() -> Result<(), Box<dyn std::error::Error>> {
-    let head = parse_module_import_head("use My::Module;")
-        .ok_or("expected import head for `use My::Module;`")?;
-    assert_eq!(head.token, "My::Module");
-    assert_eq!(head.kind, ModuleImportKind::Use);
-    Ok(())
+fn test_parse_module_import_head_function() {
+    if let Some(head) = parse_module_import_head("use My::Module;") {
+        assert_eq!(head.token, "My::Module");
+        assert_eq!(head.kind, ModuleImportKind::Use);
+    } else {
+        panic!("Failed to parse module import head");
+    }
 }
 
 /// Verify boundary module functions work end-to-end.
@@ -151,12 +152,13 @@ fn test_token_module_functions() {
 
 /// Verify token_parser can parse module tokens.
 #[test]
-fn test_token_parser_function() -> Result<(), Box<dyn std::error::Error>> {
-    let token =
-        parse_module_token("My::Module", 0).ok_or("expected to parse canonical module token")?;
-    assert_eq!(token.start, 0);
-    assert_eq!(token.end, "My::Module".len());
-    Ok(())
+fn test_token_parser_function() {
+    if let Some(token) = parse_module_token("My::Module", 0) {
+        assert_eq!(token.start, 0);
+        assert_eq!(token.end, "My::Module".len());
+    } else {
+        panic!("Failed to parse module token");
+    }
 }
 
 /// Verify import_match functions work correctly.
@@ -168,12 +170,13 @@ fn test_import_match_module_function() {
 
 /// Verify reference module functions work end-to-end.
 #[test]
-fn test_reference_module_functions() -> Result<(), Box<dyn std::error::Error>> {
+fn test_reference_module_functions() {
     let source = "use My::Module;";
-    let module_name = extract_module_reference(source, 4)
-        .ok_or("expected module reference at offset 4 in `use My::Module;`")?;
-    assert_eq!(module_name, "My::Module");
-    Ok(())
+    if let Some(module_name) = extract_module_reference(source, 4) {
+        assert_eq!(module_name, "My::Module");
+    } else {
+        panic!("Failed to extract module reference");
+    }
 }
 
 /// Verify rename module functions work correctly.
@@ -307,13 +310,14 @@ fn test_legacy_package_separator_preservation() {
 
 /// Regression: verify token parsing roundtrip.
 #[test]
-fn test_token_parsing_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+fn test_token_parsing_roundtrip() {
     let name = "Complex::Nested::Module::Name";
-    let token =
-        parse_module_token(name, 0).ok_or("expected token parse to succeed for nested module")?;
-    assert_eq!(token.start, 0);
-    assert_eq!(token.end, name.len());
-    Ok(())
+    if let Some(token) = parse_module_token(name, 0) {
+        assert_eq!(token.start, 0);
+        assert_eq!(token.end, name.len());
+    } else {
+        panic!("Failed to parse module token");
+    }
 }
 
 /// Regression: verify multi-line handling in rename edits.

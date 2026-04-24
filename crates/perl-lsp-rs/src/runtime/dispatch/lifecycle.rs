@@ -5,53 +5,6 @@
 use super::super::*;
 
 impl LspServer {
-    fn complete_initialization(&self) {
-        if self
-            .initialized
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return;
-        }
-
-        tracing::info!("Server initialized");
-
-        // Register file watchers for Perl files only if client supports it
-        if self.client_capabilities.lock().dynamic_registration_support {
-            self.register_file_watchers_async();
-        }
-
-        // Start workspace indexing in the background (if workspace folders exist)
-        #[cfg(feature = "workspace")]
-        self.start_workspace_indexing();
-
-        // Send index-ready notification
-        if let Err(e) = self.send_index_ready_notification() {
-            tracing::warn!(error = %e, "Failed to send index-ready notification");
-        }
-
-        if std::env::var("PERL_LSP_QUIET").is_err() {
-            let folder_count = self.workspace_folders.lock().len();
-            if folder_count == 0 {
-                tracing::info!("perl-lsp ready (single-file mode)");
-            } else {
-                tracing::info!(folder_count, "perl-lsp ready");
-            }
-        }
-    }
-
-    pub(super) fn auto_initialize_for_compat(&self, method: &str) {
-        if self.initialize_requested.load(Ordering::Acquire)
-            && !self.initialized.load(Ordering::Acquire)
-        {
-            tracing::warn!(
-                method,
-                "Client skipped initialized notification; auto-initializing for compatibility"
-            );
-            self.complete_initialization();
-        }
-    }
-
     /// Handle initialize request
     pub(super) fn handle_initialize_dispatch(
         &self,
@@ -138,7 +91,31 @@ impl LspServer {
             });
         }
 
-        self.complete_initialization();
+        self.initialized.store(true, Ordering::Release);
+        tracing::info!("Server initialized");
+
+        // Register file watchers for Perl files only if client supports it
+        if self.client_capabilities.lock().dynamic_registration_support {
+            self.register_file_watchers_async();
+        }
+
+        // Start workspace indexing in the background (if workspace folders exist)
+        #[cfg(feature = "workspace")]
+        self.start_workspace_indexing();
+
+        // Send index-ready notification
+        if let Err(e) = self.send_index_ready_notification() {
+            tracing::warn!(error = %e, "Failed to send index-ready notification");
+        }
+
+        if std::env::var("PERL_LSP_QUIET").is_err() {
+            let folder_count = self.workspace_folders.lock().len();
+            if folder_count == 0 {
+                tracing::info!("perl-lsp ready (single-file mode)");
+            } else {
+                tracing::info!(folder_count, "perl-lsp ready");
+            }
+        }
 
         Ok(None)
     }
@@ -168,15 +145,5 @@ mod tests {
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
-    }
-
-    #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
-        let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
-
-        server.auto_initialize_for_compat("textDocument/hover");
-
-        assert!(server.is_initialized(), "compatibility path should mark server initialized");
     }
 }

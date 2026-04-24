@@ -29,7 +29,7 @@ builder time on work that shouldn't exist.
 
 This repo trends heavily toward architecture, verification, and locking
 things in — "rust-as-spec." The codebase has:
-- ~30 focused workspace crates with strong modular boundaries (post-v0.13.0 collapse from ~135)
+- 134 workspace crates with microcrate architecture
 - Extensive BDD-style tests with non-functional requirements (NFR)
 - Multi-layer verification pipeline (scout → accuracy → research → plan-review)
 - Typed error handling, no unwrap/expect in production code
@@ -44,18 +44,6 @@ This means:
 Calibrate your "should this exist?" bar to this repo's standards, not to
 a typical project. Work that other repos would call over-engineering may
 be exactly right here.
-
-## External-agent issue rules (apply throughout challenge)
-
-These aren't "next-step" operations — they're ambient context for every issue. External agents (Codex, Jules, Hermes, Droid, Aider) file issues in the same bursts they file PRs, and the same failure modes apply at the issue level *before* any code gets written.
-
-**Hallucination pre-gate (hard veto).** If the issue proposes adding entries to `WebFrameworkKind`, `IMPLICIT_STRICT_MODULES`, `IMPLICIT_EXPORT_SKIP_LIST`, `COMMON_MODULES_TIER_1`, `PERL_SOURCE_EXTENSIONS`, or `detect_framework()` — or, more generally, asserts that a specific Perl module/framework exists — verify the named module on MetaCPAN before returning BUILD. Zero hits + name matches an AI product (OpenClaw, Droid, Builder.io Fusion, Google::Antigravity, Hermes-as-framework, Fusion, Antigravity, Continue, Roo, Kilo, PearAI, Crush, OpenCode, etc.) = **CLOSE** with a hallucination citation, not BUILD. This is a factual-error case, not a premise-challenge case. See `docs/articles/CODEX_HALLUCINATION_TRIAGE.md`. Quick check: `curl -s "https://fastapi.metacpan.org/v1/module/_search?q=<Name>&size=3" | jq -r '.hits.total'`.
-
-**Cluster awareness.** If the issue shares a `task_e_...` body ID with sibling issues filed within ~15 minutes, read the cluster as a whole before verdicting. A single narrow issue from a 5-shot Codex prompt may look like yak-shaving in isolation but be a legitimate slice of a broader topic (layer diversity). Conversely, five near-identical issues from one prompt should collapse to one BUILD verdict on the best-shaped one + CLOSE-as-redundant on the rest.
-
-**Don't adopt AI-product claims as premise.** Issues that cite "in <AI-product> we saw X" as the pain point need scrutiny — the pain must exist for a real Perl developer, not for an AI tool's simulated workflow. If the only evidence of pain is an AI-generated scenario, the premise may be synthetic.
-
-**Factual errors ARE a CLOSE.** Your CLOSE verdict already covers "factually wrong, redundant, already-solved, or fundamentally misguided." Hallucinated modules and non-existent Perl features are CLOSE cases, not "theoretical pain" DEFER cases. Don't soften a factual error into "low-priority because niche" — the issue tracker becomes noise if we accept hallucinated premises.
 
 ## What to challenge
 

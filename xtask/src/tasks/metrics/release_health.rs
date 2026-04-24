@@ -57,7 +57,7 @@ use crate::utils::project_root;
 use chrono::Utc;
 use color_eyre::eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -90,12 +90,6 @@ struct ReleaseHealthOutput {
 
 #[derive(Debug, Clone, Serialize)]
 struct ReleaseHealthMetrics {
-    /// "Modern dev-loop" timing metrics from build-timing receipts.
-    ///
-    /// Values are in seconds and are null when `artifacts/build-timing-receipt.json`
-    /// is unavailable or malformed.
-    dev_loop_durations_seconds: BTreeMap<String, Option<f64>>,
-
     current_release_version: Option<String>,
     history_window_days: u64,
 
@@ -150,20 +144,6 @@ struct DebtFlakyTest {
 // CI baseline schema (subset we need)
 // ---------------------------------------------------------------------------
 //
-// Build timing receipt schema (subset we need)
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Deserialize)]
-struct BuildTimingReceiptFile {
-    #[serde(default)]
-    measurements: BTreeMap<String, BuildTimingMeasurement>,
-}
-
-#[derive(Debug, Deserialize)]
-struct BuildTimingMeasurement {
-    duration_seconds: f64,
-}
-//
 // Mirrors the public `BaselineReport` written by
 // `xtask::tasks::ci_metrics::run_ci_baseline`.  We deliberately re-declare the
 // minimum fields rather than depend on that struct so this module stays a
@@ -208,7 +188,6 @@ fn collect_release_health(root: &Path, days: u64) -> Result<ReleaseHealthMetrics
     let ledger = read_debt_ledger(root)?;
     let baseline = read_ci_baseline(root);
     let version = read_workspace_version(root);
-    let dev_loop_durations = read_dev_loop_durations(root);
 
     let quarantined =
         ledger.flaky_tests.iter().filter(|t| t.tier.as_deref() == Some("quarantine")).count();
@@ -237,7 +216,6 @@ fn collect_release_health(root: &Path, days: u64) -> Result<ReleaseHealthMetrics
     };
 
     Ok(ReleaseHealthMetrics {
-        dev_loop_durations_seconds: dev_loop_durations,
         current_release_version: version,
         history_window_days: days,
         flaky_test_count: ledger.flaky_tests.len(),
@@ -276,43 +254,6 @@ fn read_workspace_version(root: &Path) -> Option<String> {
     let raw = fs::read_to_string(root.join("Cargo.toml")).ok()?;
     let parsed: toml::Value = toml::from_str(&raw).ok()?;
     parsed.get("workspace")?.get("package")?.get("version")?.as_str().map(str::to_string)
-}
-
-/// Read optional build-timing receipt written by
-/// `cargo xtask build-timing-receipt` and expose a stable subset of
-/// developer-loop metrics.
-fn read_dev_loop_durations(root: &Path) -> BTreeMap<String, Option<f64>> {
-    let tracked: BTreeSet<&str> = [
-        "clean_build_workspace",
-        "incremental_build_providers",
-        "incremental_build_parser",
-        "test_build_workspace",
-    ]
-    .into_iter()
-    .collect();
-
-    let path = root.join("artifacts").join("build-timing-receipt.json");
-    let raw = match fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(_) => {
-            return tracked.into_iter().map(|k| (k.to_string(), None)).collect();
-        }
-    };
-
-    let parsed = match serde_json::from_str::<BuildTimingReceiptFile>(&raw) {
-        Ok(parsed) => parsed,
-        Err(_) => {
-            return tracked.into_iter().map(|k| (k.to_string(), None)).collect();
-        }
-    };
-
-    tracked
-        .into_iter()
-        .map(|k| {
-            let value = parsed.measurements.get(k).map(|m| round_one_decimal(m.duration_seconds));
-            (k.to_string(), value)
-        })
-        .collect()
 }
 
 /// Return `Some(percent)` of `cap` consumed by `count`, or `None` when the
@@ -369,26 +310,6 @@ fn print_table(m: &ReleaseHealthMetrics) {
     }
     println!();
 
-    println!("Developer loop timing (seconds)");
-    println!("{}", "-".repeat(56));
-    print_dev_timing_row(
-        "Clean build (workspace)",
-        m.dev_loop_durations_seconds.get("clean_build_workspace").copied().flatten(),
-    );
-    print_dev_timing_row(
-        "Incremental build (providers)",
-        m.dev_loop_durations_seconds.get("incremental_build_providers").copied().flatten(),
-    );
-    print_dev_timing_row(
-        "Incremental build (parser)",
-        m.dev_loop_durations_seconds.get("incremental_build_parser").copied().flatten(),
-    );
-    print_dev_timing_row(
-        "Test build (workspace)",
-        m.dev_loop_durations_seconds.get("test_build_workspace").copied().flatten(),
-    );
-    println!();
-
     println!("Merge-gate signal (last {} days)", m.history_window_days);
     println!("{}", "-".repeat(56));
     match m.merge_gate_pass_rate {
@@ -412,11 +333,6 @@ fn print_table(m: &ReleaseHealthMetrics) {
 fn print_debt_row(label: &str, count: usize, util: Option<f64>) {
     let util_cell = util.map(|p| format!("{p:>5.1}%")).unwrap_or_else(|| "  n/a".to_string());
     println!("  {label:<32} {count:>5}   {util_cell}");
-}
-
-fn print_dev_timing_row(label: &str, seconds: Option<f64>) {
-    let value = seconds.map(|s| format!("{s:>8.1}")).unwrap_or_else(|| "     n/a".to_string());
-    println!("  {label:<32} {value}");
 }
 
 fn write_json_output(root: &Path, metrics: &ReleaseHealthMetrics) -> Result<()> {
@@ -470,16 +386,6 @@ mod tests {
         Ok(())
     }
 
-    fn write_build_timing(root: &Path, measurements_json: &str) -> Result<()> {
-        let dir = root.join("artifacts");
-        fs::create_dir_all(&dir)?;
-        fs::write(
-            dir.join("build-timing-receipt.json"),
-            format!("{{\"measurements\": {measurements_json}}}"),
-        )?;
-        Ok(())
-    }
-
     #[test]
     fn budget_utilization_handles_zero_and_missing_caps() {
         assert_eq!(budget_utilization(5, None), None);
@@ -502,14 +408,6 @@ mod tests {
         assert_eq!(m.merge_gate_billable_minutes, None);
         assert_eq!(m.current_release_version, None);
         assert_eq!(m.history_window_days, 30);
-        for k in [
-            "clean_build_workspace",
-            "incremental_build_providers",
-            "incremental_build_parser",
-            "test_build_workspace",
-        ] {
-            assert_eq!(m.dev_loop_durations_seconds.get(k).copied().flatten(), None);
-        }
         // Caps unknown → utilization is None for every bucket.
         for k in ["flaky_tests", "known_issues", "technical_debt"] {
             assert_eq!(
@@ -634,8 +532,6 @@ technical_debt:
         let metrics = &v["metrics"];
         assert_eq!(metrics["current_release_version"], "0.13.0");
         assert_eq!(metrics["history_window_days"], 7);
-        assert!(metrics["dev_loop_durations_seconds"].is_object());
-        assert!(metrics["dev_loop_durations_seconds"]["clean_build_workspace"].is_null());
         assert_eq!(metrics["flaky_test_count"], 0);
         assert_eq!(metrics["quarantined_test_count"], 0);
         assert_eq!(metrics["known_issues_count"], 0);
@@ -654,43 +550,6 @@ technical_debt:
                 .abs()
                 < 0.05
         );
-        Ok(())
-    }
-
-    #[test]
-    fn collect_reads_dev_loop_timing_when_receipt_exists() -> Result<()> {
-        let tmp = TempDir::new()?;
-        write_build_timing(
-            tmp.path(),
-            r#"{"clean_build_workspace": {"duration_seconds": 110.26},
-                "incremental_build_providers": {"duration_seconds": 8.94},
-                "test_build_workspace": {"duration_seconds": 75.04}}"#,
-        )?;
-
-        let m = collect_release_health(tmp.path(), 30)?;
-        assert_eq!(m.dev_loop_durations_seconds["clean_build_workspace"], Some(110.3));
-        assert_eq!(m.dev_loop_durations_seconds["incremental_build_providers"], Some(8.9));
-        assert_eq!(m.dev_loop_durations_seconds["incremental_build_parser"], None);
-        assert_eq!(m.dev_loop_durations_seconds["test_build_workspace"], Some(75.0));
-        Ok(())
-    }
-
-    #[test]
-    fn collect_tolerates_malformed_dev_loop_receipt() -> Result<()> {
-        let tmp = TempDir::new()?;
-        let dir = tmp.path().join("artifacts");
-        fs::create_dir_all(&dir)?;
-        fs::write(dir.join("build-timing-receipt.json"), "not json")?;
-
-        let m = collect_release_health(tmp.path(), 30)?;
-        for k in [
-            "clean_build_workspace",
-            "incremental_build_providers",
-            "incremental_build_parser",
-            "test_build_workspace",
-        ] {
-            assert_eq!(m.dev_loop_durations_seconds[k], None);
-        }
         Ok(())
     }
 

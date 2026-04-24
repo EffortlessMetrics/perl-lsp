@@ -8,11 +8,6 @@ This directory contains reusable composite actions for perl-lsp CI workflows.
 
 Installs `perllsp` for downstream GitHub Actions workflows.
 
-Supported release binaries auto-resolve for:
-- Linux: `x86_64`, `aarch64`
-- macOS: `x86_64`, `aarch64`
-- Windows: `x86_64`, `aarch64`
-
 **Usage:**
 ```yaml
 - uses: EffortlessMetrics/perl-lsp/.github/actions/setup-perl-lsp@master

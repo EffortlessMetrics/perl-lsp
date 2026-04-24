@@ -56,7 +56,7 @@ pub(crate) use cancellation::enhanced_cancelled_response;
 
 use super::*;
 use crate::cancellation::{
-    PerlLspCancellationToken, ProviderCleanupContext, GLOBAL_CANCELLATION_REGISTRY,
+    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
 };
 use std::time::Instant;
 
@@ -152,23 +152,11 @@ impl LspServer {
             }
         }
 
-        if !self.initialized.load(Ordering::Acquire)
-            && self.initialize_requested.load(Ordering::Acquire)
-            && request.method != "initialize"
-            && request.method != "initialized"
-            && request.method != "shutdown"
-            && request.method != "exit"
-        {
-            self.auto_initialize_for_compat(&request.method);
-        }
-
         let result = match request.method.as_str() {
             "initialize" => self.handle_initialize_dispatch(request.params),
             "initialized" => self.handle_initialized_dispatch(),
-            // Compatibility: some lightweight clients send `initialize` and then
-            // immediately issue requests without an explicit `initialized` notification.
-            // Accept those requests once `initialize` has completed successfully.
-            _ if !self.initialize_requested.load(Ordering::Acquire)
+            // All other requests require initialization
+            _ if !self.initialized.load(Ordering::Acquire)
                 && request.method != "shutdown"
                 && request.method != "exit" =>
             {
@@ -396,44 +384,5 @@ impl LspServer {
                 None
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn request(id: i64, method: &str, params: Option<Value>) -> JsonRpcRequest {
-        JsonRpcRequest {
-            _jsonrpc: "2.0".to_string(),
-            id: Some(json!(id)),
-            method: method.to_string(),
-            params,
-        }
-    }
-
-    #[test]
-    fn requests_are_accepted_after_initialize_even_without_initialized_notification() {
-        let server = LspServer::new();
-
-        let before_initialize = server
-            .handle_request(request(1, "custom/unknown", None))
-            .and_then(|response| response.error)
-            .map(|error| error.code);
-        assert_eq!(before_initialize, Some(-32002));
-
-        let initialize = server.handle_request(request(2, "initialize", Some(json!({}))));
-        assert!(
-            initialize
-                .as_ref()
-                .is_some_and(|response| response.error.is_none()),
-            "initialize request should succeed"
-        );
-
-        let after_initialize = server
-            .handle_request(request(3, "custom/unknown", None))
-            .and_then(|response| response.error)
-            .map(|error| error.code);
-        assert_eq!(after_initialize, Some(-32601));
     }
 }

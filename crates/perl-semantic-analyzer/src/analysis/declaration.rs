@@ -338,14 +338,6 @@ impl<'a> DeclarationProvider<'a> {
                 self.find_method_declaration(node, method, object)
             }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
-            NodeKind::Goto { target } => {
-                if let NodeKind::Identifier { name } = &target.kind {
-                    self.find_label_declaration(node, name)
-                        .or_else(|| self.find_subroutine_declaration(node, name))
-                } else {
-                    None
-                }
-            }
             // Handle string literals that are method names inside modifier calls:
             // `before 'save' => sub { }` — cursor on 'save' navigates to sub save { }
             NodeKind::String { value, .. } => self.find_modifier_target_declaration(node, value),
@@ -576,14 +568,6 @@ impl<'a> DeclarationProvider<'a> {
 
     /// Find declaration for an identifier
     fn find_identifier_declaration(&self, node: &Node, name: &str) -> Option<Vec<LocationLink>> {
-        // `goto LABEL` should resolve to the statement label before considering
-        // sub/package/constant declarations.
-        if self.identifier_is_goto_target(node)
-            && let Some(links) = self.find_label_declaration(node, name)
-        {
-            return Some(links);
-        }
-
         // Try to find as subroutine first
         if let Some(links) = self.find_subroutine_declaration(node, name) {
             return Some(links);
@@ -610,80 +594,6 @@ impl<'a> DeclarationProvider<'a> {
         }
 
         None
-    }
-
-    fn find_label_declaration(&self, origin: &Node, label_name: &str) -> Option<Vec<LocationLink>> {
-        let mut labels = Vec::new();
-        self.collect_label_declarations(&self.ast, label_name, &mut labels);
-        let labeled_stmt = labels.first().copied()?;
-
-        Some(vec![self.create_location_link(
-            origin,
-            labeled_stmt,
-            self.get_labeled_statement_label_range(labeled_stmt),
-        )])
-    }
-
-    fn collect_label_declarations<'b>(
-        &'b self,
-        node: &'b Node,
-        label_name: &str,
-        labels: &mut Vec<&'b Node>,
-    ) {
-        if let NodeKind::LabeledStatement { label, .. } = &node.kind
-            && label == label_name
-        {
-            labels.push(node);
-        }
-
-        for child in self.get_children(node) {
-            self.collect_label_declarations(child, label_name, labels);
-        }
-    }
-
-    fn get_labeled_statement_label_range(&self, node: &Node) -> (usize, usize) {
-        let NodeKind::LabeledStatement { label, .. } = &node.kind else {
-            return (node.location.start, node.location.end);
-        };
-
-        let start = node.location.start;
-        let end = node.location.end.min(self.content.len());
-        if start >= end {
-            return (node.location.start, node.location.end);
-        }
-
-        let text = &self.content[start..end];
-        let label_start = text.find(label).map_or(start, |idx| start + idx);
-        let label_end = label_start.saturating_add(label.len()).min(end);
-        (label_start, label_end)
-    }
-
-    fn identifier_is_goto_target(&self, node: &Node) -> bool {
-        let temp_parent_map;
-        let parent_map = if let Some(pm) = self.parent_map {
-            pm
-        } else {
-            temp_parent_map = {
-                let mut map = FxHashMap::default();
-                Self::build_parent_map(&self.ast, &mut map, None);
-                map
-            };
-            &temp_parent_map
-        };
-        let node_lookup = self.build_node_lookup_map();
-
-        let node_ptr = node as *const _;
-        let Some(parent_ptr) = parent_map.get(&node_ptr).copied() else {
-            return false;
-        };
-        let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
-            return false;
-        };
-
-        match &parent.kind {
-            NodeKind::Goto { target } => std::ptr::eq(target.as_ref(), node),
-            _ => false,
-        }
     }
 
     /// Find the definition of the method that a modifier string argument targets.
@@ -1344,12 +1254,7 @@ impl<'a> DeclarationProvider<'a> {
 ///     println!("Found symbol: {:?}", sym);
 /// }
 /// ```
-fn symbol_at_cursor_internal(
-    ast: &Node,
-    offset: usize,
-    current_pkg: &str,
-    source_text: &str,
-) -> Option<SymbolKey> {
+pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
     fn collect_node_path_at_offset<'a>(
         node: &'a Node,
         offset: usize,
@@ -1404,27 +1309,6 @@ fn symbol_at_cursor_internal(
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
-    fn token_at_offset_in_text(text: &str, rel_offset: usize) -> Option<String> {
-        let bytes = text.as_bytes();
-        if rel_offset >= bytes.len() {
-            return None;
-        }
-        let is_ident = |b: u8| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b':');
-        if !is_ident(bytes[rel_offset]) {
-            return None;
-        }
-
-        let mut start = rel_offset;
-        while start > 0 && is_ident(bytes[start - 1]) {
-            start -= 1;
-        }
-        let mut end = rel_offset + 1;
-        while end < bytes.len() && is_ident(bytes[end]) {
-            end += 1;
-        }
-        Some(text[start..end].to_string())
-    }
-
     fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
         match (module, tag) {
             // POSIX tag sets commonly used in system scripts.
@@ -1459,44 +1343,6 @@ fn symbol_at_cursor_internal(
             return false;
         }
         export_tag_members(module, import_token).contains(&symbol_name)
-    }
-
-    /// Pragmas and structural modules whose qw/string arguments are NOT
-    /// imported symbol names. Cursor-on-arg for these should not resolve
-    /// to a bogus `SymbolKey` — they carry inheritance lists, feature names,
-    /// or other non-import semantics.
-    const NON_IMPORT_PRAGMAS: &[&str] = &[
-        "constant", // constant definitions, not imports
-        "parent",   // inheritance: qw/string args are class names
-        "base",     // legacy inheritance
-        "vars",     // variable declarations, not imports
-        "Exporter", // 'import' arg is a proxy method, not an imported symbol
-        "mro",      // method resolution order pragma
-        "if",       // conditional module load
-        "lib",      // adds directories to @INC
-        "feature",  // enables Perl feature flags
-        "utf8",     // encoding pragma
-    ];
-
-    fn use_args_import_symbol(module: &str, args: &[String], symbol_name: &str) -> bool {
-        args.iter().any(|arg| {
-            if arg == symbol_name || tag_imports_symbol(module, arg, symbol_name) {
-                return true;
-            }
-
-            if arg.starts_with("qw") {
-                let content = arg
-                    .trim_start_matches("qw")
-                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                    .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                return content
-                    .split_whitespace()
-                    .any(|tok| tok == symbol_name || tag_imports_symbol(module, tok, symbol_name));
-            }
-
-            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
-            bare == symbol_name || tag_imports_symbol(module, bare, symbol_name)
-        })
     }
 
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
@@ -1697,8 +1543,8 @@ fn symbol_at_cursor_internal(
 
         fn find(node: &Node, name: &str) -> Option<String> {
             if let NodeKind::Use { module, args, .. } = &node.kind {
-                // Skip structural pragmas — their args are not import-list symbols
-                if NON_IMPORT_PRAGMAS.contains(&module.as_str()) {
+                // Skip `use constant` — constants are not import-list symbols
+                if module == "constant" {
                     // Fall through to children
                 } else {
                     for arg in args {
@@ -1954,28 +1800,7 @@ fn symbol_at_cursor_internal(
                 kind: SymKind::Sub,
             })
         }
-        NodeKind::Use { module, args, .. } => {
-            if !NON_IMPORT_PRAGMAS.contains(&module.as_str())
-                && !source_text.is_empty()
-                && offset >= node.location.start
-                && offset <= node.location.end
-            {
-                let rel_offset = offset.saturating_sub(node.location.start);
-                if let Some(stmt_text) = source_text.get(node.location.start..node.location.end)
-                    && let Some(token) = token_at_offset_in_text(stmt_text, rel_offset)
-                    && token != *module
-                    && token != "use"
-                    && use_args_import_symbol(module, args, &token)
-                {
-                    return Some(SymbolKey {
-                        pkg: module.clone().into(),
-                        name: token.into(),
-                        sigil: None,
-                        kind: SymKind::Sub,
-                    });
-                }
-            }
-
+        NodeKind::Use { module, .. } => {
             // When cursor is on a `use Module::Name` statement, resolve to the package
             Some(SymbolKey {
                 pkg: module.clone().into(),
@@ -1986,27 +1811,6 @@ fn symbol_at_cursor_internal(
         }
         _ => None,
     }
-}
-
-/// Extract a symbol key at a cursor offset with access to source text.
-///
-/// This variant is used by LSP handlers when additional source-aware
-/// disambiguation is needed (for example, barewords in `use ... qw(...)` lists).
-pub fn symbol_at_cursor_with_source(
-    ast: &Node,
-    offset: usize,
-    current_pkg: &str,
-    source_text: &str,
-) -> Option<SymbolKey> {
-    symbol_at_cursor_internal(ast, offset, current_pkg, source_text)
-}
-
-/// Extract a symbol key at a cursor offset.
-///
-/// This keeps the historical API and defers to [`symbol_at_cursor_with_source`]
-/// without source text-specific disambiguation.
-pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
-    symbol_at_cursor_internal(ast, offset, current_pkg, "")
 }
 
 /// Determines the current package context at the given offset.

@@ -366,7 +366,8 @@ fn nested_quantifiers_invalid_brace_quantifier_is_not_detected()
 }
 
 #[test]
-fn nested_quantifiers_open_ended_brace_is_detected() -> Result<(), Box<dyn std::error::Error>> {
+fn nested_quantifiers_open_ended_brace_is_detected()
+-> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // Open-ended {n,} is a valid Perl quantifier — must still flag nested use.
     assert!(v.detect_nested_quantifiers("(a+){2,}"));

@@ -168,23 +168,7 @@ impl EditSet {
     pub fn affected_ranges(&self) -> Vec<Range> {
         self.edits
             .iter()
-            .map(|edit| {
-                let mut range = Range::new(edit.start_position, edit.old_end_position);
-                if range.is_empty() {
-                    // Pure insertions have an empty old range, but incremental reuse still
-                    // needs a small invalidation window around the insertion boundary.
-                    //
-                    // Use byte-only context here: overlap checks in incremental reuse are
-                    // byte-based, so line/column fields are not consulted.
-                    let start_byte = range.start.byte.saturating_sub(1);
-                    let end_byte = range.end.byte.saturating_add(1);
-                    range = Range::new(
-                        Position::new(start_byte, range.start.line, range.start.column),
-                        Position::new(end_byte, range.end.line, range.end.column),
-                    );
-                }
-                range
-            })
+            .map(|edit| Range::new(edit.start_position, edit.old_end_position))
             .collect()
     }
 
@@ -332,41 +316,5 @@ mod tests {
         assert_eq!(ranges[0].end.byte, 20);
         assert_eq!(ranges[1].start.byte, 30);
         assert_eq!(ranges[1].end.byte, 35);
-    }
-
-    #[test]
-    fn test_affected_ranges_expands_zero_length_insertions() {
-        let mut edits = EditSet::new();
-        edits.add(Edit::new(
-            10,
-            10,
-            12,
-            Position::new(10, 1, 2),
-            Position::new(10, 1, 2),
-            Position::new(12, 1, 4),
-        ));
-
-        let ranges = edits.affected_ranges();
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start.byte, 9);
-        assert_eq!(ranges[0].end.byte, 11);
-    }
-
-    #[test]
-    fn test_affected_ranges_expands_zero_length_insertions_at_start() {
-        let mut edits = EditSet::new();
-        edits.add(Edit::new(
-            0,
-            0,
-            1,
-            Position::new(0, 0, 0),
-            Position::new(0, 0, 0),
-            Position::new(1, 0, 1),
-        ));
-
-        let ranges = edits.affected_ranges();
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start.byte, 0);
-        assert_eq!(ranges[0].end.byte, 1);
     }
 }

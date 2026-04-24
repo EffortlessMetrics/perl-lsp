@@ -290,7 +290,13 @@ pub static WIDENER_RULES: &[WidenerRule] = &[
     // Rule 2: semantic-analyzer / workspace-index → LSP providers
     WidenerRule {
         trigger_prefixes: &["perl-semantic-analyzer", "perl-workspace-index"],
-        targets: &["perl-lsp-rs-core", "perl-lsp-rs"],
+        targets: &[
+            "perl-lsp-definition",
+            "perl-lsp-references",
+            "perl-lsp-rename",
+            "perl-lsp-workspace",
+            "perl-lsp-rs",
+        ],
         rule: "semantic → LSP definition/references/rename",
         lanes: &["lsp_providers"],
         lane_reason: "architectural_widener",

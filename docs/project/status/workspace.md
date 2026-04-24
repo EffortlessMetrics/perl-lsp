@@ -68,7 +68,7 @@ This scorecard measures three properties of the index substrate:
 - PR 3 of 3 (per plan-reviewer option A): stale-index defect harness with realistic LSP session replay (didOpen → didChange → didSave → delete → assert)
 - Promote `ci-workspace-multiroot` from nightly to merge gate once 10 consecutive nightly passes are confirmed
 - Surface real P50/P95 latency numbers from benchmarks (`perl-workspace-index/benches/workspace_index_benchmark.rs`) into this file via `xtask update-status --only workspace`
-- Add a direct signal row for the shipped `workspace/configuration` handler (#3515) in the next `xtask update-status --only workspace` refresh
+- `workspace/configuration` handler (#3515) will add a direct signal row once implemented
 
 ## How to Update
 

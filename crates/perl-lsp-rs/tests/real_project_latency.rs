@@ -21,6 +21,7 @@
 //! 3. First goto-definition on an imported symbol
 //! 4. Incremental reparse (after a 1-line didChange)
 //! 5. Workspace symbol query latency
+//! 6. (Catalyst only) First pull-diagnostics on a generated 5000-line app
 //!
 //! Output is written to `.ci/metrics/real_project_latency.json`.
 
@@ -46,6 +47,9 @@ const OUTPUT_PATH: &str = ".ci/metrics/real_project_latency.json";
 /// Fixture base directory (relative to workspace root).
 const FIXTURE_BASE: &str = "test_corpus/real_projects";
 
+/// Default latency budget for first pull-diagnostics on generated 5000-line Catalyst app.
+const DEFAULT_FIRST_DIAGNOSTICS_BUDGET_MS: u64 = 5_000;
+
 // ---- Data types ---------------------------------------------------------------
 
 /// Per-metric latency summary: p50, p95, p99 (in milliseconds) + sample count.
@@ -67,6 +71,7 @@ struct ProjectMetrics {
     first_goto_definition: LatencySummary,
     incremental_reparse: LatencySummary,
     workspace_symbol_query: LatencySummary,
+    first_pull_diagnostics_5000_catalyst: Option<LatencySummary>,
 }
 
 /// A project fixture definition.
@@ -445,34 +450,64 @@ fn measure_workspace_symbol(fixture: &ProjectFixture, entry_content: &str) -> Ve
     samples
 }
 
-/// Build a synthetic Catalyst-style app with at least `target_lines` lines.
-fn synthetic_catalyst_app(target_lines: usize) -> String {
-    let mut content = String::from(
-        "package MyApp;\n\
-         use strict;\n\
-         use warnings;\n\
-         use Catalyst qw/-Debug ConfigLoader Static::Simple/;\n\
-         extends 'Catalyst';\n\n",
-    );
+/// Build a Catalyst-like Perl source with at least 5000 lines.
+fn generate_catalyst_app_5000_lines() -> String {
+    let mut lines = vec![
+        "package MyApp::Controller::Big;".to_string(),
+        "use strict;".to_string(),
+        "use warnings;".to_string(),
+        "use parent 'Catalyst::Controller';".to_string(),
+        String::new(),
+    ];
 
-    let mut line_count = content.lines().count();
-    let mut i = 0usize;
-    while line_count < target_lines.saturating_sub(2) {
-        let block = format!(
-            "sub action_{i} : Path('/route_{i}') Args(1) {{\n\
-             \x20\x20my ($self, $c, $arg) = @_;\n\
-             \x20\x20my $value = $c->req->params->{{value}} // $arg;\n\
-             \x20\x20$c->stash->{{result}} = uc($value);\n\
-             \x20\x20$c->response->body($c->stash->{{result}});\n\
-             }}\n\n"
-        );
-        line_count += block.lines().count();
-        content.push_str(&block);
-        i += 1;
+    for i in 0..4950 {
+        lines.push(format!("sub action_{i:04} :Path('/action/{i}') Args(0) {{"));
+        lines.push(format!("    my ($self, $c) = @_; # real-repo perf fixture {i}"));
+        lines.push(format!("    $c->stash->{{value_{i:04}}} = '{i}';"));
+        lines.push("}".to_string());
     }
 
-    content.push_str("__PACKAGE__->setup();\n1;\n");
-    content
+    lines.push(String::new());
+    lines.push("1;".to_string());
+    lines.join("\n")
+}
+
+/// Read diagnostics latency budget from env, falling back to default.
+fn first_diagnostics_budget_ms() -> u64 {
+    std::env::var("PERL_LSP_FIRST_DIAGNOSTICS_BUDGET_MS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_FIRST_DIAGNOSTICS_BUDGET_MS)
+}
+
+/// Measure first pull-diagnostics latency on a generated 5000-line Catalyst app.
+fn measure_first_pull_diagnostics_5000_catalyst() -> Vec<u64> {
+    let mut samples = Vec::with_capacity(LATENCY_SAMPLES);
+    let uri = "file:///real-project-latency-catalyst-5000.pm";
+    let content = generate_catalyst_app_5000_lines();
+
+    for _ in 0..LATENCY_SAMPLES {
+        let start = Instant::now();
+        let server = start_lsp_server();
+        initialize_lsp(&server);
+        open_document(&server, uri, &content);
+
+        let _diagnostics = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/diagnostic",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "identifier": "real-project-latency"
+                }
+            }),
+        );
+        samples.push(start.elapsed().as_millis() as u64);
+    }
+
+    samples
 }
 
 // ---- JSON output --------------------------------------------------------------
@@ -515,11 +550,24 @@ fn write_baseline(projects: &[ProjectMetrics]) {
             "incremental_reparse": summary_to_json(&p.incremental_reparse),
             "workspace_symbol_query": summary_to_json(&p.workspace_symbol_query)
         });
+        let metrics = if let Some(first_diag) = &p.first_pull_diagnostics_5000_catalyst {
+            let mut map = metrics.as_object().cloned().unwrap_or_default();
+            map.insert("first_pull_diagnostics_5000_catalyst".to_string(), summary_to_json(first_diag));
+            Value::Object(map)
+        } else {
+            metrics
+        };
         projects_map.insert(
             p.name.clone(),
             json!({
                 "file_count": p.file_count,
-                "metrics": metrics
+                "metrics": metrics,
+                "targets": {
+                    "first_diagnostics_5000_catalyst_p95_ms": first_diagnostics_budget_ms()
+                },
+                "target_pass": {
+                    "first_diagnostics_5000_catalyst_p95_ms": catalyst_first_diagnostics_budget_pass(p)
+                }
             }),
         );
     }
@@ -571,6 +619,19 @@ fn print_metrics(p: &ProjectMetrics) {
         p.workspace_symbol_query.p95_ms,
         p.workspace_symbol_query.p99_ms
     );
+    if let Some(first_diag) = &p.first_pull_diagnostics_5000_catalyst {
+        eprintln!(
+            "  first_diagnostics_5k: p50={:>5}ms  p95={:>5}ms  p99={:>5}ms",
+            first_diag.p50_ms, first_diag.p95_ms, first_diag.p99_ms
+        );
+        let budget_ms = first_diagnostics_budget_ms();
+        let pass = first_diag.p95_ms <= budget_ms;
+        eprintln!(
+            "  budget(<={:>5}ms)    : {}",
+            budget_ms,
+            if pass { "PASS" } else { "FAIL" }
+        );
+    }
 }
 
 // ---- Core measurement harness ------------------------------------------------
@@ -599,6 +660,11 @@ fn measure_project(fixture: &ProjectFixture) -> ProjectMetrics {
     let definition = summarise(measure_goto_definition(fixture, &entry_content));
     let reparse = summarise(measure_incremental_reparse(fixture, &entry_content));
     let ws_symbol = summarise(measure_workspace_symbol(fixture, &entry_content));
+    let first_diag = if fixture.name == "catalyst" {
+        Some(summarise(measure_first_pull_diagnostics_5000_catalyst()))
+    } else {
+        None
+    };
 
     ProjectMetrics {
         name: fixture.name.to_string(),
@@ -608,7 +674,16 @@ fn measure_project(fixture: &ProjectFixture) -> ProjectMetrics {
         first_goto_definition: definition,
         incremental_reparse: reparse,
         workspace_symbol_query: ws_symbol,
+        first_pull_diagnostics_5000_catalyst: first_diag,
     }
+}
+
+fn catalyst_first_diagnostics_budget_pass(metrics: &ProjectMetrics) -> Option<bool> {
+    if metrics.name != "catalyst" {
+        return None;
+    }
+    let first_diag = metrics.first_pull_diagnostics_5000_catalyst.as_ref()?;
+    Some(first_diag.p95_ms <= first_diagnostics_budget_ms())
 }
 
 // ---- Tests -------------------------------------------------------------------
@@ -703,6 +778,28 @@ fn test_real_project_latency_baseline_schema() {
             assert!(m.get("p99_ms").is_some(), "'{name}.{metric}' missing p99_ms");
             assert!(m.get("samples").is_some(), "'{name}.{metric}' missing samples");
         }
+        if *name == "catalyst" {
+            assert!(
+                metrics.get("first_pull_diagnostics_5000_catalyst").is_some(),
+                "Project '{name}' missing metric 'first_pull_diagnostics_5000_catalyst' in baseline"
+            );
+            if let Some(m) = metrics.get("first_pull_diagnostics_5000_catalyst") {
+                assert!(
+                    m.get("p95_ms").is_some(),
+                    "'{name}.first_pull_diagnostics_5000_catalyst' missing p95_ms"
+                );
+            }
+            assert!(
+                proj.get("targets").is_some(),
+                "Project '{name}' missing 'targets' in baseline"
+            );
+            if let Some(targets) = proj.get("targets") {
+                assert!(
+                    targets.get("first_diagnostics_5000_catalyst_p95_ms").is_some(),
+                    "Project '{name}' missing first-diagnostics target threshold"
+                );
+            }
+        }
     }
 }
 
@@ -766,49 +863,4 @@ fn real_project_latency_full_suite() {
     }
     write_baseline(&results);
     eprintln!("\nBaseline written to {OUTPUT_PATH}");
-}
-
-/// User-facing SLO guard:
-/// first publishDiagnostics for a 5,000-line Catalyst app should arrive in <5s.
-///
-/// Run with:
-/// ```bash
-/// cargo test -p perl-lsp-rs --test real_project_latency first_diagnostics_5000_line_catalyst -- --include-ignored --nocapture
-/// ```
-#[test]
-#[ignore = "nightly/perf lane — synthetic 5k-line fixture and wall-clock budget"]
-fn first_diagnostics_5000_line_catalyst() -> Result<(), Box<dyn std::error::Error>> {
-    let app = synthetic_catalyst_app(5000);
-    let lines = app.lines().count();
-    assert!(lines >= 5000, "Synthetic Catalyst fixture must be >=5000 lines, got {lines}");
-
-    let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis();
-    let temp_path = std::env::temp_dir().join(format!("perl_lsp_real_perf_{unique}.pm"));
-    fs::write(&temp_path, &app)?;
-
-    let uri = file_uri(&temp_path);
-    let server = start_lsp_server();
-    initialize_lsp(&server);
-
-    let start = Instant::now();
-    open_document(&server, &uri, &app);
-
-    let notification = common::read_notification_method(
-        &server,
-        "textDocument/publishDiagnostics",
-        Duration::from_secs(6),
-    );
-    let elapsed = start.elapsed().as_millis() as u64;
-
-    let _ = fs::remove_file(&temp_path);
-
-    assert!(
-        notification.is_some(),
-        "No publishDiagnostics received within 6s for 5000-line Catalyst app (elapsed={elapsed}ms)"
-    );
-    assert!(
-        elapsed < 5000,
-        "SLO breach: first diagnostics took {elapsed}ms for 5000-line Catalyst app (target <5000ms)"
-    );
-    Ok(())
 }

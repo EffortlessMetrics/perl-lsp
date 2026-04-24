@@ -28,12 +28,9 @@ impl LspServer {
 
                     // Find the symbol at the cursor position
                     let current_pkg = crate::declaration::current_package_at(ast, offset);
-                    if let Some(key) = crate::declaration::symbol_at_cursor_with_source(
-                        ast,
-                        offset,
-                        current_pkg,
-                        &doc.text,
-                    ) {
+                    if let Some(key) =
+                        crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                    {
                         let mut monikers = Vec::new();
 
                         // Determine moniker properties based on symbol context

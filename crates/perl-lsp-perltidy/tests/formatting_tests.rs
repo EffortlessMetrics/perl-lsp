@@ -274,19 +274,6 @@ fn format_range_end_line_out_of_bounds() {
 }
 
 #[test]
-fn format_range_rejects_start_after_end() {
-    let runtime = Arc::new(MockSubprocessRuntime::new());
-    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
-
-    let code = "one\ntwo\nthree";
-    let result = formatter.format_range(code, 2, 1);
-
-    assert!(result.is_err());
-    let err = perl_tdd_support::must_err(result);
-    assert!(err.contains("Invalid line range"));
-}
-
-#[test]
 fn format_range_first_line_only() {
     let runtime = Arc::new(MockSubprocessRuntime::new());
     runtime.add_response(MockResponse::success(b"formatted_first".to_vec()));
@@ -327,40 +314,4 @@ fn format_file_returns_error_on_perltidy_failure() {
     assert!(result.is_err());
     let err = perl_tdd_support::must_err(result);
     assert!(err.contains("can't open file"));
-}
-
-#[test]
-fn get_suggestions_includes_added_lines() {
-    let runtime = Arc::new(MockSubprocessRuntime::new());
-    let original = "my $x=1;\n";
-    let formatted = "my $x = 1;\nmy $y = 2;\n";
-    runtime.add_response(MockResponse::success(formatted.as_bytes().to_vec()));
-    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
-
-    let suggestions = must(formatter.get_suggestions(original));
-    assert_eq!(suggestions.len(), 2);
-    assert_eq!(suggestions[0].line, 0);
-    assert_eq!(suggestions[0].description, "Line formatting change");
-    assert_eq!(suggestions[1].line, 1);
-    assert_eq!(suggestions[1].original, "");
-    assert_eq!(suggestions[1].formatted, "my $y = 2;");
-    assert_eq!(suggestions[1].description, "Line added by formatting");
-}
-
-#[test]
-fn get_suggestions_includes_removed_lines() {
-    let runtime = Arc::new(MockSubprocessRuntime::new());
-    let original = "my $x=1;\nmy $y = 2;\n";
-    let formatted = "my $x = 1;\n";
-    runtime.add_response(MockResponse::success(formatted.as_bytes().to_vec()));
-    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
-
-    let suggestions = must(formatter.get_suggestions(original));
-    assert_eq!(suggestions.len(), 2);
-    assert_eq!(suggestions[0].line, 0);
-    assert_eq!(suggestions[0].description, "Line formatting change");
-    assert_eq!(suggestions[1].line, 1);
-    assert_eq!(suggestions[1].original, "my $y = 2;");
-    assert_eq!(suggestions[1].formatted, "");
-    assert_eq!(suggestions[1].description, "Line removed by formatting");
 }

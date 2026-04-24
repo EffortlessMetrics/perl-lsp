@@ -60,12 +60,8 @@ impl LspServer {
                         .unwrap_or_default();
 
                     let current_package = crate::declaration::current_package_at(ast, offset);
-                    let symbol_key = crate::declaration::symbol_at_cursor_with_source(
-                        ast,
-                        offset,
-                        current_package,
-                        &doc.text,
-                    );
+                    let symbol_key =
+                        crate::declaration::symbol_at_cursor(ast, offset, current_package);
 
                     // Check index state and use appropriate search strategy
                     #[cfg(feature = "workspace")]

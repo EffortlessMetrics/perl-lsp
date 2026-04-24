@@ -4978,7 +4978,8 @@ Utils::process_data();
     }
 
     #[test]
-    fn test_index_dependency_via_moo_with_role_end_to_end() -> Result<(), Box<dyn std::error::Error>>
+    fn test_index_dependency_via_moo_with_role_end_to_end()
+    -> Result<(), Box<dyn std::error::Error>>
     {
         let index = WorkspaceIndex::new();
 

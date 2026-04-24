@@ -356,7 +356,6 @@ fn run_single_test(
 ) -> Result<Option<serde_json::Value>> {
     let mut times = Vec::new();
     let mut memories = Vec::new();
-    let mut successful_iterations = 0usize;
     let mut parse_success = false;
     let mut parse_error = false;
 
@@ -382,7 +381,6 @@ fn run_single_test(
         times.push(elapsed);
         memories.push(memory);
         if ok {
-            successful_iterations += 1;
             parse_success = true;
         } else {
             parse_error = true;
@@ -418,7 +416,7 @@ fn run_single_test(
 
     Ok(Some(serde_json::json!({
         "iterations": iterations,
-        "successful_iterations": successful_iterations,
+        "successful_iterations": times.len(),
         "avg_time": avg_time,
         "min_time": min_time,
         "max_time": max_time,
@@ -433,13 +431,16 @@ fn run_single_test(
     })))
 }
 
-fn parse_benchmark_stdout(stdout: &str) -> (bool, f64) {
+fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
+    let output =
+        std::process::Command::new("./target/debug/bench_parser_c").arg(file_path).output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut has_error = false;
     let mut duration = 0.0;
-
     for line in stdout.lines() {
         if line.starts_with("status=") {
-            for part in line.split_whitespace() {
+            let parts: Vec<_> = line.split_whitespace().collect();
+            for part in parts {
                 if let Some(stripped) = part.strip_prefix("error=") {
                     has_error = stripped.parse::<bool>().unwrap_or(false);
                 }
@@ -449,15 +450,6 @@ fn parse_benchmark_stdout(stdout: &str) -> (bool, f64) {
             }
         }
     }
-
-    (has_error, duration)
-}
-
-fn test_c_implementation(file_path: &str) -> Result<(bool, f64)> {
-    let output =
-        std::process::Command::new("./target/debug/bench_parser_c").arg(file_path).output()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let (has_error, duration) = parse_benchmark_stdout(&stdout);
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
@@ -471,7 +463,21 @@ fn test_rust_implementation(file_path: &str) -> Result<(bool, f64)> {
     let output =
         std::process::Command::new("./target/debug/bench_parser").arg(file_path).output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let (has_error, duration) = parse_benchmark_stdout(&stdout);
+    let mut has_error = false;
+    let mut duration = 0.0;
+    for line in stdout.lines() {
+        if line.starts_with("status=") {
+            let parts: Vec<_> = line.split_whitespace().collect();
+            for part in parts {
+                if let Some(stripped) = part.strip_prefix("error=") {
+                    has_error = stripped.parse::<bool>().unwrap_or(false);
+                }
+                if let Some(stripped) = part.strip_prefix("duration_us=") {
+                    duration = stripped.parse::<f64>().unwrap_or(0.0);
+                }
+            }
+        }
+    }
     // Only return an error if the binary itself failed (non-zero exit code)
     // Parse errors (error=true) are valid results to be compared
     if !output.status.success() {
@@ -1164,23 +1170,5 @@ mod tests {
         assert_eq!(avg_memory, 3.0);
         assert_eq!(min_memory, 1.0);
         assert_eq!(max_memory, 5.0);
-    }
-
-    #[test]
-    fn test_parse_benchmark_stdout_extracts_status_fields() {
-        let stdout = "header\nstatus=ok error=true duration_us=123.5\nfooter";
-        let (has_error, duration) = parse_benchmark_stdout(stdout);
-
-        assert!(has_error);
-        assert!((duration - 123.5).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn test_parse_benchmark_stdout_defaults_when_missing_values() {
-        let stdout = "status=ok";
-        let (has_error, duration) = parse_benchmark_stdout(stdout);
-
-        assert!(!has_error);
-        assert_eq!(duration, 0.0);
     }
 }

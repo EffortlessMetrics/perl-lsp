@@ -25,7 +25,7 @@ is well-informed.
 
 ## Understand the repo
 
-This repo is architecture-minded by design — ~30 focused microcrates with clean boundaries, typed errors,
+This repo is architecture-heavy by design — 134 microcrates, typed errors,
 BDD tests, multi-layer verification. What looks like over-engineering in
 a typical project is often just engineering here. Calibrate your "too
 complex" threshold accordingly. But: complexity that doesn't serve the

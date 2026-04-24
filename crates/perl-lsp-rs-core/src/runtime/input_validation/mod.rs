@@ -16,9 +16,6 @@ const MAX_PATH_LENGTH: usize = 4096;
 
 /// Allowed file extensions for Perl files.
 const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod"];
-/// Allowed URI schemes for text document synchronization.
-const ALLOWED_TEXT_DOCUMENT_URI_SCHEMES: &[&str] =
-    &["file://", "untitled:", "opencode:"];
 
 /// Validates and sanitizes a file path to prevent path traversal attacks.
 pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Result<PathBuf> {
@@ -52,7 +49,7 @@ pub fn validate_file_content(content: &str, file_path: &Path) -> Result<()> {
     let max_file_size = limits_max_file_size_bytes();
     if content.len() > max_file_size {
         return Err(anyhow!(
-            "File {} too large: {} bytes (max: {} bytes) â€” adjust perl.limits.maxFileSizeBytes to increase",
+            "File {} too large: {} bytes (max: {} bytes) — adjust perl.limits.maxFileSizeBytes to increase",
             file_path.display(),
             content.len(),
             max_file_size
@@ -123,10 +120,7 @@ fn validate_text_document_params(params: &serde_json::Value) -> Result<()> {
         .and_then(|text_document| text_document.get("uri"))
         .and_then(serde_json::Value::as_str)
     {
-        if !ALLOWED_TEXT_DOCUMENT_URI_SCHEMES
-            .iter()
-            .any(|scheme| uri.starts_with(scheme))
-        {
+        if !uri.starts_with("file://") && !uri.starts_with("untitled:") {
             return Err(anyhow!("Invalid URI scheme: {}", uri));
         }
 
@@ -279,34 +273,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_lsp_request_valid_opencode_uri() {
-        let method = "textDocument/didOpen";
-        let params = serde_json::json!({
-            "textDocument": {
-                "uri": "opencode:/workspace/lib/My/Module.pm",
-                "text": "package My::Module;\n1;\n"
-            }
-        });
-
-        let result = validate_lsp_request(method, &params);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_validate_lsp_request_invalid_uri_scheme() {
-        let method = "textDocument/didOpen";
-        let params = serde_json::json!({
-            "textDocument": {
-                "uri": "https://example.com/test.pl",
-                "text": "print 'Hello';"
-            }
-        });
-
-        let result = validate_lsp_request(method, &params);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_validate_lsp_request_invalid_method() {
         let method = "invalid<script>alert('xss')</script>";
         let params = serde_json::json!({});
@@ -339,42 +305,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// Regression guard: the `untitled:` scheme must still be accepted after the
-    /// allowlist refactor (PR #5649 replaced hardcoded checks with a constant).
     #[test]
-    fn test_validate_lsp_request_valid_untitled_uri_still_accepted() {
-        let method = "textDocument/didOpen";
-        let params = serde_json::json!({
-            "textDocument": {
-                "uri": "untitled:Untitled-1",
-                "text": "package Scratch;
-1;
-"
-            }
-        });
-
-        let result = validate_lsp_request(method, &params);
-        assert!(result.is_ok(), "untitled: URI must be accepted after scheme allowlist refactor");
-    }
-
-    /// Regression guard: the original `file://` scheme must still be accepted.
-    #[test]
-    fn test_validate_lsp_request_valid_file_uri_still_accepted() {
-        let method = "textDocument/didChange";
-        let params = serde_json::json!({
-            "textDocument": {
-                "uri": "file:///home/user/project/lib/My.pm",
-                "text": "package My;
-1;
-"
-            }
-        });
-
-        let result = validate_lsp_request(method, &params);
-        assert!(result.is_ok(), "file:// URI must be accepted after scheme allowlist refactor");
-    }
-
-        #[test]
     fn test_file_size_limit_sourced_from_lsp_limits() {
         // The file size limit must come from perl-lsp-limits, not a local constant.
         // This test documents the expected single source of truth.

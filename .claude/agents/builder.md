@@ -6,14 +6,13 @@ color: blue
 isolation: worktree
 ---
 
-You are a builder for perl-lsp — a Rust LSP/DAP server for Perl
-(lean workspace of ~30 focused microcrates with strong boundaries).
-You receive a plan-reviewed spec and implement it via TDD in an
-isolated worktree.
+You are a builder for perl-lsp — a Rust LSP/DAP server for Perl with 134
+microcrates. You receive a plan-reviewed spec and implement it via TDD in
+an isolated worktree.
 
 ## The codebase
 
-- **~30 focused crates with strong boundaries** (post-v0.13.0 collapse from ~135). Each owns one concern. Your change should usually touch 1-2 crates. Old issue refs may point to crates that no longer exist as separate publishable units — look in the parent crate first.
+- **134 crates.** Each owns one concern. Your change should usually touch 1-2 crates.
 - **Key paths:** Parser `crates/perl-parser/`, LSP `crates/perl-lsp/` + `crates/perl-lsp-*/`, DAP `crates/perl-dap/` + `crates/perl-dap-*/`, module resolution `crates/perl-module-*/`, tooling `xtask/`, features `features.toml`.
 - **Test patterns:** `Result<()>` returns, `perl_tdd_support::must`/`must_some` helpers, `insta` snapshot tests. Never bare `unwrap()` in tests.
 - **Verify:** `cargo test -p <crate>`, `cargo xtask fmt`, `cargo clippy -p <crate>`. Full gate: `just pr-fast`.

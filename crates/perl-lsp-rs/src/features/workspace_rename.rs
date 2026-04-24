@@ -51,15 +51,6 @@ pub fn build_rename_edit(
         let end_line = loc.range.end.line;
         let end_char = loc.range.end.column;
 
-        if key.kind == SymKind::Sub
-            && key.pkg.as_ref() != "main"
-            && is_non_target_package_declaration(
-                idx, key, &loc.uri, start_line, start_char, end_line, end_char,
-            )
-        {
-            continue;
-        }
-
         // Compute replacement text based on symbol kind
         let replacement = match key.kind {
             SymKind::Var => {
@@ -101,89 +92,6 @@ pub fn build_rename_edit(
 
     // Convert to RenameEdit structs
     grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
-}
-
-fn package_name_for_line(text: &str, target_line: u32) -> &str {
-    let mut current_pkg = "main";
-
-    for (line_index, raw_line) in text.lines().enumerate() {
-        if (line_index as u32) > target_line {
-            break;
-        }
-
-        let trimmed = raw_line.trim_start();
-        if !trimmed.starts_with("package ") {
-            continue;
-        }
-
-        let package_decl = trimmed.trim_start_matches("package ").trim_start();
-        let package_name = package_decl
-            .split(|ch: char| ch.is_whitespace() || ch == ';')
-            .next()
-            .unwrap_or_default();
-
-        if !package_name.is_empty() {
-            current_pkg = package_name;
-        }
-    }
-
-    current_pkg
-}
-
-fn is_sub_declaration_line(line_text: &str, name: &str) -> bool {
-    let trimmed = line_text.trim_start();
-    if !trimmed.starts_with("sub ") {
-        return false;
-    }
-
-    let tail = trimmed.trim_start_matches("sub ").trim_start();
-    let declared_name = tail
-        .split(|ch: char| ch.is_whitespace() || ch == '(' || ch == '{' || ch == ';')
-        .next()
-        .unwrap_or_default();
-
-    declared_name == name || declared_name.rsplit_once("::").is_some_and(|(_, bare)| bare == name)
-}
-
-fn is_non_target_package_declaration(
-    idx: &WorkspaceIndex,
-    key: &SymbolKey,
-    uri: &str,
-    start_line: u32,
-    start_char: u32,
-    end_line: u32,
-    end_char: u32,
-) -> bool {
-    let Some(doc) = idx.document_store().get(uri) else {
-        return false;
-    };
-
-    // Try to read the original source span to detect a qualified name like "Bar::process_data".
-    // When the index returns an inverted range (end < start, a known indexer edge case), we fall
-    // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
-            doc.line_index
-                .position_to_offset(end_line, end_char)
-                .and_then(|end_off| doc.text.get(start_off..end_off))
-        });
-
-    if let Some(original) = maybe_original {
-        if let Some((qualifier, _)) = original.rsplit_once("::") {
-            return qualifier != key.pkg.as_ref();
-        }
-        // Unqualified bare name — rely on package context below.
-    }
-
-    let package_at_line = package_name_for_line(&doc.text, start_line);
-    if package_at_line == key.pkg.as_ref() {
-        return false;
-    }
-
-    let line_text = doc.text.lines().nth(start_line as usize).unwrap_or_default();
-    is_sub_declaration_line(line_text, key.name.as_ref())
 }
 
 /// Convert RenameEdit to LSP WorkspaceEdit JSON.
@@ -382,57 +290,6 @@ $var;
                 );
             }
         }
-
-        Ok(())
-    }
-
-    #[test]
-    fn is_sub_declaration_line_handles_forward_declaration() {
-        // "sub foo;" is a valid Perl forward declaration — semicolon must be treated
-        // as a delimiter so the name is extracted correctly.
-        assert!(
-            is_sub_declaration_line("sub process_data;", "process_data"),
-            "forward declaration 'sub process_data;' should match name 'process_data'"
-        );
-        assert!(
-            is_sub_declaration_line("sub process_data ;", "process_data"),
-            "forward declaration with space before semicolon should match"
-        );
-        // A declaration in another package must still not match a different name
-        assert!(
-            !is_sub_declaration_line("sub process_data;", "other_name"),
-            "forward decl with wrong name must not match"
-        );
-    }
-
-    #[test]
-    fn rename_skips_forward_decl_in_other_package() -> Result<(), Box<dyn std::error::Error>> {
-        // If package Bar has a forward declaration "sub process_data;" and we rename
-        // Foo::process_data, the forward decl in Bar must not be touched.
-        let idx = WorkspaceIndex::new();
-
-        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
-        let bar_text = "package Bar;\nsub process_data;\nsub process_data { return 2; }\n1;\n";
-
-        index_text(&idx, "file:///Foo.pm", foo_text)?;
-        index_text(&idx, "file:///Bar.pm", bar_text)?;
-
-        let key = SymbolKey {
-            pkg: Arc::from("Foo"),
-            name: Arc::from("process_data"),
-            sigil: None,
-            kind: SymKind::Sub,
-        };
-
-        let edits = build_rename_edit(&idx, &key, "process_records");
-
-        // Bar.pm must not appear in the edit list
-        let bar_edit = edits.iter().find(|e| e.uri.contains("Bar.pm"));
-        assert!(
-            bar_edit.is_none(),
-            "renaming Foo::process_data must not touch Bar.pm; got edits: {:?}",
-            edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
-        );
 
         Ok(())
     }

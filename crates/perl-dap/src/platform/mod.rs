@@ -119,15 +119,7 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
             (PathBuf::from("/usr/bin/perl"), "macOS system Perl"),
         ]
     }
-    #[cfg(target_os = "android")]
-    {
-        // Android (Termux)
-        vec![
-            (PathBuf::from("/data/data/com.termux/files/usr/bin/perl"), "Termux Perl"),
-            (PathBuf::from("/data/user/0/com.termux/files/usr/bin/perl"), "Termux Perl"),
-        ]
-    }
-    #[cfg(all(not(windows), not(target_os = "macos"), not(target_os = "android")))]
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         // Linux and others
         vec![
@@ -205,7 +197,7 @@ fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
 /// End-user remediation guidance shown when no Perl interpreter is available.
 fn perl_not_found_install_message() -> &'static str {
     "perl binary not found on PATH. Install Perl via https://strawberryperl.com (Windows), \
-`brew install perl` (macOS), `pkg install perl` in Termux (Android), or your distro package manager, then add it to PATH."
+`brew install perl` (macOS), or your distro package manager, then add it to PATH."
 }
 
 /// Normalize a file path for cross-platform compatibility.
@@ -329,7 +321,10 @@ mod tests {
             msg.contains("perl") || msg.contains("PATH"),
             "error should mention perl/PATH: {msg}"
         );
-        assert!(msg.contains("strawberryperl.com"), "error should include install guidance: {msg}");
+        assert!(
+            msg.contains("strawberryperl.com"),
+            "error should include install guidance: {msg}"
+        );
     }
 
     #[test]
@@ -458,23 +453,6 @@ mod tests {
         if let PerlInterpreterResult::NotFound { searched } = result {
             assert!(!searched.is_empty(), "searched list should not be empty");
         }
-    }
-
-    #[test]
-    #[cfg(target_os = "android")]
-    fn fallback_perl_paths_include_termux_locations() {
-        let paths = fallback_perl_paths();
-        let path_strings: Vec<String> =
-            paths.into_iter().map(|(path, _)| path.to_string_lossy().to_string()).collect();
-
-        assert!(
-            path_strings.iter().any(|p| p == "/data/data/com.termux/files/usr/bin/perl"),
-            "expected /data/data/com.termux/files/usr/bin/perl in fallback paths"
-        );
-        assert!(
-            path_strings.iter().any(|p| p == "/data/user/0/com.termux/files/usr/bin/perl"),
-            "expected /data/user/0/com.termux/files/usr/bin/perl in fallback paths"
-        );
     }
 
     #[test]

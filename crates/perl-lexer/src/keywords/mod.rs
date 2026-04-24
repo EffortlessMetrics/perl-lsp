@@ -7,7 +7,6 @@
 
 /// Canonical union of keyword inventories used by the workspace.
 pub const KEYWORDS: &[&str] = &[
-    "ADJUST",
     "AUTOLOAD",
     "BEGIN",
     "CHECK",
@@ -18,7 +17,6 @@ pub const KEYWORDS: &[&str] = &[
     "__FILE__",
     "__LINE__",
     "__PACKAGE__",
-    "__SUB__",
     "abs",
     "and",
     "async",
@@ -61,7 +59,6 @@ pub const KEYWORDS: &[&str] = &[
     "if",
     "index",
     "int",
-    "isa",
     "join",
     "keys",
     "last",
@@ -138,7 +135,6 @@ pub const KEYWORDS: &[&str] = &[
 
 /// Keywords used by `perl-lsp-completion` keyword completion.
 pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
-    "ADJUST",
     "AUTOLOAD",
     "BEGIN",
     "CHECK",
@@ -149,16 +145,11 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "__FILE__",
     "__LINE__",
     "__PACKAGE__",
-    "__SUB__",
     "and",
     "async",
     "await",
     "blessed",
-    "catch",
-    "class",
     "cmp",
-    "default",
-    "defer",
     "defined",
     "die",
     "do",
@@ -167,21 +158,16 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "eq",
     "eval",
     "exit",
-    "field",
-    "finally",
     "for",
     "foreach",
     "ge",
-    "given",
     "goto",
     "gt",
     "if",
-    "isa",
     "last",
     "le",
     "local",
     "lt",
-    "method",
     "my",
     "ne",
     "next",
@@ -196,14 +182,12 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "scalar",
     "state",
     "sub",
-    "try",
     "undef",
     "unless",
     "until",
     "use",
     "wantarray",
     "warn",
-    "when",
     "while",
     "xor",
 ];
@@ -212,11 +196,11 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
 pub const DAP_COMPLETION_KEYWORDS: &[&str] = &[
     "abs", "bless", "chomp", "chop", "chr", "close", "defined", "delete", "die", "do", "each",
     "else", "elsif", "eval", "exists", "for", "foreach", "grep", "hex", "if", "index", "int",
-    "isa", "join", "keys", "last", "lc", "lcfirst", "length", "local", "map", "my", "next",
-    "oct", "open", "ord", "our", "pack", "package", "pop", "print", "printf", "push", "qw",
-    "redo", "ref", "require", "return", "reverse", "rindex", "say", "scalar", "shift", "sort",
-    "splice", "split", "sprintf", "sqrt", "sub", "substr", "tie", "uc", "ucfirst", "unless",
-    "unpack", "unshift", "untie", "until", "use", "values", "warn", "while",
+    "join", "keys", "last", "lc", "lcfirst", "length", "local", "map", "my", "next", "oct", "open",
+    "ord", "our", "pack", "package", "pop", "print", "printf", "push", "qw", "redo", "ref",
+    "require", "return", "reverse", "rindex", "say", "scalar", "shift", "sort", "splice", "split",
+    "sprintf", "sqrt", "sub", "substr", "tie", "uc", "ucfirst", "unless", "unpack", "unshift",
+    "untie", "until", "use", "values", "warn", "while",
 ];
 
 /// Keywords used by runtime fallback completion in `perl-lsp`.
@@ -243,7 +227,6 @@ pub const PARSER_LSP_KEYWORDS: &[&str] = &[
 
 /// Keywords recognized by `perl-lexer` for token classification.
 pub const LEXER_KEYWORDS: &[&str] = &[
-    "ADJUST",
     "BEGIN",
     "CHECK",
     "END",
@@ -272,7 +255,6 @@ pub const LEXER_KEYWORDS: &[&str] = &[
     "goto",
     "grep",
     "if",
-    "isa",
     "last",
     "local",
     "m",
@@ -388,18 +370,7 @@ mod tests {
         assert!(is_keyword("foreach"));
         assert!(is_keyword("print"));
         assert!(is_keyword("__PACKAGE__"));
-        assert!(is_keyword("__SUB__"));
         assert!(!is_keyword("definitely_not_a_perl_keyword"));
-    }
-
-    #[test]
-    fn lsp_completion_includes_modern_perl_keywords() {
-        for keyword in [
-            "catch", "class", "default", "defer", "field", "finally", "given", "method", "try",
-            "when",
-        ] {
-            assert!(is_lsp_completion_keyword(keyword), "missing {keyword} in LSP completion");
-        }
     }
 
     #[test]
