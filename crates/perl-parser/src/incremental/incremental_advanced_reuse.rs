@@ -970,4 +970,115 @@ mod tests {
         assert!(analyzer.affected_nodes.contains(&0));
         assert!(!analyzer.affected_nodes.contains(&20));
     }
+
+    // --- map_old_position_to_new unit tests ---
+
+    fn make_edit(start: usize, old_end: usize, new_end: usize) -> perl_parser_core::edit::Edit {
+        perl_parser_core::edit::Edit::new(
+            start,
+            old_end,
+            new_end,
+            Position::new(start, 0, start as u32),
+            Position::new(old_end, 0, old_end as u32),
+            Position::new(new_end, 0, new_end as u32),
+        )
+    }
+
+    #[test]
+    fn test_map_position_before_edit_unchanged() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(10, 12, 14));
+        // old_pos=5 is before edit start (10) — no shift applied
+        assert_eq!(analyzer.map_old_position_to_new(5, &edits), 5);
+    }
+
+    #[test]
+    fn test_map_position_after_single_edit_shifted() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(8, 10, 11)); // "10"→"100": shift +1
+        // old_pos=13 should map to 14 (shifted by +1)
+        assert_eq!(analyzer.map_old_position_to_new(13, &edits), 14);
+    }
+
+    #[test]
+    fn test_map_position_accumulates_two_shifts() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(8, 10, 11)); // +1
+        edits.add(make_edit(24, 26, 27)); // +1
+        // old_pos=30 (past both edits) should shift by +2
+        assert_eq!(analyzer.map_old_position_to_new(30, &edits), 32);
+    }
+
+    /// old_pos at edit.start_byte is inside the edit region — returns new_end_byte.
+    ///
+    /// The previous `consumed_shift` formulation could incorrectly apply a shift
+    /// for this case instead of detecting the position as inside the edit.
+    #[test]
+    fn test_map_position_at_edit_start_returns_new_end() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        // Edit covers [10, 20) → new_end_byte = 15 (shrink)
+        edits.add(make_edit(10, 20, 15));
+        // old_pos=10 satisfies start_byte(10) <= old_pos(10) < old_end_byte(20)
+        assert_eq!(analyzer.map_old_position_to_new(10, &edits), 15);
+    }
+
+    #[test]
+    fn test_map_position_at_edit_old_end_is_shifted() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(10, 20, 25)); // +5 shift
+        // old_pos=20 is at old_end_byte (exclusive boundary) — shifted by +5
+        assert_eq!(analyzer.map_old_position_to_new(20, &edits), 25);
+    }
+
+    #[test]
+    fn test_map_position_inside_edit_returns_new_end() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(10, 30, 20)); // big deletion
+        assert_eq!(analyzer.map_old_position_to_new(15, &edits), 20);
+    }
+
+    #[test]
+    fn test_map_position_between_two_edits_shifted_by_first_only() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut edits = EditSet::new();
+        edits.add(make_edit(5, 7, 8)); // shift +1 at [5,7)
+        edits.add(make_edit(20, 22, 23)); // shift +1 at [20,22)
+        // old_pos=10 is between the two edits — shifted only by first (+1)
+        assert_eq!(analyzer.map_old_position_to_new(10, &edits), 11);
+    }
+
+    // --- try_register_match unit tests ---
+
+    #[test]
+    fn test_try_register_match_rejects_duplicate_new_pos() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut reuse_map = HashMap::new();
+
+        let first = analyzer.try_register_match(&mut reuse_map, 0, 10, ReuseType::Direct, 0.9);
+        assert!(first, "first registration should succeed");
+
+        let dup = analyzer.try_register_match(&mut reuse_map, 5, 10, ReuseType::Direct, 0.95);
+        assert!(!dup, "second registration for same new_pos must be rejected");
+        // The map still has exactly one entry — old_pos=0 holds the claim
+        assert_eq!(reuse_map.len(), 1);
+        assert_eq!(reuse_map[&0].target_position, 10);
+    }
+
+    #[test]
+    fn test_try_register_match_distinct_new_positions_both_succeed() {
+        let analyzer = AdvancedReuseAnalyzer::new();
+        let mut reuse_map = HashMap::new();
+
+        assert!(analyzer.try_register_match(&mut reuse_map, 0, 10, ReuseType::Direct, 0.9));
+        assert!(
+            analyzer.try_register_match(&mut reuse_map, 5, 20, ReuseType::PositionShift, 0.85,)
+        );
+        assert_eq!(reuse_map.len(), 2);
+    }
 }
