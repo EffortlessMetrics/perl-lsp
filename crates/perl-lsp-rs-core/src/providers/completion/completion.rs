@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,9 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
+    include_system_inc: bool,
 }
 
 impl CompletionProvider {
@@ -200,7 +204,14 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            "",
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+            false,
+        )
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +260,25 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+            false,
+        )
+    }
+
+    /// Create a completion provider with explicit module completion search roots.
+    pub fn new_with_index_and_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+        include_system_inc: bool,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +288,16 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+            include_system_inc,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +813,9 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+                self.include_system_inc,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,7 +2189,10 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::Arc;
+    use tempfile::TempDir;
     use url::Url;
 
     #[test]
@@ -3581,6 +3626,112 @@ sub helper { }
             !completions.iter().any(|c| c.sort_text.as_deref() == Some("1_MyApp")),
             "Module-priority sort_text should only appear in use context"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_to_module_name_maps_nested_pm_file() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        let module_file = root.join("File").join("Path").join("To").join("Module.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(&module_file, "package File::Path::To::Module;\n1;\n")?;
+
+        let module_name = workspace::path_to_module_name(&root, &module_file);
+        assert_eq!(module_name.as_deref(), Some("File::Path::To::Module"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_scans_include_paths() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("DB").join("Driver.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package DB::Driver;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        assert!(completions.iter().any(|c| c.label == "DB::Driver"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_workspace_first_and_dedupes_external()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("DBI.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package DBI;\n1;\n")?;
+
+        let index = Arc::new(WorkspaceIndex::new());
+        index
+            .index_file(Url::parse("file:///workspace/lib/DBI.pm")?, "package DBI;\n1;\n".into())?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        let dbi_items: Vec<_> = completions.iter().filter(|c| c.label == "DBI").collect();
+        assert_eq!(dbi_items.len(), 1, "DBI should be deduplicated across workspace/external");
+        assert_eq!(dbi_items[0].detail.as_deref(), Some("module"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_completion_system_inc_opt_in() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = TempDir::new()?;
+        let system_root = temp.path().join("sys");
+        let module_file = system_root.join("Sys").join("Only.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing parent")?)?;
+        fs::write(module_file, "package Sys::Only;\n1;\n")?;
+
+        let code = "use Sys::O";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let disabled = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            Vec::<PathBuf>::new(),
+            vec![system_root.clone()],
+            false,
+        )
+        .get_completions(code, code.len());
+        assert!(!disabled.iter().any(|c| c.label == "Sys::Only"));
+
+        let enabled = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            Vec::<PathBuf>::new(),
+            vec![system_root],
+            true,
+        )
+        .get_completions(code, code.len());
+        let sys_only =
+            enabled.iter().find(|c| c.label == "Sys::Only").ok_or("missing Sys::Only")?;
+        assert_eq!(sys_only.detail.as_deref(), Some("system module"));
         Ok(())
     }
 
