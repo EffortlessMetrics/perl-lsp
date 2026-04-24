@@ -286,6 +286,26 @@ fn disable_feature_name(state: &mut PragmaState, name: &str) -> bool {
 }
 
 fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) -> bool {
+    const ALL_KNOWN_FEATURES: &[&str] = &[
+        "say",
+        "state",
+        "switch",
+        "unicode_strings",
+        "unicode_eval",
+        "evalbytes",
+        "current_sub",
+        "fc",
+        "postfix_deref",
+        "try",
+        "signatures",
+        "defer",
+        "isa",
+        "class",
+        "field",
+        "method",
+        "builtin",
+    ];
+
     if !enabled && args.is_empty() {
         let changed =
             !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -299,6 +319,13 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
 
     for arg in args {
         for item in feature_items(arg) {
+            if enabled && item == ":all" {
+                for feature in ALL_KNOWN_FEATURES {
+                    changed |= enable_feature_name(state, feature);
+                }
+                continue;
+            }
+
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -581,8 +608,8 @@ impl PragmaTracker {
                             current_state.strict_refs = true;
                         } else {
                             // Parse specific categories
-                            for arg in args {
-                                match arg.as_str() {
+                            for item in args.iter().flat_map(|arg| pragma_arg_items(arg)) {
+                                match item.as_str() {
                                     "vars" | "'vars'" | "\"vars\"" => {
                                         current_state.strict_vars = true
                                     }
@@ -738,6 +765,24 @@ impl PragmaTracker {
                             }
                             return;
                         }
+                        "builtin" => {
+                            if conditional_args.is_empty() {
+                                current_state.builtin_imports.clear();
+                            } else {
+                                for arg in conditional_args {
+                                    for name in builtin_import_names(arg) {
+                                        current_state
+                                            .builtin_imports
+                                            .retain(|existing| existing != &name);
+                                    }
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
                         _ => return,
                     }
                 }
@@ -752,8 +797,8 @@ impl PragmaTracker {
                             current_state.strict_refs = false;
                         } else {
                             // Parse specific categories
-                            for arg in args {
-                                match arg.as_str() {
+                            for item in args.iter().flat_map(|arg| pragma_arg_items(arg)) {
+                                match item.as_str() {
                                     "vars" | "'vars'" | "\"vars\"" => {
                                         current_state.strict_vars = false
                                     }
@@ -822,6 +867,21 @@ impl PragmaTracker {
                                 current_state.clone(),
                             ));
                         }
+                    }
+                    "builtin" => {
+                        if args.is_empty() {
+                            current_state.builtin_imports.clear();
+                        } else {
+                            for arg in args {
+                                for name in builtin_import_names(arg) {
+                                    current_state
+                                        .builtin_imports
+                                        .retain(|existing| existing != &name);
+                                }
+                            }
+                        }
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {}
                 }
