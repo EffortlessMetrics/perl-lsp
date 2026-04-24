@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Internal
+
+- **Test code quality baseline infrastructure** — Added `ci/panic_test_baseline.txt`
+  (182 `panic!` calls in test code as measured baseline) and `ci/todo_test_baseline.txt`
+  (0 unlinked TODOs). A new `perl-ci-hygiene` integration test,
+  `test_quality_baseline_infrastructure`, verifies both baselines are stable. The
+  burn-down target is to reach or fall below these counts; this change does not yet
+  modify them — it establishes the measurement infrastructure.
+
+- **Modern Rust idioms in test code** — Replaced `match` + `panic!` catch-all arms with
+  `let...else` + `assert_matches!` in `perl-parser-core` test modules, matching the
+  idiom already enforced in production code. Also replaced `.expect()` with `.unwrap()`
+  in `perl-dap` adapter tests to fix `expect_used` lint violations. The `panic = "deny"`
+  lint remains active on test code via `perl-tdd-support` helpers; crates that use
+  `must()` / `must_some()` / `must_err()` in test modules must include
+  `#![allow(clippy::panic)]` on those modules to compile cleanly. Added
+  `perl-tdd-support` as a dev-dependency to `perl-dead-code` and
+  `perl-lsp-feature-policy` to support the transition. (#3237)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
