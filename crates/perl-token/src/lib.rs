@@ -119,7 +119,7 @@ impl Token {
 /// | Literals | [`Number`](Self::Number), [`String`](Self::String), [`Regex`](Self::Regex), ... |
 /// | Identifiers | [`Identifier`](Self::Identifier), [`ScalarSigil`](Self::ScalarSigil), ... |
 /// | Special | [`Eof`](Self::Eof), [`Unknown`](Self::Unknown) |
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // ===== Keywords =====
     /// Lexical variable declaration: `my $x`
@@ -398,167 +398,616 @@ pub enum TokenKind {
     Unknown,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenCategory {
+    Keyword,
+    Operator,
+    Delimiter,
+    Literal,
+    Identifier,
+    Sigil,
+    Special,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenKindInfo {
+    pub kind: TokenKind,
+    pub display_name: &'static str,
+    pub category: TokenCategory,
+    pub canonical_lexeme: Option<&'static str>,
+    pub keyword_spelling: Option<&'static str>,
+    pub operator_spelling: Option<&'static str>,
+}
+
+pub const ALL_TOKEN_KINDS: &[TokenKind] = &[
+    TokenKind::My,
+    TokenKind::Our,
+    TokenKind::Local,
+    TokenKind::State,
+    TokenKind::Sub,
+    TokenKind::If,
+    TokenKind::Elsif,
+    TokenKind::Else,
+    TokenKind::Unless,
+    TokenKind::While,
+    TokenKind::Until,
+    TokenKind::For,
+    TokenKind::Foreach,
+    TokenKind::Return,
+    TokenKind::Package,
+    TokenKind::Use,
+    TokenKind::No,
+    TokenKind::Begin,
+    TokenKind::End,
+    TokenKind::Check,
+    TokenKind::Init,
+    TokenKind::Unitcheck,
+    TokenKind::Eval,
+    TokenKind::Do,
+    TokenKind::Given,
+    TokenKind::When,
+    TokenKind::Default,
+    TokenKind::Try,
+    TokenKind::Catch,
+    TokenKind::Finally,
+    TokenKind::Continue,
+    TokenKind::Next,
+    TokenKind::Last,
+    TokenKind::Redo,
+    TokenKind::Goto,
+    TokenKind::Class,
+    TokenKind::Method,
+    TokenKind::Field,
+    TokenKind::Format,
+    TokenKind::Undef,
+    TokenKind::Defer,
+    TokenKind::Assign,
+    TokenKind::Plus,
+    TokenKind::Minus,
+    TokenKind::Star,
+    TokenKind::Slash,
+    TokenKind::Percent,
+    TokenKind::Power,
+    TokenKind::LeftShift,
+    TokenKind::RightShift,
+    TokenKind::BitwiseAnd,
+    TokenKind::BitwiseOr,
+    TokenKind::BitwiseXor,
+    TokenKind::BitwiseNot,
+    TokenKind::PlusAssign,
+    TokenKind::MinusAssign,
+    TokenKind::StarAssign,
+    TokenKind::SlashAssign,
+    TokenKind::PercentAssign,
+    TokenKind::DotAssign,
+    TokenKind::AndAssign,
+    TokenKind::OrAssign,
+    TokenKind::XorAssign,
+    TokenKind::PowerAssign,
+    TokenKind::LeftShiftAssign,
+    TokenKind::RightShiftAssign,
+    TokenKind::LogicalAndAssign,
+    TokenKind::LogicalOrAssign,
+    TokenKind::DefinedOrAssign,
+    TokenKind::Equal,
+    TokenKind::NotEqual,
+    TokenKind::Match,
+    TokenKind::NotMatch,
+    TokenKind::SmartMatch,
+    TokenKind::Less,
+    TokenKind::Greater,
+    TokenKind::LessEqual,
+    TokenKind::GreaterEqual,
+    TokenKind::Spaceship,
+    TokenKind::StringCompare,
+    TokenKind::And,
+    TokenKind::Or,
+    TokenKind::Not,
+    TokenKind::DefinedOr,
+    TokenKind::WordAnd,
+    TokenKind::WordOr,
+    TokenKind::WordNot,
+    TokenKind::WordXor,
+    TokenKind::Arrow,
+    TokenKind::FatArrow,
+    TokenKind::Dot,
+    TokenKind::Range,
+    TokenKind::Ellipsis,
+    TokenKind::Increment,
+    TokenKind::Decrement,
+    TokenKind::DoubleColon,
+    TokenKind::Question,
+    TokenKind::Colon,
+    TokenKind::Backslash,
+    TokenKind::LeftParen,
+    TokenKind::RightParen,
+    TokenKind::LeftBrace,
+    TokenKind::RightBrace,
+    TokenKind::LeftBracket,
+    TokenKind::RightBracket,
+    TokenKind::Semicolon,
+    TokenKind::Comma,
+    TokenKind::Number,
+    TokenKind::String,
+    TokenKind::Regex,
+    TokenKind::Substitution,
+    TokenKind::Transliteration,
+    TokenKind::QuoteSingle,
+    TokenKind::QuoteDouble,
+    TokenKind::QuoteWords,
+    TokenKind::QuoteCommand,
+    TokenKind::HeredocStart,
+    TokenKind::HeredocBody,
+    TokenKind::FormatBody,
+    TokenKind::DataMarker,
+    TokenKind::DataBody,
+    TokenKind::VString,
+    TokenKind::UnknownRest,
+    TokenKind::HeredocDepthLimit,
+    TokenKind::Identifier,
+    TokenKind::ScalarSigil,
+    TokenKind::ArraySigil,
+    TokenKind::HashSigil,
+    TokenKind::SubSigil,
+    TokenKind::GlobSigil,
+    TokenKind::Eof,
+    TokenKind::Unknown,
+];
+
 impl TokenKind {
-    /// Return a user-friendly display name for this token kind.
-    ///
-    /// These names appear in parser error messages shown in the editor.
-    /// They use the actual Perl syntax (e.g. `}` instead of `RightBrace`)
-    /// so users can immediately understand what the parser expected.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use perl_token::TokenKind;
-    ///
-    /// assert_eq!(TokenKind::Semicolon.display_name(), "';'");
-    /// assert_eq!(TokenKind::Sub.display_name(), "'sub'");
-    /// assert_eq!(TokenKind::Number.display_name(), "number");
-    /// ```
-    pub fn display_name(self) -> &'static str {
-        match self {
-            // Keywords
-            TokenKind::My => "'my'",
-            TokenKind::Our => "'our'",
-            TokenKind::Local => "'local'",
-            TokenKind::State => "'state'",
-            TokenKind::Sub => "'sub'",
-            TokenKind::If => "'if'",
-            TokenKind::Elsif => "'elsif'",
-            TokenKind::Else => "'else'",
-            TokenKind::Unless => "'unless'",
-            TokenKind::While => "'while'",
-            TokenKind::Until => "'until'",
-            TokenKind::For => "'for'",
-            TokenKind::Foreach => "'foreach'",
-            TokenKind::Return => "'return'",
-            TokenKind::Package => "'package'",
-            TokenKind::Use => "'use'",
-            TokenKind::No => "'no'",
-            TokenKind::Begin => "'BEGIN'",
-            TokenKind::End => "'END'",
-            TokenKind::Check => "'CHECK'",
-            TokenKind::Init => "'INIT'",
-            TokenKind::Unitcheck => "'UNITCHECK'",
-            TokenKind::Eval => "'eval'",
-            TokenKind::Do => "'do'",
-            TokenKind::Given => "'given'",
-            TokenKind::When => "'when'",
-            TokenKind::Default => "'default'",
-            TokenKind::Try => "'try'",
-            TokenKind::Catch => "'catch'",
-            TokenKind::Finally => "'finally'",
-            TokenKind::Continue => "'continue'",
-            TokenKind::Next => "'next'",
-            TokenKind::Last => "'last'",
-            TokenKind::Redo => "'redo'",
-            TokenKind::Goto => "'goto'",
-            TokenKind::Class => "'class'",
-            TokenKind::Method => "'method'",
-            TokenKind::Field => "'field'",
-            TokenKind::Format => "'format'",
-            TokenKind::Undef => "'undef'",
-            TokenKind::Defer => "'defer'",
-
-            // Operators
-            TokenKind::Assign => "'='",
-            TokenKind::Plus => "'+'",
-            TokenKind::Minus => "'-'",
-            TokenKind::Star => "'*'",
-            TokenKind::Slash => "'/'",
-            TokenKind::Percent => "'%'",
-            TokenKind::Power => "'**'",
-            TokenKind::LeftShift => "'<<'",
-            TokenKind::RightShift => "'>>'",
-            TokenKind::BitwiseAnd => "'&'",
-            TokenKind::BitwiseOr => "'|'",
-            TokenKind::BitwiseXor => "'^'",
-            TokenKind::BitwiseNot => "'~'",
-            TokenKind::PlusAssign => "'+='",
-            TokenKind::MinusAssign => "'-='",
-            TokenKind::StarAssign => "'*='",
-            TokenKind::SlashAssign => "'/='",
-            TokenKind::PercentAssign => "'%='",
-            TokenKind::DotAssign => "'.='",
-            TokenKind::AndAssign => "'&='",
-            TokenKind::OrAssign => "'|='",
-            TokenKind::XorAssign => "'^='",
-            TokenKind::PowerAssign => "'**='",
-            TokenKind::LeftShiftAssign => "'<<='",
-            TokenKind::RightShiftAssign => "'>>='",
-            TokenKind::LogicalAndAssign => "'&&='",
-            TokenKind::LogicalOrAssign => "'||='",
-            TokenKind::DefinedOrAssign => "'//='",
-            TokenKind::Equal => "'=='",
-            TokenKind::NotEqual => "'!='",
-            TokenKind::Match => "'=~'",
-            TokenKind::NotMatch => "'!~'",
-            TokenKind::SmartMatch => "'~~'",
-            TokenKind::Less => "'<'",
-            TokenKind::Greater => "'>'",
-            TokenKind::LessEqual => "'<='",
-            TokenKind::GreaterEqual => "'>='",
-            TokenKind::Spaceship => "'<=>'",
-            TokenKind::StringCompare => "'cmp'",
-            TokenKind::And => "'&&'",
-            TokenKind::Or => "'||'",
-            TokenKind::Not => "'!'",
-            TokenKind::DefinedOr => "'//'",
-            TokenKind::WordAnd => "'and'",
-            TokenKind::WordOr => "'or'",
-            TokenKind::WordNot => "'not'",
-            TokenKind::WordXor => "'xor'",
-            TokenKind::Arrow => "'->'",
-            TokenKind::FatArrow => "'=>'",
-            TokenKind::Dot => "'.'",
-            TokenKind::Range => "'..'",
-            TokenKind::Ellipsis => "'...'",
-            TokenKind::Increment => "'++'",
-            TokenKind::Decrement => "'--'",
-            TokenKind::DoubleColon => "'::'",
-            TokenKind::Question => "'?'",
-            TokenKind::Colon => "':'",
-            TokenKind::Backslash => "'\\'",
-
-            // Delimiters
-            TokenKind::LeftParen => "'('",
-            TokenKind::RightParen => "')'",
-            TokenKind::LeftBrace => "'{'",
-            TokenKind::RightBrace => "'}'",
-            TokenKind::LeftBracket => "'['",
-            TokenKind::RightBracket => "']'",
-            TokenKind::Semicolon => "';'",
-            TokenKind::Comma => "','",
-
-            // Literals
-            TokenKind::Number => "number",
-            TokenKind::String => "string",
-            TokenKind::Regex => "regex",
-            TokenKind::Substitution => "substitution (s///)",
-            TokenKind::Transliteration => "transliteration (tr///)",
-            TokenKind::QuoteSingle => "q// string",
-            TokenKind::QuoteDouble => "qq// string",
-            TokenKind::QuoteWords => "qw() word list",
-            TokenKind::QuoteCommand => "qx// command",
-            TokenKind::HeredocStart => "heredoc (<<)",
-            TokenKind::HeredocBody => "heredoc body",
-            TokenKind::FormatBody => "format body",
-            TokenKind::DataMarker => "__DATA__",
-            TokenKind::DataBody => "data section",
-            TokenKind::VString => "version string",
-            TokenKind::UnknownRest => "unparsed content",
-            TokenKind::HeredocDepthLimit => "heredoc depth limit",
-
-            // Identifiers and variables
-            TokenKind::Identifier => "identifier",
-            TokenKind::ScalarSigil => "'$'",
-            TokenKind::ArraySigil => "'@'",
-            TokenKind::HashSigil => "'%'",
-            TokenKind::SubSigil => "'&'",
-            TokenKind::GlobSigil => "'*'",
-
-            // Special
-            TokenKind::Eof => "end of input",
-            TokenKind::Unknown => "unknown token",
+    pub fn info(self) -> TokenKindInfo {
+        fn row(
+            kind: TokenKind,
+            display_name: &'static str,
+            category: TokenCategory,
+            canonical_lexeme: Option<&'static str>,
+            keyword_spelling: Option<&'static str>,
+            operator_spelling: Option<&'static str>,
+        ) -> TokenKindInfo {
+            TokenKindInfo {
+                kind,
+                display_name,
+                category,
+                canonical_lexeme,
+                keyword_spelling,
+                operator_spelling,
+            }
         }
+
+        match self {
+            TokenKind::My => {
+                row(self, "'my'", TokenCategory::Keyword, Some("my"), Some("my"), None)
+            }
+            TokenKind::Our => {
+                row(self, "'our'", TokenCategory::Keyword, Some("our"), Some("our"), None)
+            }
+            TokenKind::Local => {
+                row(self, "'local'", TokenCategory::Keyword, Some("local"), Some("local"), None)
+            }
+            TokenKind::State => {
+                row(self, "'state'", TokenCategory::Keyword, Some("state"), Some("state"), None)
+            }
+            TokenKind::Sub => {
+                row(self, "'sub'", TokenCategory::Keyword, Some("sub"), Some("sub"), None)
+            }
+            TokenKind::If => {
+                row(self, "'if'", TokenCategory::Keyword, Some("if"), Some("if"), None)
+            }
+            TokenKind::Elsif => {
+                row(self, "'elsif'", TokenCategory::Keyword, Some("elsif"), Some("elsif"), None)
+            }
+            TokenKind::Else => {
+                row(self, "'else'", TokenCategory::Keyword, Some("else"), Some("else"), None)
+            }
+            TokenKind::Unless => {
+                row(self, "'unless'", TokenCategory::Keyword, Some("unless"), Some("unless"), None)
+            }
+            TokenKind::While => {
+                row(self, "'while'", TokenCategory::Keyword, Some("while"), Some("while"), None)
+            }
+            TokenKind::Until => {
+                row(self, "'until'", TokenCategory::Keyword, Some("until"), Some("until"), None)
+            }
+            TokenKind::For => {
+                row(self, "'for'", TokenCategory::Keyword, Some("for"), Some("for"), None)
+            }
+            TokenKind::Foreach => row(
+                self,
+                "'foreach'",
+                TokenCategory::Keyword,
+                Some("foreach"),
+                Some("foreach"),
+                None,
+            ),
+            TokenKind::Return => {
+                row(self, "'return'", TokenCategory::Keyword, Some("return"), Some("return"), None)
+            }
+            TokenKind::Package => row(
+                self,
+                "'package'",
+                TokenCategory::Keyword,
+                Some("package"),
+                Some("package"),
+                None,
+            ),
+            TokenKind::Use => {
+                row(self, "'use'", TokenCategory::Keyword, Some("use"), Some("use"), None)
+            }
+            TokenKind::No => {
+                row(self, "'no'", TokenCategory::Keyword, Some("no"), Some("no"), None)
+            }
+            TokenKind::Begin => {
+                row(self, "'BEGIN'", TokenCategory::Keyword, Some("BEGIN"), Some("BEGIN"), None)
+            }
+            TokenKind::End => {
+                row(self, "'END'", TokenCategory::Keyword, Some("END"), Some("END"), None)
+            }
+            TokenKind::Check => {
+                row(self, "'CHECK'", TokenCategory::Keyword, Some("CHECK"), Some("CHECK"), None)
+            }
+            TokenKind::Init => {
+                row(self, "'INIT'", TokenCategory::Keyword, Some("INIT"), Some("INIT"), None)
+            }
+            TokenKind::Unitcheck => row(
+                self,
+                "'UNITCHECK'",
+                TokenCategory::Keyword,
+                Some("UNITCHECK"),
+                Some("UNITCHECK"),
+                None,
+            ),
+            TokenKind::Eval => {
+                row(self, "'eval'", TokenCategory::Keyword, Some("eval"), Some("eval"), None)
+            }
+            TokenKind::Do => {
+                row(self, "'do'", TokenCategory::Keyword, Some("do"), Some("do"), None)
+            }
+            TokenKind::Given => {
+                row(self, "'given'", TokenCategory::Keyword, Some("given"), Some("given"), None)
+            }
+            TokenKind::When => {
+                row(self, "'when'", TokenCategory::Keyword, Some("when"), Some("when"), None)
+            }
+            TokenKind::Default => row(
+                self,
+                "'default'",
+                TokenCategory::Keyword,
+                Some("default"),
+                Some("default"),
+                None,
+            ),
+            TokenKind::Try => {
+                row(self, "'try'", TokenCategory::Keyword, Some("try"), Some("try"), None)
+            }
+            TokenKind::Catch => {
+                row(self, "'catch'", TokenCategory::Keyword, Some("catch"), Some("catch"), None)
+            }
+            TokenKind::Finally => row(
+                self,
+                "'finally'",
+                TokenCategory::Keyword,
+                Some("finally"),
+                Some("finally"),
+                None,
+            ),
+            TokenKind::Continue => row(
+                self,
+                "'continue'",
+                TokenCategory::Keyword,
+                Some("continue"),
+                Some("continue"),
+                None,
+            ),
+            TokenKind::Next => {
+                row(self, "'next'", TokenCategory::Keyword, Some("next"), Some("next"), None)
+            }
+            TokenKind::Last => {
+                row(self, "'last'", TokenCategory::Keyword, Some("last"), Some("last"), None)
+            }
+            TokenKind::Redo => {
+                row(self, "'redo'", TokenCategory::Keyword, Some("redo"), Some("redo"), None)
+            }
+            TokenKind::Goto => {
+                row(self, "'goto'", TokenCategory::Keyword, Some("goto"), Some("goto"), None)
+            }
+            TokenKind::Class => {
+                row(self, "'class'", TokenCategory::Keyword, Some("class"), Some("class"), None)
+            }
+            TokenKind::Method => {
+                row(self, "'method'", TokenCategory::Keyword, Some("method"), Some("method"), None)
+            }
+            TokenKind::Field => {
+                row(self, "'field'", TokenCategory::Keyword, Some("field"), Some("field"), None)
+            }
+            TokenKind::Format => {
+                row(self, "'format'", TokenCategory::Keyword, Some("format"), Some("format"), None)
+            }
+            TokenKind::Undef => {
+                row(self, "'undef'", TokenCategory::Keyword, Some("undef"), Some("undef"), None)
+            }
+            TokenKind::Defer => {
+                row(self, "'defer'", TokenCategory::Keyword, Some("defer"), Some("defer"), None)
+            }
+            TokenKind::Assign => {
+                row(self, "'='", TokenCategory::Operator, Some("="), None, Some("="))
+            }
+            TokenKind::Plus => {
+                row(self, "'+'", TokenCategory::Operator, Some("+"), None, Some("+"))
+            }
+            TokenKind::Minus => {
+                row(self, "'-'", TokenCategory::Operator, Some("-"), None, Some("-"))
+            }
+            TokenKind::Star => {
+                row(self, "'*'", TokenCategory::Operator, Some("*"), None, Some("*"))
+            }
+            TokenKind::Slash => {
+                row(self, "'/'", TokenCategory::Operator, Some("/"), None, Some("/"))
+            }
+            TokenKind::Percent => {
+                row(self, "'%'", TokenCategory::Operator, Some("%"), None, Some("%"))
+            }
+            TokenKind::Power => {
+                row(self, "'**'", TokenCategory::Operator, Some("**"), None, Some("**"))
+            }
+            TokenKind::LeftShift => {
+                row(self, "'<<'", TokenCategory::Operator, Some("<<"), None, Some("<<"))
+            }
+            TokenKind::RightShift => {
+                row(self, "'>>'", TokenCategory::Operator, Some(">>"), None, Some(">>"))
+            }
+            TokenKind::BitwiseAnd => {
+                row(self, "'&'", TokenCategory::Operator, Some("&"), None, Some("&"))
+            }
+            TokenKind::BitwiseOr => {
+                row(self, "'|'", TokenCategory::Operator, Some("|"), None, Some("|"))
+            }
+            TokenKind::BitwiseXor => {
+                row(self, "'^'", TokenCategory::Operator, Some("^"), None, Some("^"))
+            }
+            TokenKind::BitwiseNot => {
+                row(self, "'~'", TokenCategory::Operator, Some("~"), None, Some("~"))
+            }
+            TokenKind::PlusAssign => {
+                row(self, "'+='", TokenCategory::Operator, Some("+="), None, Some("+="))
+            }
+            TokenKind::MinusAssign => {
+                row(self, "'-='", TokenCategory::Operator, Some("-="), None, Some("-="))
+            }
+            TokenKind::StarAssign => {
+                row(self, "'*='", TokenCategory::Operator, Some("*="), None, Some("*="))
+            }
+            TokenKind::SlashAssign => {
+                row(self, "'/='", TokenCategory::Operator, Some("/="), None, Some("/="))
+            }
+            TokenKind::PercentAssign => {
+                row(self, "'%='", TokenCategory::Operator, Some("%="), None, Some("%="))
+            }
+            TokenKind::DotAssign => {
+                row(self, "'.='", TokenCategory::Operator, Some(".="), None, Some(".="))
+            }
+            TokenKind::AndAssign => {
+                row(self, "'&='", TokenCategory::Operator, Some("&="), None, Some("&="))
+            }
+            TokenKind::OrAssign => {
+                row(self, "'|='", TokenCategory::Operator, Some("|="), None, Some("|="))
+            }
+            TokenKind::XorAssign => {
+                row(self, "'^='", TokenCategory::Operator, Some("^="), None, Some("^="))
+            }
+            TokenKind::PowerAssign => {
+                row(self, "'**='", TokenCategory::Operator, Some("**="), None, Some("**="))
+            }
+            TokenKind::LeftShiftAssign => {
+                row(self, "'<<='", TokenCategory::Operator, Some("<<="), None, Some("<<="))
+            }
+            TokenKind::RightShiftAssign => {
+                row(self, "'>>='", TokenCategory::Operator, Some(">>="), None, Some(">>="))
+            }
+            TokenKind::LogicalAndAssign => {
+                row(self, "'&&='", TokenCategory::Operator, Some("&&="), None, Some("&&="))
+            }
+            TokenKind::LogicalOrAssign => {
+                row(self, "'||='", TokenCategory::Operator, Some("||="), None, Some("||="))
+            }
+            TokenKind::DefinedOrAssign => {
+                row(self, "'//='", TokenCategory::Operator, Some("//="), None, Some("//="))
+            }
+            TokenKind::Equal => {
+                row(self, "'=='", TokenCategory::Operator, Some("=="), None, Some("=="))
+            }
+            TokenKind::NotEqual => {
+                row(self, "'!='", TokenCategory::Operator, Some("!="), None, Some("!="))
+            }
+            TokenKind::Match => {
+                row(self, "'=~'", TokenCategory::Operator, Some("=~"), None, Some("=~"))
+            }
+            TokenKind::NotMatch => {
+                row(self, "'!~'", TokenCategory::Operator, Some("!~"), None, Some("!~"))
+            }
+            TokenKind::SmartMatch => {
+                row(self, "'~~'", TokenCategory::Operator, Some("~~"), None, Some("~~"))
+            }
+            TokenKind::Less => {
+                row(self, "'<'", TokenCategory::Operator, Some("<"), None, Some("<"))
+            }
+            TokenKind::Greater => {
+                row(self, "'>'", TokenCategory::Operator, Some(">"), None, Some(">"))
+            }
+            TokenKind::LessEqual => {
+                row(self, "'<='", TokenCategory::Operator, Some("<="), None, Some("<="))
+            }
+            TokenKind::GreaterEqual => {
+                row(self, "'>='", TokenCategory::Operator, Some(">="), None, Some(">="))
+            }
+            TokenKind::Spaceship => {
+                row(self, "'<=>'", TokenCategory::Operator, Some("<=>"), None, Some("<=>"))
+            }
+            TokenKind::StringCompare => {
+                row(self, "'cmp'", TokenCategory::Operator, Some("cmp"), None, Some("cmp"))
+            }
+            TokenKind::And => {
+                row(self, "'&&'", TokenCategory::Operator, Some("&&"), None, Some("&&"))
+            }
+            TokenKind::Or => {
+                row(self, "'||'", TokenCategory::Operator, Some("||"), None, Some("||"))
+            }
+            TokenKind::Not => row(self, "'!'", TokenCategory::Operator, Some("!"), None, Some("!")),
+            TokenKind::DefinedOr => {
+                row(self, "'//'", TokenCategory::Operator, Some("//"), None, Some("//"))
+            }
+            TokenKind::WordAnd => {
+                row(self, "'and'", TokenCategory::Operator, Some("and"), None, Some("and"))
+            }
+            TokenKind::WordOr => {
+                row(self, "'or'", TokenCategory::Operator, Some("or"), None, Some("or"))
+            }
+            TokenKind::WordNot => {
+                row(self, "'not'", TokenCategory::Operator, Some("not"), None, Some("not"))
+            }
+            TokenKind::WordXor => {
+                row(self, "'xor'", TokenCategory::Operator, Some("xor"), None, Some("xor"))
+            }
+            TokenKind::Arrow => {
+                row(self, "'->'", TokenCategory::Operator, Some("->"), None, Some("->"))
+            }
+            TokenKind::FatArrow => {
+                row(self, "'=>'", TokenCategory::Operator, Some("=>"), None, Some("=>"))
+            }
+            TokenKind::Dot => row(self, "'.'", TokenCategory::Operator, Some("."), None, Some(".")),
+            TokenKind::Range => {
+                row(self, "'..'", TokenCategory::Operator, Some(".."), None, Some(".."))
+            }
+            TokenKind::Ellipsis => {
+                row(self, "'...'", TokenCategory::Operator, Some("..."), None, Some("..."))
+            }
+            TokenKind::Increment => {
+                row(self, "'++'", TokenCategory::Operator, Some("++"), None, Some("++"))
+            }
+            TokenKind::Decrement => {
+                row(self, "'--'", TokenCategory::Operator, Some("--"), None, Some("--"))
+            }
+            TokenKind::DoubleColon => {
+                row(self, "'::'", TokenCategory::Operator, Some("::"), None, Some("::"))
+            }
+            TokenKind::Question => {
+                row(self, "'?'", TokenCategory::Operator, Some("?"), None, Some("?"))
+            }
+            TokenKind::Colon => {
+                row(self, "':'", TokenCategory::Operator, Some(":"), None, Some(":"))
+            }
+            TokenKind::Backslash => {
+                row(self, "'\\'", TokenCategory::Operator, Some("\\"), None, Some("\\"))
+            }
+            TokenKind::LeftParen => {
+                row(self, "'('", TokenCategory::Delimiter, Some("("), None, None)
+            }
+            TokenKind::RightParen => {
+                row(self, "')'", TokenCategory::Delimiter, Some(")"), None, None)
+            }
+            TokenKind::LeftBrace => {
+                row(self, "'{'", TokenCategory::Delimiter, Some("{"), None, None)
+            }
+            TokenKind::RightBrace => {
+                row(self, "'}'", TokenCategory::Delimiter, Some("}"), None, None)
+            }
+            TokenKind::LeftBracket => {
+                row(self, "'['", TokenCategory::Delimiter, Some("["), None, None)
+            }
+            TokenKind::RightBracket => {
+                row(self, "']'", TokenCategory::Delimiter, Some("]"), None, None)
+            }
+            TokenKind::Semicolon => {
+                row(self, "';'", TokenCategory::Delimiter, Some(";"), None, None)
+            }
+            TokenKind::Comma => row(self, "','", TokenCategory::Delimiter, Some(","), None, None),
+            TokenKind::Number => row(self, "number", TokenCategory::Literal, None, None, None),
+            TokenKind::String => row(self, "string", TokenCategory::Literal, None, None, None),
+            TokenKind::Regex => row(self, "regex", TokenCategory::Literal, None, None, None),
+            TokenKind::Substitution => {
+                row(self, "substitution (s///)", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::Transliteration => {
+                row(self, "transliteration (tr///)", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::QuoteSingle => {
+                row(self, "q// string", TokenCategory::Literal, Some("q"), None, None)
+            }
+            TokenKind::QuoteDouble => {
+                row(self, "qq// string", TokenCategory::Literal, Some("qq"), None, None)
+            }
+            TokenKind::QuoteWords => {
+                row(self, "qw() word list", TokenCategory::Literal, Some("qw"), None, None)
+            }
+            TokenKind::QuoteCommand => {
+                row(self, "qx// command", TokenCategory::Literal, Some("qx"), None, None)
+            }
+            TokenKind::HeredocStart => {
+                row(self, "heredoc (<<)", TokenCategory::Literal, Some("<<"), None, None)
+            }
+            TokenKind::HeredocBody => {
+                row(self, "heredoc body", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::FormatBody => {
+                row(self, "format body", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::DataMarker => {
+                row(self, "__DATA__", TokenCategory::Literal, Some("__DATA__"), None, None)
+            }
+            TokenKind::DataBody => {
+                row(self, "data section", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::VString => {
+                row(self, "version string", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::UnknownRest => {
+                row(self, "unparsed content", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::HeredocDepthLimit => {
+                row(self, "heredoc depth limit", TokenCategory::Literal, None, None, None)
+            }
+            TokenKind::Identifier => {
+                row(self, "identifier", TokenCategory::Identifier, None, None, None)
+            }
+            TokenKind::ScalarSigil => row(self, "'$'", TokenCategory::Sigil, Some("$"), None, None),
+            TokenKind::ArraySigil => row(self, "'@'", TokenCategory::Sigil, Some("@"), None, None),
+            TokenKind::HashSigil => row(self, "'%'", TokenCategory::Sigil, Some("%"), None, None),
+            TokenKind::SubSigil => row(self, "'&'", TokenCategory::Sigil, Some("&"), None, None),
+            TokenKind::GlobSigil => row(self, "'*'", TokenCategory::Sigil, Some("*"), None, None),
+            TokenKind::Eof => row(self, "end of input", TokenCategory::Special, None, None, None),
+            TokenKind::Unknown => {
+                row(self, "unknown token", TokenCategory::Special, None, None, None)
+            }
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        self.info().display_name
+    }
+    pub fn category(self) -> TokenCategory {
+        self.info().category
+    }
+    pub fn is_keyword(self) -> bool {
+        self.category() == TokenCategory::Keyword
+    }
+    pub fn is_operator(self) -> bool {
+        self.category() == TokenCategory::Operator
+    }
+    pub fn is_delimiter(self) -> bool {
+        self.category() == TokenCategory::Delimiter
+    }
+    pub fn is_literal(self) -> bool {
+        self.category() == TokenCategory::Literal
+    }
+    pub fn is_identifier_like(self) -> bool {
+        matches!(self.category(), TokenCategory::Identifier | TokenCategory::Sigil)
+    }
+    pub fn is_sigil(self) -> bool {
+        self.category() == TokenCategory::Sigil
+    }
+    pub fn is_special(self) -> bool {
+        self.category() == TokenCategory::Special
+    }
+    pub fn canonical_lexeme(self) -> Option<&'static str> {
+        self.info().canonical_lexeme
     }
 }
