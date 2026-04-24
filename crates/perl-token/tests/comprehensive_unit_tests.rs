@@ -842,3 +842,19 @@ fn many_tokens_in_vec() {
     assert_eq!(&*tokens[0].text, "0");
     assert_eq!(&*tokens[999].text, "999");
 }
+
+#[test]
+fn canonical_lexeme_examples() {
+    assert_eq!(TokenKind::Sub.canonical_lexeme(), Some("sub"));
+    assert_eq!(TokenKind::Arrow.canonical_lexeme(), Some("->"));
+    assert_eq!(TokenKind::Semicolon.canonical_lexeme(), Some(";"));
+    assert_eq!(TokenKind::Identifier.canonical_lexeme(), None);
+    assert_eq!(TokenKind::Number.canonical_lexeme(), None);
+}
+
+#[test]
+fn info_kind_round_trips() {
+    for kind in TokenKind::all() {
+        assert_eq!(kind.info().kind, *kind);
+    }
+}

@@ -11,15 +11,23 @@ dependencies (only `std::sync::Arc`).
 ## Public API
 
 - **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
-- **`TokenKind`** -- enum classifying every Perl token: keywords, operators, delimiters, literals, sigils, and special tokens
+- **`TokenKind`** -- enum classifying every Perl token
+- **`TokenCategory`** -- normalized category for each token kind (`Keyword`, `Operator`, `Delimiter`, `Literal`, `Identifier`, `Sigil`, `Special`)
+- **`TokenKindInfo`** -- metadata row exposed by `TokenKind::info()` (display name, category, canonical lexeme, keyword/operator spellings)
 
 ## Usage
 
 ```rust
-use perl_token::{Token, TokenKind};
+use perl_token::{Token, TokenCategory, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+
+let info = TokenKind::Sub.info();
+assert_eq!(info.category, TokenCategory::Keyword);
+assert_eq!(info.display_name, "'sub'");
+assert_eq!(TokenKind::Sub.canonical_lexeme(), Some("sub"));
+assert!(TokenKind::Sub.is_keyword());
 ```
 
 ## Workspace Role
