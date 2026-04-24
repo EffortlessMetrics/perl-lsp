@@ -81,6 +81,12 @@ fn test_map_expression_form() {
 }
 
 #[test]
+fn test_sort_subname_list_form() {
+    let source = r#"my @sorted = sort by_name @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_map_complex_expr_form() {
     let source = r#"local $ENV{PERL5LIB} = join $sep, map abs_path($_), grep -e, @INC;"#;
     assert_clean_parse(source);
@@ -177,6 +183,12 @@ fn test_core_grep_with_block() {
 fn test_core_grep_with_regex() {
     // CORE::grep /regex/, @list should re-lex / as regex delimiter
     let source = r#"my @matches = CORE::grep /foo/, @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_expr_with_trailing_comma() {
+    let source = r#"my @result = grep defined, @list,;"#;
     assert_clean_parse(source);
 }
 

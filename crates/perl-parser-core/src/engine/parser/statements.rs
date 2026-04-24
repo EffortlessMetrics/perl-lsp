@@ -889,6 +889,11 @@ impl<'a> Parser<'a> {
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
                                     }
+                                    // Allow optional trailing separator in list-builtin
+                                    // argument lists (e.g. `grep defined, @list,;`).
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
                                     args.push(self.parse_assignment()?);
                                 }
                             } else {
