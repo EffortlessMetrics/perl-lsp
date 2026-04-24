@@ -989,6 +989,26 @@ pub struct Location {
     pub range: Range,
 }
 
+/// Planned text edit for a module-move rewrite.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlannedTextEdit {
+    /// Start byte offset (inclusive).
+    pub start: usize,
+    /// End byte offset (exclusive).
+    pub end: usize,
+    /// Replacement text.
+    pub new_text: String,
+}
+
+/// Planned edits for one document URI.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlannedFileEdits {
+    /// File URI.
+    pub uri: String,
+    /// Non-overlapping edits sorted by start offset.
+    pub edits: Vec<PlannedTextEdit>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1149,58 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    /// Compute conservative workspace edits for moving a module from `old_module` to `new_module`.
+    ///
+    /// First slice behavior:
+    /// - Rewrites `use Old::Name ...;` to `use New::Name ...;`
+    /// - Rewrites statically-safe fully qualified function call prefixes
+    ///   (e.g. `Old::Name::run()` -> `New::Name::run()`).
+    /// - Leaves ambiguous contexts untouched (comments, strings, unknown nodes).
+    pub fn plan_module_move_rewrites(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Vec<PlannedFileEdits> {
+        if old_module.is_empty() || new_module.is_empty() || old_module == new_module {
+            return Vec::new();
+        }
+
+        let mut planned = Vec::new();
+        for document in self.document_store.all_documents() {
+            let mut edits = collect_use_statement_rewrites(&document.text, old_module, new_module);
+            edits.extend(collect_function_call_prefix_rewrites(
+                &document.text,
+                old_module,
+                new_module,
+            ));
+            if edits.is_empty() {
+                continue;
+            }
+
+            edits.sort_by_key(|edit| (edit.start, edit.end));
+            edits.dedup_by(|left, right| {
+                left.start == right.start
+                    && left.end == right.end
+                    && left.new_text == right.new_text
+            });
+            let mut has_overlap = false;
+            for pair in edits.windows(2) {
+                if pair[0].end > pair[1].start {
+                    has_overlap = true;
+                    break;
+                }
+            }
+            if has_overlap {
+                continue;
+            }
+
+            planned.push(PlannedFileEdits { uri: document.uri, edits });
+        }
+
+        planned.sort_by(|left, right| left.uri.cmp(&right.uri));
+        planned
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -2687,6 +2759,115 @@ impl WorkspaceIndex {
         });
 
         all_refs
+    }
+}
+
+fn collect_use_statement_rewrites(
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+) -> Vec<PlannedTextEdit> {
+    let mut edits = Vec::new();
+    let mut line_start = 0usize;
+
+    for line in text.split_inclusive('\n') {
+        if let Some((module_start, module_end)) = find_use_module_span_in_line(line) {
+            if &line[module_start..module_end] == old_module {
+                edits.push(PlannedTextEdit {
+                    start: line_start + module_start,
+                    end: line_start + module_end,
+                    new_text: new_module.to_string(),
+                });
+            }
+        }
+        line_start += line.len();
+    }
+
+    if !text.ends_with('\n') {
+        if let Some(last_line) = text.split('\n').next_back() {
+            let base = text.len().saturating_sub(last_line.len());
+            if let Some((module_start, module_end)) = find_use_module_span_in_line(last_line) {
+                if &last_line[module_start..module_end] == old_module {
+                    edits.push(PlannedTextEdit {
+                        start: base + module_start,
+                        end: base + module_end,
+                        new_text: new_module.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    edits
+}
+
+fn find_use_module_span_in_line(line: &str) -> Option<(usize, usize)> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') || !trimmed.starts_with("use ") {
+        return None;
+    }
+
+    let prefix_len = line.len().saturating_sub(trimmed.len());
+    let module_start = prefix_len + "use ".len();
+    let module_slice = &line[module_start..];
+
+    let module_len = module_slice
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_' || *ch == ':')
+        .count();
+
+    if module_len == 0 {
+        return None;
+    }
+
+    Some((module_start, module_start + module_len))
+}
+
+fn collect_function_call_prefix_rewrites(
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+) -> Vec<PlannedTextEdit> {
+    let mut parser = Parser::new(text);
+    let Ok(ast) = parser.parse() else {
+        return Vec::new();
+    };
+
+    let mut edits = Vec::new();
+    collect_function_call_prefix_rewrites_from_node(&ast, text, old_module, new_module, &mut edits);
+    edits
+}
+
+fn collect_function_call_prefix_rewrites_from_node(
+    node: &Node,
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+    edits: &mut Vec<PlannedTextEdit>,
+) {
+    if let NodeKind::FunctionCall { name, .. } = &node.kind {
+        let prefix = format!("{old_module}::");
+        if name.starts_with(&prefix)
+            && node.location.end <= text.len()
+            && node.location.start <= node.location.end
+        {
+            let node_start = node.location.start;
+            let node_end = node.location.end;
+            if let Some(node_slice) = text.get(node_start..node_end) {
+                if let Some(rel_idx) = node_slice.find(name) {
+                    let absolute_name_start = node_start + rel_idx;
+                    edits.push(PlannedTextEdit {
+                        start: absolute_name_start,
+                        end: absolute_name_start + old_module.len(),
+                        new_text: new_module.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    for child in node.children() {
+        collect_function_call_prefix_rewrites_from_node(child, text, old_module, new_module, edits);
     }
 }
 
@@ -5473,5 +5654,66 @@ sub other_sub {
             0,
             "Document store should stay in sync for symbol-free files"
         );
+    }
+
+    fn apply_planned_edits(text: &str, edits: &[PlannedTextEdit]) -> String {
+        let mut rendered = text.to_string();
+        for edit in edits.iter().rev() {
+            rendered.replace_range(edit.start..edit.end, &edit.new_text);
+        }
+        rendered
+    }
+
+    #[test]
+    fn test_plan_module_move_rewrites_updates_imports_and_safe_qualified_calls() {
+        let index = WorkspaceIndex::new();
+        let producer_uri = "file:///workspace/lib/Old/Name.pm";
+        let consumer_one_uri = "file:///workspace/lib/ConsumerOne.pm";
+        let consumer_two_uri = "file:///workspace/lib/ConsumerTwo.pm";
+
+        must(index.index_file(
+            must(url::Url::parse(producer_uri)),
+            "package Old::Name;\nsub helper { return 1; }\n1;\n".to_string(),
+        ));
+        let consumer_one =
+            "package ConsumerOne;\nuse Old::Name;\nmy $x = Old::Name::helper();\n1;\n";
+        let consumer_two =
+            "package ConsumerTwo;\nuse Old::Name qw(helper);\nOld::Name::helper();\n1;\n";
+        must(index.index_file(must(url::Url::parse(consumer_one_uri)), consumer_one.to_string()));
+        must(index.index_file(must(url::Url::parse(consumer_two_uri)), consumer_two.to_string()));
+
+        let planned = index.plan_module_move_rewrites("Old::Name", "New::Name");
+        assert_eq!(planned.len(), 2, "Expected edits for both consumer files only");
+
+        let one = must_some(planned.iter().find(|file| file.uri == consumer_one_uri));
+        let two = must_some(planned.iter().find(|file| file.uri == consumer_two_uri));
+        assert_eq!(one.edits.len(), 2, "Import and call should both be rewritten");
+        assert_eq!(two.edits.len(), 2, "Import and call should both be rewritten");
+
+        let one_after = apply_planned_edits(consumer_one, &one.edits);
+        let two_after = apply_planned_edits(consumer_two, &two.edits);
+        assert!(one_after.contains("use New::Name;"));
+        assert!(one_after.contains("New::Name::helper();"));
+        assert!(two_after.contains("use New::Name qw(helper);"));
+        assert!(two_after.contains("New::Name::helper();"));
+    }
+
+    #[test]
+    fn test_plan_module_move_rewrites_keeps_ambiguous_strings_and_comments() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///workspace/lib/Ambiguous.pm";
+        let source = "package Ambiguous;\nuse Old::Name;\n# Old::Name::helper();\nmy $label = 'Old::Name::helper';\nOld::Name::helper();\n1;\n";
+        must(index.index_file(must(url::Url::parse(uri)), source.to_string()));
+
+        let planned = index.plan_module_move_rewrites("Old::Name", "New::Name");
+        assert_eq!(planned.len(), 1);
+        let edits = &planned[0].edits;
+        assert_eq!(edits.len(), 2, "Only import and AST-backed call should change");
+
+        let updated = apply_planned_edits(source, edits);
+        assert!(updated.contains("use New::Name;"));
+        assert!(updated.contains("New::Name::helper();"));
+        assert!(updated.contains("# Old::Name::helper();"));
+        assert!(updated.contains("'Old::Name::helper'"));
     }
 }
