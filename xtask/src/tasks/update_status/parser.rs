@@ -85,6 +85,18 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
     format!("{clean_pct:.1}% clean (`{clean_files}/{total_files}`)")
 }
 
+fn format_recovery_salvage(
+    dirty_files: usize,
+    recovery_only_files: usize,
+    salvage_rate: Option<f64>,
+) -> String {
+    if dirty_files == 0 {
+        return "n/a (0 dirty)".to_string();
+    }
+    let pct = salvage_rate.unwrap_or_else(|| recovery_only_files as f64 / dirty_files as f64);
+    format!("{:.1}% salvage (`{}/{}`)", pct * 100.0, recovery_only_files, dirty_files)
+}
+
 fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
@@ -99,12 +111,25 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let dirty_files = if report.total_dirty_files == 0 {
+                report.files_with_errors
+            } else {
+                report.total_dirty_files
+            };
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` dirty (`{}` recovery-only / `{}` ERROR-node / `{}` catastrophic), {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
                 report.files_unreadable,
-                report.files_with_errors,
+                dirty_files,
+                report.structured_recovery_only_files,
+                report.files_with_error_nodes,
+                report.catastrophic_parse_failure_files,
+                format_recovery_salvage(
+                    dirty_files,
+                    report.structured_recovery_only_files,
+                    report.recovery_salvage_rate,
+                ),
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +140,24 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let dirty_files = if report.total_dirty_files == 0 {
+                report.files_with_errors
+            } else {
+                report.total_dirty_files
+            };
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` dirty (`{}` recovery-only / `{}` ERROR-node / `{}` catastrophic), {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.files_unreadable,
-                report.files_with_errors,
+                dirty_files,
+                report.structured_recovery_only_files,
+                report.files_with_error_nodes,
+                report.catastrophic_parse_failure_files,
+                format_recovery_salvage(
+                    dirty_files,
+                    report.structured_recovery_only_files,
+                    report.recovery_salvage_rate,
+                ),
                 short_day(&report.timestamp),
             )
         },
@@ -130,12 +168,23 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Project corpus** | UNVERIFIED | live repo scan unavailable | `test_corpus/` + `crates/perl-corpus/src/gen` |".to_string()
         },
         |summary| {
+            let salvage = summary.recovery_salvage_rate.map_or_else(
+                || "n/a".to_string(),
+                |rate| format!("{:.1}% ({}/{})", rate * 100.0, summary.structured_recovery_only_files, summary.total_dirty_files),
+            );
             format!(
-                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` parse-error outcomes, `{}` dirty (`{}` recovery-only / `{}` ERROR-node / `{}` catastrophic), salvage `{}`, recovered nodes `{}`, first unrecovered ERROR nodes `{}`, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
                 format_clean_rate(summary.ok_files, summary.total_files),
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
                 summary.error_files,
+                summary.total_dirty_files,
+                summary.structured_recovery_only_files,
+                summary.files_with_error_nodes,
+                summary.catastrophic_parse_failure_files,
+                salvage,
+                summary.recovered_node_count,
+                summary.first_unrecovered_error_node_files,
                 summary.timeout_files,
                 summary.panic_files,
                 summary.nodekind_covered,
@@ -288,6 +337,13 @@ mod tests {
             error_files: 0,
             timeout_files: 0,
             panic_files: 0,
+            total_dirty_files: 0,
+            structured_recovery_only_files: 0,
+            files_with_error_nodes: 0,
+            catastrophic_parse_failure_files: 0,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_files: 0,
+            recovery_salvage_rate: None,
             test_corpus_files: 69,
             perl_corpus_files: 22,
             nodekind_covered: 65,
@@ -362,8 +418,15 @@ mod tests {
             files_unreadable: 0,
             clean_files: 10,
             files_with_errors: 0,
+            total_dirty_files: 0,
+            structured_recovery_only_files: 0,
+            files_with_error_nodes: 0,
+            catastrophic_parse_failure_files: 0,
+            recovered_node_count: 0,
             total_error_nodes: 0,
             first_error_buckets: BTreeMap::new(),
+            first_unrecovered_error_buckets: BTreeMap::new(),
+            recovery_salvage_rate: None,
             files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,

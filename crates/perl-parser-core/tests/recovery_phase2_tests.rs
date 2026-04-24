@@ -13,8 +13,8 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
-use perl_parser_core::Parser;
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::{ParseCloseoutKind, Parser};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -228,6 +228,17 @@ fn clean_logical_or_does_not_emit_recovered() {
 fn clean_defined_or_assign_does_not_emit_recovered() {
     let errors = parse_errors("$x //= 'default';");
     assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn recovery_only_parse_is_classified_as_salvaged() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let output = parser.parse_with_recovery();
+    assert_eq!(
+        output.classify_closeout(0, false),
+        ParseCloseoutKind::StructuredRecoveryOnly,
+        "recoverable missing-RHS input should classify as structured recovery only"
+    );
 }
 
 // ──────────────────────────────────────────────────────────────

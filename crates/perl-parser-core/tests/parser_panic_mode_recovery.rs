@@ -3,7 +3,12 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
-use perl_parser_core::{NodeKind, ParseResult, Parser};
+use perl_parser_core::{Node, NodeKind, ParseCloseoutKind, ParseResult, Parser};
+
+fn count_error_nodes(node: &Node) -> usize {
+    let self_count = usize::from(matches!(node.kind, NodeKind::Error { .. }));
+    self_count + node.children().iter().map(|child| count_error_nodes(child)).sum::<usize>()
+}
 
 // AC1: Parser implements synchronization point detection for Perl syntax
 #[test]
@@ -239,6 +244,18 @@ fn parser_ac8_error_location_accuracy() {
             assert!(loc < code.len(), "Error location should be within source");
         }
     }
+}
+
+#[test]
+fn parse_with_error_nodes_stays_visible_in_closeout_classification() {
+    let mut parser = Parser::new("my $x = 1 + ; my $y = );");
+    let output = parser.parse_with_recovery();
+    let error_nodes = count_error_nodes(&output.ast);
+    assert!(
+        error_nodes > 0,
+        "test precondition failed: malformed input should produce unrecovered ERROR nodes"
+    );
+    assert_eq!(output.classify_closeout(error_nodes, false), ParseCloseoutKind::HasErrorNodes);
 }
 
 // AC9: Parser performance overhead for recovery is < 5% on valid code

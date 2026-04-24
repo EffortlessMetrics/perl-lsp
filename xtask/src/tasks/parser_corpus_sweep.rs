@@ -7,7 +7,7 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use perl_parser::{Node, NodeKind, Parser};
+use perl_parser::{Node, NodeKind, ParseError, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -159,8 +159,29 @@ pub struct SweepReport {
     pub files_unreadable: usize,
     pub clean_files: usize,
     pub files_with_errors: usize,
+    /// Total dirty files (`structured_recovery_only + files_with_error_nodes + catastrophic`).
+    #[serde(default)]
+    pub total_dirty_files: usize,
+    /// Files that recovered with structured diagnostics only (no ERROR nodes).
+    #[serde(default)]
+    pub structured_recovery_only_files: usize,
+    /// Files that contain at least one unrecovered `ERROR` AST node.
+    #[serde(default)]
+    pub files_with_error_nodes: usize,
+    /// Files where `Parser::parse()` returned `Err` (catastrophic failure).
+    #[serde(default)]
+    pub catastrophic_parse_failure_files: usize,
+    /// Total `ParseError::Recovered` diagnostics across all parsed files.
+    #[serde(default)]
+    pub recovered_node_count: usize,
     pub total_error_nodes: usize,
     pub first_error_buckets: BTreeMap<String, usize>,
+    /// Buckets for first unrecovered `ERROR` nodes (excludes recovery-only files).
+    #[serde(default)]
+    pub first_unrecovered_error_buckets: BTreeMap<String, usize>,
+    /// Structured-recovery salvage rate among dirty files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub recovery_salvage_rate: Option<f64>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub files_by_bucket: BTreeMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
@@ -679,8 +700,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_unreadable = 0usize;
     let mut clean_files = 0usize;
     let mut files_with_errors = 0usize;
+    let mut structured_recovery_only_files = 0usize;
+    let mut files_with_error_nodes = 0usize;
+    let mut catastrophic_parse_failure_files = 0usize;
+    let mut recovered_node_count = 0usize;
     let mut total_error_nodes = 0usize;
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut first_unrecovered_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
 
@@ -740,6 +766,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Err(_) => {
                 // Catastrophic failure (recursion limit etc.) — count as error
                 files_with_errors += 1;
+                catastrophic_parse_failure_files += 1;
                 total_error_nodes += 1;
                 let bucket = "catastrophic_parse_failure".to_string();
                 *first_error_buckets.entry(bucket.clone()).or_default() += 1;
@@ -765,6 +792,12 @@ pub fn run(config: SweepConfig) -> Result<()> {
             }
         };
 
+        let recovered_for_file =
+            parser.errors().iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+        let unrecovered_diagnostics =
+            parser.errors().iter().filter(|e| !matches!(e, ParseError::Recovered { .. })).count();
+        recovered_node_count += recovered_for_file;
+
         // Count ERROR nodes via AST walk
         let summary = collect_error_summary(&ast);
 
@@ -776,23 +809,55 @@ pub fn run(config: SweepConfig) -> Result<()> {
         });
 
         if summary.count == 0 {
-            clean_files += 1;
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path.clone(),
-                    status: "clean".to_string(),
-                    error_node_count: 0,
-                    first_error: None,
-                    parse_duration_ms: Some(parse_duration_ms),
-                    line_count: Some(line_count),
-                });
+            if recovered_for_file > 0 && unrecovered_diagnostics == 0 {
+                files_with_errors += 1;
+                structured_recovery_only_files += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "recovery_only".to_string(),
+                        error_node_count: 0,
+                        first_error: Some("recovered_only".to_string()),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            } else if recovered_for_file == 0 && unrecovered_diagnostics == 0 {
+                clean_files += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "clean".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            } else {
+                files_with_errors += 1;
+                let bucket = "diagnostics_without_error_nodes".to_string();
+                *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+                files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "diagnostics_only".to_string(),
+                        error_node_count: 0,
+                        first_error: Some(bucket),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
             }
         } else {
             files_with_errors += 1;
+            files_with_error_nodes += 1;
             total_error_nodes += summary.count;
             let first = summary.first_message.as_deref().unwrap_or("unknown");
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+            *first_unrecovered_error_buckets.entry(bucket.clone()).or_default() += 1;
             files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
             if config.verbose {
                 file_results.push(FileResult {
@@ -822,6 +887,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
     };
     let median_error_density_per_1k_loc = compute_median_error_density(&measurements);
     let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
+    let total_dirty_files =
+        structured_recovery_only_files + files_with_error_nodes + catastrophic_parse_failure_files;
+    let recovery_salvage_rate = if total_dirty_files == 0 {
+        None
+    } else {
+        Some(structured_recovery_only_files as f64 / total_dirty_files as f64)
+    };
 
     let report = SweepReport {
         schema_version: "1.3.0".to_string(),
@@ -839,8 +911,15 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_unreadable,
         clean_files,
         files_with_errors,
+        total_dirty_files,
+        structured_recovery_only_files,
+        files_with_error_nodes,
+        catastrophic_parse_failure_files,
+        recovered_node_count,
         total_error_nodes,
         first_error_buckets,
+        first_unrecovered_error_buckets,
+        recovery_salvage_rate,
         files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
@@ -1077,7 +1156,20 @@ pub fn print_summary(report: &SweepReport) {
     println!("Unreadable:        {}", report.files_unreadable);
     println!("Clean (no errors): {} ({:.1}%)", report.clean_files, clean_pct);
     println!("With errors:       {}", report.files_with_errors);
+    println!("Dirty files:       {}", report.total_dirty_files);
+    println!("  - Recovery-only: {}", report.structured_recovery_only_files);
+    println!("  - ERROR nodes:   {}", report.files_with_error_nodes);
+    println!("  - Catastrophic:  {}", report.catastrophic_parse_failure_files);
+    println!("Recovered nodes:   {}", report.recovered_node_count);
     println!("Total ERROR nodes: {}", report.total_error_nodes);
+    if let Some(rate) = report.recovery_salvage_rate {
+        println!(
+            "Recovery salvage:  {:.1}% ({}/{})",
+            rate * 100.0,
+            report.structured_recovery_only_files,
+            report.total_dirty_files
+        );
+    }
     println!("Elapsed:           {:.1}s", report.elapsed_secs);
 
     if let Some(ref timings) = report.phase_timings {
@@ -1160,8 +1252,18 @@ mod tests {
             files_unreadable,
             clean_files,
             files_with_errors,
+            total_dirty_files: files_with_errors,
+            structured_recovery_only_files: 0,
+            files_with_error_nodes: files_with_errors,
+            catastrophic_parse_failure_files: first_error_buckets
+                .get("catastrophic_parse_failure")
+                .copied()
+                .unwrap_or(0),
+            recovered_node_count: 0,
             total_error_nodes,
             first_error_buckets,
+            first_unrecovered_error_buckets: BTreeMap::new(),
+            recovery_salvage_rate: None,
             files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,

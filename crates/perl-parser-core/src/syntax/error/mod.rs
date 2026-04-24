@@ -542,6 +542,19 @@ pub struct ParseOutput {
     pub recovered_count: usize,
 }
 
+/// Recovery-closeout classification for a single parsed file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseCloseoutKind {
+    /// Clean parse: no diagnostics and no unrecovered ERROR nodes.
+    Clean,
+    /// Structured recovery diagnostics only (salvageable editor-state parse).
+    StructuredRecoveryOnly,
+    /// Parse completed but left unrecovered ERROR nodes in AST.
+    HasErrorNodes,
+    /// Parser returned catastrophic failure (`Err`) instead of a salvageable AST.
+    CatastrophicFailure,
+}
+
 impl ParseOutput {
     /// Create a successful parse output with no errors.
     pub fn success(ast: Node) -> Self {
@@ -594,6 +607,29 @@ impl ParseOutput {
     /// Get the error count.
     pub fn error_count(&self) -> usize {
         self.diagnostics.len()
+    }
+
+    /// Count non-recovery diagnostics.
+    pub fn unrecovered_diagnostic_count(&self) -> usize {
+        self.diagnostics.iter().filter(|e| !matches!(e, ParseError::Recovered { .. })).count()
+    }
+
+    /// Classify parse closeout for recovery-salvage metrics.
+    pub fn classify_closeout(
+        &self,
+        unrecovered_error_node_count: usize,
+        catastrophic_failure: bool,
+    ) -> ParseCloseoutKind {
+        if catastrophic_failure {
+            return ParseCloseoutKind::CatastrophicFailure;
+        }
+        if unrecovered_error_node_count > 0 {
+            return ParseCloseoutKind::HasErrorNodes;
+        }
+        if self.recovered_count > 0 && self.unrecovered_diagnostic_count() == 0 {
+            return ParseCloseoutKind::StructuredRecoveryOnly;
+        }
+        ParseCloseoutKind::Clean
     }
 }
 

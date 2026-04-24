@@ -11,7 +11,7 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
-use perl_parser_core::{NodeKind, Parser};
+use perl_parser_core::{NodeKind, ParseCloseoutKind, Parser};
 use perl_tdd_support::must;
 
 // ---------------------------------------------------------------------------
@@ -332,4 +332,11 @@ fn clean_inputs_produce_zero_inserted_closer() {
             src, recovered
         );
     }
+}
+
+#[test]
+fn missing_closer_classifies_as_structured_recovery_only() {
+    let mut parser = Parser::new("my @a = ($x, $y");
+    let output = parser.parse_with_recovery();
+    assert_eq!(output.classify_closeout(0, false), ParseCloseoutKind::StructuredRecoveryOnly);
 }

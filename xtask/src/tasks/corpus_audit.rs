@@ -78,6 +78,13 @@ pub struct StatusSummary {
     pub error_files: usize,
     pub timeout_files: usize,
     pub panic_files: usize,
+    pub total_dirty_files: usize,
+    pub structured_recovery_only_files: usize,
+    pub files_with_error_nodes: usize,
+    pub catastrophic_parse_failure_files: usize,
+    pub recovered_node_count: usize,
+    pub first_unrecovered_error_node_files: usize,
+    pub recovery_salvage_rate: Option<f64>,
     pub test_corpus_files: usize,
     pub perl_corpus_files: usize,
     pub nodekind_covered: usize,
@@ -101,15 +108,53 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
     let mut error_files = 0usize;
     let mut timeout_files = 0usize;
     let mut panic_files = 0usize;
+    let mut structured_recovery_only_files = 0usize;
+    let mut files_with_error_nodes = 0usize;
+    let mut catastrophic_parse_failure_files = 0usize;
+    let mut recovered_node_count = 0usize;
+    let mut first_unrecovered_error_node_files = 0usize;
 
     for outcome in parse_results.values() {
         match outcome {
-            ParseOutcome::Ok { .. } => ok_files += 1,
-            ParseOutcome::Error { .. } => error_files += 1,
+            ParseOutcome::Ok {
+                recovered_count,
+                unrecovered_diagnostics,
+                error_node_count,
+                first_unrecovered_error_node,
+                ..
+            } => {
+                if *error_node_count == 0 && *recovered_count == 0 && *unrecovered_diagnostics == 0
+                {
+                    ok_files += 1;
+                } else {
+                    error_files += 1;
+                }
+                if *error_node_count == 0 && *recovered_count > 0 && *unrecovered_diagnostics == 0 {
+                    structured_recovery_only_files += 1;
+                }
+                if *error_node_count > 0 {
+                    files_with_error_nodes += 1;
+                }
+                if first_unrecovered_error_node.is_some() {
+                    first_unrecovered_error_node_files += 1;
+                }
+                recovered_node_count += *recovered_count;
+            }
+            ParseOutcome::Error { .. } => {
+                error_files += 1;
+                catastrophic_parse_failure_files += 1;
+            }
             ParseOutcome::Timeout { .. } => timeout_files += 1,
             ParseOutcome::Panic { .. } => panic_files += 1,
         }
     }
+    let total_dirty_files =
+        structured_recovery_only_files + files_with_error_nodes + catastrophic_parse_failure_files;
+    let recovery_salvage_rate = if total_dirty_files == 0 {
+        None
+    } else {
+        Some(structured_recovery_only_files as f64 / total_dirty_files as f64)
+    };
 
     let mut test_corpus_files = 0usize;
     let mut perl_corpus_files = 0usize;
@@ -127,6 +172,13 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
         error_files,
         timeout_files,
         panic_files,
+        total_dirty_files,
+        structured_recovery_only_files,
+        files_with_error_nodes,
+        catastrophic_parse_failure_files,
+        recovered_node_count,
+        first_unrecovered_error_node_files,
+        recovery_salvage_rate,
         test_corpus_files,
         perl_corpus_files,
         nodekind_covered: nodekind_stats.covered_count,
@@ -249,6 +301,25 @@ fn print_audit_summary(report: &AuditReport) {
     println!("     - Error: {} ❌", report.parse_outcomes.error);
     println!("     - Timeout: {} ⏱️", report.parse_outcomes.timeout);
     println!("     - Panic: {} 💥", report.parse_outcomes.panic);
+    println!("   Recovery closeout:");
+    println!("     - Dirty files: {}", report.parse_outcomes.total_dirty_files);
+    println!(
+        "     - Structured recovery only: {}",
+        report.parse_outcomes.structured_recovery_only_files
+    );
+    println!("     - Files with ERROR nodes: {}", report.parse_outcomes.files_with_error_nodes);
+    println!(
+        "     - Catastrophic parse failures: {}",
+        report.parse_outcomes.catastrophic_parse_failure_files
+    );
+    println!("     - Recovered node count: {}", report.parse_outcomes.recovered_node_count);
+    println!(
+        "     - First unrecovered ERROR nodes: {}",
+        report.parse_outcomes.first_unrecovered_error_node_files
+    );
+    if let Some(rate) = report.parse_outcomes.recovery_salvage_rate {
+        println!("     - Recovery salvage rate: {:.1}%", rate * 100.0);
+    }
     println!(
         "   NodeKind coverage: {}/{} ({:.1}%)",
         report.nodekind_coverage.covered_count,
