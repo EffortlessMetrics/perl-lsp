@@ -96,6 +96,32 @@ impl IncrementalEditSet {
         self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
     }
 
+    /// Normalize and validate edits for deterministic batch processing.
+    ///
+    /// Returns edits sorted by ascending source order when all edits are valid.
+    /// Returns `None` when a range is backwards or if two edits overlap.
+    /// Zero-width insertions are preserved and considered non-overlapping.
+    pub fn normalize_for_batch(&self) -> Option<Vec<IncrementalEdit>> {
+        let mut normalized = self.edits.clone();
+        normalized.sort_by_key(|edit| (edit.start_byte, edit.old_end_byte));
+
+        for edit in &normalized {
+            if edit.start_byte > edit.old_end_byte {
+                return None;
+            }
+        }
+
+        for pair in normalized.windows(2) {
+            let current = &pair[0];
+            let next = &pair[1];
+            if current.old_end_byte > next.start_byte {
+                return None;
+            }
+        }
+
+        Some(normalized)
+    }
+
     /// Check if the edit set is empty
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
@@ -177,5 +203,31 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_normalize_for_batch_rejects_backwards_range() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(3, 1, "x".to_string()));
+        assert!(edits.normalize_for_batch().is_none());
+    }
+
+    #[test]
+    fn test_normalize_for_batch_rejects_overlap() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 3, "x".to_string()));
+        edits.add(IncrementalEdit::new(2, 4, "y".to_string()));
+        assert!(edits.normalize_for_batch().is_none());
+    }
+
+    #[test]
+    fn test_normalize_for_batch_keeps_zero_width_insertions() -> Result<(), String> {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 1, "x".to_string()));
+        edits.add(IncrementalEdit::new(1, 1, "y".to_string()));
+        let normalized = edits.normalize_for_batch();
+        let normalized = normalized.ok_or("zero-width insertions should be preserved")?;
+        assert_eq!(normalized.len(), 2);
+        Ok(())
     }
 }
