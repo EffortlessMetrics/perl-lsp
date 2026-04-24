@@ -269,6 +269,58 @@ gates:
       - common
       - strict
 
+  - name: parser_corpus_ratchet
+    tier: merge_gate
+    description: "System Perl corpus must not regress against parser baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - ratchet
+
+  - name: cpan_corpus_ratchet
+    tier: merge_gate
+    description: "CPAN corpus baseline + known-clean manifest must remain green"
+    required: true
+    command: cargo run --locked -p xtask -- cpan-corpus sweep --enforce
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - cpan
+      - ratchet
+
+  - name: parser_audit_closeout
+    tier: merge_gate
+    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) must not regress"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- corpus-audit --fresh --corpus-path . --check
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - audit
+      - ratchet
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"
@@ -847,6 +899,9 @@ workflow_integration:
         - unit_core
         - unit_full
         - common_corpus_clean
+        - parser_corpus_ratchet
+        - cpan_corpus_ratchet
+        - parser_audit_closeout
         - lsp_tier_a
         - lsp_tier_b
         - lsp_smoke

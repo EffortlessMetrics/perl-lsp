@@ -9,7 +9,7 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -346,6 +346,49 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         ));
     }
 
+    // Parser closeout ratchets sourced from .ci/metrics/baselines/parser.json.
+    let floor_metrics = load_parser_floor_metrics().unwrap_or_default();
+
+    if let Some(Some(baseline_nodekind)) = floor_metrics.get("node_kind_coverage") {
+        let current_nodekind = if report.nodekind_coverage.total_count == 0 {
+            0.0
+        } else {
+            report.nodekind_coverage.covered_count as f64
+                / report.nodekind_coverage.total_count as f64
+        };
+        if current_nodekind + 1e-6 < *baseline_nodekind {
+            failures.push(format!(
+                "NodeKind coverage regression: {:.4} < {:.4} baseline",
+                current_nodekind, baseline_nodekind
+            ));
+        }
+    }
+
+    if let Some(Some(baseline_gap_count)) = floor_metrics.get("valid_parser_gap_count") {
+        let current_gap_count = report.parse_outcomes.error as f64;
+        if current_gap_count > *baseline_gap_count {
+            failures.push(format!(
+                "Valid parser gap regression: {:.0} > {:.0} baseline",
+                current_gap_count, baseline_gap_count
+            ));
+        }
+    }
+
+    if let Some(Some(baseline_recovery_salvage_rate)) = floor_metrics.get("recovery_salvage_rate") {
+        let parsed_total = report.parse_outcomes.ok + report.parse_outcomes.error;
+        let current_recovery_salvage_rate = if parsed_total == 0 {
+            1.0
+        } else {
+            report.parse_outcomes.ok as f64 / parsed_total as f64
+        };
+        if current_recovery_salvage_rate + 1e-6 < *baseline_recovery_salvage_rate {
+            failures.push(format!(
+                "Recovery salvage regression: {:.4} < {:.4} baseline",
+                current_recovery_salvage_rate, baseline_recovery_salvage_rate
+            ));
+        }
+    }
+
     // Print error category breakdown if there are errors (Issue #180)
     if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
         println!("\n   Error breakdown by category:");
@@ -366,6 +409,29 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         }
         Err(color_eyre::eyre::eyre!("CI gate validation failed: {}", failures.join("; ")))
     }
+}
+
+fn load_parser_floor_metrics() -> Result<BTreeMap<String, Option<f64>>> {
+    let baseline_path = std::path::Path::new(".ci/metrics/baselines/parser.json");
+    if !baseline_path.exists() {
+        return Ok(BTreeMap::new());
+    }
+
+    let baseline_raw =
+        fs::read_to_string(baseline_path).context("Failed to read parser metrics baseline")?;
+    let baseline_json: serde_json::Value =
+        serde_json::from_str(&baseline_raw).context("Failed to parse parser metrics baseline")?;
+
+    let floor_metrics = baseline_json
+        .get("floor_metrics")
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.iter()
+                .map(|(k, v)| (k.clone(), v.as_f64()))
+                .collect::<BTreeMap<String, Option<f64>>>()
+        })
+        .unwrap_or_default();
+    Ok(floor_metrics)
 }
 
 /// Test function to verify corpus audit functionality

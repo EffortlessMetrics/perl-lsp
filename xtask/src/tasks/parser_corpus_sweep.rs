@@ -970,12 +970,16 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
         });
     }
 
-    // 3. Clean-file count must not decrease
-    if report.clean_files < baseline.clean_files {
+    // 3. Clean-rate must not decrease.
+    //
+    // Compare ratios rather than absolute clean-file counts so the ratchet
+    // remains meaningful when corpus inventory size differs between runners
+    // (for example, distro package layout drift or optional roots missing).
+    if clean_rate(report) < clean_rate(baseline) {
         violations.push(RatchetViolation {
-            metric: "clean_files".to_string(),
-            baseline_value: baseline.clean_files.to_string(),
-            current_value: report.clean_files.to_string(),
+            metric: "clean_rate".to_string(),
+            baseline_value: format!("{:.6}", clean_rate(baseline)),
+            current_value: format!("{:.6}", clean_rate(report)),
         });
     }
 
@@ -1001,6 +1005,13 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     }
 
     violations
+}
+
+fn clean_rate(report: &SweepReport) -> f64 {
+    if report.total_files == 0 {
+        return 1.0;
+    }
+    report.clean_files as f64 / report.total_files as f64
 }
 
 /// Discover all .pm files under the given roots
@@ -1441,7 +1452,7 @@ mod tests {
             test_report(80, 18, 25, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
 
         let report = SweepReport {
-            clean_files: 75,       // decreased (violation)
+            clean_files: 75,       // decreased clean-rate (violation)
             total_error_nodes: 30, // increased (violation)
             files_unreadable: 3,   // increased (violation)
             ..baseline.clone()
@@ -1452,7 +1463,7 @@ mod tests {
 
         let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
         assert!(metrics.contains(&"files_unreadable"));
-        assert!(metrics.contains(&"clean_files"));
+        assert!(metrics.contains(&"clean_rate"));
         assert!(metrics.contains(&"total_error_nodes"));
     }
 
