@@ -586,17 +586,16 @@ impl CheckpointedIncrementalParser {
     ) -> ParseResult<Node> {
         // Calculate relex bounds using checkpoint positions
         let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
-            right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
+        let relex_end = right_checkpoint
+            .as_ref()
+            .map(|cp| cp.position)
+            .unwrap_or(self.source.len())
+            .max(edit.start + edit.new_text.len());
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
-        if edit.start >= relex_start {
-            self.stats.left_checkpoint_distance = edit.start - relex_start;
-        }
-        if relex_end >= edit_end {
-            self.stats.right_checkpoint_distance = relex_end - edit_end;
-        }
+        self.stats.left_checkpoint_distance = edit.start.saturating_sub(relex_start);
+        self.stats.right_checkpoint_distance = relex_end.saturating_sub(edit_end);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -639,9 +638,17 @@ impl CheckpointedIncrementalParser {
                 Some(token) => {
                     let token_end = token.end;
                     let token_start = token.start;
+
+                    // The right checkpoint marks the start of the unchanged suffix.
+                    // Tokens that begin at or beyond this boundary are reused from
+                    // cache in phase 3, so avoid re-lexing them here.
+                    if token_start >= relex_end {
+                        break;
+                    }
+
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
-                    bytes_relexed_this_phase += token_end - token_start;
+                    bytes_relexed_this_phase += token_end.min(relex_end) - token_start;
                     if token_end >= relex_end {
                         break;
                     }
@@ -685,6 +692,7 @@ impl CheckpointedIncrementalParser {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                self.stats.bytes_relexed += token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
@@ -862,5 +870,37 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_checkpoint_window_does_not_relex_token_starting_at_right_boundary() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = format!("{}my $value = 1;\n", " ".repeat(100));
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 112, end: 113, new_text: "2".to_string() };
+        let stats_before = parser.stats().bytes_relexed;
+
+        let incremental_tree = must(parser.apply_edit(&edit));
+
+        let mut expected_source = source;
+        expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+
+        let mut full = CheckpointedIncrementalParser::new();
+        let full_tree = must(full.parse(expected_source));
+        assert_eq!(
+            format!("{incremental_tree:?}"),
+            format!("{full_tree:?}"),
+            "incremental tree diverged from fresh full parse"
+        );
+
+        let stats = parser.stats();
+        assert_eq!(stats.left_checkpoint_distance, 12);
+        assert_eq!(stats.right_checkpoint_distance, 0);
+        assert_eq!(
+            stats.bytes_relexed - stats_before,
+            12,
+            "expected right-boundary token to be reused from cache rather than relexed"
+        );
     }
 }
