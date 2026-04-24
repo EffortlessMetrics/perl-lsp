@@ -1117,4 +1117,59 @@ EOF
         assert_eq!(bp_b.hit_count, 0);
         Ok(())
     }
+
+    /// Two breakpoints at the same (line, column) with different conditions must each be
+    /// validated independently.  The validation_cache is keyed by (line, column) and only
+    /// caches the AST line-validity result; condition validation is applied per-breakpoint
+    /// AFTER the cache lookup.  This test would fail if condition validation were accidentally
+    /// skipped for the second breakpoint due to a cache hit.
+    #[test]
+    fn test_same_line_different_conditions_both_validated() {
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    // No condition on the first entry — prime the cache for (line=10, col=None).
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    // Newline injection — must be rejected by the security guard even though
+                    // (line=10, col=None) is already in the validation_cache from entry 1.
+                    condition: Some("$x > 0\nB *".to_string()),
+                    hit_condition: None,
+                    log_message: None,
+                },
+            ]),
+            source_modified: None,
+        };
+
+        let result = store.set_breakpoints(&args);
+        assert_eq!(result.len(), 2, "both breakpoints must appear in the response");
+
+        // Second breakpoint has a newline in the condition — security guard must fire.
+        assert!(
+            !result[1].verified,
+            "breakpoint with newline in condition must be unverified (security guard applies \
+             independently of the AST validation cache); got verified={}",
+            result[1].verified
+        );
+
+        // The stored records must also reflect two entries (both stored, second unverified).
+        let records = store.get_breakpoints(&source_path);
+        assert_eq!(records.len(), 2, "both records must be stored (unverified ones are kept)");
+        assert!(!records[1].verified, "stored second record must be unverified");
+        assert!(
+            records[1].message.as_deref().unwrap_or("").contains("newline"),
+            "stored record must carry the newline-rejection message"
+        );
+    }
 }
