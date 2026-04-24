@@ -70,7 +70,7 @@ use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
@@ -1106,6 +1106,15 @@ pub struct FileIndex {
     content_hash: u64,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+    /// Exported symbols discovered in this file (`@EXPORT` / `@EXPORT_OK`).
+    exports: Vec<ExportedSymbol>,
+}
+
+#[derive(Debug, Clone)]
+struct ExportedSymbol {
+    module_name: String,
+    symbol_name: String,
+    location: Location,
 }
 
 /// Thread-safe workspace index
@@ -1119,6 +1128,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Export lookup table: (`module_name`, `symbol_name`) -> definition location.
+    export_symbols: Arc<RwLock<HashMap<(String, String), Location>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1188,6 +1199,31 @@ impl WorkspaceIndex {
                 symbols.insert(qname.clone(), sym.uri.clone());
             }
             symbols.insert(sym.name.clone(), sym.uri.clone());
+        }
+    }
+
+    fn incremental_remove_exports(
+        export_symbols: &mut HashMap<(String, String), Location>,
+        old_file_index: &FileIndex,
+        old_uri: &str,
+    ) {
+        for exported in &old_file_index.exports {
+            let key = (exported.module_name.clone(), exported.symbol_name.clone());
+            if export_symbols.get(&key).is_some_and(|location| location.uri == old_uri) {
+                export_symbols.remove(&key);
+            }
+        }
+    }
+
+    fn incremental_add_exports(
+        export_symbols: &mut HashMap<(String, String), Location>,
+        new_file_index: &FileIndex,
+    ) {
+        for exported in &new_file_index.exports {
+            export_symbols.insert(
+                (exported.module_name.clone(), exported.symbol_name.clone()),
+                exported.location.clone(),
+            );
         }
     }
 
@@ -1286,6 +1322,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            export_symbols: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1324,6 +1361,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            export_symbols: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1467,6 +1505,7 @@ impl WorkspaceIndex {
         };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
+        visitor.finalize_exports(&mut file_index);
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -1485,10 +1524,18 @@ impl WorkspaceIndex {
                 Self::incremental_remove_symbols(&files, &mut symbols, old_index);
                 drop(symbols);
             }
+            if let Some(old_index) = files.get(&key) {
+                let mut export_symbols = self.export_symbols.write();
+                Self::incremental_remove_exports(&mut export_symbols, old_index, &uri_str);
+            }
             files.insert(key.clone(), file_index);
             let mut symbols = self.symbols.write();
             if let Some(new_index) = files.get(&key) {
                 Self::incremental_add_symbols(&mut symbols, new_index);
+            }
+            if let Some(new_index) = files.get(&key) {
+                let mut export_symbols = self.export_symbols.write();
+                Self::incremental_add_exports(&mut export_symbols, new_index);
             }
 
             if let Some(file_index) = files.get(&key) {
@@ -1552,6 +1599,8 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+            let mut export_symbols = self.export_symbols.write();
+            Self::incremental_remove_exports(&mut export_symbols, &file_index, &uri_str);
         }
     }
 
@@ -1784,6 +1833,7 @@ impl WorkspaceIndex {
             };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
+            visitor.finalize_exports(&mut file_index);
 
             parsed.push((key, uri_str, file_index));
         }
@@ -1793,6 +1843,7 @@ impl WorkspaceIndex {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
             let mut global_refs = self.global_references.write();
+            let mut export_symbols = self.export_symbols.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
             // Each symbol is indexed under both its qualified name and bare name.
@@ -1803,6 +1854,7 @@ impl WorkspaceIndex {
                 // Remove stale global references
                 if let Some(old_index) = files.get(&key) {
                     Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
+                    Self::incremental_remove_exports(&mut export_symbols, old_index, &uri_str);
                 }
 
                 files.insert(key.clone(), file_index);
@@ -1818,6 +1870,7 @@ impl WorkspaceIndex {
                             });
                         }
                     }
+                    Self::incremental_add_exports(&mut export_symbols, fi);
                 }
             }
 
@@ -2054,6 +2107,22 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.export_symbols.write().clear();
+    }
+
+    /// Resolve an exported symbol definition from a specific module.
+    ///
+    /// Returns `None` when the module or symbol is not indexed as an export.
+    pub fn find_exported_symbol_definition(
+        &self,
+        module_name: &str,
+        symbol_name: &str,
+    ) -> Option<Location> {
+        let module_key = canonicalize_perl_module_name(module_name);
+        self.export_symbols
+            .read()
+            .get(&(module_key, symbol_name.to_string()))
+            .cloned()
     }
 
     /// Return the number of indexed files in the workspace
@@ -2696,6 +2765,7 @@ struct IndexVisitor {
     uri: String,
     current_package: Option<String>,
     workspace_folder_uri: Option<String>,
+    exported_symbol_candidates: Vec<(String, String)>,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2742,11 +2812,41 @@ impl IndexVisitor {
             uri,
             current_package: Some("main".to_string()),
             workspace_folder_uri,
+            exported_symbol_candidates: Vec::new(),
         }
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
         self.visit_node(node, file_index);
+    }
+
+    fn finalize_exports(&mut self, file_index: &mut FileIndex) {
+        let mut seen = BTreeSet::new();
+        for (module_name, symbol_name) in &self.exported_symbol_candidates {
+            let qualified_name = format!("{module_name}::{symbol_name}");
+            let definition = file_index.symbols.iter().find(|symbol| {
+                symbol.qualified_name.as_deref() == Some(qualified_name.as_str())
+                    || (symbol.container_name.as_deref() == Some(module_name.as_str())
+                        && symbol.name == *symbol_name)
+            });
+            if let Some(symbol) = definition
+                && seen.insert((module_name.clone(), symbol_name.clone()))
+            {
+                file_index.exports.push(ExportedSymbol {
+                    module_name: module_name.clone(),
+                    symbol_name: symbol_name.clone(),
+                    location: Location { uri: symbol.uri.clone(), range: symbol.range },
+                });
+            }
+        }
+    }
+
+    fn record_exports_from_initializer(&mut self, initializer: &Node) {
+        let module_name =
+            self.current_package.clone().unwrap_or_else(|| "main".to_string());
+        for symbol_name in extract_export_symbol_names(initializer) {
+            self.exported_symbol_candidates.push((module_name.clone(), symbol_name));
+        }
     }
 
     fn record_interpolated_variable_references(
@@ -2899,6 +2999,12 @@ impl IndexVisitor {
                             kind: ReferenceKind::Definition,
                         },
                     );
+
+                    if sigil == "@" && (name == "EXPORT" || name == "EXPORT_OK")
+                        && let Some(init) = initializer
+                    {
+                        self.record_exports_from_initializer(init);
+                    }
                 }
 
                 // Visit initializer
@@ -2932,6 +3038,19 @@ impl IndexVisitor {
                             kind: ReferenceKind::Definition,
                         });
                     }
+                }
+
+                let contains_export_target = variables.iter().any(|var| {
+                    matches!(
+                        &var.kind,
+                        NodeKind::Variable { sigil, name }
+                            if sigil == "@" && (name == "EXPORT" || name == "EXPORT_OK")
+                    )
+                });
+                if contains_export_target
+                    && let Some(init) = initializer
+                {
+                    self.record_exports_from_initializer(init);
                 }
 
                 // Visit the initializer
@@ -3069,6 +3188,10 @@ impl IndexVisitor {
                         range: self.node_to_range(lhs),
                         kind: ReferenceKind::Write,
                     });
+
+                    if op == "=" && sigil == "@" && (name == "EXPORT" || name == "EXPORT_OK") {
+                        self.record_exports_from_initializer(rhs);
+                    }
                 }
 
                 // Right side could have reads
@@ -3436,6 +3559,69 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn clean_export_symbol_token(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches(|ch: char| {
+        matches!(
+            ch,
+            '\'' | '"' | ',' | ';' | '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>'
+        )
+    });
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | ':' | '$' | '@' | '%'))
+    {
+        return Some(trimmed.to_string());
+    }
+    None
+}
+
+fn extract_export_symbol_names(node: &Node) -> Vec<String> {
+    fn collect(node: &Node, out: &mut BTreeSet<String>) {
+        match &node.kind {
+            NodeKind::ExpressionStatement { expression } => collect(expression, out),
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    collect(element, out);
+                }
+            }
+            NodeKind::FunctionCall { name, args, .. } if name == "qw" => {
+                for arg in args {
+                    collect(arg, out);
+                }
+            }
+            NodeKind::String { value, .. } => {
+                let (qw_words, remainder) = extract_qw_words(value);
+                for token in
+                    qw_words.into_iter().chain(remainder.split_whitespace().map(str::to_string))
+                {
+                    if let Some(clean) = clean_export_symbol_token(&token) {
+                        out.insert(clean);
+                    }
+                }
+            }
+            NodeKind::Identifier { name } => {
+                let (qw_words, remainder) = extract_qw_words(name);
+                for token in
+                    qw_words.into_iter().chain(remainder.split_whitespace().map(str::to_string))
+                {
+                    if let Some(clean) = clean_export_symbol_token(&token) {
+                        out.insert(clean);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut symbols = BTreeSet::new();
+    collect(node, &mut symbols);
+    symbols.into_iter().collect()
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {
@@ -5038,6 +5224,57 @@ Utils::process_data();
             }
         }
         assert!(found_parent_use, "No Use node with module='parent' found in AST");
+    }
+
+    #[test]
+    fn test_exporting_module_contributes_workspace_exports() {
+        let index = WorkspaceIndex::new();
+        let module_uri = must(url::Url::parse("file:///workspace/lib/My/Exporter.pm"));
+        let module_src = r#"
+package My::Exporter;
+use Exporter 'import';
+our @EXPORT_OK = qw(helper_one helper_two);
+sub helper_one { 1 }
+sub helper_two { 2 }
+1;
+"#;
+        must(index.index_file(module_uri.clone(), module_src.to_string()));
+
+        let helper_one = must_some(index.find_exported_symbol_definition("My::Exporter", "helper_one"));
+        assert_eq!(helper_one.uri, module_uri.to_string());
+
+        let helper_two = must_some(index.find_exported_symbol_definition("My::Exporter", "helper_two"));
+        assert_eq!(helper_two.uri, module_uri.to_string());
+    }
+
+    #[test]
+    fn test_export_lookup_is_cross_file_and_precise() {
+        let index = WorkspaceIndex::new();
+        let module_uri = must(url::Url::parse("file:///workspace/lib/My/Tools.pm"));
+        let consumer_uri = must(url::Url::parse("file:///workspace/script/use_tools.pl"));
+
+        let module_src = r#"
+package My::Tools;
+use Exporter 'import';
+our @EXPORT = qw(do_work);
+sub do_work { return 1; }
+sub not_exported { return 2; }
+1;
+"#;
+        let consumer_src = r#"
+package Consumer;
+use My::Tools qw(do_work);
+do_work();
+1;
+"#;
+
+        must(index.index_file(module_uri.clone(), module_src.to_string()));
+        must(index.index_file(consumer_uri, consumer_src.to_string()));
+
+        let exported = must_some(index.find_exported_symbol_definition("My::Tools", "do_work"));
+        assert_eq!(exported.uri, module_uri.to_string());
+        assert!(index.find_exported_symbol_definition("My::Tools", "not_exported").is_none());
+        assert!(index.find_exported_symbol_definition("My::Tools", "missing").is_none());
     }
 
     // -------------------------------------------------------------------------
