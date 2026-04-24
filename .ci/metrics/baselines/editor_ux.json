@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "measured_at": "2026-04-24T05:47:43Z",
+  "subsystem": "editor_ux",
+  "commit": "3d21531",
+  "floor_metrics": {
+    "hover_correctness_pct": 100.0,
+    "completion_top1_pct": null,
+    "completion_top5_pct": null,
+    "definition_exact_hit_pct": 100.0,
+    "symbol_correctness_pct": 100.0,
+    "cross_file_success_pct": 100.0,
+    "hover_latency_p95_ms": null,
+    "completion_latency_p95_ms": null,
+    "definition_latency_p95_ms": null,
+    "workspace_symbols_latency_p95_ms": null
+  },
+  "improvement_metrics": {
+    "hover_latency_p50_ms": null,
+    "completion_latency_p50_ms": null,
+    "definition_latency_p50_ms": null,
+    "workspace_symbols_latency_p50_ms": null
+  },
+  "tolerance_pct": 0.005,
+  "lower_is_better": [
+    "hover_latency_p95_ms",
+    "completion_latency_p95_ms",
+    "definition_latency_p95_ms",
+    "workspace_symbols_latency_p95_ms",
+    "hover_latency_p50_ms",
+    "completion_latency_p50_ms",
+    "definition_latency_p50_ms",
+    "workspace_symbols_latency_p50_ms"
+  ]
+}

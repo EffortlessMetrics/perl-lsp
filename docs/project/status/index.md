@@ -23,6 +23,7 @@
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
+| Editor UX scorecard | [editor_ux.md](editor_ux.md) | Generator | Every UX harness receipt update |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
 | Workspace & indexing scorecard | [workspace.md](workspace.md) | Generator | Every workspace-touching merge |
 

@@ -73,6 +73,17 @@ Issues filed for structural debt exposed this session:
 - **#5017** `ast_anonymous_sub` parser regression (landed via #5060 from Codex)
 - **#5019** collapse duplicate UX workflow surfaces
 - **#5020** agent-facing receipt extension (scope/lanes/reasons/next-actions)
+  - compact UX scorecard block now emitted by `cargo xtask ux-scorecard --format json`:
+    ```json
+    {
+      "hover_correctness_pct": 100.0,
+      "completion_top1_pct": null,
+      "completion_top5_pct": null,
+      "definition_exact_hit_pct": 100.0,
+      "symbol_correctness_pct": 100.0,
+      "cross_file_success_pct": 100.0
+    }
+    ```
 - **#5021** scope-aware cache keying + post-merge cache warmer
 - **#5096** UX gate 10s timeout too tight under concurrent CI load (fixed via #5097)
 - **#5198** sandbox output capture broken on Windows + Linux runners

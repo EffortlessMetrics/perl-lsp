@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-24T05:47:43.726680677+00:00",
+  "subsystem": "editor_ux",
+  "metrics": {
+    "completion_top1_pct": null,
+    "completion_top5_pct": null,
+    "cross_file_success_pct": 100.0,
+    "definition_exact_hit_pct": 100.0,
+    "hover_correctness_pct": 100.0,
+    "symbol_correctness_pct": 100.0
+  },
+  "latency_by_request_class": {
+    "completion": {
+      "p50_ms": null,
+      "p95_ms": null
+    },
+    "definition": {
+      "p50_ms": null,
+      "p95_ms": null
+    },
+    "hover": {
+      "p50_ms": null,
+      "p95_ms": null
+    },
+    "workspace_symbols": {
+      "p50_ms": null,
+      "p95_ms": null
+    }
+  }
+}

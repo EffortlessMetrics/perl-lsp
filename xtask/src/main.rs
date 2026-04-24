@@ -16,6 +16,7 @@ use tasks::gates::{GateTier, OutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
+use tasks::ux_scorecard::UxScorecardFormat;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -247,6 +248,13 @@ enum Commands {
         /// Output path for generated Homebrew formula.
         #[arg(long, default_value = "homebrew/perl-lsp.rb")]
         output: PathBuf,
+    },
+
+    /// Publish editor UX scorecard artifacts from canonical harness receipts.
+    UxScorecard {
+        /// Output format for stdout.
+        #[arg(long, value_enum, default_value_t = UxScorecardFormat::Json)]
+        format: UxScorecardFormat,
     },
 
     /// Generate documentation
@@ -1349,6 +1357,7 @@ fn main() -> Result<()> {
                 output,
             })
         }
+        Commands::UxScorecard { format } => ux_scorecard::run(format),
         Commands::Compare {
             c_only,
             rust_only,
