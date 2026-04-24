@@ -29,9 +29,14 @@ perl-ast = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+criterion.workspace = true
 perl-ast = { workspace = true }
 perl-tdd-support = { workspace = true }
 serde_json = { workspace = true }
+
+[[bench]]
+name = "symbol_benchmarks"
+harness = false
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
