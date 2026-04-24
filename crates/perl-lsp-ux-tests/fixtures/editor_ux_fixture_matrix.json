@@ -436,6 +436,26 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "rename_workflow_core",
+      "scenario_file": "ux_scenario_23_rename_workflow.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "rename a symbol in a representative file and validate workspace edit output",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "prepareRename and rename do not error",
+        "rename returns clean null or valid workspace edit for the opened file"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }
