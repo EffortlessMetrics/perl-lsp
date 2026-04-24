@@ -3297,6 +3297,87 @@ sub run {
     }
 
     #[test]
+    fn test_static_class_arrow_includes_inherited_method_with_origin_metadata()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/BaseWidget.pm")?,
+            r#"package BaseWidget;
+sub inherited_render { }
+1;
+"#
+            .to_string(),
+        )?;
+        index.index_file(
+            Url::parse("file:///workspace/ChildWidget.pm")?,
+            r#"package ChildWidget;
+use parent 'BaseWidget';
+sub own_render { }
+1;
+"#
+            .to_string(),
+        )?;
+
+        let code = "use ChildWidget;\nChildWidget->";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let inherited = must_some(completions.iter().find(|c| c.label == "inherited_render"));
+        let inherited_detail = must_some(inherited.detail.as_deref());
+        assert!(
+            inherited_detail.contains("from BaseWidget"),
+            "inherited method detail should include defining package; got {inherited_detail:?}"
+        );
+        assert_eq!(
+            inherited.sort_text.as_deref(),
+            Some("3_inherited_render"),
+            "inherited methods should keep inherited ranking tier"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "own_render"),
+            "own class methods should still be present"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_workspace_method_completion_keeps_own_methods_ranked_above_inherited()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/RankBase.pm")?,
+            r#"package RankBase;
+sub alpha_inherited { }
+1;
+"#
+            .to_string(),
+        )?;
+        index.index_file(
+            Url::parse("file:///workspace/RankChild.pm")?,
+            r#"package RankChild;
+use parent 'RankBase';
+sub zeta_own { }
+1;
+"#
+            .to_string(),
+        )?;
+
+        let code = "use RankChild;\nRankChild->";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let own = must_some(completions.iter().find(|c| c.label == "zeta_own"));
+        let inherited = must_some(completions.iter().find(|c| c.label == "alpha_inherited"));
+        assert_eq!(own.sort_text.as_deref(), Some("2_zeta_own"));
+        assert_eq!(inherited.sort_text.as_deref(), Some("3_alpha_inherited"));
+        Ok(())
+    }
+
+    #[test]
     fn test_self_arrow_in_main_package_does_not_resolve() -> Result<(), Box<dyn std::error::Error>>
     {
         // Edge case: $self-> in the main package should NOT resolve to any package methods.

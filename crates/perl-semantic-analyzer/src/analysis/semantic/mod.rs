@@ -37,6 +37,10 @@ use crate::analysis::class_model::{ClassModel, ClassModelBuilder, MethodResoluti
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
 use std::collections::{HashMap, HashSet};
+use std::collections::{VecDeque, hash_map::Entry};
+
+use perl_workspace::workspace_index::{Location as WorkspaceLocation, SymbolKind as WsSymbolKind};
+use perl_workspace::workspace_index::{WorkspaceIndex, WorkspaceSymbol, uri_to_fs_path};
 
 #[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
@@ -569,6 +573,117 @@ impl SemanticAnalyzer {
 
         linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
     }
+}
+
+/// Collect method-like symbols visible from `package_name`, including inherited methods.
+///
+/// Traverses the package's parent/role graph in breadth-first order and keeps the
+/// first occurrence of each method name (child definitions shadow ancestors).
+pub fn collect_accessible_methods(
+    workspace_index: &WorkspaceIndex,
+    package_name: &str,
+) -> Vec<WorkspaceSymbol> {
+    let mut seen_names: HashSet<String> = HashSet::new();
+    let mut collected: Vec<WorkspaceSymbol> = Vec::new();
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut queue: VecDeque<String> = VecDeque::new();
+    let mut related_cache: HashMap<String, Vec<String>> = HashMap::new();
+
+    queue.push_back(package_name.to_string());
+    visited.insert(package_name.to_string());
+
+    while let Some(pkg) = queue.pop_front() {
+        for symbol in workspace_index.get_package_members(&pkg) {
+            if matches!(symbol.kind, WsSymbolKind::Subroutine | WsSymbolKind::Method)
+                && seen_names.insert(symbol.name.clone())
+            {
+                collected.push(symbol);
+            }
+        }
+
+        for related in package_related_packages(workspace_index, &pkg, &mut related_cache) {
+            if visited.insert(related.clone()) {
+                queue.push_back(related);
+            }
+        }
+    }
+
+    collected
+}
+
+/// Resolve a method defined in a parent/role package for `receiver_pkg`.
+pub fn resolve_inherited_method_definition(
+    workspace_index: &WorkspaceIndex,
+    receiver_pkg: &str,
+    method_name: &str,
+) -> Option<WorkspaceLocation> {
+    let mut visited: HashSet<String> = HashSet::from([receiver_pkg.to_string()]);
+    let mut queue: VecDeque<String> = VecDeque::new();
+    let mut related_cache: HashMap<String, Vec<String>> = HashMap::new();
+
+    for related in package_related_packages(workspace_index, receiver_pkg, &mut related_cache) {
+        if !visited.contains(&related) {
+            queue.push_back(related);
+        }
+    }
+
+    while let Some(pkg) = queue.pop_front() {
+        if !visited.insert(pkg.clone()) {
+            continue;
+        }
+
+        if let Some(location) = workspace_index.find_definition(&format!("{pkg}::{method_name}")) {
+            return Some(location);
+        }
+
+        for related in package_related_packages(workspace_index, &pkg, &mut related_cache) {
+            if !visited.contains(&related) {
+                queue.push_back(related);
+            }
+        }
+    }
+
+    None
+}
+
+fn package_related_packages(
+    workspace_index: &WorkspaceIndex,
+    package_name: &str,
+    cache: &mut HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    match cache.entry(package_name.to_string()) {
+        Entry::Occupied(entry) => entry.get().clone(),
+        Entry::Vacant(entry) => {
+            let related = workspace_index
+                .find_definition(package_name)
+                .and_then(|location| workspace_document_text(workspace_index, &location.uri))
+                .and_then(|text| {
+                    let mut parser = crate::Parser::new(&text);
+                    let ast = parser.parse().ok()?;
+                    let analyzer = SemanticAnalyzer::analyze_with_source(&ast, &text);
+                    analyzer.class_models.into_iter().find(|model| model.name == package_name).map(
+                        |model| {
+                            model
+                                .parents
+                                .iter()
+                                .chain(model.roles.iter())
+                                .cloned()
+                                .collect::<Vec<_>>()
+                        },
+                    )
+                })
+                .unwrap_or_default();
+
+            entry.insert(related).clone()
+        }
+    }
+}
+
+fn workspace_document_text(workspace_index: &WorkspaceIndex, uri: &str) -> Option<String> {
+    workspace_index
+        .document_store()
+        .get_text(uri)
+        .or_else(|| uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok()))
 }
 
 #[cfg(test)]

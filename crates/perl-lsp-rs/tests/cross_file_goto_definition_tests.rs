@@ -2019,6 +2019,138 @@ $c->greet();
     Ok(())
 }
 
+/// Test A2: inherited bareword call inside child package resolves to parent method.
+#[test]
+fn go_to_definition_cross_file_plain_oo_inherited_bareword_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/BareParent.pm",
+        r#"package BareParent;
+
+sub inherited_ping {
+    return "pong";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/BareChild.pm",
+        r#"package BareChild;
+use parent 'BareParent';
+
+sub run {
+    inherited_ping();
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/BareParent.pm", "lib/BareChild.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.barrier();
+
+    // Line 4 (0-indexed): `    inherited_ping();` with cursor on "inherited_ping"
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("lib/BareChild.pm")},
+            "position": {"line": 4, "character": 7}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for inherited bareword goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected inherited bareword goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("BareParent.pm"),
+        "inherited bareword: definition should point to BareParent.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+/// Test A3: static `Class->method()` inherited call resolves to parent method.
+#[test]
+fn go_to_definition_cross_file_plain_oo_static_class_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/StaticBase.pm",
+        r#"package StaticBase;
+
+sub inherited_static {
+    return "base";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/StaticChild.pm",
+        r#"package StaticChild;
+use parent 'StaticBase';
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+    for relative in ["lib/StaticBase.pm", "lib/StaticChild.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+    harness.open(
+        &workspace.uri("main.pl"),
+        r#"use lib 'lib';
+use StaticChild;
+
+StaticChild->inherited_static();
+"#,
+    )?;
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("main.pl")},
+            "position": {"line": 3, "character": 15}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for static inherited goto-def, got: {result:?}"))?;
+    assert!(!locations.is_empty(), "Expected static inherited goto-def to return a location");
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("StaticBase.pm"),
+        "static inherited call should point to StaticBase.pm, got: {uri}"
+    );
+    Ok(())
+}
+
 /// Test B: `use base` — child->greet() resolves to Base.pm
 #[test]
 fn go_to_definition_cross_file_plain_oo_use_base() -> TestResult {
