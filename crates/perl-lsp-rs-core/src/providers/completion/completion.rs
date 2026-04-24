@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
 }
 
 impl CompletionProvider {
@@ -249,6 +252,26 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_inc(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a completion provider with workspace index and effective @INC path plumbing.
+    ///
+    /// This constructor is used by the runtime layer to pass document-scoped include roots.
+    /// The paths are intentionally stored without scanning in this phase.
+    pub fn new_with_index_and_source_and_inc(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +281,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +805,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,8 +2180,43 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use url::Url;
+
+    #[test]
+    fn test_provider_stores_doc_specific_inc_paths() {
+        let code = "use strict;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths =
+            vec![PathBuf::from("/workspace/project/lib"), PathBuf::from("local/lib/perl5")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_inc(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_provider_defaults_to_empty_inc_paths() {
+        let code = "my $value = 1;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        assert!(provider.include_paths.is_empty());
+        assert!(provider.system_inc_paths.is_empty());
+    }
 
     #[test]
     fn test_variable_completion() {
