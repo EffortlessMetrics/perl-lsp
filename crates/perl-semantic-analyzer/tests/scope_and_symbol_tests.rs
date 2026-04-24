@@ -1896,6 +1896,42 @@ print sum(1, 2, 3);
 }
 
 #[test]
+fn strict_subs_allows_paren_list_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use POSIX ('WIFEXITED');
+print WIFEXITED(0);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "WIFEXITED"
+        }),
+        "strict 'subs' should not flag paren-list imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_single_quoted_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use List::Util 'sum';
+print sum(1, 2, 3);
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "sum"
+        }),
+        "strict 'subs' should not flag single-quoted imported bareword function names"
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_subs_allows_tag_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'subs';
@@ -1909,6 +1945,24 @@ print WIFEXITED(0);
             matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "WIFEXITED"
         }),
         "strict 'subs' should not flag symbols imported through known export tags"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_use_constant_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+use constant PI => 3.14159;
+print PI;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "PI"
+        }),
+        "strict 'subs' should not flag barewords introduced by use constant"
     );
     Ok(())
 }

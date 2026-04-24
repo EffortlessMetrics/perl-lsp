@@ -3,6 +3,7 @@
 //! Provides go-to-declaration functionality for finding where symbols are declared.
 //! Supports LocationLink for enhanced client experience.
 
+use super::import_surface::{ImportSurface, resolve_known_export_tag};
 use crate::ast::{Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
@@ -1399,43 +1400,19 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
-    fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
-        match (module, tag) {
-            // POSIX tag sets commonly used in system scripts.
-            ("POSIX", ":sys_wait_h") => {
-                &["WEXITSTATUS", "WIFEXITED", "WIFSIGNALED", "WIFSTOPPED", "WTERMSIG"]
-            }
-            ("POSIX", ":fcntl_h") => &["F_GETFD", "F_SETFD", "F_GETFL", "F_SETFL", "FD_CLOEXEC"],
-            ("POSIX", ":termios_h") => {
-                &["B9600", "B19200", "B38400", "TCSANOW", "TCSADRAIN", "TCSAFLUSH"]
-            }
-            // File::Find exports.
-            ("File::Find", ":find") => &["find", "finddepth"],
-            // Fcntl exports.
-            ("Fcntl", ":seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
-            ("Fcntl", ":lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
-            // Encode exports.
-            ("Encode", ":fallback") => &[
-                "FB_DEFAULT",
-                "FB_CROAK",
-                "FB_QUIET",
-                "FB_WARN",
-                "FB_PERLQQ",
-                "FB_HTMLCREF",
-                "FB_XMLCREF",
-            ],
-            _ => &[],
-        }
-    }
-
     fn tag_imports_symbol(module: &str, import_token: &str, symbol_name: &str) -> bool {
         if !import_token.starts_with(':') {
             return false;
         }
-        export_tag_members(module, import_token).contains(&symbol_name)
+        resolve_known_export_tag(module, import_token)
+            .is_some_and(|members| members.contains(&symbol_name))
     }
 
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        if let Some(source) = ImportSurface::from_ast(ast).resolved_source_for(symbol_name) {
+            return Some(source.to_string());
+        }
+
         /// Extract the module name from a `require Module;` statement node.
         ///
         /// Matches both `require Foo::Bar` (Identifier arg) and
