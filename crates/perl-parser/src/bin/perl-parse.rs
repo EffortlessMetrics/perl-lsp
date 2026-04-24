@@ -306,10 +306,27 @@ fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
             let raw = err.into_bytes();
             let mut decoded = String::with_capacity(raw.len());
             for byte in raw {
-                decoded.push(char::from(byte));
+                decoded.push(decode_windows_1252(byte));
             }
             Ok(decoded)
         }
+    }
+}
+
+fn decode_windows_1252(byte: u8) -> char {
+    // For non-UTF-8 sources, prefer Windows-1252 as the fallback because it is
+    // the most common legacy single-byte encoding on Windows systems.
+    const WINDOWS_1252_EXTENDED: [char; 32] = [
+        '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}',
+        '\u{2021}', '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}',
+        '\u{017D}', '\u{008F}', '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}',
+        '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}',
+        '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
+    ];
+
+    match byte {
+        0x80..=0x9F => WINDOWS_1252_EXTENDED[(byte - 0x80) as usize],
+        _ => char::from(byte),
     }
 }
 
@@ -446,6 +463,18 @@ mod tests {
         // "Sår" in ISO-8859-1 bytes
         let decoded = read_source_bytes(vec![0x53, 0xE5, 0x72, 0x0A])?;
         assert_eq!(decoded, "Sår\n");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_windows_1252_punctuation() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // Curly quotes and en dash in Windows-1252:
+        // “Hi–there”
+        let decoded = read_source_bytes(vec![
+            0x93, b'H', b'i', 0x96, b't', b'h', b'e', b'r', b'e', 0x94, b'\n',
+        ])?;
+        assert_eq!(decoded, "“Hi–there”\n");
         Ok(())
     }
 }
