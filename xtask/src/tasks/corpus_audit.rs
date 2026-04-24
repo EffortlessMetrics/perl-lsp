@@ -287,7 +287,7 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
 
     let mut failures = Vec::new();
 
-    // Parse error ratchet: read baseline and compare (Issue #180)
+    // Parse error ratchet: read legacy baseline and compare (Issue #180)
     let baseline_path = std::path::Path::new("ci/parse_errors_baseline.txt");
     let current_errors = report.parse_outcomes.error;
 
@@ -314,6 +314,63 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     } else {
         // No baseline file - just report the count
         println!("   Parse errors: {} (no baseline file)", current_errors);
+    }
+
+    // Parser closeout floors from scorecard baseline.
+    if let Ok(raw) = fs::read_to_string(".ci/metrics/baselines/parser.json")
+        && let Ok(baseline) = serde_json::from_str::<serde_json::Value>(&raw)
+    {
+        let floor_metrics = baseline.get("floor_metrics");
+        let improvement_metrics = baseline.get("improvement_metrics");
+
+        if let Some(max_gap) =
+            floor_metrics.and_then(|m| m.get("valid_parser_gap_count")).and_then(|v| v.as_f64())
+        {
+            println!("   Valid parser gaps: {} (floor max: {})", current_errors, max_gap as usize);
+            if (current_errors as f64) > max_gap {
+                failures.push(format!(
+                    "Valid parser gaps increased: {} > {}",
+                    current_errors, max_gap as usize
+                ));
+            }
+        }
+
+        if let Some(min_nodekind) =
+            improvement_metrics.and_then(|m| m.get("node_kind_coverage")).and_then(|v| v.as_f64())
+        {
+            let current_nodekind = report.nodekind_coverage.coverage_percentage / 100.0;
+            println!(
+                "   NodeKind coverage: {:.4} (floor min: {:.4})",
+                current_nodekind, min_nodekind
+            );
+            if current_nodekind + f64::EPSILON < min_nodekind {
+                failures.push(format!(
+                    "NodeKind coverage regressed: {:.4} < {:.4}",
+                    current_nodekind, min_nodekind
+                ));
+            }
+        }
+
+        if let Some(min_recovery_salvage) = improvement_metrics
+            .and_then(|m| m.get("recovery_salvage_rate"))
+            .and_then(|v| v.as_f64())
+        {
+            let current_recovery_salvage = if report.parse_outcomes.total == 0 {
+                1.0
+            } else {
+                report.parse_outcomes.ok as f64 / report.parse_outcomes.total as f64
+            };
+            println!(
+                "   Recovery salvage rate: {:.4} (floor min: {:.4})",
+                current_recovery_salvage, min_recovery_salvage
+            );
+            if current_recovery_salvage + f64::EPSILON < min_recovery_salvage {
+                failures.push(format!(
+                    "Recovery salvage rate regressed: {:.4} < {:.4}",
+                    current_recovery_salvage, min_recovery_salvage
+                ));
+            }
+        }
     }
 
     // Timeouts should always be zero

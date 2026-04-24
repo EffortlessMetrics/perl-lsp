@@ -269,6 +269,64 @@ gates:
       - common
       - strict
 
+  - name: parser_corpus_ratchet
+    tier: merge_gate
+    description: "System Perl corpus must stay at or above parser closeout baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: false
+    artifacts:
+      - target/receipts/system-corpus-sweep.json
+    tags:
+      - corpus
+      - parser
+      - ratchet
+
+  - name: cpan_corpus_ratchet
+    tier: merge_gate
+    description: "CPAN corpus must stay at or above parser closeout baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask -- cpan-corpus sweep --enforce
+    timeout_seconds: 900
+    retry_count: 0
+    budgets:
+      max_duration_ms: 900000
+    quarantine: false
+    artifacts:
+      - target/receipts/cpan-corpus-sweep.json
+      - target/receipts/common-corpus-sweep.json
+    tags:
+      - corpus
+      - parser
+      - cpan
+      - ratchet
+
+  - name: parser_audit_ratchet
+    tier: merge_gate
+    description: "Project corpus NodeKind and gap ratchets must hold"
+    required: true
+    command: just ci-parser-features-check
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    artifacts:
+      - corpus_audit_report.json
+    tags:
+      - corpus
+      - parser
+      - nodekind
+      - ratchet
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"

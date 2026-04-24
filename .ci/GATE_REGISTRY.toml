@@ -144,6 +144,54 @@ docs_url = "justfile#ci-check-no-nested-lock"
 cost_tier = "low"  # <1 second
 failure_impact = "medium"
 
+[[gate]]
+id = "parser-corpus-ratchet"
+name = "Parser Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo run --locked -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "System Perl corpus clean/error floors enforced against committed parser baseline"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "CPAN Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 900
+command = "cargo run --locked -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "CPAN corpus baseline and known-clean subset must remain non-regressing"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "high"
+
+[[gate]]
+id = "parser-audit-ratchet"
+name = "Parser Audit Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 300
+command = "just ci-parser-features-check"
+evidence_pattern = "Check passed: parse error count is within acceptable range"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Project corpus valid-gap and NodeKind/recovery ratchets from parser closeout baseline"
+docs_url = "justfile#ci-parser-features-check"
+cost_tier = "medium"
+failure_impact = "high"
+
 # ============================================================================
 # Extended Gates (RECOMMENDED for large changes, ci-full)
 # ============================================================================

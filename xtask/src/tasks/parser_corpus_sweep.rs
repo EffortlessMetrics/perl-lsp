@@ -643,7 +643,10 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     let discovery_start = Instant::now();
     let pm_files = if let Some(ref manifest) = config.manifest_path {
-        resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?
+        // In enforcement mode, every manifest entry must resolve; unresolved
+        // modules would silently shrink the strict-clean set and mask regressions.
+        let min_resolved = if config.enforce { parse_manifest(manifest)?.len() } else { 6 };
+        resolve_manifest_modules(manifest, &config.manifest_perl5lib, min_resolved)?
     } else {
         discover_pm_files(&config.corpus_roots)
     };
