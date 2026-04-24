@@ -1206,6 +1206,16 @@ impl RefactoringEngine {
     }
 
     #[cfg(feature = "workspace_refactor")]
+    fn path_within_directory(path: &Path, directory: &Path) -> bool {
+        match (path.canonicalize(), directory.canonicalize()) {
+            (Ok(canonical_path), Ok(canonical_directory)) => {
+                canonical_path.starts_with(&canonical_directory)
+            }
+            _ => false,
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
     fn find_package_byte_range(source: &str, package_name: &str) -> Option<(usize, usize)> {
         let package_decl = format!("package {package_name}");
         let start = source.find(&package_decl)?;
@@ -1688,7 +1698,22 @@ impl RefactoringEngine {
                     {
                         Ok(refactor_result) => {
                             let edits = refactor_result.file_edits;
-                            if edits.is_empty() {
+                            let scope_root = def_file.parent().unwrap_or(def_file);
+                            let mut skipped_out_of_scope = 0usize;
+                            let scoped_edits: Vec<_> = edits
+                                .into_iter()
+                                .filter(|file_edit| {
+                                    let is_in_scope = Self::path_within_directory(
+                                        &file_edit.file_path,
+                                        scope_root,
+                                    );
+                                    if !is_in_scope {
+                                        skipped_out_of_scope += 1;
+                                    }
+                                    is_in_scope
+                                })
+                                .collect();
+                            if scoped_edits.is_empty() {
                                 warnings.push(format!(
                                     "Symbol '{}' not found across workspace",
                                     symbol_name
@@ -1702,13 +1727,22 @@ impl RefactoringEngine {
                                     operation_id: None,
                                 });
                             }
-                            let changes_made = edits.iter().map(|e| e.edits.len()).sum::<usize>();
-                            let files_modified = self.apply_file_edits(&edits)?;
+                            if skipped_out_of_scope > 0 {
+                                warnings.push(format!(
+                                    "Skipped {} out-of-scope file(s) during inline all_occurrences",
+                                    skipped_out_of_scope
+                                ));
+                            }
+                            let changes_made =
+                                scoped_edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                            let files_modified = self.apply_file_edits(&scoped_edits)?;
+                            let mut merged_warnings = refactor_result.warnings;
+                            merged_warnings.extend(warnings);
                             return Ok(RefactoringResult {
                                 success: true,
                                 files_modified,
                                 changes_made,
-                                warnings: refactor_result.warnings,
+                                warnings: merged_warnings,
                                 errors: vec![],
                                 operation_id: None,
                             });
@@ -3376,5 +3410,44 @@ sub complex {
 
         assert!(result.success, "expected success, warnings: {:?}", result.warnings);
         assert_eq!(result.files_modified, 1);
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_all_occurrences_skips_out_of_scope_file_edits() {
+        let temp_dir = must(tempfile::tempdir());
+        let other_dir = must(tempfile::tempdir());
+        let path_a = temp_dir.path().join("a.pl");
+        let path_b = other_dir.path().join("b.pl");
+
+        let content_a = "my $const = 42;\nprint $const;\n";
+        let content_b = "print $const;\n";
+
+        must(std::fs::write(&path_a, content_a));
+        must(std::fs::write(&path_b, content_b));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        must(engine.index_file(&path_a, content_a));
+        must(engine.index_file(&path_b, content_b));
+
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$const".to_string(), all_occurrences: true },
+            vec![path_a.clone()],
+        ));
+
+        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Skipped 1 out-of-scope file(s)")),
+            "expected out-of-scope warning, got {:?}",
+            result.warnings
+        );
+
+        let updated_b = must(std::fs::read_to_string(&path_b));
+        assert_eq!(updated_b, content_b);
     }
 }
