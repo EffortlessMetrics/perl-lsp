@@ -8,6 +8,16 @@ Core token type definitions for the Perl parser ecosystem.
 across the lexer, tokenizer, and parser crates. It has zero external
 dependencies (only `std::sync::Arc`).
 
+## Stability Contract
+
+`perl-token` is a **tiny stable leaf crate** and should stay dependency-free at runtime.
+Public `Token`/`TokenKind` source compatibility is intentionally conservative and should
+only change with explicit, reviewed intent.
+
+- TokenKind variants: 132
+- Conformance update rule: adding a `TokenKind` variant must also update metadata,
+  this crate's docs, and the conformance guard tests.
+
 ## Public API
 
 - **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
