@@ -22,6 +22,7 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -56,6 +57,24 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
+    fn completion_inc_paths_for_doc(&self, doc_uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let mut config = self.config_for_doc(doc_uri).unwrap_or_default();
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|value| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&value))
+            .unwrap_or_default();
+
+        let include_paths = config
+            .effective_include_paths(&perl5lib_paths)
+            .into_iter()
+            .map(PathBuf::from)
+            .collect();
+
+        let system_inc_paths =
+            if config.use_system_inc { config.get_system_inc().to_vec() } else { Vec::new() };
+
+        (include_paths, system_inc_paths)
+    }
+
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
         match chars.next() {
@@ -315,6 +334,7 @@ impl LspServer {
 
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
+            let (include_paths, system_inc_paths) = self.completion_inc_paths_for_doc(uri);
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -332,15 +352,22 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_inc_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_inc_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -544,6 +571,7 @@ impl LspServer {
 
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
+            let (include_paths, system_inc_paths) = self.completion_inc_paths_for_doc(uri);
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -574,14 +602,21 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_inc_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_inc_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
