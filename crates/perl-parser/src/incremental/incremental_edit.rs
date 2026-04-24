@@ -112,9 +112,13 @@ impl IncrementalEditSet {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start
+        // Sort edits in reverse order to apply from end to start.
+        // Secondary sort by old_end_byte (descending) makes the order deterministic
+        // for edits with the same start_byte, matching normalize_for_source's sort.
         let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        sorted_edits.sort_by(|a, b| {
+            b.start_byte.cmp(&a.start_byte).then_with(|| b.old_end_byte.cmp(&a.old_end_byte))
+        });
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
