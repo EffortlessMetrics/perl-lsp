@@ -2269,4 +2269,33 @@ mod tests {
         assert!(!read.is_empty());
         Ok(())
     }
+
+    /// Edge case: empty file should decode to an empty string without panic.
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_empty_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("empty.pm");
+        std::fs::write(&path, [])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "Empty file should decode to empty string");
+        Ok(())
+    }
+
+    /// Edge case: file with only a UTF-8 BOM and no content should decode
+    /// to an empty string (BOM is stripped, nothing remains).
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn read_text_with_encoding_fallback_handles_bom_only_file()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("bom_only.pm");
+        std::fs::write(&path, [0xEF, 0xBB, 0xBF])?;
+
+        let read = read_text_with_encoding_fallback(&path)?;
+        assert_eq!(read, "", "BOM-only file should decode to empty string after BOM strip");
+        Ok(())
+    }
 }
