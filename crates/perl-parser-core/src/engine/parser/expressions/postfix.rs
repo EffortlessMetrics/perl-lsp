@@ -1215,18 +1215,16 @@ impl<'a> Parser<'a> {
     /// Contrast: `qw(a b)` has `qw` followed by `(`, so it returns `false`
     /// and the normal `parse_expression` path handles it as a `qw(...)` literal.
     fn peek_is_quote_op_bareword(&mut self) -> bool {
-        if self.peek_kind() == Some(TokenKind::Identifier) {
-            if let Ok(first) = self.tokens.peek() {
-                let is_quote_op_name = matches!(
-                    first.text.as_ref(),
-                    "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
-                );
-                if is_quote_op_name {
-                    // Only treat as a bareword key if the NEXT token is `}` or `,`
-                    // (meaning there is no delimiter to start a real quote expression).
-                    if let Ok(second) = self.tokens.peek_second() {
-                        return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
-                    }
+        if let Ok(first) = self.tokens.peek() {
+            let is_quote_op_name = matches!(
+                first.text.as_ref(),
+                "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
+            );
+            if is_quote_op_name {
+                // Only treat as a bareword key if the NEXT token is `}` or `,`
+                // (meaning there is no delimiter to start a real quote expression).
+                if let Ok(second) = self.tokens.peek_second() {
+                    return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
                 }
             }
         }

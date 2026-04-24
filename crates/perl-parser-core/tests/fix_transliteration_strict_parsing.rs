@@ -31,3 +31,17 @@ fn transliteration_strict_handles_edge_cases() {
     assert_has_error(r#"$x =~ tr/a/b;"#, "closing delimiter in transliteration");
     assert_has_error(r#"$x =~ tr{abc}{xyz;"#, "closing delimiter in transliteration");
 }
+
+#[test]
+fn transliteration_supports_mixed_paired_delimiters() {
+    assert_clean_parse(r#"$x =~ tr[a-z]{A-Z}d;"#);
+    assert_clean_parse(r#"$x =~ y<abc>[xyz]r;"#);
+}
+
+#[test]
+fn transliteration_reports_missing_replacement() {
+    assert_has_error(
+        r#"$x =~ tr{abc};"#,
+        "missing replacement list in transliteration",
+    );
+}
