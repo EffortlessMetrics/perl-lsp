@@ -2189,6 +2189,150 @@ $c->greet();
     Ok(())
 }
 
+/// Test C2: bareword inherited call inside child package resolves to parent method.
+#[test]
+fn go_to_definition_cross_file_plain_oo_inherited_bareword_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/BareBase.pm",
+        r#"package BareBase;
+
+sub inherited_bareword {
+    return "from base";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/BareChild.pm",
+        r#"package BareChild;
+use parent 'BareBase';
+
+sub trigger {
+    inherited_bareword();
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let child_uri = workspace.uri("lib/BareChild.pm");
+    for relative in ["lib/BareBase.pm", "lib/BareChild.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": child_uri},
+            "position": {"line": 4, "character": 7}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or_else(|| {
+        format!("Expected array for bareword inherited goto-def, got: {result:?}")
+    })?;
+    assert!(
+        !locations.is_empty(),
+        "Expected bareword inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("BareBase.pm"),
+        "bareword inherited call should point to BareBase.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+/// Test C3: statically known `Class->method` call resolves inherited parent method.
+#[test]
+fn go_to_definition_cross_file_plain_oo_static_class_method_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/StaticBase.pm",
+        r#"package StaticBase;
+
+sub inherited_static {
+    return "from static base";
+}
+
+1;
+"#,
+    )?;
+
+    workspace.write(
+        "lib/StaticChild.pm",
+        r#"package StaticChild;
+use parent 'StaticBase';
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    for relative in ["lib/StaticBase.pm", "lib/StaticChild.pm"] {
+        let uri = workspace.uri(relative);
+        let content = std::fs::read_to_string(workspace.dir.path().join(relative))
+            .map_err(|e| format!("failed to read {relative}: {e}"))?;
+        harness.open(&uri, &content)?;
+    }
+
+    let main_uri = workspace.uri("main.pl");
+    harness.open(
+        &main_uri,
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use lib 'lib';
+use StaticChild;
+
+StaticChild->inherited_static();
+"#,
+    )?;
+
+    harness.barrier();
+
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": main_uri},
+            "position": {"line": 6, "character": 16}
+        }),
+    )?;
+
+    let locations = result
+        .as_array()
+        .ok_or_else(|| format!("Expected array for static inherited goto-def, got: {result:?}"))?;
+    assert!(
+        !locations.is_empty(),
+        "Expected static inherited method goto-def to return at least one location"
+    );
+
+    let uri = locations[0]["uri"].as_str().ok_or("Expected definition URI")?;
+    assert!(
+        uri.contains("StaticBase.pm"),
+        "static inherited call should point to StaticBase.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
 /// Test D: Grandparent chain — GrandChild inherits Child inherits Base;
 /// gc->base_method() should resolve to Base.pm (BFS depth > 1).
 #[test]
@@ -2521,9 +2665,7 @@ $store->component_method();
     )?;
 
     let locations = result.as_array().ok_or_else(|| {
-        format!(
-            "Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}"
-        )
+        format!("Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}")
     })?;
     assert!(
         !locations.is_empty(),

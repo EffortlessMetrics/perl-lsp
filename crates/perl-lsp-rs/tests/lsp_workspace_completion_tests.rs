@@ -395,7 +395,7 @@ tri
 /// Test that `->` completion suggests inherited methods from parent class.
 ///
 /// Validates Gap 3 of issue #3482: add_workspace_method_completions must traverse
-/// the inheritance chain (via collect_all_package_members BFS) so that methods
+/// the inheritance chain (via shared package resolution order) so that methods
 /// defined in parent packages appear when completing on a child class receiver.
 #[test]
 fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::error::Error>> {
@@ -484,11 +484,21 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
         labels
     );
 
-    // inherited_greet should appear from parent via collect_all_package_members BFS
+    // inherited_greet should appear from parent class traversal
     assert!(
         labels.iter().any(|l| l.contains("inherited_greet")),
         "Should suggest inherited_greet from parent class. Got: {:?}",
         labels
+    );
+
+    let inherited_item = items
+        .iter()
+        .find(|item| item["label"].as_str() == Some("inherited_greet"))
+        .ok_or("Expected inherited_greet completion item")?;
+    let detail = inherited_item["detail"].as_str().unwrap_or("");
+    assert!(
+        detail.contains("from CompletionBase"),
+        "Inherited method completion should include origin metadata. Got detail: {detail:?}"
     );
 
     Ok(())
