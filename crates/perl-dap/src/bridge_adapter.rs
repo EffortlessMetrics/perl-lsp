@@ -39,6 +39,7 @@ use tokio::time::sleep;
 
 const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
 const PLS_SHUTDOWN_POLL_MS: u64 = 25;
+const PLS_FORCE_KILL_WAIT_MS: u64 = 250;
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
@@ -158,31 +159,47 @@ impl BridgeAdapter {
 
         // Create bidirectional copy tasks
         // Task 1: Client (Parent Stdin) -> Server (Child Stdin)
-        let client_to_server = async move {
+        let mut client_to_server = tokio::spawn(async move {
             tokio::io::copy(&mut parent_stdin, &mut child_stdin)
                 .await
                 .context("Error copying from client to server")?;
             // Shut down child_stdin to signal EOF to the server
             let _ = child_stdin.shutdown().await;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
         // Task 2: Server (Child Stdout) -> Client (Parent Stdout)
-        let server_to_client = async move {
+        let mut server_to_client = tokio::spawn(async move {
             tokio::io::copy(&mut child_stdout, &mut parent_stdout)
                 .await
                 .context("Error copying from server to client")?;
             parent_stdout.flush().await.context("Error flushing to client")?;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
-        // Run both tasks concurrently and wait for both to finish.
-        // We use join instead of select to ensure graceful shutdown:
-        // if the client closes its input, we want to continue proxying
-        // any remaining output from the server.
-        let (res1, res2) = tokio::join!(client_to_server, server_to_client);
-        res1?;
-        res2?;
+        // If the server side closes first, the client->server copier can block forever
+        // on stdin reads. We prefer deterministic completion and abort the input task
+        // once server->client has completed.
+        tokio::select! {
+            res = &mut server_to_client => {
+                match res {
+                    Ok(inner) => inner?,
+                    Err(e) => anyhow::bail!("Server-to-client proxy task failed: {e}"),
+                }
+                client_to_server.abort();
+                let _ = (&mut client_to_server).await;
+            }
+            res = &mut client_to_server => {
+                match res {
+                    Ok(inner) => inner?,
+                    Err(e) => anyhow::bail!("Client-to-server proxy task failed: {e}"),
+                }
+                match (&mut server_to_client).await {
+                    Ok(inner) => inner?,
+                    Err(e) => anyhow::bail!("Server-to-client proxy task failed: {e}"),
+                }
+            }
+        }
 
         Ok(())
     }
@@ -194,6 +211,10 @@ impl BridgeAdapter {
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
             if !Self::wait_for_child_exit(&mut child, Duration::from_millis(0)).await {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.shutdown().await;
+                }
+
                 #[cfg(unix)]
                 {
                     if let Some(pid) = child.id() {
@@ -210,10 +231,10 @@ impl BridgeAdapter {
                     }
                 }
 
-                let _ = child.kill().await;
+                let _ = child.start_kill();
                 if !Self::wait_for_child_exit(
                     &mut child,
-                    Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
+                    Duration::from_millis(PLS_FORCE_KILL_WAIT_MS),
                 )
                 .await
                 {
@@ -231,9 +252,11 @@ impl BridgeAdapter {
 
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let delay = remaining.min(Duration::from_millis(PLS_SHUTDOWN_POLL_MS));
             match child.try_wait() {
                 Ok(Some(_)) => return true,
-                Ok(None) => sleep(Duration::from_millis(PLS_SHUTDOWN_POLL_MS)).await,
+                Ok(None) => sleep(delay).await,
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to poll Perl::LanguageServer process");
                     return false;

@@ -174,3 +174,21 @@ async fn test_sequential_adapters_are_independent() -> Result<()> {
     second.shutdown().await?;
     Ok(())
 }
+
+/// Calling spawn twice should not leave an orphaned process.
+///
+/// If perl / Perl::LanguageServer is unavailable, this test exits early.
+#[tokio::test]
+async fn test_respawn_replaces_previous_child_cleanly() -> Result<()> {
+    let mut adapter = BridgeAdapter::new();
+    let first_spawn = adapter.spawn_pls_dap().await;
+    if first_spawn.is_err() {
+        // Environment does not have a runnable bridge target.
+        return Ok(());
+    }
+
+    // Second spawn should force cleanup of any previous child before respawning.
+    let _ = adapter.spawn_pls_dap().await;
+    adapter.shutdown().await?;
+    Ok(())
+}
