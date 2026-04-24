@@ -6,7 +6,7 @@
 use super::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_parser_core::{
     ast::{Node, NodeKind},
-    error::ParseResult,
+    error::{ParseError, ParseResult},
     parser::Parser,
 };
 use std::collections::{HashMap, VecDeque};
@@ -128,32 +128,37 @@ impl IncrementalDocument {
         // Reset metrics for this batch of edits
         self.metrics = ParseMetrics::default();
 
-        // Sort edits by position (reverse order for correct application)
-        let mut sorted_edits = edits.edits.clone();
-        sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+        if !edits.has_valid_non_overlapping_ranges() {
+            return Err(ParseError::SyntaxError {
+                message: "Invalid incremental batch: overlapping or backwards edit range"
+                    .to_string(),
+                location: edits.edits.first().map_or(0, |edit| edit.start_byte),
+            });
+        }
+
+        // Sort edits by position in reverse order for deterministic application.
+        let sorted_edits = edits.sorted_reverse();
 
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
+        let mut needs_full_parse_fallback = false;
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.try_apply_edit_in_place(&mut new_source, edit) {
+                needs_full_parse_fallback = true;
+                break;
+            }
         }
 
-        // Find all affected ranges
-        let affected_ranges: Vec<_> =
-            sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
+        if needs_full_parse_fallback {
+            debug!("Falling back to full parse for batch edit due to unmappable range");
+        }
 
-        // Collect reusable subtrees outside affected ranges
-        let reusable = self.find_reusable_for_ranges(&affected_ranges);
-
-        // Parse with reuse when possible
-        let new_root = if !reusable.is_empty() {
-            self.parse_with_reuse(&new_source, reusable)?
-        } else {
-            let mut parser = Parser::new(&new_source);
-            parser.parse()?
-        };
+        // Batch edits are reparsed conservatively from the final text snapshot to
+        // guarantee deterministic correctness at byte and UTF-8 boundaries.
+        let mut parser = Parser::new(&new_source);
+        let new_root = parser.parse()?;
 
         // Update state
         self.source = new_source;
@@ -173,6 +178,14 @@ impl IncrementalDocument {
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
 
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Rejecting backwards single edit range: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return source.to_string();
+        }
+
         // Safely handle byte positions with bounds checking
         let start = edit.start_byte.min(source.len());
         let end = edit.old_end_byte.min(source.len());
@@ -191,19 +204,29 @@ impl IncrementalDocument {
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
+    fn try_apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Rejecting backwards edit range: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return false;
+        }
+
         let start = edit.start_byte.min(source.len());
         let end = edit.old_end_byte.min(source.len());
 
         if start > end {
             debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
+            return false;
         }
 
         if source.is_char_boundary(start) && source.is_char_boundary(end) {
             source.replace_range(start..end, &edit.new_text);
+            true
         } else {
             debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            false
         }
     }
 
@@ -230,28 +253,6 @@ impl IncrementalDocument {
                     self.metrics.cache_hits += 1;
                     self.metrics.nodes_reused += self.count_nodes(node);
                 }
-            } else {
-                self.metrics.cache_misses += 1;
-            }
-        }
-
-        reusable
-    }
-
-    /// Find reusable subtrees for multiple affected ranges
-    fn find_reusable_for_ranges(&mut self, ranges: &[(usize, usize)]) -> Vec<Arc<Node>> {
-        let mut reusable = Vec::new();
-
-        for ((start, end), node) in &self.subtree_cache.by_range {
-            let affected = ranges.iter().any(|(r_start, r_end)| {
-                // Check if this subtree overlaps with any affected range
-                *start < *r_end && *end > *r_start
-            });
-
-            if !affected {
-                reusable.push(node.clone());
-                self.metrics.cache_hits += 1;
-                self.metrics.nodes_reused += self.count_nodes(node);
             } else {
                 self.metrics.cache_misses += 1;
             }
@@ -308,7 +309,11 @@ impl IncrementalDocument {
         let mut new_root = (*self.root).clone();
 
         // Find and update the affected token
-        if self.update_token_in_tree(&mut new_root, source, edit) { Some(new_root) } else { None }
+        if self.update_token_in_tree(&mut new_root, source, edit) {
+            Some(new_root)
+        } else {
+            None
+        }
     }
 
     /// Update a single token in the tree

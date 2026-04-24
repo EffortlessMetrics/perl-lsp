@@ -43,6 +43,11 @@ impl IncrementalEdit {
         IncrementalEdit { start_byte, old_end_byte, new_text, start_position, old_end_position }
     }
 
+    /// Check whether this edit has a forward (non-backwards) range.
+    pub fn has_valid_range(&self) -> bool {
+        self.start_byte <= self.old_end_byte
+    }
+
     /// Get the new end byte after applying this edit
     pub fn new_end_byte(&self) -> usize {
         self.start_byte + self.new_text.len()
@@ -96,6 +101,44 @@ impl IncrementalEditSet {
         self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
     }
 
+    /// Return edits sorted by start position.
+    pub fn sorted(&self) -> Vec<IncrementalEdit> {
+        let mut edits = self.edits.clone();
+        edits.sort_by_key(|e| e.start_byte);
+        edits
+    }
+
+    /// Return edits sorted in reverse order (end-to-start application order).
+    pub fn sorted_reverse(&self) -> Vec<IncrementalEdit> {
+        let mut edits = self.edits.clone();
+        edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        edits
+    }
+
+    /// Validate that all edit ranges are forward and non-overlapping.
+    ///
+    /// Zero-width insertions are preserved as valid edits.
+    pub fn has_valid_non_overlapping_ranges(&self) -> bool {
+        let sorted = self.sorted();
+        let mut prev_end: Option<usize> = None;
+
+        for edit in sorted {
+            if !edit.has_valid_range() {
+                return false;
+            }
+
+            if let Some(end) = prev_end {
+                if edit.start_byte < end {
+                    return false;
+                }
+            }
+
+            prev_end = Some(edit.old_end_byte);
+        }
+
+        true
+    }
+
     /// Check if the edit set is empty
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
@@ -113,8 +156,7 @@ impl IncrementalEditSet {
         }
 
         // Sort edits in reverse order to apply from end to start
-        let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        let sorted_edits = self.sorted_reverse();
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
@@ -166,6 +208,29 @@ mod tests {
         let edit = IncrementalEdit::new(5, 10, "replaced".to_string());
         assert_eq!(edit.new_end_byte(), 13);
         assert_eq!(edit.byte_shift(), 3);
+    }
+
+    #[test]
+    fn test_has_valid_non_overlapping_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 1, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "yy".to_string()));
+        assert!(edits.has_valid_non_overlapping_ranges());
+    }
+
+    #[test]
+    fn test_has_invalid_overlapping_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "yy".to_string()));
+        assert!(!edits.has_valid_non_overlapping_ranges());
+    }
+
+    #[test]
+    fn test_has_invalid_backwards_range() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(5, 3, "x".to_string()));
+        assert!(!edits.has_valid_non_overlapping_ranges());
     }
 
     #[test]
