@@ -220,10 +220,13 @@ mod tests {
     }
 
     #[test]
-    fn given_server_receives_shutdown_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
+    fn given_initialized_server_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
     -> TestResult {
-        // Given
+        // Given — LSP spec requires initialize before shutdown
         let server = LspServer::new();
+        server
+            .handle_initialize(None)
+            .map_err(|e| format!("initialize request should succeed: {e}"))?;
 
         // When
         let response = server
@@ -265,6 +268,49 @@ mod tests {
 
         // Then
         assert_eq!(server.trace_level.lock().as_str(), "verbose");
+        Ok(())
+    }
+
+    #[test]
+    fn given_trace_notification_with_messages_level_when_set_trace_dispatch_runs_then_trace_level_is_messages()
+    -> TestResult {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "messages"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // Then
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "messages",
+            "messages is a valid LSP TraceValue and must be stored exactly"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn given_set_trace_with_no_params_when_dispatch_runs_then_trace_level_is_unchanged()
+    -> TestResult {
+        // Given — establish a non-default level first
+        let server = LspServer::new();
+        server
+            .handle_set_trace_dispatch(Some(json!({"value": "verbose"})))
+            .map_err(|e| format!("setTrace should succeed: {e}"))?;
+
+        // When — params=None (malformed/missing notification body)
+        server
+            .handle_set_trace_dispatch(None)
+            .map_err(|e| format!("setTrace with no params should not error: {e}"))?;
+
+        // Then — level must be preserved; None params must not reset to "off"
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "verbose",
+            "missing params must not reset trace level"
+        );
         Ok(())
     }
 }
