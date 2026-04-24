@@ -1,56 +1,72 @@
-/// Minimal reproduction case for transliteration parsing bug discovered in fuzz testing
-///
-/// CRASH DETAILS:
-/// - Input: "tr/abc/xyz/"
-/// - Expected: ("abc", "xyz", "")
-/// - Actual: ("abc", "", "xyz")
-///
-/// This indicates a critical bug in extract_transliteration_parts where the replacement
-/// and modifiers are being swapped for non-paired delimiters.
-///
-/// IMPACT: This affects Perl transliteration operator parsing throughout the entire
-/// parser pipeline, potentially causing incorrect syntax highlighting, code analysis,
-/// and refactoring operations.
-///
-/// REPRODUCTION: Run with `cargo test -p perl-parser --test fuzz_transliteration_crash_repro`
 use perl_parser::quote_parser::extract_transliteration_parts;
 
 #[test]
-fn minimal_transliteration_crash_repro() {
-    let input = "tr/abc/xyz/";
-    let (search, replace, modifiers) = extract_transliteration_parts(input);
-
-    println!("FUZZ BUG REPRODUCED: tr// parsing issue");
-    println!("Input: {}", input);
-    println!("Expected: ('abc', 'xyz', '')");
-    println!("Actual: ('{}', '{}', '{}')", search, replace, modifiers);
-
-    // Demonstrate the bug - these will fail due to the parsing issue
-    assert_eq!(search.as_str(), "abc", "Search pattern incorrect");
-    assert_eq!(replace.as_str(), "xyz", "Replace pattern incorrect");
-    assert_eq!(modifiers.as_str(), "", "Modifiers incorrect");
+fn minimal_transliteration_crash_repro() -> Result<(), Box<dyn std::error::Error>> {
+    let (search, replace, modifiers) = extract_transliteration_parts("tr/abc/xyz/");
+    assert_eq!((search.as_str(), replace.as_str(), modifiers.as_str()), ("abc", "xyz", ""));
+    Ok(())
 }
 
 #[test]
-fn fuzz_transliteration_regression_suite() {
-    // Test additional variants that likely have the same bug
-    let test_cases = vec![
+fn transliteration_regression_bank() -> Result<(), Box<dyn std::error::Error>> {
+    // tr/// and y/// coverage
+    let slash_cases = [
+        ("tr/abc/xyz/", ("abc", "xyz", "")),
         ("y/abc/xyz/", ("abc", "xyz", "")),
         ("tr/a/b/d", ("a", "b", "d")),
-        ("y/x/y/g", ("x", "y", "")), // 'g' is not a valid transliteration modifier
-        ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // This might work correctly with paired delimiters
+        ("y/x/y/g", ("x", "y", "")),
+        ("tr /left/right/c", ("left", "right", "c")),
     ];
 
-    for (input, expected) in test_cases {
+    for (input, expected) in slash_cases {
         let (search, replace, modifiers) = extract_transliteration_parts(input);
-        let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
-
-        println!("Testing: {} -> expected {:?}, got {:?}", input, expected, actual);
-
-        if actual != expected {
-            println!("  BUG CONFIRMED in variant: {}", input);
-        } else {
-            println!("  PASSED: {}", input);
-        }
+        assert_eq!(
+            (search.as_str(), replace.as_str(), modifiers.as_str()),
+            expected,
+            "slash-delimited transliteration parse mismatch for `{input}`"
+        );
     }
+
+    // Paired delimiter forms, including mixed paired delimiters.
+    let paired_cases = [
+        ("tr{abc}{xyz}d", ("abc", "xyz", "d")),
+        ("tr[abc][xyz]s", ("abc", "xyz", "s")),
+        ("tr(abc)<xyz>r", ("abc", "xyz", "r")),
+        ("y<a-z>{A-Z}cd", ("a-z", "A-Z", "cd")),
+    ];
+
+    for (input, expected) in paired_cases {
+        let (search, replace, modifiers) = extract_transliteration_parts(input);
+        assert_eq!(
+            (search.as_str(), replace.as_str(), modifiers.as_str()),
+            expected,
+            "paired transliteration parse mismatch for `{input}`"
+        );
+    }
+
+    // Delimiter edge cases and malformed-but-nonpanicking cases.
+    let malformed_cases = [
+        ("tr/abc/xyz", ("abc", "xyz", "")),
+        ("tr{abc}{xyz", ("abc", "xyz", "")),
+        ("tr{abc}xyz", ("abc", "", "")),
+        ("trabc", ("", "", "")),
+        ("tr /abc/xyz/qd", ("abc", "xyz", "d")),
+        ("y", ("", "", "")),
+    ];
+
+    for (input, expected) in malformed_cases {
+        let result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
+        assert!(result.is_ok(), "parser panicked for malformed input `{input}`");
+        let (search, replace, modifiers) = match result {
+            Ok(parts) => parts,
+            Err(_) => return Err("unexpected transliteration panic".into()),
+        };
+        assert_eq!(
+            (search.as_str(), replace.as_str(), modifiers.as_str()),
+            expected,
+            "malformed transliteration parse mismatch for `{input}`"
+        );
+    }
+
+    Ok(())
 }
