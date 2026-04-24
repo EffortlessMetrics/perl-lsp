@@ -215,7 +215,43 @@ impl TokenCache {
     /// * `start` - Start byte position of the range to invalidate.
     /// * `end` - End byte position of the range to invalidate.
     fn invalidate_range(&mut self, start: usize, end: usize) {
-        self.segments.retain(|seg| !seg.overlaps(start, end));
+        let mut retained_segments = Vec::with_capacity(self.segments.len() + 1);
+
+        for segment in self.segments.drain(..) {
+            let overlaps = if start == end {
+                segment.start <= start && segment.end >= start
+            } else {
+                segment.overlaps(start, end)
+            };
+
+            if !overlaps {
+                retained_segments.push(segment);
+                continue;
+            }
+
+            let left_tokens: Vec<Token> = segment
+                .tokens
+                .iter()
+                .filter(|token| token.end <= start)
+                .cloned()
+                .collect();
+            if let (Some(first), Some(last)) = (left_tokens.first(), left_tokens.last()) {
+                retained_segments.push(TokenSegment::new(first.start, last.end, left_tokens));
+            }
+
+            let right_tokens: Vec<Token> = segment
+                .tokens
+                .iter()
+                .filter(|token| token.start >= end)
+                .cloned()
+                .collect();
+            if let (Some(first), Some(last)) = (right_tokens.first(), right_tokens.last()) {
+                retained_segments.push(TokenSegment::new(first.start, last.end, right_tokens));
+            }
+        }
+
+        retained_segments.sort_by_key(|seg| seg.start);
+        self.segments = retained_segments;
     }
 
     /// Adjust segment positions after an edit.
@@ -355,6 +391,8 @@ pub struct IncrementalStats {
     pub segments_invalidated: usize,
     /// Count of times we had to relex the entire tail (cache coverage gaps)
     pub full_tail_fallbacks: usize,
+    /// Total bytes relexed while handling full tail fallback paths.
+    pub tail_fallback_bytes_relexed: usize,
 }
 
 impl std::fmt::Display for IncrementalStats {
@@ -374,6 +412,7 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
         writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
+        writeln!(f, "  Tail fallback bytes relexed: {}", self.tail_fallback_bytes_relexed)?;
         Ok(())
     }
 }
@@ -486,16 +525,18 @@ impl CheckpointedIncrementalParser {
 
         let mut lexer = PerlLexer::new(&self.source);
         let mut raw_tokens = Vec::new();
-        let mut checkpoint_positions = vec![0, 100, 500, 1000, 5000];
+        let checkpoint_step = 256usize;
+        let mut next_checkpoint = 0usize;
 
         // Collect raw lexer tokens and save checkpoints at specific positions
         let mut position = 0;
         while let Some(token) = lexer.next_token() {
-            // Save checkpoint at specific positions
-            if checkpoint_positions.first() == Some(&position) {
-                checkpoint_positions.remove(0);
+            // Save checkpoints at regular intervals using the nearest
+            // available lexer state at or after each target byte offset.
+            while position >= next_checkpoint {
                 let checkpoint = lexer.checkpoint();
                 self.checkpoint_cache.add(checkpoint);
+                next_checkpoint += checkpoint_step;
             }
 
             position = token.end;
@@ -675,19 +716,20 @@ impl CheckpointedIncrementalParser {
             }
         } else {
             self.stats.cache_misses += 1;
-            // Track full tail fallback when no segments are found after relex_end
-            if segments_after.is_empty() {
-                self.stats.full_tail_fallbacks += 1;
-            }
+            self.stats.full_tail_fallbacks += 1;
             // No cache hit — lex the remainder of the source.
             let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
+            let mut tail_relexed_bytes = 0usize;
             while let Some(token) = lexer.next_token() {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                tail_relexed_bytes += token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
+            self.stats.tail_fallback_bytes_relexed += tail_relexed_bytes;
+            self.stats.bytes_relexed += tail_relexed_bytes;
             parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
@@ -861,6 +903,48 @@ mod tests {
                 incremental.checkpoint_cache.find_after(query).map(|cp| cp.position);
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
+        }
+    }
+
+    #[test]
+    fn test_insertion_invalidates_only_overlapping_segment_region() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $a = 1;\nmy $b = 2;\nmy $c = 3;\n".to_string();
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 11, end: 11, new_text: "our ".to_string() };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(
+            stats.segments_reused_before > 0,
+            "expected prefix segment reuse after zero-length insertion, got {stats:?}"
+        );
+        assert!(
+            stats.segments_reused_after > 0,
+            "expected suffix segment reuse after zero-length insertion, got {stats:?}"
+        );
+        assert_eq!(
+            stats.full_tail_fallbacks, 0,
+            "unexpected tail fallback after insertion with reusable suffix, got {stats:?}"
+        );
+    }
+
+    #[test]
+    fn test_tail_fallback_stats_account_relexed_bytes() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $x = 1;\n".repeat(120);
+        must(parser.parse(source));
+
+        let edit = SimpleEdit { start: 8, end: 9, new_text: String::new() };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        if stats.full_tail_fallbacks > 0 {
+            assert!(
+                stats.tail_fallback_bytes_relexed > 0,
+                "tail fallback should account relexed bytes, got {stats:?}"
+            );
         }
     }
 }
