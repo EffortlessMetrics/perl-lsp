@@ -8,6 +8,7 @@
 //! - TokenKind Copy / Clone / Eq / Debug
 //! - Edge cases: empty text, zero-length spans, unicode, large offsets
 
+use perl_parser_core::percentile::nearest_rank_percentile;
 use perl_token::{Token, TokenKind};
 use std::sync::Arc;
 
@@ -841,4 +842,22 @@ fn many_tokens_in_vec() {
     assert_eq!(tokens.len(), 1000);
     assert_eq!(&*tokens[0].text, "0");
     assert_eq!(&*tokens[999].text, "999");
+}
+
+#[test]
+fn token_kind_category_predicates_match_expected_groups() {
+    assert!(TokenKind::My.is_keyword());
+    assert!(!TokenKind::My.is_operator());
+
+    assert!(TokenKind::Plus.is_operator());
+    assert!(!TokenKind::Plus.is_literal());
+
+    assert!(TokenKind::String.is_literal());
+    assert!(!TokenKind::String.is_keyword());
+}
+
+#[test]
+fn nearest_rank_p95_uses_corrected_formula() {
+    let sorted: Vec<u64> = (1..=20).collect();
+    assert_eq!(nearest_rank_percentile(&sorted, 95), 19);
 }

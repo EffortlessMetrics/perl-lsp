@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "generated_at_epoch_s": 1777040135,
+  "metrics": {
+    "eof_synthetic_token_construction": {
+      "iterations": 5000,
+      "median_ns": 90,
+      "p95_ns": 117
+    },
+    "lexer_to_parser_token_conversion": {
+      "iterations": 3000,
+      "median_ns": 226,
+      "p95_ns": 253
+    },
+    "token_clone": {
+      "iterations": 5000,
+      "median_ns": 47,
+      "p95_ns": 59
+    },
+    "token_equality": {
+      "iterations": 5000,
+      "median_ns": 30,
+      "p95_ns": 39
+    },
+    "token_kind_category_predicates": {
+      "iterations": 5000,
+      "median_ns": 29,
+      "p95_ns": 40
+    },
+    "token_kind_display_name": {
+      "iterations": 5000,
+      "median_ns": 29,
+      "p95_ns": 40
+    },
+    "token_new_long": {
+      "iterations": 5000,
+      "median_ns": 60,
+      "p95_ns": 85
+    },
+    "token_new_short": {
+      "iterations": 5000,
+      "median_ns": 62,
+      "p95_ns": 63
+    }
+  }
+}

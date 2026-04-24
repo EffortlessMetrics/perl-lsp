@@ -1896,6 +1896,13 @@ version = "0.12.4"
 [[package]]
 name = "perl-token"
 version = "0.12.4"
+dependencies = [
+ "criterion",
+ "perl-lexer",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "perl-uri"
