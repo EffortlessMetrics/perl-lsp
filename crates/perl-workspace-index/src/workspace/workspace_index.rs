@@ -937,6 +937,32 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// Stable symbol identity returned by cross-file reference queries.
+pub struct SymbolIdentity {
+    /// Canonical stable key for the symbol query target.
+    pub stable_key: String,
+    /// Package name containing this symbol.
+    pub package: String,
+    /// Bare symbol name without sigil.
+    pub name: String,
+    /// Variable sigil (`$`, `@`, `%`) when querying variables.
+    pub sigil: Option<char>,
+    /// Queried symbol kind.
+    pub kind: SymKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Read-only cross-file symbol query response.
+pub struct CrossFileReferenceQueryResult {
+    /// Stable symbol identity for downstream rename/safe-delete planning.
+    pub symbol: SymbolIdentity,
+    /// Resolved definition location.
+    pub definition: Location,
+    /// All non-definition reference locations across indexed files.
+    pub references: Vec<Location>,
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -980,7 +1006,7 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 
 // Using lsp_types for Position and Range
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Internal location type used during Navigate/Analyze workflows.
 pub struct Location {
     /// File URI where the symbol is located
@@ -1129,6 +1155,30 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_sort_key(loc: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            loc.uri.as_str(),
+            loc.range.start.line,
+            loc.range.start.column,
+            loc.range.end.line,
+            loc.range.end.column,
+        )
+    }
+
+    fn sort_locations_deterministic(locations: &mut [Location]) {
+        locations.sort_by(|a, b| Self::location_sort_key(a).cmp(&Self::location_sort_key(b)));
+    }
+
+    fn symbol_match_rank(symbol: &WorkspaceSymbol, symbol_name: &str) -> Option<u8> {
+        if symbol.qualified_name.as_deref() == Some(symbol_name) {
+            return Some(0);
+        }
+        if symbol.name == symbol_name {
+            return Some(1);
+        }
+        None
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1245,6 +1295,8 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
+        let mut best_match: Option<(u8, Location, String)> = None;
+
         for file_index in files.values() {
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
@@ -1253,18 +1305,30 @@ impl WorkspaceIndex {
             }
 
             for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    return Some((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
-                        symbol.uri.clone(),
-                    ));
+                let Some(rank) = Self::symbol_match_rank(symbol, symbol_name) else {
+                    continue;
+                };
+                let candidate_location = Location { uri: symbol.uri.clone(), range: symbol.range };
+                let candidate_uri = symbol.uri.clone();
+                let candidate_key =
+                    (rank, Self::location_sort_key(&candidate_location), candidate_uri.as_str());
+
+                if let Some((current_rank, current_location, current_uri)) = &best_match {
+                    let current_key = (
+                        *current_rank,
+                        Self::location_sort_key(current_location),
+                        current_uri.as_str(),
+                    );
+                    if candidate_key < current_key {
+                        best_match = Some((rank, candidate_location, candidate_uri));
+                    }
+                } else {
+                    best_match = Some((rank, candidate_location, candidate_uri));
                 }
             }
         }
 
-        None
+        best_match.map(|(_, location, uri)| (location, uri))
     }
 
     /// Create a new empty index
@@ -1916,6 +1980,7 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations_deterministic(&mut locations);
         locations
     }
 
@@ -2686,7 +2751,41 @@ impl WorkspaceIndex {
             ))
         });
 
+        Self::sort_locations_deterministic(&mut all_refs);
         all_refs
+    }
+
+    /// Query symbol identity, definition, and cross-file references in one call.
+    ///
+    /// Returns `None` when the symbol cannot be resolved to a definition.
+    pub fn query_symbol_references(
+        &self,
+        key: &SymbolKey,
+    ) -> Option<CrossFileReferenceQueryResult> {
+        let definition = self.find_def(key)?;
+        let references = self.find_refs(key);
+        Some(CrossFileReferenceQueryResult {
+            symbol: SymbolIdentity {
+                stable_key: stable_symbol_key(key),
+                package: key.pkg.to_string(),
+                name: key.name.to_string(),
+                sigil: key.sigil,
+                kind: key.kind,
+            },
+            definition,
+            references,
+        })
+    }
+}
+
+fn stable_symbol_key(key: &SymbolKey) -> String {
+    match key.kind {
+        SymKind::Var => {
+            let sigil = key.sigil.unwrap_or('$');
+            format!("var:{}::{}{}", key.pkg, sigil, key.name)
+        }
+        SymKind::Sub => format!("sub:{}::{}", key.pkg, key.name),
+        SymKind::Pack => format!("pkg:{}", key.pkg),
     }
 }
 
@@ -3946,6 +4045,72 @@ RefDemo::helper();
         assert!(
             bare_refs.len() >= qualified_refs.len(),
             "bare-name reference lookup should include qualified calls"
+        );
+    }
+
+    #[test]
+    fn test_query_symbol_references_cross_file_subroutine() {
+        let index = WorkspaceIndex::new();
+        let def_uri = must(url::Url::parse("file:///workspace/lib/My/Util.pm"));
+        let use_uri = must(url::Url::parse("file:///workspace/script/run.pl"));
+
+        let def_src = r#"
+package My::Util;
+sub helper {
+    return 1;
+}
+1;
+"#;
+        let use_src = r#"
+package main;
+use My::Util;
+my $value = My::Util::helper();
+1;
+"#;
+
+        must(index.index_file(def_uri.clone(), def_src.to_string()));
+        must(index.index_file(use_uri.clone(), use_src.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::Util"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+        let query = must_some(index.query_symbol_references(&key));
+
+        assert_eq!(query.symbol.stable_key, "sub:My::Util::helper");
+        assert_eq!(query.definition.uri, def_uri.to_string());
+        assert!(
+            query.references.iter().any(|loc| loc.uri == use_uri.to_string()),
+            "expected call-site reference in second file: {:?}",
+            query.references
+        );
+
+        let mut sorted = query.references.clone();
+        WorkspaceIndex::sort_locations_deterministic(&mut sorted);
+        assert_eq!(
+            query.references, sorted,
+            "query references should be returned in deterministic order"
+        );
+    }
+
+    #[test]
+    fn test_query_symbol_references_not_found_is_clean() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///workspace/lib/Only.pm"));
+        must(index.index_file(uri, "package Only;\nsub exists { 1 }\n1;\n".to_string()));
+
+        let missing = SymbolKey {
+            pkg: Arc::from("Only"),
+            name: Arc::from("missing_symbol"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        assert!(
+            index.query_symbol_references(&missing).is_none(),
+            "query should return None for missing symbols"
         );
     }
 
