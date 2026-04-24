@@ -199,6 +199,10 @@ pub struct ClassModel {
     pub exports: Vec<String>,
     /// Names available for explicit import via `@EXPORT_OK`
     pub export_ok: Vec<String>,
+    /// Exporter tag mappings from `%EXPORT_TAGS`.
+    pub export_tags: HashMap<String, Vec<String>>,
+    /// Exported symbol names that resolve to same-package subroutine definitions.
+    pub exported_subroutines: HashMap<String, MethodInfo>,
 }
 
 impl ClassModel {
@@ -228,6 +232,7 @@ pub struct ClassModelBuilder {
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
     current_export_ok: Vec<String>,
+    current_export_tags: HashMap<String, Vec<String>>,
     current_package_aliases: HashSet<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
@@ -256,6 +261,7 @@ impl ClassModelBuilder {
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
             current_export_ok: Vec::new(),
+            current_export_tags: HashMap::new(),
             current_package_aliases: HashSet::new(),
             framework_map: HashMap::new(),
         }
@@ -278,21 +284,33 @@ impl ClassModelBuilder {
             || !self.current_parents.is_empty()
             || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
-            || !self.current_export_ok.is_empty();
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
         if has_oo_indicator {
+            let methods = std::mem::take(&mut self.current_methods);
+            let export_tags = std::mem::take(&mut self.current_export_tags);
+            let exports = std::mem::take(&mut self.current_exports);
+            let export_ok = std::mem::take(&mut self.current_export_ok);
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
                 attributes: std::mem::take(&mut self.current_attributes),
                 fields: std::mem::take(&mut self.current_fields),
-                methods: std::mem::take(&mut self.current_methods),
+                exported_subroutines: collect_exported_subroutines(
+                    &methods,
+                    &exports,
+                    &export_ok,
+                    &export_tags,
+                ),
+                methods,
                 adjusts: std::mem::take(&mut self.current_adjusts),
                 parents: std::mem::take(&mut self.current_parents),
                 mro: self.current_mro,
                 roles: std::mem::take(&mut self.current_roles),
                 modifiers: std::mem::take(&mut self.current_modifiers),
-                exports: std::mem::take(&mut self.current_exports),
-                export_ok: std::mem::take(&mut self.current_export_ok),
+                exports,
+                export_ok,
+                export_tags,
             };
             self.models.push(model);
             self.current_package_aliases.clear();
@@ -308,6 +326,7 @@ impl ClassModelBuilder {
             self.current_modifiers.clear();
             self.current_exports.clear();
             self.current_export_ok.clear();
+            self.current_export_tags.clear();
             self.current_package_aliases.clear();
         }
     }
@@ -375,30 +394,36 @@ impl ClassModelBuilder {
                             _ => {}
                         }
                     }
+
+                    if sigil == "%"
+                        && name == "EXPORT_TAGS"
+                        && let Some(init) = initializer
+                    {
+                        merge_export_tags(&mut self.current_export_tags, collect_export_tags(init));
+                    }
                 }
             }
 
             // `@ISA = qw(...);` / `@EXPORT = qw(...);` / `@EXPORT_OK = qw(...);` (bare assignment without `our`)
             NodeKind::Assignment { lhs, rhs, .. } => {
-                if let NodeKind::Variable { sigil, name } = &lhs.kind
-                    && sigil == "@"
-                {
-                    match name.as_str() {
-                        "ISA" => self.extract_isa_from_node(rhs),
-                        "EXPORT" => {
-                            self.current_exports.extend(collect_symbol_names(rhs));
+                if let NodeKind::Variable { sigil, name } = &lhs.kind {
+                    if sigil == "@" {
+                        match name.as_str() {
+                            "ISA" => self.extract_isa_from_node(rhs),
+                            "EXPORT" => {
+                                self.current_exports.extend(collect_symbol_names(rhs));
+                            }
+                            "EXPORT_OK" => {
+                                self.current_export_ok.extend(collect_symbol_names(rhs));
+                            }
+                            _ => {}
                         }
-                        "EXPORT_OK" => {
-                            self.current_export_ok.extend(collect_symbol_names(rhs));
-                        }
-                        _ => {}
+                    } else if sigil == "%" && name == "EXPORT_TAGS" {
+                        merge_export_tags(&mut self.current_export_tags, collect_export_tags(rhs));
                     }
                 }
             }
 
-            // `push @ISA, 'Parent';` or `push @ISA, 'Base1', 'Base2';`
-            // Also recurse into the inner expression so that assignments like
-            // `@EXPORT_OK = qw(...)` (wrapped in ExpressionStatement) are still handled.
             NodeKind::ExpressionStatement { expression } => {
                 if let NodeKind::FunctionCall { name, args } = &expression.kind
                     && name == "push"
@@ -1155,13 +1180,77 @@ impl ClassModelBuilder {
 
 fn collect_symbol_names(node: &Node) -> Vec<String> {
     match &node.kind {
-        NodeKind::String { value, .. } => normalize_symbol_name(value).into_iter().collect(),
-        NodeKind::Identifier { name } => normalize_symbol_name(name).into_iter().collect(),
+        NodeKind::String { value, .. } => expand_symbol_list(value),
+        NodeKind::Identifier { name } => expand_symbol_list(name),
         NodeKind::ArrayLiteral { elements } => {
             elements.iter().flat_map(collect_symbol_names).collect()
         }
         _ => Vec::new(),
     }
+}
+
+fn collect_export_tags(node: &Node) -> HashMap<String, Vec<String>> {
+    let mut tags = HashMap::new();
+    match &node.kind {
+        NodeKind::HashLiteral { pairs } => {
+            for (key_node, value_node) in pairs {
+                let Some(tag_name) = collect_symbol_names(key_node).into_iter().next() else {
+                    continue;
+                };
+                let members = collect_symbol_names(value_node);
+                if !members.is_empty() {
+                    tags.insert(tag_name, members);
+                }
+            }
+        }
+        NodeKind::ArrayLiteral { elements } => {
+            for pair in elements.chunks_exact(2) {
+                let Some(tag_name) = collect_symbol_names(&pair[0]).into_iter().next() else {
+                    continue;
+                };
+                let members = collect_symbol_names(&pair[1]);
+                if !members.is_empty() {
+                    tags.insert(tag_name, members);
+                }
+            }
+        }
+        _ => {}
+    }
+    tags
+}
+
+fn merge_export_tags(
+    target: &mut HashMap<String, Vec<String>>,
+    incoming: HashMap<String, Vec<String>>,
+) {
+    for (tag, members) in incoming {
+        target.entry(tag).or_default().extend(members);
+    }
+}
+
+fn collect_exported_subroutines(
+    methods: &[MethodInfo],
+    exports: &[String],
+    export_ok: &[String],
+    export_tags: &HashMap<String, Vec<String>>,
+) -> HashMap<String, MethodInfo> {
+    let by_name: HashMap<&str, &MethodInfo> =
+        methods.iter().map(|method| (method.name.as_str(), method)).collect();
+
+    let mut exported_subroutines = HashMap::new();
+    let mut names: Vec<&str> = exports.iter().map(String::as_str).collect();
+    names.extend(export_ok.iter().map(String::as_str));
+    for tag_members in export_tags.values() {
+        names.extend(tag_members.iter().map(String::as_str));
+    }
+
+    for name in names {
+        if let Some(method) = by_name.get(name) {
+            exported_subroutines.insert(name.to_string(), (*method).clone());
+        }
+    }
+
+    exported_subroutines
 }
 
 fn collect_accessor_names(node: &Node) -> Vec<String> {
@@ -2055,6 +2144,10 @@ has 'level' => (is => 'ro');
         let model = find_model(&models, "MyUtils").expect("MyUtils model");
         assert_eq!(model.exports, vec!["foo".to_string(), "bar".to_string()]);
         assert_eq!(model.export_ok, vec!["baz".to_string()]);
+        assert!(model.export_tags.is_empty());
+        assert!(model.exported_subroutines.contains_key("foo"));
+        assert!(model.exported_subroutines.contains_key("bar"));
+        assert!(model.exported_subroutines.contains_key("baz"));
     }
 
     #[test]
@@ -2082,6 +2175,53 @@ has 'level' => (is => 'ro');
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
+    #[test]
+    fn export_tags_captured_from_hash_literal() {
+        let code = r#"
+package Color::Util;
+our @EXPORT_OK = qw(red green blue rgb);
+our %EXPORT_TAGS = (
+    colors => [qw(red green blue)],
+    all => ['rgb'],
+);
+sub red {}
+sub green {}
+sub blue {}
+sub rgb {}
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "Color::Util").expect("Color::Util model");
+        assert_eq!(
+            model.export_tags.get("colors").cloned().unwrap_or_default(),
+            vec!["red".to_string(), "green".to_string(), "blue".to_string()]
+        );
+        assert_eq!(
+            model.export_tags.get("all").cloned().unwrap_or_default(),
+            vec!["rgb".to_string()]
+        );
+        assert!(model.exported_subroutines.contains_key("red"));
+        assert!(model.exported_subroutines.contains_key("rgb"));
+    }
+
+    #[test]
+    fn missing_export_definitions_are_ignored_conservatively() {
+        let code = r#"
+package Export::Loose;
+our @EXPORT = qw(present missing);
+our @EXPORT_OK = ('ok_missing');
+our %EXPORT_TAGS = (all => [qw(present tag_missing)]);
+sub present {}
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "Export::Loose").expect("Export::Loose model");
+        assert!(model.exported_subroutines.contains_key("present"));
+        assert!(!model.exported_subroutines.contains_key("missing"));
+        assert!(!model.exported_subroutines.contains_key("ok_missing"));
+        assert!(!model.exported_subroutines.contains_key("tag_missing"));
     }
 
     // ---- Gap 2: push @ISA ----
