@@ -229,6 +229,26 @@ impl DebugAdapter {
         None
     }
 
+    /// Parse explicit debugger error lines from evaluate output.
+    pub(super) fn parse_evaluate_error_from_lines(lines: &[String]) -> Option<String> {
+        const ERROR_PREFIXES: &[&str] =
+            &["Undefined", "Can't ", "syntax error", "Execution of ", "Use of uninitialized"];
+
+        for line in lines.iter().rev() {
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
+            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+                continue;
+            }
+
+            if ERROR_PREFIXES.iter().any(|prefix| text.starts_with(prefix)) {
+                return Some(format!("evaluate failed: {text}"));
+            }
+        }
+
+        None
+    }
+
     /// Parse evaluate output from recent debugger lines into a DAP result payload.
     pub(super) fn parse_evaluate_result_from_output(
         &self,

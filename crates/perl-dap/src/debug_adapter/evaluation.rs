@@ -1,6 +1,9 @@
 //! REPL and expression evaluation: evaluate, set expression, completions.
 
 use super::*;
+use std::sync::LazyLock;
+
+static SAFE_EVALUATOR: LazyLock<SafeEvaluator> = LazyLock::new(SafeEvaluator::new);
 
 impl DebugAdapter {
     /// Handle evaluate request with policy validation and timeout enforcement.
@@ -73,8 +76,7 @@ impl DebugAdapter {
 
                 // Re-run through microcrate validator to keep evaluation policy aligned
                 // with shared DAP security logic.
-                let evaluator = SafeEvaluator::new();
-                if let Err(error) = evaluator.validate(expression) {
+                if let Err(error) = SAFE_EVALUATOR.validate(expression) {
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -149,10 +151,24 @@ impl DebugAdapter {
             self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
         });
 
-        let parsed = framed_lines
-            .as_ref()
-            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-            .or_else(|| self.parse_evaluate_result_from_output(expression));
+        if let Some(lines) = framed_lines.as_ref()
+            && let Some(error_line) = Self::parse_evaluate_error_from_lines(lines)
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some(error_line),
+            };
+        }
+
+        let parsed = if let Some(lines) = framed_lines.as_ref() {
+            Self::parse_evaluate_result_from_lines(lines, expression, true)
+        } else {
+            self.parse_evaluate_result_from_output(expression)
+        };
 
         let Some((result, result_type)) = parsed else {
             return DapMessage::Response {
@@ -161,7 +177,9 @@ impl DebugAdapter {
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some(format!("evaluate timed out after {timeout_ms}ms")),
+                message: Some(format!(
+                    "evaluate timed out after {timeout_ms}ms while evaluating `{expression}`"
+                )),
             };
         };
 
