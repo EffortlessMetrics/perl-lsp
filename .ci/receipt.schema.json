@@ -445,30 +445,29 @@
       "type": "object",
       "description": "Agent-oriented CI context for PR responder automation",
       "required": [
+        "sha",
+        "is_latest",
+        "tier",
         "scope",
         "selected_lanes",
-        "reasons",
         "failures",
-        "baselines",
-        "next_actions"
+        "suggested_next_actions"
       ],
       "additionalProperties": false,
       "properties": {
+        "sha": { "type": "string" },
+        "is_latest": { "type": "boolean" },
+        "tier": { "type": "string" },
         "scope": { "$ref": "#/$defs/agent_scope" },
         "selected_lanes": {
           "type": "array",
           "items": { "$ref": "#/$defs/agent_lane" }
         },
-        "reasons": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "failures": { "$ref": "#/$defs/agent_failures" },
-        "baselines": {
+        "failures": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "$ref": "#/$defs/agent_failure" }
         },
-        "next_actions": {
+        "suggested_next_actions": {
           "type": "array",
           "items": { "type": "string" }
         }
@@ -476,32 +475,38 @@
     },
     "agent_scope": {
       "type": "object",
-      "required": ["base", "diff_class", "changed_files", "direct_crates", "reverse_dep_closure"],
+      "required": ["base", "diff_class", "changed_files", "direct_crates", "reverse_deps", "wideners", "risk_tags"],
       "additionalProperties": false,
       "properties": {
         "base": { "type": "string" },
         "diff_class": { "type": "string" },
         "changed_files": { "type": "array", "items": { "type": "string" } },
         "direct_crates": { "type": "array", "items": { "type": "string" } },
-        "reverse_dep_closure": { "type": "array", "items": { "type": "string" } }
+        "reverse_deps": { "type": "array", "items": { "type": "string" } },
+        "wideners": { "type": "array", "items": { "type": "string" } },
+        "risk_tags": { "type": "array", "items": { "type": "string" } }
       }
     },
     "agent_lane": {
       "type": "object",
-      "required": ["lane", "scope"],
+      "required": ["name", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "agent_failure": {
+      "type": "object",
+      "required": ["lane", "summary", "repro", "file_hints"],
       "additionalProperties": false,
       "properties": {
         "lane": { "type": "string" },
-        "scope": { "type": "array", "items": { "type": "string" } }
-      }
-    },
-    "agent_failures": {
-      "type": "object",
-      "required": ["blocking", "repro"],
-      "additionalProperties": false,
-      "properties": {
-        "blocking": { "type": "array", "items": { "type": "string" } },
-        "repro": { "type": "array", "items": { "type": "string" } }
+        "summary": { "type": "string" },
+        "repro": { "type": "string" },
+        "file_hints": { "type": "array", "items": { "type": "string" } }
       }
     },
     "debt_status": {
