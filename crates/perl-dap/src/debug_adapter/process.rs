@@ -2,6 +2,38 @@
 
 use super::*;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PerlInfoCacheEntry {
+    key: PerlDiscoveryCacheKey,
+    info: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PerlDiscoveryCacheKey {
+    path: Option<String>,
+    perlbrew_home: Option<String>,
+    perlbrew_root: Option<String>,
+    perlbrew_perl: Option<String>,
+    plenv_root: Option<String>,
+    plenv_version: Option<String>,
+}
+
+impl PerlDiscoveryCacheKey {
+    fn from_env() -> Self {
+        Self {
+            path: std::env::var("PATH").ok(),
+            perlbrew_home: std::env::var("PERLBREW_HOME").ok(),
+            perlbrew_root: std::env::var("PERLBREW_ROOT").ok(),
+            perlbrew_perl: std::env::var("PERLBREW_PERL").ok(),
+            plenv_root: std::env::var("PLENV_ROOT").ok(),
+            plenv_version: std::env::var("PLENV_VERSION").ok(),
+        }
+    }
+}
+
+static PERL_INFO_CACHE: std::sync::LazyLock<std::sync::Mutex<Option<PerlInfoCacheEntry>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+
 /// Try to detect the Perl interpreter available on the system and return a human-readable
 /// summary string.
 ///
@@ -9,7 +41,15 @@ use super::*;
 /// then runs `perl -e 'print $]'` to get the version number.  Returns a string describing what
 /// was found, or a "not found" / install-hint message suitable for inclusion in error messages.
 fn detect_perl_info() -> String {
-    match crate::platform::resolve_perl_path_with_toolchain() {
+    let cache_key = PerlDiscoveryCacheKey::from_env();
+    if let Ok(cache_guard) = PERL_INFO_CACHE.lock()
+        && let Some(cached) = cache_guard.as_ref()
+        && cached.key == cache_key
+    {
+        return cached.info.clone();
+    }
+
+    let info = match crate::platform::resolve_perl_path_with_toolchain() {
         Ok(perl_path) => {
             let version_output =
                 Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
@@ -37,7 +77,13 @@ fn detect_perl_info() -> String {
                     .to_string()
             }
         }
+    };
+
+    if let Ok(mut cache_guard) = PERL_INFO_CACHE.lock() {
+        *cache_guard = Some(PerlInfoCacheEntry { key: cache_key, info: info.clone() });
     }
+
+    info
 }
 
 fn format_perl_spawn_error(error: &std::io::Error) -> String {
@@ -1702,7 +1748,10 @@ impl DebugAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{DebugAdapter, detect_perl_info, format_perl_spawn_error};
+    use super::{
+        DebugAdapter, PERL_INFO_CACHE, PerlDiscoveryCacheKey, detect_perl_info,
+        format_perl_spawn_error,
+    };
 
     #[test]
     fn missing_module_name_parses_standard_module_path() {
@@ -1763,6 +1812,20 @@ mod tests {
             info.to_lowercase().contains("perl"),
             "detect_perl_info output should mention 'perl'; got: {info:?}"
         );
+    }
+
+    #[test]
+    fn detect_perl_info_populates_cache_for_current_environment() -> Result<(), String> {
+        let _ = detect_perl_info();
+
+        let guard = PERL_INFO_CACHE.lock().map_err(|e| format!("cache lock failed: {e}"))?;
+        let cached = guard
+            .as_ref()
+            .ok_or_else(|| "detect_perl_info should populate cache".to_string())?;
+
+        assert_eq!(cached.key, PerlDiscoveryCacheKey::from_env());
+        assert!(!cached.info.is_empty(), "cached Perl detection info should not be empty");
+        Ok(())
     }
 
     /// Verify that a failed launch returns a response whose message mentions Perl.
