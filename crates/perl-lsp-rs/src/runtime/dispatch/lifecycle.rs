@@ -147,9 +147,11 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn given_initialized_notification_without_initialize_when_dispatched_then_server_not_initialized_error()
+     {
         let server = LspServer::new();
 
         let result = server.handle_initialized_dispatch();
@@ -159,9 +161,11 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn given_initialized_notification_after_initialize_when_dispatched_twice_then_second_is_invalid_request()
+     {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
@@ -171,12 +175,50 @@ mod tests {
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn given_compat_request_after_initialize_when_initialized_notification_missing_then_server_auto_initializes()
+     {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    #[test]
+    fn given_shutdown_request_when_dispatched_then_shutdown_flag_is_set_and_null_response_returned()
+    {
+        let server = LspServer::new();
+
+        let result = server.handle_shutdown_dispatch();
+
+        assert!(result.is_ok(), "shutdown dispatch should succeed");
+        assert!(
+            server.shutdown_received.load(Ordering::Acquire),
+            "shutdown flag should be set after dispatch"
+        );
+        assert_eq!(result.ok(), Some(Some(json!(null))));
+    }
+
+    #[test]
+    fn given_set_trace_notification_with_invalid_level_when_dispatched_then_trace_level_defaults_to_off()
+     {
+        let server = LspServer::new();
+
+        let result = server.handle_set_trace_dispatch(Some(json!({ "value": "trace-everything" })));
+
+        assert!(result.is_ok(), "setTrace dispatch should succeed");
+        assert_eq!(&*server.trace_level.lock(), "off");
+    }
+
+    #[test]
+    fn given_set_trace_notification_with_verbose_level_when_dispatched_then_trace_level_updates() {
+        let server = LspServer::new();
+
+        let result = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
+
+        assert!(result.is_ok(), "setTrace dispatch should succeed");
+        assert_eq!(&*server.trace_level.lock(), "verbose");
     }
 }
