@@ -11,7 +11,7 @@
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
-use perl_parser_core::{NodeKind, Parser};
+use perl_parser_core::{NodeKind, Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use perl_tdd_support::must;
 
 // ---------------------------------------------------------------------------
@@ -426,4 +426,14 @@ fn clean_inputs_produce_zero_inserted_closer() {
             src, recovered
         );
     }
+}
+
+#[test]
+fn missing_closer_profiles_as_structured_recovery_only() {
+    let mut parser = Parser::new("my @arr = ($a, $b;");
+    let ast = must(parser.parse());
+    let profile = RecoverySalvageProfile::from_parse(&ast, parser.errors(), false);
+    assert_eq!(profile.class, RecoverySalvageClass::StructuredRecoveryOnly);
+    assert!(profile.recovered_count >= 1);
+    assert_eq!(profile.error_node_count, 0);
 }
