@@ -1,0 +1,2 @@
+# cpan known invalid files.
+# One path per line.

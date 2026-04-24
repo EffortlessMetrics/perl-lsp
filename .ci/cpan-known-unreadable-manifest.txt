@@ -1,0 +1,2 @@
+# cpan known unreadable files.
+# One path per line.

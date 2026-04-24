@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.2.0",
+  "schema_version": "1.4.0",
   "commit": "3f7ede36",
   "timestamp": "2026-04-09T18:13:43.704986753+00:00",
   "corpus_profile": "system",
@@ -233,5 +233,13 @@
       "/usr/share/perl/5.38.2/Pod/Perldoc.pm"
     ]
   },
-  "elapsed_secs": 5.267180426
+  "elapsed_secs": 5.267180426,
+  "unreadable_files": [],
+  "dirty_classification": {
+    "clean_files": 6890,
+    "valid_parser_gaps": 79,
+    "expected_recovery_only": 0,
+    "known_invalid": 0,
+    "unreadable": 48
+  }
 }
