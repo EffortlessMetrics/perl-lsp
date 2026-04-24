@@ -492,6 +492,32 @@ fn link_pipe_with_spaced_section_encodes_url() {
 }
 
 #[test]
+fn link_target_reserved_chars_are_percent_encoded() {
+    let doc =
+        extract_pod("=head1 NAME\n\nL<click here|File::Path) [evil](http://x.test)>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[click here]"), "expected '[click here]' but got: {name}");
+    assert!(
+        name.contains("perl-module://File::Path%29%20%5Bevil%5D%28http://x.test%29"),
+        "expected markdown-breaking characters in target to be percent-encoded; got: {name}"
+    );
+    assert!(
+        !name.contains("[evil](http://x.test)"),
+        "injected markdown link should not appear as standalone markdown: {name}"
+    );
+}
+
+#[test]
+fn link_display_text_markdown_delimiters_are_escaped() {
+    let doc = extract_pod("=head1 NAME\n\nL<click ] here|File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("[click \\] here](perl-module://File::Path)"),
+        "expected closing bracket in display text to be escaped; got: {name}"
+    );
+}
+
+#[test]
 fn multiple_pod_blocks() {
     let source = r#"
 package Multi;
