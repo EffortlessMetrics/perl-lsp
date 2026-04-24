@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -169,6 +170,8 @@ pub struct CompletionProvider {
     class_models: Vec<ClassModel>,
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    include_roots: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
     import_map: ImportMap,
 }
 
@@ -200,7 +203,7 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_and_source_and_paths(ast, "", workspace_index, Vec::new(), Vec::new())
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +252,23 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a new completion provider with explicit module search roots.
+    pub fn new_with_index_and_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_roots: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +278,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            include_roots,
+            system_inc_paths,
+            import_map,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +802,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_roots,
+                &self.system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);

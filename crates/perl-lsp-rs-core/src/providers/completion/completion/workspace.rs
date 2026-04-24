@@ -14,6 +14,7 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -240,55 +241,157 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_roots: &[PathBuf],
+    system_inc_roots: &[PathBuf],
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
+    if let Some(index) = workspace_index
+        && index.has_symbols()
+    {
+        // Search for package symbols matching the prefix
+        let all_symbols = if context.prefix.is_empty() {
+            index.all_symbols()
+        } else {
+            index.find_symbols(&context.prefix)
+        };
+
+        for symbol in all_symbols {
+            if symbol.kind != WsSymbolKind::Package {
+                continue;
+            }
+
+            // Match against the module name prefix
+            if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            if !seen.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let name = &symbol.name;
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module".to_string()),
+                documentation: symbol
+                    .documentation
+                    .clone()
+                    .or_else(|| Some(format!("Package `{name}`"))),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
+        }
+    }
+
+    for module_name in scan_modules_from_roots(include_roots, &context.prefix) {
+        if seen.insert(module_name.clone()) {
+            push_external_module_completion(completions, context, &module_name, "include path");
+        }
+    }
+
+    for module_name in scan_modules_from_roots(system_inc_roots, &context.prefix) {
+        if seen.insert(module_name.clone()) {
+            push_external_module_completion(completions, context, &module_name, "system @INC");
+        }
+    }
+}
+
+fn push_external_module_completion(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    module_name: &str,
+    source_label: &str,
+) {
+    completions.push(CompletionItem {
+        label: module_name.to_string(),
+        kind: CompletionItemKind::Module,
+        detail: Some(format!("module ({source_label})")),
+        documentation: Some(format!("Package `{module_name}` discovered from {source_label}.")),
+        insert_text: Some(module_name.to_string()),
+        sort_text: Some(format!("2{}_{module_name}", module_sort_tier(module_name))),
+        filter_text: Some(module_name.to_string()),
+        additional_edits: vec![],
+        text_edit_range: Some((context.prefix_start, context.position)),
+        commit_characters: None,
+    });
+}
+
+fn scan_modules_from_roots(roots: &[PathBuf], prefix: &str) -> Vec<String> {
+    let mut modules: HashSet<String> = HashSet::new();
+    for root in roots {
+        for module_name in scan_modules_from_root(root, prefix) {
+            modules.insert(module_name);
+        }
+    }
+    let mut sorted: Vec<String> = modules.into_iter().collect();
+    sorted.sort_unstable();
+    sorted
+}
+
+fn scan_modules_from_root(root: &Path, prefix: &str) -> Vec<String> {
+    let mut modules = Vec::new();
+    scan_directory_for_modules(root, root, prefix, &mut modules);
+    modules
+}
+
+fn scan_directory_for_modules(
+    root: &Path,
+    current_dir: &Path,
+    prefix: &str,
+    modules: &mut Vec<String>,
+) {
+    let Ok(entries) = std::fs::read_dir(current_dir) else {
+        return;
     };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+
+        if file_type.is_dir() {
+            scan_directory_for_modules(root, &path, prefix, modules);
             continue;
         }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+        if !file_type.is_file() || path.extension().is_none_or(|ext| ext != "pm") {
             continue;
         }
 
-        if !seen.insert(symbol.name.clone()) {
+        let Some(module_name) = module_name_from_pm_path(root, &path) else {
+            continue;
+        };
+        if !prefix.is_empty() && !module_name.starts_with(prefix) {
             continue;
         }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
+        modules.push(module_name);
     }
+}
+
+fn module_name_from_pm_path(root: &Path, module_file: &Path) -> Option<String> {
+    let relative = module_file.strip_prefix(root).ok()?;
+    let mut components = relative.components().peekable();
+    let mut module_parts: Vec<String> = Vec::new();
+
+    while let Some(component) = components.next() {
+        let segment = component.as_os_str().to_str()?;
+        if components.peek().is_some() {
+            module_parts.push(segment.to_string());
+            continue;
+        }
+
+        let file_stem = Path::new(segment).file_stem()?.to_str()?;
+        module_parts.push(file_stem.to_string());
+    }
+
+    if module_parts.is_empty() { None } else { Some(module_parts.join("::")) }
 }
 
 /// Add import completions for symbols inside `use Module qw(...)`.
@@ -653,4 +756,76 @@ fn find_assignment_eq(line: &str) -> Option<usize> {
         return Some(i);
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn test_context(prefix: &str) -> CompletionContext {
+        CompletionContext {
+            position: prefix.len(),
+            trigger_character: None,
+            in_string: false,
+            in_regex: false,
+            in_comment: false,
+            in_use_statement: true,
+            current_package: "main".to_string(),
+            prefix: prefix.to_string(),
+            prefix_start: 0,
+            cursor_scope_id: 0,
+        }
+    }
+
+    #[test]
+    fn scans_include_root_modules_and_converts_path_to_module_name()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let module_path = dir.path().join("DB").join("Connector.pm");
+        if let Some(parent) = module_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(module_path, "package DB::Connector; 1;")?;
+
+        let modules = scan_modules_from_root(dir.path(), "DB");
+        assert_eq!(modules, vec!["DB::Connector".to_string()]);
+        Ok(())
+    }
+
+    #[test]
+    fn module_completion_merges_workspace_and_external_with_workspace_precedence()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let module_path = dir.path().join("DBI.pm");
+        std::fs::write(module_path, "package DBI; 1;")?;
+        let module_path = dir.path().join("DB").join("External.pm");
+        if let Some(parent) = module_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(module_path, "package DB::External; 1;")?;
+
+        let index = Arc::new(WorkspaceIndex::new());
+        let uri = url::Url::parse("file:///workspace/DBI.pm")?;
+        index.index_file(uri, "package DBI; sub connect { } 1;".to_string())?;
+
+        let mut completions = Vec::new();
+        add_use_module_completions(
+            &mut completions,
+            &test_context("DB"),
+            &Some(index),
+            &[dir.path().to_path_buf()],
+            &[dir.path().to_path_buf()],
+        );
+
+        let dbi_items: Vec<&CompletionItem> =
+            completions.iter().filter(|item| item.label == "DBI").collect();
+        assert_eq!(dbi_items.len(), 1, "DBI should be deduped across sources");
+        assert_eq!(dbi_items[0].detail.as_deref(), Some("module"));
+        assert!(
+            completions.iter().any(|item| item.label == "DB::External"),
+            "external include root module should be present"
+        );
+        Ok(())
+    }
 }
