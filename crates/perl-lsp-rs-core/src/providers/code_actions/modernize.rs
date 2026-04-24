@@ -24,6 +24,8 @@ pub fn get_modernize_actions(source: &str) -> Vec<CodeAction> {
 fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
+    let line_offsets = line_start_offsets(source);
+
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
 
@@ -65,7 +67,7 @@ fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
                 )
             };
 
-            let line_start = line_start_offset(source, line_idx);
+            let line_start = line_offsets[line_idx];
             let line_end = line_start + line.len();
 
             actions.push(CodeAction {
@@ -154,6 +156,7 @@ fn find_deprecated_defined(source: &str) -> Vec<CodeAction> {
 /// Detect `require 5.006` and suggest `use v5.6`.
 fn find_legacy_require_version(source: &str) -> Vec<CodeAction> {
     let mut actions = Vec::new();
+    let line_offsets = line_start_offsets(source);
 
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
@@ -169,7 +172,7 @@ fn find_legacy_require_version(source: &str) -> Vec<CodeAction> {
         }
 
         if let Some(modern_version) = modernize_version(after_require) {
-            let line_start = line_start_offset(source, line_idx);
+            let line_start = line_offsets[line_idx];
             let line_end = line_start + line.len();
             let indent = &line[..line.len() - trimmed.len()];
 
@@ -283,6 +286,7 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
     let already_uses_carp = source.contains("use Carp");
     let mut actions = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
+    let line_offsets = line_start_offsets(source);
 
     for (line_idx, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
@@ -308,7 +312,7 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
             }
         }
 
-        let line_start = line_start_offset(source, line_idx);
+        let line_start = line_offsets[line_idx];
         let indent_len = line.len() - trimmed.len();
         let die_start = line_start + indent_len;
         let die_end = die_start + 3; // len("die")
@@ -523,15 +527,17 @@ fn modernize_version(ver: &str) -> Option<String> {
     }
 }
 
-fn line_start_offset(source: &str, line_idx: usize) -> usize {
-    let mut offset = 0;
-    for (i, line) in source.lines().enumerate() {
-        if i == line_idx {
-            return offset;
+fn line_start_offsets(source: &str) -> Vec<usize> {
+    let mut offsets = Vec::new();
+    offsets.push(0);
+
+    for (idx, byte) in source.bytes().enumerate() {
+        if byte == b'\n' {
+            offsets.push(idx + 1);
         }
-        offset += line.len() + 1;
     }
-    offset
+
+    offsets
 }
 
 fn find_pragma_insert_pos(source: &str) -> usize {
@@ -828,5 +834,140 @@ mod tests {
             1,
             "use Carp::Heavy counts as Carp present; no new use Carp should be inserted"
         );
+    }
+
+    // ---- line_start_offsets correctness tests ----------------------------------
+
+    #[test]
+    fn test_line_start_offsets_lf() {
+        // LF-only: offsets must point at exact byte start of each line.
+        let source = "foo\nbar\nbaz\n";
+        let offsets = line_start_offsets(source);
+        // "foo" at 0, "bar" at 4, "baz" at 8; trailing \n adds sentinel 12
+        assert_eq!(offsets, vec![0, 4, 8, 12]);
+        assert_eq!(&source[offsets[0]..offsets[0] + 3], "foo");
+        assert_eq!(&source[offsets[1]..offsets[1] + 3], "bar");
+        assert_eq!(&source[offsets[2]..offsets[2] + 3], "baz");
+    }
+
+    #[test]
+    fn test_line_start_offsets_crlf() {
+        // CRLF: each \r\n pair contributes +2 to the byte offset of the next line.
+        // The old O(n²) scanner used line.len()+1 which missed the \r, producing
+        // wrong offsets for every line after the first. This test proves the fix.
+        let source = "foo\r\nbar\r\nbaz\r\n";
+        let offsets = line_start_offsets(source);
+        // "foo\r\n" = 5 bytes, "bar\r\n" = 5 bytes, "baz\r\n" = 5 bytes
+        assert_eq!(offsets, vec![0, 5, 10, 15]);
+        // str::lines() strips the \r\n terminator, so line slices should match
+        for (i, line) in source.lines().enumerate() {
+            let start = offsets[i];
+            assert_eq!(
+                &source[start..start + line.len()],
+                line,
+                "CRLF: line {i} byte slice must match str::lines() content"
+            );
+        }
+    }
+
+    #[test]
+    fn test_line_start_offsets_no_trailing_newline() {
+        // File without trailing newline: offsets count == line count (no sentinel).
+        let source = "foo\nbar\nbaz";
+        let offsets = line_start_offsets(source);
+        assert_eq!(offsets.len(), 3, "no trailing newline => offsets.len() == lines count");
+        assert_eq!(offsets, vec![0, 4, 8]);
+        // Verify each offset is indexable by enumerate(source.lines())
+        for (i, line) in source.lines().enumerate() {
+            let start = offsets[i];
+            assert_eq!(&source[start..start + line.len()], line, "line {i} slice correct");
+        }
+    }
+
+    #[test]
+    fn test_line_start_offsets_empty_file() {
+        // Empty file: one sentinel offset [0], lines() yields nothing => no out-of-bounds.
+        let source = "";
+        let offsets = line_start_offsets(source);
+        assert_eq!(offsets, vec![0]);
+        // No panic: iteration over lines() is empty
+        assert_eq!(source.lines().count(), 0);
+    }
+
+    #[test]
+    fn test_line_start_offsets_only_newlines() {
+        // File of only newlines: offsets always outnumber lines() output.
+        let source = "\n\n\n";
+        let offsets = line_start_offsets(source);
+        // Three \n bytes produce three extra offsets beyond the initial 0
+        assert_eq!(offsets, vec![0, 1, 2, 3]);
+        let lines: Vec<&str> = source.lines().collect();
+        // Rust's str::lines() strips the trailing empty "line" after a final \n,
+        // so 3 newlines yield 3 empty lines (each empty string).
+        // Every line_idx from enumerate() is within bounds of offsets.
+        for (i, _line) in lines.iter().enumerate() {
+            assert!(i < offsets.len(), "line_idx {i} must index within offsets (len {})", offsets.len());
+        }
+    }
+
+    #[test]
+    fn test_two_arg_open_crlf_byte_offsets() {
+        // Regression: with CRLF line endings, byte offsets must match actual
+        // positions in the source buffer. The old per-call scanner undercounted
+        // by 1 byte per prior CRLF line.
+        let source = "use strict;\r\nopen(FILE, \">output.txt\");\r\n";
+        let actions = find_two_arg_open(source);
+        assert!(!actions.is_empty(), "two-arg open should be detected in CRLF file");
+        let edit = &actions[0].edit.changes[0];
+        let loc = &edit.location;
+        // The open() line starts at byte 13 (after "use strict;\r\n" = 13 bytes)
+        assert_eq!(
+            loc.start, 13,
+            "line start offset must account for the CRLF (\\r\\n = 2 bytes, not 1)"
+        );
+        // The edit must cover exactly the open(...) text (no line terminator)
+        let covered = &source[loc.start..loc.end];
+        assert!(
+            covered.starts_with("open("),
+            "edit range must start at the open() call, got {:?}",
+            covered
+        );
+        assert!(
+            !covered.contains('\r') && !covered.contains('\n'),
+            "edit range must not include line terminator"
+        );
+    }
+
+    #[test]
+    fn test_require_version_crlf_byte_offsets() {
+        // Same CRLF regression check for find_legacy_require_version.
+        let source = "use strict;\r\nrequire 5.006;\r\n";
+        let actions = find_legacy_require_version(source);
+        assert!(!actions.is_empty(), "require version should be detected in CRLF file");
+        let edit = &actions[0].edit.changes[0];
+        let loc = &edit.location;
+        // "use strict;\r\n" = 13 bytes
+        assert_eq!(loc.start, 13, "require line must start at byte 13 for CRLF input");
+        let covered = &source[loc.start..loc.end];
+        assert!(covered.starts_with("require "), "edit must cover the require line");
+        assert!(!covered.contains('\r') && !covered.contains('\n'), "no terminator in range");
+    }
+
+    #[test]
+    fn test_get_modernize_actions_empty_source() {
+        // Empty string must not panic and must return empty actions.
+        let actions = get_modernize_actions("");
+        // The only possible action is "add strict/warnings" for a non-empty file.
+        // An empty file has nothing to modernize and inserting pragmas would produce
+        // a 0-byte insert — allowed, but it should not panic.
+        // The important invariant is: no index-out-of-bounds panic.
+        drop(actions); // no panic => pass
+    }
+
+    #[test]
+    fn test_get_modernize_actions_only_newlines() {
+        // File of only newlines: no patterns to detect, must not panic.
+        let actions = get_modernize_actions("\n\n\n");
+        drop(actions);
     }
 }
