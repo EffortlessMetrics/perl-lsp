@@ -355,6 +355,8 @@ pub struct IncrementalStats {
     pub segments_invalidated: usize,
     /// Count of times we had to relex the entire tail (cache coverage gaps)
     pub full_tail_fallbacks: usize,
+    /// Count of times the right relex boundary was tightened because no suffix cache could be reused.
+    pub tightened_relex_windows: usize,
 }
 
 impl std::fmt::Display for IncrementalStats {
@@ -374,6 +376,7 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
         writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
+        writeln!(f, "  Tightened relex windows: {}", self.tightened_relex_windows)?;
         Ok(())
     }
 }
@@ -584,13 +587,23 @@ impl CheckpointedIncrementalParser {
         right_checkpoint: Option<LexerCheckpoint>,
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
-        // Calculate relex bounds using checkpoint positions
+        // Calculate initial relex bounds using checkpoint positions.
         let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
+        let edit_end = edit.start + edit.new_text.len();
+        let mut relex_end =
             right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
 
+        // If no suffix segments exist after the edit, there is no cache reuse benefit in
+        // extending phase-2 lexing out to a distant right checkpoint.
+        // Tighten to the edit boundary and let the existing tail-lex fallback continue from there.
+        let has_cached_suffix_after_edit =
+            !self.token_cache.get_segments_after(edit_end).is_empty();
+        if right_checkpoint.is_some() && !has_cached_suffix_after_edit && relex_end > edit_end {
+            relex_end = edit_end;
+            self.stats.tightened_relex_windows += 1;
+        }
+
         // Track checkpoint distances for statistics
-        let edit_end = edit.start + edit.new_text.len();
         if edit.start >= relex_start {
             self.stats.left_checkpoint_distance = edit.start - relex_start;
         }
@@ -685,6 +698,7 @@ impl CheckpointedIncrementalParser {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                self.stats.bytes_relexed += token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
@@ -862,5 +876,40 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_interior_edit_tightens_window_without_suffix_cache() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $v = 1;\n".repeat(80);
+        must(parser.parse(source.clone()));
+
+        // Interior edit in a source large enough to have a right checkpoint.
+        // With the current monolithic cache invalidation, no suffix cache remains
+        // after the edit, so phase-2 right bound should tighten to edit_end.
+        let edit = SimpleEdit { start: 120, end: 121, new_text: "999".to_string() };
+        let expected_right_distance = 0usize;
+
+        let incremental_tree = must(parser.apply_edit(&edit));
+        let stats = parser.stats();
+        assert!(
+            stats.tightened_relex_windows > 0,
+            "expected tightened window bookkeeping, got {stats:?}"
+        );
+        assert_eq!(
+            stats.right_checkpoint_distance, expected_right_distance,
+            "tightened window should terminate at edit end when suffix cache is unavailable"
+        );
+
+        let mut expected_source = source;
+        expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+        let mut full = CheckpointedIncrementalParser::new();
+        let full_tree = must(full.parse(expected_source));
+
+        assert_eq!(
+            format!("{incremental_tree:?}"),
+            format!("{full_tree:?}"),
+            "incremental tree diverged from fresh full parse"
+        );
     }
 }
