@@ -37,6 +37,9 @@ path = "src/bin/bench_facade.rs"
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-ast = { workspace = true }
+perl-module = { workspace = true }
+perl-pragma = { workspace = true }
+perl-semantic-analyzer = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

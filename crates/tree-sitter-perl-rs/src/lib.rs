@@ -53,7 +53,11 @@
 )]
 
 use perl_ast::Node as AstNode;
+use perl_module::import::{ModuleImportKind, parse_module_import_head};
 use perl_parser_core::Parser as CoreParser;
+use perl_pragma::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::semantic::SemanticModel;
+use perl_semantic_analyzer::symbol::Symbol as SemanticSymbol;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -210,6 +214,31 @@ pub struct Tree {
     pending_edits: Vec<InputEdit>,
 }
 
+/// Read-only semantic overlay queries over a parsed [`Tree`].
+///
+/// This API is intentionally narrow and considered in development. It exposes a
+/// small set of high-value semantic queries while the broader overlay surface is
+/// still being designed.
+pub struct SemanticOverlay {
+    source: String,
+    semantic_model: SemanticModel,
+    pragma_map: Vec<(std::ops::Range<usize>, PragmaState)>,
+}
+
+/// A visible import at a specific source location.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Parsed import kind (for example `use`, `require`, `use parent`).
+    pub kind: ModuleImportKind,
+    /// Parsed import token/module name.
+    pub token: String,
+    /// Start byte offset of `token` in the source.
+    pub start_byte: usize,
+    /// End byte offset of `token` in the source.
+    pub end_byte: usize,
+}
+
 impl Tree {
     /// Returns the root node of the syntax tree.
     pub fn root_node(&self) -> Node<'_> {
@@ -239,6 +268,70 @@ impl Tree {
     /// `tree.root_node().walk()`.
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
+    }
+
+    /// Build a read-only semantic overlay facade for this tree.
+    pub fn semantic_overlay(&self) -> SemanticOverlay {
+        let semantic_model = SemanticModel::build(&self.root, &self.source);
+        let pragma_map = PragmaTracker::build(&self.root);
+        SemanticOverlay { source: self.source.clone(), semantic_model, pragma_map }
+    }
+}
+
+impl SemanticOverlay {
+    /// Find the definition symbol for the syntax node under a given byte offset.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<SemanticSymbol> {
+        self.semantic_model.definition_at(offset).cloned()
+    }
+
+    /// Find the definition symbol associated with the provided byte span.
+    pub fn definition_for_span(
+        &self,
+        start_byte: usize,
+        end_byte: usize,
+    ) -> Option<SemanticSymbol> {
+        let clamped_start = start_byte.min(self.source.len());
+        let clamped_end = end_byte.min(self.source.len());
+        self.definition_at_offset(clamped_start).or_else(|| {
+            if clamped_start < clamped_end {
+                self.definition_at_offset(clamped_end - 1)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Find the definition symbol associated with a syntax [`Node`].
+    pub fn definition_for_node(&self, node: &Node<'_>) -> Option<SemanticSymbol> {
+        self.definition_for_span(node.start_byte(), node.end_byte())
+    }
+
+    /// Return parsed imports visible up to the provided byte offset.
+    pub fn visible_imports_at(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut imports = Vec::new();
+        let clamped = offset.min(self.source.len());
+        let Some(prefix) = self.source.get(..clamped) else {
+            return imports;
+        };
+
+        let mut line_start = 0usize;
+        for line in prefix.lines() {
+            if let Some(import) = parse_module_import_head(line) {
+                imports.push(VisibleImport {
+                    kind: import.kind,
+                    token: import.token.to_string(),
+                    start_byte: line_start + import.token_start,
+                    end_byte: line_start + import.token_end,
+                });
+            }
+            line_start += line.len() + 1;
+        }
+        imports
+    }
+
+    /// Return the effective pragma state at a given byte offset.
+    pub fn effective_pragma_state_at(&self, offset: usize) -> PragmaState {
+        PragmaTracker::state_for_offset(&self.pragma_map, offset)
     }
 }
 
@@ -968,7 +1061,10 @@ mod tests {
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
-        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+        assert!(
+            !node.kind().is_empty(),
+            "cursor should remain at valid node after exhausting siblings"
+        );
     }
 
     #[test]
@@ -1009,11 +1105,7 @@ mod tests {
 
         // reset() should bring us back to root
         cursor.reset();
-        assert_eq!(
-            cursor.node().grammar_kind(),
-            "source_file",
-            "reset must return cursor to root"
-        );
+        assert_eq!(cursor.node().grammar_kind(), "source_file", "reset must return cursor to root");
     }
 
     #[test]
@@ -1073,10 +1165,7 @@ mod tests {
             sibling_count += 1;
         }
 
-        assert_eq!(
-            sibling_count, child_count,
-            "sibling count should match root.child_count()"
-        );
+        assert_eq!(sibling_count, child_count, "sibling count should match root.child_count()");
     }
 
     #[test]
