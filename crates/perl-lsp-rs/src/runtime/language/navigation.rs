@@ -1419,7 +1419,12 @@ impl LspServer {
                             let current_package =
                                 crate::declaration::current_package_at(ast, offset);
                             if let Some(symbol_key) =
-                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_package,
+                                    &doc.text,
+                                )
                             {
                                 tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
 

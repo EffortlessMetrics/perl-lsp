@@ -17,4 +17,3 @@ fn transliteration_rejects_invalid_modifiers() {
     assert_has_error(r#"$x =~ tr/a-z/A-Z/z;"#, "invalid transliteration modifier");
     assert_has_error(r#"$x =~ y/a-z/A-Z/1;"#, "invalid transliteration modifier");
 }
-

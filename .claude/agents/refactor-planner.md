@@ -17,7 +17,7 @@ so the expensive agent jumps straight to editing.
 
 ## The codebase
 
-- **134 microcrates.** Existing patterns are strong — the refactorer should follow them, not invent.
+- **~30 focused microcrates with strong boundaries** (post-v0.13.0 collapse). Existing patterns are strong — the refactorer should follow them, not invent.
 - **Idiomatic Rust:** `.first()` not `.get(0)`, `or_default()` not `or_insert_with(Vec::new)`, `?` chains not verbose match arms, iterator chains over manual loops.
 - **Banned:** `unwrap()`, `expect()`, `panic!()`, `todo!()`, `dbg!()` in production.
 - **Visibility:** `pub(crate)` over `pub` where possible, `pub(super)` for module internals.
