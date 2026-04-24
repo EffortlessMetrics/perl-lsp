@@ -22,6 +22,7 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -56,6 +57,30 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
+    fn completion_module_scan_roots(&self, doc_uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let mut include_paths = self.include_paths_for_doc(doc_uri);
+        let mut system_inc_paths = Vec::new();
+
+        if let Some(mut config) = self.config_for_doc(doc_uri) {
+            let perl5lib_paths = std::env::var("PERL5LIB")
+                .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
+                .unwrap_or_default();
+
+            for path in config.effective_include_paths(&perl5lib_paths) {
+                let path_buf = PathBuf::from(path);
+                if !include_paths.contains(&path_buf) {
+                    include_paths.push(path_buf);
+                }
+            }
+
+            if config.use_system_inc {
+                system_inc_paths.extend(config.get_system_inc().iter().cloned());
+            }
+        }
+
+        (include_paths, system_inc_paths)
+    }
+
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
         match chars.next() {
@@ -332,10 +357,15 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let (include_paths, system_inc_paths) = self.completion_module_scan_roots(uri);
+
+                    #[cfg(feature = "workspace")]
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
                     );
 
                     #[cfg(not(feature = "workspace"))]
@@ -574,10 +604,15 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let (include_paths, system_inc_paths) = self.completion_module_scan_roots(uri);
+
+                    #[cfg(feature = "workspace")]
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
                     );
                     #[cfg(not(feature = "workspace"))]
                     let provider =
