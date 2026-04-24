@@ -19,6 +19,7 @@ mod builtins;
 mod hover;
 mod model;
 mod node_analysis;
+mod query_facade;
 mod references;
 mod tokens;
 
@@ -30,6 +31,10 @@ pub use builtins::{
 };
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
+pub use query_facade::{
+    DefinitionLocation, EffectivePragmaState, ParentChain, ResolvedSymbol, SemanticQueryFacade,
+    VisibleImport,
+};
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;

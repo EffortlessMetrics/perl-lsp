@@ -1,6 +1,7 @@
 //! `SemanticModel` — a stable, query-oriented facade over `SemanticAnalyzer`.
 
 use crate::SourceLocation;
+use crate::analysis::class_model::ClassModel;
 use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolTable};
 
@@ -132,5 +133,10 @@ impl SemanticModel {
     /// ```
     pub fn definition_at(&self, position: usize) -> Option<&Symbol> {
         self.analyzer.find_definition(position)
+    }
+
+    /// Get same-file class models extracted during semantic analysis.
+    pub fn class_models(&self) -> &[ClassModel] {
+        &self.analyzer.class_models
     }
 }

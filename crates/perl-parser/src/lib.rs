@@ -547,8 +547,9 @@ pub use incremental::{Edit, IncrementalState, apply_edits};
 
 /// Semantic analysis types for hover, tokens, and code understanding.
 pub use semantic::{
-    HoverInfo, SemanticAnalyzer, SemanticModel, SemanticToken, SemanticTokenModifier,
-    SemanticTokenType,
+    DefinitionLocation, EffectivePragmaState, HoverInfo, ParentChain, ResolvedSymbol,
+    SemanticAnalyzer, SemanticModel, SemanticQueryFacade, SemanticToken, SemanticTokenModifier,
+    SemanticTokenType, VisibleImport,
 };
 /// Symbol extraction, table, and reference types for navigation.
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
