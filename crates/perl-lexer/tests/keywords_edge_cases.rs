@@ -11,6 +11,14 @@ use perl_lexer::{
     is_lsp_runtime_completion_keyword, is_parser_lsp_keyword, is_rename_keyword,
 };
 
+const EXPECTED_KEYWORDS_COUNT: usize = 127;
+const EXPECTED_LSP_COMPLETION_KEYWORDS_COUNT: usize = 68;
+const EXPECTED_DAP_COMPLETION_KEYWORDS_COUNT: usize = 72;
+const EXPECTED_LSP_RUNTIME_COMPLETION_KEYWORDS_COUNT: usize = 40;
+const EXPECTED_RENAME_KEYWORDS_COUNT: usize = 25;
+const EXPECTED_PARSER_LSP_KEYWORDS_COUNT: usize = 32;
+const EXPECTED_LEXER_KEYWORDS_COUNT: usize = 67;
+
 // ---------------------------------------------------------------------------
 // Binary-search boundary behavior
 // ---------------------------------------------------------------------------
@@ -273,47 +281,41 @@ fn specialized_lists_are_proper_subsets() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn keywords_count_is_at_least_120() {
+fn keyword_inventory_counts_are_stable() {
     assert!(
-        KEYWORDS.len() >= 120,
-        "KEYWORDS should have at least 120 entries, found {}",
-        KEYWORDS.len()
+        KEYWORDS.len() == EXPECTED_KEYWORDS_COUNT,
+        "KEYWORDS count drifted: expected {EXPECTED_KEYWORDS_COUNT}, found {}",
+        KEYWORDS.len(),
     );
-}
-
-#[test]
-fn lsp_completion_keywords_count_at_least_40() {
     assert!(
-        LSP_COMPLETION_KEYWORDS.len() >= 40,
-        "LSP_COMPLETION_KEYWORDS should have at least 40 entries, found {}",
-        LSP_COMPLETION_KEYWORDS.len()
+        LSP_COMPLETION_KEYWORDS.len() == EXPECTED_LSP_COMPLETION_KEYWORDS_COUNT,
+        "LSP_COMPLETION_KEYWORDS count drifted: expected {EXPECTED_LSP_COMPLETION_KEYWORDS_COUNT}, found {}",
+        LSP_COMPLETION_KEYWORDS.len(),
     );
-}
-
-#[test]
-fn dap_completion_keywords_count_at_least_60() {
     assert!(
-        DAP_COMPLETION_KEYWORDS.len() >= 60,
-        "DAP_COMPLETION_KEYWORDS should have at least 60 entries, found {}",
-        DAP_COMPLETION_KEYWORDS.len()
+        DAP_COMPLETION_KEYWORDS.len() == EXPECTED_DAP_COMPLETION_KEYWORDS_COUNT,
+        "DAP_COMPLETION_KEYWORDS count drifted: expected {EXPECTED_DAP_COMPLETION_KEYWORDS_COUNT}, found {}",
+        DAP_COMPLETION_KEYWORDS.len(),
     );
-}
-
-#[test]
-fn lexer_keywords_count_at_least_50() {
     assert!(
-        LEXER_KEYWORDS.len() >= 50,
-        "LEXER_KEYWORDS should have at least 50 entries, found {}",
-        LEXER_KEYWORDS.len()
+        LSP_RUNTIME_COMPLETION_KEYWORDS.len() == EXPECTED_LSP_RUNTIME_COMPLETION_KEYWORDS_COUNT,
+        "LSP_RUNTIME_COMPLETION_KEYWORDS count drifted: expected {EXPECTED_LSP_RUNTIME_COMPLETION_KEYWORDS_COUNT}, found {}",
+        LSP_RUNTIME_COMPLETION_KEYWORDS.len(),
     );
-}
-
-#[test]
-fn rename_keywords_count_at_least_20() {
     assert!(
-        RENAME_KEYWORDS.len() >= 20,
-        "RENAME_KEYWORDS should have at least 20 entries, found {}",
-        RENAME_KEYWORDS.len()
+        RENAME_KEYWORDS.len() == EXPECTED_RENAME_KEYWORDS_COUNT,
+        "RENAME_KEYWORDS count drifted: expected {EXPECTED_RENAME_KEYWORDS_COUNT}, found {}",
+        RENAME_KEYWORDS.len(),
+    );
+    assert!(
+        PARSER_LSP_KEYWORDS.len() == EXPECTED_PARSER_LSP_KEYWORDS_COUNT,
+        "PARSER_LSP_KEYWORDS count drifted: expected {EXPECTED_PARSER_LSP_KEYWORDS_COUNT}, found {}",
+        PARSER_LSP_KEYWORDS.len(),
+    );
+    assert!(
+        LEXER_KEYWORDS.len() == EXPECTED_LEXER_KEYWORDS_COUNT,
+        "LEXER_KEYWORDS count drifted: expected {EXPECTED_LEXER_KEYWORDS_COUNT}, found {}",
+        LEXER_KEYWORDS.len(),
     );
 }
 
@@ -337,6 +339,20 @@ fn specialized_lists_differ_from_each_other() {
             let (name_b, list_b) = lists[j];
             assert!(list_a != list_b, "{name_a} and {name_b} should not be identical");
         }
+    }
+}
+
+#[test]
+fn rename_keywords_are_a_proper_subset_of_lsp_completion_keywords() {
+    assert!(
+        RENAME_KEYWORDS.len() < LSP_COMPLETION_KEYWORDS.len(),
+        "RENAME_KEYWORDS should stay smaller than LSP_COMPLETION_KEYWORDS"
+    );
+    for &kw in RENAME_KEYWORDS {
+        assert!(
+            LSP_COMPLETION_KEYWORDS.binary_search(&kw).is_ok(),
+            "RENAME_KEYWORDS entry {kw:?} missing from LSP_COMPLETION_KEYWORDS"
+        );
     }
 }
 
