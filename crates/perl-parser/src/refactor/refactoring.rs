@@ -2822,38 +2822,44 @@ sub complex {
         #[test]
         #[serial]
         fn test_cleanup_respects_retention_count() {
-            use std::io::Write;
+            use std::fs;
+            use std::thread;
+            use std::time::Duration;
+
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
+
+            // Manually create 4 backup directories with different modification times.
+            let backups = [
+                backup_root.join("refactor_100_0"),
+                backup_root.join("refactor_200_0"),
+                backup_root.join("refactor_300_0"),
+                backup_root.join("refactor_400_0"),
+            ];
+
+            for (i, backup) in backups.iter().enumerate() {
+                must(fs::create_dir_all(backup));
+                must(fs::write(backup.join("file.pl"), format!("sub test{} {{}}", i)));
+                thread::sleep(Duration::from_millis(50));
+            }
 
             let config = RefactoringConfig {
                 create_backups: true,
                 max_backup_retention: 2,
                 backup_max_age_seconds: 0, // Disable age-based retention
+                backup_root: Some(backup_root),
                 ..RefactoringConfig::default()
             };
-
             let mut engine = RefactoringEngine::with_config(config);
 
-            // Create multiple backups
-            for i in 0..4 {
-                let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
-                must(writeln!(file, "sub test{} {{ }}", i));
-                let path = file.path().to_path_buf();
-
-                let op = RefactoringType::SymbolRename {
-                    old_name: format!("test{}", i),
-                    new_name: format!("renamed_test{}", i),
-                    scope: RefactoringScope::File(path.clone()),
-                };
-
-                let _ = engine.refactor(op, vec![path]);
-                std::thread::sleep(std::time::Duration::from_millis(100)); // Ensure different timestamps
-            }
-
-            // Clean up with retention policy
             let result = must(engine.clear_history());
 
-            // Should have removed excess directories (4 created - 2 retained = 2 removed)
-            assert!(result.directories_removed >= 2);
+            // Should have removed exactly 2 oldest directories and retained 2 newest.
+            assert_eq!(result.directories_removed, 2);
+            assert!(!backups[0].exists());
+            assert!(!backups[1].exists());
+            assert!(backups[2].exists());
+            assert!(backups[3].exists());
         }
 
         #[test]
