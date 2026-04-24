@@ -2641,9 +2641,7 @@ $store->component_method();
     )?;
 
     let locations = result.as_array().ok_or_else(|| {
-        format!(
-            "Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}"
-        )
+        format!("Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}")
     })?;
     assert!(
         !locations.is_empty(),
