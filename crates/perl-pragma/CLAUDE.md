@@ -1,22 +1,26 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this crate.
 
 ## Crate Overview
 
-`perl-pragma` is a **Tier 1 leaf crate** that tracks pragma state across Perl source files.
+`perl-pragma` is a **Tier 1 leaf crate** that tracks effective pragma state
+across Perl source files.
 
-**Purpose**: Walks an AST to build a range-indexed map of `use strict`, `no strict`, `use warnings`, and `no warnings` effects, enabling scope-aware pragma queries at any byte offset.
+**Purpose**: Walk a `perl-ast` tree and produce a range-indexed map of lexical
+pragma effects, including strict/warnings controls, utf8/encoding/locale,
+feature bundles, builtin imports, and version-implied semantics.
 
-**Version**: workspace (currently 0.12.3)
+**Version**: Workspace-managed (`version.workspace = true`).
 
 ## Commands
 
 ```bash
-cargo build -p perl-pragma           # Build this crate
-cargo test -p perl-pragma            # Run tests
-cargo clippy -p perl-pragma          # Lint
-cargo doc -p perl-pragma --open      # View documentation
+cargo build -p perl-pragma
+cargo test -p perl-pragma
+cargo check --all-targets -p perl-pragma
+cargo clippy -p perl-pragma
+cargo doc -p perl-pragma --open
 ```
 
 ## Architecture
@@ -25,42 +29,43 @@ cargo doc -p perl-pragma --open      # View documentation
 
 - `perl-ast` -- AST node types (`Node`, `NodeKind`)
 
-### Key Types
+### Key Types and Functions
 
-| Type | Description |
+| Item | Description |
 |------|-------------|
-| `PragmaState` | Boolean flags: `strict_vars`, `strict_subs`, `strict_refs`, `warnings` |
-| `PragmaTracker` | Stateless struct with `build()` and `state_for_offset()` methods |
+| `PragmaState` | Effective lexical state: strict flags, warnings + disabled categories, `utf8`, `encoding`, locale state, active features, builtin imports |
+| `PragmaTracker` | Stateless entry points: `build()` and `state_for_offset()` |
+| `PerlVersion` | Parsed Perl version pair used by version pragmas |
+| `parse_perl_version()` | Parses `v5.xx` / `5.xxx` declarations |
+| `features_enabled_by_version()` | Returns feature bundle implied by a version pragma |
 
-### How It Works
+### Lexical Scoping Model
 
-1. `PragmaTracker::build(ast)` recursively walks an AST `Node`.
-2. `NodeKind::Use { module: "strict" | "warnings", .. }` and `NodeKind::No { .. }` toggle flags on a running `PragmaState`.
-3. `NodeKind::Block` saves/restores state to model lexical scoping.
-4. The result is a sorted `Vec<(Range<usize>, PragmaState)>`.
-5. `state_for_offset()` performs a binary search (`partition_point`) to return the effective state at any byte offset.
+`PragmaTracker::build_ranges` applies pragma transitions and restores caller
+state at lexical boundaries. Scoped handling includes:
 
-### Downstream Consumers
+- `Block`
+- `PhaseBlock` (`BEGIN`, `END`, `INIT`, `CHECK`, `UNITCHECK`)
+- `Eval` blocks (`eval { ... }`)
+- braced package blocks (`package Foo { ... }`)
+- other scoped bodies (`sub`, `method`, `class`, loop bodies, `try` branches)
+
+`state_for_offset()` returns the effective state at an offset by selecting the
+latest preceding range and applying any derived strictness (for example,
+`feature 'signatures'` implications).
+
+## Tests
+
+This crate has first-class integration-style tests under `tests/`:
+
+- `tests/comprehensive_unit_tests.rs` -- broad API and edge-case coverage
+- `tests/behavior_spec_tests.rs` -- BDD-style scenario coverage for lexical
+  behavior and pragma interactions
+
+When changing behavior, update/add tests in this crate rather than relying only
+on downstream integration coverage.
+
+## Downstream Consumers
 
 - `perl-parser-core` -- uses pragma state during parsing
 - `perl-lsp-diagnostics` -- pragma-aware diagnostic reporting
-
-## Usage
-
-```rust
-use perl_pragma::{PragmaState, PragmaTracker};
-
-let pragma_map = PragmaTracker::build(&ast);
-let state = PragmaTracker::state_for_offset(&pragma_map, byte_offset);
-if state.strict_vars {
-    // strict vars is in effect at this offset
-}
-```
-
-## Important Notes
-
-- Pragmas are lexically scoped; `Block` nodes save/restore state
-- `use strict` with no args enables all three categories; with args only the named ones
-- `no strict` / `no warnings` disable the corresponding flags
-- Unrecognized modules in `use`/`no` are silently ignored
-- No tests directory exists yet; the crate is exercised through downstream integration tests
