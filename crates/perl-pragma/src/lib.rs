@@ -370,6 +370,21 @@ fn normalized_pragma_token(arg: &str) -> &str {
     arg.trim().trim_matches('\'').trim_matches('"')
 }
 
+fn normalize_source_encoding(arg: &str) -> Option<String> {
+    let normalized = normalized_pragma_token(arg);
+    if normalized.is_empty() {
+        return None;
+    }
+
+    let lower = normalized.to_ascii_lowercase();
+    let canonical = match lower.as_str() {
+        "cp1252" | "cp-1252" | "windows1252" | "windows-1252" => "windows-1252",
+        _ => lower.as_str(),
+    };
+
+    Some(canonical.to_string())
+}
+
 fn is_tracked_pragma_module(module: &str) -> bool {
     matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
 }
@@ -523,7 +538,7 @@ impl PragmaTracker {
                         "encoding" => {
                             current_state.encoding = conditional_args
                                 .first()
-                                .map(|arg| normalized_pragma_token(arg).to_string());
+                                .and_then(|arg| normalize_source_encoding(arg));
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -615,9 +630,8 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "encoding" => {
-                        current_state.encoding = args
-                            .first()
-                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        current_state.encoding =
+                            args.first().and_then(|arg| normalize_source_encoding(arg));
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }

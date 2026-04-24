@@ -281,6 +281,16 @@ fn use_if_encoding_targets_encoding_not_argument() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn use_if_encoding_normalizes_windows_1252_aliases() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$cond", "encoding", "'cp1252'"], 0, 34)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+
+    assert_eq!(state.encoding.as_deref(), Some("windows-1252"));
+    Ok(())
+}
+
+#[test]
 fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &[], 13, 23)]);
     let map = PragmaTracker::build(&ast);
@@ -455,6 +465,20 @@ fn use_encoding_tracks_active_source_encoding() -> Result<(), Box<dyn std::error
     assert_eq!(map.len(), 2);
     assert_eq!(map[0].1.encoding.as_deref(), Some("utf8"));
     assert!(map[1].1.encoding.is_none());
+    Ok(())
+}
+
+#[test]
+fn use_encoding_normalizes_windows_1252_aliases() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("encoding", &["'Windows1252'"], 0, 25),
+        use_node("encoding", &["'cp-1252'"], 26, 47),
+    ]);
+
+    let map = PragmaTracker::build(&ast);
+
+    assert_eq!(map[0].1.encoding.as_deref(), Some("windows-1252"));
+    assert_eq!(map[1].1.encoding.as_deref(), Some("windows-1252"));
     Ok(())
 }
 
