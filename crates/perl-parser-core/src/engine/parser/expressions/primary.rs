@@ -110,6 +110,28 @@ impl<'a> Parser<'a> {
                             }
                             continue;
                         }
+                        if i < quote_end && bytes[i] == b'(' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'(', b')', quote_end,
+                            ) {
+                                return Some('(');
+                            }
+                            continue;
+                        }
+                        // bare method name: $obj->method(...) — scan the name, then check for (
+                        if i < quote_end && Self::is_identifier_start(bytes[i]) {
+                            while i < quote_end && Self::is_identifier_continue(bytes[i]) {
+                                i += 1;
+                            }
+                            if i < quote_end && bytes[i] == b'(' {
+                                if !Self::consume_balanced_in_interpolated_string(
+                                    bytes, i, b'(', b')', quote_end,
+                                ) {
+                                    return Some('(');
+                                }
+                                continue;
+                            }
+                        }
                     }
 
                     if i < quote_end && bytes[i] == b'{' {

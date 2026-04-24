@@ -73,6 +73,24 @@ fn double_quote_incomplete_mixed_array_index() -> R {
 }
 
 #[test]
+fn double_quote_incomplete_arrow_paren_call() -> R {
+    // "$obj->method(arg" — paren-call tail swallowed closing quote before fix
+    let source = r#"my $msg = "Call: $obj->method(arg";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_has_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
+fn double_quote_incomplete_block_deref() -> R {
+    // "${incomplete" — block-dereference form (${expr}) with missing closing brace
+    let source = r#"my $msg = "Deref: ${incomplete";"#;
+    assert_clean_sexp_without_error_nodes(source)?;
+    assert_has_unclosed_interpolation_diagnostic(source)?;
+    Ok(())
+}
+
+#[test]
 fn double_quote_complete_interpolation_cases() -> R {
     let source = r#"my $msg = "Complete: $hash{key} $array[0] $obj->{field}";"#;
     assert_clean_sexp_without_error_nodes(source)?;

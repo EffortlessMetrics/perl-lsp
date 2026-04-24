@@ -742,6 +742,20 @@ fn interpolated_string_preserves_complex_tails() -> R {
                 StringPart::ArraySlice(Arc::from("[$i")),
             ],
         ),
+        (
+            r#""$obj->method(arg""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->method(arg")),
+            ],
+        ),
+        (
+            r#""$obj->(incomplete""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->(incomplete")),
+            ],
+        ),
     ];
 
     for (input, expected_parts) in cases {

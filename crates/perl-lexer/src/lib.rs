@@ -863,6 +863,11 @@ impl<'a> PerlLexer<'a> {
         }
     }
 
+    /// General-purpose balanced-segment consumer (no quote-boundary recovery).
+    ///
+    /// For use inside double-quoted string interpolation where the outer `"` must
+    /// act as a recovery boundary, use [`consume_balanced_segment_in_string`] instead.
+    #[allow(dead_code)]
     #[inline]
     fn consume_balanced_segment(&mut self, open: char, close: char) -> Option<usize> {
         if self.current_char() != Some(open) {
@@ -2905,7 +2910,8 @@ impl<'a> PerlLexer<'a> {
                                             )));
                                         }
                                         Some('(') => {
-                                            let _ = self.consume_balanced_segment('(', ')');
+                                            let _ = self
+                                                .consume_balanced_segment_in_string('(', ')', '"');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2930,7 +2936,9 @@ impl<'a> PerlLexer<'a> {
                                                 }
                                             }
                                             if self.current_char() == Some('(') {
-                                                let _ = self.consume_balanced_segment('(', ')');
+                                                let _ = self.consume_balanced_segment_in_string(
+                                                    '(', ')', '"',
+                                                );
                                             }
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
