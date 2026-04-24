@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "measurements": {
+    "cold_parse": {
+      "regime": "cold parse",
+      "benchmark": "full reparse",
+      "iterations": 40,
+      "median_ns": 44288,
+      "p95_ns": 60209
+    },
+    "incremental_multiple_edits": {
+      "regime": "incremental multiple edits",
+      "benchmark": "incremental multiple edits",
+      "iterations": 40,
+      "median_ns": 64390,
+      "p95_ns": 94923
+    },
+    "incremental_small_edit": {
+      "regime": "incremental small edit",
+      "benchmark": "incremental small edit",
+      "iterations": 40,
+      "median_ns": 61605,
+      "p95_ns": 92791
+    },
+    "lexer_only": {
+      "regime": "lexer-only",
+      "benchmark": "lexer_only",
+      "iterations": 40,
+      "median_ns": 24008,
+      "p95_ns": 43044
+    },
+    "scope_analysis": {
+      "regime": "scope analysis",
+      "benchmark": "scope_analysis",
+      "iterations": 40,
+      "median_ns": 9803,
+      "p95_ns": 10226
+    },
+    "warm_reparse": {
+      "regime": "warm reparse",
+      "benchmark": "warm reparse",
+      "iterations": 40,
+      "median_ns": 117155,
+      "p95_ns": 178780
+    }
+  }
+}

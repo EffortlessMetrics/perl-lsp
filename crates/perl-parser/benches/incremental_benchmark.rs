@@ -5,6 +5,9 @@ use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_tdd_support::{must, must_some};
 use std::hint::black_box;
 
+#[path = "common/scorecard.rs"]
+mod scorecard;
+
 fn bench_incremental_small_edit(c: &mut Criterion) {
     let source = r#"
 use strict;
@@ -34,6 +37,24 @@ process_data($items);
 
     let start = must_some(source.find("transform"));
     let old_end = start + "transform".len();
+
+    scorecard::measure_and_record(
+        "incremental_small_edit",
+        "incremental small edit",
+        "incremental small edit",
+        40,
+        || {
+            let mut state = IncrementalState::new(source.clone());
+            let edit = Edit {
+                start_byte: start,
+                old_end_byte: old_end,
+                new_end_byte: start + "process".len(),
+                new_text: "process".to_string(),
+            };
+            must(apply_edits(&mut state, &[edit]));
+            black_box(&state.ast);
+        },
+    );
 
     c.bench_function("incremental small edit", |b| {
         b.iter_batched(
@@ -79,6 +100,11 @@ my $items = [1, 2, 3, 4, 5];
 process_data($items);
 "#
     .to_string();
+
+    scorecard::measure_and_record("cold_parse", "cold parse", "full reparse", 40, || {
+        let state = IncrementalState::new(source.clone());
+        black_box(&state.ast);
+    });
 
     c.bench_function("full reparse", |b| {
         b.iter(|| {
@@ -131,6 +157,12 @@ process_data($items);
 "#
     .to_string();
 
+    scorecard::measure_and_record("warm_reparse", "warm reparse", "warm reparse", 40, || {
+        let mut state = IncrementalState::new(source.clone());
+        must(apply_edits(&mut state, &[]));
+        black_box(&state.ast);
+    });
+
     c.bench_function("warm reparse", |b| {
         b.iter_batched(
             || IncrementalState::new(source.clone()),
@@ -156,6 +188,32 @@ print "$x $y $z\n";
 
     let pos_1 = must_some(source.find("= 1")) + 2;
     let pos_2 = must_some(source.find("= 2")) + 2;
+
+    scorecard::measure_and_record(
+        "incremental_multiple_edits",
+        "incremental multiple edits",
+        "incremental multiple edits",
+        40,
+        || {
+            let mut state = IncrementalState::new(source.clone());
+            let edits = vec![
+                Edit {
+                    start_byte: pos_1,
+                    old_end_byte: pos_1 + 1,
+                    new_end_byte: pos_1 + 2,
+                    new_text: "10".to_string(),
+                },
+                Edit {
+                    start_byte: pos_2,
+                    old_end_byte: pos_2 + 1,
+                    new_end_byte: pos_2 + 2,
+                    new_text: "20".to_string(),
+                },
+            ];
+            must(apply_edits(&mut state, &edits));
+            black_box(&state.ast);
+        },
+    );
 
     c.bench_function("incremental multiple edits", |b| {
         b.iter_batched(
