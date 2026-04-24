@@ -42,6 +42,27 @@ my $v = helper_func();
 }
 
 #[test]
+fn require_import_qw_multi_symbol_resolves_pkg() {
+    let code = r#"require My::Tools;
+My::Tools->import(qw(helper_one helper_two));
+helper_one();
+helper_two();
+"#;
+    let pkg_one = parse_and_symbol_at(code, "helper_one()");
+    let pkg_two = parse_and_symbol_at(code, "helper_two()");
+    assert_eq!(
+        pkg_one.as_deref(),
+        Some("My::Tools"),
+        "helper_one() should resolve to My::Tools via require+qw import, got: {pkg_one:?}"
+    );
+    assert_eq!(
+        pkg_two.as_deref(),
+        Some("My::Tools"),
+        "helper_two() should resolve to My::Tools via require+qw import, got: {pkg_two:?}"
+    );
+}
+
+#[test]
 fn use_import_still_resolves_correctly() {
     let code = r#"use Carp qw(croak);
 croak("error");

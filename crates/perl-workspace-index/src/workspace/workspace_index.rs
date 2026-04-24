@@ -2987,6 +2987,19 @@ impl IndexVisitor {
                             .insert(normalize_dependency_module_name(&module_name));
                     }
                 }
+                if name == "require" {
+                    if let Some(module_name) = extract_static_require_module_name(args.first()) {
+                        let normalized = normalize_dependency_module_name(&module_name);
+                        file_index.dependencies.insert(normalized.clone());
+                        file_index.references.entry(normalized).or_default().push(
+                            SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(node),
+                                kind: ReferenceKind::Import,
+                            },
+                        );
+                    }
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3158,6 +3171,20 @@ impl IndexVisitor {
                         kind: ReferenceKind::Usage,
                     },
                 );
+
+                if method == "import" && !args.is_empty() {
+                    if let NodeKind::Identifier { name: module_name } = &object.kind {
+                        let normalized = normalize_dependency_module_name(module_name);
+                        file_index.dependencies.insert(normalized.clone());
+                        file_index.references.entry(normalized).or_default().push(
+                            SymbolReference {
+                                uri: self.uri.clone(),
+                                range: self.node_to_range(node),
+                                kind: ReferenceKind::Import,
+                            },
+                        );
+                    }
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3436,6 +3463,22 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn extract_static_require_module_name(arg: Option<&Node>) -> Option<String> {
+    let node = arg?;
+    match &node.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::String { value, .. } => {
+            let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+            if cleaned.is_empty() {
+                return None;
+            }
+            let module = cleaned.trim_end_matches(".pm").replace('/', "::");
+            if module.is_empty() { None } else { Some(module) }
+        }
+        _ => None,
+    }
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {
@@ -4955,6 +4998,38 @@ Utils::process_data();
         let deps = index.file_dependencies(uri.as_str());
         assert!(deps.contains("My::Base"));
         assert!(!deps.contains("My'Base"));
+    }
+
+    #[test]
+    fn test_file_dependencies_include_static_require_module() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/require-static.pl"));
+        let src = "package Consumer;\nrequire My::Loader;\nMy::Loader->import('load_data');\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Loader"),
+            "require/import static form should register dependency, got: {deps:?}"
+        );
+    }
+
+    #[test]
+    fn test_find_dependents_include_static_require_manual_import() {
+        let index = WorkspaceIndex::new();
+        let exporter_url = must(url::Url::parse("file:///test/workspace/lib/My/Loader.pm"));
+        let exporter_src = "package My::Loader;\nsub load_data { 1 }\n1;\n";
+        must(index.index_file(exporter_url, exporter_src.to_string()));
+
+        let consumer_url = must(url::Url::parse("file:///test/workspace/consumer-require.pl"));
+        let consumer_src = "package Consumer;\nrequire My::Loader;\nMy::Loader->import(qw(load_data));\nload_data();\n1;\n";
+        must(index.index_file(consumer_url, consumer_src.to_string()));
+
+        let dependents = index.find_dependents("My::Loader");
+        assert!(
+            dependents.contains(&"file:///test/workspace/consumer-require.pl".to_string()),
+            "consumer-require.pl should be in dependents for static require/manual import, got: {dependents:?}"
+        );
     }
 
     #[test]

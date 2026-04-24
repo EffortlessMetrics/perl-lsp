@@ -1842,6 +1842,28 @@ impl ScopeAnalyzer {
 }
 
 fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
+    fn require_module_name(node: &Node) -> Option<String> {
+        let (name, args) = match &node.kind {
+            NodeKind::FunctionCall { name, args } => (name, args),
+            _ => return None,
+        };
+        if name != "require" {
+            return None;
+        }
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                if cleaned.is_empty() {
+                    return None;
+                }
+                Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+            }
+            _ => None,
+        }
+    }
+
     fn push_symbol(imported: &mut std::collections::HashSet<String>, module: &str, token: &str) {
         let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
         if symbol.is_empty() || symbol == "," {
@@ -1865,6 +1887,76 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
+    fn arg_node_tokens(arg: &Node, out: &mut Vec<String>) {
+        match &arg.kind {
+            NodeKind::String { value, .. } => out.push(value.clone()),
+            NodeKind::Identifier { name } => {
+                if name.starts_with("qw") {
+                    let content = name
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    out.extend(content.split_whitespace().map(str::to_string));
+                } else {
+                    out.push(name.clone());
+                }
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    arg_node_tokens(element, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn inner_expr(node: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &node.kind {
+            expression.as_ref()
+        } else {
+            node
+        }
+    }
+
+    fn collect_manual_imports_in_statements(
+        stmts: &[Node],
+        imported: &mut std::collections::HashSet<String>,
+    ) {
+        let mut required_modules: Vec<String> =
+            stmts.iter().filter_map(|stmt| require_module_name(inner_expr(stmt))).collect();
+        required_modules.sort();
+        required_modules.dedup();
+
+        if required_modules.is_empty() {
+            return;
+        }
+
+        for stmt in stmts {
+            let expr = inner_expr(stmt);
+            let (object, method, args) = match &expr.kind {
+                NodeKind::MethodCall { object, method, args } => (object, method, args),
+                _ => continue,
+            };
+            if method != "import" || args.is_empty() {
+                continue;
+            }
+            let NodeKind::Identifier { name: object_name } = &object.kind else {
+                continue;
+            };
+            if !required_modules.iter().any(|module| module == object_name) {
+                continue;
+            }
+
+            for arg in args {
+                let mut tokens = Vec::new();
+                arg_node_tokens(arg, &mut tokens);
+                for token in tokens {
+                    push_symbol(imported, object_name, &token);
+                }
+            }
+        }
+    }
+
     fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
@@ -1880,6 +1972,10 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
                     push_symbol(imported, module, arg);
                 }
             }
+        }
+
+        if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+            collect_manual_imports_in_statements(statements, imported);
         }
 
         for child in node.children() {
