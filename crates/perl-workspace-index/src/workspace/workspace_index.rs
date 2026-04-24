@@ -2986,6 +2986,12 @@ impl IndexVisitor {
                             .dependencies
                             .insert(normalize_dependency_module_name(&module_name));
                     }
+                } else if name == "require" {
+                    if let Some(module_name) = extract_module_name_from_require_args(args) {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(&module_name));
+                    }
                 }
 
                 // Visit arguments
@@ -3158,6 +3164,19 @@ impl IndexVisitor {
                         kind: ReferenceKind::Usage,
                     },
                 );
+
+                if method == "import"
+                    && let NodeKind::Identifier { name: module_name } = &object.kind
+                {
+                    for symbol in extract_manual_import_symbols(args) {
+                        file_index.references.entry(symbol).or_default().push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(node),
+                            kind: ReferenceKind::Import,
+                        });
+                    }
+                    file_index.dependencies.insert(normalize_dependency_module_name(module_name));
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3531,6 +3550,66 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
     }
 
     (words, remainder)
+}
+
+fn extract_module_name_from_require_args(args: &[Node]) -> Option<String> {
+    let first = args.first()?;
+    match &first.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::String { value, .. } => {
+            let cleaned = value.trim().trim_matches('"').trim_matches('\'');
+            if cleaned.is_empty() {
+                return None;
+            }
+            Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_manual_import_symbols(args: &[Node]) -> Vec<String> {
+    fn push_if_bareword(out: &mut Vec<String>, token: &str) {
+        let bare = token.trim().trim_matches('"').trim_matches('\'').trim();
+        if bare.is_empty() || bare == "," {
+            return;
+        }
+        let is_bareword = bare.bytes().all(|ch| ch.is_ascii_alphanumeric() || ch == b'_')
+            && bare.as_bytes().first().is_some_and(|ch| ch.is_ascii_alphabetic() || *ch == b'_');
+        if is_bareword {
+            out.push(bare.to_string());
+        }
+    }
+
+    let mut symbols = Vec::new();
+    for arg in args {
+        match &arg.kind {
+            NodeKind::String { value, .. } => push_if_bareword(&mut symbols, value),
+            NodeKind::Identifier { name } => {
+                if name.starts_with("qw") {
+                    let content = name
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    for token in content.split_whitespace() {
+                        push_if_bareword(&mut symbols, token);
+                    }
+                } else {
+                    push_if_bareword(&mut symbols, name);
+                }
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    if let NodeKind::String { value, .. } = &element.kind {
+                        push_if_bareword(&mut symbols, value);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    symbols.sort();
+    symbols.dedup();
+    symbols
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -4997,6 +5076,51 @@ Utils::process_data();
 
         let deps = index.file_dependencies(consumer_url.as_str());
         assert!(deps.contains("My::App::Role"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_literal_require_end_to_end()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/require-consumer.pl"));
+        let src = "package Consumer;\nrequire My::Loader;\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Loader"),
+            "literal require should register module dependency, got: {deps:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_manual_import_symbols_are_indexed_as_import_references()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/manual-import.pl"));
+        let src = r#"package Consumer;
+require My::Tools;
+My::Tools->import(qw(helper_one helper_two));
+helper_one();
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Tools"),
+            "manual import target should be tracked as dependency, got: {deps:?}"
+        );
+
+        for symbol in ["helper_one", "helper_two"] {
+            let refs = index.find_references(symbol);
+            assert!(
+                !refs.is_empty(),
+                "expected at least one indexed reference for imported symbol `{symbol}`"
+            );
+        }
         Ok(())
     }
 
