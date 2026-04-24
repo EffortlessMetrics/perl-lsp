@@ -18,10 +18,25 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds that are allowlisted as intentionally unreachable in clean corpus
+    #[serde(default)]
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
+    /// Never-seen NodeKinds that are not allowlisted
+    #[serde(default)]
+    pub actionable_never_seen: Vec<String>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// A never-seen NodeKind that is explicitly allowlisted with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this kind is intentionally unreachable in clean deterministic corpus
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -79,6 +94,22 @@ pub fn analyze_nodekind_coverage(
     let never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
 
+    let allowlisted_never_seen: Vec<AllowlistedNodeKind> = never_seen
+        .iter()
+        .filter_map(|name| {
+            never_seen_allowlist_rationale(name).map(|rationale| AllowlistedNodeKind {
+                name: name.clone(),
+                rationale: rationale.to_string(),
+            })
+        })
+        .collect();
+
+    let actionable_never_seen: Vec<String> = never_seen
+        .iter()
+        .filter(|name| never_seen_allowlist_rationale(name).is_none())
+        .cloned()
+        .collect();
+
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
         .iter()
@@ -102,8 +133,28 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen,
+        actionable_never_seen,
         at_risk,
         frequency: nodekind_counts,
+    }
+}
+
+fn never_seen_allowlist_rationale(kind: &str) -> Option<&'static str> {
+    match kind {
+        "MissingIdentifier" => Some(
+            "Synthetic parser-recovery sentinel; emitted only when identifier recovery is required.",
+        ),
+        "MissingBlock" => Some(
+            "Synthetic parser-recovery sentinel; emitted only when block recovery is required.",
+        ),
+        "MissingStatement" => Some(
+            "Synthetic parser-recovery sentinel; emitted only when statement recovery is required.",
+        ),
+        "UnknownRest" => Some(
+            "Lexer-budget sentinel token surfaced as AST node only when lexing is force-truncated.",
+        ),
+        _ => None,
     }
 }
 
@@ -174,5 +225,14 @@ mod tests {
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn test_recovery_never_seen_allowlist() {
+        assert!(never_seen_allowlist_rationale("MissingIdentifier").is_some());
+        assert!(never_seen_allowlist_rationale("MissingBlock").is_some());
+        assert!(never_seen_allowlist_rationale("MissingStatement").is_some());
+        assert!(never_seen_allowlist_rationale("UnknownRest").is_some());
+        assert!(never_seen_allowlist_rationale("Program").is_none());
     }
 }
