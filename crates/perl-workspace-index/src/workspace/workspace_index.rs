@@ -989,6 +989,21 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Stable symbol identity for cross-file definition/reference queries.
+pub struct StableSymbolId(pub String);
+
+#[derive(Debug, Clone)]
+/// Deterministic cross-file definition/reference query result.
+pub struct SymbolQueryResult {
+    /// Stable symbol identity that can be reused for later queries.
+    pub symbol_id: StableSymbolId,
+    /// Definition location for the symbol.
+    pub definition: Location,
+    /// Sorted, deduplicated references across all indexed files.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1144,60 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn stable_symbol_id_for(symbol: &WorkspaceSymbol) -> StableSymbolId {
+        let kind = match symbol.kind {
+            SymbolKind::Package | SymbolKind::Class | SymbolKind::Role => "pkg",
+            SymbolKind::Subroutine | SymbolKind::Method | SymbolKind::Constant => "sub",
+            SymbolKind::Variable(_) => "var",
+            _ => "sym",
+        };
+        let canonical = symbol.qualified_name.as_deref().unwrap_or(&symbol.name);
+        StableSymbolId(format!("{kind}:{canonical}"))
+    }
+
+    fn sort_locations_deterministically(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then(left.range.start.line.cmp(&right.range.start.line))
+                .then(left.range.start.column.cmp(&right.range.start.column))
+                .then(left.range.end.line.cmp(&right.range.end.line))
+                .then(left.range.end.column.cmp(&right.range.end.column))
+        });
+    }
+
+    fn resolve_symbol_for_query(&self, symbol_name: &str) -> Option<(WorkspaceSymbol, Location)> {
+        let files = self.files.read();
+        let mut matches = Vec::new();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
+                {
+                    matches.push(symbol.clone());
+                }
+            }
+        }
+
+        Self::sort_symbols_deterministically(&mut matches);
+        let symbol = matches.into_iter().next()?;
+        let definition = Location { uri: symbol.uri.clone(), range: symbol.range };
+        Some((symbol, definition))
+    }
+
+    fn sort_symbols_deterministically(symbols: &mut [WorkspaceSymbol]) {
+        symbols.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then(left.range.start.line.cmp(&right.range.start.line))
+                .then(left.range.start.column.cmp(&right.range.start.column))
+                .then(left.range.end.line.cmp(&right.range.end.line))
+                .then(left.range.end.column.cmp(&right.range.end.column))
+                .then(left.name.cmp(&right.name))
+        });
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1917,6 +1986,50 @@ impl WorkspaceIndex {
         }
 
         locations
+    }
+
+    /// Query a symbol's stable identity, definition, and cross-file references.
+    ///
+    /// This API is intended as a stable foundation for refactoring workflows that
+    /// need deterministic ordering and identity-based follow-up queries.
+    pub fn query_symbol(&self, symbol_name: &str) -> Option<SymbolQueryResult> {
+        let (resolved_symbol, definition) = self.resolve_symbol_for_query(symbol_name)?;
+        let symbol_id = Self::stable_symbol_id_for(&resolved_symbol);
+        if let Some(result) = self.query_symbol_by_id(&symbol_id) {
+            Some(result)
+        } else {
+            Some(SymbolQueryResult { symbol_id, definition, references: Vec::new() })
+        }
+    }
+
+    /// Query a symbol by stable identity.
+    ///
+    /// Returns `None` when the identity is malformed or no longer present.
+    pub fn query_symbol_by_id(&self, symbol_id: &StableSymbolId) -> Option<SymbolQueryResult> {
+        let (kind, canonical_name) = symbol_id.0.split_once(':')?;
+        let name_for_lookup = if kind == "var" {
+            canonical_name.to_string()
+        } else {
+            canonical_name
+                .rsplit_once("::")
+                .map_or_else(|| canonical_name.to_string(), |(_, bare_name)| bare_name.to_string())
+        };
+
+        let (resolved_symbol, definition) = self
+            .resolve_symbol_for_query(canonical_name)
+            .or_else(|| self.resolve_symbol_for_query(&name_for_lookup))?;
+
+        let mut references = self.find_references(canonical_name);
+        if references.is_empty() && canonical_name != name_for_lookup {
+            references = self.find_references(&name_for_lookup);
+        }
+        Self::sort_locations_deterministically(&mut references);
+
+        Some(SymbolQueryResult {
+            symbol_id: Self::stable_symbol_id_for(&resolved_symbol),
+            definition,
+            references,
+        })
     }
 
     /// Count non-definition references (usages) of a symbol.
