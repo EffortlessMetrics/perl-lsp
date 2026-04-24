@@ -21,27 +21,33 @@
 //!
 //! ```bash
 //! # Run all benchmarks
-//! cargo bench -p perl-dap
+//! cargo bench -p perl-dap --bench dap_benchmarks
 //!
 //! # Run specific benchmark group
 //! cargo bench -p perl-dap --bench dap_benchmarks -- configuration
 //! cargo bench -p perl-dap --bench dap_benchmarks -- platform
+//! cargo bench -p perl-dap --bench dap_benchmarks -- dap_live_session
+//!
+//! # Stable benchmark names for machine diffing
+//! cargo bench -p perl-dap --bench dap_benchmarks -- dap_live_session/launch_warm
 //!
 //! # Run with shorter measurement time (for CI)
 //! cargo bench -p perl-dap -- --measurement-time 5
 //! ```
 
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use perl_dap::configuration::LaunchConfiguration;
-use perl_dap::debug_adapter::DebugAdapter;
+use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::fs;
 use std::hint::black_box;
 use std::path::PathBuf;
 use std::time::Duration;
+use tempfile::TempDir;
 
 // ========== Configuration Benchmarks (AC14) ==========
 
@@ -285,6 +291,244 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     group.finish();
 }
 
+// ========== Phase 3: Live Session Benchmarks ==========
+
+fn create_live_session_fixture() -> Option<(TempDir, PathBuf)> {
+    let temp_dir = tempfile::tempdir().ok()?;
+    let script_path = temp_dir.path().join("live_session_benchmark.pl");
+    let script = r#"#!/usr/bin/env perl
+use strict;
+use warnings;
+
+my $counter = 0;
+my @items = qw(alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu);
+my %lookup = map { $_ => length($_) } @items;
+
+sub do_work {
+    my ($n) = @_;
+    my $sum = 0;
+    for my $i (0 .. $n) {
+        $sum += $i;
+    }
+    return $sum;
+}
+
+for my $round (1 .. 200) {
+    $counter += do_work($round);
+    my $token = $items[$round % scalar @items];
+    $counter += $lookup{$token};
+}
+
+print "counter=$counter\n";
+"#;
+
+    fs::write(&script_path, script).ok()?;
+    Some((temp_dir, script_path))
+}
+
+fn launch_args_for_script(script_path: &PathBuf) -> Value {
+    json!({
+        "program": script_path,
+        "args": [],
+        "stopOnEntry": true
+    })
+}
+
+fn response_succeeded(response: DapMessage) -> bool {
+    matches!(response, DapMessage::Response { success: true, .. })
+}
+
+fn benchmark_live_session_paths(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dap_live_session");
+    group.measurement_time(Duration::from_secs(10));
+
+    let Some((_temp_dir, script_path)) = create_live_session_fixture() else {
+        group.finish();
+        return;
+    };
+
+    if resolve_perl_path().is_err() {
+        group.finish();
+        return;
+    }
+
+    let launch_args = launch_args_for_script(&script_path);
+
+    group.bench_function("launch_cold", |b| {
+        b.iter_batched(
+            DebugAdapter::new,
+            |mut adapter| {
+                let launched = adapter.handle_request(1, "launch", Some(launch_args.clone()));
+                black_box(response_succeeded(launched));
+                let _ = black_box(adapter.handle_request(2, "disconnect", None));
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    group.bench_function("launch_warm", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            let launched = adapter.handle_request(10, "launch", Some(launch_args.clone()));
+            black_box(response_succeeded(launched));
+            let _ = black_box(adapter.handle_request(11, "disconnect", None));
+        })
+    });
+
+    group.bench_function("attach_loopback", |b| {
+        let mut adapter = DebugAdapter::new();
+        let pid = std::process::id();
+        b.iter(|| {
+            let attached = adapter.handle_request(20, "attach", Some(json!({ "processId": pid })));
+            black_box(response_succeeded(attached));
+            let _ = black_box(adapter.handle_request(21, "disconnect", None));
+        })
+    });
+
+    group.bench_function("set_breakpoints_100", |b| {
+        let mut adapter = DebugAdapter::new();
+        let breakpoints = (1..=100).map(|line| json!({ "line": line })).collect::<Vec<_>>();
+        let args = json!({
+            "source": { "path": script_path },
+            "breakpoints": breakpoints
+        });
+        b.iter(|| {
+            black_box(adapter.handle_request(30, "setBreakpoints", Some(args.clone())));
+        })
+    });
+
+    group.bench_function("step_continue_p95", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            let mut samples = Vec::with_capacity(40);
+            for i in 0..40 {
+                let start = std::time::Instant::now();
+                let response = if i % 2 == 0 {
+                    adapter.handle_request(
+                        40 + i,
+                        "continue",
+                        Some(json!({ "threadId": 1, "singleThread": false })),
+                    )
+                } else {
+                    adapter.handle_request(40 + i, "next", Some(json!({ "threadId": 1 })))
+                };
+                black_box(response_succeeded(response));
+                samples.push(start.elapsed());
+            }
+            samples.sort_unstable();
+            let idx = ((samples.len() as f64) * 0.95).ceil() as usize;
+            let p95 = samples[idx.saturating_sub(1).min(samples.len().saturating_sub(1))];
+            black_box(p95);
+        })
+    });
+
+    group.bench_function("stack_trace_live", |b| {
+        let mut adapter = DebugAdapter::new();
+        let pid = std::process::id();
+        let _ = adapter.handle_request(50, "attach", Some(json!({ "processId": pid })));
+        b.iter(|| {
+            black_box(adapter.handle_request(51, "stackTrace", Some(json!({ "threadId": pid }))));
+        });
+        let _ = adapter.handle_request(52, "disconnect", None);
+    });
+
+    group.bench_function("variables_root", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                60,
+                "variables",
+                Some(json!({
+                    "variablesReference": 11
+                })),
+            ));
+        })
+    });
+
+    group.bench_function("variables_child_page", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            let root_response = adapter.handle_request(
+                70,
+                "variables",
+                Some(json!({
+                    "variablesReference": 11
+                })),
+            );
+
+            let child_ref = match root_response {
+                DapMessage::Response { body, .. } => body
+                    .and_then(|value| value.get("variables").and_then(|v| v.as_array()).cloned())
+                    .and_then(|vars| {
+                        vars.into_iter()
+                            .find_map(|var| var.get("variablesReference").and_then(|n| n.as_i64()))
+                    })
+                    .unwrap_or(0),
+                _ => 0,
+            };
+
+            if child_ref > 0 {
+                black_box(adapter.handle_request(
+                    71,
+                    "variables",
+                    Some(json!({
+                        "variablesReference": child_ref,
+                        "start": 5,
+                        "count": 10
+                    })),
+                ));
+            } else {
+                black_box(child_ref);
+            }
+        })
+    });
+
+    group.bench_function("evaluate_safe_blocked", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                80,
+                "evaluate",
+                Some(json!({
+                    "expression": "system('echo blocked')",
+                    "context": "watch",
+                    "allowSideEffects": false
+                })),
+            ));
+        })
+    });
+
+    group.bench_function("evaluate_live_simple", |b| {
+        let mut adapter = DebugAdapter::new();
+        b.iter(|| {
+            let launched = adapter.handle_request(90, "launch", Some(launch_args.clone()));
+            if response_succeeded(launched) {
+                black_box(adapter.handle_request(
+                    91,
+                    "evaluate",
+                    Some(json!({
+                        "expression": "$counter",
+                        "context": "watch",
+                        "frameId": 1
+                    })),
+                ));
+            } else {
+                black_box(adapter.handle_request(
+                    91,
+                    "evaluate",
+                    Some(json!({
+                        "expression": "$counter",
+                        "context": "watch"
+                    })),
+                ));
+            }
+            let _ = black_box(adapter.handle_request(92, "disconnect", None));
+        })
+    });
+
+    group.finish();
+}
+
 // ========== Benchmark Groups ==========
 
 criterion_group!(configuration_benches, benchmark_launch_config_validation);
@@ -350,4 +594,6 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
 
 criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
 
-criterion_main!(configuration_benches, platform_benches, session_benches);
+criterion_group!(live_session_benches, benchmark_live_session_paths);
+
+criterion_main!(configuration_benches, platform_benches, session_benches, live_session_benches);

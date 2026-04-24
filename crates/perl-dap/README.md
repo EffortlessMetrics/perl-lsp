@@ -31,6 +31,19 @@ perl-dap --socket --port 13603
 perl-dap --bridge
 ```
 
+## Benchmark DAP adapter paths
+
+```bash
+# Run all DAP benchmarks (config/platform + live-session groups)
+cargo bench -p perl-dap --bench dap_benchmarks
+
+# Filter to live-session benchmark group
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live_session
+
+# Filter to one stable benchmark name (machine-diff friendly)
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live_session/launch_warm
+```
+
 ## BridgeAdapter dependency
 
 `--bridge` mode requires the CPAN module `Perl::LanguageServer`.
