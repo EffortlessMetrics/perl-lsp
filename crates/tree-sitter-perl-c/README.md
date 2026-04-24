@@ -85,7 +85,47 @@ for snippet in &["my $x = 1;", "print $x;"] {
 ## Binaries
 
 - `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
-- `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
+- `bench_parser_c` — benchmark parse throughput and print stable `key=value` output (requires `--features test-utils`)
+
+### `bench_parser_c` modes
+
+Run a one-shot cold parse (default):
+
+```bash
+cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- path/to/file.pl
+```
+
+Run warm parser-reuse mode for 100 iterations:
+
+```bash
+cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- --mode warm --iterations 100 path/to/file.pl
+```
+
+Select input path (`str` default, or raw `bytes`):
+
+```bash
+cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- --input bytes path/to/file.pl
+```
+
+Supported flags:
+
+- `--mode <cold|warm>`
+  - `cold`: constructs a parser for each iteration
+  - `warm`: reuses a single configured parser across iterations
+- `--iterations <N>` / `-n <N>`: repeat parse loop `N` times
+- `--input <str|bytes>`
+  - `str`: parse through UTF-8 `&str` path
+  - `bytes`: parse via raw byte slice path
+
+Output format is stable `key=value` lines, ordered as:
+
+- `mode`
+- `input_mode`
+- `iterations`
+- `total_us`
+- `avg_us`
+- `has_error`
+- `status`
 
 ## Build Requirements
 
