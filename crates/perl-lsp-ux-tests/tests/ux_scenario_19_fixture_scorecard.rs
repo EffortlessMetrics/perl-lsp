@@ -1,7 +1,7 @@
 // Test infrastructure — allow scenario-oriented assertions and skips.
 #![allow(clippy::expect_used, clippy::panic)]
 
-//! Scenario 18 — fixture-backed editor-intelligence scorecard smoke.
+//! Scenario 19 — fixture-backed editor-intelligence scorecard smoke.
 //!
 //! This scenario runs a single JSON fixture that exercises the canonical LSP UX
 //! request/response surface in one place (hover/completion/navigation/symbols/

@@ -459,7 +459,7 @@
     },
     {
       "id": "fixture_backed_editor_intelligence_surface",
-      "scenario_file": "ux_scenario_18_fixture_scorecard.rs",
+      "scenario_file": "ux_scenario_19_fixture_scorecard.rs",
       "subsystem_owner": "editor_intelligence",
       "ci_tier": "pr",
       "user_journey": "exercise hover, completion, definition/declaration/references, symbols, rename, and diagnostics-after-edit from one executable fixture",
