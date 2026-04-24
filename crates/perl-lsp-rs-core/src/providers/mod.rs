@@ -12,6 +12,7 @@
 
 // Group 1 -- helpers (no inter-provider dependencies)
 pub mod completion_item;
+pub mod inheritance;
 pub mod symbol_query;
 
 // Group 2 -- consumers of Group 1 helpers
@@ -56,6 +57,7 @@ pub use code_lens::*;
 pub use color::*;
 pub use completion::*;
 pub use completion_item::*;
+pub use inheritance::*;
 pub use diagnostics::*;
 pub use document_highlight::*;
 pub use document_links::*;

@@ -7,7 +7,7 @@ use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
 use crate::util::token_under_cursor;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
 
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
@@ -477,17 +477,6 @@ fn find_plack_middleware_definition_location(
 }
 
 #[cfg(feature = "workspace")]
-pub(super) fn workspace_document_text(
-    workspace_index: &crate::workspace_index::WorkspaceIndex,
-    uri: &str,
-) -> Option<String> {
-    workspace_index.document_store().get_text(uri).or_else(|| {
-        crate::workspace_index::uri_to_fs_path(uri)
-            .and_then(|path| std::fs::read_to_string(path).ok())
-    })
-}
-
-#[cfg(feature = "workspace")]
 fn get_mojo_string_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     MOJO_STRING_ROUTE_RE
         .get_or_init(|| {
@@ -662,79 +651,13 @@ fn inherited_method_definition_location(
     receiver_pkg: &str,
     method_name: &str,
 ) -> Option<crate::workspace_index::Location> {
-    let mut visited = HashSet::from([receiver_pkg.to_string()]);
-    let mut queue = VecDeque::new();
-    let mut related_package_cache: HashMap<String, Vec<String>> = HashMap::new();
-
-    let mut enqueue_related_packages =
-        |package_name: &str, queue: &mut VecDeque<String>, visited: &HashSet<String>| {
-            let related_packages = related_package_cache
-                .entry(package_name.to_string())
-                .or_insert_with(|| {
-                    let Some(package_location) = workspace_index.find_definition(package_name)
-                    else {
-                        return Vec::new();
-                    };
-                    let Some(text) =
-                        workspace_document_text(workspace_index, &package_location.uri)
-                    else {
-                        return Vec::new();
-                    };
-
-                    let mut parser = Parser::new(&text);
-                    let Ok(ast) = parser.parse() else {
-                        return Vec::new();
-                    };
-
-                    crate::semantic::SemanticAnalyzer::analyze_with_source(&ast, &text)
-                        .class_models
-                        .into_iter()
-                        .find(|model| model.name == package_name)
-                        .map(|model| {
-                            // Include both parent classes and composed roles in the BFS
-                            // so that `with 'Role'` methods are resolved alongside
-                            // `extends`/`use parent` methods.
-                            // NOTE: BFS visited-set (above) handles diamond and circular inheritance.
-                            // NOTE: C3 MRO ordering is a pre-existing approximation; BFS does not
-                            // honour strict C3 order. Filed as follow-up (see issue #3482).
-                            model
-                                .parents
-                                .iter()
-                                .chain(model.roles.iter())
-                                .cloned()
-                                .collect::<Vec<_>>()
-                        })
-                        .unwrap_or_default()
-                })
-                .clone();
-
-            for related_package in related_packages {
-                if !visited.contains(&related_package) {
-                    queue.push_back(related_package);
-                }
-            }
-        };
-
-    enqueue_related_packages(receiver_pkg, &mut queue, &visited);
-
-    while let Some(package_name) = queue.pop_front() {
-        if !visited.insert(package_name.clone()) {
-            continue;
-        }
-
-        if let Some(location) =
-            find_workspace_definition_location(workspace_index, &package_name, method_name)
-        {
-            tracing::debug!(
-                receiver_pkg,
-                package_name,
-                method_name,
-                "resolved inherited/role method definition"
-            );
-            return Some(location);
-        }
-
-        enqueue_related_packages(&package_name, &mut queue, &visited);
+    if let Some(location) = perl_lsp_rs_core::providers::find_inherited_method_definition(
+        workspace_index,
+        receiver_pkg,
+        method_name,
+    ) {
+        tracing::debug!(receiver_pkg, method_name, "resolved inherited/role method definition");
+        return Some(location);
     }
 
     None
