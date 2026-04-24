@@ -7,7 +7,7 @@
 # when and how strictly they are enforced.
 #
 # Schema Version: 1
-# Last Updated: 2026-04-23
+# Last Updated: 2026-04-24
 # Related: justfile (ci-gate, ci-full), .github/workflows/ci.yml
 #
 # =============================================================================
@@ -268,6 +268,59 @@ gates:
       - parser
       - common
       - strict
+
+  - name: parser_corpus_ratchet
+    tier: merge_gate
+    description: "Parser corpus sweep ratchet check against committed system baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - ratchet
+
+  - name: cpan_corpus_ratchet
+    tier: merge_gate
+    description: "CPAN top-1000 parser sweep ratchet and known-clean manifest check"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- cpan-corpus sweep --enforce
+    timeout_seconds: 1200
+    retry_count: 0
+    budgets:
+      max_duration_ms: 1200000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - cpan
+      - ratchet
+
+  - name: parser_metrics_ratchet
+    tier: merge_gate
+    description: "Scorecard parser floor ratchet check"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- metrics ratchet-check parser
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 60000
+    quarantine: false
+    tags:
+      - metrics
+      - parser
+      - ratchet
 
   - name: security_audit
     tier: merge_gate
