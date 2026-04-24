@@ -9,7 +9,9 @@ mod dap_golden_transcripts {
     use anyhow::Result;
     use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
     use serde_json::{Value, json};
+    use std::collections::HashMap;
     use std::path::PathBuf;
+    use std::sync::mpsc::channel;
 
     fn transcript_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -60,6 +62,22 @@ mod dap_golden_transcripts {
                 }
             }
             _ => anyhow::bail!("expected response for {command}"),
+        }
+        Ok(())
+    }
+
+    fn assert_required_body_keys(
+        body: &Value,
+        required_body_keys: &[Value],
+        context: &str,
+    ) -> Result<()> {
+        for key in required_body_keys {
+            let key = key
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("requiredBodyKeys entries must be strings"))?;
+            if body.get(key).is_none() {
+                anyhow::bail!("{context} body missing required key: {key}");
+            }
         }
         Ok(())
     }
@@ -187,6 +205,155 @@ mod dap_golden_transcripts {
             }
             _ => anyhow::bail!("expected setBreakpoints response"),
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_reference_attach_full_sequence_conformance() -> Result<()> {
+        let transcript = load_transcript("reference_attach_full_sequence.json")?;
+        let messages = extract_messages(&transcript)?;
+
+        let required_commands = [
+            "initialize",
+            "attach",
+            "setBreakpoints",
+            "configurationDone",
+            "stackTrace",
+            "scopes",
+            "variables",
+            "evaluate",
+            "disconnect",
+        ];
+        for command in required_commands {
+            assert!(
+                messages.iter().any(|m| m["type"] == "request" && m["command"] == command),
+                "golden transcript must include request command: {command}"
+            );
+        }
+
+        let expected_events: Vec<&Value> =
+            messages.iter().filter(|m| m["type"] == "event").collect();
+
+        let mut response_expectations: HashMap<String, &Value> = HashMap::new();
+        for message in messages {
+            if message["type"] == "response" {
+                let command = message
+                    .get("command")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow::anyhow!("response message missing command"))?;
+                response_expectations.insert(command.to_string(), message);
+            }
+        }
+
+        let mut adapter = DebugAdapter::new();
+        let (sender, receiver) = channel();
+        adapter.set_event_sender(sender);
+
+        let mut next_request_seq = 1_i64;
+        let mut prev_response_seq = 0_i64;
+        let mut observed_events: Vec<DapMessage> = Vec::new();
+
+        for request in messages.iter().filter(|m| m["type"] == "request") {
+            let command = request
+                .get("command")
+                .and_then(Value::as_str)
+                .ok_or_else(|| anyhow::anyhow!("request message missing command"))?;
+            let arguments = request.get("arguments").map(resolve_workspace_vars);
+
+            let response = adapter.handle_request(next_request_seq, command, arguments);
+            match response {
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success,
+                    command: echoed_command,
+                    body,
+                    message,
+                } => {
+                    assert!(
+                        seq > prev_response_seq,
+                        "response seq must be monotonic for {command}"
+                    );
+                    prev_response_seq = seq;
+
+                    assert_eq!(
+                        request_seq, next_request_seq,
+                        "request_seq echo mismatch for {command}"
+                    );
+                    assert_eq!(echoed_command, command, "command echo mismatch for {command}");
+
+                    let expected = response_expectations
+                        .get(command)
+                        .ok_or_else(|| anyhow::anyhow!("no response expectation for {command}"))?;
+                    let expected_success =
+                        expected.get("success").and_then(Value::as_bool).ok_or_else(|| {
+                            anyhow::anyhow!("response expectation missing success for {command}")
+                        })?;
+                    assert_eq!(success, expected_success, "success mismatch for {command}");
+
+                    if let Some(required_body_keys) =
+                        expected.get("requiredBodyKeys").and_then(Value::as_array)
+                    {
+                        let body =
+                            body.ok_or_else(|| anyhow::anyhow!("{command} response missing body"))?;
+                        assert!(body.is_object(), "{command} response body must be an object");
+                        assert_required_body_keys(&body, required_body_keys, command)?;
+                    }
+
+                    if let Some(expected_message) =
+                        expected.get("requiredMessageContains").and_then(Value::as_str)
+                    {
+                        let actual_message = message.unwrap_or_default();
+                        assert!(
+                            actual_message.contains(expected_message),
+                            "{command} message must contain '{expected_message}', got: {actual_message}"
+                        );
+                    }
+                }
+                other => anyhow::bail!("expected response for {command}, got {other:?}"),
+            }
+
+            observed_events.extend(receiver.try_iter());
+            next_request_seq += 1;
+        }
+
+        assert_eq!(
+            observed_events.len(),
+            expected_events.len(),
+            "event count mismatch between replay and golden transcript"
+        );
+
+        let mut prev_event_seq = 0_i64;
+        for (idx, (actual, expected)) in
+            observed_events.iter().zip(expected_events.iter()).enumerate()
+        {
+            match actual {
+                DapMessage::Event { seq, event, body } => {
+                    assert!(
+                        *seq > prev_event_seq,
+                        "event seq must increase monotonically at index {idx}"
+                    );
+                    prev_event_seq = *seq;
+
+                    let expected_event = expected
+                        .get("event")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| anyhow::anyhow!("event expectation missing event name"))?;
+                    assert_eq!(event, expected_event, "event ordering mismatch at index {idx}");
+
+                    if let Some(required_body_keys) =
+                        expected.get("requiredBodyKeys").and_then(Value::as_array)
+                    {
+                        let body = body
+                            .as_ref()
+                            .ok_or_else(|| anyhow::anyhow!("expected body for event {event}"))?;
+                        assert_required_body_keys(body, required_body_keys, event)?;
+                    }
+                }
+                other => anyhow::bail!("expected DAP event at index {idx}, got {other:?}"),
+            }
+        }
+
         Ok(())
     }
 }

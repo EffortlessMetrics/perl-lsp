@@ -19,18 +19,29 @@
         "supportsSetVariable",
         "supportsCompletionsRequest",
         "supportsLoadedSourcesRequest"
+      ],
+      "expectedEvents": [
+        {
+          "event": "initialized"
+        }
       ]
     },
     {
       "command": "threads",
       "expectSuccess": true,
-      "requiredBodyKeys": ["threads"]
+      "requiredBodyKeys": [
+        "threads"
+      ]
     },
     {
       "command": "setExceptionBreakpoints",
-      "arguments": { "filters": [] },
+      "arguments": {
+        "filters": []
+      },
       "expectSuccess": true,
-      "requiredBodyKeys": ["breakpoints"]
+      "requiredBodyKeys": [
+        "breakpoints"
+      ]
     },
     {
       "command": "setBreakpoints",
@@ -39,7 +50,9 @@
         "breakpoints": []
       },
       "expectSuccess": true,
-      "requiredBodyKeys": ["breakpoints"]
+      "requiredBodyKeys": [
+        "breakpoints"
+      ]
     },
     {
       "command": "configurationDone",
@@ -47,42 +60,69 @@
     },
     {
       "command": "stackTrace",
-      "arguments": { "threadId": 1 },
+      "arguments": {
+        "threadId": 1
+      },
       "expectSuccess": true,
-      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+      "requiredBodyKeys": [
+        "stackFrames",
+        "totalFrames"
+      ]
     },
     {
       "command": "scopes",
-      "arguments": { "frameId": 1 },
+      "arguments": {
+        "frameId": 1
+      },
       "expectSuccess": true,
-      "requiredBodyKeys": ["scopes"]
+      "requiredBodyKeys": [
+        "scopes"
+      ]
     },
     {
       "command": "variables",
-      "arguments": { "variablesReference": 1 },
+      "arguments": {
+        "variablesReference": 1
+      },
       "expectSuccess": true,
-      "requiredBodyKeys": ["variables"]
+      "requiredBodyKeys": [
+        "variables"
+      ]
     },
     {
       "command": "evaluate",
-      "arguments": { "expression": "$x" },
+      "arguments": {
+        "expression": "$x"
+      },
       "expectSuccess": false,
       "requiredMessageContains": "No debugger session"
     },
     {
       "command": "completions",
-      "arguments": { "text": "$foo", "column": 2 },
+      "arguments": {
+        "text": "$foo",
+        "column": 2
+      },
       "expectSuccess": true,
-      "requiredBodyKeys": ["targets"]
+      "requiredBodyKeys": [
+        "targets"
+      ]
     },
     {
       "command": "loadedSources",
       "expectSuccess": true,
-      "requiredBodyKeys": ["sources"]
+      "requiredBodyKeys": [
+        "sources"
+      ]
     },
     {
       "command": "disconnect",
-      "expectSuccess": true
+      "expectSuccess": true,
+      "expectedEvents": [
+        {
+          "event": "terminated"
+        }
+      ]
     }
   ]
 }

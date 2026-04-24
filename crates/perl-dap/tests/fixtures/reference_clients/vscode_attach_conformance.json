@@ -1,0 +1,104 @@
+{
+  "client": "vscode-reference",
+  "description": "Richer attach-mode request/response/event conformance sweep",
+  "requests": [
+    {
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "perl",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "locale": "en-US"
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsEvaluateForHovers",
+        "supportsSetVariable"
+      ],
+      "expectedEvents": [
+        {
+          "event": "initialized"
+        }
+      ]
+    },
+    {
+      "command": "attach",
+      "arguments": {
+        "processId": 4242,
+        "stopOnEntry": false
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["threadId", "processId", "mode"],
+      "expectedEvents": [
+        {
+          "event": "stopped",
+          "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped"]
+        }
+      ]
+    },
+    {
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "path": "${workspaceFolder}/crates/perl-dap/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [{ "line": 9 }]
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "command": "configurationDone",
+      "expectSuccess": true
+    },
+    {
+      "command": "continue",
+      "arguments": { "threadId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["allThreadsContinued"],
+      "expectedEvents": [
+        {
+          "event": "continued",
+          "requiredBodyKeys": ["threadId", "allThreadsContinued"]
+        }
+      ]
+    },
+    {
+      "command": "stackTrace",
+      "arguments": { "threadId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "command": "scopes",
+      "arguments": { "frameId": 4242 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "command": "variables",
+      "arguments": { "variablesReference": 42421 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "command": "evaluate",
+      "arguments": { "expression": "$x" },
+      "expectSuccess": false,
+      "requiredMessageContains": "without an active debugger transport"
+    },
+    {
+      "command": "disconnect",
+      "expectSuccess": true,
+      "expectedEvents": [
+        {
+          "event": "terminated"
+        }
+      ]
+    }
+  ]
+}

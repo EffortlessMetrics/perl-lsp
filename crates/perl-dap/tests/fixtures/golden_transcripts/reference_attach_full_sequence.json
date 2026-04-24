@@ -1,0 +1,148 @@
+{
+  "name": "reference_attach_full_sequence",
+  "description": "Golden transcript for attach-mode lifecycle with inspection and evaluate fallback",
+  "messages": [
+    {
+      "type": "request",
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "perl",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true
+      }
+    },
+    {
+      "type": "response",
+      "command": "initialize",
+      "success": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsEvaluateForHovers"
+      ]
+    },
+    {
+      "type": "event",
+      "event": "initialized"
+    },
+    {
+      "type": "request",
+      "command": "attach",
+      "arguments": {
+        "processId": 9999,
+        "stopOnEntry": false
+      }
+    },
+    {
+      "type": "response",
+      "command": "attach",
+      "success": true,
+      "requiredBodyKeys": ["threadId", "processId", "mode"]
+    },
+    {
+      "type": "event",
+      "event": "stopped",
+      "requiredBodyKeys": ["reason", "threadId", "allThreadsStopped"]
+    },
+    {
+      "type": "request",
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {
+          "path": "${workspaceFolder}/crates/perl-dap/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [{ "line": 9 }]
+      }
+    },
+    {
+      "type": "response",
+      "command": "setBreakpoints",
+      "success": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "type": "request",
+      "command": "configurationDone"
+    },
+    {
+      "type": "response",
+      "command": "configurationDone",
+      "success": true
+    },
+    {
+      "type": "request",
+      "command": "continue",
+      "arguments": { "threadId": 9999 }
+    },
+    {
+      "type": "response",
+      "command": "continue",
+      "success": true,
+      "requiredBodyKeys": ["allThreadsContinued"]
+    },
+    {
+      "type": "event",
+      "event": "continued",
+      "requiredBodyKeys": ["threadId", "allThreadsContinued"]
+    },
+    {
+      "type": "request",
+      "command": "stackTrace",
+      "arguments": { "threadId": 9999 }
+    },
+    {
+      "type": "response",
+      "command": "stackTrace",
+      "success": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "type": "request",
+      "command": "scopes",
+      "arguments": { "frameId": 9999 }
+    },
+    {
+      "type": "response",
+      "command": "scopes",
+      "success": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "type": "request",
+      "command": "variables",
+      "arguments": { "variablesReference": 99991 }
+    },
+    {
+      "type": "response",
+      "command": "variables",
+      "success": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "type": "request",
+      "command": "evaluate",
+      "arguments": { "expression": "$x" }
+    },
+    {
+      "type": "response",
+      "command": "evaluate",
+      "success": false,
+      "requiredMessageContains": "without an active debugger transport"
+    },
+    {
+      "type": "request",
+      "command": "disconnect"
+    },
+    {
+      "type": "response",
+      "command": "disconnect",
+      "success": true
+    },
+    {
+      "type": "event",
+      "event": "terminated"
+    }
+  ]
+}
