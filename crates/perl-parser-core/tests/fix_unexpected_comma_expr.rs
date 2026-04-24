@@ -144,6 +144,14 @@ fn test_comma_as_sequence_operator() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_nullary_builtin_then_comma_return() {
+    // From File::Spec::Win32: nullary `shift` followed by comma operator.
+    // `shift` has no explicit arg here; comma starts the surrounding expr list.
+    let source = r#"sub canonpath { shift, return _canon_cat("/", @_ ) }"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]
@@ -273,6 +281,12 @@ fn test_map_with_comma_expr() {
 #[test]
 fn test_sort_with_custom_comparison() {
     let source = r#"my @sorted = sort { $a->{name} cmp $b->{name} } @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_subname_list_form() {
+    let source = r#"my @sorted = sort by_name @items;"#;
     assert_clean_parse(source);
 }
 
