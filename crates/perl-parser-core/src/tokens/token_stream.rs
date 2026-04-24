@@ -343,121 +343,19 @@ impl<'a> TokenStream<'a> {
     fn convert_lexer_token(token: LexerToken) -> Token {
         let kind = match &token.token_type {
             // Keywords
-            LexerTokenType::Keyword(kw) => match kw.as_ref() {
-                "my" => TokenKind::My,
-                "our" => TokenKind::Our,
-                "local" => TokenKind::Local,
-                "state" => TokenKind::State,
-                "sub" => TokenKind::Sub,
-                "if" => TokenKind::If,
-                "elsif" => TokenKind::Elsif,
-                "else" => TokenKind::Else,
-                "unless" => TokenKind::Unless,
-                "while" => TokenKind::While,
-                "until" => TokenKind::Until,
-                "for" => TokenKind::For,
-                "foreach" => TokenKind::Foreach,
-                "return" => TokenKind::Return,
-                "package" => TokenKind::Package,
-                "use" => TokenKind::Use,
-                "no" => TokenKind::No,
-                "BEGIN" => TokenKind::Begin,
-                "END" => TokenKind::End,
-                "CHECK" => TokenKind::Check,
-                "INIT" => TokenKind::Init,
-                "UNITCHECK" => TokenKind::Unitcheck,
-                "eval" => TokenKind::Eval,
-                "do" => TokenKind::Do,
-                "given" => TokenKind::Given,
-                "when" => TokenKind::When,
-                "default" => TokenKind::Default,
-                "try" => TokenKind::Try,
-                "catch" => TokenKind::Catch,
-                "field" => TokenKind::Field,
-                "finally" => TokenKind::Finally,
-                "continue" => TokenKind::Continue,
-                "next" => TokenKind::Next,
-                "last" => TokenKind::Last,
-                "redo" => TokenKind::Redo,
-                "goto" => TokenKind::Goto,
-                "class" => TokenKind::Class,
-                "method" => TokenKind::Method,
-                "format" => TokenKind::Format,
-                "undef" => TokenKind::Undef,
-                "defer" => TokenKind::Defer,
-                "and" => TokenKind::WordAnd,
-                "or" => TokenKind::WordOr,
-                "not" => TokenKind::WordNot,
-                "xor" => TokenKind::WordXor,
-                "cmp" => TokenKind::StringCompare,
-                "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
-                _ => TokenKind::Identifier,
-            },
+            LexerTokenType::Keyword(kw) => {
+                // Keep `qw` as identifier but handle specially in parsing.
+                if kw.as_ref() == "qw" {
+                    TokenKind::Identifier
+                } else {
+                    Self::keyword_token_kind(kw.as_ref()).unwrap_or(TokenKind::Identifier)
+                }
+            }
 
             // Operators
-            LexerTokenType::Operator(op) => match op.as_ref() {
-                "=" => TokenKind::Assign,
-                "+" => TokenKind::Plus,
-                "-" => TokenKind::Minus,
-                "*" => TokenKind::Star,
-                "/" => TokenKind::Slash,
-                "%" => TokenKind::Percent,
-                "**" => TokenKind::Power,
-                "<<" => TokenKind::LeftShift,
-                ">>" => TokenKind::RightShift,
-                "&" => TokenKind::BitwiseAnd,
-                "|" => TokenKind::BitwiseOr,
-                "^" => TokenKind::BitwiseXor,
-                "~" => TokenKind::BitwiseNot,
-                // Compound assignments
-                "+=" => TokenKind::PlusAssign,
-                "-=" => TokenKind::MinusAssign,
-                "*=" => TokenKind::StarAssign,
-                "/=" => TokenKind::SlashAssign,
-                "%=" => TokenKind::PercentAssign,
-                ".=" => TokenKind::DotAssign,
-                "&=" => TokenKind::AndAssign,
-                "|=" => TokenKind::OrAssign,
-                "^=" => TokenKind::XorAssign,
-                "**=" => TokenKind::PowerAssign,
-                "<<=" => TokenKind::LeftShiftAssign,
-                ">>=" => TokenKind::RightShiftAssign,
-                "&&=" => TokenKind::LogicalAndAssign,
-                "||=" => TokenKind::LogicalOrAssign,
-                "//=" => TokenKind::DefinedOrAssign,
-                "==" => TokenKind::Equal,
-                "!=" => TokenKind::NotEqual,
-                "=~" => TokenKind::Match,
-                "!~" => TokenKind::NotMatch,
-                "~~" => TokenKind::SmartMatch,
-                "<" => TokenKind::Less,
-                ">" => TokenKind::Greater,
-                "<=" => TokenKind::LessEqual,
-                ">=" => TokenKind::GreaterEqual,
-                "<=>" => TokenKind::Spaceship,
-                "&&" => TokenKind::And,
-                "||" => TokenKind::Or,
-                "!" => TokenKind::Not,
-                "//" => TokenKind::DefinedOr,
-                "->" => TokenKind::Arrow,
-                "=>" => TokenKind::FatArrow,
-                "." => TokenKind::Dot,
-                ".." => TokenKind::Range,
-                "..." => TokenKind::Ellipsis,
-                "++" => TokenKind::Increment,
-                "--" => TokenKind::Decrement,
-                "::" => TokenKind::DoubleColon,
-                "?" => TokenKind::Question,
-                ":" => TokenKind::Colon,
-                "\\" => TokenKind::Backslash,
-                // Sigils (when used as operators in certain contexts)
-                "$" => TokenKind::ScalarSigil,
-                "@" => TokenKind::ArraySigil,
-                // % is already handled as Percent above
-                // & is already handled as BitwiseAnd above
-                // * is already handled as Star above
-                _ => TokenKind::Unknown,
-            },
+            LexerTokenType::Operator(op) => {
+                Self::operator_token_kind(op.as_ref()).unwrap_or(TokenKind::Unknown)
+            }
 
             // Arrow tokens
             LexerTokenType::Arrow => TokenKind::Arrow,
@@ -529,5 +427,35 @@ impl<'a> TokenStream<'a> {
         };
 
         Token { kind, text: token.text, start: token.start, end: token.end }
+    }
+
+    fn keyword_token_kind(keyword: &str) -> Option<TokenKind> {
+        perl_token::TokenKind::keyword_spellings()
+            .iter()
+            .chain(
+                [
+                    (TokenKind::WordAnd, "and"),
+                    (TokenKind::WordOr, "or"),
+                    (TokenKind::WordNot, "not"),
+                    (TokenKind::WordXor, "xor"),
+                    (TokenKind::StringCompare, "cmp"),
+                ]
+                .iter(),
+            )
+            .find_map(|(kind, canonical)| (*canonical == keyword).then_some(*kind))
+    }
+
+    fn operator_token_kind(operator: &str) -> Option<TokenKind> {
+        perl_token::TokenKind::operator_spellings()
+            .iter()
+            .chain(
+                [
+                    // Sigils can be lexed as operators in some contexts.
+                    (TokenKind::ScalarSigil, "$"),
+                    (TokenKind::ArraySigil, "@"),
+                ]
+                .iter(),
+            )
+            .find_map(|(kind, canonical)| (*canonical == operator).then_some(*kind))
     }
 }
