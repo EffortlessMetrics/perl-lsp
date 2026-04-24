@@ -37,6 +37,8 @@ pub enum PosEnc {
     Utf16,
     /// UTF-8 encoding (Rust native) - counts UTF-8 bytes
     Utf8,
+    /// UTF-32 encoding - counts Unicode scalar values (Rust `char` units)
+    Utf32,
 }
 
 /// Convert LSP position to char index with UTF-16/UTF-8 encoding support
@@ -91,6 +93,11 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
                 char_idx += 1;
             }
             char_idx
+        }
+        PosEnc::Utf32 => {
+            // UTF-32: pos.character is Unicode scalar value offset.
+            // Rope stores char indices as Unicode scalar values, so this is direct.
+            pos.character as usize
         }
     };
 
@@ -150,6 +157,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
             let line_slice = rope.line(line);
             line_slice.chars().take(col_chars).map(|c| c.len_utf16() as u32).sum()
         }
+        PosEnc::Utf32 => col_chars as u32,
     };
 
     Position { line: line as u32, character }
@@ -310,5 +318,46 @@ mod tests {
         assert_eq!(pos2.line, 1);
         let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
         assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+
+    /// Test UTF-32 encoding handles Unicode scalar offsets directly.
+    #[test]
+    fn test_utf32_position_scalar_offset() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+
+        // UTF-32 counts Unicode scalar values (chars): h,i, ,emoji => x at 4
+        let pos = Position { line: 0, character: 4 };
+        let char_idx = lsp_pos_to_char(&rope, pos, PosEnc::Utf32);
+
+        assert_eq!(char_idx, 4, "UTF-32 scalar offset should map to char index");
+    }
+
+    /// Test byte_to_lsp_pos returns UTF-32 scalar offsets correctly.
+    #[test]
+    fn test_byte_to_lsp_pos_utf32_emoji() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+
+        // 'x' is at byte 7 and scalar offset 4
+        let pos = byte_to_lsp_pos(&rope, 7, PosEnc::Utf32);
+
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 4, "UTF-32 character should count scalar values");
+    }
+
+    /// Test roundtrip: byte -> UTF-32 position -> byte
+    #[test]
+    fn test_roundtrip_with_emoji_utf32() {
+        let rope = Rope::from_str("hi \u{1F600}x\nworld");
+
+        // Test 'x' position (byte 7)
+        let pos = byte_to_lsp_pos(&rope, 7, PosEnc::Utf32);
+        let back = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+        assert_eq!(back, 7, "UTF-32 roundtrip should preserve byte offset");
+
+        // Test 'w' position (byte 9, line 1)
+        let pos2 = byte_to_lsp_pos(&rope, 9, PosEnc::Utf32);
+        assert_eq!(pos2.line, 1);
+        let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf32);
+        assert_eq!(back2, 9, "UTF-32 roundtrip on second line should work");
     }
 }
