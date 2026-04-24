@@ -67,6 +67,11 @@ impl IncrementalEdit {
     pub fn is_after(&self, pos: usize) -> bool {
         self.start_byte >= pos
     }
+
+    /// Returns true when this edit range is ordered (not backwards).
+    pub fn has_ordered_range(&self) -> bool {
+        self.start_byte <= self.old_end_byte
+    }
 }
 
 /// Collection of incremental edits
@@ -96,6 +101,44 @@ impl IncrementalEditSet {
         self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
     }
 
+    /// Returns normalized reverse-ordered edits for deterministic application.
+    ///
+    /// Returns `None` when any edit is malformed (backwards range) or when edits
+    /// overlap on the original source document.
+    pub fn normalized_reverse(&self) -> Option<Vec<IncrementalEdit>> {
+        if self.edits.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let mut indexed: Vec<(usize, &IncrementalEdit)> = self.edits.iter().enumerate().collect();
+        indexed.sort_by_key(|(_, edit)| (edit.start_byte, edit.old_end_byte));
+
+        let mut previous_end: Option<usize> = None;
+        for (_, edit) in &indexed {
+            if !edit.has_ordered_range() {
+                return None;
+            }
+
+            if let Some(end) = previous_end
+                && edit.start_byte < end
+            {
+                return None;
+            }
+
+            previous_end = Some(edit.old_end_byte);
+        }
+
+        indexed.sort_by(|(left_idx, left), (right_idx, right)| {
+            right
+                .start_byte
+                .cmp(&left.start_byte)
+                .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+                .then_with(|| right_idx.cmp(left_idx))
+        });
+
+        Some(indexed.into_iter().map(|(_, edit)| edit.clone()).collect())
+    }
+
     /// Check if the edit set is empty
     pub fn is_empty(&self) -> bool {
         self.edits.is_empty()
@@ -112,21 +155,21 @@ impl IncrementalEditSet {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start
-        let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        let Some(sorted_edits) = self.normalized_reverse() else {
+            return source.to_string();
+        };
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            let start = edit.start_byte.min(result.len());
-            let end = edit.old_end_byte.min(result.len());
+            let start = edit.start_byte;
+            let end = edit.old_end_byte;
 
-            if start > end {
-                continue;
+            if end > result.len() || start > end {
+                return source.to_string();
             }
 
             if !result.is_char_boundary(start) || !result.is_char_boundary(end) {
-                continue;
+                return source.to_string();
             }
 
             result.replace_range(start..end, &edit.new_text);
@@ -177,5 +220,31 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_normalized_reverse_rejects_overlap() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "y".to_string()));
+
+        assert!(edits.normalized_reverse().is_none());
+    }
+
+    #[test]
+    fn test_normalized_reverse_preserves_zero_width_insertions() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(2, 2, "A".to_string()));
+        edits.add(IncrementalEdit::new(2, 2, "B".to_string()));
+
+        let normalized = if let Some(normalized) = edits.normalized_reverse() {
+            normalized
+        } else {
+            assert!(false, "zero-width insertions should be valid");
+            return;
+        };
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(normalized[0].new_text, "B");
+        assert_eq!(normalized[1].new_text, "A");
     }
 }
