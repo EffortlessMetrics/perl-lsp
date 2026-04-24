@@ -54,6 +54,10 @@ impl LspServer {
 }
 
 impl LspServer {
+    fn is_perltidy_enabled(&self) -> bool {
+        self.config.lock().perltidy_enabled
+    }
+
     /// Handle textDocument/onTypeFormatting request
     pub(crate) fn handle_on_type_formatting(
         &self,
@@ -91,6 +95,10 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        if !self.is_perltidy_enabled() {
+            return Ok(Some(json!([])));
+        }
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
 
@@ -153,6 +161,10 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        if !self.is_perltidy_enabled() {
+            return Ok(Some(json!([])));
+        }
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let ((start_line, start_char), (end_line, end_char)) = req_range(&params)?;
@@ -215,6 +227,10 @@ impl LspServer {
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
+        if !self.is_perltidy_enabled() {
+            return Ok(Some(json!([])));
+        }
+
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let options: FormattingOptions = serde_json::from_value(params["options"].clone())
