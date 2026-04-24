@@ -468,3 +468,34 @@ async fn test_empty_environment_handling() -> Result<()> {
 
     Ok(())
 }
+
+/// Test: proxy_messages reports clear lifecycle error before spawn
+#[tokio::test]
+async fn test_bridge_proxy_requires_spawn() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    let mut adapter = BridgeAdapter::new();
+    let err =
+        adapter.proxy_messages().await.err().ok_or_else(|| {
+            anyhow::anyhow!("proxy_messages unexpectedly succeeded without spawn")
+        })?;
+    let message = err.to_string();
+    assert!(
+        message.contains("spawn_pls_dap"),
+        "lifecycle guidance should mention spawn_pls_dap, got: {message}"
+    );
+
+    Ok(())
+}
+
+/// Test: shutdown is idempotent even when no bridge process exists
+#[tokio::test]
+async fn test_bridge_shutdown_is_idempotent_without_spawn() -> Result<()> {
+    use perl_dap::BridgeAdapter;
+
+    let mut adapter = BridgeAdapter::new();
+    adapter.shutdown().await?;
+    adapter.shutdown().await?;
+
+    Ok(())
+}

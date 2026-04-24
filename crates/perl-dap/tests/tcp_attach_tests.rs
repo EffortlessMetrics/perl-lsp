@@ -278,3 +278,79 @@ fn test_tcp_attach_reader_handles_concatenated_frames() {
 
     must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
 }
+
+#[test]
+fn test_tcp_attach_connect_timeout_reports_address() {
+    // Port 9 (discard) is expected to be closed in local test environments.
+    let mut session = TcpAttachSession::new();
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), 9).with_timeout(50);
+
+    let err = must(session.connect(&config).err().ok_or("connect unexpectedly succeeded"));
+    let message = err.to_string();
+    assert!(message.contains("127.0.0.1:9"), "error should include address: {message}");
+}
+
+#[test]
+fn test_tcp_attach_reader_emits_terminated_when_remote_closes() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (socket, _) = must(listener.accept());
+        drop(socket);
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    let event = must(event_rx.recv_timeout(Duration::from_secs(2)));
+    match event {
+        DapEvent::Terminated { reason } => {
+            assert_eq!(reason, "connection_closed");
+        }
+        other => must(Err::<(), _>(format!("Expected Terminated event, got {other:?}"))),
+    }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_can_reconnect_after_disconnect() {
+    let first_listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let first_port = must(first_listener.local_addr()).port();
+    let first_server = thread::spawn(move || {
+        let (socket, _) = must(first_listener.accept());
+        drop(socket);
+    });
+
+    let second_listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let second_port = must(second_listener.local_addr()).port();
+    let second_server = thread::spawn(move || {
+        let (socket, _) = must(second_listener.accept());
+        drop(socket);
+    });
+
+    let mut session = TcpAttachSession::new();
+    let first_config = TcpAttachConfig::new("127.0.0.1".to_string(), first_port).with_timeout(2000);
+    must(session.connect(&first_config));
+    assert!(session.is_connected());
+
+    must(session.disconnect());
+    assert!(!session.is_connected());
+
+    let second_config =
+        TcpAttachConfig::new("127.0.0.1".to_string(), second_port).with_timeout(2000);
+    must(session.connect(&second_config));
+    assert!(session.is_connected());
+
+    must(session.disconnect());
+    assert!(!session.is_connected());
+
+    must(first_server.join().map_err(|_| "First server panicked".to_string()));
+    must(second_server.join().map_err(|_| "Second server panicked".to_string()));
+}

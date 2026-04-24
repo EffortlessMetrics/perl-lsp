@@ -8,7 +8,7 @@ use perl_lsp_rs_core::transport::framing::frame;
 use serde_json::{Value, json};
 use std::error::Error;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener};
 use std::sync::mpsc::{Receiver, channel};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -76,28 +76,30 @@ fn event_body(message: &DapMessage) -> Option<&Value> {
     }
 }
 
-#[test]
-fn dap_attach_e2e_tcp_loopback() -> TestResult {
+fn spawn_fake_debugger(
+    send_stopped: bool,
+) -> Result<(SocketAddr, thread::JoinHandle<()>), Box<dyn Error>> {
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
-    let port = listener.local_addr()?.port();
-
+    let address = listener.local_addr()?;
     let server_handle = thread::spawn(move || {
         let result = (|| -> Result<(), Box<dyn Error + Send + Sync>> {
             let (mut socket, _) = listener.accept()?;
 
-            let stopped_event = json!({
-                "type": "event",
-                "seq": 1,
-                "event": "stopped",
-                "body": {
-                    "reason": "breakpoint",
-                    "threadId": 7,
-                    "allThreadsStopped": true
-                }
-            })
-            .to_string();
-            socket.write_all(&frame(stopped_event.as_bytes()))?;
-            socket.flush()?;
+            if send_stopped {
+                let stopped_event = json!({
+                    "type": "event",
+                    "seq": 1,
+                    "event": "stopped",
+                    "body": {
+                        "reason": "breakpoint",
+                        "threadId": 7,
+                        "allThreadsStopped": true
+                    }
+                })
+                .to_string();
+                socket.write_all(&frame(stopped_event.as_bytes()))?;
+                socket.flush()?;
+            }
 
             let mut buf = [0u8; 512];
             loop {
@@ -116,6 +118,13 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
             panic!("fake TCP debugger server failed: {err}");
         }
     });
+    Ok((address, server_handle))
+}
+
+#[test]
+fn dap_attach_e2e_tcp_loopback() -> TestResult {
+    let (address, server_handle) = spawn_fake_debugger(true)?;
+    let port = address.port();
 
     let timeout = smoke_timeout();
     let mut adapter = DebugAdapter::new();
@@ -159,5 +168,73 @@ fn dap_attach_e2e_tcp_loopback() -> TestResult {
     let _terminated = wait_for_event(&rx, "terminated", timeout)?;
 
     server_handle.join().map_err(|_| std::io::Error::other("fake TCP debugger server panicked"))?;
+    Ok(())
+}
+
+#[test]
+fn dap_attach_e2e_reconnect_and_terminate() -> TestResult {
+    let timeout = smoke_timeout();
+    let mut adapter = DebugAdapter::new();
+    let (tx, rx) = channel();
+    adapter.set_event_sender(tx);
+
+    response_success(adapter.handle_request(1, "initialize", None), "initialize")?;
+    let _initialized = wait_for_event(&rx, "initialized", timeout)?;
+
+    let (first_address, first_server) = spawn_fake_debugger(false)?;
+    response_success(
+        adapter.handle_request(
+            2,
+            "attach",
+            Some(json!({
+                "host": "127.0.0.1",
+                "port": first_address.port(),
+                "timeout": 2000,
+                "stopOnEntry": true
+            })),
+        ),
+        "attach",
+    )?;
+
+    let first_stopped = wait_for_event(&rx, "stopped", timeout)?;
+    let first_stopped_body =
+        event_body(&first_stopped).ok_or("first stopped event missing body")?;
+    assert_eq!(first_stopped_body.get("reason").and_then(Value::as_str), Some("entry"));
+
+    response_success(
+        adapter.handle_request(3, "terminate", Some(json!({"restart": true}))),
+        "terminate",
+    )?;
+    let terminated = wait_for_event(&rx, "terminated", timeout)?;
+    let terminated_body = event_body(&terminated).ok_or("terminated event missing body")?;
+    assert_eq!(terminated_body.get("restart").and_then(Value::as_bool), Some(true));
+
+    first_server
+        .join()
+        .map_err(|_| std::io::Error::other("first fake debugger server panicked"))?;
+
+    let (second_address, second_server) = spawn_fake_debugger(true)?;
+    response_success(
+        adapter.handle_request(
+            4,
+            "attach",
+            Some(json!({
+                "host": "127.0.0.1",
+                "port": second_address.port(),
+                "timeout": 2000
+            })),
+        ),
+        "attach",
+    )?;
+
+    let second_stopped = wait_for_event(&rx, "stopped", timeout)?;
+    let second_body = event_body(&second_stopped).ok_or("second stopped event missing body")?;
+    assert_eq!(second_body.get("reason").and_then(Value::as_str), Some("breakpoint"));
+
+    response_success(adapter.handle_request(5, "disconnect", Some(json!({}))), "disconnect")?;
+    let _ = wait_for_event(&rx, "terminated", timeout)?;
+    second_server
+        .join()
+        .map_err(|_| std::io::Error::other("second fake debugger server panicked"))?;
     Ok(())
 }
