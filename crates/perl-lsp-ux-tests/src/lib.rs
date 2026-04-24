@@ -46,14 +46,18 @@
 
 pub mod client;
 pub mod env;
+pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
+pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 /// Configuration for a UX scenario.
@@ -150,6 +154,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -171,7 +176,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -180,7 +185,37 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
+        Ok(())
+    }
+
+    /// Apply a full-document text replacement and send `textDocument/didChange`.
+    pub fn change_file_full(&self, relative_path: &str, updated_content: &str) -> Result<()> {
+        self.workspace.write(relative_path, updated_content)?;
+        let uri = self.workspace.uri(relative_path);
+        let version = {
+            let mut versions = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = versions.entry(uri.clone()).or_insert(1);
+            *entry += 1;
+            *entry
+        };
+        self.client.did_change_full(&uri, version, updated_content)
+    }
+
+    /// Open a file in the LSP server with an explicit language identifier.
+    ///
+    /// Useful for UX regressions where the editor mode intentionally differs
+    /// from the file extension (for example, opening `*.html.ep` as HTML).
+    pub fn open_file_with_language_id(
+        &self,
+        relative_path: &str,
+        content: &str,
+        language_id: &str,
+    ) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_open_with_language_id(&uri, content, language_id)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -451,97 +486,11 @@ impl UxHarness {
                 if resp["result"].is_null() {
                     Ok(Vec::new())
                 } else {
+                    // Single location object
                     Ok(vec![resp["result"].clone()])
                 }
             }
         }
-    }
-
-    /// Request references.
-    pub fn references(
-        &self,
-        relative_path: &str,
-        line: u32,
-        character: u32,
-        include_declaration: bool,
-    ) -> Result<Vec<Value>> {
-        let uri = self.workspace.uri(relative_path);
-        let resp = self.client.request(
-            "textDocument/references",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character },
-                "context": { "includeDeclaration": include_declaration }
-            }),
-            self.config.timeout,
-        )?;
-        if resp.get("error").is_some() {
-            return Err(anyhow!("references returned error: {}", resp["error"]));
-        }
-        match resp["result"].as_array() {
-            Some(locs) => Ok(locs.clone()),
-            None => {
-                if resp["result"].is_null() {
-                    Ok(Vec::new())
-                } else {
-                    Ok(vec![resp["result"].clone()])
-                }
-            }
-        }
-    }
-
-    /// Request rename edits for a symbol.
-    ///
-    /// Returns `None` when the server reports no workspace edit.
-    pub fn rename(
-        &self,
-        relative_path: &str,
-        line: u32,
-        character: u32,
-        new_name: &str,
-    ) -> Result<Option<Value>> {
-        let uri = self.workspace.uri(relative_path);
-        let resp = self.client.request(
-            "textDocument/rename",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character },
-                "newName": new_name
-            }),
-            self.config.timeout,
-        )?;
-        if resp.get("error").is_some() {
-            return Err(anyhow!("rename returned error: {}", resp["error"]));
-        }
-        if resp["result"].is_null() {
-            return Ok(None);
-        }
-        Ok(Some(resp["result"].clone()))
-    }
-
-    /// Publish a full-document change and overwrite the corresponding workspace file.
-    pub fn change_file_full(
-        &self,
-        relative_path: &str,
-        new_text: &str,
-        version: u32,
-    ) -> Result<()> {
-        self.workspace.write(relative_path, new_text)?;
-        let uri = self.workspace.uri(relative_path);
-        self.client.notify(
-            "textDocument/didChange",
-            json!({
-                "textDocument": {
-                    "uri": uri,
-                    "version": version
-                },
-                "contentChanges": [
-                    {
-                        "text": new_text
-                    }
-                ]
-            }),
-        )
     }
 
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
