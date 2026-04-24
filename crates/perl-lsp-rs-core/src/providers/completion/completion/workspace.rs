@@ -14,6 +14,7 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -240,7 +241,11 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    effective_include_paths: &[PathBuf],
+    system_include_paths: &[PathBuf],
 ) {
+    let _ = (effective_include_paths, system_include_paths);
+
     let Some(index) = workspace_index else {
         return;
     };
