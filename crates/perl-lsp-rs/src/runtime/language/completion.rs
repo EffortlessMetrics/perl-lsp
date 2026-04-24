@@ -315,6 +315,17 @@ impl LspServer {
 
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
+            let include_paths = self.include_paths_for_doc(uri);
+            let system_inc_paths = self
+                .config_for_doc(uri)
+                .map(|mut config| {
+                    if config.use_system_inc {
+                        config.get_system_inc().to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .unwrap_or_default();
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -332,15 +343,22 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -544,6 +562,17 @@ impl LspServer {
 
             // Use routing to determine workspace index access mode
             let workspace_mode = route_index_access(self.coordinator());
+            let include_paths = self.include_paths_for_doc(uri);
+            let system_inc_paths = self
+                .config_for_doc(uri)
+                .map(|mut config| {
+                    if config.use_system_inc {
+                        config.get_system_inc().to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .unwrap_or_default();
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
@@ -574,14 +603,21 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(

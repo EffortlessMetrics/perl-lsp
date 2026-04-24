@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
 }
 
 impl CompletionProvider {
@@ -200,7 +203,7 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_source_and_paths(ast, "", workspace_index, Vec::new(), Vec::new())
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +252,20 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_source_and_paths(ast, source, workspace_index, Vec::new(), Vec::new())
+    }
+
+    /// Create a completion provider with explicit include paths and system `@INC` paths.
+    ///
+    /// This constructor is used by runtime handlers that resolve document-scoped workspace
+    /// configuration and need to pass effective include data into module completion plumbing.
+    pub fn new_with_index_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +275,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -770,6 +795,7 @@ impl CompletionProvider {
             );
         } else if context.in_use_statement && !context.prefix.starts_with('$') {
             // Module name completion after `use` or `require`
+            let _module_search_paths = (&self.include_paths, &self.system_inc_paths);
             workspace::add_use_module_completions(
                 &mut completions,
                 &context,
@@ -3375,6 +3401,65 @@ sub helper { }
             !completions.iter().any(|c| c.label == "OtherLib"),
             "use MyA should not suggest OtherLib"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_provider_carries_document_specific_inc_paths() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let include_paths = vec![PathBuf::from("/workspace/project/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_source_and_paths(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+        Ok(())
+    }
+
+    #[test]
+    fn test_empty_inc_paths_preserve_module_completion_behavior()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(Url::parse("file:///lib/MyApp.pm")?, "package MyApp;\n1;\n".to_string())?;
+        index.index_file(
+            Url::parse("file:///lib/OtherLib.pm")?,
+            "package OtherLib;\n1;\n".to_string(),
+        )?;
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let baseline_provider = CompletionProvider::new_with_index_and_source(
+            &ast,
+            code,
+            Some(Arc::clone(&index)),
+        );
+        let baseline = baseline_provider.get_completions(code, code.len());
+
+        let explicit_empty_provider = CompletionProvider::new_with_index_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            Vec::new(),
+            Vec::new(),
+        );
+        let with_empty_paths = explicit_empty_provider.get_completions(code, code.len());
+
+        let baseline_labels: Vec<(String, CompletionItemKind)> =
+            baseline.into_iter().map(|item| (item.label, item.kind)).collect();
+        let with_empty_labels: Vec<(String, CompletionItemKind)> =
+            with_empty_paths.into_iter().map(|item| (item.label, item.kind)).collect();
+        assert_eq!(baseline_labels, with_empty_labels);
         Ok(())
     }
 
