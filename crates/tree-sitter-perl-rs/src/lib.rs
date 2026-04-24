@@ -54,6 +54,8 @@
 
 use perl_ast::Node as AstNode;
 use perl_parser_core::Parser as CoreParser;
+use perl_semantic_analyzer::analysis::declaration;
+use perl_semantic_analyzer::analysis::semantic::SemanticAnalyzer;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -199,6 +201,109 @@ pub fn language() -> PerlLanguage {
 /// The [`PerlLanguage`] descriptor as a constant.
 pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
 
+/// Lightweight semantic overlay API (experimental).
+///
+/// This facade exposes a small set of high-signal semantic queries over a
+/// parsed [`Tree`]. It is intentionally read-only and intentionally limited
+/// while the API shape is validated.
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct SemanticOverlay<'tree> {
+    root: &'tree AstNode,
+    source: &'tree str,
+}
+
+impl<'tree> SemanticOverlay<'tree> {
+    /// Returns the effective package at `offset` (defaults to `"main"`).
+    pub fn package_at_offset(&self, offset: usize) -> String {
+        declaration::current_package_at(self.root, offset).to_string()
+    }
+
+    /// Finds a package declaration whose span covers `offset`.
+    pub fn package_declaration_at(&self, offset: usize) -> Option<PackageDeclaration> {
+        let package_name = declaration::current_package_at(self.root, offset);
+        if package_name == "main" {
+            return None;
+        }
+        find_latest_package_declaration(self.root, offset, package_name)
+    }
+
+    /// Finds a semantic definition for the symbol at `offset`.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<SemanticDefinition> {
+        let analyzer = SemanticAnalyzer::analyze_with_source(self.root, self.source);
+        analyzer.find_definition(offset).map(SemanticDefinition::from_symbol)
+    }
+
+    /// Finds a semantic definition using the start of `node` as lookup anchor.
+    pub fn definition_at_node(&self, node: Node<'tree>) -> Option<SemanticDefinition> {
+        self.definition_at_offset(node.start_byte())
+    }
+
+    /// Finds visible `use Module ...` imports at `offset`.
+    ///
+    /// This is a conservative lexical view intended for ergonomic editor use.
+    pub fn visible_imports_at(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut imports = Vec::new();
+        collect_visible_imports(self.root, offset, &mut imports);
+        imports
+    }
+
+    /// Returns the effective pragma state at `offset`.
+    pub fn effective_pragma_state_at(
+        &self,
+        offset: usize,
+    ) -> perl_parser_core::pragma_tracker::PragmaState {
+        let map = perl_parser_core::pragma_tracker::PragmaTracker::build(self.root);
+        perl_parser_core::pragma_tracker::PragmaTracker::state_for_offset(&map, offset)
+    }
+}
+
+/// Package declaration data returned by [`SemanticOverlay::package_declaration_at`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PackageDeclaration {
+    /// Package name (for example `My::Module`).
+    pub name: String,
+    /// Full declaration span (byte offsets).
+    pub declaration_span: std::ops::Range<usize>,
+    /// Package-name token span (byte offsets).
+    pub name_span: std::ops::Range<usize>,
+}
+
+/// Definition data returned by semantic lookup methods.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SemanticDefinition {
+    /// Bare symbol name.
+    pub name: String,
+    /// Fully-qualified symbol name.
+    pub qualified_name: String,
+    /// Symbol declaration span (byte offsets).
+    pub definition_span: std::ops::Range<usize>,
+}
+
+impl SemanticDefinition {
+    fn from_symbol(symbol: &perl_semantic_analyzer::analysis::symbol::Symbol) -> Self {
+        Self {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            definition_span: symbol.location.start..symbol.location.end,
+        }
+    }
+}
+
+/// One visible module import (`use Module ...`) at a byte offset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Imported module name.
+    pub module: String,
+    /// Raw import arguments captured from the AST.
+    pub args: Vec<String>,
+    /// Span of the `use` statement.
+    pub span: std::ops::Range<usize>,
+}
+
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
 /// Use [`root_node`][Tree::root_node] to begin traversal.
@@ -219,6 +324,14 @@ impl Tree {
     /// Returns the source text this tree was built from.
     pub fn source(&self) -> &str {
         &self.source
+    }
+
+    /// Returns an experimental semantic overlay view over this tree.
+    ///
+    /// This API is intentionally limited and read-only while the facade surface
+    /// is validated.
+    pub fn semantic_overlay(&self) -> SemanticOverlay<'_> {
+        SemanticOverlay { root: &self.root, source: &self.source }
     }
 
     /// Records a source edit on this tree, invalidating affected byte ranges.
@@ -540,6 +653,60 @@ fn pascal_to_snake(s: &str) -> String {
     out
 }
 
+fn find_latest_package_declaration(
+    node: &AstNode,
+    offset: usize,
+    package_name: &str,
+) -> Option<PackageDeclaration> {
+    let mut best = None;
+    if let perl_ast::NodeKind::Package { name, name_span, .. } = &node.kind
+        && name == package_name
+        && node.location.start <= offset
+    {
+        best = Some(PackageDeclaration {
+            name: name.clone(),
+            declaration_span: node.location.start..node.location.end,
+            name_span: name_span.start..name_span.end,
+        });
+    }
+
+    for child in ast_children(node) {
+        if child.location.start > offset {
+            break;
+        }
+        if let Some(candidate) = find_latest_package_declaration(child, offset, package_name) {
+            best = Some(candidate);
+        }
+    }
+
+    best
+}
+
+fn collect_visible_imports(node: &AstNode, offset: usize, out: &mut Vec<VisibleImport>) {
+    if offset < node.location.start || offset > node.location.end {
+        return;
+    }
+
+    for child in ast_children(node) {
+        if child.location.start > offset {
+            break;
+        }
+
+        if let perl_ast::NodeKind::Use { module, args, .. } = &child.kind {
+            out.push(VisibleImport {
+                module: module.clone(),
+                args: args.clone(),
+                span: child.location.start..child.location.end,
+            });
+        }
+
+        if offset <= child.location.end {
+            collect_visible_imports(child, offset, out);
+            break;
+        }
+    }
+}
+
 fn byte_to_point(source: &str, byte: usize) -> Point {
     let clamped = byte.min(source.len());
     let mut row = 0usize;
@@ -565,6 +732,45 @@ fn byte_to_point(source: &str, byte: usize) -> Point {
 mod tests {
     use super::*;
     use perl_tdd_support::must_some;
+
+    #[test]
+    fn test_semantic_overlay_package_and_import_queries() {
+        let source = "package My::Pkg;\nuse strict;\nuse warnings;\nmy $x = 1;";
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+
+        let x_offset = source.find("$x").unwrap_or(0);
+        let pkg = overlay.package_at_offset(x_offset);
+        assert_eq!(pkg, "My::Pkg");
+
+        let imports = overlay.visible_imports_at(x_offset);
+        assert!(imports.iter().any(|item| item.module == "strict"));
+        assert!(imports.iter().any(|item| item.module == "warnings"));
+
+        let strict_offset = source.find("strict").unwrap_or(0);
+        let maybe_decl = overlay.package_declaration_at(strict_offset);
+        assert!(maybe_decl.is_some());
+        let decl = must_some(maybe_decl);
+        assert_eq!(decl.name, "My::Pkg");
+    }
+
+    #[test]
+    fn test_semantic_overlay_definition_and_pragma_queries() {
+        let source = "use strict;\nmy $x = 1;\n$x++;";
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+
+        let ref_offset = source.rfind("$x").unwrap_or(0);
+        let maybe_def = overlay.definition_at_offset(ref_offset);
+        assert!(maybe_def.is_some());
+        let def = must_some(maybe_def);
+        assert_eq!(def.name, "x");
+
+        let state = overlay.effective_pragma_state_at(ref_offset);
+        assert!(state.strict_vars);
+    }
 
     #[test]
     fn test_parser_creates_tree() {

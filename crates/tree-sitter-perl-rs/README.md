@@ -47,6 +47,7 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Parser::parse(&mut self, source: &str) -> Option<Tree>` | Parse Perl source; `None` only on complete failure |
 | `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
 | `Tree::source() -> &str` | Source text this tree was built from |
+| `Tree::semantic_overlay() -> SemanticOverlay<'_>` | Experimental semantic query facade |
 | `Node::kind() -> &'static str` | Node type name (e.g. `"Program"`, `"Subroutine"`) |
 | `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
 | `Node::child_count() -> usize` | Number of direct children |
@@ -58,6 +59,19 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Node::is_leaf() -> bool` | `true` if the node has no children |
 | `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
+
+### Experimental semantic overlay (limited)
+
+`tree-sitter-perl-rs` now exposes a **small, read-only semantic overlay** to
+provide tree-sitter-style ergonomics for common semantic tasks:
+
+- package/declaration lookup
+- definition lookup at offset/node
+- visible imports at offset
+- effective pragma state at offset
+
+This surface is intentionally in-development and intentionally narrow; use it
+for high-value editor queries, not broad compatibility guarantees.
 
 ## Error tolerance
 
