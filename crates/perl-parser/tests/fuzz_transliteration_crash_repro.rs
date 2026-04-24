@@ -1,18 +1,4 @@
-/// Minimal reproduction case for transliteration parsing bug discovered in fuzz testing
-///
-/// CRASH DETAILS:
-/// - Input: "tr/abc/xyz/"
-/// - Expected: ("abc", "xyz", "")
-/// - Actual: ("abc", "", "xyz")
-///
-/// This indicates a critical bug in extract_transliteration_parts where the replacement
-/// and modifiers are being swapped for non-paired delimiters.
-///
-/// IMPACT: This affects Perl transliteration operator parsing throughout the entire
-/// parser pipeline, potentially causing incorrect syntax highlighting, code analysis,
-/// and refactoring operations.
-///
-/// REPRODUCTION: Run with `cargo test -p perl-parser --test fuzz_transliteration_crash_repro`
+/// Regression bank for fuzz-discovered transliteration extraction failures.
 use perl_parser::quote_parser::extract_transliteration_parts;
 
 #[test]
@@ -20,37 +6,64 @@ fn minimal_transliteration_crash_repro() {
     let input = "tr/abc/xyz/";
     let (search, replace, modifiers) = extract_transliteration_parts(input);
 
-    println!("FUZZ BUG REPRODUCED: tr// parsing issue");
-    println!("Input: {}", input);
-    println!("Expected: ('abc', 'xyz', '')");
-    println!("Actual: ('{}', '{}', '{}')", search, replace, modifiers);
-
-    // Demonstrate the bug - these will fail due to the parsing issue
     assert_eq!(search.as_str(), "abc", "Search pattern incorrect");
     assert_eq!(replace.as_str(), "xyz", "Replace pattern incorrect");
     assert_eq!(modifiers.as_str(), "", "Modifiers incorrect");
 }
 
 #[test]
-fn fuzz_transliteration_regression_suite() {
-    // Test additional variants that likely have the same bug
-    let test_cases = vec![
+fn transliteration_non_paired_delimiters_regression_bank() {
+    let test_cases = [
+        ("tr/abc/xyz/", ("abc", "xyz", "")),
         ("y/abc/xyz/", ("abc", "xyz", "")),
         ("tr/a/b/d", ("a", "b", "d")),
-        ("y/x/y/g", ("x", "y", "")), // 'g' is not a valid transliteration modifier
-        ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // This might work correctly with paired delimiters
+        ("y/x/y/g", ("x", "y", "")),
+        ("tr!a\\!!b\\!!cdr", ("a\\!", "b\\!", "cdr")),
+        ("tr /a/b/d", ("a", "b", "d")),
     ];
 
     for (input, expected) in test_cases {
         let (search, replace, modifiers) = extract_transliteration_parts(input);
         let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "input: {input}");
+    }
+}
 
-        println!("Testing: {} -> expected {:?}, got {:?}", input, expected, actual);
+#[test]
+fn transliteration_paired_delimiters_regression_bank() {
+    let test_cases = [
+        ("tr{abc}{xyz}d", ("abc", "xyz", "d")),
+        ("tr[abc][xyz]cdr", ("abc", "xyz", "cdr")),
+        ("tr<abc>{xyz}s", ("abc", "xyz", "s")),
+        ("y(a(b)c)(x(y)z)r", ("a(b)c", "x(y)z", "r")),
+    ];
 
-        if actual != expected {
-            println!("  BUG CONFIRMED in variant: {}", input);
-        } else {
-            println!("  PASSED: {}", input);
-        }
+    for (input, expected) in test_cases {
+        let (search, replace, modifiers) = extract_transliteration_parts(input);
+        let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "input: {input}");
+    }
+}
+
+#[test]
+fn transliteration_malformed_is_non_panicking_and_does_not_leak_modifiers() {
+    let malformed_cases = [
+        ("tr", ("", "", "")),
+        ("trabc", ("", "", "")),
+        ("tr/abc", ("abc", "", "")),
+        ("tr/abc/xyz", ("abc", "xyz", "")),
+        ("tr{abc}{xyz", ("abc", "xyz", "")),
+        ("tr{abc}xyzcdr", ("abc", "", "")),
+    ];
+
+    for (input, expected) in malformed_cases {
+        let result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
+        assert!(result.is_ok(), "input panicked: {input}");
+        let (search, replace, modifiers) = match result {
+            Ok(parts) => parts,
+            Err(_) => unreachable!("asserted is_ok above"),
+        };
+        let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "input: {input}");
     }
 }
