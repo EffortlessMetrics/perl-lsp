@@ -3,9 +3,9 @@
 //! These scenarios describe pragma behavior from a consumer point of view:
 //! "Given <context>, when <construct appears>, then <effective state>."
 
-use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_ast::SourceLocation;
+use perl_pragma::{PragmaQueryCursor, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -142,8 +142,8 @@ fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available
 }
 
 #[test]
-fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_strings_are_enabled()
- {
+fn given_use_feature_qw_when_querying_state_then_requested_features_and_unicode_strings_are_enabled(
+) {
     let ast = program(vec![use_node("feature", &["'qw(signatures unicode_strings)'"], 0, 41)]);
     let map = PragmaTracker::build(&ast);
 
@@ -177,8 +177,8 @@ fn given_use_feature_signatures_when_querying_state_then_effective_strict_modes_
 }
 
 #[test]
-fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are()
- {
+fn given_use_v5_38_when_querying_state_then_switch_feature_is_not_available_but_modern_features_are(
+) {
     let ast = program(vec![use_node("v5.38", &[], 0, 10)]);
     let map = PragmaTracker::build(&ast);
 
@@ -312,4 +312,35 @@ fn given_unitcheck_block_with_use_strict_when_querying_after_block_then_strict_i
     assert!(!after_unitcheck.strict_vars);
     assert!(!after_unitcheck.strict_subs);
     assert!(!after_unitcheck.strict_refs);
+}
+
+#[test]
+fn given_pragmas_when_querying_final_state_then_last_effective_state_is_returned() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+}
+
+#[test]
+fn given_monotonic_lookups_when_using_cursor_then_states_match_offset_queries() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = PragmaQueryCursor::new();
+    let s1 = cursor.state_for_offset(&map, 8);
+    let s2 = cursor.state_for_offset(&map, 30);
+    let s3 = cursor.state_for_offset(&map, 50);
+
+    assert_eq!(s1, PragmaTracker::state_for_offset(&map, 8));
+    assert_eq!(s2, PragmaTracker::state_for_offset(&map, 30));
+    assert_eq!(s3, PragmaTracker::state_for_offset(&map, 50));
 }

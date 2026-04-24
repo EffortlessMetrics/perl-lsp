@@ -416,6 +416,67 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
+/// Monotonic query cursor for repeated pragma lookups.
+///
+/// Reuse a single cursor when querying offsets in non-decreasing order to
+/// avoid repeated binary searches over the pragma map.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct PragmaQueryCursor {
+    index: usize,
+}
+
+impl PragmaQueryCursor {
+    /// Create a new cursor positioned before the start of the map.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Query state at `offset` assuming lookups are mostly non-decreasing.
+    ///
+    /// If the caller queries an older offset, this falls back to a binary
+    /// search and repositions the cursor.
+    pub fn state_for_offset(
+        &mut self,
+        pragma_map: &[(Range<usize>, PragmaState)],
+        offset: usize,
+    ) -> PragmaState {
+        if pragma_map.is_empty() {
+            return PragmaState::default();
+        }
+
+        if self.index >= pragma_map.len() {
+            self.index = pragma_map.len() - 1;
+        }
+
+        if pragma_map[self.index].0.start > offset {
+            self.index = pragma_map.partition_point(|(range, _)| range.start <= offset);
+            if self.index > 0 {
+                self.index -= 1;
+            }
+        } else {
+            while self.index + 1 < pragma_map.len() && pragma_map[self.index + 1].0.start <= offset
+            {
+                self.index += 1;
+            }
+        }
+
+        let mut state = if pragma_map[self.index].0.start <= offset {
+            pragma_map[self.index].1.clone()
+        } else {
+            PragmaState::default()
+        };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
+    }
+}
+
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
@@ -444,6 +505,20 @@ impl PragmaTracker {
 
         let mut state =
             if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
+
+        if state.signatures_strict {
+            state.strict_vars = true;
+            state.strict_subs = true;
+            state.strict_refs = true;
+        }
+
+        state
+    }
+
+    /// Get the final top-level pragma state after all lexical scopes close.
+    #[must_use]
+    pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
+        let mut state = pragma_map.last().map_or_else(PragmaState::default, |(_, s)| s.clone());
 
         if state.signatures_strict {
             state.strict_vars = true;
