@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 impl LspServer {
     /// Handle initialize request
@@ -476,8 +476,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
+    use crate::protocol::capabilities::BuildFlags;
     use serde_json::json;
 
     #[test]
