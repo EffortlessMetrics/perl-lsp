@@ -7,6 +7,7 @@
 //! # Exporter Detection Patterns
 //!
 //! A module is considered an Exporter if it matches any of:
+//! - `use Exporter;` (Use node with module="Exporter" and empty args — bare form)
 //! - `use Exporter 'import';` (Use node with module="Exporter" and args containing "import")
 //! - `use parent 'Exporter';` (Use node with module="parent" and args containing "Exporter")
 //! - `our @ISA = qw(Exporter);` (VariableDeclaration with @ISA array containing "Exporter")
@@ -82,13 +83,20 @@ impl ExportSymbolExtractor {
     /// Walk AST looking for Exporter inheritance patterns.
     fn walk_for_exporter_detection(ast: &Node) -> Option<ExporterDetector> {
         match &ast.kind {
-            // Pattern 1: `use Exporter 'import';`
+            // Pattern 1: `use Exporter 'import';` or `use Exporter;` (no-args form)
+            //
+            // `use Exporter;` without 'import' is valid and extremely common in CPAN code —
+            // the module is loaded but callers must invoke `Exporter::import` explicitly, or
+            // rely on `@EXPORT` being populated before import time.  We treat both forms as
+            // Exporter-based so that @EXPORT/@EXPORT_OK are still extracted.
             NodeKind::Use { module, args, .. } if module == "Exporter" => {
-                // Check if 'import' is in the arguments (args may contain quoted strings like "'import'")
-                if args.iter().any(|arg| {
-                    let arg_stripped = arg.trim_matches('\'');
-                    arg_stripped == "import" || arg == "import"
-                }) {
+                // Accept `use Exporter;` (args empty) or `use Exporter 'import';`
+                if args.is_empty()
+                    || args.iter().any(|arg| {
+                        let arg_stripped = arg.trim_matches('\'');
+                        arg_stripped == "import" || arg == "import"
+                    })
+                {
                     return Some(ExporterDetector::UseExporterImport);
                 }
             }
@@ -538,5 +546,27 @@ our %EXPORT_TAGS = (
         assert!(info.optional_export.contains("optional_d"));
 
         assert_eq!(info.export_tags.len(), 1);
+    }
+
+    #[test]
+    fn test_detect_use_exporter_no_args() {
+        // `use Exporter;` (no 'import' argument) is common in CPAN code and must
+        // also trigger export extraction.
+        let code = r#"
+package MyUtils;
+use Exporter;
+our @EXPORT = qw(legacy_func);
+1;
+"#;
+        let info = parse_and_extract(code);
+        assert!(
+            info.is_some(),
+            "Should detect bare `use Exporter;` as Exporter-based module"
+        );
+        let info = info.unwrap();
+        assert!(
+            info.default_export.contains("legacy_func"),
+            "Should extract @EXPORT symbols from bare use Exporter; module"
+        );
     }
 }
