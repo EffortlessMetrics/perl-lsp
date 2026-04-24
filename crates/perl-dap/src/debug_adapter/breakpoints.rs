@@ -47,35 +47,42 @@ impl DebugAdapter {
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
 
-        // If a session is active, also sync the breakpoints to the Perl debugger
+        // If a session is active, also sync the breakpoints to the Perl debugger.
+        // Batch writes to avoid per-breakpoint flush churn while preserving command order.
         if let Ok(mut guard) = self.session.lock()
             && let Some(ref mut session) = *guard
+            && let Some(stdin) = session.process.stdin.as_mut()
         {
-            if let Some(stdin) = session.process.stdin.as_mut() {
-                // Clear only the old breakpoints for this specific file
-                for old_bp in &old_breakpoints {
-                    if old_bp.verified {
-                        let cmd = format!("B {}\n", old_bp.line);
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
-                    }
-                }
+            let mut command_batch = String::new();
 
-                // Set new breakpoints that were successfully verified
-                for bp in &verified_breakpoints {
-                    if bp.verified {
-                        // Retrieve the record to get the original condition
-                        let cmd = if let Some(record) = self.breakpoints.get_breakpoint_by_id(bp.id)
-                            && let Some(cond) = record.condition
-                        {
-                            format!("b {} {}\n", bp.line, cond)
-                        } else {
-                            format!("b {}\n", bp.line)
-                        };
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
+            // Clear only the old breakpoints for this specific file.
+            for old_bp in &old_breakpoints {
+                if old_bp.verified {
+                    command_batch.push_str(&format!("B {}\n", old_bp.line));
+                }
+            }
+
+            // Set new breakpoints that were successfully verified.
+            // Use the freshly stored per-file records so conditions/logpoints remain intact
+            // without repeatedly scanning global breakpoint storage by id.
+            if let Some(source_path) = args.source.path.as_deref() {
+                let stored_records = self.breakpoints.get_breakpoints(source_path);
+                for record in &stored_records {
+                    if !record.verified {
+                        continue;
+                    }
+
+                    if let Some(condition) = &record.condition {
+                        command_batch.push_str(&format!("b {} {}\n", record.line, condition));
+                    } else {
+                        command_batch.push_str(&format!("b {}\n", record.line));
                     }
                 }
+            }
+
+            if !command_batch.is_empty() {
+                let _ = stdin.write_all(command_batch.as_bytes());
+                let _ = stdin.flush();
             }
         }
 

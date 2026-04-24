@@ -229,27 +229,28 @@ impl BreakpointStore {
             }
         };
 
-        // Get breakpoints array (empty if not provided)
-        let source_breakpoints = args.breakpoints.as_ref().map_or(Vec::new(), |bps| bps.clone());
-
-        // Lock stores for atomic operation
-        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
-        let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
-
-        // Clear existing breakpoints for this source (REPLACE semantics)
-        breakpoints_map.remove(&source_path);
-
         // Read source file and parse once for AST validation (AC7).
         let source_content = std::fs::read_to_string(&source_path).ok();
         let validator = source_content
             .as_ref()
             .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
 
-        let mut records = Vec::new();
+        // Reserve a contiguous range of IDs up front so heavy validation work
+        // does not hold the shared mutex.
+        let requested_count = args.breakpoints.as_ref().map_or(0, Vec::len);
+        let first_id = {
+            let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
+            let first_id = *next_id;
+            *next_id += requested_count as i64;
+            first_id
+        };
+
+        let source_breakpoints = args.breakpoints.as_deref().unwrap_or(&[]);
+        let mut records = Vec::with_capacity(source_breakpoints.len());
+
         // Create new breakpoint records
-        for bp in &source_breakpoints {
-            let id = *next_id;
-            *next_id += 1;
+        for (index, bp) in source_breakpoints.iter().enumerate() {
+            let id = first_id + index as i64;
 
             if bp.line <= 0 {
                 records.push(BreakpointRecord {
@@ -271,7 +272,7 @@ impl BreakpointStore {
             // allows injecting arbitrary debugger commands.
             if let Some(ref condition) = bp.condition {
                 if condition.contains('\n') || condition.contains('\r') {
-                    let record = BreakpointRecord {
+                    records.push(BreakpointRecord {
                         id,
                         line: bp.line,
                         column: bp.column,
@@ -281,8 +282,7 @@ impl BreakpointStore {
                         hit_count: 0,
                         verified: false,
                         message: Some("Breakpoint condition cannot contain newlines".to_string()),
-                    };
-                    records.push(record);
+                    });
                     continue;
                 }
             }
@@ -290,7 +290,7 @@ impl BreakpointStore {
             if let Some(ref hit_condition) = bp.hit_condition {
                 let hit_condition = hit_condition.trim();
                 if hit_condition.contains('\n') || hit_condition.contains('\r') {
-                    let record = BreakpointRecord {
+                    records.push(BreakpointRecord {
                         id,
                         line: bp.line,
                         column: bp.column,
@@ -300,12 +300,11 @@ impl BreakpointStore {
                         hit_count: 0,
                         verified: false,
                         message: Some("Hit condition cannot contain newlines".to_string()),
-                    };
-                    records.push(record);
+                    });
                     continue;
                 }
                 if !is_valid_hit_condition(hit_condition) {
-                    let record = BreakpointRecord {
+                    records.push(BreakpointRecord {
                         id,
                         line: bp.line,
                         column: bp.column,
@@ -317,8 +316,7 @@ impl BreakpointStore {
                         message: Some(format!(
                             "Invalid hitCondition `{hit_condition}` (expected numeric expression like `10`, `>= 5`, `%2`)"
                         )),
-                    };
-                    records.push(record);
+                    });
                     continue;
                 }
             }
@@ -336,7 +334,7 @@ impl BreakpointStore {
                 }
             };
 
-            let record = BreakpointRecord {
+            records.push(BreakpointRecord {
                 id,
                 line: resolved_line,
                 column: bp.column,
@@ -346,18 +344,18 @@ impl BreakpointStore {
                 hit_count: 0,
                 verified,
                 message,
-            };
-
-            records.push(record);
+            });
         }
 
-        // Store breakpoints for this source
+        // Store breakpoints for this source with REPLACE semantics.
+        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
+        breakpoints_map.remove(&source_path);
         if !records.is_empty() {
-            breakpoints_map.insert(source_path.clone(), records.clone());
+            breakpoints_map.insert(source_path, records.clone());
         }
 
         // Convert to protocol format (preserving order)
-        records.iter().map(|r| r.to_protocol()).collect()
+        records.iter().map(BreakpointRecord::to_protocol).collect()
     }
 
     /// Get all breakpoints for a source file
