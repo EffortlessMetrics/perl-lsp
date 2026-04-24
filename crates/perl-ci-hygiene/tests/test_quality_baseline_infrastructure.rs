@@ -9,7 +9,7 @@
 
 use regex::Regex;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use walkdir::WalkDir;
 
 /// Get the workspace root (two levels up from CARGO_MANIFEST_DIR since we're in crates/*/tests/)
@@ -159,7 +159,7 @@ fn test_perl_dead_code_tests_have_allow_clippy_panic() {
     let test_files: Vec<_> = WalkDir::new(&tests_dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().map_or(false, |ext| ext == "rs"))
+        .filter(|e| e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"))
         .collect();
 
     assert!(!test_files.is_empty(), "perl-dead-code should have test files in tests/");
@@ -193,7 +193,7 @@ fn test_perl_lsp_feature_policy_tests_have_allow_clippy_panic() {
     let test_files: Vec<_> = WalkDir::new(&tests_dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().map_or(false, |ext| ext == "rs"))
+        .filter(|e| e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"))
         .collect();
 
     assert!(!test_files.is_empty(), "perl-lsp-feature-policy should have test files in tests/");
@@ -231,8 +231,8 @@ fn test_perl_parser_core_no_panic_in_match_arm_catches() {
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.path().is_file()
-                && e.path().extension().map_or(false, |ext| ext == "rs")
-                && e.path().file_name().map_or(false, |name| {
+                && e.path().extension().is_some_and(|ext| ext == "rs")
+                && e.path().file_name().is_some_and(|name| {
                     name.to_string_lossy().contains("_test")
                         || name.to_string_lossy().contains("tests")
                 })
@@ -291,7 +291,7 @@ fn test_perl_dap_no_panic_in_match_arm_catches() {
     let test_files: Vec<_> = WalkDir::new(&tests_dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().map_or(false, |ext| ext == "rs"))
+        .filter(|e| e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"))
         .collect();
 
     if test_files.is_empty() {
@@ -345,7 +345,7 @@ fn test_perl_lexer_no_panic_in_match_arm_catches() {
     let test_files: Vec<_> = WalkDir::new(&tests_dir)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().map_or(false, |ext| ext == "rs"))
+        .filter(|e| e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "rs"))
         .collect();
 
     if test_files.is_empty() {
