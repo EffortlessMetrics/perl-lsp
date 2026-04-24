@@ -432,6 +432,111 @@ fn workspace_beats_system_inc() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn whitespace_only_include_paths_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Trimmed.pm")?;
+
+    let result = resolve_module_uri(
+        "Trimmed",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "	".to_string(), " lib ".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("lib/Trimmed.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn duplicate_system_inc_entries_do_not_change_resolution_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let inc1 = temp.path().join("inc1");
+    std::fs::create_dir_all(&inc1)?;
+    std::fs::write(inc1.join("Dedupe.pm"), "1;")?;
+
+    let inc2 = temp.path().join("inc2");
+    std::fs::create_dir_all(&inc2)?;
+    std::fs::write(inc2.join("Dedupe.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "Dedupe",
+        &[],
+        &[],
+        &[],
+        true,
+        &[
+            PathBuf::from(format!("  {}  ", inc1.to_string_lossy())),
+            PathBuf::from(&inc1),
+            PathBuf::from("."),
+            PathBuf::from(&inc2),
+            PathBuf::from(&inc2),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("inc1"));
+            assert!(!uri.contains("inc2"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn precedence_is_stable_after_normalization() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let src_root = workspace.join("src");
+    std::fs::create_dir_all(&src_root)?;
+    std::fs::write(src_root.join("Precedence.pm"), "1;")?;
+
+    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "build URI")?.to_string();
+
+    let system_root = temp.path().join("system");
+    let system_module = system_root.join("Precedence.pm");
+    std::fs::create_dir_all(&system_root)?;
+    std::fs::write(&system_module, "1;")?;
+
+    let result = resolve_module_uri(
+        "Precedence",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "src/".to_string(), "./src".to_string(), "src".to_string()],
+        true,
+        &[
+            PathBuf::from("."),
+            PathBuf::from(format!(" {} ", system_root.to_string_lossy())),
+            PathBuf::from(&system_root),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("workspace"));
+            assert!(uri.ends_with("src/Precedence.pm"));
+            assert!(!uri.contains("system"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // Timeout behavior
 // ===========================================================================
