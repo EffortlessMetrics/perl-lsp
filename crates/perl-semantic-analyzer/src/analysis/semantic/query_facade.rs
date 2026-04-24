@@ -29,6 +29,10 @@ pub struct ResolvedSymbol {
     pub kind: SymbolKind,
     /// Definition source location.
     pub location: SourceLocation,
+    /// Variable declaration type (`my`, `our`, `local`, `state`) when known.
+    pub declaration: Option<String>,
+    /// Extracted POD or comment documentation when present.
+    pub documentation: Option<String>,
 }
 
 /// Definition location that may include a workspace URI.
@@ -143,6 +147,8 @@ impl From<&Symbol> for ResolvedSymbol {
             qualified_name: value.qualified_name.clone(),
             kind: value.kind,
             location: value.location,
+            declaration: value.declaration.clone(),
+            documentation: value.documentation.clone(),
         }
     }
 }
@@ -187,5 +193,82 @@ mod tests {
 
         let chain = must_some(facade.parent_chain("Child"));
         assert_eq!(chain.ancestors, vec!["Base"]);
+    }
+
+    #[test]
+    fn query_facade_resolved_symbol_carries_declaration_and_docs() {
+        // Verify that declaration and documentation fields are propagated
+        // from Symbol through the From impl — not silently dropped.
+        let code = "my $x = 1;\n$x;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let facade = SemanticQueryFacade::build(&ast, code);
+
+        let usage_offset = must_some(code.rfind("$x"));
+        let symbol = must_some(facade.resolved_symbol_at(usage_offset));
+        // `my $x` should produce declaration = Some("my")
+        assert_eq!(
+            symbol.declaration.as_deref(),
+            Some("my"),
+            "declaration field must be propagated from Symbol, not silently dropped"
+        );
+    }
+
+    #[test]
+    fn query_facade_resolved_symbol_at_past_end_returns_none() {
+        // Out-of-range offset must return None gracefully — no panic.
+        let code = "my $x = 1;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let facade = SemanticQueryFacade::build(&ast, code);
+
+        assert!(
+            facade.resolved_symbol_at(usize::MAX).is_none(),
+            "out-of-range offset must return None, not panic"
+        );
+    }
+
+    #[test]
+    fn query_facade_parent_chain_unknown_class_returns_none() {
+        // A class that doesn't appear in class models must return None.
+        let code = "package Foo; sub bar {} 1;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let facade = SemanticQueryFacade::build(&ast, code);
+
+        assert!(
+            facade.parent_chain("NonExistentClass").is_none(),
+            "unknown class must return None from parent_chain"
+        );
+    }
+
+    #[test]
+    fn query_facade_effective_pragma_state_no_pragmas() {
+        // A file with no pragmas must return a default (all-false) pragma state.
+        let code = "my $x = 1;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let facade = SemanticQueryFacade::build(&ast, code);
+
+        let state = facade.effective_pragma_state(0);
+        assert!(!state.state.strict_vars, "strict_vars must be false when no use strict");
+        assert!(!state.state.strict_subs, "strict_subs must be false when no use strict");
+        assert!(!state.state.strict_refs, "strict_refs must be false when no use strict");
+        assert!(!state.state.warnings, "warnings must be false when no use warnings");
+    }
+
+    #[test]
+    fn query_facade_visible_imports_empty_file_returns_empty() {
+        // A file with no use statements must return an empty import list.
+        let code = "my $x = 1;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let facade = SemanticQueryFacade::build(&ast, code);
+
+        let index = workspace_index::WorkspaceIndex::new();
+        must(index.index_file_str("file:///test/empty.pm", code));
+
+        let imports = facade.visible_imports(&index, "file:///test/empty.pm");
+        assert!(imports.is_empty(), "file with no use statements must produce no visible imports");
     }
 }
