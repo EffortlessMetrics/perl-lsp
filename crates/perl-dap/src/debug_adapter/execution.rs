@@ -25,8 +25,11 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
+            session.stack_frames.clear();
+            session.stack_trace_cache_epoch = None;
             session.variables.clear();
             thread_id = session.thread_id;
+            self.invalidate_stack_trace_epoch();
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
             let _ = self.send_continue_signal(pid);
@@ -69,8 +72,11 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
+            session.stack_frames.clear();
+            session.stack_trace_cache_epoch = None;
             session.variables.clear();
             let t_id = session.thread_id;
+            self.invalidate_stack_trace_epoch();
             self.send_event(
                 "continued",
                 Some(json!({
@@ -105,8 +111,11 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
+            session.stack_frames.clear();
+            session.stack_trace_cache_epoch = None;
             session.variables.clear();
             let t_id = session.thread_id;
+            self.invalidate_stack_trace_epoch();
             self.send_event(
                 "continued",
                 Some(json!({
@@ -142,8 +151,11 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
+            session.stack_frames.clear();
+            session.stack_trace_cache_epoch = None;
             session.variables.clear();
             let t_id = session.thread_id;
+            self.invalidate_stack_trace_epoch();
             self.send_event(
                 "continued",
                 Some(json!({
@@ -356,8 +368,11 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Goto;
+            session.stack_frames.clear();
+            session.stack_trace_cache_epoch = None;
             session.variables.clear();
             let t_id = session.thread_id;
+            self.invalidate_stack_trace_epoch();
 
             self.send_event(
                 "continued",

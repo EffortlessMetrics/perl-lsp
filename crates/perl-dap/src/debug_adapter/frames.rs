@@ -16,6 +16,30 @@ impl DebugAdapter {
             args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
         let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
         let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
+        let current_epoch = self.current_stack_trace_epoch();
+
+        if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && session.stack_trace_cache_epoch == Some(current_epoch)
+            && !session.stack_frames.is_empty()
+        {
+            let stack_frames = Self::paginate_stack_frames(
+                Self::filter_user_visible_frames(session.stack_frames.clone()),
+                start_frame,
+                requested_count,
+            );
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "stackTrace".to_string(),
+                body: Some(json!({
+                    "stackFrames": stack_frames,
+                    "totalFrames": stack_frames.len()
+                })),
+                message: None,
+            };
+        }
+
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -70,6 +94,7 @@ impl DebugAdapter {
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             {
                 session.stack_frames = parsed_frames.clone();
+                session.stack_trace_cache_epoch = Some(current_epoch);
             }
             parsed_frames
         } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {

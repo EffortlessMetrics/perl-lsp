@@ -368,7 +368,9 @@ impl DebugAdapter {
                     variables: HashMap::new(),
                     thread_id,
                     last_resume_mode: ResumeMode::Unknown,
+                    stack_trace_cache_epoch: None,
                 };
+                self.invalidate_stack_trace_epoch();
 
                 if let Ok(mut guard) = self.session.lock() {
                     *guard = Some(session);
@@ -489,6 +491,7 @@ impl DebugAdapter {
         let last_exception_message = self.last_exception_message.clone();
         let tcp_session = self.tcp_session.clone();
         let attached_pid = self.attached_pid.clone();
+        let stack_trace_epoch = self.stack_trace_epoch.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -719,6 +722,7 @@ impl DebugAdapter {
                                             end_line: None,
                                             end_column: None,
                                         }];
+                                        s.stack_trace_cache_epoch = None;
                                     }
 
                                     if matches!(s.state, DebugState::Running) {
@@ -879,12 +883,14 @@ impl DebugAdapter {
                                         };
                                         s.stack_frames = vec![frame];
                                     }
+                                    s.stack_trace_cache_epoch = None;
                                     s.state = DebugState::Stopped;
                                     s.thread_id
                                 } else {
                                     continue;
                                 }
                             };
+                            stack_trace_epoch.fetch_add(1, Ordering::AcqRel);
 
                             // Send stopped event with robust error handling
                             if let Some(ref sender) = sender
@@ -954,6 +960,7 @@ impl DebugAdapter {
     ) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
+            self.invalidate_stack_trace_epoch();
             let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
 
             // PID attachment mode: best-effort process control without requiring TCP shim transport.
@@ -1294,6 +1301,7 @@ impl DebugAdapter {
 
     /// Clear active process session, TCP session, and PID-attach mode state.
     pub(super) fn clear_active_session_state(&self) {
+        self.invalidate_stack_trace_epoch();
         Self::clear_active_session_state_with_state(
             &self.session,
             &self.tcp_session,
@@ -1478,6 +1486,9 @@ impl DebugAdapter {
                 // stop) and auto-continue until a user breakpoint is hit.
                 session.state = DebugState::Running;
                 session.last_resume_mode = ResumeMode::RunToBreakpoint;
+                session.stack_frames.clear();
+                session.stack_trace_cache_epoch = None;
+                self.invalidate_stack_trace_epoch();
                 let _ = stdin.write_all(b"c\n");
                 let _ = stdin.flush();
             }

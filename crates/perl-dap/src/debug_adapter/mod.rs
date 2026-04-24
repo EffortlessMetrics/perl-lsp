@@ -441,6 +441,8 @@ pub struct DebugAdapter {
     next_goto_target_id: Arc<Mutex<i64>>,
     /// Workspace root for path validation (set during launch)
     workspace_root: Arc<Mutex<Option<PathBuf>>>,
+    /// Monotonic stack-trace cache invalidation epoch.
+    stack_trace_epoch: Arc<AtomicU64>,
 }
 
 /// Active debug session
@@ -457,6 +459,8 @@ struct DebugSession {
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+    /// Epoch value for cached `stack_frames`.
+    stack_trace_cache_epoch: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -557,6 +561,7 @@ impl DebugAdapter {
             goto_targets: Arc::new(Mutex::new(HashMap::new())),
             next_goto_target_id: Arc::new(Mutex::new(1)),
             workspace_root: Arc::new(Mutex::new(None)),
+            stack_trace_epoch: Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -722,6 +727,14 @@ impl DebugAdapter {
                 }
             }
         }
+    }
+
+    fn current_stack_trace_epoch(&self) -> u64 {
+        self.stack_trace_epoch.load(Ordering::Acquire)
+    }
+
+    fn invalidate_stack_trace_epoch(&self) -> u64 {
+        self.stack_trace_epoch.fetch_add(1, Ordering::AcqRel) + 1
     }
 }
 #[cfg(test)]
