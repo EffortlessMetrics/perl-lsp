@@ -3,6 +3,10 @@
 //! This crate has a single responsibility: provide reusable matching and
 //! ranking primitives used by LSP symbol-search providers.
 
+mod inheritance;
+
+pub use inheritance::{collect_accessible_method_symbols, find_accessible_method_symbol};
+
 use std::cmp::Ordering;
 
 /// Returns `true` when a symbol name matches the provided query.

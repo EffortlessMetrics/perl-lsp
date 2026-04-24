@@ -9,11 +9,10 @@ use super::{
     context::CompletionContext,
     items::{CompletionItem, CompletionItemKind},
 };
+use crate::providers::symbol_query::collect_accessible_method_symbols;
 use perl_semantic_analyzer::type_inference::{PerlType, TypeInferenceEngine};
-use perl_workspace::workspace_index::{
-    SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
-};
-use std::collections::{HashMap, HashSet, VecDeque};
+use perl_workspace::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Add workspace symbol completions for functions and variables
@@ -485,7 +484,7 @@ pub fn add_workspace_method_completions(
     // Collect all methods from the receiver package AND its ancestor chain (parents + roles).
     // Child methods take priority: collect_all_package_members deduplicates by keeping the
     // first occurrence (closest to the receiver in the BFS order).
-    let members = collect_all_package_members(index, &package_name);
+    let members = collect_accessible_method_symbols(index, &package_name);
 
     // Build an auto-import edit once for all methods from this package.
     let auto_import_edit = auto_import::build_auto_import_edit(source, &package_name);
@@ -536,100 +535,6 @@ pub fn add_workspace_method_completions(
             commit_characters: None,
         });
     }
-}
-
-/// Collect all method symbols accessible from a package, following parent/role chains.
-///
-/// Performs BFS over the inheritance graph starting at `package_name`, collecting
-/// subroutine and method symbols from each package in the resolution order.
-/// Child-defined methods shadow parent methods — the first occurrence of each name wins.
-///
-/// Edge-case handling:
-/// - Diamond inheritance: BFS visited-set prevents duplicate traversal.
-/// - Circular `@ISA`: visited-set prevents infinite loops.
-/// - Package not indexed: `get_package_members` returns `Vec::new()` gracefully.
-/// - `use parent -norequire`: already handled by `ClassModelBuilder`; model.parents
-///   contains the parent names regardless.
-///
-/// NOTE: C3 MRO ordering is NOT honoured — this uses BFS (breadth-first), which
-/// approximates but does not exactly match C3 for complex diamond hierarchies.
-/// This is a pre-existing approximation shared with `navigation.rs`. A follow-up
-/// issue should address strict C3 ordering if it becomes important (see issue #3482).
-fn collect_all_package_members(index: &WorkspaceIndex, package_name: &str) -> Vec<WorkspaceSymbol> {
-    let mut seen_names: HashSet<String> = HashSet::new();
-    let mut result: Vec<WorkspaceSymbol> = Vec::new();
-
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut queue: VecDeque<String> = VecDeque::new();
-
-    // Cache of package_name → list of parent/role package names, populated lazily.
-    let mut related_cache: HashMap<String, Vec<String>> = HashMap::new();
-
-    // Collect related packages (parents + roles) for a given package by parsing
-    // its source file from the workspace index or filesystem.
-    let collect_related = |pkg: &str, cache: &mut HashMap<String, Vec<String>>| -> Vec<String> {
-        cache
-            .entry(pkg.to_string())
-            .or_insert_with(|| {
-                let Some(pkg_location) = index.find_definition(pkg) else {
-                    return Vec::new();
-                };
-
-                let text = index.document_store().get_text(&pkg_location.uri).or_else(|| {
-                    perl_workspace::workspace_index::uri_to_fs_path(&pkg_location.uri)
-                        .and_then(|path| std::fs::read_to_string(path).ok())
-                });
-
-                let Some(text) = text else {
-                    return Vec::new();
-                };
-
-                let mut parser = perl_semantic_analyzer::Parser::new(&text);
-                let Ok(ast) = parser.parse() else {
-                    return Vec::new();
-                };
-
-                perl_semantic_analyzer::semantic::SemanticAnalyzer::analyze_with_source(&ast, &text)
-                    .class_models
-                    .into_iter()
-                    .find(|model| model.name == pkg)
-                    .map(|model| {
-                        model.parents.iter().chain(model.roles.iter()).cloned().collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default()
-            })
-            .clone()
-    };
-
-    // Start with the receiver package itself
-    queue.push_back(package_name.to_string());
-    visited.insert(package_name.to_string());
-
-    while let Some(pkg) = queue.pop_front() {
-        // Collect direct members for this package
-        let members = index.get_package_members(&pkg);
-        for symbol in members {
-            // Only include subroutines and methods
-            match symbol.kind {
-                WsSymbolKind::Subroutine | WsSymbolKind::Method => {}
-                _ => continue,
-            }
-            // Child wins: skip if a closer ancestor already provided this name
-            if seen_names.insert(symbol.name.clone()) {
-                result.push(symbol);
-            }
-        }
-
-        // Enqueue ancestor packages
-        let related = collect_related(&pkg, &mut related_cache);
-        for ancestor in related {
-            if visited.insert(ancestor.clone()) {
-                queue.push_back(ancestor);
-            }
-        }
-    }
-
-    result
 }
 
 /// Find the position of a single assignment `=` in a line, skipping compound

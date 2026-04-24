@@ -3297,6 +3297,70 @@ sub run {
     }
 
     #[test]
+    fn test_static_class_arrow_includes_inherited_methods() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/Parent.pm")?,
+            "package Parent;\nsub inherited_api { }\n1;\n".to_string(),
+        )?;
+        index.index_file(
+            Url::parse("file:///workspace/Child.pm")?,
+            "package Child;\nuse parent 'Parent';\nsub own_api { }\n1;\n".to_string(),
+        )?;
+
+        let code = "package Child;\nChild->";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let inherited = completions.iter().find(|c| c.label == "inherited_api");
+        assert!(inherited.is_some(), "Child-> should include inherited Parent methods");
+        let detail = inherited.and_then(|item| item.detail.as_deref()).unwrap_or("");
+        assert!(
+            detail.contains("from Parent"),
+            "inherited method detail should include origin package; got {detail:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_static_class_arrow_ranks_own_before_inherited() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/Parent.pm")?,
+            "package Parent;\nsub alpha_parent { }\n1;\n".to_string(),
+        )?;
+        index.index_file(
+            Url::parse("file:///workspace/Child.pm")?,
+            "package Child;\nuse parent 'Parent';\nsub zeta_child { }\n1;\n".to_string(),
+        )?;
+
+        let code = "package Child;\nChild->";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let own = completions.iter().find(|c| c.label == "zeta_child");
+        let inherited = completions.iter().find(|c| c.label == "alpha_parent");
+        assert!(own.is_some(), "expected own method completion");
+        assert!(inherited.is_some(), "expected inherited method completion");
+
+        let own_sort = own.and_then(|item| item.sort_text.as_deref()).unwrap_or("");
+        let inherited_sort = inherited.and_then(|item| item.sort_text.as_deref()).unwrap_or("");
+        assert!(
+            own_sort < inherited_sort,
+            "own methods should rank ahead of inherited methods; own={own_sort:?} inherited={inherited_sort:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_self_arrow_in_main_package_does_not_resolve() -> Result<(), Box<dyn std::error::Error>>
     {
         // Edge case: $self-> in the main package should NOT resolve to any package methods.
