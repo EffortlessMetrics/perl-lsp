@@ -482,6 +482,12 @@ impl<'a> Parser<'a> {
                 if self.peek_kind() == Some(TokenKind::Comma) {
                     self.consume_token()?; // consume comma
                 } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                    // Strong followers (e.g. `;`, `}`, EOF, next statement keyword)
+                    // should recover as an inserted `)` so incomplete declaration
+                    // lists inside calls remain structured and non-cascading.
+                    if self.is_delimiter_recovery_point() {
+                        break;
+                    }
                     return Err(ParseError::syntax(
                         "Expected comma or closing parenthesis in variable list",
                         self.current_position(),

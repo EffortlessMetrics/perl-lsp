@@ -233,6 +233,78 @@ fn recovered_error_has_correct_site_for_array_subscript() {
     );
 }
 
+/// Missing `)` in declaration-list argument should recover at ArgList instead
+/// of hard-failing with a generic "comma or )" error.
+#[test]
+fn missing_paren_in_declaration_arg_list_emits_recovered() {
+    let src = "foo(my ($x, $y; my $z = 1;";
+    let (ast, errors) = parse_errors(src);
+
+    let has_arg_list_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_arg_list_recovery,
+        "Expected ArgList InsertedCloser recovery for '{}', got: {:?}",
+        src, errors
+    );
+    assert!(
+        statement_count(&ast) >= 2,
+        "Recovery should preserve downstream statements for '{}'",
+        src
+    );
+}
+
+/// Missing `}` in postfix hash subscript should recover with hash-subscript site.
+#[test]
+fn missing_brace_in_postfix_hash_subscript_emits_recovered() {
+    let src = "my $x = $obj->{key; my $y = 1;";
+    let (ast, errors) = parse_errors(src);
+
+    let has_hash_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::HashSubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_hash_recovery,
+        "Expected HashSubscript InsertedCloser recovery for '{}', got: {:?}",
+        src, errors
+    );
+    assert!(
+        statement_count(&ast) >= 2,
+        "Recovery should preserve downstream statements for '{}'",
+        src
+    );
+}
+
+/// Quote-like command forms should keep malformed delimiter diagnostics rather
+/// than silently parsing as clean strings.
+#[test]
+fn unclosed_qx_delimiter_reports_diagnostic() {
+    let src = "my $out = qx{echo hi;";
+    let (_ast, errors) = parse_errors(src);
+    let has_unclosed =
+        errors.iter().any(|e| format!("{e}").contains("Unclosed { delimiter in command quote"));
+    assert!(
+        has_unclosed,
+        "Expected unclosed qx delimiter diagnostic for '{}', got: {:?}",
+        src, errors
+    );
+}
+
 /// Both inner and outer parens missing — each level independently emits InsertedCloser.
 /// `foo(bar($x` → inner bar's `)` recovered at EOF, then outer foo's `)` also recovered.
 /// This tests that nested recovery does not lose the outer call's recovery.

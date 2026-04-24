@@ -211,9 +211,34 @@ impl<'a> Parser<'a> {
 
             TokenKind::QuoteCommand => {
                 let token = self.tokens.next()?;
-                // qx/backticks - for now treat as a string
+                let text = token.text.as_ref();
+
+                // qx/backticks - treat as a string, but still surface unclosed
+                // bracket-style delimiters as structured diagnostics.
+                let op_len = if text.starts_with("qx") { 2 } else { 0 };
+                if op_len > 0 {
+                    let after_op = &text[op_len..];
+                    if let Some(open) = after_op.chars().next() {
+                        let close = match open {
+                            '(' => ')',
+                            '[' => ']',
+                            '{' => '}',
+                            '<' => '>',
+                            c => c,
+                        };
+                        if !after_op.ends_with(close) {
+                            self.record_error(ParseError::syntax(
+                                format!(
+                                    "Unclosed {} delimiter in command quote before end of file",
+                                    open
+                                ),
+                                token.start,
+                            ));
+                        }
+                    }
+                }
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.to_string(), interpolated: true },
+                    NodeKind::String { value: text.to_string(), interpolated: true },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
