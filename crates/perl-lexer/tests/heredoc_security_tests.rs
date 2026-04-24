@@ -38,3 +38,22 @@ fn test_heredoc_timeout() {
 
     assert!(duration < Duration::from_secs(10), "Lexer should not hang for more than 10 seconds");
 }
+
+#[test]
+fn test_cr_data_marker_transition_does_not_runaway() {
+    let src = "my $x = 1;\r__DATA__\rpayload\rmore";
+    let start = Instant::now();
+    let mut lexer = PerlLexer::new(src);
+    let tokens = lexer.collect_tokens();
+    let duration = start.elapsed();
+
+    assert!(duration < Duration::from_secs(2), "CR marker transition should stay bounded");
+    assert!(
+        tokens.iter().any(|t| matches!(t.token_type, TokenType::DataMarker(_))),
+        "expected DataMarker token"
+    );
+    assert!(
+        tokens.iter().any(|t| matches!(t.token_type, TokenType::DataBody(_))),
+        "expected DataBody token"
+    );
+}

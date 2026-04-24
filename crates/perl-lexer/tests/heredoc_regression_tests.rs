@@ -1,4 +1,4 @@
-use perl_lexer::PerlLexer;
+use perl_lexer::{PerlLexer, TokenType};
 
 #[test]
 fn lexer_terminates_on_backtick_heredoc_with_cr() {
@@ -84,4 +84,20 @@ fn lexer_handles_malformed_heredoc_gracefully() {
         }
         assert!(token_count < 20, "Too many tokens, possible infinite loop");
     }
+}
+
+#[test]
+fn lexer_does_not_treat_unterminated_quoted_labels_as_heredoc() {
+    let mut lx = PerlLexer::new("my $x = <<\"EOF\r\nprint 1;\r\n");
+    let toks = lx.collect_tokens();
+    let has_heredoc = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    assert!(!has_heredoc, "unterminated quoted label must not queue heredoc");
+}
+
+#[test]
+fn lexer_does_not_treat_unterminated_backtick_label_as_heredoc() {
+    let mut lx = PerlLexer::new("my $x = <<`CMD\rprint 1;\r");
+    let toks = lx.collect_tokens();
+    let has_heredoc = toks.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    assert!(!has_heredoc, "unterminated backtick label must not queue heredoc");
 }

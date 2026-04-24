@@ -200,6 +200,26 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_unquoted_label_disallows_leading_indent_on_terminator() -> R {
+    let input = "<<EOF\nbody\n  EOF\nprint 1;\n";
+    let sig = significant(input);
+    let has_unknown_rest = sig.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(has_unknown_rest, "indented terminator must not close non-<<~ heredoc");
+    Ok(())
+}
+
+#[test]
+fn heredoc_indented_allows_crlf_terminator() -> R {
+    let input = "<<~EOF\r\nline\r\n\tEOF\r\nmy $x = 1;\r\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    let has_my =
+        sig.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
+    assert!(has_my, "expected lexer to resume normal lexing after <<~ terminator");
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================
