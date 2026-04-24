@@ -137,9 +137,9 @@ fn extract_bare_word_defaults_to_subroutine() -> Result<(), String> {
 #[test]
 fn extract_bare_word_mid_position() -> Result<(), String> {
     let source = "my_func();";
-    // cursor in the middle of "my_func"
+    // cursor in the middle of "my_func" should still resolve the full token
     let (name, kind) = must_some(extract_symbol_from_source(3, source));
-    assert_eq!(name, "func");
+    assert_eq!(name, "my_func");
     assert_eq!(kind, CursorSymbolKind::Subroutine);
     Ok(())
 }
@@ -377,12 +377,10 @@ fn range_on_whitespace_returns_some_empty_range() {
 #[test]
 fn range_cursor_at_start_of_source() -> Result<(), String> {
     let source = "$abc";
-    // position 0 is '$', no sigil before (position > 0 false)
-    // forward scan: '$' is not alnum/_, so end stays at 0
-    // backward loop: start == position so no backward scan
+    // position 0 is '$' and resolves to the full symbol span.
     let (start, end) = must_some(get_symbol_range_at_position(0, source));
     assert_eq!(start, 0);
-    assert_eq!(end, 0);
+    assert_eq!(end, 4);
     Ok(())
 }
 
@@ -461,12 +459,10 @@ fn extract_numeric_name_after_sigil() -> Result<(), String> {
 
 #[test]
 fn extract_dollar_at_treats_first_as_sigil() -> Result<(), String> {
-    // "$$ref" — cursor at position 1 (second $): chars[0] is '$'
-    // so sigil = Scalar, name_start = 1, but chars[1] is '$' (not alnum/_)
-    // end stays at 1, no name → None
+    // "$$ref" — cursor at position 1 (second $) resolves to "$ref".
     let source = "$$ref";
-    let result = extract_symbol_from_source(1, source);
-    assert_eq!(result, None);
+    let result = must_some(extract_symbol_from_source(1, source));
+    assert_eq!(result, ("ref".to_string(), CursorSymbolKind::Scalar));
     Ok(())
 }
 
