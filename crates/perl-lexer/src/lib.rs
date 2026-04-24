@@ -2106,11 +2106,10 @@ impl<'a> PerlLexer<'a> {
 
             let token_type = if is_keyword_fast(text) {
                 // Check for special keywords that affect lexer mode
+                if LexerMode::keyword_keeps_expect_term(text) {
+                    self.mode = LexerMode::ExpectTerm;
+                }
                 match text {
-                    "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
-                    | "sort" | "split" => {
-                        self.mode = LexerMode::ExpectTerm;
-                    }
                     "sub" => {
                         self.after_sub = true;
                     }

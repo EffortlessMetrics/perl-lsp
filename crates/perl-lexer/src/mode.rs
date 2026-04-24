@@ -69,4 +69,47 @@ impl LexerMode {
     pub fn is_expect_operator(&self) -> bool {
         matches!(self, LexerMode::ExpectOperator)
     }
+
+    /// Keywords that should keep the lexer in `ExpectTerm` mode.
+    ///
+    /// These are prefix/control-flow keywords where the next token starts a
+    /// term-like expression (including regex literals), not an infix operator.
+    #[must_use]
+    pub fn keyword_keeps_expect_term(keyword: &str) -> bool {
+        matches!(
+            keyword,
+            "if"
+                | "unless"
+                | "while"
+                | "until"
+                | "for"
+                | "foreach"
+                | "grep"
+                | "map"
+                | "sort"
+                | "split"
+                | "and"
+                | "or"
+                | "xor"
+                | "not"
+                | "return"
+                | "next"
+                | "last"
+                | "redo"
+                | "goto"
+                | "do"
+                | "elsif"
+                | "else"
+                | "given"
+                | "when"
+                | "continue"
+                | "use"
+                | "require"
+                | "no"
+                | "my"
+                | "our"
+                | "state"
+                | "local"
+        )
+    }
 }

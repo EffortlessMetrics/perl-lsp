@@ -946,3 +946,49 @@ fn lexer_slash_division_after_number_literal() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn lexer_slash_ambiguity_defined_or_after_closing_delimiter() -> TestResult {
+    let mut lexer = PerlLexer::new("($x) // $fallback");
+    let mut saw_right_paren = false;
+
+    while let Some(tok) = lexer.next_token() {
+        if matches!(tok.token_type, TokenType::RightParen) {
+            saw_right_paren = true;
+            continue;
+        }
+        if saw_right_paren {
+            assert!(
+                matches!(tok.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"),
+                "expected // operator after right paren, got {:?}",
+                tok.token_type
+            );
+            return Ok(());
+        }
+    }
+
+    Err("expected // after right paren".into())
+}
+
+#[test]
+fn lexer_slash_ambiguity_division_after_subscript_with_comment_gap() -> TestResult {
+    let mut lexer = PerlLexer::new("$h{key} # comment\n / 2");
+
+    let mut saw_right_brace = false;
+    while let Some(tok) = lexer.next_token() {
+        if matches!(tok.token_type, TokenType::RightBrace) {
+            saw_right_brace = true;
+            continue;
+        }
+        if saw_right_brace {
+            assert!(
+                matches!(tok.token_type, TokenType::Division),
+                "expected division after subscript + comment/newline, got {:?}",
+                tok.token_type
+            );
+            return Ok(());
+        }
+    }
+
+    Err("expected division after subscript/comment gap".into())
+}

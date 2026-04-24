@@ -272,6 +272,28 @@ fn test_slash_after_hash_subscript() -> TestResult {
 }
 
 #[test]
+fn test_slash_after_logical_keyword_is_regex() -> TestResult {
+    // `and` is keyword-form logical operator, so it should keep ExpectTerm.
+    let mut lexer = PerlLexer::new("$ok and /pattern/");
+    lexer.next_token(); // $ok
+    lexer.next_token(); // and
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}
+
+#[test]
+fn test_slash_after_builtin_with_comment_is_regex() -> TestResult {
+    // Builtins like print expect a following term; comment/newline should not
+    // change slash disambiguation.
+    let mut lexer = PerlLexer::new("print # comment\n /pattern/");
+    lexer.next_token(); // print
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}
+
+#[test]
 fn test_budget_guard_prevents_infinite_loop() {
     // Test that budget guard prevents infinite loops
     // Create a regex that approaches but doesn't exceed the limit

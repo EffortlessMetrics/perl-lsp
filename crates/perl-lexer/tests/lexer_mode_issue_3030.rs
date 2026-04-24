@@ -258,3 +258,27 @@ fn mode_transitions_after_keyword_to_expect_term() -> R {
     assert!(has_regex, "after 'if' keyword the slash must start a regex");
     Ok(())
 }
+
+#[test]
+fn keyword_helper_marks_logical_keywords_as_expect_term() {
+    assert!(LexerMode::keyword_keeps_expect_term("and"));
+    assert!(LexerMode::keyword_keeps_expect_term("or"));
+    assert!(LexerMode::keyword_keeps_expect_term("not"));
+}
+
+#[test]
+fn mode_transitions_after_logical_keyword_to_expect_term() -> R {
+    // After keyword-form logical operators, slash should still start regex.
+    let mut lexer = PerlLexer::new("$flag and /pattern/");
+    let tokens: Vec<_> = lexer
+        .collect_tokens()
+        .into_iter()
+        .filter(|t| {
+            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+        })
+        .collect();
+
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "after 'and' keyword the slash must start a regex");
+    Ok(())
+}
