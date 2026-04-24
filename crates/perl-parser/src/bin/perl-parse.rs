@@ -3,6 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use encoding_rs::{Encoding, GB18030};
 use perl_parser::{Node, ParseError, Parser};
 
 #[derive(Default)]
@@ -304,6 +305,12 @@ fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
         Ok(source) => Ok(source),
         Err(err) => {
             let raw = err.into_bytes();
+            if let Some(encoding) = detect_declared_source_encoding(&raw) {
+                let (decoded, _, had_errors) = encoding.decode(&raw);
+                if !had_errors {
+                    return Ok(decoded.into_owned());
+                }
+            }
             let mut decoded = String::with_capacity(raw.len());
             for byte in raw {
                 decoded.push(char::from(byte));
@@ -311,6 +318,48 @@ fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
             Ok(decoded)
         }
     }
+}
+
+fn detect_declared_source_encoding(bytes: &[u8]) -> Option<&'static Encoding> {
+    let probe_len = bytes.len().min(4096);
+    let probe = String::from_utf8_lossy(&bytes[..probe_len]);
+
+    for line in probe.lines() {
+        if let Some(encoding_name) = parse_encoding_pragma(line.trim())
+            && is_gb18030_alias(encoding_name)
+        {
+            return Some(GB18030);
+        }
+    }
+
+    None
+}
+
+fn parse_encoding_pragma(line: &str) -> Option<&str> {
+    let without_use = line.strip_prefix("use ")?;
+    let without_encoding = without_use.trim_start().strip_prefix("encoding")?;
+    let mut token = without_encoding.trim_start().trim_end_matches(';').trim();
+
+    if token.is_empty() {
+        return None;
+    }
+
+    if let Some(stripped) = token.strip_prefix('\'') {
+        token = stripped;
+        token = token.strip_suffix('\'')?;
+    } else if let Some(stripped) = token.strip_prefix('"') {
+        token = stripped;
+        token = token.strip_suffix('"')?;
+    } else {
+        token = token.split(|ch: char| ch.is_whitespace() || ch == ';').next().unwrap_or("");
+    }
+
+    if token.is_empty() { None } else { Some(token) }
+}
+
+fn is_gb18030_alias(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    matches!(lower.as_str(), "gb18030" | "gb-18030")
 }
 
 fn ast_to_json(ast: &Node) -> serde_json::Value {
@@ -432,7 +481,7 @@ fn print_error_context(source: &str, position: usize, stderr: &mut io::Stderr) {
 
 #[cfg(test)]
 mod tests {
-    use super::read_source_bytes;
+    use super::{detect_declared_source_encoding, read_source_bytes};
 
     #[test]
     fn read_source_bytes_preserves_utf8() -> Result<(), Box<dyn std::error::Error>> {
@@ -447,5 +496,21 @@ mod tests {
         let decoded = read_source_bytes(vec![0x53, 0xE5, 0x72, 0x0A])?;
         assert_eq!(decoded, "Sår\n");
         Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_declared_gb18030() -> Result<(), Box<dyn std::error::Error>> {
+        let mut source = b"use encoding 'gb18030';\n".to_vec();
+        source.extend_from_slice(&[0xD6, 0xD0, 0xCE, 0xC4, 0x0A]); // 中文\n in GB18030
+
+        let decoded = read_source_bytes(source)?;
+        assert!(decoded.contains("中文"));
+        Ok(())
+    }
+
+    #[test]
+    fn detect_declared_source_encoding_accepts_dash_alias() {
+        let encoding = detect_declared_source_encoding(b"use encoding 'GB-18030';\n");
+        assert!(encoding.is_some());
     }
 }
