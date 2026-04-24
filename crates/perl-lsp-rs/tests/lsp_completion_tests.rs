@@ -1055,28 +1055,26 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Test that completion ranking respects lexical scope distance.
-/// Variables from immediate scope should rank higher than parent scope.
+///
+/// The server sorts completions internally by scope-distance tier before sending
+/// the response (`deduplicate_and_sort` runs with sort_key 'a'=Immediate <
+/// 'b'=Parent < 'c'=PackageLevel < 'd'=Workspace). The list position in the
+/// response is therefore the observable ranking signal.
+///
+/// Uses **distinct** variable names (`$scope_inner` vs `$scope_outer`) so that
+/// `deduplicate_and_sort()` does not collapse them into a single winner — the
+/// same-label dedup would silently discard the outer-scope entry and make any
+/// ordering assertion vacuous.
 #[test]
 fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
 
-    let uri = "file:///test_scope.pl";
-    let code = r#"
-my $outer = 1;
-
-{
-    my $inner = 2;
-    my $config = 'local';
-
-    {
-        my $deep = 3;
-        my $config = 'deeper';
-
-        my $result = $c
-    }
-}
-"#;
+    let uri = "file:///test_scope_ranking.pl";
+    // $scope_outer declared at file scope   → ScopeDistance::PackageLevel (sort key 'c')
+    // $scope_inner declared in inner block  → ScopeDistance::Immediate    (sort key 'a')
+    // Both start with "scope", so both match prefix "$scope". Different labels → dedup keeps both.
+    let code = "my $scope_outer = 1;\n{\n    my $scope_inner = 2;\n    my $x = $scope\n}\n";
 
     send_notification(
         &server,
@@ -1095,10 +1093,7 @@ my $outer = 1;
     );
     drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
 
-    let lines: Vec<&str> = code.lines().collect();
-    let target_line = lines.iter().position(|l| l.contains("$c")).unwrap_or(0);
-    let target_char = lines[target_line].rfind("$c").unwrap_or(0) + 2;
-
+    // Line 3 (0-indexed): "    my $x = $scope" — cursor at character 18 (end of "$scope")
     let response = send_request(
         &server,
         json!({
@@ -1106,39 +1101,41 @@ my $outer = 1;
             "method": "textDocument/completion",
             "params": {
                 "textDocument": { "uri": uri },
-                "position": { "line": target_line as i32, "character": target_char as i32 }
+                "position": { "line": 3, "character": 18 }
             }
         }),
     );
 
     let items = completion_items(&response);
 
-    let config_items: Vec<_> = items
+    // Find list positions — position encodes the server's sort order since the
+    // server pre-sorts by scope-distance tier and does not echo sortText back.
+    let inner_pos = items
         .iter()
-        .filter(|item| {
-            item["label"]
-                .as_str()
-                .map(|s| s.contains("config"))
-                .unwrap_or(false)
-        })
-        .collect();
+        .position(|item| item["label"].as_str().map(|s| s == "$scope_inner").unwrap_or(false));
+    let outer_pos = items
+        .iter()
+        .position(|item| item["label"].as_str().map(|s| s == "$scope_outer").unwrap_or(false));
 
     assert!(
-        config_items.len() >= 1,
-        "Should suggest $config from at least one scope"
+        inner_pos.is_some(),
+        "$scope_inner should appear in completions (cursor is inside its declaring block)"
+    );
+    assert!(
+        outer_pos.is_some(),
+        "$scope_outer should appear in completions (file-scope `my` variable)"
     );
 
-    let first_sort = config_items[0]["sortText"].as_str().unwrap_or("");
+    let inner_pos = inner_pos.unwrap();
+    let outer_pos = outer_pos.unwrap();
 
-    if config_items.len() >= 2 {
-        let second_sort = config_items[1]["sortText"].as_str().unwrap_or("");
-        assert!(
-            first_sort < second_sort,
-            "Immediate scope should rank before parent scope: '{}' vs '{}'",
-            first_sort,
-            second_sort
-        );
-    }
+    // Immediate scope ('a') must sort before PackageLevel ('c'), so $scope_inner
+    // must appear at a lower list index than $scope_outer.
+    assert!(
+        inner_pos < outer_pos,
+        "$scope_inner (immediate scope, index {inner_pos}) must sort before \
+         $scope_outer (file scope, index {outer_pos}) in the completion list"
+    );
 
     Ok(())
 }
