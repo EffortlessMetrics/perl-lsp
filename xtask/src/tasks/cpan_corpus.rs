@@ -24,6 +24,16 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default path for the full CPAN corpus baseline report
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
+pub(crate) const SYSTEM_VALID_GAP_MANIFEST_PATH: &str = ".ci/parser-valid-parser-gap-manifest.txt";
+pub(crate) const SYSTEM_KNOWN_INVALID_MANIFEST_PATH: &str = ".ci/parser-known-invalid-manifest.txt";
+pub(crate) const SYSTEM_UNREADABLE_MANIFEST_PATH: &str = ".ci/parser-unreadable-manifest.txt";
+pub(crate) const SYSTEM_EXPECTED_RECOVERY_MANIFEST_PATH: &str =
+    ".ci/parser-known-recovery-manifest.txt";
+pub(crate) const CPAN_VALID_GAP_MANIFEST_PATH: &str = ".ci/cpan-valid-parser-gap-manifest.txt";
+pub(crate) const CPAN_KNOWN_INVALID_MANIFEST_PATH: &str = ".ci/cpan-known-invalid-manifest.txt";
+pub(crate) const CPAN_UNREADABLE_MANIFEST_PATH: &str = ".ci/cpan-unreadable-manifest.txt";
+pub(crate) const CPAN_EXPECTED_RECOVERY_MANIFEST_PATH: &str =
+    ".ci/cpan-known-recovery-manifest.txt";
 /// Default install target directory (relative to workspace root)
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
 /// Temp report path used by ratchet (relative to workspace root)
@@ -41,6 +51,40 @@ const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(120);
 /// such as `PDL` legitimately need more wall-clock time than a whole batch
 /// should get before we split it apart.
 const CPANM_SINGLE_DIST_TIMEOUT: Duration = Duration::from_secs(300);
+
+#[derive(Debug, Clone)]
+pub(crate) struct ClassificationManifestPaths {
+    pub valid_parser_gap: PathBuf,
+    pub expected_recovery_only: PathBuf,
+    pub known_invalid: PathBuf,
+    pub unreadable: PathBuf,
+}
+
+pub(crate) fn classification_manifests_for_profile(
+    profile: &str,
+) -> Option<ClassificationManifestPaths> {
+    let manifests = match profile {
+        "system" => (
+            SYSTEM_VALID_GAP_MANIFEST_PATH,
+            SYSTEM_EXPECTED_RECOVERY_MANIFEST_PATH,
+            SYSTEM_KNOWN_INVALID_MANIFEST_PATH,
+            SYSTEM_UNREADABLE_MANIFEST_PATH,
+        ),
+        "cpan" => (
+            CPAN_VALID_GAP_MANIFEST_PATH,
+            CPAN_EXPECTED_RECOVERY_MANIFEST_PATH,
+            CPAN_KNOWN_INVALID_MANIFEST_PATH,
+            CPAN_UNREADABLE_MANIFEST_PATH,
+        ),
+        _ => return None,
+    };
+    Some(ClassificationManifestPaths {
+        valid_parser_gap: workspace_path(manifests.0),
+        expected_recovery_only: workspace_path(manifests.1),
+        known_invalid: workspace_path(manifests.2),
+        unreadable: workspace_path(manifests.3),
+    })
+}
 
 /// Return the workspace root path, anchored at compile time to the xtask
 /// crate's manifest directory. This makes every relative CPAN corpus path

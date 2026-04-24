@@ -533,5 +533,11 @@
       "target/cpan-corpus/lib/perl5/Log/Message.pm"
     ]
   },
-  "elapsed_secs": 6.100542583
+  "elapsed_secs": 6.100542583,
+  "classification_counts": {
+    "valid_parser_gap": 219,
+    "expected_recovery_only": 0,
+    "known_invalid": 0,
+    "unreadable": 6
+  }
 }

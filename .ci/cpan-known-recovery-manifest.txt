@@ -1,0 +1,1 @@
+# CPAN corpus files expected to rely on parser recovery.

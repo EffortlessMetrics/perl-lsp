@@ -1,0 +1,2 @@
+# CPAN corpus files currently unreadable in sweep environment.
+# Populate from a fresh sweep report with file_results when CPAN corpus is installed.

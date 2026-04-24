@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use perl_parser::{Node, NodeKind, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
@@ -184,6 +184,9 @@ pub struct SweepReport {
     /// present; empty when no per-file timings were recorded.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub slowest_files: Vec<SlowestFileEntry>,
+    /// Classification counts for non-clean files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub classification_counts: Option<ClassificationCounts>,
 }
 
 /// Phase-timing breakdown of a corpus sweep in milliseconds.
@@ -266,6 +269,40 @@ pub struct RatchetViolation {
     pub metric: String,
     pub baseline_value: String,
     pub current_value: String,
+}
+
+/// Per-category classification counts for non-clean corpus files.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ClassificationCounts {
+    pub valid_parser_gap: usize,
+    pub expected_recovery_only: usize,
+    pub known_invalid: usize,
+    pub unreadable: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ClassificationSets {
+    valid_parser_gap: BTreeSet<String>,
+    expected_recovery_only: BTreeSet<String>,
+    known_invalid: BTreeSet<String>,
+    unreadable: BTreeSet<String>,
+}
+
+impl ClassificationSets {
+    fn load_for_profile(profile: &str) -> Result<Option<Self>> {
+        let Some(paths) = super::cpan_corpus::classification_manifests_for_profile(profile) else {
+            return Ok(None);
+        };
+
+        Ok(Some(Self {
+            valid_parser_gap: parse_manifest(&paths.valid_parser_gap)?.into_iter().collect(),
+            expected_recovery_only: parse_manifest(&paths.expected_recovery_only)?
+                .into_iter()
+                .collect(),
+            known_invalid: parse_manifest(&paths.known_invalid)?.into_iter().collect(),
+            unreadable: parse_manifest(&paths.unreadable)?.into_iter().collect(),
+        }))
+    }
 }
 
 /// Default high-level corpus root directories for system Perl
@@ -632,6 +669,85 @@ fn compute_median_error_density(measurements: &[FileMeasurement]) -> Option<f64>
     Some(median)
 }
 
+#[derive(Debug, Clone)]
+struct DirtyFileRecord {
+    path: String,
+    status: String,
+}
+
+fn dirty_file_records(report: &SweepReport) -> Vec<DirtyFileRecord> {
+    if !report.file_results.is_empty() {
+        return report
+            .file_results
+            .iter()
+            .filter(|entry| entry.status != "clean")
+            .map(|entry| DirtyFileRecord { path: entry.path.clone(), status: entry.status.clone() })
+            .collect();
+    }
+
+    let mut records = Vec::new();
+    let mut seen = BTreeSet::new();
+    for files in report.files_by_bucket.values() {
+        for path in files {
+            if seen.insert(path.clone()) {
+                records.push(DirtyFileRecord { path: path.clone(), status: "errors".to_string() });
+            }
+        }
+    }
+    records
+}
+
+fn classify_dirty_files(
+    report: &SweepReport,
+    sets: &ClassificationSets,
+) -> (ClassificationCounts, Vec<String>) {
+    let mut counts = ClassificationCounts::default();
+    let mut violations = Vec::new();
+
+    for record in dirty_file_records(report) {
+        let memberships = [
+            ("valid-parser-gap", sets.valid_parser_gap.contains(&record.path)),
+            ("expected-recovery", sets.expected_recovery_only.contains(&record.path)),
+            ("known-invalid", sets.known_invalid.contains(&record.path)),
+            ("unreadable", sets.unreadable.contains(&record.path)),
+        ];
+        let matched: Vec<&str> =
+            memberships.iter().filter_map(|(name, is_member)| is_member.then_some(*name)).collect();
+
+        if matched.len() != 1 {
+            violations.push(format!(
+                "{} must belong to exactly one category, found {}",
+                record.path,
+                if matched.is_empty() { "none".to_string() } else { matched.join(", ") },
+            ));
+            continue;
+        }
+
+        match matched[0] {
+            "valid-parser-gap" => counts.valid_parser_gap += 1,
+            "expected-recovery" => counts.expected_recovery_only += 1,
+            "known-invalid" => counts.known_invalid += 1,
+            "unreadable" => counts.unreadable += 1,
+            _ => {}
+        }
+
+        if record.status == "unreadable" && matched[0] != "unreadable" {
+            violations.push(format!(
+                "{} is unreadable in the sweep output and must be listed in unreadable manifest",
+                record.path
+            ));
+        }
+        if record.status != "unreadable" && matched[0] == "unreadable" {
+            violations.push(format!(
+                "{} parsed but errored; move it out of unreadable manifest",
+                record.path
+            ));
+        }
+    }
+
+    (counts, violations)
+}
+
 /// Run the corpus sweep with the given configuration
 pub fn run(config: SweepConfig) -> Result<()> {
     let start_time = Instant::now();
@@ -710,16 +826,14 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
-                if config.verbose {
-                    file_results.push(FileResult {
-                        path: portable_path.clone(),
-                        status: "unreadable".to_string(),
-                        error_node_count: 0,
-                        first_error: None,
-                        parse_duration_ms: None,
-                        line_count: None,
-                    });
-                }
+                file_results.push(FileResult {
+                    path: portable_path.clone(),
+                    status: "unreadable".to_string(),
+                    error_node_count: 0,
+                    first_error: None,
+                    parse_duration_ms: None,
+                    line_count: None,
+                });
                 progress.inc(1);
                 continue;
             }
@@ -750,16 +864,14 @@ pub fn run(config: SweepConfig) -> Result<()> {
                     line_count,
                     error_node_count: 1,
                 });
-                if config.verbose {
-                    file_results.push(FileResult {
-                        path: portable_path.clone(),
-                        status: "errors".to_string(),
-                        error_node_count: 1,
-                        first_error: Some(bucket),
-                        parse_duration_ms: Some(parse_duration_ms),
-                        line_count: Some(line_count),
-                    });
-                }
+                file_results.push(FileResult {
+                    path: portable_path.clone(),
+                    status: "errors".to_string(),
+                    error_node_count: 1,
+                    first_error: Some(bucket),
+                    parse_duration_ms: Some(parse_duration_ms),
+                    line_count: Some(line_count),
+                });
                 progress.inc(1);
                 continue;
             }
@@ -794,16 +906,14 @@ pub fn run(config: SweepConfig) -> Result<()> {
             let bucket = normalize_error_bucket(first);
             *first_error_buckets.entry(bucket.clone()).or_default() += 1;
             files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path,
-                    status: "errors".to_string(),
-                    error_node_count: summary.count,
-                    first_error: Some(bucket),
-                    parse_duration_ms: Some(parse_duration_ms),
-                    line_count: Some(line_count),
-                });
-            }
+            file_results.push(FileResult {
+                path: portable_path,
+                status: "errors".to_string(),
+                error_node_count: summary.count,
+                first_error: Some(bucket),
+                parse_duration_ms: Some(parse_duration_ms),
+                line_count: Some(line_count),
+            });
         }
 
         progress.inc(1);
@@ -842,12 +952,29 @@ pub fn run(config: SweepConfig) -> Result<()> {
         total_error_nodes,
         first_error_buckets,
         files_by_bucket,
-        file_results: if config.verbose { file_results } else { Vec::new() },
+        file_results,
         elapsed_secs: elapsed.as_secs_f64(),
         phase_timings: Some(phase_timings),
         median_error_density_per_1k_loc,
         slowest_files,
+        classification_counts: None,
     };
+
+    let mut report = report;
+    if !use_manifest && let Some(sets) = ClassificationSets::load_for_profile(&corpus_profile)? {
+        let (counts, classification_violations) = classify_dirty_files(&report, &sets);
+        if config.enforce && !classification_violations.is_empty() {
+            println!("\n--- Classification violations ---");
+            for violation in &classification_violations {
+                println!("  VIOLATION: {violation}");
+            }
+            return Err(color_eyre::eyre::eyre!(
+                "Corpus classification enforcement failed: {} violation(s) detected",
+                classification_violations.len(),
+            ));
+        }
+        report.classification_counts = Some(counts);
+    }
 
     // Print summary
     print_summary(&report);
@@ -898,6 +1025,18 @@ pub fn run(config: SweepConfig) -> Result<()> {
             fs::read_to_string(baseline_path).context("Failed to read baseline file")?;
         let baseline: SweepReport =
             serde_json::from_str(&baseline_json).context("Failed to parse baseline JSON")?;
+        let mut baseline_valid_parser_gap_count: Option<usize> = None;
+        if !use_manifest && let Some(sets) = ClassificationSets::load_for_profile(&corpus_profile)?
+        {
+            let (baseline_counts, baseline_violations) = classify_dirty_files(&baseline, &sets);
+            if config.enforce && !baseline_violations.is_empty() {
+                return Err(color_eyre::eyre::eyre!(
+                    "Baseline classification manifest drift detected: {} violation(s) in baseline report",
+                    baseline_violations.len(),
+                ));
+            }
+            baseline_valid_parser_gap_count = Some(baseline_counts.valid_parser_gap);
+        }
 
         println!("\n--- Baseline comparison ---");
         println!(
@@ -923,7 +1062,20 @@ pub fn run(config: SweepConfig) -> Result<()> {
         }
 
         if config.enforce {
-            let violations = enforce_ratchet(&report, &baseline);
+            let mut violations = enforce_ratchet(&report, &baseline);
+            if let Some(baseline_valid_gap) = baseline_valid_parser_gap_count {
+                let current_valid_gap = report
+                    .classification_counts
+                    .as_ref()
+                    .map_or(0, |counts| counts.valid_parser_gap);
+                if current_valid_gap > baseline_valid_gap {
+                    violations.push(RatchetViolation {
+                        metric: "valid_parser_gap_files".to_string(),
+                        baseline_value: baseline_valid_gap.to_string(),
+                        current_value: current_valid_gap.to_string(),
+                    });
+                }
+            }
             if !violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
                 for v in &violations {
@@ -1092,6 +1244,14 @@ pub fn print_summary(report: &SweepReport) {
         println!("\nMedian error density (dirty files): {density:.2} errors / 1k LOC");
     }
 
+    if let Some(ref counts) = report.classification_counts {
+        println!("\n--- Dirty-file classification ---");
+        println!("  Valid parser gaps:      {}", counts.valid_parser_gap);
+        println!("  Expected recovery-only: {}", counts.expected_recovery_only);
+        println!("  Known invalid Perl:     {}", counts.known_invalid);
+        println!("  Unreadable:             {}", counts.unreadable);
+    }
+
     if !report.slowest_files.is_empty() {
         println!("\n--- Top {} slowest files by parse time ---", report.slowest_files.len());
         for entry in &report.slowest_files {
@@ -1168,6 +1328,7 @@ mod tests {
             phase_timings: None,
             median_error_density_per_1k_loc: None,
             slowest_files: vec![],
+            classification_counts: None,
         }
     }
 

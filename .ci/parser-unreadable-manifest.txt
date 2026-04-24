@@ -1,0 +1,22 @@
+# System corpus files currently unreadable in sweep environment.
+/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/CJKConstants.pm
+/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/JP/H2Z.pm
+/usr/lib/x86_64-linux-gnu/perl/5.38/Encode/CJKConstants.pm
+/usr/lib/x86_64-linux-gnu/perl/5.38/Encode/JP/H2Z.pm
+/usr/share/perl5/Date/Language/Austrian.pm
+/usr/share/perl5/Date/Language/Brazilian.pm
+/usr/share/perl5/Date/Language/Chinese_GB.pm
+/usr/share/perl5/Date/Language/Czech.pm
+/usr/share/perl5/Date/Language/Danish.pm
+/usr/share/perl5/Date/Language/Finnish.pm
+/usr/share/perl5/Date/Language/French.pm
+/usr/share/perl5/Date/Language/German.pm
+/usr/share/perl5/Date/Language/Hungarian.pm
+/usr/share/perl5/Date/Language/Icelandic.pm
+/usr/share/perl5/Date/Language/Norwegian.pm
+/usr/share/perl5/Date/Language/Russian.pm
+/usr/share/perl5/Date/Language/Russian_cp1251.pm
+/usr/share/perl5/Date/Language/Russian_koi8r.pm
+/usr/share/perl5/Date/Language/Spanish.pm
+/usr/share/perl5/Date/Language/Swedish.pm
+/usr/share/perl5/Date/Language/Turkish.pm

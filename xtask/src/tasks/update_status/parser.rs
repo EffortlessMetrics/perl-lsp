@@ -99,12 +99,25 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classes = report.classification_counts.as_ref().map_or_else(
+                || "classification unavailable".to_string(),
+                |counts| {
+                    format!(
+                        "{} valid gaps / {} recovery-only / {} known-invalid / {} unreadable",
+                        counts.valid_parser_gap,
+                        counts.expected_recovery_only,
+                        counts.known_invalid,
+                        counts.unreadable
+                    )
+                },
+            );
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
                 report.files_unreadable,
                 report.files_with_errors,
+                classes,
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +128,24 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classes = report.classification_counts.as_ref().map_or_else(
+                || "classification unavailable".to_string(),
+                |counts| {
+                    format!(
+                        "{} valid gaps / {} recovery-only / {} known-invalid / {} unreadable",
+                        counts.valid_parser_gap,
+                        counts.expected_recovery_only,
+                        counts.known_invalid,
+                        counts.unreadable
+                    )
+                },
+            );
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.files_unreadable,
                 report.files_with_errors,
+                classes,
                 short_day(&report.timestamp),
             )
         },
@@ -370,6 +396,7 @@ mod tests {
             phase_timings: None,
             median_error_density_per_1k_loc: None,
             slowest_files: vec![],
+            classification_counts: None,
         };
         let metrics = ParserMetrics {
             syntax_sections: 611,
