@@ -147,6 +147,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -178,5 +179,21 @@ mod tests {
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    proptest! {
+        #[test]
+        fn set_trace_dispatch_normalizes_unknown_levels_to_off(input in ".*") {
+            let server = LspServer::new();
+
+            let _ = server.handle_set_trace_dispatch(Some(json!({ "value": input })));
+
+            let expected = match input.as_str() {
+                "off" | "messages" | "verbose" => input,
+                _ => "off".to_string(),
+            };
+
+            prop_assert_eq!(server.trace_level.lock().clone(), expected);
+        }
     }
 }
