@@ -315,7 +315,7 @@ impl LspServer {
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
-        // would be inaccurate — we do not maintain incremental AST state between
+        // would be inaccurate â€” we do not maintain incremental AST state between
         // edits; we rebuild the entire AST from the complete document text each time.
         let sync_kind = 1;
 
@@ -534,7 +534,7 @@ mod tests {
             assert!(
                 !still_all,
                 "feature ID '{id}' emitted by to_feature_ids() has no match arm in \
-                 apply_disabled_feature_id — add one to keep the two in sync"
+                 apply_disabled_feature_id â€” add one to keep the two in sync"
             );
         }
     }
@@ -638,5 +638,31 @@ mod tests {
             "must create one workspace folder from initializationOptions.rootUri"
         );
         assert_eq!(folders[0].uri, "file:///tmp/claude-workspace");
+    }
+
+    /// Precedence guard: top-level `rootUri` must take priority over
+    /// `initializationOptions.rootUri` when both are present.
+    #[test]
+    fn initialize_top_level_root_uri_takes_precedence_over_initialization_options() {
+        let server = LspServer::new();
+        let params = json!({
+            "rootUri": "file:///top-level-workspace",
+            "initializationOptions": {
+                "rootUri": "file:///init-options-workspace"
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(
+            folders.len(),
+            1,
+            "must create exactly one workspace folder"
+        );
+        assert_eq!(
+            folders[0].uri, "file:///top-level-workspace",
+            "top-level rootUri must take precedence over initializationOptions.rootUri"
+        );
     }
 }
