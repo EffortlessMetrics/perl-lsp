@@ -148,3 +148,60 @@ fn braced_short_findbin_exports_are_treated_as_findbin_paths() {
         }]),]
     );
 }
+
+#[test]
+fn multiline_use_lib_is_extracted() {
+    let source = "\
+use lib (
+    'alpha',
+    'beta'
+);
+";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![UseLibAction::Add(vec![
+            UseLibPath { path: "alpha".to_string(), from_findbin: false },
+            UseLibPath { path: "beta".to_string(), from_findbin: false },
+        ])]
+    );
+}
+
+#[test]
+fn multiline_use_and_no_lib_are_ordered() {
+    let source = "\
+use lib (
+    'first',
+    'second'
+);
+no lib (
+    'first'
+);
+";
+
+    let include_paths = resolve_use_lib_paths_from_source_at_offset(
+        source,
+        source.len(),
+        Path::new("/workspace"),
+        None,
+    );
+
+    assert_eq!(include_paths, vec!["second".to_string()]);
+}
+
+#[test]
+fn quoted_semicolon_does_not_split_statement() {
+    let source = "use lib 'path;still_path';\n";
+
+    let ops = extract_use_lib_operations(source);
+
+    assert_eq!(
+        ops,
+        vec![UseLibAction::Add(vec![UseLibPath {
+            path: "path;still_path".to_string(),
+            from_findbin: false,
+        }])]
+    );
+}

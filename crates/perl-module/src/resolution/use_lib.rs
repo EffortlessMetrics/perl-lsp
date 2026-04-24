@@ -38,8 +38,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             extract_paths_from_args(rest, &mut paths);
         }
@@ -53,8 +53,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
@@ -74,6 +74,76 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     }
 
     ops
+}
+
+fn split_perl_statements(source: &str) -> Vec<&str> {
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    enum QuoteState {
+        Single,
+        Double,
+    }
+
+    let mut statements = Vec::new();
+    let mut start = 0;
+    let mut quote_state = None;
+    let mut escaped = false;
+
+    for (index, ch) in source.char_indices() {
+        match quote_state {
+            Some(QuoteState::Single) => {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if ch == '\\' {
+                    escaped = true;
+                    continue;
+                }
+                if ch == '\'' {
+                    quote_state = None;
+                }
+            }
+            Some(QuoteState::Double) => {
+                if escaped {
+                    escaped = false;
+                    continue;
+                }
+                if ch == '\\' {
+                    escaped = true;
+                    continue;
+                }
+                if ch == '"' {
+                    quote_state = None;
+                }
+            }
+            None => {
+                if ch == '\'' {
+                    quote_state = Some(QuoteState::Single);
+                    escaped = false;
+                    continue;
+                }
+                if ch == '"' {
+                    quote_state = Some(QuoteState::Double);
+                    escaped = false;
+                    continue;
+                }
+                if ch == ';' {
+                    let statement = source[start..index].trim();
+                    if !statement.is_empty() {
+                        statements.push(statement);
+                    }
+                    start = index + ch.len_utf8();
+                }
+            }
+        }
+    }
+
+    let trailing = source[start..].trim();
+    if !trailing.is_empty() {
+        statements.push(trailing);
+    }
+
+    statements
 }
 
 /// Resolve `use lib` paths against a workspace root and optional file directory.
