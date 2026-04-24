@@ -591,12 +591,8 @@ impl CheckpointedIncrementalParser {
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
-        if edit.start >= relex_start {
-            self.stats.left_checkpoint_distance = edit.start - relex_start;
-        }
-        if relex_end >= edit_end {
-            self.stats.right_checkpoint_distance = relex_end - edit_end;
-        }
+        self.stats.left_checkpoint_distance = edit.start.saturating_sub(relex_start);
+        self.stats.right_checkpoint_distance = relex_end.saturating_sub(edit_end);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -632,6 +628,8 @@ impl CheckpointedIncrementalParser {
 
         let mut raw_relexed: Vec<perl_lexer::Token> = Vec::new();
         let mut bytes_relexed_this_phase = 0usize;
+        let cached_suffix_tokens = self.token_cache.get_tokens_from(relex_end);
+        let can_reuse_right_suffix = cached_suffix_tokens.is_some();
 
         loop {
             match lexer.next_token() {
@@ -639,6 +637,13 @@ impl CheckpointedIncrementalParser {
                 Some(token) => {
                     let token_end = token.end;
                     let token_start = token.start;
+
+                    // If we already proved a reusable suffix starts at this boundary,
+                    // avoid re-lexing tokens that begin at/after the right checkpoint.
+                    if can_reuse_right_suffix && token_start >= relex_end {
+                        break;
+                    }
+
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
                     bytes_relexed_this_phase += token_end - token_start;
@@ -660,7 +665,7 @@ impl CheckpointedIncrementalParser {
         let segments_after = self.token_cache.get_segments_after(relex_end);
         self.stats.segments_reused_after += segments_after.len();
 
-        if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
+        if let Some(cached) = cached_suffix_tokens {
             self.stats.cache_hits += 1;
             for token in cached {
                 // Adjust byte positions to account for the inserted/removed bytes.
@@ -685,6 +690,7 @@ impl CheckpointedIncrementalParser {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                self.stats.bytes_relexed += token.end - token.start;
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
@@ -862,5 +868,34 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_checkpoint_window_stops_before_reusable_suffix_boundary_token() {
+        // 100 leading spaces make checkpoint 100 land exactly before the first
+        // non-trivia token, so the right suffix can be reused from that boundary.
+        let mut source = format!("{}my $x = 1;\nmy $y = 2;\n", " ".repeat(100));
+
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse(source.clone()));
+
+        // Edit inside leading trivia; this should keep the right checkpoint path
+        // active while avoiding re-lexing the token that starts at the checkpoint.
+        let edit = SimpleEdit { start: 10, end: 11, new_text: "  ".to_string() };
+        let bytes_before = parser.stats().bytes_relexed;
+
+        must(parser.apply_edit(&edit));
+        source.replace_range(edit.start..edit.end, &edit.new_text);
+
+        let stats = parser.stats();
+        let bytes_this_edit = stats.bytes_relexed - bytes_before;
+        let checkpoint_window_len =
+            stats.left_checkpoint_distance + edit.new_text.len() + stats.right_checkpoint_distance;
+
+        assert!(
+            bytes_this_edit <= checkpoint_window_len,
+            "expected relex bytes to stay within checkpoint window, got bytes={bytes_this_edit}, window={checkpoint_window_len}, stats={stats:?}"
+        );
+        assert!(stats.cache_hits > 0, "expected reusable suffix cache hit, got {stats:?}");
     }
 }
