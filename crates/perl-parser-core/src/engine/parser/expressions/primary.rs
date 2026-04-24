@@ -915,11 +915,56 @@ impl<'a> Parser<'a> {
             // In expression context, keywords can appear as barewords / hash keys
             // (especially before `=>`).  Control-flow keywords are only safe here
             // because `parse_statement_inner` already handled the real keyword case.
-            TokenKind::My
-            | TokenKind::Our
-            | TokenKind::Local
-            | TokenKind::State
-            | TokenKind::Field
+            TokenKind::Local => {
+                // Declaration keywords are valid expression terms in Perl, e.g.
+                // `my $x = local $SIG{__WARN__} = sub { ... };`.
+                // Keep fat-arrow autoquoting (`local => 1`) by treating only the
+                // `=>` form as an identifier.
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_local_statement()
+                }
+            }
+
+            TokenKind::My | TokenKind::Our | TokenKind::State => {
+                let looks_like_declaration = self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .is_some_and(|next| {
+                        matches!(
+                            next.kind,
+                            TokenKind::ScalarSigil
+                                | TokenKind::ArraySigil
+                                | TokenKind::HashSigil
+                                | TokenKind::SubSigil
+                                | TokenKind::GlobSigil
+                                | TokenKind::LeftParen
+                        ) || (next.kind == TokenKind::Identifier
+                            && next
+                                .text
+                                .chars()
+                                .next()
+                                .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
+                    });
+
+                if self.is_keyword_before_fat_arrow() || !looks_like_declaration {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_declaration_arg()
+                }
+            }
+
+            TokenKind::Field
             | TokenKind::Package
             | TokenKind::Use
             | TokenKind::No
