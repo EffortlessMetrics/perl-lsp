@@ -278,3 +278,114 @@ fn test_tcp_attach_reader_handles_concatenated_frames() {
 
     must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
 }
+
+#[test]
+fn test_tcp_attach_connect_timeout_for_unreachable_endpoint() {
+    let mut session = TcpAttachSession::new();
+    let config = TcpAttachConfig::new("203.0.113.1".to_string(), 6553).with_timeout(50);
+
+    let result = session.connect(&config);
+    assert!(result.is_err(), "expected timeout or network error for unreachable endpoint");
+    assert!(!session.is_connected(), "failed connect must keep session disconnected");
+}
+
+#[test]
+fn test_tcp_attach_reader_emits_stopped_and_terminated_events() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (mut socket, _) = must(listener.accept());
+
+        let stopped_event = serde_json::json!({
+            "type": "event",
+            "seq": 1,
+            "event": "stopped",
+            "body": {
+                "reason": "breakpoint",
+                "threadId": 42
+            }
+        })
+        .to_string();
+
+        let terminated_event = serde_json::json!({
+            "type": "event",
+            "seq": 2,
+            "event": "terminated",
+            "body": {
+                "reason": "completed"
+            }
+        })
+        .to_string();
+
+        let mut bytes = frame(stopped_event.as_bytes());
+        bytes.extend_from_slice(&frame(terminated_event.as_bytes()));
+        must(socket.write_all(&bytes));
+        must(socket.flush());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    let first = must(event_rx.recv_timeout(Duration::from_secs(2)));
+    let second = must(event_rx.recv_timeout(Duration::from_secs(2)));
+
+    match first {
+        DapEvent::Stopped { reason, thread_id } => {
+            assert_eq!(reason, "breakpoint");
+            assert_eq!(thread_id, 42);
+        }
+        other => must(Err::<(), _>(format!("Expected Stopped event, got {other:?}"))),
+    }
+
+    match second {
+        DapEvent::Terminated { reason } => {
+            assert_eq!(reason, "completed");
+        }
+        other => must(Err::<(), _>(format!("Expected Terminated event, got {other:?}"))),
+    }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
+}
+
+#[test]
+fn test_tcp_attach_disconnect_after_reader_allows_reconnect() {
+    let listener1 = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port1 = must(listener1.local_addr()).port();
+    let server1 = thread::spawn(move || {
+        let (_socket, _) = must(listener1.accept());
+        thread::sleep(Duration::from_millis(800));
+    });
+
+    let listener2 = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port2 = must(listener2.local_addr()).port();
+    let server2 = thread::spawn(move || {
+        let (_socket, _) = must(listener2.accept());
+        thread::sleep(Duration::from_millis(200));
+    });
+
+    let mut session = TcpAttachSession::new();
+    must(session.connect(&TcpAttachConfig::new("127.0.0.1".to_string(), port1).with_timeout(2000)));
+    must(session.start_reader());
+    assert!(session.is_connected());
+
+    must(session.disconnect());
+    assert!(
+        !session.is_connected(),
+        "disconnect should mark reader-backed session as disconnected"
+    );
+
+    must(session.connect(&TcpAttachConfig::new("127.0.0.1".to_string(), port2).with_timeout(2000)));
+    assert!(session.is_connected(), "session should reconnect cleanly after disconnect");
+
+    must(session.disconnect());
+    assert!(!session.is_connected());
+
+    must(server1.join().map_err(|_| "Server 1 thread panicked".to_string()));
+    must(server2.join().map_err(|_| "Server 2 thread panicked".to_string()));
+}
