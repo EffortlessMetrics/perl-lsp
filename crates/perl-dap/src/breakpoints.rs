@@ -230,24 +230,25 @@ impl BreakpointStore {
         };
 
         // Get breakpoints array (empty if not provided)
-        let source_breakpoints = args.breakpoints.as_ref().map_or(Vec::new(), |bps| bps.clone());
-
-        // Lock stores for atomic operation
-        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
-        let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
-
-        // Clear existing breakpoints for this source (REPLACE semantics)
-        breakpoints_map.remove(&source_path);
+        let source_breakpoints = args.breakpoints.as_deref().unwrap_or(&[]);
 
         // Read source file and parse once for AST validation (AC7).
         let source_content = std::fs::read_to_string(&source_path).ok();
         let validator = source_content
             .as_ref()
             .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
+        let mut line_validation_cache: HashMap<i64, (bool, i64, Option<String>)> = HashMap::new();
 
-        let mut records = Vec::new();
+        // Lock stores for atomic REPLACE operation
+        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
+        let mut next_id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
+
+        // Clear existing breakpoints for this source (REPLACE semantics)
+        breakpoints_map.remove(&source_path);
+
+        let mut records = Vec::with_capacity(source_breakpoints.len());
         // Create new breakpoint records
-        for bp in &source_breakpoints {
+        for bp in source_breakpoints {
             let id = *next_id;
             *next_id += 1;
 
@@ -324,17 +325,24 @@ impl BreakpointStore {
             }
 
             // AC7: AST-based breakpoint validation via `perl-dap-breakpoint` microcrate.
-            let (verified, resolved_line, message) = match &validator {
-                Some(Ok(v)) => {
-                    let result = v.validate_with_column(bp.line, bp.column);
-                    (result.verified, result.line, result.message)
-                }
-                Some(Err(error)) => (false, bp.line, Some(error.clone())),
-                None => {
-                    // Can't read file - mark as unverified but still create breakpoint.
-                    (false, bp.line, Some("Unable to read source file".to_string()))
-                }
-            };
+            let (verified, resolved_line, message) =
+                if let Some(cached) = line_validation_cache.get(&bp.line) {
+                    cached.clone()
+                } else {
+                    let computed = match &validator {
+                        Some(Ok(v)) => {
+                            let result = v.validate(bp.line);
+                            (result.verified, result.line, result.message)
+                        }
+                        Some(Err(error)) => (false, bp.line, Some(error.clone())),
+                        None => {
+                            // Can't read file - mark as unverified but still create breakpoint.
+                            (false, bp.line, Some("Unable to read source file".to_string()))
+                        }
+                    };
+                    line_validation_cache.insert(bp.line, computed.clone());
+                    computed
+                };
 
             let record = BreakpointRecord {
                 id,
