@@ -266,6 +266,66 @@ my $result = calculate_sum(1, 2, 3);
 }
 
 #[test]
+fn go_to_definition_on_use_qw_import_bareword_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/My/Utils.pm",
+        r#"package My::Utils;
+use strict;
+use warnings;
+
+sub calculate_sum {
+    my (@nums) = @_;
+    my $total = 0;
+    $total += $_ for @nums;
+    return $total;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/My/Utils.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/My/Utils.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use My::Utils qw(calculate_sum);
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "calculate_sum")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(!locations.is_empty(), "expected definition result for use qw bareword import");
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("My/Utils.pm") || uri.contains("My%2FUtils.pm"),
+        "Definition should point to My/Utils.pm, got: {uri}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn go_to_definition_on_tag_imported_symbol_navigates_to_source_module() -> TestResult {
     let mut harness = LspHarness::new();
     let workspace = support::lsp_harness::TempWorkspace::new()?;
@@ -387,6 +447,66 @@ my $result = runtime_sum(1, 2, 3);
         uri.contains("My/Runtime.pm") || uri.contains("My%2FRuntime.pm"),
         "Definition should point to My/Runtime.pm, got: {}",
         uri
+    );
+
+    Ok(())
+}
+
+#[test]
+fn go_to_definition_on_use_qw_tag_expansion_bareword_navigates_to_source_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    workspace.write(
+        "lib/POSIX.pm",
+        r#"package POSIX;
+use strict;
+use warnings;
+
+sub WIFEXITED {
+    return 1;
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    let module_uri = workspace.uri("lib/POSIX.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/POSIX.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    let caller = r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use POSIX qw(:sys_wait_h WIFEXITED);
+"#;
+    harness.open(&workspace.uri("app.pl"), caller)?;
+    harness.barrier();
+
+    let (line, character) = find_line_char(caller, "WIFEXITED")?;
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": line, "character": character}
+        }),
+    )?;
+
+    let locations = result.as_array().ok_or("expected location array")?;
+    assert!(
+        !locations.is_empty(),
+        "expected definition result for bareword in tag-based use qw import list"
+    );
+
+    let first = &locations[0];
+    assert_valid_location(first);
+    let uri = first["uri"].as_str().ok_or("Expected URI")?;
+    assert!(
+        uri.contains("POSIX.pm") || uri.contains("POSIX%2Epm"),
+        "Definition should point to POSIX.pm, got: {uri}"
     );
 
     Ok(())
@@ -2521,9 +2641,7 @@ $store->component_method();
     )?;
 
     let locations = result.as_array().ok_or_else(|| {
-        format!(
-            "Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}"
-        )
+        format!("Expected array for deep mixed-inheritance CPAN-style goto-def, got: {result:?}")
     })?;
     assert!(
         !locations.is_empty(),

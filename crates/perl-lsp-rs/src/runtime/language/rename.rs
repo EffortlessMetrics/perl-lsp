@@ -222,7 +222,12 @@ impl LspServer {
                                 let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                                 let current_pkg =
                                     crate::declaration::current_package_at(ast, offset);
-                                crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_pkg,
+                                    &doc.text,
+                                )
                             })
                         })
                     };
