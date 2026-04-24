@@ -50,3 +50,21 @@ fn test_legacy_typed_our_declaration_parses_without_error_node()
     );
     Ok(())
 }
+
+#[test]
+fn test_legacy_typed_declaration_with_qualified_type_constraint()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut parser = Parser::new("my ExtUtils::Typemaps::Type $type = shift;");
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+
+    assert!(
+        !sexp.contains("ERROR"),
+        "Qualified typed declaration should parse without ERROR node, got: {sexp}",
+    );
+    assert!(
+        sexp.contains("(variable $ type)"),
+        "Expected variable `$type` after qualified type constraint, got: {sexp}",
+    );
+    Ok(())
+}

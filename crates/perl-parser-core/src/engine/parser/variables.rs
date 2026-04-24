@@ -169,8 +169,15 @@ impl<'a> Parser<'a> {
     ///
     /// The type constraint is intentionally ignored in the AST for now.
     fn consume_legacy_decl_type_constraint(&mut self) -> ParseResult<()> {
+        let _ = self.consume_optional_type_constraint()?;
+        Ok(())
+    }
+
+    /// Consume an optional type constraint prefix (e.g. `Type` or `Type::Name`)
+    /// before a variable in declarations/signatures.
+    fn consume_optional_type_constraint(&mut self) -> ParseResult<Option<String>> {
         if self.peek_kind() != Some(TokenKind::Identifier) {
-            return Ok(());
+            return Ok(None);
         }
 
         let looks_like_type = {
@@ -200,11 +207,20 @@ impl<'a> Parser<'a> {
             }
         };
 
-        if looks_like_type {
-            self.consume_token()?;
+        if !looks_like_type {
+            return Ok(None);
         }
 
-        Ok(())
+        let mut type_name = self.consume_token()?.text.to_string();
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            && self.tokens.peek_second().is_ok_and(|t| t.kind == TokenKind::Identifier)
+        {
+            self.consume_token()?; // ::
+            type_name.push_str("::");
+            type_name.push_str(&self.consume_token()?.text);
+        }
+
+        Ok(Some(type_name))
     }
 
     /// Parse local statement (can localize any lvalue, not just simple variables)
@@ -791,23 +807,8 @@ impl<'a> Parser<'a> {
             false
         };
 
-        // Check for type constraint (Type $var)
-        let _type_constraint = if self.peek_kind() == Some(TokenKind::Identifier) {
-            // Look ahead to see if this is a type constraint
-            let token = self.tokens.peek()?;
-            if !token.text.starts_with('$')
-                && !token.text.starts_with('@')
-                && !token.text.starts_with('%')
-                && !token.text.starts_with('&')
-            {
-                // It's likely a type constraint
-                Some(self.tokens.next()?.text.to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // Check for type constraint (Type $var / Type::Name $var)
+        let _type_constraint = self.consume_optional_type_constraint()?;
 
         // Parse the variable
         let variable = self.parse_variable()?;
@@ -815,8 +816,9 @@ impl<'a> Parser<'a> {
         // Check for default value (= expression)
         let default_value = if self.peek_kind() == Some(TokenKind::Assign) {
             self.tokens.next()?; // consume =
-            // Parse a primary expression for default value to avoid parsing too far
-            Some(Box::new(self.parse_primary()?))
+            // Parse assignment-level expressions so defaults like `shift // 0`
+            // are accepted without consuming comma-separated next parameters.
+            Some(Box::new(self.parse_assignment()?))
         } else {
             None
         };

@@ -165,3 +165,25 @@ fn test_empty_signature_no_diagnostics() {
     let errors = parse_and_collect_errors("sub foo () { }");
     assert!(errors.is_empty(), "Unexpected diagnostics for empty signature, got: {:?}", errors);
 }
+
+#[test]
+fn test_typed_signature_with_qualified_type_is_valid() {
+    let errors = parse_and_collect_errors("sub foo (My::Type $value) { }");
+    assert!(
+        errors.is_empty(),
+        "Unexpected diagnostics for qualified typed signature, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn test_signature_default_value_allows_expression() {
+    let errors = parse_and_collect_errors("sub foo ($x = shift // 0, $y) { }");
+    assert!(
+        !errors
+            .iter()
+            .any(|e| e.contains("Expected comma or closing parenthesis in signature")),
+        "Default expression should not trigger signature comma diagnostics, got: {:?}",
+        errors
+    );
+}
