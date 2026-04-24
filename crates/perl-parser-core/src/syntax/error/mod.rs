@@ -113,6 +113,7 @@
 //! }
 //! ```
 
+use perl_ast::{Node, NodeKind};
 use perl_position_tracking::LineIndex;
 use thiserror::Error;
 
@@ -489,8 +490,6 @@ pub mod classifier;
 /// Error recovery strategies and traits for the Perl parser.
 pub mod recovery;
 
-use perl_ast::Node;
-
 /// Structured output from parsing, combining AST with all diagnostics.
 ///
 /// This type replaces the simple `Result<Node, ParseError>` pattern to enable
@@ -540,6 +539,39 @@ pub struct ParseOutput {
     /// LSP providers use this as a confidence signal: `0` means a clean parse,
     /// `> 0` means at least one synthetic repair was made.
     pub recovered_count: usize,
+}
+
+/// Earliest unrecovered `ERROR` node observed in a parsed AST.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstUnrecoveredErrorNode {
+    /// Error message stored in the `NodeKind::Error`.
+    pub message: String,
+    /// Byte location of the error node start in source text.
+    pub location: usize,
+}
+
+/// Recovery-vs-failure closeout metrics for a single parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoverySalvageMetrics {
+    /// Number of structured `ParseError::Recovered` diagnostics.
+    pub recovered_node_count: usize,
+    /// Number of unrecovered `NodeKind::Error` nodes in the AST.
+    pub unrecovered_error_node_count: usize,
+    /// Earliest unrecovered `ERROR` node when present.
+    pub first_unrecovered_error_node: Option<FirstUnrecoveredErrorNode>,
+}
+
+impl RecoverySalvageMetrics {
+    /// True when parsing used structured recovery only and produced no
+    /// unrecovered `ERROR` node.
+    pub fn is_structured_recovery_only(&self) -> bool {
+        self.recovered_node_count > 0 && self.unrecovered_error_node_count == 0
+    }
+
+    /// True when parsing left at least one unrecovered `ERROR` node.
+    pub fn has_unrecovered_error_nodes(&self) -> bool {
+        self.unrecovered_error_node_count > 0
+    }
 }
 
 impl ParseOutput {
@@ -595,6 +627,48 @@ impl ParseOutput {
     pub fn error_count(&self) -> usize {
         self.diagnostics.len()
     }
+
+    /// Summarize recovery salvage quality for this parse output.
+    pub fn recovery_salvage_metrics(&self) -> RecoverySalvageMetrics {
+        recovery_salvage_metrics(&self.ast, &self.diagnostics)
+    }
+}
+
+/// Compute recovery salvage metrics from a parsed AST + diagnostics list.
+pub fn recovery_salvage_metrics(ast: &Node, diagnostics: &[ParseError]) -> RecoverySalvageMetrics {
+    let recovered_node_count =
+        diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+    let (unrecovered_error_node_count, first_unrecovered_error_node) =
+        collect_unrecovered_error_nodes(ast);
+    RecoverySalvageMetrics {
+        recovered_node_count,
+        unrecovered_error_node_count,
+        first_unrecovered_error_node,
+    }
+}
+
+fn collect_unrecovered_error_nodes(ast: &Node) -> (usize, Option<FirstUnrecoveredErrorNode>) {
+    fn walk(node: &Node, count: &mut usize, earliest: &mut Option<FirstUnrecoveredErrorNode>) {
+        if let NodeKind::Error { message, .. } = &node.kind {
+            *count += 1;
+            let replace = match earliest {
+                Some(current) => node.location.start < current.location,
+                None => true,
+            };
+            if replace {
+                *earliest = Some(FirstUnrecoveredErrorNode {
+                    message: message.clone(),
+                    location: node.location.start,
+                });
+            }
+        }
+        node.for_each_child(|child| walk(child, count, earliest));
+    }
+
+    let mut count = 0usize;
+    let mut earliest = None;
+    walk(ast, &mut count, &mut earliest);
+    (count, earliest)
 }
 
 impl ParseError {
@@ -1039,5 +1113,57 @@ mod tests {
 
         assert_eq!(output.recovered_count, 1);
         assert!(!output.terminated_early);
+    }
+
+    #[test]
+    fn test_recovery_salvage_metrics_structured_only() {
+        use perl_ast::{Node, NodeKind, SourceLocation};
+
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![ParseError::Recovered {
+            site: RecoverySite::InfixRhs,
+            kind: RecoveryKind::MissingOperand,
+            location: 5,
+        }];
+        let metrics = recovery_salvage_metrics(&ast, &errors);
+        assert!(metrics.is_structured_recovery_only());
+        assert!(!metrics.has_unrecovered_error_nodes());
+    }
+
+    #[test]
+    fn test_recovery_salvage_metrics_tracks_first_unrecovered_error_node() {
+        use perl_ast::{Node, NodeKind, SourceLocation};
+
+        let first = Node::new(
+            NodeKind::Error {
+                message: "first".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation { start: 3, end: 4 },
+        );
+        let second = Node::new(
+            NodeKind::Error {
+                message: "second".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation { start: 8, end: 9 },
+        );
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![first, second] },
+            SourceLocation { start: 0, end: 9 },
+        );
+        let metrics = recovery_salvage_metrics(&ast, &[]);
+        assert_eq!(metrics.unrecovered_error_node_count, 2);
+        assert_eq!(
+            metrics.first_unrecovered_error_node,
+            Some(FirstUnrecoveredErrorNode { message: "first".to_string(), location: 3 })
+        );
     }
 }

@@ -4,6 +4,7 @@
 //! detection of files that may cause timeouts or hangs.
 
 use perl_parser::Parser;
+use perl_parser::error::recovery_salvage_metrics;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -138,6 +139,8 @@ pub enum ParseOutcome {
     Ok {
         /// Time taken to parse
         duration_ms: u64,
+        /// Recovery/error-node classification for closeout metrics.
+        recovery: ParseRecoveryAudit,
     },
     /// Parse failed with error
     Error {
@@ -156,6 +159,17 @@ pub enum ParseOutcome {
     },
 }
 
+/// Recovery-vs-failure metrics for one parsed file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParseRecoveryAudit {
+    /// Number of `ParseError::Recovered` diagnostics.
+    pub recovered_node_count: usize,
+    /// Number of unrecovered `ERROR` nodes left in AST.
+    pub unrecovered_error_node_count: usize,
+    /// Message from the first unrecovered `ERROR` node, if any.
+    pub first_unrecovered_error_node: Option<String>,
+}
+
 impl ParseOutcome {
     /// Check if the parse was successful
     #[allow(dead_code)]
@@ -166,8 +180,19 @@ impl ParseOutcome {
     /// Get the duration in milliseconds if parse succeeded
     pub fn duration_ms(&self) -> Option<u64> {
         match self {
-            ParseOutcome::Ok { duration_ms } => Some(*duration_ms),
+            ParseOutcome::Ok { duration_ms, .. } => Some(*duration_ms),
             _ => None,
+        }
+    }
+}
+
+impl ParseRecoveryAudit {
+    #[cfg(test)]
+    fn clean() -> Self {
+        Self {
+            recovered_node_count: 0,
+            unrecovered_error_node_count: 0,
+            first_unrecovered_error_node: None,
         }
     }
 }
@@ -215,12 +240,26 @@ pub fn parse_with_timeout(
     let handle = std::thread::spawn(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut parser = Parser::new(&content_clone);
-            parser.parse()
+            let parse_result = parser.parse();
+            let diagnostics = parser.errors().to_vec();
+            (parse_result, diagnostics)
         }));
 
         let outcome = match result {
-            Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
-            Ok(Err(e)) => ParseOutcome::Error { message: e.to_string() },
+            Ok((Ok(ast), diagnostics)) => {
+                let metrics = recovery_salvage_metrics(&ast, &diagnostics);
+                ParseOutcome::Ok {
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    recovery: ParseRecoveryAudit {
+                        recovered_node_count: metrics.recovered_node_count,
+                        unrecovered_error_node_count: metrics.unrecovered_error_node_count,
+                        first_unrecovered_error_node: metrics
+                            .first_unrecovered_error_node
+                            .map(|error| error.message),
+                    },
+                }
+            }
+            Ok((Err(e), _diagnostics)) => ParseOutcome::Error { message: e.to_string() },
             Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
         };
 
@@ -503,7 +542,9 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_is_ok() {
-        assert!(ParseOutcome::Ok { duration_ms: 100 }.is_ok());
+        assert!(
+            ParseOutcome::Ok { duration_ms: 100, recovery: ParseRecoveryAudit::clean() }.is_ok()
+        );
         assert!(!ParseOutcome::Error { message: "error".to_string() }.is_ok());
         assert!(!ParseOutcome::Timeout { timeout_ms: 1000 }.is_ok());
         assert!(!ParseOutcome::Panic { message: "panic".to_string() }.is_ok());
@@ -511,7 +552,11 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_duration_ms() {
-        assert_eq!(ParseOutcome::Ok { duration_ms: 100 }.duration_ms(), Some(100));
+        assert_eq!(
+            ParseOutcome::Ok { duration_ms: 100, recovery: ParseRecoveryAudit::clean() }
+                .duration_ms(),
+            Some(100)
+        );
         assert_eq!(ParseOutcome::Error { message: "error".to_string() }.duration_ms(), None);
     }
 

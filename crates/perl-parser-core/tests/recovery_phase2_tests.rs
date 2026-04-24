@@ -14,7 +14,8 @@ mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
 use perl_parser_core::Parser;
-use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite, recovery_salvage_metrics};
+use perl_tdd_support::must;
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -272,6 +273,15 @@ fn clean_equality_does_not_emit_recovered() {
 fn clean_relational_does_not_emit_recovered() {
     let errors = parse_errors("if ($a < $b) { print 1; }");
     assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn missing_rhs_is_classified_as_structured_recovery_only() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let ast = must(parser.parse());
+    let metrics = recovery_salvage_metrics(&ast, parser.errors());
+    assert!(metrics.is_structured_recovery_only(), "expected structured-only recovery metrics");
+    assert!(!metrics.has_unrecovered_error_nodes(), "expected no unrecovered ERROR nodes");
 }
 
 // ──────────────────────────────────────────────────────────────

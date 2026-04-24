@@ -3,6 +3,7 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
+use perl_parser_core::error::recovery_salvage_metrics;
 use perl_parser_core::{NodeKind, ParseResult, Parser};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
@@ -264,6 +265,19 @@ fn parser_ac9_performance_overhead_check() -> ParseResult<()> {
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(statements.len() >= 3, "Should parse all statements");
     }
+    Ok(())
+}
+
+#[test]
+fn parser_recovery_metrics_flags_unrecovered_error_nodes() -> ParseResult<()> {
+    let mut parser = Parser::new("my $x = $obj->;");
+    let ast = parser.parse()?;
+    let metrics = recovery_salvage_metrics(&ast, parser.errors());
+    assert!(metrics.has_unrecovered_error_nodes(), "expected unrecovered ERROR node visibility");
+    assert!(
+        metrics.first_unrecovered_error_node.is_some(),
+        "expected first unrecovered ERROR node message",
+    );
     Ok(())
 }
 

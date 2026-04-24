@@ -85,6 +85,11 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
     format!("{clean_pct:.1}% clean (`{clean_files}/{total_files}`)")
 }
 
+fn format_recovery_salvage_rate(rate: Option<f64>) -> String {
+    let pct = rate.unwrap_or(1.0) * 100.0;
+    format!("{pct:.1}% (`recovery_only/dirty`)")
+}
+
 fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
@@ -131,10 +136,17 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |summary| {
             format!(
-                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, recovery salvage {}, dirty `{}` (`{}` recovery-only, `{}` ERROR-node, `{}` catastrophic), recovered nodes `{}`, first-unrecovered `{}`, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
                 format_clean_rate(summary.ok_files, summary.total_files),
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
+                format_recovery_salvage_rate(summary.recovery_salvage_rate),
+                summary.dirty_files,
+                summary.structured_recovery_only_files,
+                summary.files_with_error_nodes,
+                summary.catastrophic_parse_failure_files,
+                summary.recovered_node_count,
+                summary.first_unrecovered_error_node_files,
                 summary.error_files,
                 summary.timeout_files,
                 summary.panic_files,
@@ -285,9 +297,16 @@ mod tests {
         let summary = super::super::super::corpus_audit::StatusSummary {
             total_files: 91,
             ok_files: 91,
+            dirty_files: 0,
             error_files: 0,
             timeout_files: 0,
             panic_files: 0,
+            structured_recovery_only_files: 0,
+            files_with_error_nodes: 0,
+            catastrophic_parse_failure_files: 0,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_files: 0,
+            recovery_salvage_rate: None,
             test_corpus_files: 69,
             perl_corpus_files: 22,
             nodekind_covered: 65,
@@ -312,6 +331,7 @@ mod tests {
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        assert!(result.contains("recovery salvage 100.0%"), "missing recovery salvage metric");
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"

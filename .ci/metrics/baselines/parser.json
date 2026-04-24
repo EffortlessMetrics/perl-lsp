@@ -15,7 +15,7 @@
   "improvement_metrics": {
     "node_kind_coverage": 0.941,
     "error_density_per_1k_loc": null,
-    "recovery_salvage_rate": null
+    "recovery_salvage_rate": 1.0
   },
   "tolerance_pct": 0.005
 }
