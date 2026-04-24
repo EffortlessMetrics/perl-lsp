@@ -14,7 +14,9 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use walkdir::WalkDir;
 
 /// Add workspace symbol completions for functions and variables
 ///
@@ -230,6 +232,68 @@ fn module_sort_tier(name: &str) -> &'static str {
     }
 }
 
+const MODULE_SCAN_MAX_ENTRIES: usize = 4_096;
+const MODULE_SCAN_MAX_DEPTH: usize = 12;
+
+fn path_to_module_name(root: &Path, path: &Path) -> Option<String> {
+    let rel = path.strip_prefix(root).ok()?;
+    if rel.extension().and_then(|ext| ext.to_str()) != Some("pm") {
+        return None;
+    }
+
+    let mut components: Vec<String> = rel
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy().into_owned())
+        .collect();
+
+    let last = components.pop()?;
+    let stem = last.strip_suffix(".pm")?;
+    if stem.is_empty() {
+        return None;
+    }
+    components.push(stem.to_string());
+
+    if components.iter().any(|part| part.is_empty()) {
+        return None;
+    }
+
+    Some(components.join("::"))
+}
+
+fn scan_directory_for_modules(root: &Path, prefix: &str) -> Vec<String> {
+    if !root.is_dir() {
+        return Vec::new();
+    }
+
+    // TODO(#4314): Add caching keyed by roots + mtimes to avoid repeated scans on each keystroke.
+    let mut modules = Vec::new();
+    let mut examined = 0usize;
+    for entry in WalkDir::new(root)
+        .follow_links(false)
+        .max_depth(MODULE_SCAN_MAX_DEPTH)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if examined >= MODULE_SCAN_MAX_ENTRIES {
+            break;
+        }
+        examined += 1;
+
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Some(module_name) = path_to_module_name(root, entry.path()) else {
+            continue;
+        };
+        if !prefix.is_empty() && !module_name.starts_with(prefix) {
+            continue;
+        }
+        modules.push(module_name);
+    }
+
+    modules
+}
+
 /// Add module name completions for `use` and `require` statements.
 ///
 /// When the cursor is after `use ` or `require `, suggests package names from the
@@ -240,54 +304,92 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    if let Some(index) = workspace_index
+        && index.has_symbols()
+    {
+        // Search for package symbols matching the prefix
+        let all_symbols = if context.prefix.is_empty() {
+            index.all_symbols()
+        } else {
+            index.find_symbols(&context.prefix)
+        };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
-            continue;
+        for symbol in all_symbols {
+            if symbol.kind != WsSymbolKind::Package {
+                continue;
+            }
+
+            // Match against the module name prefix
+            if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+
+            if !seen.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let name = &symbol.name;
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module".to_string()),
+                documentation: symbol
+                    .documentation
+                    .clone()
+                    .or_else(|| Some(format!("Package `{name}`"))),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
+    }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
+    for root in include_paths {
+        for name in scan_directory_for_modules(root, &context.prefix) {
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module (external)".to_string()),
+                documentation: Some(format!("Module from include path: {}", root.display())),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("2{}_{name}", module_sort_tier(&name))),
+                filter_text: Some(name),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
+    }
 
-        if !seen.insert(symbol.name.clone()) {
-            continue;
+    for root in system_inc_paths {
+        for name in scan_directory_for_modules(root, &context.prefix) {
+            if !seen.insert(name.clone()) {
+                continue;
+            }
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module (system @INC)".to_string()),
+                documentation: Some(format!("Module from system @INC: {}", root.display())),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("3{}_{name}", module_sort_tier(&name))),
+                filter_text: Some(name),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
         }
-
-        let name = &symbol.name;
-        completions.push(CompletionItem {
-            label: name.clone(),
-            kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-            commit_characters: None,
-        });
     }
 }
 
@@ -653,4 +755,44 @@ fn find_assignment_eq(line: &str) -> Option<usize> {
         return Some(i);
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{path_to_module_name, scan_directory_for_modules};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn path_to_module_name_maps_nested_pm_file() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempdir()?;
+        let root = temp.path().join("lib");
+        let module_path = root.join("File/Path/To/Module.pm");
+        fs::create_dir_all(module_path.parent().ok_or("missing parent")?)?;
+        fs::write(&module_path, "package File::Path::To::Module;\n1;\n")?;
+
+        let module = path_to_module_name(&root, &module_path).ok_or("missing module name")?;
+        assert_eq!(module, "File::Path::To::Module");
+        Ok(())
+    }
+
+    #[test]
+    fn scan_directory_for_modules_filters_by_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempdir()?;
+        let root = temp.path().join("external_lib");
+        fs::create_dir_all(root.join("HTTP"))?;
+        fs::write(root.join("DBI.pm"), "package DBI;\n1;\n")?;
+        fs::write(root.join("HTTP/Tiny.pm"), "package HTTP::Tiny;\n1;\n")?;
+
+        let scanned = scan_directory_for_modules(&root, "DB");
+        assert!(
+            scanned.iter().any(|name| name == "DBI"),
+            "expected DBI from include-path scan, got: {scanned:?}"
+        );
+        assert!(
+            !scanned.iter().any(|name| name == "HTTP::Tiny"),
+            "prefix DB must exclude HTTP::Tiny, got: {scanned:?}"
+        );
+        Ok(())
+    }
 }

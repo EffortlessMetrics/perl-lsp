@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    module_include_paths: Vec<PathBuf>,
+    module_system_inc_paths: Vec<PathBuf>,
 }
 
 impl CompletionProvider {
@@ -258,7 +261,27 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            module_include_paths: Vec::new(),
+            module_system_inc_paths: Vec::new(),
+        }
+    }
+
+    /// Configure external roots used for `use` / `require` module completion.
+    #[must_use]
+    pub fn with_module_search_paths(
+        mut self,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
+        self.module_include_paths = include_paths;
+        self.module_system_inc_paths = system_inc_paths;
+        self
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +797,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.module_include_paths,
+                &self.module_system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,7 +2172,9 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
     use std::sync::Arc;
+    use tempfile::tempdir;
     use url::Url;
 
     #[test]
@@ -3557,6 +3584,53 @@ sub helper { }
             myapp_count, 1,
             "Duplicate package declarations should produce exactly one completion"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_workspace_precedes_external_scan() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(Url::parse("file:///lib/DBI.pm")?, "package DBI;\n1;\n".to_string())?;
+
+        let temp = tempdir()?;
+        let include_root = temp.path().join("vendor_lib");
+        fs::create_dir_all(&include_root)?;
+        fs::write(include_root.join("DBI.pm"), "package DBI;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index(&ast, Some(index))
+            .with_module_search_paths(vec![include_root], Vec::new());
+        let completions = provider.get_completions(code, code.len());
+
+        let dbi: Vec<&CompletionItem> =
+            completions.iter().filter(|item| item.label == "DBI").collect();
+        assert_eq!(dbi.len(), 1, "DBI should be deduped across workspace and external roots");
+        assert_eq!(dbi[0].detail.as_deref(), Some("module"), "workspace completion must win");
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_system_inc_opt_in() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempdir()?;
+        let system_root = temp.path().join("system_inc");
+        fs::create_dir_all(&system_root)?;
+        fs::write(system_root.join("DBIx.pm"), "package DBIx;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None)
+            .with_module_search_paths(Vec::new(), vec![system_root]);
+        let completions = provider.get_completions(code, code.len());
+
+        let dbix = completions
+            .iter()
+            .find(|item| item.label == "DBIx")
+            .ok_or("DBIx should be suggested from system @INC roots")?;
+        assert_eq!(dbix.detail.as_deref(), Some("module (system @INC)"));
         Ok(())
     }
 
