@@ -256,3 +256,33 @@ fn test_m_vs_bareword_disambiguation() {
         tokens2[0].token_type
     );
 }
+
+#[test]
+fn test_m_operator_whitespace_before_arbitrary_delimiter() {
+    let code = "m !pattern!";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (regex + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::RegexMatch),
+        "Expected RegexMatch token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "m !pattern!");
+}
+
+#[test]
+fn test_qr_operator_whitespace_before_arbitrary_delimiter() {
+    let code = "qr #pattern#ms";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (quote regex + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::QuoteRegex),
+        "Expected QuoteRegex token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "qr #pattern#ms");
+}

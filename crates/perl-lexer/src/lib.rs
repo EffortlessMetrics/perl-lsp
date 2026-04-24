@@ -2072,17 +2072,16 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
-                    let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
-                    let is_quote_char = matches!(next, '\'' | '"') && text != "s";
-                    let transliteration_allows_whitespace = text == "tr" || text == "y";
                     let substitution_disallows_whitespace = text == "s" && has_whitespace;
+
+                    // Perl allows optional whitespace before quote-like delimiters for
+                    // quote-like operators, including arbitrary non-alnum delimiters.
+                    // Keep `s` strict to avoid mis-tokenizing `-s 'file'` file-test usage.
+                    let whitespace_allowed = !has_whitespace || text != "s";
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
-                        && !substitution_disallows_whitespace
-                        && (!has_whitespace
-                            || is_paired_delim
-                            || is_quote_char
-                            || transliteration_allows_whitespace);
+                        && whitespace_allowed
+                        && !substitution_disallows_whitespace;
 
                     if is_valid_delim {
                         match text {
@@ -2123,18 +2122,9 @@ impl<'a> PerlLexer<'a> {
                         && self.hash_brace_depth == 0
                         && quote_handler::is_quote_operator(op) =>
                     {
-                        // Perl allows whitespace between a quote-like operator and its delimiter,
-                        // but ONLY for paired delimiters (s { ... } { ... }g).
-                        // For non-paired delimiters (s/foo/bar/, s,foo,bar,), the delimiter
-                        // must be immediately adjacent — otherwise `s $foo` would wrongly
-                        // treat `$` as a delimiter instead of being a bareword `s` followed
-                        // by a scalar variable.
-                        //
-                        // Strategy:
-                        //   1. Check the immediately-adjacent char first (no whitespace skip).
-                        //      If it is a valid delimiter → any non-alnum, non-whitespace char.
-                        //   2. If the adjacent char is whitespace, peek past it.
-                        //      Only accept PAIRED delimiters ({, [, (, <) in that case.
+                        // Perl allows optional whitespace before quote-like delimiters
+                        // for quote-like operators. We still keep `s` strict so `-s 'file'`
+                        // remains a file-test, not a substitution.
                         let immediate = self.current_char();
                         let (candidate, char_after_next, has_whitespace) =
                             if immediate.is_some_and(|c| c.is_whitespace()) {
@@ -2155,19 +2145,13 @@ impl<'a> PerlLexer<'a> {
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
 
-                            // When whitespace precedes the delimiter, only unambiguous
-                            // delimiters are accepted:
-                            //   - Paired delimiters ({, [, (, <) are always safe.
-                            //   - ' and " are safe for all operators EXCEPT `s` — `-s 'filename'`
-                            //     is a valid file-size filetest and must not be treated as a
-                            //     substitution start. All other operators (qw, q, qq, qr, qx, m,
-                            //     tr, y) have no corresponding file-test operator.
-                            //   - Non-paired, non-quote chars ($, @, ,, etc.) remain rejected.
-                            let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
-                            let is_quote_char = matches!(next, '\'' | '"') && op != "s";
-                            let is_valid_delim = Self::is_quote_delim(next)
-                                && !is_fat_arrow
-                                && (!has_whitespace || is_paired_delim || is_quote_char);
+                            // Perl allows optional whitespace before quote-like delimiters,
+                            // including arbitrary non-alnum delimiters.
+                            // Keep `s` strict to avoid mis-tokenizing `-s 'filename'` as
+                            // substitution rather than file-test.
+                            let whitespace_allowed = !has_whitespace || op != "s";
+                            let is_valid_delim =
+                                Self::is_quote_delim(next) && !is_fat_arrow && whitespace_allowed;
 
                             if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;

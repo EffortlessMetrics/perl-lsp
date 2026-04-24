@@ -657,6 +657,32 @@ fn q_with_escaped_delimiter() -> R {
     Ok(())
 }
 
+#[test]
+fn q_with_whitespace_before_nonpaired_delimiter() -> R {
+    let input = "q |hello world|";
+    let first = first_significant(input).ok_or("no token")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteSingle),
+        "Expected QuoteSingle for q |...|, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "q |hello world|");
+    Ok(())
+}
+
+#[test]
+fn qq_with_whitespace_before_nonpaired_delimiter() -> R {
+    let input = "qq !hello $world!";
+    let first = first_significant(input).ok_or("no token")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteDouble),
+        "Expected QuoteDouble for qq !...!, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "qq !hello $world!");
+    Ok(())
+}
+
 // ===========================================================================
 // 4. Special variables
 // ===========================================================================
