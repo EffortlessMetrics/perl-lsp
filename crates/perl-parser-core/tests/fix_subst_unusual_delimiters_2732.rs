@@ -239,6 +239,21 @@ fn test_comma_delimited_subst_xsloader() {
     assert_clean_parse(source);
 }
 
+/// ExtUtils/MM_VMS.pm pattern: colon-delimited substitution with empty replacement
+/// and `ig` modifiers. This previously showed up in invalid_substitution_modifier.
+#[test]
+fn test_colon_delimited_empty_replacement_with_modifiers() {
+    let source = r#"$quals =~ s:/${type}i?n?e?=[^/]+::ig;"#;
+    assert_clean_parse(source);
+}
+
+/// Variant from ExtUtils/MM_VMS.pm where the delimiter appears in a character class.
+#[test]
+fn test_colon_delimited_with_character_class() {
+    let source = r#"$flags =~ s:/${qual_type}\S{0,4}=[^/]+::ig;"#;
+    assert_clean_parse(source);
+}
+
 /// XSLoader.pm full content — must parse cleanly (corpus gate regression test).
 #[test]
 fn test_xsloader_pm_full() {
