@@ -258,3 +258,30 @@ fn mode_transitions_after_keyword_to_expect_term() -> R {
     assert!(has_regex, "after 'if' keyword the slash must start a regex");
     Ok(())
 }
+
+#[test]
+fn mode_transitions_after_return_keyword_to_expect_term() -> R {
+    let mut lexer = PerlLexer::new("return /pattern/");
+    let _ = lexer.next_token().ok_or("expected return token")?;
+    let slash = lexer.next_token().ok_or("expected slash token")?;
+    assert!(
+        matches!(slash.token_type, TokenType::RegexMatch),
+        "after 'return' keyword the slash must start regex, got {:?}",
+        slash.token_type
+    );
+    Ok(())
+}
+
+#[test]
+fn mode_transitions_after_word_logical_operator_to_expect_term() -> R {
+    let mut lexer = PerlLexer::new("$x and /pattern/");
+    let _ = lexer.next_token().ok_or("expected variable token")?;
+    let _ = lexer.next_token().ok_or("expected and keyword")?;
+    let slash = lexer.next_token().ok_or("expected slash token")?;
+    assert!(
+        matches!(slash.token_type, TokenType::RegexMatch),
+        "after 'and' keyword the slash must start regex, got {:?}",
+        slash.token_type
+    );
+    Ok(())
+}

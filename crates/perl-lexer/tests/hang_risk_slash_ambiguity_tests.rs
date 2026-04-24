@@ -299,6 +299,20 @@ fn lexer_slash_ambiguity_regex_whitespace_variations() -> TestResult {
     Ok(())
 }
 
+/// Test slash after keyword with an intervening comment/newline
+#[test]
+fn lexer_slash_ambiguity_regex_after_keyword_comment_gap() -> TestResult {
+    let mut lexer = PerlLexer::new("if # comment keeps ExpectTerm\n/pattern/");
+    let _ = lexer.next_token(); // if
+    let tok = lexer.next_token().ok_or("Expected regex token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after keyword+comment gap, got {:?}",
+        tok.token_type
+    );
+    Ok(())
+}
+
 /// Test slash after string literal
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity

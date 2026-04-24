@@ -2107,8 +2107,7 @@ impl<'a> PerlLexer<'a> {
             let token_type = if is_keyword_fast(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
-                    "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
-                    | "sort" | "split" => {
+                    kw if keyword_expects_term(kw) => {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
@@ -2242,7 +2241,7 @@ impl<'a> PerlLexer<'a> {
                 TokenType::Keyword(Arc::from(text))
             } else {
                 // Mirror parser bare-builtin handling so `/` after builtins like
-                // `join` or `print` is lexed as a regex term, not division.
+                // `join`, `print`, or `printf` is lexed as a regex term, not division.
                 if is_builtin_function(text) {
                     self.mode = LexerMode::ExpectTerm;
                 } else {
@@ -3637,11 +3636,33 @@ fn is_builtin_function(word: &str) -> bool {
     BARE_TERM_BUILTINS.binary_search(&word).is_ok()
 }
 
+#[inline]
+fn keyword_expects_term(word: &str) -> bool {
+    matches!(
+        word,
+        "if" | "unless"
+            | "while"
+            | "until"
+            | "for"
+            | "foreach"
+            | "grep"
+            | "map"
+            | "sort"
+            | "split"
+            | "do"
+            | "return"
+            | "and"
+            | "or"
+            | "xor"
+            | "not"
+    )
+}
+
 const BARE_TERM_BUILTINS: &[&str] = &[
     "abs", "chomp", "chop", "chr", "close", "defined", "delete", "each", "exists", "hex", "int",
-    "join", "keys", "lc", "lcfirst", "length", "oct", "open", "ord", "pack", "print", "push",
-    "read", "ref", "reverse", "rindex", "say", "scalar", "splice", "sprintf", "sqrt", "substr",
-    "tie", "uc", "ucfirst", "unpack", "unshift", "untie", "values", "write",
+    "join", "keys", "lc", "lcfirst", "length", "oct", "open", "ord", "pack", "print", "printf",
+    "push", "read", "ref", "reverse", "rindex", "say", "scalar", "splice", "sprintf", "sqrt",
+    "substr", "tie", "uc", "ucfirst", "unpack", "unshift", "untie", "values", "write",
 ];
 
 /// Fast lookup table for compound operator second characters

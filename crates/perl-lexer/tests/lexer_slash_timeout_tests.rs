@@ -66,6 +66,26 @@ fn test_slash_after_keyword_is_regex() -> TestResult {
 }
 
 #[test]
+fn test_slash_after_logical_keyword_is_regex() -> TestResult {
+    // Word logical operators should keep us in ExpectTerm.
+    let mut lexer = PerlLexer::new("$x and /pattern/");
+    lexer.next_token(); // $x
+    lexer.next_token(); // and
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}
+
+#[test]
+fn test_slash_after_printf_builtin_is_regex() -> TestResult {
+    let mut lexer = PerlLexer::new("printf /%s/, $x");
+    lexer.next_token(); // printf
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}
+
+#[test]
 fn test_slash_after_opening_paren_is_regex() -> TestResult {
     // After opening paren → likely regex
     let mut lexer = PerlLexer::new("if (/pattern/)");
@@ -138,6 +158,19 @@ fn test_defined_or_vs_empty_regex() -> TestResult {
 
     // After $a (identifier), // should be defined-or operator
     assert!(matches!(token.token_type, TokenType::Operator(_)));
+    Ok(())
+}
+
+#[test]
+fn test_defined_or_after_comment_stays_operator() -> TestResult {
+    let mut lexer = PerlLexer::new("$a # keep mode\n// $b");
+    lexer.next_token(); // $a
+    let token = lexer.next_token().ok_or("Expected defined-or token")?;
+    assert!(
+        matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"),
+        "Expected defined-or operator, got {:?}",
+        token.token_type
+    );
     Ok(())
 }
 
