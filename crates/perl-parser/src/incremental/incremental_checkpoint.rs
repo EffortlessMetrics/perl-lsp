@@ -915,4 +915,78 @@ mod tests {
             "incremental tree diverged from fresh full parse"
         );
     }
+
+    #[test]
+    fn test_invalidate_range_non_overlapping_preserves_all_segments() {
+        // A range that doesn't touch any segment must leave the cache intact.
+        let mut cache = TokenCache::new();
+        let tokens = vec![
+            Token::new(TokenKind::Identifier, "a", 0, 10),
+            Token::new(TokenKind::Identifier, "b", 10, 20),
+        ];
+        cache.cache_tokens(0, 20, tokens);
+
+        // Invalidate a range entirely after the cached segment — no overlap.
+        cache.invalidate_range(30, 50);
+
+        assert_eq!(cache.segments.len(), 1, "non-overlapping invalidation should leave segment intact");
+        assert_eq!(cache.segments[0].start, 0);
+        assert_eq!(cache.segments[0].end, 20);
+        assert_eq!(cache.segments[0].tokens.len(), 2);
+    }
+
+    #[test]
+    fn test_invalidate_range_entirely_inside_segment_drops_middle_tokens() {
+        // Invalidating a range that is entirely inside a segment that has tokens
+        // on both sides must produce two sub-segments, neither empty.
+        let mut cache = TokenCache::new();
+        let tokens = vec![
+            Token::new(TokenKind::Identifier, "a", 0, 5),
+            Token::new(TokenKind::Identifier, "b", 5, 10),
+            Token::new(TokenKind::Identifier, "c", 10, 15),
+            Token::new(TokenKind::Identifier, "d", 15, 20),
+        ];
+        cache.cache_tokens(0, 20, tokens);
+
+        // Invalidate exactly the middle two tokens' span.
+        cache.invalidate_range(5, 15);
+
+        assert_eq!(cache.segments.len(), 2, "should produce prefix and suffix sub-segments");
+
+        // Prefix: only token "a" [0,5] has end <= 5.
+        assert_eq!(cache.segments[0].start, 0);
+        assert_eq!(cache.segments[0].end, 5);
+        assert_eq!(cache.segments[0].tokens.len(), 1);
+
+        // Suffix: only token "d" [15,20] has start >= 15.
+        assert_eq!(cache.segments[1].start, 15);
+        assert_eq!(cache.segments[1].end, 20);
+        assert_eq!(cache.segments[1].tokens.len(), 1);
+    }
+
+    #[test]
+    fn test_adjust_positions_shifts_segment_bounds_not_token_coords() {
+        // adjust_positions must shift segment.start/end but leave token byte
+        // positions in their pre-edit coordinates so Phase-3 byte_shift can
+        // apply exactly once when the cached tokens are consumed.
+        let mut cache = TokenCache::new();
+        let tokens = vec![
+            Token::new(TokenKind::Identifier, "x", 100, 110),
+            Token::new(TokenKind::Identifier, "y", 110, 120),
+        ];
+        cache.cache_tokens(100, 120, tokens);
+
+        // Simulate an insertion of 5 bytes before position 50 (before the segment).
+        cache.adjust_positions(50, 0, 5); // old_len=0 new_len=5 → delta=+5
+
+        // Segment bounds must be shifted by +5.
+        assert_eq!(cache.segments[0].start, 105, "segment start should shift by +5");
+        assert_eq!(cache.segments[0].end, 125, "segment end should shift by +5");
+
+        // But individual token positions must remain at their original values so
+        // Phase-3's byte_shift application later yields the right final position.
+        assert_eq!(cache.segments[0].tokens[0].start, 100, "token start must NOT be shifted by adjust_positions");
+        assert_eq!(cache.segments[0].tokens[0].end, 110, "token end must NOT be shifted by adjust_positions");
+        assert_eq!(cache.segments[0].tokens[1].start, 110, "token start must NOT be shifted by adjust_positions");
+    }
 }
