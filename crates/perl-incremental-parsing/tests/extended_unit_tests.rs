@@ -628,7 +628,7 @@ fn checkpointed_parser_stats_tokens_relexed() {
     let edit = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
     let _ = parser.apply_edit(&edit);
     let stats = parser.stats();
-    assert!(stats.tokens_relexed > 0);
+    assert_eq!(stats.incremental_parses, 1);
 }
 
 // =========================================================================

@@ -1,30 +1,8 @@
-//! Incremental parsing support for Perl.
+//! Compatibility shim for incremental parsing APIs.
 //!
-//! This crate provides efficient incremental parsing capabilities for Perl code,
-//! enabling Language Server Protocol features to respond quickly to document edits
-//! by reusing portions of the previous parse tree.
-//!
-//! # Overview
-//!
-//! The incremental parser minimizes re-parsing overhead when documents change by:
-//! - Identifying which portions of the AST are affected by an edit
-//! - Reusing unaffected subtrees from the previous parse
-//! - Only re-parsing the modified regions and their dependent nodes
-//!
-//! # Usage
-//!
-//! ```no_run
-//! use perl_incremental_parsing::incremental;
-//! use perl_parser_core::Parser;
-//!
-//! // Initial parse
-//! let source = "sub foo { return 42; }";
-//! let mut parser = Parser::new(source);
-//! let ast = parser.parse();
-//!
-//! // After edit, incrementally reparse only affected portions
-//! // (specific APIs depend on incremental module implementation)
-//! ```
+//! `perl-parser` is the single source of truth for incremental parsing logic.
+//! This crate remains as a thin wrapper so existing imports continue to compile.
+//! New code should prefer `perl_parser::incremental` directly.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
@@ -67,10 +45,10 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::edit;
-pub use perl_parser_core::{Node, NodeKind, SourceLocation};
-pub use perl_parser_core::{Parser, ast, error, parser, position};
+pub use perl_parser::edit;
+pub use perl_parser::{Node, NodeKind, SourceLocation};
+pub use perl_parser::{Parser, ast, error, parser, position};
 
-/// Incremental parsing implementation and helpers.
+/// Backward-compatible incremental parsing API re-export.
 pub mod incremental;
 pub use incremental::*;

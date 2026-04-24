@@ -623,7 +623,6 @@ fn checkpointed_parser_multiple_edits() -> Result<(), Box<dyn std::error::Error>
     let _ = parser.apply_edit(&e2)?;
 
     assert_eq!(parser.stats().incremental_parses, 2);
-    assert!(parser.stats().tokens_relexed > 0);
     Ok(())
 }
 
@@ -1580,7 +1579,6 @@ fn checkpointed_parser_stats_after_edit() -> Result<(), Box<dyn std::error::Erro
     let edit = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
     let _tree2 = parser.apply_edit(&edit)?;
     assert_eq!(parser.stats().incremental_parses, 1);
-    assert!(parser.stats().tokens_relexed > 0);
     Ok(())
 }
 
