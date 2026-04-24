@@ -330,4 +330,138 @@ mod tests {
 
         assert_eq!(roundtrip, pos);
     }
+
+    #[test]
+    fn test_utf32_surrogate_pair_counts_as_one_scalar() {
+        // Non-BMP chars are a single Unicode scalar under UTF-32, even
+        // though they require a UTF-16 surrogate pair. This is the whole
+        // point of UTF-32 support — clients that count scalars (not UTF-16
+        // code units) must not see surrogate-pair offsets.
+        let rope = Rope::from_str("x💖y");
+
+        // UTF-32 column layout: x=0, 💖=1, y=2, end=3.
+        assert_eq!(lsp_pos_to_char(&rope, Position { line: 0, character: 0 }, PosEnc::Utf32), 0);
+        assert_eq!(lsp_pos_to_char(&rope, Position { line: 0, character: 1 }, PosEnc::Utf32), 1);
+        assert_eq!(lsp_pos_to_char(&rope, Position { line: 0, character: 2 }, PosEnc::Utf32), 2);
+        assert_eq!(lsp_pos_to_char(&rope, Position { line: 0, character: 3 }, PosEnc::Utf32), 3);
+
+        // Byte round-trip: 💖 starts at byte 1, occupies [1, 5).
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 1 }, PosEnc::Utf32), 1);
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 2 }, PosEnc::Utf32), 5);
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 3 }, PosEnc::Utf32), 6);
+
+        assert_eq!(byte_to_lsp_pos(&rope, 0, PosEnc::Utf32).character, 0);
+        assert_eq!(byte_to_lsp_pos(&rope, 1, PosEnc::Utf32).character, 1);
+        assert_eq!(byte_to_lsp_pos(&rope, 5, PosEnc::Utf32).character, 2);
+        assert_eq!(byte_to_lsp_pos(&rope, 6, PosEnc::Utf32).character, 3);
+    }
+
+    #[test]
+    fn test_utf32_max_code_point() {
+        // U+10FFFF is the highest valid Unicode code point — a single scalar
+        // under UTF-32 but a surrogate pair in UTF-16. Must round-trip cleanly.
+        let max_char = '\u{10FFFF}';
+        let text = format!("a{max_char}b");
+        let rope = Rope::from_str(&text);
+
+        // UTF-32: three scalars, one column each.
+        for col in 0..=3u32 {
+            let pos = Position { line: 0, character: col };
+            let byte = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+            let roundtrip = byte_to_lsp_pos(&rope, byte, PosEnc::Utf32);
+            assert_eq!(roundtrip, pos, "roundtrip failed at col {col}");
+        }
+
+        // Explicit byte positions: a=0, U+10FFFF=1..5, b=5.
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 0 }, PosEnc::Utf32), 0);
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 1 }, PosEnc::Utf32), 1);
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 2 }, PosEnc::Utf32), 5);
+        assert_eq!(lsp_pos_to_byte(&rope, Position { line: 0, character: 3 }, PosEnc::Utf32), 6);
+    }
+
+    #[test]
+    fn test_utf32_mixed_bmp_and_supplementary_plane() {
+        // Mix of BMP chars (1 UTF-16 unit, 1 UTF-32 scalar) and supplementary
+        // chars (2 UTF-16 units, 1 UTF-32 scalar). Under UTF-32 every char
+        // advances the column by exactly one regardless of plane.
+        let rope = Rope::from_str("aé💖ñ🎉b");
+
+        // UTF-32 columns: a=0, é=1, 💖=2, ñ=3, 🎉=4, b=5, end=6.
+        let expected_bytes = [0_usize, 1, 3, 7, 9, 13, 14];
+        for (col, expected_byte) in expected_bytes.iter().enumerate() {
+            let pos = Position { line: 0, character: col as u32 };
+            let byte = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+            assert_eq!(
+                byte, *expected_byte,
+                "UTF-32 col {col} expected byte {expected_byte}, got {byte}"
+            );
+            let roundtrip = byte_to_lsp_pos(&rope, byte, PosEnc::Utf32);
+            assert_eq!(roundtrip.character, col as u32, "UTF-32 round-trip at col {col}");
+        }
+    }
+
+    #[test]
+    fn test_utf32_zero_length_input() {
+        let rope = Rope::from_str("");
+
+        // Position (0, 0) in an empty rope must map to char 0 and byte 0.
+        let pos = Position { line: 0, character: 0 };
+        assert_eq!(lsp_pos_to_char(&rope, pos, PosEnc::Utf32), 0);
+        assert_eq!(lsp_pos_to_byte(&rope, pos, PosEnc::Utf32), 0);
+
+        // Overshoot positions must clamp, not panic.
+        let over = Position { line: 0, character: 99 };
+        assert_eq!(lsp_pos_to_byte(&rope, over, PosEnc::Utf32), 0);
+
+        // Byte 0 maps back to (0, 0).
+        let back = byte_to_lsp_pos(&rope, 0, PosEnc::Utf32);
+        assert_eq!(back.line, 0);
+        assert_eq!(back.character, 0);
+
+        // A line past end-of-document clamps to end (len_chars == 0).
+        let beyond_line = Position { line: 99, character: 0 };
+        assert_eq!(lsp_pos_to_char(&rope, beyond_line, PosEnc::Utf32), 0);
+    }
+
+    #[test]
+    fn test_utf32_multi_line_with_emoji() {
+        // UTF-32 positions should be per-line, matching LSP semantics.
+        let rope = Rope::from_str("a💖b\nc🎉d");
+
+        // Line 0: a=0, 💖=1, b=2
+        // Line 1: c=0, 🎉=1, d=2
+        let cases: &[(u32, u32, usize)] = &[
+            (0, 0, 0),
+            (0, 1, 1),
+            (0, 2, 5),
+            (1, 0, 7),
+            (1, 1, 8),
+            (1, 2, 12),
+        ];
+        for (line, col, expected_byte) in cases {
+            let pos = Position { line: *line, character: *col };
+            let byte = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+            assert_eq!(
+                byte, *expected_byte,
+                "line {line} col {col} expected byte {expected_byte}, got {byte}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_utf32_clamps_on_overflow() {
+        // Columns past the end of a line should clamp, not panic or
+        // overflow. Tests both a tiny rope and a large character index.
+        let rope = Rope::from_str("abc");
+
+        // Well past the line — must clamp to end-of-line (byte 3).
+        let pos = Position { line: 0, character: u32::MAX };
+        let byte = lsp_pos_to_byte(&rope, pos, PosEnc::Utf32);
+        assert_eq!(byte, 3);
+
+        // Line past end-of-document — clamp to end of rope.
+        let pos_line = Position { line: u32::MAX, character: 0 };
+        let byte_line = lsp_pos_to_byte(&rope, pos_line, PosEnc::Utf32);
+        assert_eq!(byte_line, 3);
+    }
 }

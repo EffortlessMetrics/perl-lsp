@@ -625,4 +625,120 @@ mod tests {
             .expect("initialize response should include positionEncoding");
         assert_eq!(advertised, "utf-32");
     }
+
+    /// If the client does not advertise any positionEncodings, the server must
+    /// default to UTF-16 (the LSP default per the spec).
+    #[test]
+    fn initialize_defaults_to_utf16_when_no_general_capability() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {}
+        });
+
+        let result = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf16));
+
+        let advertised = result
+            .and_then(|value| value.get("capabilities").cloned())
+            .and_then(|caps| caps.get("positionEncoding").cloned())
+            .and_then(|enc| enc.as_str().map(ToOwned::to_owned))
+            .expect("initialize response should include positionEncoding");
+        assert_eq!(advertised, "utf-16");
+    }
+
+    /// An empty positionEncodings list must also fall back to UTF-16.
+    #[test]
+    fn initialize_empty_position_encodings_defaults_to_utf16() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": []
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf16));
+    }
+
+    /// Unknown encoding strings should be ignored and the server should fall back
+    /// to UTF-16, not panic or choose a random value.
+    #[test]
+    fn initialize_unknown_encoding_falls_back_to_utf16() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-64", "ebcdic", "nonsense"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf16));
+    }
+
+    /// When the client offers multiple encodings, the server should pick the first
+    /// one it supports (priority order is the client's). Here UTF-32 comes first.
+    #[test]
+    fn initialize_picks_first_supported_encoding() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-32", "utf-16", "utf-8"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf32));
+    }
+
+    /// UTF-8 explicitly requested by the client should be honoured.
+    #[test]
+    fn initialize_negotiates_utf8_position_encoding() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-8"]
+                }
+            }
+        });
+
+        let result = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf8));
+
+        let advertised = result
+            .and_then(|value| value.get("capabilities").cloned())
+            .and_then(|caps| caps.get("positionEncoding").cloned())
+            .and_then(|enc| enc.as_str().map(ToOwned::to_owned))
+            .expect("initialize response should include positionEncoding");
+        assert_eq!(advertised, "utf-8");
+    }
+
+    /// If the positionEncodings list mixes unknown and known encodings, the
+    /// server must skip unknowns and pick the first recognized one.
+    #[test]
+    fn initialize_skips_unknown_encodings() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "general": {
+                    "positionEncodings": ["utf-64", "utf-32", "utf-16"]
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params)).expect("initialize should succeed");
+        let encoding = *server.position_encoding.lock();
+        assert!(matches!(encoding, PosEnc::Utf32));
+    }
 }
