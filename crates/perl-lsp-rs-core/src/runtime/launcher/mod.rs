@@ -74,7 +74,7 @@ pub fn init_logging(default_filter: &str) {
             .or_else(|_| EnvFilter::try_new(default_filter))
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
-        let use_ansi = std::env::var("NO_COLOR").is_err() && io::stderr().is_terminal();
+        let use_ansi = should_use_ansi_stderr();
 
         // If PERL_LSP_LOG_FILE is set, add a rolling file appender alongside stderr.
         if let Ok(log_path) = std::env::var("PERL_LSP_LOG_FILE") {
@@ -119,6 +119,45 @@ pub fn init_logging(default_filter: &str) {
             .with_target(true)
             .try_init();
     });
+}
+
+fn env_truthy(var_name: &str) -> Option<bool> {
+    std::env::var(var_name).ok().map(|value| {
+        let normalized = value.trim().to_ascii_lowercase();
+        !(normalized.is_empty() || normalized == "0" || normalized == "false" || normalized == "no")
+    })
+}
+
+fn is_warp_terminal() -> bool {
+    matches!(std::env::var("TERM_PROGRAM"), Ok(value) if value.eq_ignore_ascii_case("WarpTerminal"))
+}
+
+fn should_use_ansi(is_terminal: bool) -> bool {
+    if std::env::var("NO_COLOR").is_ok() {
+        return false;
+    }
+
+    if matches!(env_truthy("FORCE_COLOR"), Some(true))
+        || matches!(env_truthy("CLICOLOR_FORCE"), Some(true))
+    {
+        return true;
+    }
+
+    if matches!(env_truthy("CLICOLOR"), Some(false)) {
+        return false;
+    }
+
+    is_terminal || is_warp_terminal()
+}
+
+/// Returns whether ANSI color should be used for stdout output.
+pub fn should_use_ansi_stdout() -> bool {
+    should_use_ansi(io::stdout().is_terminal())
+}
+
+/// Returns whether ANSI color should be used for stderr output.
+pub fn should_use_ansi_stderr() -> bool {
+    should_use_ansi(io::stderr().is_terminal())
 }
 
 /// Emit a consistent startup log line for server binaries.
@@ -1174,6 +1213,159 @@ mod tests {
         match previous {
             Some(value) => unsafe { std::env::set_var("PERL_LSP_QUIET", value) },
             None => unsafe { std::env::remove_var("PERL_LSP_QUIET") },
+        }
+    }
+
+    // ANSI detection helpers
+
+    /// Guard: NO_COLOR=1 must disable ANSI regardless of terminal state.
+    #[test]
+    fn ansi_no_color_env_disables_ansi() {
+        let _guard = EnvGuard::set("NO_COLOR", "1");
+        // Even pretending we have a terminal, NO_COLOR wins.
+        assert!(!super::should_use_ansi(true));
+    }
+
+    /// Guard: CLICOLOR=0 must disable ANSI.
+    #[test]
+    fn ansi_clicolor_zero_disables_ansi() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard_fc = EnvGuard::remove("FORCE_COLOR");
+        let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
+        let _guard = EnvGuard::set("CLICOLOR", "0");
+        assert!(!super::should_use_ansi(true), "CLICOLOR=0 must disable ANSI");
+    }
+
+    /// Guard: FORCE_COLOR=1 must enable ANSI even without a terminal.
+    #[test]
+    fn ansi_force_color_enables_ansi_without_terminal() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard = EnvGuard::set("FORCE_COLOR", "1");
+        assert!(super::should_use_ansi(false), "FORCE_COLOR=1 must enable ANSI even without a terminal");
+    }
+
+    /// Guard: is_warp_terminal() must be true when TERM_PROGRAM=WarpTerminal.
+    #[test]
+    fn ansi_warp_terminal_detection() {
+        let _guard = EnvGuard::set("TERM_PROGRAM", "WarpTerminal");
+        assert!(super::is_warp_terminal(), "WarpTerminal must be detected");
+    }
+
+    /// Guard: TERM_PROGRAM=vscode (a non-Warp terminal) must NOT trigger the
+    /// Warp fallback path. VSCode's integrated terminal already reports
+    /// is_terminal() correctly, so ANSI support must flow through the
+    /// terminal-detection branch rather than the Warp override.
+    ///
+    /// Regression guard: if `is_warp_terminal()` ever loosened its match
+    /// (e.g. any non-empty TERM_PROGRAM → Warp), this test fails — which
+    /// would otherwise silently start emitting ANSI in pipelines where
+    /// VSCode ran perl-lsp with stderr redirected.
+    #[test]
+    fn ansi_vscode_does_not_trigger_warp_path() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard_fc = EnvGuard::remove("FORCE_COLOR");
+        let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
+        let _guard_cc = EnvGuard::remove("CLICOLOR");
+        let _guard = EnvGuard::set("TERM_PROGRAM", "vscode");
+
+        assert!(
+            !super::is_warp_terminal(),
+            "TERM_PROGRAM=vscode must not be classified as WarpTerminal"
+        );
+
+        // With a real terminal: ANSI enabled via the terminal-detection path.
+        assert!(
+            super::should_use_ansi(true),
+            "TERM_PROGRAM=vscode with is_terminal=true must still enable ANSI"
+        );
+
+        // Without a terminal (e.g. vscode's task runner capturing stderr):
+        // the Warp fallback must not rescue this case.
+        assert!(
+            !super::should_use_ansi(false),
+            "TERM_PROGRAM=vscode with is_terminal=false must not enable ANSI via the Warp path"
+        );
+    }
+
+    /// Global lock serializing env-var mutation across parallel tests.
+    ///
+    /// Env vars are process-global on Unix and Windows, and libtest runs
+    /// unit tests on a threadpool by default. Without this lock, a test
+    /// that sets NO_COLOR can briefly be observed by a parallel test that
+    /// expects NO_COLOR unset, producing flaky failures. The thread-local
+    /// depth counter makes the guard reentrant: a single test may create
+    /// several `EnvGuard`s (e.g. to scrub multiple env vars) without
+    /// deadlocking on itself.
+    static ANSI_ENV_LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    std::thread_local! {
+        static ANSI_ENV_LOCK_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    fn acquire_ansi_env_lock() -> Option<std::sync::MutexGuard<'static, ()>> {
+        ANSI_ENV_LOCK_DEPTH.with(|depth| {
+            let current = depth.get();
+            depth.set(current + 1);
+            if current == 0 {
+                Some(
+                    ANSI_ENV_LOCK
+                        .get_or_init(|| std::sync::Mutex::new(()))
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner()),
+                )
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Helper to temporarily set/restore an env var for test isolation.
+    ///
+    /// Holds the shared `ANSI_ENV_LOCK` for the lifetime of the outermost
+    /// guard on this thread; inner guards bump a depth counter and release
+    /// the mutex when the outermost drops. This lets a single test freely
+    /// create multiple guards without deadlocking, while still serializing
+    /// across parallel tests.
+    struct EnvGuard {
+        key: String,
+        previous: Option<String>,
+        _lock: Option<std::sync::MutexGuard<'static, ()>>,
+    }
+
+    impl EnvGuard {
+        #[allow(unsafe_code)]
+        fn set(key: &str, value: &str) -> Self {
+            let lock = acquire_ansi_env_lock();
+            let previous = std::env::var(key).ok();
+            // SAFETY: test-only env var manipulation, serialized by ANSI_ENV_LOCK;
+            // restored in Drop.
+            unsafe { std::env::set_var(key, value) };
+            EnvGuard { key: key.to_string(), previous, _lock: lock }
+        }
+
+        #[allow(unsafe_code)]
+        fn remove(key: &str) -> Self {
+            let lock = acquire_ansi_env_lock();
+            let previous = std::env::var(key).ok();
+            // SAFETY: test-only env var manipulation, serialized by ANSI_ENV_LOCK;
+            // restored in Drop.
+            unsafe { std::env::remove_var(key) };
+            EnvGuard { key: key.to_string(), previous, _lock: lock }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        #[allow(unsafe_code)]
+        fn drop(&mut self) {
+            match &self.previous {
+                // SAFETY: restoring the previous value while still holding
+                // the ANSI_ENV_LOCK mutex (via the outermost guard on this thread).
+                Some(v) => unsafe { std::env::set_var(&self.key, v) },
+                None => unsafe { std::env::remove_var(&self.key) },
+            }
+            ANSI_ENV_LOCK_DEPTH.with(|depth| {
+                let current = depth.get();
+                depth.set(current.saturating_sub(1));
+            });
         }
     }
 
