@@ -86,6 +86,14 @@ mod dap_performance {
     }
 
     /// Bulk breakpoint requests should stay stable across repeated REPLACE calls.
+    ///
+    /// Uses 20 measurement samples after 5 warm-up runs so that p95 is a genuine
+    /// 95th-percentile (8 samples yields p95 = max, which is meaningless).
+    /// Two bounds are checked:
+    ///   1. Relative: p95 must not exceed the warm-up median × 5, guarding against
+    ///      accumulating per-call overhead (e.g. unbounded Vec growth).
+    ///   2. Absolute: p95 must stay under 2 s, guarding against full regression
+    ///      independent of warm-up timing variance.
     #[tokio::test]
     // AC:15
     async fn test_breakpoint_verification_latency_stability() -> Result<()> {
@@ -102,8 +110,24 @@ mod dap_performance {
             "breakpoints": (1..=100).map(|line| json!({ "line": line })).collect::<Vec<_>>()
         });
 
-        let mut samples = Vec::new();
-        for seq in 1..=8 {
+        // 5 warm-up runs: prime OS file cache and allocator before measuring.
+        let mut warmup: Vec<Duration> = Vec::with_capacity(5);
+        for seq in 1..=5 {
+            let start = Instant::now();
+            let response = adapter.handle_request(seq, "setBreakpoints", Some(payload.clone()));
+            let elapsed = start.elapsed();
+            match response {
+                DapMessage::Response { success, .. } => assert!(success),
+                _ => anyhow::bail!("expected setBreakpoints response (warmup)"),
+            }
+            warmup.push(elapsed);
+        }
+        warmup.sort_unstable();
+        let warmup_median = warmup[warmup.len() / 2];
+
+        // 20 measurement samples — enough for p95 to be distinct from the maximum.
+        let mut samples = Vec::with_capacity(20);
+        for seq in 6..=25 {
             let start = Instant::now();
             let response = adapter.handle_request(seq, "setBreakpoints", Some(payload.clone()));
             let elapsed = start.elapsed();
@@ -114,11 +138,18 @@ mod dap_performance {
             samples.push(elapsed);
         }
 
-        let first = samples[0];
         let p95_latency = p95(samples);
+
+        // Relative guard: p95 must not exceed 5× the warm median.
+        // (Catches accumulating-state bugs; 5× is generous enough for CI jitter.)
         assert!(
-            p95_latency <= first.saturating_mul(3),
-            "breakpoint verification latency regressed across repeats: first={first:?}, p95={p95_latency:?}"
+            p95_latency <= warmup_median.saturating_mul(5),
+            "breakpoint verification latency regressed: warmup_median={warmup_median:?}, p95={p95_latency:?}"
+        );
+        // Absolute guard: hard ceiling independent of warmup timing.
+        assert!(
+            p95_latency < Duration::from_secs(2),
+            "breakpoint verification p95 exceeded absolute ceiling: {p95_latency:?}"
         );
         Ok(())
     }
