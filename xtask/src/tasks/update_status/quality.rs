@@ -193,6 +193,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 
     let bullets_content = format!(
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
+         - **Lexer perf scorecard artifact**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `target/criterion/lexer_scorecard.json` for the 8 benchmark families\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
            the integration-only 10k-line large-file case; confidence signals (manual smoke, \

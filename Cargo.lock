@@ -1600,6 +1600,8 @@ dependencies = [
  "perl-token",
  "phf",
  "proptest",
+ "serde",
+ "serde_json",
  "thiserror",
  "tracing",
  "unicode-ident",

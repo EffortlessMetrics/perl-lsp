@@ -27,6 +27,8 @@ perl-position-tracking = { workspace = true }
 
 [dev-dependencies]
 criterion.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 proptest.workspace = true
 perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
