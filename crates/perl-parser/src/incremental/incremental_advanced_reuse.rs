@@ -158,7 +158,13 @@ impl AdvancedReuseAnalyzer {
         self.find_direct_structural_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
         // Strategy 2: Position-shifted matching
-        self.find_position_shifted_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
+        self.find_position_shifted_matches(
+            &old_analysis,
+            &new_analysis,
+            edits,
+            &mut reuse_map,
+            config,
+        );
 
         // Strategy 3: Content-updated matching
         if config.enable_content_reuse {
@@ -367,38 +373,80 @@ impl AdvancedReuseAnalyzer {
         &mut self,
         old_analysis: &TreeAnalysis,
         new_analysis: &TreeAnalysis,
+        edits: &EditSet,
         reuse_map: &mut HashMap<usize, ReuseStrategy>,
         config: &ReuseConfig,
     ) {
-        for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+        let mut used_targets: HashSet<usize> =
+            reuse_map.values().map(|strategy| strategy.target_position).collect();
+
+        let mut old_positions: Vec<usize> = old_analysis.node_info.keys().copied().collect();
+        old_positions.sort_unstable();
+
+        for old_pos in old_positions {
+            // Skip if already matched or affected by the edit set
+            if reuse_map.contains_key(&old_pos) || self.affected_nodes.contains(&old_pos) {
                 continue;
             }
 
+            let Some(old_info) = old_analysis.node_info.get(&old_pos) else {
+                continue;
+            };
+
+            let expected_position =
+                Self::apply_position_shift(old_pos, edits.byte_shift_at(old_pos));
+
+            let mut best_candidate: Option<(usize, f64, isize)> = None;
+
             // Look for content matches that may have shifted position
             for (new_pos, new_info) in &new_analysis.node_info {
+                if used_targets.contains(new_pos) {
+                    continue;
+                }
+
                 if old_info.content_hash == new_info.content_hash
                     && old_info.structural_hash == new_info.structural_hash
                 {
-                    let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
+                    let position_shift = (*new_pos as isize - old_pos as isize).unsigned_abs();
                     if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
+                        let expected_distance =
+                            (*new_pos as isize - expected_position as isize).unsigned_abs() as f64;
+                        let expected_position_bonus = if expected_distance == 0.0 {
+                            1.0
+                        } else {
+                            1.0 / (1.0 + expected_distance)
+                        };
+                        let confidence = (self.calculate_match_confidence(old_info, new_info)
+                            * 0.8)
+                            + (expected_position_bonus * 0.2);
+
                         if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
+                            if best_candidate.is_none_or(|(_, current_confidence, _)| {
+                                confidence > current_confidence
+                            }) {
+                                best_candidate = Some((
+                                    *new_pos,
+                                    confidence,
+                                    (*new_pos as isize) - (old_pos as isize),
+                                ));
+                            }
                         }
                     }
                 }
+            }
+
+            if let Some((target_position, confidence_score, position_adjustment)) = best_candidate {
+                reuse_map.insert(
+                    old_pos,
+                    ReuseStrategy {
+                        target_position,
+                        reuse_type: ReuseType::PositionShift,
+                        confidence_score,
+                        position_adjustment,
+                    },
+                );
+                used_targets.insert(target_position);
+                self.analysis_stats.position_adjustments += 1;
             }
         }
     }
@@ -585,7 +633,11 @@ impl AdvancedReuseAnalyzer {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => statements.len(),
             NodeKind::VariableDeclaration { initializer, .. } => {
-                if initializer.is_some() { 2 } else { 1 } // variable + optional initializer
+                if initializer.is_some() {
+                    2
+                } else {
+                    1
+                } // variable + optional initializer
             }
             NodeKind::Binary { .. } => 2, // left + right
             NodeKind::Unary { .. } => 1,  // operand
@@ -750,6 +802,14 @@ impl AdvancedReuseAnalyzer {
 
         count
     }
+
+    fn apply_position_shift(position: usize, shift: isize) -> usize {
+        if shift.is_positive() {
+            position.saturating_add(shift as usize)
+        } else {
+            position.saturating_sub((-shift) as usize)
+        }
+    }
 }
 
 /// Comprehensive analysis of a tree structure
@@ -820,7 +880,7 @@ impl ReuseAnalysisResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::{SourceLocation, ast::Node};
+    use perl_parser_core::{ast::Node, SourceLocation};
 
     #[test]
     fn test_advanced_reuse_analyzer_creation() {

@@ -297,10 +297,25 @@ impl IncrementalParserV2 {
                 self.reused_nodes = 0;
                 self.reparsed_nodes = self.count_nodes(&root);
             } else if let Some(ref old_tree) = self.last_tree {
-                // Normal incremental fallback - still compare against old tree
-                let (reused, reparsed) = self.analyze_reuse(&old_tree.root, &root);
-                self.reused_nodes = reused;
-                self.reparsed_nodes = reparsed;
+                // Normal incremental fallback - use advanced reuse analyzer first,
+                // then fall back to simple structural comparison if needed.
+                let analysis = self.reuse_analyzer.analyze_reuse_opportunities(
+                    &old_tree.root,
+                    &root,
+                    &self.pending_edits,
+                    &self.reuse_config,
+                );
+                self.last_reuse_analysis = Some(analysis);
+
+                if let Some(last_analysis) = &self.last_reuse_analysis {
+                    self.reused_nodes = last_analysis.reused_nodes;
+                    self.reparsed_nodes =
+                        last_analysis.total_new_nodes.saturating_sub(last_analysis.reused_nodes);
+                } else {
+                    let (reused, reparsed) = self.analyze_reuse(&old_tree.root, &root);
+                    self.reused_nodes = reused;
+                    self.reparsed_nodes = reparsed;
+                }
             } else {
                 // No old tree - full parse
                 self.reused_nodes = 0;
