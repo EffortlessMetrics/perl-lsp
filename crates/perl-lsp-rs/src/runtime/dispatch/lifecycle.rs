@@ -147,36 +147,104 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn given_no_initialize_request_when_initialized_notification_arrives_then_server_returns_not_initialized_error(
+    ) {
+        // Given
         let server = LspServer::new();
 
+        // When
         let result = server.handle_initialized_dispatch();
 
+        // Then
         assert!(result.is_err(), "initialized before initialize must error");
         assert!(!server.is_initialized(), "server must remain uninitialized");
+        if let Err(error) = result {
+            assert_eq!(error.code, -32002, "must use ServerNotInitialized code");
+        }
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn given_initialized_notification_already_processed_when_initialized_notification_repeated_then_server_returns_invalid_request_error(
+    ) {
+        // Given
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        must(server.handle_initialize(None));
 
+        // When
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
+        // Then
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        if let Err(error) = second {
+            assert_eq!(error.code, -32600, "must use InvalidRequest code");
+        }
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn given_initialize_request_without_initialized_notification_when_compatibility_method_runs_then_server_auto_initializes(
+    ) {
+        // Given
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        must(server.handle_initialize(None));
 
+        // When
         server.auto_initialize_for_compat("textDocument/hover");
 
+        // Then
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    #[test]
+    fn given_no_initialize_request_when_compatibility_method_runs_then_server_does_not_auto_initialize() {
+        // Given
+        let server = LspServer::new();
+
+        // When
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        // Then
+        assert!(!server.is_initialized(), "compatibility path must not initialize without initialize request");
+    }
+
+    #[test]
+    fn given_set_trace_verbose_when_notification_contains_verbose_level_then_trace_level_is_updated() {
+        // Given
+        let server = LspServer::new();
+        let params = Some(json!({ "value": "verbose" }));
+
+        // When
+        let result = server.handle_set_trace_dispatch(params);
+
+        // Then
+        assert!(result.is_ok(), "setTrace is a notification and must not fail");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "verbose",
+            "trace level should move to verbose"
+        );
+    }
+
+    #[test]
+    fn given_set_trace_with_invalid_level_when_notification_arrives_then_trace_level_defaults_to_off() {
+        // Given
+        let server = LspServer::new();
+        must(server.handle_set_trace_dispatch(Some(json!({ "value": "messages" }))));
+        let params = Some(json!({ "value": "super-verbose" }));
+
+        // When
+        let result = server.handle_set_trace_dispatch(params);
+
+        // Then
+        assert!(result.is_ok(), "setTrace is a notification and must not fail");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "off",
+            "invalid setTrace levels must default to off"
+        );
     }
 }
