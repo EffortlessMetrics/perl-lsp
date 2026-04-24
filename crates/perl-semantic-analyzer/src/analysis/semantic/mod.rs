@@ -38,6 +38,8 @@ use crate::ast::Node;
 use crate::symbol::{Symbol, SymbolExtractor, SymbolTable, is_universal_method};
 use std::collections::{HashMap, HashSet};
 
+const MAX_MRO_TRAVERSAL_DEPTH: usize = 1024;
+
 #[derive(Debug)]
 /// Semantic analyzer providing comprehensive IDE features for Perl code.
 ///
@@ -477,7 +479,12 @@ impl SemanticAnalyzer {
             models_by_name: &HashMap<&str, &ClassModel>,
             seen: &mut HashSet<String>,
             out: &mut Vec<String>,
+            depth: usize,
         ) {
+            if depth >= MAX_MRO_TRAVERSAL_DEPTH {
+                return;
+            }
+
             let Some(model) = models_by_name.get(package).copied() else {
                 return;
             };
@@ -485,14 +492,14 @@ impl SemanticAnalyzer {
             for parent in &model.parents {
                 if seen.insert(parent.clone()) {
                     out.push(parent.clone());
-                    walk(parent, models_by_name, seen, out);
+                    walk(parent, models_by_name, seen, out, depth + 1);
                 }
             }
         }
 
         let mut seen = HashSet::from([package.to_string()]);
         let mut out = Vec::new();
-        walk(package, models_by_name, &mut seen, &mut out);
+        walk(package, models_by_name, &mut seen, &mut out, 0);
         out
     }
 
@@ -505,7 +512,12 @@ impl SemanticAnalyzer {
             package: &str,
             models_by_name: &HashMap<&str, &ClassModel>,
             visited: &mut HashSet<String>,
+            depth: usize,
         ) -> Vec<String> {
+            if depth >= MAX_MRO_TRAVERSAL_DEPTH {
+                return vec![package.to_string()];
+            }
+
             if !visited.insert(package.to_string()) {
                 return vec![];
             }
@@ -521,7 +533,7 @@ impl SemanticAnalyzer {
 
             let mut parent_mros: Vec<Vec<String>> = parents
                 .iter()
-                .map(|parent| linearize(parent, models_by_name, &mut visited.clone()))
+                .map(|parent| linearize(parent, models_by_name, &mut visited.clone(), depth + 1))
                 .collect();
             parent_mros.push(parents.clone());
 
@@ -567,7 +579,7 @@ impl SemanticAnalyzer {
             result
         }
 
-        linearize(package, models_by_name, &mut HashSet::new()).into_iter().skip(1).collect()
+        linearize(package, models_by_name, &mut HashSet::new(), 0).into_iter().skip(1).collect()
     }
 }
 
@@ -1818,6 +1830,45 @@ my %config = (key => "value");
             );
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_inherited_method_location_limits_dfs_depth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let chain_len = MAX_MRO_TRAVERSAL_DEPTH + 10;
+        let mut code = String::new();
+        for i in 0..chain_len {
+            code.push_str(&format!("package P{i}; use parent 'P{}';\n", i + 1));
+        }
+        code.push_str(&format!("package P{chain_len}; sub target {{ 1 }}\n"));
+
+        let mut parser = Parser::new(&code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, &code);
+
+        let location = analyzer.resolve_inherited_method_location("P0", "target");
+        assert!(location.is_none(), "DFS traversal should stop at depth limit");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_inherited_method_location_limits_c3_depth()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let chain_len = MAX_MRO_TRAVERSAL_DEPTH + 10;
+        let mut code = String::new();
+        code.push_str("package P0; use mro 'c3'; use parent 'P1';\n");
+        for i in 1..chain_len {
+            code.push_str(&format!("package P{i}; use parent 'P{}';\n", i + 1));
+        }
+        code.push_str(&format!("package P{chain_len}; sub target {{ 1 }}\n"));
+
+        let mut parser = Parser::new(&code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, &code);
+
+        let location = analyzer.resolve_inherited_method_location("P0", "target");
+        assert!(location.is_none(), "C3 traversal should stop at depth limit");
         Ok(())
     }
 }
