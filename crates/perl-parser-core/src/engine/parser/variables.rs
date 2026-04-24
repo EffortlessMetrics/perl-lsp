@@ -381,6 +381,16 @@ impl<'a> Parser<'a> {
             end = name_token.end;
         }
 
+        // Main-stash package variable shorthand may be lexed as `$::` + `IDENT`
+        // instead of a single `$::IDENT` token. Join that tail identifier so
+        // parenthesized expressions like `($::IS_ASCII || ...)` do not leave a
+        // stray identifier that looks like an unclosed `)`.
+        if sigil == "$" && full_name == "::" && self.peek_kind() == Some(TokenKind::Identifier) {
+            let name_token = self.tokens.next()?;
+            full_name.push_str(&name_token.text);
+            end = name_token.end;
+        }
+
         // Handle :: in package-qualified variables
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
             self.tokens.next()?; // consume ::
@@ -425,7 +435,7 @@ impl<'a> Parser<'a> {
         // Check if next token is an identifier or a keyword that should be treated as identifier
         let next_kind = self.peek_kind();
 
-        let (name, end) = if next_kind == Some(TokenKind::Identifier) ||
+        let (mut name, mut end) = if next_kind == Some(TokenKind::Identifier) ||
                              // Keywords can be used as variable names with any sigil
                              // e.g., %try, $default, @for, &try are all valid Perl
                              matches!(next_kind, Some(k) if Self::can_be_sub_name(k))
@@ -597,6 +607,14 @@ impl<'a> Parser<'a> {
                 }
             }
         };
+
+        // `$::IDENT` may arrive as a sigil token (`$`) followed by `::` and
+        // then an identifier token.  Attach the identifier tail eagerly.
+        if sigil == "$" && name == "::" && self.peek_kind() == Some(TokenKind::Identifier) {
+            let name_token = self.tokens.next()?;
+            name.push_str(&name_token.text);
+            end = name_token.end;
+        }
 
         // Special handling for @, %, or $ sigil followed by { - array/hash/scalar dereference
         // e.g. @{$ref}, %{$hash}, ${"${pkg}::$sym"}

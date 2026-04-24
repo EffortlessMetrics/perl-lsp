@@ -196,3 +196,10 @@ if ($self->is_valid()
 "#,
     );
 }
+
+#[test]
+fn test_print_block_filehandle_without_comma_in_parens() {
+    // Real-world pattern from Dpkg::Source::Archive:
+    // print({ *$self->{tar_input} } "$file\0")
+    assert_clean_parse(r#"print({ *$self->{tar_input} } "$file\0");"#);
+}

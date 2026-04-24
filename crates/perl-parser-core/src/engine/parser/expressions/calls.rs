@@ -555,12 +555,17 @@ impl<'a> Parser<'a> {
                 return Ok(vec![]);
             }
 
-            // Peek ahead: if the first token is a scalar variable ($fh) and the
+            // Peek ahead: if the first argument is an indirect filehandle and the
             // token after it is NOT a comma, fat-arrow, or `)`, treat it as the
-            // indirect filehandle (no comma before the message list).
+            // filehandle form (no comma before the message list).
+            //
+            // Supported indirect-filehandle first-arg forms:
+            // 1) scalar variable: `print($fh "msg")`
+            // 2) block filehandle: `print({ *$fh } "msg")`
             let first_is_scalar = s.tokens.peek().is_ok_and(|t| {
                 t.text.starts_with('$') && t.text.len() > 1
             });
+            let first_is_fh_block = s.peek_kind() == Some(TokenKind::LeftBrace);
             let second_is_not_separator = s.tokens.peek_second().is_ok_and(|t| {
                 !matches!(
                     t.kind,
@@ -568,7 +573,7 @@ impl<'a> Parser<'a> {
                 )
             });
 
-            if first_is_scalar && second_is_not_separator {
+            if (first_is_scalar || first_is_fh_block) && second_is_not_separator {
                 // Filehandle form: parse $fh as first argument, then remaining args
                 // without requiring a comma separator.
                 let mut args = Vec::new();

@@ -65,3 +65,9 @@ fn main_stash_array_sigil() {
     // @:: is the list of symbol names in the main package
     assert_clean_parse(r#"my @syms = @::;"#);
 }
+
+#[test]
+fn main_stash_symbol_in_parenthesized_condition() {
+    // Unicode::Collate pattern: `$::IS_ASCII` in a paren condition.
+    assert_clean_parse(r#"my $x = ($::IS_ASCII || $] < 5.008) ? 1 : 0;"#);
+}
