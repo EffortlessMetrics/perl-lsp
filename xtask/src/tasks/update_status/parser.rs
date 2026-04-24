@@ -2,6 +2,7 @@
 //!
 //! Owns corpus tracking, sweep report loading, and parser.md generation.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
@@ -89,6 +90,174 @@ fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum FailureCluster {
+    TransliterationQuote,
+    DeclarationPackage,
+    HeredocDelimiter,
+    RecoveryOnly,
+    EncodingMultibyte,
+    Other,
+}
+
+impl FailureCluster {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::TransliterationQuote => "transliteration / quote parsing",
+            Self::DeclarationPackage => "declaration / package parsing",
+            Self::HeredocDelimiter => "heredoc / delimiter handling",
+            Self::RecoveryOnly => "recovery-only failures",
+            Self::EncodingMultibyte => "encoding / multibyte failures",
+            Self::Other => "other",
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct ClusterSummary {
+    count: usize,
+    representative_buckets: Vec<String>,
+    representative_files: Vec<String>,
+}
+
+fn classify_failure_bucket(bucket: &str) -> FailureCluster {
+    let lower = bucket.to_ascii_lowercase();
+    if lower.contains("recover")
+        || lower.contains("incomplete")
+        || lower.contains("unexpected_token_in_expr")
+    {
+        return FailureCluster::RecoveryOnly;
+    }
+    if lower.contains("delimiter")
+        || lower.contains("unclosed_")
+        || lower.contains("substitution")
+        || lower.contains("angle")
+        || lower.contains("bracket")
+        || lower.contains("paren")
+        || lower.contains("brace")
+    {
+        return FailureCluster::HeredocDelimiter;
+    }
+    if lower.contains("package")
+        || lower.contains("module")
+        || lower.contains("import")
+        || lower.contains("identifier")
+        || lower.contains("signature")
+        || lower.contains("variable")
+        || lower.contains("check must be followed by a block")
+    {
+        return FailureCluster::DeclarationPackage;
+    }
+    if lower.contains("encoding")
+        || lower.contains("utf")
+        || lower.contains("unicode")
+        || lower.contains("wide character")
+        || lower.contains("multibyte")
+    {
+        return FailureCluster::EncodingMultibyte;
+    }
+    if lower.contains("quote")
+        || lower.contains("translit")
+        || lower.contains("tr/")
+        || lower.contains("y/")
+        || lower.contains("string")
+    {
+        return FailureCluster::TransliterationQuote;
+    }
+    FailureCluster::Other
+}
+
+fn build_failure_worklist(report: &super::super::parser_corpus_sweep::SweepReport) -> String {
+    if report.first_error_buckets.is_empty() {
+        return format!(
+            "| {} | 0 | n/a | n/a |\n| {} | 0 | n/a | n/a |\n| {} | 0 | n/a | n/a |\n| {} | 0 | n/a | n/a |\n| {} | 0 | n/a | n/a |\n| {} | 0 | n/a | n/a |",
+            FailureCluster::TransliterationQuote.as_label(),
+            FailureCluster::DeclarationPackage.as_label(),
+            FailureCluster::HeredocDelimiter.as_label(),
+            FailureCluster::RecoveryOnly.as_label(),
+            FailureCluster::EncodingMultibyte.as_label(),
+            FailureCluster::Other.as_label()
+        );
+    }
+
+    let mut clusters: BTreeMap<FailureCluster, ClusterSummary> = BTreeMap::new();
+    for (bucket, count) in &report.first_error_buckets {
+        let cluster = classify_failure_bucket(bucket);
+        let summary = clusters.entry(cluster).or_default();
+        summary.count += count;
+        summary.representative_buckets.push(bucket.clone());
+        if let Some(files) = report.files_by_bucket.get(bucket) {
+            summary.representative_files.extend(files.iter().take(2).cloned());
+        }
+    }
+
+    let ordered = [
+        FailureCluster::TransliterationQuote,
+        FailureCluster::DeclarationPackage,
+        FailureCluster::HeredocDelimiter,
+        FailureCluster::RecoveryOnly,
+        FailureCluster::EncodingMultibyte,
+        FailureCluster::Other,
+    ];
+
+    ordered
+        .into_iter()
+        .map(|cluster| {
+            let details = clusters.get(&cluster).cloned().unwrap_or_default();
+            let mut buckets = details.representative_buckets;
+            buckets.sort();
+            buckets.truncate(2);
+            let bucket_note =
+                if buckets.is_empty() { "n/a".to_string() } else { buckets.join(", ") };
+
+            let mut files = details.representative_files;
+            files.sort();
+            files.dedup();
+            files.truncate(2);
+            let example_note =
+                if files.is_empty() { "n/a".to_string() } else { files.join("<br>") };
+            format!(
+                "| {} | {} | {} | {} |",
+                cluster.as_label(),
+                details.count,
+                bucket_note,
+                example_note
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn render_failure_worklist_source(
+    label: &str,
+    report: &super::super::parser_corpus_sweep::SweepReport,
+) -> String {
+    let categories_table = build_failure_worklist(report);
+    format!(
+        "### {label}\n\
+         - Files with errors: `{}`\n\
+         - Baseline date: `{}`\n\n\
+         | Category | Count | Representative buckets | Representative examples |\n\
+         | --- | ---: | --- | --- |\n\
+         {}\n",
+        report.files_with_errors,
+        short_day(&report.timestamp),
+        categories_table
+    )
+}
+
+fn render_never_seen_nodekinds(summary: &super::super::corpus_audit::StatusSummary) -> String {
+    if summary.never_seen_nodekinds.is_empty() {
+        return "- None (all node kinds observed in corpus parses).".to_string();
+    }
+    summary
+        .never_seen_nodekinds
+        .iter()
+        .map(|kind| format!("- `{kind}`"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -158,12 +327,38 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
                 100.0 * summary.nodekind_covered as f64 / summary.nodekind_total as f64
             };
             let never_seen = summary.nodekind_total.saturating_sub(summary.nodekind_covered);
+            let kinds_preview =
+                summary.never_seen_nodekinds.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            let notes = if kinds_preview.is_empty() {
+                format!("{never_seen} never-seen node kinds")
+            } else {
+                format!("{never_seen} never-seen node kinds ({kinds_preview})")
+            };
             format!(
-                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds | `corpus_audit` |",
-                summary.nodekind_covered, summary.nodekind_total, pct, never_seen,
+                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} | `corpus_audit` |",
+                summary.nodekind_covered, summary.nodekind_total, pct, notes,
             )
         },
     );
+
+    let never_seen_nodekinds = metrics.project_corpus.as_ref().map_or_else(
+        || "- UNVERIFIED (live repo scan unavailable).".to_string(),
+        render_never_seen_nodekinds,
+    );
+
+    let failure_worklist = match (&metrics.system_receipt, &metrics.cpan_receipt) {
+        (None, None) => "- UNVERIFIED (baseline receipts unavailable).".to_string(),
+        (system, cpan) => {
+            let mut sections = Vec::new();
+            if let Some(report) = system {
+                sections.push(render_failure_worklist_source("Ubuntu system Perl", report));
+            }
+            if let Some(report) = cpan {
+                sections.push(render_failure_worklist_source("CPAN top 1000", report));
+            }
+            sections.join("\n")
+        }
+    };
 
     let reliability_row = {
         let sys_unread = metrics
@@ -242,6 +437,18 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->",
+        "<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->",
+        &never_seen_nodekinds,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_FAILURE_WORKLIST -->",
+        "<!-- END: PARSER_FAILURE_WORKLIST -->",
+        &failure_worklist,
+    )?;
     Ok(text)
 }
 
@@ -292,6 +499,12 @@ mod tests {
             perl_corpus_files: 22,
             nodekind_covered: 65,
             nodekind_total: 69,
+            never_seen_nodekinds: vec![
+                "Reserved".to_string(),
+                "PackageBlock".to_string(),
+                "BitwiseNot".to_string(),
+                "SpecialLiteral".to_string(),
+            ],
             ga_covered: 12,
             ga_total: 12,
         };
@@ -307,11 +520,17 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        assert!(
+            result.contains("Reserved"),
+            "never-seen section should list representative node kinds"
+        );
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"
@@ -334,6 +553,8 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
@@ -383,6 +604,8 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");

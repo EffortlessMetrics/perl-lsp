@@ -10,7 +10,7 @@
 <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 97.1% clean (`6890/7095`) | Compatibility baseline; Perl `5.038002`, `48` unreadable, `157` with errors, baseline `2026-04-09` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) | Ecosystem breadth baseline; `6` unreadable, `435` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`91/91`) | Deterministic regression baseline; `69` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`93/93`) | Deterministic regression baseline; `71` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -18,14 +18,54 @@
 | Metric | Value | Notes | Source |
 | --- | --- | --- | --- |
 <!-- BEGIN: PARSER_NODEKIND_ROW -->
-| **Node-kind coverage** | 65/69 (94.2%) | 4 never-seen node kinds | `corpus_audit` |
+| **Node-kind coverage** | 65/69 (94.2%) | 4 never-seen node kinds (MissingBlock, MissingIdentifier, MissingStatement) | `corpus_audit` |
 <!-- END: PARSER_NODEKIND_ROW -->
 <!-- BEGIN: PARSER_RELIABILITY_ROW -->
 | **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | 10 modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
+
+## Never-Seen Node Kinds (Project Corpus)
+
+<!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->
+- `MissingBlock`
+- `MissingIdentifier`
+- `MissingStatement`
+- `UnknownRest`
+<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->
+
+## Parser Failure Worklist (Clustered)
+
+<!-- BEGIN: PARSER_FAILURE_WORKLIST -->
+### Ubuntu system Perl
+- Files with errors: `157`
+- Baseline date: `2026-04-09`
+
+| Category | Count | Representative buckets | Representative examples |
+| --- | ---: | --- | --- |
+| transliteration / quote parsing | 0 | n/a | n/a |
+| declaration / package parsing | 6 | expected_variable | /usr/share/perl5/Debconf/DbDriver.pm |
+| heredoc / delimiter handling | 67 | expected_left_brace, invalid_substitution_modifier | /usr/lib/x86_64-linux-gnu/perl/5.38/Data/Dumper.pm<br>/usr/lib/x86_64-linux-gnu/perl/5.38/Encode/Guess.pm |
+| recovery-only failures | 26 | unexpected_token_in_expr | /usr/share/perl/5.38/English.pm |
+| encoding / multibyte failures | 0 | n/a | n/a |
+| other | 58 | expected_colon, expected_comma | /usr/lib/x86_64-linux-gnu/perl/5.38/File/Spec/Win32.pm<br>/usr/lib/x86_64-linux-gnu/perl/5.38/re.pm |
+
+### CPAN top 1000
+- Files with errors: `435`
+- Baseline date: `2026-04-09`
+
+| Category | Count | Representative buckets | Representative examples |
+| --- | ---: | --- | --- |
+| transliteration / quote parsing | 0 | n/a | n/a |
+| declaration / package parsing | 34 | CHECK must be followed by a block, expected_identifier | target/cpan-corpus/lib/perl5/ExtUtils/ParseXS/Node.pm<br>target/cpan-corpus/lib/perl5/Mojo/Exception.pm |
+| heredoc / delimiter handling | 234 | Missing replacement in substitution, expected_left_brace | target/cpan-corpus/lib/perl5/Alien/Build/Version/Basic.pm<br>target/cpan-corpus/lib/perl5/Capture/Tiny.pm |
+| recovery-only failures | 45 | Incomplete arrow expression, unexpected_token_in_expr | target/cpan-corpus/lib/perl5/Alien/Base.pm<br>target/cpan-corpus/lib/perl5/IO/Async/Function.pm |
+| encoding / multibyte failures | 0 | n/a | n/a |
+| other | 122 | expected_colon, unexpected_arrow_expr | target/cpan-corpus/lib/perl5/App/Cmd.pm<br>target/cpan-corpus/lib/perl5/Class/Accessor/Grouped.pm |
+
+<!-- END: PARSER_FAILURE_WORKLIST -->
 
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.

@@ -82,6 +82,7 @@ pub struct StatusSummary {
     pub perl_corpus_files: usize,
     pub nodekind_covered: usize,
     pub nodekind_total: usize,
+    pub never_seen_nodekinds: Vec<String>,
     pub ga_covered: usize,
     pub ga_total: usize,
 }
@@ -131,6 +132,11 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
         perl_corpus_files,
         nodekind_covered: nodekind_stats.covered_count,
         nodekind_total: nodekind_stats.total_count,
+        never_seen_nodekinds: {
+            let mut kinds = nodekind_stats.never_seen;
+            kinds.sort();
+            kinds
+        },
         ga_covered: ga_coverage.covered_count,
         ga_total: ga_coverage.total_count,
     })
