@@ -400,6 +400,8 @@ pub use position::{LineEnding, PositionMapper};
 
 /// Semantic analysis, scope resolution, and type inference.
 pub mod analysis;
+/// Read-only semantic query façade spanning parser, semantic, and workspace layers.
+pub mod semantic_query;
 /// Perl builtin function signatures and metadata.
 pub mod builtins;
 #[cfg(feature = "incremental")]
