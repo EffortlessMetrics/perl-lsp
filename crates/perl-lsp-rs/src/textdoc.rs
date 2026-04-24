@@ -14,6 +14,12 @@
 use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
 use ropey::Rope;
 
+/// Sentinel range used to signal that an LSP range cannot be mapped safely.
+///
+/// Returning an ordered-invalid pair preserves the existing tuple-based API while
+/// allowing callers that already gate on `start <= end` to reject malformed edits.
+const INVALID_RANGE_SENTINEL: (usize, usize) = (1, 0);
+
 /// Document state using Rope for efficient text operations
 ///
 /// The `Doc` struct stores document content in a Rope data structure,
@@ -102,6 +108,63 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     target_char.min(rope.len_chars())
 }
 
+#[derive(Clone, Copy)]
+struct PosMapping {
+    char_idx: usize,
+    is_exact_boundary: bool,
+}
+
+fn lsp_pos_to_char_checked(rope: &Rope, pos: Position, enc: PosEnc) -> Option<PosMapping> {
+    let line = usize::try_from(pos.line).ok()?;
+    if line >= rope.len_lines() {
+        return None;
+    }
+
+    let line_char0 = rope.line_to_char(line);
+    let line_slice = rope.line(line);
+    let mut char_idx = 0usize;
+
+    let is_exact_boundary = match enc {
+        PosEnc::Utf8 => {
+            let mut bytes = 0u32;
+            for ch in line_slice.chars() {
+                let next = bytes + ch.len_utf8() as u32;
+                if next > pos.character {
+                    return Some(PosMapping {
+                        char_idx: line_char0 + char_idx,
+                        is_exact_boundary: false,
+                    });
+                }
+                bytes = next;
+                char_idx += 1;
+            }
+            bytes == pos.character
+        }
+        PosEnc::Utf16 => {
+            let mut utf16_units = 0u32;
+            for ch in line_slice.chars() {
+                let next = utf16_units + ch.len_utf16() as u32;
+                if next > pos.character {
+                    return Some(PosMapping {
+                        char_idx: line_char0 + char_idx,
+                        is_exact_boundary: false,
+                    });
+                }
+                utf16_units = next;
+                char_idx += 1;
+            }
+            utf16_units == pos.character
+        }
+    };
+
+    Some(PosMapping { char_idx: line_char0 + char_idx, is_exact_boundary })
+}
+
+fn range_order_is_valid(range: &Range) -> bool {
+    range.start.line < range.end.line
+        || (range.start.line == range.end.line && range.start.character <= range.end.character)
+}
+
 /// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
@@ -169,9 +232,22 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
 /// # Returns
 /// Tuple of (start_char, end_char) clamped to rope bounds
 pub fn range_to_chars(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
-    let s = lsp_pos_to_char(rope, range.start, enc);
-    let e = lsp_pos_to_char(rope, range.end, enc);
-    (s.min(rope.len_chars()), e.min(rope.len_chars()))
+    if !range_order_is_valid(range) {
+        return INVALID_RANGE_SENTINEL;
+    }
+
+    let Some(start) = lsp_pos_to_char_checked(rope, range.start, enc) else {
+        return INVALID_RANGE_SENTINEL;
+    };
+    let Some(end) = lsp_pos_to_char_checked(rope, range.end, enc) else {
+        return INVALID_RANGE_SENTINEL;
+    };
+
+    if !start.is_exact_boundary || !end.is_exact_boundary {
+        return INVALID_RANGE_SENTINEL;
+    }
+
+    (start.char_idx.min(rope.len_chars()), end.char_idx.min(rope.len_chars()))
 }
 
 /// Convert LSP range to byte offset pair
@@ -187,9 +263,20 @@ pub fn range_to_chars(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 /// # Returns
 /// Tuple of (start_byte, end_byte) clamped to rope bounds
 pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
-    let s = lsp_pos_to_byte(rope, range.start, enc);
-    let e = lsp_pos_to_byte(rope, range.end, enc);
+    let (start_char, end_char) = range_to_chars(rope, range, enc);
+    if start_char > end_char {
+        return INVALID_RANGE_SENTINEL;
+    }
+
+    let s = rope.char_to_byte(start_char);
+    let e = rope.char_to_byte(end_char);
     (s.min(rope.len_bytes()), e.min(rope.len_bytes()))
+}
+
+fn range_to_chars_clamped(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
+    let s = lsp_pos_to_char(rope, range.start, enc);
+    let e = lsp_pos_to_char(rope, range.end, enc);
+    (s.min(rope.len_chars()), e.min(rope.len_chars()))
 }
 
 /// Apply incremental LSP text changes to a Rope-backed document
@@ -216,7 +303,7 @@ pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], 
     for ch in changes {
         if let Some(r) = &ch.range {
             // IMPORTANT: Rope::remove and Rope::insert use char indices, not byte offsets
-            let (s, e) = range_to_chars(&doc.rope, r, enc);
+            let (s, e) = range_to_chars_clamped(&doc.rope, r, enc);
             if s <= e {
                 doc.rope.remove(s..e);
                 doc.rope.insert(s, &ch.text);
@@ -310,5 +397,28 @@ mod tests {
         assert_eq!(pos2.line, 1);
         let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
         assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+
+    #[test]
+    fn test_range_to_chars_rejects_reversed_range() {
+        let rope = Rope::from_str("abc\n");
+        let range = Range {
+            start: Position { line: 0, character: 2 },
+            end: Position { line: 0, character: 1 },
+        };
+
+        assert_eq!(range_to_chars(&rope, &range, PosEnc::Utf16), INVALID_RANGE_SENTINEL);
+    }
+
+    #[test]
+    fn test_range_to_chars_rejects_utf16_mid_surrogate() {
+        let rope = Rope::from_str("a\u{1F600}b\n");
+        let range = Range {
+            start: Position { line: 0, character: 1 },
+            end: Position { line: 0, character: 2 },
+        };
+
+        assert_eq!(range_to_chars(&rope, &range, PosEnc::Utf16), INVALID_RANGE_SENTINEL);
+        assert_eq!(range_to_bytes(&rope, &range, PosEnc::Utf16), INVALID_RANGE_SENTINEL);
     }
 }
