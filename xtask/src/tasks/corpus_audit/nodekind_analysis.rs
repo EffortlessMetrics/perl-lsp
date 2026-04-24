@@ -7,6 +7,25 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+const INTENTIONALLY_UNREACHABLE_NODEKINDS: [(&str, &str); 4] = [
+    (
+        "MissingStatement",
+        "Error-recovery sentinel emitted only when a statement is missing; clean corpus excludes invalid programs.",
+    ),
+    (
+        "MissingIdentifier",
+        "Error-recovery sentinel emitted only when an identifier is missing; clean corpus excludes invalid programs.",
+    ),
+    (
+        "MissingBlock",
+        "Error-recovery sentinel emitted only when a block is missing; clean corpus excludes invalid programs.",
+    ),
+    (
+        "UnknownRest",
+        "Lexer budget-exhaustion sentinel token; deterministic fixture corpus is intentionally small and does not trigger budget exhaustion.",
+    ),
+];
+
 /// Statistics about NodeKind coverage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeKindStats {
@@ -18,6 +37,12 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds that are allowlisted as intentionally unreachable
+    #[serde(default)]
+    pub intentionally_unreachable: Vec<AllowlistedNodeKind>,
+    /// Never-seen NodeKinds that are not allowlisted and need coverage work
+    #[serde(default)]
+    pub unexpected_never_seen: Vec<String>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
@@ -33,6 +58,15 @@ pub struct AtRiskNodeKind {
     pub count: usize,
     /// Risk level
     pub risk_level: RiskLevel,
+}
+
+/// A never-seen NodeKind that is allowlisted with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this NodeKind is intentionally unreachable in deterministic clean corpus runs
+    pub rationale: String,
 }
 
 /// Risk level for NodeKind coverage
@@ -76,8 +110,25 @@ pub fn analyze_nodekind_coverage(
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
+    let mut never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    never_seen.sort();
+
+    let allowlist: HashMap<&str, &str> =
+        INTENTIONALLY_UNREACHABLE_NODEKINDS.iter().copied().collect();
+
+    let mut intentionally_unreachable = Vec::new();
+    let mut unexpected_never_seen = Vec::new();
+    for nodekind in &never_seen {
+        if let Some(rationale) = allowlist.get(nodekind.as_str()) {
+            intentionally_unreachable.push(AllowlistedNodeKind {
+                name: nodekind.clone(),
+                rationale: (*rationale).to_string(),
+            });
+        } else {
+            unexpected_never_seen.push(nodekind.clone());
+        }
+    }
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +153,8 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        intentionally_unreachable,
+        unexpected_never_seen,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -163,6 +216,14 @@ mod tests {
         assert!(nodekinds.contains("ExpressionStatement"));
         assert!(nodekinds.contains("Binary"));
         assert!(nodekinds.contains("Subroutine"));
+    }
+
+    #[test]
+    fn test_intentionally_unreachable_allowlist_consistency() {
+        let nodekinds = get_all_nodekinds();
+        for (name, _) in INTENTIONALLY_UNREACHABLE_NODEKINDS {
+            assert!(nodekinds.contains(name));
+        }
     }
 
     #[test]

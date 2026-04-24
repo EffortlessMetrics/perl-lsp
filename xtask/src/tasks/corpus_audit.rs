@@ -256,6 +256,25 @@ fn print_audit_summary(report: &AuditReport) {
         report.nodekind_coverage.coverage_percentage
     );
     println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
+    if !report.nodekind_coverage.never_seen.is_empty() {
+        println!("     - {}", report.nodekind_coverage.never_seen.join(", "));
+    }
+    if !report.nodekind_coverage.intentionally_unreachable.is_empty() {
+        println!(
+            "   Intentionally unreachable (allowlist): {}",
+            report.nodekind_coverage.intentionally_unreachable.len()
+        );
+        for entry in &report.nodekind_coverage.intentionally_unreachable {
+            println!("     - {}: {}", entry.name, entry.rationale);
+        }
+    }
+    if !report.nodekind_coverage.unexpected_never_seen.is_empty() {
+        println!(
+            "   Unexpected never-seen NodeKinds requiring new corpus fixtures: {}",
+            report.nodekind_coverage.unexpected_never_seen.len()
+        );
+        println!("     - {}", report.nodekind_coverage.unexpected_never_seen.join(", "));
+    }
     println!("   At-risk NodeKinds (<5 occurrences): {}", report.nodekind_coverage.at_risk.len());
     println!(
         "   GA features covered: {}/{} ({:.1}%)",
