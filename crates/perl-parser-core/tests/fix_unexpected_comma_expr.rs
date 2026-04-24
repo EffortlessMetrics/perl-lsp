@@ -144,6 +144,21 @@ fn test_comma_as_sequence_operator() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_nullary_builtin_comma_sequence() {
+    // File::Spec::Win32 / overload.pm pattern: comma operator with nullary builtins
+    let source = r#"shift, shift;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_nullary_builtin_then_return_with_modifier() {
+    // File::Spec::Win32 pattern:
+    // shift, return _canon_cat("/", @_) if !@_ || $_[0] eq "";
+    let source = r#"shift, return _canon_cat("/", @_) if !@_ || $_[0] eq "";"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]
