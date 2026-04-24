@@ -4,7 +4,20 @@
 
 use super::super::*;
 
+const TRACE_LEVEL_OFF: &str = "off";
+const TRACE_LEVEL_MESSAGES: &str = "messages";
+const TRACE_LEVEL_VERBOSE: &str = "verbose";
+
 impl LspServer {
+    fn normalize_trace_level(value: Option<&str>) -> &'static str {
+        match value {
+            Some(TRACE_LEVEL_OFF) => TRACE_LEVEL_OFF,
+            Some(TRACE_LEVEL_MESSAGES) => TRACE_LEVEL_MESSAGES,
+            Some(TRACE_LEVEL_VERBOSE) => TRACE_LEVEL_VERBOSE,
+            _ => TRACE_LEVEL_OFF,
+        }
+    }
+
     fn complete_initialization(&self) {
         if self
             .initialized
@@ -85,14 +98,9 @@ impl LspServer {
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            if let Some(value) = params.get("value").and_then(|v| v.as_str()) {
-                let level = match value {
-                    "off" | "messages" | "verbose" => value.to_string(),
-                    _ => "off".to_string(),
-                };
-                tracing::debug!(level, "Trace level set");
-                *self.trace_level.lock() = level;
-            }
+            let level = Self::normalize_trace_level(params.get("value").and_then(|v| v.as_str()));
+            tracing::debug!(level, "Trace level set");
+            *self.trace_level.lock() = level.to_string();
         }
         Ok(None) // Notification, no response
     }
@@ -104,13 +112,13 @@ impl LspServer {
     #[allow(dead_code)]
     pub(crate) fn send_log_trace(&self, message: &str, verbose: Option<&str>) {
         let current_level = self.trace_level.lock().clone();
-        if current_level == "off" {
+        if current_level == TRACE_LEVEL_OFF {
             return;
         }
         let mut params = json!({
             "message": message
         });
-        if current_level == "verbose" {
+        if current_level == TRACE_LEVEL_VERBOSE {
             if let Some(v) = verbose {
                 params["verbose"] = json!(v);
             }
@@ -159,24 +167,37 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn set_trace_invalid_value_defaults_to_off() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
+
+        server.handle_set_trace_dispatch(Some(json!({ "value": "invalid-value" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF);
+        Ok(())
     }
 }
