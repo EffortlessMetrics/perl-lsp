@@ -743,7 +743,7 @@ upstream-log count='20' base='':
     fi
     if [ -z "$base" ]; then
         echo "ERROR: Could not auto-detect base ref."
-        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 HEAD)."
+        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 origin/master)."
         exit 1
     fi
     echo "Showing last $count commits from $base"
