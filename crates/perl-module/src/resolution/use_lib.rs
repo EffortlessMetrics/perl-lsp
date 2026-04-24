@@ -323,6 +323,13 @@ fn resolve_findbin_in_string(s: &str) -> (String, bool) {
 
 fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String> {
     if let Ok(rel) = path.strip_prefix(workspace_root) {
+        // Guard against lexical strip_prefix matching an embedded `..` segment.
+        // For example, `/workspace/../etc` strips the `/workspace` prefix lexically,
+        // leaving `../etc` which would escape the workspace.  Reject any result
+        // that contains a parent-directory component.
+        if rel.components().any(|c| c == std::path::Component::ParentDir) {
+            return None;
+        }
         let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
         if s.is_empty() { Some(".".to_string()) } else { Some(s) }
     } else if path.is_absolute() {

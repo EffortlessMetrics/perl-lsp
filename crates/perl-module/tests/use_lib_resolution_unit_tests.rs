@@ -61,8 +61,8 @@ fn absolute_use_lib_path_outside_workspace_is_rejected() -> Result<(), Box<dyn s
 }
 
 #[test]
-fn absolute_use_lib_path_inside_workspace_is_normalized_to_relative(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn absolute_use_lib_path_inside_workspace_is_normalized_to_relative()
+-> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().join("workspace");
     let inside = workspace.join("lib").join("Nested");
@@ -76,6 +76,39 @@ fn absolute_use_lib_path_inside_workspace_is_normalized_to_relative(
     );
 
     assert_eq!(resolved, vec!["lib/Nested".to_string()]);
+    Ok(())
+}
+
+#[test]
+fn absolute_use_lib_path_with_embedded_dotdot_is_rejected() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Regression guard: `Path::strip_prefix` is purely lexical.  An absolute path
+    // like `<workspace>/../sibling` strips the `<workspace>` prefix lexically but
+    // the remainder is `../sibling`, which would escape the workspace.  The guard in
+    // `path_to_relative_string` must detect any `ParentDir` component in the
+    // stripped result and return `None`.
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    std::fs::create_dir_all(&workspace)?;
+
+    // Construct a truly absolute path that lexically starts with the workspace
+    // prefix but contains an embedded `..` that escapes it.
+    let bypass_path = format!(
+        "{}{}..{}sibling",
+        workspace.display(),
+        std::path::MAIN_SEPARATOR,
+        std::path::MAIN_SEPARATOR
+    );
+
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: bypass_path.clone(), from_findbin: false }],
+        &workspace,
+        None,
+    );
+    assert!(
+        resolved.is_empty(),
+        "absolute path with embedded `..` must be rejected; bypass_path={bypass_path:?} got: {resolved:?}"
+    );
     Ok(())
 }
 
