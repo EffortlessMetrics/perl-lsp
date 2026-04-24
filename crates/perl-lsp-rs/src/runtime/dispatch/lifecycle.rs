@@ -159,24 +159,67 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state()
+    -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn auto_initialize_for_compat_does_not_initialize_without_request() {
+        let server = LspServer::new();
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(
+            !server.is_initialized(),
+            "compatibility path must not initialize without initialize request"
+        );
+    }
+
+    #[test]
+    fn handle_shutdown_dispatch_clears_cancelled_requests_and_sets_shutdown_flag()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        server.cancelled.lock().insert(json!("request-1"));
+
+        let response = server.handle_shutdown_dispatch()?;
+
+        assert_eq!(response, Some(json!(null)), "shutdown response should be null");
+        assert!(server.cancelled.lock().is_empty(), "shutdown should clear cancelled request ids");
+        assert!(
+            server.shutdown_received.load(Ordering::Acquire),
+            "shutdown should mark server shutdown flag"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_trace_dispatch_accepts_known_levels_and_defaults_invalid_to_off() {
+        let server = LspServer::new();
+
+        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })));
+        assert_eq!(server.trace_level.lock().as_str(), "messages", "messages must be preserved");
+
+        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "invalid-level" })));
+        assert_eq!(server.trace_level.lock().as_str(), "off", "invalid level must default to off");
     }
 }
