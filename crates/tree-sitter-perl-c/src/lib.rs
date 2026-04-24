@@ -122,6 +122,18 @@ impl std::error::Error for ParsePerlError {
     }
 }
 
+impl From<tree_sitter::LanguageError> for ParsePerlError {
+    fn from(error: tree_sitter::LanguageError) -> Self {
+        Self::LanguageSetup(error)
+    }
+}
+
+impl From<std::io::Error> for ParsePerlError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
 /// Creates a [`tree_sitter::Parser`] configured for Perl, silently ignoring
 /// language-set errors.
 ///
@@ -181,7 +193,7 @@ where
 /// Returns an error if the parser cannot be initialised (version mismatch) or
 /// if tree-sitter returns `None` from `parse` (cancelled or timed out).
 pub fn try_parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, ParsePerlError> {
-    try_parse_perl_bytes_with(code, || try_create_parser().map_err(ParsePerlError::LanguageSetup))
+    try_parse_perl_bytes_with(code, || Ok(try_create_parser()?))
 }
 
 /// Compatibility shim for [`try_parse_perl_bytes`].
@@ -220,7 +232,7 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 /// Returns an error if the file cannot be read or if parsing fails (see
 /// [`parse_perl_code`]).
 pub fn try_parse_perl_file<P: AsRef<Path>>(path: P) -> Result<tree_sitter::Tree, ParsePerlError> {
-    let code = std::fs::read(path).map_err(ParsePerlError::Io)?;
+    let code = std::fs::read(path)?;
     try_parse_perl_bytes(&code)
 }
 
@@ -306,6 +318,20 @@ mod tests {
             result,
             Err(ParsePerlError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound
         ));
+    }
+
+    #[test]
+    fn test_from_language_error_converts_to_language_setup_variant() {
+        let lang_err = LanguageError::Version(0);
+        let parse_err: ParsePerlError = lang_err.into();
+        assert!(matches!(parse_err, ParsePerlError::LanguageSetup(_)));
+    }
+
+    #[test]
+    fn test_from_io_error_converts_to_io_variant() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "test");
+        let parse_err: ParsePerlError = io_err.into();
+        assert!(matches!(parse_err, ParsePerlError::Io(e) if e.kind() == std::io::ErrorKind::PermissionDenied));
     }
 
     #[test]
