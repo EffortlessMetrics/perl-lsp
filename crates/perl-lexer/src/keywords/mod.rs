@@ -17,6 +17,7 @@ pub const KEYWORDS: &[&str] = &[
     "__FILE__",
     "__LINE__",
     "__PACKAGE__",
+    "__SUB__",
     "abs",
     "and",
     "async",
@@ -145,6 +146,7 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
     "__FILE__",
     "__LINE__",
     "__PACKAGE__",
+    "__SUB__",
     "and",
     "async",
     "await",
@@ -380,6 +382,7 @@ mod tests {
         assert!(is_keyword("foreach"));
         assert!(is_keyword("print"));
         assert!(is_keyword("__PACKAGE__"));
+        assert!(is_keyword("__SUB__"));
         assert!(!is_keyword("definitely_not_a_perl_keyword"));
     }
 

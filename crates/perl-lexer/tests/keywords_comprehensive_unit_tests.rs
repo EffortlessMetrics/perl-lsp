@@ -237,7 +237,7 @@ fn phase_blocks_are_keywords() {
 
 #[test]
 fn dunder_tokens_are_keywords() {
-    for kw in ["__FILE__", "__LINE__", "__PACKAGE__"] {
+    for kw in ["__FILE__", "__LINE__", "__PACKAGE__", "__SUB__"] {
         assert!(is_keyword(kw), "dunder token {kw:?} missing from KEYWORDS");
     }
 }
@@ -479,6 +479,7 @@ fn dunder_tokens_not_in_lexer_keywords() {
     assert!(!is_lexer_keyword("__FILE__"));
     assert!(!is_lexer_keyword("__LINE__"));
     assert!(!is_lexer_keyword("__PACKAGE__"));
+    assert!(!is_lexer_keyword("__SUB__"));
 }
 
 #[test]
