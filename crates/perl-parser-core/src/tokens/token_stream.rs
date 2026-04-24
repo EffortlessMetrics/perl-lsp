@@ -343,135 +343,47 @@ impl<'a> TokenStream<'a> {
     fn convert_lexer_token(token: LexerToken) -> Token {
         let kind = match &token.token_type {
             // Keywords
-            LexerTokenType::Keyword(kw) => match kw.as_ref() {
-                "my" => TokenKind::My,
-                "our" => TokenKind::Our,
-                "local" => TokenKind::Local,
-                "state" => TokenKind::State,
-                "sub" => TokenKind::Sub,
-                "if" => TokenKind::If,
-                "elsif" => TokenKind::Elsif,
-                "else" => TokenKind::Else,
-                "unless" => TokenKind::Unless,
-                "while" => TokenKind::While,
-                "until" => TokenKind::Until,
-                "for" => TokenKind::For,
-                "foreach" => TokenKind::Foreach,
-                "return" => TokenKind::Return,
-                "package" => TokenKind::Package,
-                "use" => TokenKind::Use,
-                "no" => TokenKind::No,
-                "BEGIN" => TokenKind::Begin,
-                "END" => TokenKind::End,
-                "CHECK" => TokenKind::Check,
-                "INIT" => TokenKind::Init,
-                "UNITCHECK" => TokenKind::Unitcheck,
-                "eval" => TokenKind::Eval,
-                "do" => TokenKind::Do,
-                "given" => TokenKind::Given,
-                "when" => TokenKind::When,
-                "default" => TokenKind::Default,
-                "try" => TokenKind::Try,
-                "catch" => TokenKind::Catch,
-                "field" => TokenKind::Field,
-                "finally" => TokenKind::Finally,
-                "continue" => TokenKind::Continue,
-                "next" => TokenKind::Next,
-                "last" => TokenKind::Last,
-                "redo" => TokenKind::Redo,
-                "goto" => TokenKind::Goto,
-                "class" => TokenKind::Class,
-                "method" => TokenKind::Method,
-                "format" => TokenKind::Format,
-                "undef" => TokenKind::Undef,
-                "defer" => TokenKind::Defer,
-                "and" => TokenKind::WordAnd,
-                "or" => TokenKind::WordOr,
-                "not" => TokenKind::WordNot,
-                "xor" => TokenKind::WordXor,
-                "cmp" => TokenKind::StringCompare,
-                "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
-                _ => TokenKind::Identifier,
-            },
+            LexerTokenType::Keyword(kw) => {
+                // Keep `qw` as a contextual identifier for parser-driven quote handling.
+                if kw.as_ref() == "qw" {
+                    TokenKind::Identifier
+                } else {
+                    TokenKind::from_keyword(kw.as_ref()).unwrap_or(TokenKind::Identifier)
+                }
+            }
 
             // Operators
-            LexerTokenType::Operator(op) => match op.as_ref() {
-                "=" => TokenKind::Assign,
-                "+" => TokenKind::Plus,
-                "-" => TokenKind::Minus,
-                "*" => TokenKind::Star,
-                "/" => TokenKind::Slash,
-                "%" => TokenKind::Percent,
-                "**" => TokenKind::Power,
-                "<<" => TokenKind::LeftShift,
-                ">>" => TokenKind::RightShift,
-                "&" => TokenKind::BitwiseAnd,
-                "|" => TokenKind::BitwiseOr,
-                "^" => TokenKind::BitwiseXor,
-                "~" => TokenKind::BitwiseNot,
-                // Compound assignments
-                "+=" => TokenKind::PlusAssign,
-                "-=" => TokenKind::MinusAssign,
-                "*=" => TokenKind::StarAssign,
-                "/=" => TokenKind::SlashAssign,
-                "%=" => TokenKind::PercentAssign,
-                ".=" => TokenKind::DotAssign,
-                "&=" => TokenKind::AndAssign,
-                "|=" => TokenKind::OrAssign,
-                "^=" => TokenKind::XorAssign,
-                "**=" => TokenKind::PowerAssign,
-                "<<=" => TokenKind::LeftShiftAssign,
-                ">>=" => TokenKind::RightShiftAssign,
-                "&&=" => TokenKind::LogicalAndAssign,
-                "||=" => TokenKind::LogicalOrAssign,
-                "//=" => TokenKind::DefinedOrAssign,
-                "==" => TokenKind::Equal,
-                "!=" => TokenKind::NotEqual,
-                "=~" => TokenKind::Match,
-                "!~" => TokenKind::NotMatch,
-                "~~" => TokenKind::SmartMatch,
-                "<" => TokenKind::Less,
-                ">" => TokenKind::Greater,
-                "<=" => TokenKind::LessEqual,
-                ">=" => TokenKind::GreaterEqual,
-                "<=>" => TokenKind::Spaceship,
-                "&&" => TokenKind::And,
-                "||" => TokenKind::Or,
-                "!" => TokenKind::Not,
-                "//" => TokenKind::DefinedOr,
-                "->" => TokenKind::Arrow,
-                "=>" => TokenKind::FatArrow,
-                "." => TokenKind::Dot,
-                ".." => TokenKind::Range,
-                "..." => TokenKind::Ellipsis,
-                "++" => TokenKind::Increment,
-                "--" => TokenKind::Decrement,
-                "::" => TokenKind::DoubleColon,
-                "?" => TokenKind::Question,
-                ":" => TokenKind::Colon,
-                "\\" => TokenKind::Backslash,
-                // Sigils (when used as operators in certain contexts)
-                "$" => TokenKind::ScalarSigil,
-                "@" => TokenKind::ArraySigil,
-                // % is already handled as Percent above
-                // & is already handled as BitwiseAnd above
-                // * is already handled as Star above
-                _ => TokenKind::Unknown,
-            },
+            LexerTokenType::Operator(op) => TokenKind::from_operator(op.as_ref())
+                .or_else(|| TokenKind::from_sigil(op.as_ref()))
+                .unwrap_or(TokenKind::Unknown),
 
             // Arrow tokens
             LexerTokenType::Arrow => TokenKind::Arrow,
             LexerTokenType::FatComma => TokenKind::FatArrow,
 
             // Delimiters
-            LexerTokenType::LeftParen => TokenKind::LeftParen,
-            LexerTokenType::RightParen => TokenKind::RightParen,
-            LexerTokenType::LeftBrace => TokenKind::LeftBrace,
-            LexerTokenType::RightBrace => TokenKind::RightBrace,
-            LexerTokenType::LeftBracket => TokenKind::LeftBracket,
-            LexerTokenType::RightBracket => TokenKind::RightBracket,
-            LexerTokenType::Semicolon => TokenKind::Semicolon,
-            LexerTokenType::Comma => TokenKind::Comma,
+            LexerTokenType::LeftParen => {
+                TokenKind::from_delimiter("(").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::RightParen => {
+                TokenKind::from_delimiter(")").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::LeftBrace => {
+                TokenKind::from_delimiter("{").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::RightBrace => {
+                TokenKind::from_delimiter("}").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::LeftBracket => {
+                TokenKind::from_delimiter("[").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::RightBracket => {
+                TokenKind::from_delimiter("]").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::Semicolon => {
+                TokenKind::from_delimiter(";").unwrap_or(TokenKind::Unknown)
+            }
+            LexerTokenType::Comma => TokenKind::from_delimiter(",").unwrap_or(TokenKind::Unknown),
 
             // Division operator (important to handle before other tokens)
             LexerTokenType::Division => TokenKind::Slash,
@@ -502,10 +414,9 @@ impl<'a> TokenStream<'a> {
                 match text.as_ref() {
                     "no" => TokenKind::No,
                     "*" => TokenKind::Star, // Special case: * by itself is multiplication
-                    "$" => TokenKind::ScalarSigil,
-                    "@" => TokenKind::ArraySigil,
-                    "%" => TokenKind::HashSigil,
-                    "&" => TokenKind::SubSigil,
+                    "$" | "@" | "%" | "&" => {
+                        TokenKind::from_sigil(text.as_ref()).unwrap_or(TokenKind::Identifier)
+                    }
                     _ => TokenKind::Identifier,
                 }
             }
