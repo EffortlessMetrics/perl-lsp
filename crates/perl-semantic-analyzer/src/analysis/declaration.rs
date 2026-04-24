@@ -3,6 +3,7 @@
 //! Provides go-to-declaration functionality for finding where symbols are declared.
 //! Supports LocationLink for enhanced client experience.
 
+use crate::analysis::import_surface::ImportSurface;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
@@ -1435,7 +1436,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         export_tag_members(module, import_token).contains(&symbol_name)
     }
 
-    fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+    fn find_import_source(
+        ast: &Node,
+        surface: &ImportSurface,
+        symbol_name: &str,
+    ) -> Option<String> {
         /// Extract the module name from a `require Module;` statement node.
         ///
         /// Matches both `require Foo::Bar` (Identifier arg) and
@@ -1693,6 +1698,10 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             None
         }
 
+        if let Some(module) = surface.first_resolved_symbol_source(symbol_name) {
+            return Some(module.to_string());
+        }
+
         find(ast, symbol_name)
     }
 
@@ -1843,6 +1852,7 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 
     let (path, node) = find_symbol_node_at_offset(ast, offset)?;
+    let import_surface = ImportSurface::from_ast(ast);
 
     if let Some(symbol_key) = plack_builder_middleware_symbol(&path, offset) {
         return Some(symbol_key);
@@ -1864,7 +1874,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 (name[..idx].to_string(), name[idx + 2..].to_string())
             } else {
                 (
-                    find_import_source(ast, name).unwrap_or_else(|| current_pkg.to_string()),
+                    find_import_source(ast, &import_surface, name)
+                        .unwrap_or_else(|| current_pkg.to_string()),
                     name.clone(),
                 )
             };

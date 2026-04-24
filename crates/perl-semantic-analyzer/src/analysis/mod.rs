@@ -5,6 +5,8 @@ pub mod class_model;
 /// Go-to-declaration support and parent map construction.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod declaration;
+/// Canonical visible import surface for a file.
+pub mod import_surface;
 /// Lightweight workspace symbol index.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod index;

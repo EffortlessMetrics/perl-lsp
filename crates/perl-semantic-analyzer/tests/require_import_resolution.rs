@@ -55,6 +55,59 @@ croak("error");
 }
 
 #[test]
+fn use_parenthesized_import_resolves_pkg() {
+    let code = r#"use Carp ('croak');
+croak("error");
+"#;
+    let pkg = parse_and_symbol_at(code, "croak(");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("Carp"),
+        "croak() should resolve to Carp via parenthesized import, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn use_single_quote_import_resolves_pkg() {
+    let code = r#"use Cwd 'getcwd';
+my $cwd = getcwd();
+"#;
+    let pkg = parse_and_symbol_at(code, "getcwd()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("Cwd"),
+        "getcwd() should resolve to Cwd via single-quote import, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn use_known_tag_import_resolves_pkg() {
+    let code = r#"use POSIX qw(:sys_wait_h);
+my $ok = WIFEXITED($status);
+"#;
+    let pkg = parse_and_symbol_at(code, "WIFEXITED(");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("POSIX"),
+        "WIFEXITED() should resolve to POSIX via known export tag, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn use_constant_does_not_resolve_to_constant_module() {
+    let code = r#"package Demo;
+use constant PI => 3.14;
+my $x = PI();
+"#;
+    let pkg = parse_and_symbol_at(code, "PI()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("constant"),
+        "PI() should not resolve to the constant pragma module, got: {pkg:?}"
+    );
+}
+
+#[test]
 fn require_import_multiple_symbols_both_resolve() {
     let code = r#"require My::Utils;
 My::Utils->import('alpha', 'beta');
