@@ -1,0 +1,98 @@
+{
+  "description": "Realistic debugger-session inspired fixture bank for deferred DAP variable/evaluate correctness gaps",
+  "variables": {
+    "arrays": [
+      {
+        "id": "array_200",
+        "variable": "@records",
+        "size": 200,
+        "page": {
+          "start": 120,
+          "count": 40,
+          "first_name": "[120]",
+          "last_name": "[159]"
+        }
+      },
+      {
+        "id": "array_500",
+        "variable": "@events",
+        "size": 500,
+        "page": {
+          "start": 450,
+          "count": 80,
+          "first_name": "[450]",
+          "last_name": "[499]"
+        }
+      }
+    ],
+    "deep_hash": {
+      "variable": "%config",
+      "depth": 7,
+      "leaf_key": "final",
+      "leaf_value": 1
+    },
+    "scopes": {
+      "locals": [
+        "$lex_user",
+        "$lex_count"
+      ],
+      "package": [
+        "$main::pkg_value"
+      ],
+      "globals": [
+        "$::ENV_MODE"
+      ]
+    },
+    "coderef_preview": {
+      "variable": "$handler",
+      "name": "App::Controller::dispatch"
+    },
+    "blessed_object_preview": {
+      "variable": "$user",
+      "class": "My::App::User",
+      "fields": {
+        "id": 42,
+        "name": "Mónica"
+      }
+    },
+    "unicode_hash": {
+      "variable": "%i18n",
+      "pairs": {
+        "日本語": "こんにちは世界",
+        "emoji_🧪": "テスト✅"
+      }
+    },
+    "deep_truncation": {
+      "variable": "$tree",
+      "summary": "HASH(0xDEADBEEF)...",
+      "total_count": 2048
+    }
+  },
+  "evaluate": {
+    "safe_pass": [
+      "$lex_user",
+      "$main::pkg_value",
+      "$::ENV_MODE",
+      "$matrix->[0]->{name}",
+      "defined($i18n{'日本語'})",
+      "ref($user)"
+    ],
+    "safe_blocked": [
+      "$lex_user = 1",
+      "system('id')",
+      "exec('cat /etc/passwd')",
+      "qx/ls/",
+      "`uname -a`"
+    ],
+    "timeout_oriented_fail_cleanly": [
+      {
+        "timeout_ms": 0,
+        "expect_clamped_to": 1
+      },
+      {
+        "timeout_ms": 500001,
+        "expect_error_contains": "timeout"
+      }
+    ]
+  }
+}

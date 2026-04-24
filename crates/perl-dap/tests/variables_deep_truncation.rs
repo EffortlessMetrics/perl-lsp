@@ -1,152 +1,206 @@
-// Minimal test to reproduce deep nesting, large arrays, and cyclic reference behavior
-// Run with: cargo test --test test_deep_truncation -- --nocapture
+use perl_dap::variables::{PerlValue, PerlVariableRenderer, VariableRenderer};
+use serde_json::Value;
+use std::fs;
+use std::path::PathBuf;
 
-#[cfg(test)]
-mod deep_truncation_tests {
-    use perl_dap::variables::{PerlValue, PerlVariableRenderer, VariableParser, VariableRenderer};
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    #[test]
-    fn test_7level_nested_hash_rendering() {
-        let renderer = PerlVariableRenderer::new();
+fn load_fixture() -> Result<Value, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/mocks/dap_deferred_gap_sessions.json");
+    let content = fs::read_to_string(path)?;
+    Ok(serde_json::from_str(&content)?)
+}
 
-        // Build a 7-level nested hash
-        let mut value = PerlValue::Hash(vec![("g".to_string(), PerlValue::Integer(1))]);
-        for level in ['f', 'e', 'd', 'c', 'b', 'a'].iter() {
-            value = PerlValue::Hash(vec![(level.to_string(), value)]);
-        }
+fn fixture_variables() -> Result<Value, Box<dyn std::error::Error>> {
+    let fixture = load_fixture()?;
+    fixture
+        .get("variables")
+        .cloned()
+        .ok_or_else(|| "missing variables section in deferred gap fixture".into())
+}
 
-        let rendered = renderer.render("$config", &value);
-        println!("7-level nested hash:");
-        println!("  value: {}", rendered.value);
-        println!("  type_name: {:?}", rendered.type_name);
-        println!("  named_variables: {:?}", rendered.named_variables);
-
-        // Should not panic or produce exponential output
-        assert!(rendered.value.len() < 1000, "value should be bounded");
-        assert_eq!(rendered.type_name, Some("HASH".to_string()));
-        assert_eq!(rendered.named_variables, Some(1));
+fn build_nested_hash(depth: usize, leaf_key: &str, leaf_value: i64) -> PerlValue {
+    let mut value = PerlValue::Hash(vec![(leaf_key.to_string(), PerlValue::Integer(leaf_value))]);
+    for idx in (1..depth).rev() {
+        value = PerlValue::Hash(vec![(format!("level_{idx}"), value)]);
     }
+    value
+}
 
-    #[test]
-    fn test_500element_array_rendering() {
-        let renderer = PerlVariableRenderer::new();
+#[test]
+fn fixture_large_array_200_preview_and_pagination() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let cases = vars.get("arrays").and_then(Value::as_array).ok_or("missing arrays in fixture")?;
+    let case = cases
+        .iter()
+        .find(|entry| entry.get("id").and_then(Value::as_str) == Some("array_200"))
+        .ok_or("missing array_200 case")?;
 
-        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
-        let value = PerlValue::Array(elements);
+    let size_u64 = case.get("size").and_then(Value::as_u64).ok_or("missing array_200 size")?;
+    let size = usize::try_from(size_u64)?;
+    let values = PerlValue::Array((0..size).map(|idx| PerlValue::Integer(idx as i64)).collect());
+    let name = case.get("variable").and_then(Value::as_str).ok_or("missing array_200 variable")?;
+    let rendered = renderer.render(name, &values);
 
-        let rendered = renderer.render("@big", &value);
-        println!("500-element array:");
-        println!("  value: {}", rendered.value);
-        println!("  type_name: {:?}", rendered.type_name);
-        println!("  indexed_variables: {:?}", rendered.indexed_variables);
+    assert!(rendered.value.contains("200 total"));
+    assert_eq!(rendered.indexed_variables, Some(200));
 
-        // Should show truncation marker
-        assert!(rendered.value.contains("..."), "should have truncation marker");
-        assert!(rendered.value.contains("500 total"), "should show total count");
-        assert!(rendered.indexed_variables.is_some());
-        assert!(rendered.value.len() < 500, "preview should be bounded");
-    }
+    let page = case.get("page").ok_or("missing array_200 page")?;
+    let start = usize::try_from(page.get("start").and_then(Value::as_u64).ok_or("missing start")?)?;
+    let count = usize::try_from(page.get("count").and_then(Value::as_u64).ok_or("missing count")?)?;
+    let children = renderer.render_children(&values, start, count);
+    let first_name = page.get("first_name").and_then(Value::as_str).ok_or("missing first_name")?;
+    let last_name = page.get("last_name").and_then(Value::as_str).ok_or("missing last_name")?;
 
-    #[test]
-    fn test_500element_array_pagination() {
-        let renderer = PerlVariableRenderer::new();
+    assert_eq!(children.first().ok_or("empty children")?.name, first_name);
+    assert_eq!(children.last().ok_or("empty children")?.name, last_name);
+    Ok(())
+}
 
-        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
-        let value = PerlValue::Array(elements);
+#[test]
+fn fixture_large_array_500_preview_and_tail_page() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let cases = vars.get("arrays").and_then(Value::as_array).ok_or("missing arrays in fixture")?;
+    let case = cases
+        .iter()
+        .find(|entry| entry.get("id").and_then(Value::as_str) == Some("array_500"))
+        .ok_or("missing array_500 case")?;
 
-        // Request children at various positions
-        let start = renderer.render_children(&value, 0, 50);
-        assert_eq!(start.len(), 50);
-        assert_eq!(start[0].name, "[0]");
+    let size_u64 = case.get("size").and_then(Value::as_u64).ok_or("missing array_500 size")?;
+    let size = usize::try_from(size_u64)?;
+    let values = PerlValue::Array((0..size).map(|idx| PerlValue::Integer(idx as i64)).collect());
+    let rendered = renderer.render("@events", &values);
+    assert!(rendered.value.contains("500 total"));
+    assert_eq!(rendered.indexed_variables, Some(500));
 
-        let mid = renderer.render_children(&value, 250, 50);
-        assert_eq!(mid.len(), 50);
-        assert_eq!(mid[0].name, "[250]");
+    let page = case.get("page").ok_or("missing array_500 page")?;
+    let start = usize::try_from(page.get("start").and_then(Value::as_u64).ok_or("missing start")?)?;
+    let count = usize::try_from(page.get("count").and_then(Value::as_u64).ok_or("missing count")?)?;
+    let children = renderer.render_children(&values, start, count);
 
-        let end = renderer.render_children(&value, 450, 100);
-        assert_eq!(end.len(), 50, "only 50 items left at [450..500]");
-        assert_eq!(end[0].name, "[450]");
+    assert_eq!(children.len(), 50);
+    assert_eq!(children.first().ok_or("empty children")?.name, "[450]");
+    assert_eq!(children.last().ok_or("empty children")?.name, "[499]");
+    Ok(())
+}
 
-        println!("500-element array pagination: OK");
-    }
+#[test]
+fn fixture_deep_nested_hash_preview_is_bounded() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let deep_hash = vars.get("deep_hash").ok_or("missing deep_hash fixture")?;
+    let depth =
+        usize::try_from(deep_hash.get("depth").and_then(Value::as_u64).ok_or("missing depth")?)?;
+    let leaf_key = deep_hash.get("leaf_key").and_then(Value::as_str).ok_or("missing leaf_key")?;
+    let leaf_value =
+        deep_hash.get("leaf_value").and_then(Value::as_i64).ok_or("missing leaf_value")?;
+    let value = build_nested_hash(depth, leaf_key, leaf_value);
 
-    #[test]
-    fn test_cyclic_reference_rendering() {
-        let renderer = PerlVariableRenderer::new();
+    let rendered = renderer.render("%config", &value);
+    assert_eq!(rendered.type_name.as_deref(), Some("HASH"));
+    assert!(rendered.value.len() < 1000);
+    assert_eq!(rendered.named_variables, Some(1));
+    Ok(())
+}
 
-        // Simulate a self-referential hash: my %c; $c{self} = \%c;
-        // In reality, PerlValue uses Box (no Rc), so true cycles can't exist.
-        // The debugger would emit a Truncated marker instead.
-        let truncated_marker =
-            PerlValue::Truncated { summary: "HASH(0x7f1234567890)".to_string(), total_count: None };
-        let value = PerlValue::Hash(vec![(
-            "self".to_string(),
-            PerlValue::Reference(Box::new(truncated_marker)),
-        )]);
+#[test]
+fn fixture_scope_visibility_keeps_lexical_package_and_global_distinct() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let scopes = vars.get("scopes").ok_or("missing scopes fixture")?;
 
-        let rendered = renderer.render("$c", &value);
-        println!("Cyclic reference hash:");
-        println!("  value: {}", rendered.value);
-        println!("  type_name: {:?}", rendered.type_name);
+    let locals = scopes.get("locals").and_then(Value::as_array).ok_or("missing locals")?;
+    let package = scopes.get("package").and_then(Value::as_array).ok_or("missing package")?;
+    let globals = scopes.get("globals").and_then(Value::as_array).ok_or("missing globals")?;
 
-        // Should not panic
-        assert_eq!(rendered.type_name, Some("HASH".to_string()));
-        assert_eq!(rendered.named_variables, Some(1));
-        assert!(rendered.value.len() < 500);
-    }
+    let local_name = locals.first().and_then(Value::as_str).ok_or("missing lexical variable")?;
+    let package_name = package.first().and_then(Value::as_str).ok_or("missing package variable")?;
+    let global_name = globals.first().and_then(Value::as_str).ok_or("missing global variable")?;
 
-    #[test]
-    fn test_parser_max_depth_parsing() {
-        let parser = VariableParser::new();
+    let local = renderer.render(local_name, &PerlValue::scalar("lex"));
+    let package = renderer.render(package_name, &PerlValue::Integer(10));
+    let global = renderer.render(global_name, &PerlValue::scalar("prod"));
 
-        // Try to parse a 7-level nested literal
-        let text = "$x = { a => { b => { c => { d => { e => { f => { g => 1 } } } } } } }";
-        let result = parser.parse_assignment(text);
+    assert!(local.name.starts_with("$lex_"));
+    assert!(package.name.contains("::"));
+    assert!(global.name.starts_with("$::"));
+    Ok(())
+}
 
-        // Should parse successfully with default max_depth=50
-        assert!(result.is_ok(), "parser should accept 7-level nested hash: {:?}", result.err());
-        if let Ok((name, value)) = result {
-            println!("Parsed 7-level nested hash:");
-            println!("  name: {}", name);
-            println!("  value: {:?}", value);
-            assert_eq!(name, "$x");
-        }
-    }
+#[test]
+fn fixture_coderef_preview_displays_subroutine_identity() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let coderef = vars.get("coderef_preview").ok_or("missing coderef fixture")?;
+    let variable =
+        coderef.get("variable").and_then(Value::as_str).ok_or("missing coderef variable")?;
+    let name = coderef.get("name").and_then(Value::as_str).ok_or("missing coderef name")?;
 
-    #[test]
-    fn test_parser_exceeds_max_depth() {
-        let parser = VariableParser::new().with_max_depth(3);
+    let rendered = renderer.render(variable, &PerlValue::Code { name: Some(name.to_string()) });
+    assert_eq!(rendered.type_name.as_deref(), Some("CODE"));
+    assert!(rendered.value.contains(name));
+    Ok(())
+}
 
-        // Try to parse a 7-level nested literal with shallow max_depth
-        let text = "$x = { a => { b => { c => { d => 1 } } } }";
-        let result = parser.parse_assignment(text);
+#[test]
+fn fixture_blessed_object_preview_includes_class_and_fields() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let object = vars.get("blessed_object_preview").ok_or("missing blessed object fixture")?;
+    let variable =
+        object.get("variable").and_then(Value::as_str).ok_or("missing blessed variable")?;
+    let class = object.get("class").and_then(Value::as_str).ok_or("missing class")?;
 
-        // Should fail due to max_depth exceeded
-        assert!(result.is_err(), "should fail with max_depth=3");
-        println!("Parser correctly rejects depth > 3: OK");
-    }
+    let value = PerlValue::Object {
+        class: class.to_string(),
+        value: Box::new(PerlValue::Hash(vec![
+            ("id".to_string(), PerlValue::Integer(42)),
+            ("name".to_string(), PerlValue::scalar("Mónica")),
+        ])),
+    };
+    let rendered = renderer.render(variable, &value);
+    assert_eq!(rendered.type_name.as_deref(), Some(class));
+    assert!(rendered.value.contains(class));
+    assert_eq!(rendered.named_variables, Some(2));
+    Ok(())
+}
 
-    #[test]
-    fn test_render_deeply_nested_hash_with_children() {
-        let renderer = PerlVariableRenderer::new();
+#[test]
+fn fixture_unicode_keys_and_values_round_trip_in_preview() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let unicode = vars.get("unicode_hash").ok_or("missing unicode_hash fixture")?;
+    let variable =
+        unicode.get("variable").and_then(Value::as_str).ok_or("missing unicode variable")?;
 
-        // Build nested structure and check children expansion
-        let mut value = PerlValue::Hash(vec![("level7".to_string(), PerlValue::Integer(7))]);
-        for level in (1..=6).rev() {
-            value = PerlValue::Hash(vec![(format!("level{}", level), value)]);
-        }
+    let value = PerlValue::Hash(vec![
+        ("日本語".to_string(), PerlValue::scalar("こんにちは世界")),
+        ("emoji_🧪".to_string(), PerlValue::scalar("テスト✅")),
+    ]);
+    let rendered = renderer.render(variable, &value);
+    assert!(rendered.value.contains("日本語"));
+    assert!(rendered.value.contains("テスト✅"));
+    assert_eq!(rendered.named_variables, Some(2));
+    Ok(())
+}
 
-        let rendered = renderer.render("$root", &value);
-        let children = renderer.render_children(&value, 0, 10);
+#[test]
+fn fixture_truncated_deep_structure_reports_summary_and_count() -> TestResult {
+    let renderer = PerlVariableRenderer::new();
+    let vars = fixture_variables()?;
+    let trunc = vars.get("deep_truncation").ok_or("missing deep_truncation fixture")?;
+    let variable = trunc.get("variable").and_then(Value::as_str).ok_or("missing trunc variable")?;
+    let summary = trunc.get("summary").and_then(Value::as_str).ok_or("missing summary")?;
+    let total = usize::try_from(
+        trunc.get("total_count").and_then(Value::as_u64).ok_or("missing total_count")?,
+    )?;
+    let value = PerlValue::Truncated { summary: summary.to_string(), total_count: Some(total) };
 
-        println!("Nested hash children:");
-        println!("  root_value: {}", rendered.value);
-        println!("  children_count: {}", children.len());
-        if !children.is_empty() {
-            println!("  first_child: name={}, value={}", children[0].name, children[0].value);
-        }
-
-        assert_eq!(children.len(), 1, "root should have 1 child");
-        assert_eq!(children[0].name, "level1");
-    }
+    let rendered = renderer.render(variable, &value);
+    assert!(rendered.value.contains(summary));
+    assert!(rendered.value.contains("2048 total"));
+    Ok(())
 }

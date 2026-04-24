@@ -13,7 +13,11 @@
 //! - setExpression missing-argument error handling
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use perl_dap::security::{SecurityError, validate_timeout};
+use serde_json::Value;
 use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -23,6 +27,17 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn new_adapter() -> DebugAdapter {
     DebugAdapter::new()
+}
+
+fn deferred_gap_evaluate_fixture() -> Result<Value, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/mocks/dap_deferred_gap_sessions.json");
+    let content = fs::read_to_string(path)?;
+    let fixture: Value = serde_json::from_str(&content)?;
+    fixture
+        .get("evaluate")
+        .cloned()
+        .ok_or_else(|| "missing evaluate section in deferred gap fixture".into())
 }
 
 /// Assert that the response is a failed evaluate with a message containing `needle`.
@@ -711,6 +726,101 @@ fn test_set_expression_newline_in_value_is_rejected() -> TestResult {
             );
         }
         other => return Err(format!("expected Response, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn test_fixture_safe_evaluate_expressions_pass_policy_validation() -> TestResult {
+    let mut adapter = new_adapter();
+    let evaluate = deferred_gap_evaluate_fixture()?;
+    let expressions = evaluate
+        .get("safe_pass")
+        .and_then(Value::as_array)
+        .ok_or("missing safe_pass expressions")?;
+
+    for expr in expressions {
+        let expression = expr.as_str().ok_or("safe_pass expression must be a string")?;
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": expression, "allowSideEffects": false })),
+        );
+        assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn test_fixture_blocked_evaluate_expressions_are_rejected() -> TestResult {
+    let mut adapter = new_adapter();
+    let evaluate = deferred_gap_evaluate_fixture()?;
+    let expressions = evaluate
+        .get("safe_blocked")
+        .and_then(Value::as_array)
+        .ok_or("missing safe_blocked expressions")?;
+
+    for expr in expressions {
+        let expression = expr.as_str().ok_or("safe_blocked expression must be a string")?;
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": expression, "allowSideEffects": false })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(!success, "expected {expression:?} to be blocked");
+                let msg = message.ok_or("expected blocked message")?;
+                assert!(msg.contains("Safe evaluation mode") || msg.contains("not allowed"));
+            }
+            other => return Err(format!("expected Response, got {other:?}").into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_fixture_timeout_cases_fail_cleanly() -> TestResult {
+    let evaluate = deferred_gap_evaluate_fixture()?;
+    let timeout_cases = evaluate
+        .get("timeout_oriented_fail_cleanly")
+        .and_then(Value::as_array)
+        .ok_or("missing timeout_oriented_fail_cleanly cases")?;
+
+    let zero_case = timeout_cases
+        .iter()
+        .find(|case| case.get("timeout_ms").and_then(Value::as_u64) == Some(0))
+        .ok_or("missing zero timeout case")?;
+    let clamped_to = u32::try_from(
+        zero_case
+            .get("expect_clamped_to")
+            .and_then(Value::as_u64)
+            .ok_or("missing expect_clamped_to")?,
+    )?;
+    assert_eq!(validate_timeout(0)?, clamped_to);
+
+    let excessive_case = timeout_cases
+        .iter()
+        .find(|case| case.get("timeout_ms").and_then(Value::as_u64) == Some(500001))
+        .ok_or("missing excessive timeout case")?;
+    let timeout_ms = u32::try_from(
+        excessive_case.get("timeout_ms").and_then(Value::as_u64).ok_or("missing timeout_ms")?,
+    )?;
+    let expected = excessive_case
+        .get("expect_error_contains")
+        .and_then(Value::as_str)
+        .ok_or("missing expect_error_contains")?;
+    let err = match validate_timeout(timeout_ms) {
+        Ok(_) => return Err("expected timeout validation error".into()),
+        Err(err) => err,
+    };
+    match err {
+        SecurityError::ExcessiveTimeout(ms) => {
+            assert_eq!(ms, timeout_ms);
+            assert!(err.to_string().to_lowercase().contains(expected));
+        }
+        other => return Err(format!("expected ExcessiveTimeout, got {other:?}").into()),
     }
     Ok(())
 }
