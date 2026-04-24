@@ -614,6 +614,28 @@ impl<'a> Parser<'a> {
                 self.expect_closing_delimiter(TokenKind::RightParen)?;
                 var_name
             } else {
+                // Typed catch clauses from Try::Tiny-like ecosystems can appear as:
+                //   catch Some::Error with { ... }
+                // Consume the type/filter tokens until the handler block starts.
+                while let Some(kind) = self.peek_kind() {
+                    if kind == TokenKind::LeftBrace {
+                        break;
+                    }
+
+                    match kind {
+                        TokenKind::Identifier
+                        | TokenKind::DoubleColon
+                        | TokenKind::Colon
+                        | TokenKind::Comma
+                        | TokenKind::String
+                        | TokenKind::Number
+                        | TokenKind::LeftParen
+                        | TokenKind::RightParen => {
+                            self.consume_token()?;
+                        }
+                        _ => break,
+                    }
+                }
                 None
             };
 
