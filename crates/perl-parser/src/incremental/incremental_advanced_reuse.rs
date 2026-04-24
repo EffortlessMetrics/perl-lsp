@@ -338,26 +338,57 @@ impl AdvancedReuseAnalyzer {
                 continue;
             }
 
+            let mut best_match: Option<(usize, f64)> = None;
+
             // Look for exact structural matches in new tree
             for (new_pos, new_info) in &new_analysis.node_info {
                 if old_info.structural_hash == new_info.structural_hash
                     && old_info.children_count == new_info.children_count
                 {
+                    if self.is_sensitive_container_node(&old_info.node)
+                        && old_info.content_hash != new_info.content_hash
+                    {
+                        continue;
+                    }
+
+                    if old_info.children_count == 0
+                        && old_info.content_hash != new_info.content_hash
+                        && !self.are_compatible_for_content_update(&old_info.node, &new_info.node)
+                    {
+                        continue;
+                    }
+
                     let confidence = self.calculate_match_confidence(old_info, new_info);
-                    if confidence >= config.min_confidence {
-                        reuse_map.insert(
-                            *old_pos,
-                            ReuseStrategy {
-                                target_position: *new_pos,
-                                reuse_type: ReuseType::Direct,
-                                confidence_score: confidence,
-                                position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                            },
-                        );
-                        self.analysis_stats.structural_matches += 1;
-                        break; // Use first good match
+                    if confidence < config.min_confidence {
+                        continue;
+                    }
+
+                    let distance = (*new_pos as isize - *old_pos as isize).unsigned_abs();
+                    let prefers_candidate =
+                        best_match.as_ref().is_none_or(|&(best_pos, best_score)| {
+                            let best_distance =
+                                (best_pos as isize - *old_pos as isize).unsigned_abs();
+                            confidence > best_score
+                                || (confidence == best_score && distance < best_distance)
+                        });
+
+                    if prefers_candidate {
+                        best_match = Some((*new_pos, confidence));
                     }
                 }
+            }
+
+            if let Some((best_pos, confidence)) = best_match {
+                reuse_map.insert(
+                    *old_pos,
+                    ReuseStrategy {
+                        target_position: best_pos,
+                        reuse_type: ReuseType::Direct,
+                        confidence_score: confidence,
+                        position_adjustment: (best_pos as isize) - (*old_pos as isize),
+                    },
+                );
+                self.analysis_stats.structural_matches += 1;
             }
         }
     }
@@ -371,10 +402,23 @@ impl AdvancedReuseAnalyzer {
         config: &ReuseConfig,
     ) {
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            if reuse_map.contains_key(old_pos) {
                 continue;
             }
+
+            if self.affected_nodes.contains(old_pos)
+                && self.is_sensitive_container_node(&old_info.node)
+            {
+                continue;
+            }
+
+            let allow_leaf_shift =
+                old_info.children_count == 0 && self.is_shift_safe_leaf(&old_info.node);
+            if old_info.children_count == 0 && !allow_leaf_shift {
+                continue;
+            }
+
+            let mut best_match: Option<(usize, f64)> = None;
 
             // Look for content matches that may have shifted position
             for (new_pos, new_info) in &new_analysis.node_info {
@@ -383,22 +427,35 @@ impl AdvancedReuseAnalyzer {
                 {
                     let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
                     if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
+                        let confidence = self.calculate_shifted_match_confidence(
+                            old_info,
+                            new_info,
+                            position_shift,
+                            config.max_position_shift,
+                        );
                         if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
+                            let prefers_candidate = best_match
+                                .as_ref()
+                                .is_none_or(|&(_, best_score)| confidence > best_score);
+                            if prefers_candidate {
+                                best_match = Some((*new_pos, confidence));
+                            }
                         }
                     }
                 }
+            }
+
+            if let Some((best_pos, confidence)) = best_match {
+                reuse_map.insert(
+                    *old_pos,
+                    ReuseStrategy {
+                        target_position: best_pos,
+                        reuse_type: ReuseType::PositionShift,
+                        confidence_score: confidence,
+                        position_adjustment: (best_pos as isize) - (*old_pos as isize),
+                    },
+                );
+                self.analysis_stats.position_adjustments += 1;
             }
         }
     }
@@ -417,13 +474,22 @@ impl AdvancedReuseAnalyzer {
             }
 
             // For leaf nodes, check if structure matches but content differs
-            if old_info.children_count == 0 {
+            if old_info.children_count == 0 && self.is_shift_safe_leaf(&old_info.node) {
                 for (new_pos, new_info) in &new_analysis.node_info {
                     if old_info.structural_hash == new_info.structural_hash
                         && old_info.content_hash != new_info.content_hash
                         && self.are_compatible_for_content_update(&old_info.node, &new_info.node)
                     {
-                        let confidence = 0.8; // Content updates get medium confidence
+                        let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
+                        if position_shift > config.max_position_shift / 2 {
+                            continue;
+                        }
+
+                        let confidence = if self.is_value_literal_or_identifier(&old_info.node) {
+                            0.83
+                        } else {
+                            0.76
+                        };
                         if confidence >= config.min_confidence {
                             reuse_map.insert(
                                 *old_pos,
@@ -462,9 +528,15 @@ impl AdvancedReuseAnalyzer {
 
             for (new_pos, new_info) in &new_analysis.node_info {
                 // Compare structural similarity
+                if self.is_sensitive_container_node(&old_info.node)
+                    && old_info.content_hash != new_info.content_hash
+                {
+                    continue;
+                }
+
                 let similarity =
                     self.calculate_structural_similarity(&old_info.node, &new_info.node);
-                if similarity >= config.min_confidence * 0.8 {
+                if similarity >= config.min_confidence * 0.85 {
                     // Slightly lower threshold for aggressive matching
                     if best_match.as_ref().is_none_or(|&(_, s)| similarity > s) {
                         best_match = Some((*new_pos, similarity));
@@ -473,7 +545,7 @@ impl AdvancedReuseAnalyzer {
             }
 
             if let Some((best_pos, confidence)) = best_match {
-                if confidence >= config.min_confidence * 0.7 {
+                if confidence >= config.min_confidence * 0.8 {
                     // Final threshold check
                     reuse_map.insert(
                         *old_pos,
@@ -585,7 +657,11 @@ impl AdvancedReuseAnalyzer {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => statements.len(),
             NodeKind::VariableDeclaration { initializer, .. } => {
-                if initializer.is_some() { 2 } else { 1 } // variable + optional initializer
+                if initializer.is_some() {
+                    2
+                } else {
+                    1
+                } // variable + optional initializer
             }
             NodeKind::Binary { .. } => 2, // left + right
             NodeKind::Unary { .. } => 1,  // operand
@@ -629,6 +705,49 @@ impl AdvancedReuseAnalyzer {
         }
 
         confidence.min(1.0)
+    }
+
+    /// Calculate confidence score for position-shifted matches.
+    fn calculate_shifted_match_confidence(
+        &self,
+        old_info: &NodeAnalysisInfo,
+        new_info: &NodeAnalysisInfo,
+        position_shift: usize,
+        max_position_shift: usize,
+    ) -> f64 {
+        let base_confidence = self.calculate_match_confidence(old_info, new_info);
+        let shift_ratio = if max_position_shift == 0 {
+            1.0
+        } else {
+            (position_shift as f64 / max_position_shift as f64).min(1.0)
+        };
+
+        let mut shift_penalty = 0.12 + (0.28 * shift_ratio);
+        if self.is_shift_safe_leaf(&old_info.node) {
+            shift_penalty *= 0.5;
+        } else if self.is_sensitive_container_node(&old_info.node) {
+            shift_penalty *= 1.25;
+        }
+
+        (base_confidence - shift_penalty).clamp(0.0, 1.0)
+    }
+
+    fn is_value_literal_or_identifier(&self, node: &Node) -> bool {
+        matches!(
+            node.kind,
+            NodeKind::Number { .. }
+                | NodeKind::String { .. }
+                | NodeKind::Identifier { .. }
+                | NodeKind::Variable { .. }
+        )
+    }
+
+    fn is_shift_safe_leaf(&self, node: &Node) -> bool {
+        self.is_value_literal_or_identifier(node)
+    }
+
+    fn is_sensitive_container_node(&self, node: &Node) -> bool {
+        matches!(node.kind, NodeKind::Program { .. } | NodeKind::Block { .. } | NodeKind::If { .. })
     }
 
     /// Calculate structural similarity between two nodes
@@ -820,7 +939,7 @@ impl ReuseAnalysisResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::{SourceLocation, ast::Node};
+    use perl_parser_core::{ast::Node, SourceLocation};
 
     #[test]
     fn test_advanced_reuse_analyzer_creation() {
@@ -969,5 +1088,130 @@ mod tests {
 
         assert!(analyzer.affected_nodes.contains(&0));
         assert!(!analyzer.affected_nodes.contains(&20));
+    }
+
+    #[test]
+    fn test_direct_matching_prefers_content_and_nearest_shifted_candidate() {
+        let mut analyzer = AdvancedReuseAnalyzer::new();
+        let old_tree = Node::new(
+            NodeKind::Program {
+                statements: vec![
+                    Node::new(
+                        NodeKind::Number { value: "10".to_string() },
+                        SourceLocation { start: 10, end: 12 },
+                    ),
+                    Node::new(
+                        NodeKind::Number { value: "20".to_string() },
+                        SourceLocation { start: 30, end: 32 },
+                    ),
+                ],
+            },
+            SourceLocation { start: 0, end: 32 },
+        );
+
+        let new_tree = Node::new(
+            NodeKind::Program {
+                statements: vec![
+                    Node::new(
+                        NodeKind::Number { value: "99".to_string() },
+                        SourceLocation { start: 10, end: 12 },
+                    ),
+                    Node::new(
+                        NodeKind::Number { value: "10".to_string() },
+                        SourceLocation { start: 20, end: 22 },
+                    ),
+                    Node::new(
+                        NodeKind::Number { value: "20".to_string() },
+                        SourceLocation { start: 40, end: 42 },
+                    ),
+                ],
+            },
+            SourceLocation { start: 0, end: 42 },
+        );
+
+        let mut edits = EditSet::new();
+        edits.add(perl_parser_core::edit::Edit::new(
+            0,
+            5,
+            12,
+            Position::new(0, 0, 0),
+            Position::new(5, 0, 5),
+            Position::new(12, 0, 12),
+        ));
+
+        let result = analyzer.analyze_reuse_opportunities(
+            &old_tree,
+            &new_tree,
+            &edits,
+            &ReuseConfig::default(),
+        );
+
+        let first = result.reuse_map.get(&10);
+        assert!(first.is_some());
+        assert_eq!(first.map(|entry| entry.target_position), Some(20));
+
+        let second = result.reuse_map.get(&30);
+        assert!(second.is_some());
+        assert_eq!(second.map(|entry| entry.target_position), Some(40));
+    }
+
+    #[test]
+    fn test_aggressive_matching_rejects_changed_container_structure() {
+        let mut analyzer = AdvancedReuseAnalyzer::new();
+        let old_tree = Node::new(
+            NodeKind::Program {
+                statements: vec![Node::new(
+                    NodeKind::Block {
+                        statements: vec![Node::new(
+                            NodeKind::Identifier { name: "a".to_string() },
+                            SourceLocation { start: 5, end: 6 },
+                        )],
+                    },
+                    SourceLocation { start: 4, end: 7 },
+                )],
+            },
+            SourceLocation { start: 0, end: 7 },
+        );
+
+        let new_tree = Node::new(
+            NodeKind::Program {
+                statements: vec![Node::new(
+                    NodeKind::Block {
+                        statements: vec![
+                            Node::new(
+                                NodeKind::Identifier { name: "a".to_string() },
+                                SourceLocation { start: 8, end: 9 },
+                            ),
+                            Node::new(
+                                NodeKind::Identifier { name: "b".to_string() },
+                                SourceLocation { start: 11, end: 12 },
+                            ),
+                        ],
+                    },
+                    SourceLocation { start: 7, end: 13 },
+                )],
+            },
+            SourceLocation { start: 0, end: 13 },
+        );
+
+        let mut edits = EditSet::new();
+        edits.add(perl_parser_core::edit::Edit::new(
+            7,
+            7,
+            13,
+            Position::new(7, 0, 7),
+            Position::new(7, 0, 7),
+            Position::new(13, 0, 13),
+        ));
+
+        let result = analyzer.analyze_reuse_opportunities(
+            &old_tree,
+            &new_tree,
+            &edits,
+            &ReuseConfig::default(),
+        );
+
+        let block_strategy = result.reuse_map.get(&4);
+        assert!(block_strategy.is_none());
     }
 }
