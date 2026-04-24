@@ -148,6 +148,8 @@ impl LspServer {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
     fn initialized_requires_initialize_request_first() {
         let server = LspServer::new();
@@ -189,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_initialize_for_compat_requires_initialize_request() {
+    fn auto_initialize_for_compat_requires_initialize_request() -> TestResult {
         let server = LspServer::new();
 
         server.auto_initialize_for_compat("textDocument/hover");
@@ -198,10 +200,11 @@ mod tests {
             !server.is_initialized(),
             "compatibility path must not initialize server before initialize request"
         );
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_noop_when_already_initialized() {
+    fn auto_initialize_for_compat_noop_when_already_initialized() -> TestResult {
         let server = LspServer::new();
         let init = server.handle_initialize(None);
         assert!(init.is_ok(), "initialize request should succeed");
@@ -211,10 +214,11 @@ mod tests {
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "server should remain initialized");
+        Ok(())
     }
 
     #[test]
-    fn set_trace_accepts_known_values() {
+    fn set_trace_accepts_known_values() -> TestResult {
         let server = LspServer::new();
 
         let result_messages =
@@ -233,10 +237,11 @@ mod tests {
             "verbose",
             "setTrace(verbose) should store verbose level"
         );
+        Ok(())
     }
 
     #[test]
-    fn set_trace_invalid_value_defaults_to_off() {
+    fn set_trace_invalid_value_defaults_to_off() -> TestResult {
         let server = LspServer::new();
         let set_messages = server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })));
         assert!(set_messages.is_ok(), "setTrace(messages) should succeed");
@@ -253,10 +258,11 @@ mod tests {
             "off",
             "invalid trace level must be coerced to off"
         );
+        Ok(())
     }
 
     #[test]
-    fn set_trace_explicit_off_stores_off() {
+    fn set_trace_explicit_off_stores_off() -> TestResult {
         let server = LspServer::new();
         // First set to a non-default level so we can verify the write.
         let r = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
@@ -271,5 +277,6 @@ mod tests {
             "off",
             "explicit off level must be stored as off"
         );
+        Ok(())
     }
 }
