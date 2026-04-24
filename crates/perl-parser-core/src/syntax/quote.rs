@@ -55,6 +55,8 @@ pub enum SubstitutionError {
 pub enum TransliterationError {
     /// Invalid modifier character found
     InvalidModifier(char),
+    /// Invalid delimiter after `tr`/`y`
+    InvalidDelimiter(char),
     /// Missing delimiter after `tr`/`y`
     MissingDelimiter,
     /// Search list section is missing
@@ -302,19 +304,23 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -364,6 +370,12 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
             extract_delimited_content(rest2, repl_delimiter, repl_closing)
+        } else if let Some(repl_delimiter) = rest2.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                (String::new(), rest2)
+            } else {
+                extract_delimited_content(rest2, repl_delimiter, repl_delimiter)
+            }
         } else {
             (String::new(), rest2)
         }
@@ -409,6 +421,9 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return Err(TransliterationError::InvalidDelimiter(delimiter));
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -433,6 +448,11 @@ pub fn extract_transliteration_parts_strict(
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
             (body, rest, found_closing)
+        } else if let Some(repl_delimiter) = trimmed.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                return Err(TransliterationError::InvalidDelimiter(repl_delimiter));
+            }
+            extract_delimited_content_strict(trimmed, repl_delimiter, repl_delimiter)
         } else {
             return Err(TransliterationError::MissingReplacement);
         }
