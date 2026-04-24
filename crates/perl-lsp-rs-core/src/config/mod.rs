@@ -11,6 +11,7 @@ use crate::platform::resolve_perl_path_with_toolchain;
 use std::path::{Path, PathBuf};
 #[cfg(not(target_arch = "wasm32"))]
 use std::process::Command;
+use std::{fs::File, io::Read};
 
 mod native_build_hints;
 
@@ -739,18 +740,59 @@ pub struct ProjectFormattingConfig {
 pub fn load_project_config(
     workspace_root: &std::path::Path,
 ) -> Result<Option<ProjectConfig>, String> {
+    const MAX_PROJECT_CONFIG_BYTES: u64 = 1024 * 1024; // 1 MiB
+
     let path = workspace_root.join(".perl-lsp.toml");
-    match std::fs::read_to_string(&path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!(
+    let metadata = match std::fs::metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read .perl-lsp.toml: {}. \
+                 Check that the file is readable and not locked by another process.",
+                e
+            ));
+        }
+        Ok(metadata) => metadata,
+    };
+
+    if !metadata.file_type().is_file() {
+        return Err(
+            "Could not read .perl-lsp.toml: path must be a regular file (not a directory, pipe, \
+             or device)."
+                .to_string(),
+        );
+    }
+
+    if metadata.len() > MAX_PROJECT_CONFIG_BYTES {
+        return Err(format!(
+            "Could not read .perl-lsp.toml: file is too large ({} bytes, max {} bytes).",
+            metadata.len(),
+            MAX_PROJECT_CONFIG_BYTES
+        ));
+    }
+
+    let file = File::open(&path).map_err(|e| {
+        format!(
             "Could not read .perl-lsp.toml: {}. \
              Check that the file is readable and not locked by another process.",
             e
-        )),
-        Ok(content) => toml::from_str::<ProjectConfig>(&content)
-            .map(Some)
-            .map_err(|e| format!(".perl-lsp.toml has a syntax error: {}", e)),
+        )
+    })?;
+    let mut content = String::new();
+    file.take(MAX_PROJECT_CONFIG_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|e| format!("Could not read .perl-lsp.toml: {}", e))?;
+
+    if content.len() as u64 > MAX_PROJECT_CONFIG_BYTES {
+        return Err(format!(
+            "Could not read .perl-lsp.toml: file is too large (max {} bytes).",
+            MAX_PROJECT_CONFIG_BYTES
+        ));
     }
+
+    toml::from_str::<ProjectConfig>(&content)
+        .map(Some)
+        .map_err(|e| format!(".perl-lsp.toml has a syntax error: {}", e))
 }
 
 impl ProjectConfig {
@@ -905,6 +947,31 @@ perltidy_extra_args = ["-noll"]
         assert_eq!(config.formatting.enabled, Some(true));
         assert_eq!(config.formatting.perltidy_maximum_line_length, Some(100));
         assert_eq!(config.formatting.perltidy_extra_args, vec!["-noll"]);
+        Ok(())
+    }
+
+    #[test]
+    fn load_project_config_rejects_non_regular_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        std::fs::create_dir(temp.path().join(".perl-lsp.toml"))?;
+
+        let err = load_project_config(temp.path())
+            .err()
+            .ok_or("expected non-regular config path to return an error")?;
+        assert!(err.contains("regular file"));
+        Ok(())
+    }
+
+    #[test]
+    fn load_project_config_rejects_oversized_file() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let oversized = vec![b'a'; (1024 * 1024) + 1];
+        std::fs::write(temp.path().join(".perl-lsp.toml"), oversized)?;
+
+        let err = load_project_config(temp.path())
+            .err()
+            .ok_or("expected oversized config file to return an error")?;
+        assert!(err.contains("too large"));
         Ok(())
     }
 
