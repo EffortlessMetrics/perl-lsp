@@ -4,6 +4,7 @@
 //! Supports LocationLink for enhanced client experience.
 
 use crate::ast::{Node, NodeKind};
+use crate::analysis::import_surface::ImportSurface;
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
@@ -1436,6 +1437,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
     }
 
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        let import_surface = ImportSurface::from_ast(ast);
+        if let Some(module) = import_surface.source_for_name(symbol_name) {
+            return Some(module.to_string());
+        }
+
         /// Extract the module name from a `require Module;` statement node.
         ///
         /// Matches both `require Foo::Bar` (Identifier arg) and
@@ -1632,46 +1638,6 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
 
         fn find(node: &Node, name: &str) -> Option<String> {
-            if let NodeKind::Use { module, args, .. } = &node.kind {
-                // Skip `use constant` — constants are not import-list symbols
-                if module == "constant" {
-                    // Fall through to children
-                } else {
-                    for arg in args {
-                        if arg == name {
-                            return Some(module.clone());
-                        }
-                        if tag_imports_symbol(module, arg, name) {
-                            return Some(module.clone());
-                        }
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            for import_token in content.split_whitespace() {
-                                if import_token == name
-                                    || tag_imports_symbol(module, import_token, name)
-                                {
-                                    return Some(module.clone());
-                                }
-                            }
-                        } else {
-                            // Parenthesized import list: use Foo ('bar', 'baz')
-                            // The parser emits each token as a separate arg including commas
-                            // and string literals with their surrounding quotes.
-                            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
-                            if bare == name {
-                                return Some(module.clone());
-                            }
-                            if tag_imports_symbol(module, bare, name) {
-                                return Some(module.clone());
-                            }
-                        }
-                    }
-                }
-            }
-
             // Scan block/program statement lists for `require M; M->import(sym)` patterns.
             let stmts = match &node.kind {
                 NodeKind::Program { statements } => Some(statements.as_slice()),

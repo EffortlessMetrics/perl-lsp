@@ -51,7 +51,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
-use perl_module::import::resolve_known_export_tag;
+use crate::analysis::import_surface::ImportSurface;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
@@ -358,7 +358,7 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
-    imported_barewords: std::collections::HashSet<String>,
+    import_surface: ImportSurface,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
@@ -369,14 +369,14 @@ impl<'a> AnalysisContext<'a> {
         Self {
             code,
             pragma_map,
-            imported_barewords: collect_imported_barewords(ast),
+            import_surface: ImportSurface::from_ast(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
     }
 
     fn has_imported_bareword(&self, name: &str) -> bool {
-        self.imported_barewords.contains(name)
+        self.import_surface.contains_name(name)
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -1839,57 +1839,6 @@ impl ScopeAnalyzer {
             })
             .collect()
     }
-}
-
-fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
-    fn push_symbol(imported: &mut std::collections::HashSet<String>, module: &str, token: &str) {
-        let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
-        if symbol.is_empty() || symbol == "," {
-            return;
-        }
-
-        if symbol.starts_with(':') {
-            if let Some(expanded) = resolve_known_export_tag(module, symbol) {
-                imported.extend(expanded.iter().map(|name| (*name).to_string()));
-            }
-            return;
-        }
-
-        let is_bareword = symbol.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
-            && symbol
-                .as_bytes()
-                .first()
-                .is_some_and(|first| first.is_ascii_alphabetic() || *first == b'_');
-        if is_bareword {
-            imported.insert(symbol.to_string());
-        }
-    }
-
-    fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
-        if let NodeKind::Use { module, args, .. } = &node.kind {
-            for arg in args {
-                if arg.starts_with("qw") {
-                    let content = arg
-                        .trim_start_matches("qw")
-                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                    for token in content.split_whitespace() {
-                        push_symbol(imported, module, token);
-                    }
-                } else {
-                    push_symbol(imported, module, arg);
-                }
-            }
-        }
-
-        for child in node.children() {
-            visit(child, imported);
-        }
-    }
-
-    let mut imported = std::collections::HashSet::new();
-    visit(ast, &mut imported);
-    imported
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.

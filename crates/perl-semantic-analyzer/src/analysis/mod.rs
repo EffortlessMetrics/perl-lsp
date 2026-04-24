@@ -8,6 +8,8 @@ pub mod declaration;
 /// Lightweight workspace symbol index.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod index;
+/// Canonical visible-import collection for per-file semantic consumers.
+pub mod import_surface;
 /// Scope analysis for variable and subroutine resolution.
 #[allow(missing_docs)]
 pub mod scope_analyzer;
