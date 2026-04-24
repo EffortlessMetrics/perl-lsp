@@ -331,10 +331,12 @@ impl<'a> PerlLexer<'a> {
 
     /// Normalize file start by skipping BOM if present
     fn normalize_file_start(&mut self) {
-        // Skip UTF-8 BOM (EF BB BF) if at file start
-        if self.position == 0 && self.matches_bytes(&[0xEF, 0xBB, 0xBF]) {
-            self.position = 3;
-            self.line_start_offset = 3;
+        // Skip UTF-8 BOM (EF BB BF) / U+FEFF at file start.
+        if self.position == 0
+            && (self.matches_bytes(&[0xEF, 0xBB, 0xBF]) || self.current_char() == Some('\u{FEFF}'))
+        {
+            self.advance();
+            self.line_start_offset = self.position;
         }
     }
 

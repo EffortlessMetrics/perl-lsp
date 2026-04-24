@@ -44,6 +44,21 @@ fn assert_terminates(input: &str) {
             input.len()
         );
         assert!(t.start <= t.end, "Token {:?} has start {} > end {}", t.token_type, t.start, t.end);
+        assert!(
+            input.is_char_boundary(t.start) && input.is_char_boundary(t.end),
+            "Token {:?} has non-boundary UTF-8 span {}..{}",
+            t.token_type,
+            t.start,
+            t.end
+        );
+        assert_eq!(
+            t.text.as_ref(),
+            &input[t.start..t.end],
+            "Token {:?} text mismatch for span {}..{}",
+            t.token_type,
+            t.start,
+            t.end
+        );
     }
     assert!(
         toks.iter().any(|t| matches!(t.token_type, TokenType::EOF)),
