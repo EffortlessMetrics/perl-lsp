@@ -78,7 +78,9 @@ perl-dap --stdio  # Standard DAP transport
 ```bash
 # Workspace health check (run before any agent-spawning session)
 just doctor         # Detects+fixes core.bare, worktree leaks, stale branches, etc.
-just upstream-log   # Shows recent commits from auto-detected upstream ref
+
+# Developer utilities
+just upstream-log   # Shows recent N commits from auto-detected upstream ref
 
 # Check the local environment (tools, Rust components)
 just devex          # Alias: just doctor-env
