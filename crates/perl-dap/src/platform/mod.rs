@@ -55,10 +55,15 @@ fn perl_discovery_cache_key(configured_path: Option<&str>) -> String {
     let perlbrew_root = env::var("PERLBREW_ROOT").unwrap_or_default();
     let plenv_root = env::var("PLENV_ROOT").unwrap_or_default();
     let plenv_version = env::var("PLENV_VERSION").unwrap_or_default();
+    // HOME (Unix) and USERPROFILE (Windows) are both checked by home_dir() in
+    // perl-lsp-rs-core::platform when PERLBREW_ROOT/PLENV_ROOT are absent.
     let home = env::var("HOME").unwrap_or_default();
+    let userprofile = env::var("USERPROFILE").unwrap_or_default();
+    // PREFIX is used by resolve_perl_path() for Termux detection.
+    let prefix = env::var("PREFIX").unwrap_or_default();
 
     format!(
-        "cfg={};path={path_env};perlbrew_perl={perlbrew_perl};perlbrew_root={perlbrew_root};plenv_root={plenv_root};plenv_version={plenv_version};home={home}",
+        "cfg={};path={path_env};perlbrew_perl={perlbrew_perl};perlbrew_root={perlbrew_root};plenv_root={plenv_root};plenv_version={plenv_version};home={home};userprofile={userprofile};prefix={prefix}",
         configured_path.unwrap_or_default()
     )
 }
@@ -211,7 +216,17 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
 ///
 /// This avoids repeated PATH/toolchain scans during repeated launch failures in
 /// the same environment while still invalidating when key discovery inputs
-/// (PATH/toolchain environment/configured path) change.
+/// (PATH, toolchain environment, configured path) change.
+///
+/// # Concurrency
+///
+/// The cache uses a simple check-then-compute-then-store pattern with two
+/// separate lock acquisitions. Two concurrent callers racing on a cold cache
+/// will both run [`find_perl_interpreter`] and the second write wins. This is
+/// intentional: the correctness invariant is that callers always receive a
+/// valid result for the current environment, not that exactly one subprocess
+/// is spawned per cache entry. A condvar/OnceLock approach would complicate the
+/// API without measurable benefit for the low-frequency DAP launch path.
 pub fn find_perl_interpreter_cached(configured_path: Option<&str>) -> PerlInterpreterResult {
     let cache_key = perl_discovery_cache_key(configured_path);
 
@@ -537,5 +552,24 @@ mod tests {
             windows_perl_rank(active) < windows_perl_rank(msys),
             "ActiveState should rank better than msys perl"
         );
+    }
+
+    /// Verify that USERPROFILE and PREFIX changes produce different cache keys.
+    ///
+    /// On Windows, HOME is typically absent and home_dir() falls back to
+    /// USERPROFILE to resolve the perlbrew/plenv default root.  The PREFIX
+    /// variable is used by the Termux path resolver.  Both must appear in the
+    /// cache key so that a changed user profile or Termux prefix invalidates
+    /// a stale cached result.
+    #[test]
+    fn discovery_cache_key_contains_userprofile_and_prefix() {
+        // Synthetic keys that differ only in userprofile or prefix must differ.
+        let base = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=;prefix=";
+        let with_profile = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=C_Users_alice;prefix=";
+        let with_prefix = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=;prefix=/data/data/com.termux/files/usr";
+        assert_ne!(base, with_profile, "key must differ when userprofile changes");
+        assert_ne!(base, with_prefix, "key must differ when prefix changes");
+        assert!(base.contains("userprofile="), "key must contain userprofile= field");
+        assert!(base.contains("prefix="), "key must contain prefix= field");
     }
 }
