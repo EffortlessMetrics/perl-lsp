@@ -946,3 +946,41 @@ fn lexer_slash_division_after_number_literal() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn lexer_slash_word_operator_contexts_stay_expect_term() -> TestResult {
+    let cases = ["$x and /ok/", "$x or /ok/", "$x xor /ok/", "not /ok/"];
+
+    for code in cases {
+        let mut lexer = PerlLexer::new(code);
+        let mut saw_regex = false;
+        while let Some(tok) = lexer.next_token() {
+            if matches!(tok.token_type, TokenType::RegexMatch) {
+                saw_regex = true;
+                break;
+            }
+            if matches!(tok.token_type, TokenType::EOF) {
+                break;
+            }
+        }
+
+        assert!(saw_regex, "Expected regex token after word operator in '{code}'");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn lexer_slash_comment_adjacent_division_and_defined_or() -> TestResult {
+    let mut division = PerlLexer::new("$x # trailing\n/ 2");
+    division.next_token(); // $x
+    let slash = division.next_token().ok_or("expected division after comment/newline")?;
+    assert!(matches!(slash.token_type, TokenType::Division));
+
+    let mut dor = PerlLexer::new("$x # trailing\n// $y");
+    dor.next_token(); // $x
+    let op = dor.next_token().ok_or("expected defined-or after comment/newline")?;
+    assert!(matches!(op.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
+
+    Ok(())
+}

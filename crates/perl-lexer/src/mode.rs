@@ -21,7 +21,7 @@
 //! | identifier             | ExpectOperator | `$x / 2`          |
 //! | number                 | ExpectOperator | `10 / 3`          |
 //! | closing paren/bracket  | ExpectOperator | `) / 2`           |
-//! | keyword                | ExpectTerm     | `if /pattern/`    |
+//! | keyword/word-operator  | ExpectTerm     | `if /p/`, `x and /p/` |
 //! | operator               | ExpectTerm     | `=~ /test/`       |
 //! | opening paren/bracket  | ExpectTerm     | `( /regex/`       |
 //!

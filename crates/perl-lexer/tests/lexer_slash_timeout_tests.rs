@@ -284,3 +284,22 @@ fn test_budget_guard_prevents_infinite_loop() {
     // Should successfully parse or gracefully fail, not hang
     assert!(token.is_some());
 }
+
+#[test]
+fn test_slash_after_word_operator_is_regex() -> TestResult {
+    let mut lexer = PerlLexer::new("$x and /pattern/");
+    lexer.next_token(); // $x
+    lexer.next_token(); // and
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}
+
+#[test]
+fn test_defined_or_after_comment_newline() -> TestResult {
+    let mut lexer = PerlLexer::new("$x # comment\n// $y");
+    lexer.next_token(); // $x
+    let token = lexer.next_token().ok_or("Expected // operator token")?;
+    assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"));
+    Ok(())
+}
