@@ -2130,6 +2130,86 @@ sub foo ($x) { $z = 1; }
 }
 
 #[test]
+fn signatures_lexical_no_feature_disables_strict_vars_checks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use feature 'signatures';
+no feature 'signatures';
+sub foo ($x) {
+    $inside_ok = 1;
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UndeclaredVariable) && i.variable_name == "$inside_ok"
+        }),
+        "lexical no feature 'signatures' should disable signature-driven strict vars checks"
+    );
+    Ok(())
+}
+
+#[test]
+fn signatures_lexical_no_feature_disables_strict_subs_checks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use feature 'signatures';
+no feature 'signatures';
+sub foo ($x) {
+    print INSIDE_OK;
+}
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "INSIDE_OK"
+        }),
+        "lexical no feature 'signatures' should disable signature-driven strict subs checks"
+    );
+    Ok(())
+}
+
+#[test]
+fn conditional_no_strict_subs_is_observable_to_scope_analyzer()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+no if 1, 'strict', 'subs';
+print MAYBE_BAREWORD;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "MAYBE_BAREWORD"
+        }),
+        "conditional no strict 'subs' should disable bareword diagnostics downstream"
+    );
+    Ok(())
+}
+
+#[test]
+fn eval_string_no_strict_subs_does_not_disable_scope_analyzer_checks()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+eval "no strict 'subs';";
+print STILL_STRICT;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "STILL_STRICT"
+        }),
+        "eval STRING no strict should not be interpreted as compile-time strict disable"
+    );
+    Ok(())
+}
+
+#[test]
 fn signature_parameters_are_registered_as_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 sub add ($x, $y = 1, @rest) {
@@ -3916,7 +3996,7 @@ print func();
         issues.iter().any(|issue| {
             matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "func"
         }),
-        "require inside eval { } is runtime; should not suppress strict 'subs'"
+        "require inside eval {{ }} is runtime; should not suppress strict 'subs'"
     );
     Ok(())
 }

@@ -599,6 +599,28 @@ mod tests {
     }
 
     #[test]
+    fn package_block_no_strict_restores_top_level_state() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\npackage Foo {\n  no strict;\n  no warnings;\n  my $tmp = 1;\n}\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "no strict/no warnings inside package block must not revoke top-level strict/warnings"
+        );
+    }
+
+    #[test]
+    fn begin_block_no_strict_restores_top_level_state() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\nBEGIN { no strict; no warnings; my $tmp = 1; }\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "no strict/no warnings inside BEGIN block must not revoke top-level strict/warnings"
+        );
+    }
+
+    #[test]
     fn sub_inside_eval_scoped_strict_does_not_suppress() {
         // sub inside eval: use strict inside sub inside eval.
         // Three scoping levels — none should leak to top level.
