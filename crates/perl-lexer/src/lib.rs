@@ -897,6 +897,54 @@ impl<'a> PerlLexer<'a> {
         None
     }
 
+    /// Consume a balanced segment inside a double-quoted string interpolation.
+    ///
+    /// Unlike `consume_balanced_segment`, this variant stops before an unescaped
+    /// closing double-quote so interpolation-local delimiter mistakes (like
+    /// `$hash{incomplete"`) do not consume the string terminator and poison the
+    /// whole token as "unterminated string".
+    #[inline]
+    fn consume_balanced_segment_in_double_quote(
+        &mut self,
+        open: char,
+        close: char,
+    ) -> Option<usize> {
+        if self.current_char() != Some(open) {
+            return None;
+        }
+
+        let mut depth = 1usize;
+        self.advance();
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                '"' => {
+                    // Keep the quote for the outer string parser.
+                    return None;
+                }
+                c if c == open => {
+                    depth += 1;
+                    self.advance();
+                }
+                c if c == close => {
+                    self.advance();
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(self.position);
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+
+        None
+    }
+
     /// Fast byte-level check for ASCII characters
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
@@ -2847,19 +2895,22 @@ impl<'a> PerlLexer<'a> {
 
                                     match self.current_char() {
                                         Some('[') => {
-                                            let _ = self.consume_balanced_segment('[', ']');
+                                            let _ = self
+                                                .consume_balanced_segment_in_double_quote('[', ']');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('{') => {
-                                            let _ = self.consume_balanced_segment('{', '}');
+                                            let _ = self
+                                                .consume_balanced_segment_in_double_quote('{', '}');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('(') => {
-                                            let _ = self.consume_balanced_segment('(', ')');
+                                            let _ = self
+                                                .consume_balanced_segment_in_double_quote('(', ')');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2884,7 +2935,11 @@ impl<'a> PerlLexer<'a> {
                                                 }
                                             }
                                             if self.current_char() == Some('(') {
-                                                let _ = self.consume_balanced_segment('(', ')');
+                                                let _ = self
+                                                    .consume_balanced_segment_in_double_quote(
+                                                        '(',
+                                                        ')',
+                                                    );
                                             }
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
@@ -2898,13 +2953,13 @@ impl<'a> PerlLexer<'a> {
                                     }
                                 } else if self.current_char() == Some('[') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('[', ']');
+                                    let _ = self.consume_balanced_segment_in_double_quote('[', ']');
                                     parts.push(StringPart::ArraySlice(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));
                                 } else if self.current_char() == Some('{') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('{', '}');
+                                    let _ = self.consume_balanced_segment_in_double_quote('{', '}');
                                     parts.push(StringPart::Expression(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));

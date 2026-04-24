@@ -1740,6 +1740,34 @@ my $msg = "value: ${Foo::name}";
 }
 
 #[test]
+fn incomplete_hash_subscript_interpolation_keeps_base_variable_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $msg = "Key: $hash{incomplete";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("hash"),
+        "$hash should still register a reference when interpolation-local hash key is incomplete",
+    );
+    Ok(())
+}
+
+#[test]
+fn incomplete_array_index_interpolation_keeps_base_variable_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $item = "Element: $array[0";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("array"),
+        "$array should still register a reference when interpolation-local index is incomplete",
+    );
+    Ok(())
+}
+
+#[test]
 fn escaped_interpolated_variable_is_still_unused() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 my $name = "World";
