@@ -1,13 +1,13 @@
-//! Rope-based text document handling for LSP with UTF-16 aware position mapping
+//! Rope-based text document handling for LSP with multi-encoding position mapping
 //!
 //! This module provides efficient document management using the `ropey` crate for
 //! O(log n) insertions, deletions, and position conversions. It handles the conversion
-//! between LSP's UTF-16 based positions and Rust's UTF-8 strings, ensuring proper
+//! between LSP position encodings and Rust's UTF-8 strings, ensuring proper
 //! handling of Unicode characters including emojis and multi-byte sequences.
 //!
 //! ## Key Features
 //! - **Efficient Edits**: O(log n) performance for document modifications
-//! - **UTF-16 Compliance**: Proper LSP position mapping for Unicode text
+//! - **LSP Encoding Compliance**: UTF-8, UTF-16, and UTF-32 position mapping
 //! - **Incremental Updates**: Support for LSP TextDocumentContentChangeEvent
 //! - **Position Safety**: Boundary-checked conversions with graceful clamping
 
@@ -17,7 +17,7 @@ use ropey::Rope;
 /// Document state using Rope for efficient text operations
 ///
 /// The `Doc` struct stores document content in a Rope data structure,
-/// providing O(log n) performance for edits while maintaining UTF-8/UTF-16
+/// providing O(log n) performance for edits while maintaining UTF-8/UTF-16/UTF-32
 /// position mapping capabilities for LSP compliance.
 #[derive(Clone)]
 pub struct Doc {
@@ -29,7 +29,8 @@ pub struct Doc {
 
 /// Position encoding format for LSP compatibility
 ///
-/// LSP uses UTF-16 code units for positions, while Rust strings are UTF-8.
+/// LSP position encodings may be UTF-8, UTF-16, or UTF-32, while Rust strings
+/// are UTF-8.
 /// This enum determines how position conversions are performed.
 #[derive(Clone, Copy)]
 pub enum PosEnc {
@@ -37,9 +38,11 @@ pub enum PosEnc {
     Utf16,
     /// UTF-8 encoding (Rust native) - counts UTF-8 bytes
     Utf8,
+    /// UTF-32 encoding - counts Unicode scalar values (Rust `char`s)
+    Utf32,
 }
 
-/// Convert LSP position to char index with UTF-16/UTF-8 encoding support
+/// Convert LSP position to char index with UTF-16/UTF-8/UTF-32 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
 /// to a char index in the Rope, accounting for UTF-16 vs UTF-8 encoding
@@ -48,7 +51,7 @@ pub enum PosEnc {
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `pos` - LSP position with 0-based line and character indices
-/// * `enc` - Whether to interpret character positions as UTF-16 or UTF-8
+/// * `enc` - Whether to interpret character positions as UTF-16, UTF-8, or UTF-32
 ///
 /// # Returns
 /// Char index clamped to valid rope boundaries
@@ -92,6 +95,20 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
             }
             char_idx
         }
+        PosEnc::Utf32 => {
+            // UTF-32: pos.character is Unicode scalar offset (1 unit per Rust char)
+            let mut char_idx = 0usize;
+            let mut utf32_units = 0u32;
+            for _ in line_slice.chars() {
+                let next = utf32_units + 1;
+                if next > pos.character {
+                    break;
+                }
+                utf32_units = next;
+                char_idx += 1;
+            }
+            char_idx
+        }
     };
 
     // Clamp to line boundaries
@@ -102,7 +119,7 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     target_char.min(rope.len_chars())
 }
 
-/// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
+/// Convert LSP position to byte offset with UTF-16/UTF-8/UTF-32 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
 /// to a byte offset in the Rope, accounting for UTF-16 vs UTF-8 encoding
@@ -111,7 +128,7 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `pos` - LSP position with 0-based line and character indices
-/// * `enc` - Whether to interpret character positions as UTF-16 or UTF-8
+/// * `enc` - Whether to interpret character positions as UTF-16, UTF-8, or UTF-32
 ///
 /// # Returns
 /// Byte offset clamped to valid rope boundaries
@@ -119,7 +136,7 @@ pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     rope.char_to_byte(lsp_pos_to_char(rope, pos, enc))
 }
 
-/// Convert byte offset to LSP position with UTF-16/UTF-8 encoding support
+/// Convert byte offset to LSP position with UTF-16/UTF-8/UTF-32 encoding support
 ///
 /// This function performs the reverse conversion from a byte offset in the Rope
 /// back to an LSP Position, ensuring proper character counting for the specified
@@ -128,7 +145,7 @@ pub fn lsp_pos_to_byte(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
 /// # Arguments
 /// * `rope` - The rope containing the document text
 /// * `byte` - Byte offset to convert (will be clamped to rope bounds)
-/// * `enc` - Whether to count characters as UTF-16 or UTF-8
+/// * `enc` - Whether to count characters as UTF-16, UTF-8, or UTF-32
 ///
 /// # Returns
 /// LSP Position with 0-based line and character indices
@@ -150,6 +167,7 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
             let line_slice = rope.line(line);
             line_slice.chars().take(col_chars).map(|c| c.len_utf16() as u32).sum()
         }
+        PosEnc::Utf32 => col_chars as u32,
     };
 
     Position { line: line as u32, character }
@@ -206,7 +224,7 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 /// # Behavior
 /// - Changes without ranges replace the entire document
 /// - Changes with ranges perform incremental edits at specified positions
-/// - All position calculations respect UTF-16/UTF-8 encoding differences
+/// - All position calculations respect UTF-16/UTF-8/UTF-32 encoding differences
 /// - Invalid ranges are safely clamped to document boundaries
 ///
 /// # Note
@@ -310,5 +328,23 @@ mod tests {
         assert_eq!(pos2.line, 1);
         let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
         assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+
+    /// Test UTF-32 encoding handles supplementary-plane chars as one unit.
+    #[test]
+    fn test_utf32_position_with_emoji() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+        let pos = Position { line: 0, character: 4 };
+        let char_idx = lsp_pos_to_char(&rope, pos, PosEnc::Utf32);
+        assert_eq!(char_idx, 4, "UTF-32 scalar offset should map to 'x'");
+    }
+
+    /// Test byte_to_lsp_pos returns scalar count for UTF-32.
+    #[test]
+    fn test_byte_to_lsp_pos_utf32_emoji() {
+        let rope = Rope::from_str("hi \u{1F600}x");
+        let pos = byte_to_lsp_pos(&rope, 7, PosEnc::Utf32);
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 4, "UTF-32 should count one unit for emoji");
     }
 }
