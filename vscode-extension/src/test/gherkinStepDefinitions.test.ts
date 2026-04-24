@@ -87,6 +87,15 @@ describe('gherkin step definition support', () => {
     ])).toBe('undefined');
   });
 
+  test('treats potentially expensive step regexes as ambiguous', () => {
+    const step = parseGherkinStepLine('Then aaaaaaaaaaaaaaaaaaaa!', 1);
+    expect(step).not.toBeNull();
+
+    expect(classifyStepDefinitionStatus(step!, [
+      'Then qr/^(a+)+!$/, sub { return; };',
+    ])).toBe('ambiguous');
+  });
+
   test('suggests a deterministic feature-relative target file', () => {
     expect(
       suggestStepDefinitionPath(
