@@ -29,6 +29,7 @@ console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
 perl-corpus = { workspace = true }
+perl-token = { workspace = true }
 perl-lsp-ux-tests = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }

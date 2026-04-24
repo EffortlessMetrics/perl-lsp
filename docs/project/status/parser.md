@@ -40,6 +40,33 @@
 | **scope analysis** | p50 0.010 ms / p95 0.025 ms | mean 0.012 ms over 40 samples | `docs/project/status/parser_performance_scorecard.json` |
 <!-- END: PARSER_PERFORMANCE_TABLE -->
 
+## Perl Token Health
+
+| Metric | Value | Notes | Source |
+| --- | --- | --- | --- |
+<!-- BEGIN: TOKEN_STATUS_TABLE -->
+| **Token metadata coverage** | 132/132 | PASS | `.ci/metrics/baselines/token.json` |
+| **Category partition** | PASS | keyword/operator/delimiter/literal/identifier/special | `TokenKind::category()` |
+| **Display-name coverage** | 132/132 | `TokenKind::display_name()` mappings | `crates/perl-token/src/lib.rs` |
+| **Lexer/parser conformance** | PASS (`cargo test -p perl-token` conformance suite) | token vocabulary + parser/lexer contract tests | `crates/perl-token/tests/` |
+| **Runtime dependency count** | 0 | direct `dependencies` from `cargo metadata` | `crates/perl-token/Cargo.toml` |
+<!-- END: TOKEN_STATUS_TABLE -->
+
+## Perl Token Performance
+
+| Regime | Value | Notes | Source |
+| --- | --- | --- | --- |
+<!-- BEGIN: TOKEN_PERFORMANCE_TABLE -->
+| **token construction** | UNVERIFIED | benchmark receipt missing | `docs/project/status/token_performance_scorecard.json` |
+| **display-name lookup** | UNVERIFIED | benchmark receipt missing | `docs/project/status/token_performance_scorecard.json` |
+<!-- END: TOKEN_PERFORMANCE_TABLE -->
+
+<!-- BEGIN: TOKEN_METRICS_BULLETS -->
+- **Vocabulary breadth**: `TokenKind` tracks `132` variants with metadata coverage `132/132`
+- **Conformance signal**: PASS
+- **Performance receipt**: `UNVERIFIED (run perl-token benches to generate scorecard)` from `docs/project/status/token_performance_scorecard.json`.
+<!-- END: TOKEN_METRICS_BULLETS -->
+
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.

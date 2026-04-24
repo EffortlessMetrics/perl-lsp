@@ -3851,6 +3851,7 @@ dependencies = [
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
+ "perl-token",
  "procfs",
  "regex",
  "serde",
