@@ -377,6 +377,7 @@ impl<'a> Parser<'a> {
                         | TokenKind::RightBrace
                         | TokenKind::RightParen
                         | TokenKind::RightBracket
+                        | TokenKind::Question
                 )
             )
         {
@@ -391,6 +392,7 @@ impl<'a> Parser<'a> {
                 self.tokens.next()?; // consume , or =>
             } else if Self::is_statement_terminator(self.peek_kind())
                 || self.is_statement_modifier_keyword()
+                || self.peek_kind() == Some(TokenKind::Question)
             {
                 break;
             }
