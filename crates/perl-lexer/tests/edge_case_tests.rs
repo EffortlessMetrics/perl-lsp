@@ -644,6 +644,20 @@ fn qq_with_nested_parens() -> R {
 }
 
 #[test]
+fn qq_with_optional_whitespace_before_paired_delimiter() -> R {
+    let input = "qq {hello {nested}}";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteDouble),
+        "Expected QuoteDouble, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "qq {hello {nested}}");
+    Ok(())
+}
+
+#[test]
 fn q_with_escaped_delimiter() -> R {
     let input = r"q|hello \| world|";
     let sig = significant(input);
@@ -654,6 +668,20 @@ fn q_with_escaped_delimiter() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), r"q|hello \| world|");
+    Ok(())
+}
+
+#[test]
+fn qr_with_escaped_delimiter_and_modifiers() -> R {
+    let input = r#"qr!foo\!bar!ims"#;
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteRegex),
+        "Expected QuoteRegex, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), r#"qr!foo\!bar!ims"#);
     Ok(())
 }
 
@@ -1171,6 +1199,20 @@ fn substitution_with_escaped_delimiters() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), r"s/foo\/bar/baz\/qux/");
+    Ok(())
+}
+
+#[test]
+fn substitution_with_mixed_paired_delimiters_and_whitespace() -> R {
+    let input = "s{old}   [new]ge";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s{old}   [new]ge");
     Ok(())
 }
 

@@ -3379,26 +3379,25 @@ impl<'a> PerlLexer<'a> {
         })
     }
 
-    /// Read content between delimiters
-    fn read_delimited_body(&mut self, delim: char) -> String {
+    /// Read content between delimiters, starting after the opening delimiter.
+    ///
+    /// Returns `true` if a closing delimiter was found, `false` if EOF was reached first.
+    fn read_delimited_body(&mut self, delim: char) -> bool {
         let paired = quote_handler::paired_close(delim);
         let close = paired.unwrap_or(delim);
-        let mut body = String::new();
-        let mut depth = i32::from(paired.is_some());
+        let mut depth = usize::from(paired.is_some());
+        let mut closed = false;
 
         while let Some(ch) = self.current_char() {
             if ch == '\\' {
-                body.push(ch);
                 self.advance();
-                if let Some(next) = self.current_char() {
-                    body.push(next);
+                if self.current_char().is_some() {
                     self.advance();
                 }
                 continue;
             }
 
             if paired.is_some() && ch == delim {
-                body.push(ch);
                 self.advance();
                 depth += 1;
                 continue;
@@ -3409,22 +3408,50 @@ impl<'a> PerlLexer<'a> {
                     depth -= 1;
                     if depth == 0 {
                         self.advance();
+                        closed = true;
                         break;
                     }
-                    body.push(ch);
                     self.advance();
                 } else {
                     self.advance();
+                    closed = true;
                     break;
                 }
                 continue;
             }
 
-            body.push(ch);
             self.advance();
         }
 
-        body
+        closed
+    }
+
+    /// For paired first delimiters in `s///` and `tr///`, Perl allows optional whitespace
+    /// before the second delimiter.
+    fn skip_quote_op_between_parts_whitespace(&mut self) {
+        while let Some(ch) = self.current_char() {
+            if ch.is_whitespace() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Determine replacement/list delimiter for second part in `s` or `tr`/`y`.
+    fn second_part_delimiter(&mut self, first_delimiter: char) -> Option<char> {
+        if quote_handler::paired_close(first_delimiter).is_some() {
+            self.skip_quote_op_between_parts_whitespace();
+            let second_delim = self.current_char()?;
+            if Self::is_quote_delim(second_delim) {
+                self.advance();
+                Some(second_delim)
+            } else {
+                None
+            }
+        } else {
+            Some(first_delimiter)
+        }
     }
 
     /// Parse a quote operator after we've seen the delimiter
@@ -3437,63 +3464,35 @@ impl<'a> PerlLexer<'a> {
         match operator.as_str() {
             "s" => {
                 // Substitution: two bodies
-                let _pattern = self.read_delimited_body(delimiter);
-
-                // For paired delimiters, skip whitespace between bodies
-                if quote_handler::paired_close(delimiter).is_some() {
-                    while let Some(ch) = self.current_char() {
-                        if ch.is_whitespace() {
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    // Expect same delimiter for replacement
-                    if self.current_char() == Some(delimiter) {
-                        self.advance();
-                    }
+                let _pattern_closed = self.read_delimited_body(delimiter);
+                if let Some(replacement_delim) = self.second_part_delimiter(delimiter) {
+                    let _replacement_closed = self.read_delimited_body(replacement_delim);
                 }
-
-                let _replacement = self.read_delimited_body(delimiter);
 
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::S_SPEC);
             }
             "tr" | "y" => {
                 // Transliteration: two bodies
-                let _from = self.read_delimited_body(delimiter);
-
-                // For paired delimiters, skip whitespace between bodies
-                if quote_handler::paired_close(delimiter).is_some() {
-                    while let Some(ch) = self.current_char() {
-                        if ch.is_whitespace() {
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    // Expect same delimiter for replacement
-                    if self.current_char() == Some(delimiter) {
-                        self.advance();
-                    }
+                let _from_closed = self.read_delimited_body(delimiter);
+                if let Some(to_delim) = self.second_part_delimiter(delimiter) {
+                    let _to_closed = self.read_delimited_body(to_delim);
                 }
-
-                let _to = self.read_delimited_body(delimiter);
 
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::TR_SPEC);
             }
             "qr" => {
-                let _pattern = self.read_delimited_body(delimiter);
+                let _pattern_closed = self.read_delimited_body(delimiter);
                 self.parse_regex_modifiers(&quote_handler::QR_SPEC);
             }
             "m" => {
-                let _pattern = self.read_delimited_body(delimiter);
+                let _pattern_closed = self.read_delimited_body(delimiter);
                 self.parse_regex_modifiers(&quote_handler::M_SPEC);
             }
             _ => {
                 // q, qq, qw, qx - no modifiers
-                let _body = self.read_delimited_body(delimiter);
+                let _body_closed = self.read_delimited_body(delimiter);
             }
         }
 

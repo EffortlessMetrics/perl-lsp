@@ -94,6 +94,21 @@ fn test_s_operator_brace_delimiter() {
 }
 
 #[test]
+fn test_s_operator_mixed_paired_delimiters() {
+    let code = r#"s{old}[new]g"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Substitution),
+        "Expected Substitution token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "s{old}[new]g");
+}
+
+#[test]
 fn test_s_operator_pipe_delimiter() {
     let code = r#"s|old|new|"#;
     let mut lexer = PerlLexer::new(code);
@@ -136,6 +151,51 @@ fn test_tr_operator_exclamation_delimiter() {
         tokens[0].token_type
     );
     assert_eq!(tokens[0].text.as_ref(), "tr!abc!xyz!");
+}
+
+#[test]
+fn test_tr_operator_mixed_paired_delimiters() {
+    let code = r#"tr{abc}[xyz]cds"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Transliteration),
+        "Expected Transliteration token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "tr{abc}[xyz]cds");
+}
+
+#[test]
+fn test_q_operator_optional_whitespace_before_paired_delimiter() {
+    let code = "q {hello}";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::QuoteSingle),
+        "Expected QuoteSingle token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "q {hello}");
+}
+
+#[test]
+fn test_malformed_q_operator_does_not_panic() {
+    let code = "q{unterminated";
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert!(
+        matches!(tokens[0].token_type, TokenType::QuoteSingle),
+        "Expected QuoteSingle token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "q{unterminated");
+    assert!(matches!(tokens.last().map(|t| &t.token_type), Some(TokenType::EOF)));
 }
 
 #[test]
