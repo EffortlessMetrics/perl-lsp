@@ -13,6 +13,8 @@ pub mod index;
 pub mod scope_analyzer;
 /// Semantic analyzer and token classification.
 pub mod semantic;
+/// Narrow read-only semantic query facade.
+pub mod semantic_query;
 /// Symbol extraction and symbol table construction.
 pub mod symbol;
 /// Type inference engine for Perl variable analysis.

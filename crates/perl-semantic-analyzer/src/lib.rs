@@ -72,5 +72,6 @@ pub use analysis::declaration;
 pub use analysis::index;
 pub use analysis::scope_analyzer;
 pub use analysis::semantic;
+pub use analysis::semantic_query;
 pub use analysis::symbol;
 pub use analysis::type_inference;
