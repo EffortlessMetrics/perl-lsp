@@ -1957,6 +1957,50 @@ print helper_two();
 }
 
 #[test]
+fn strict_subs_still_flags_import_without_require()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Guard: ->import() without a preceding require should NOT suppress strict_subs.
+    // Bareword identifiers (no parens) are the subject of strict 'subs' checking.
+    // Use `print SOME_CONST` to produce an Identifier node rather than a FunctionCall.
+    let code = r#"
+use strict 'subs';
+My::Loader->import('LOAD_CONST');
+print LOAD_CONST;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "LOAD_CONST"
+        }),
+        "strict 'subs' should still flag bareword Identifiers when require is absent"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_require_path_form_then_manual_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    // require "Foo/Bar.pm" path form should normalise to Foo::Bar for the
+    // subsequent Foo::Bar->import(...) pairing.
+    let code = r#"
+use strict 'subs';
+require "My/Loader.pm";
+My::Loader->import('load_data');
+print load_data();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should not flag barewords imported via require path form + manual import"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;
