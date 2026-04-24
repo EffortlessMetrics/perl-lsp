@@ -956,8 +956,43 @@ impl IncrementalParserV2 {
     }
 
     fn is_node_affected(&self, node: &Node) -> bool {
-        let node_range = Range::from(node.location);
-        self.pending_edits.affects_range(&node_range)
+        let mut cumulative_shift = 0isize;
+        let node_start = node.location.start;
+        let node_end = node.location.end;
+
+        for edit in self.pending_edits.edits() {
+            let original_start = if cumulative_shift >= 0 {
+                edit.start_byte.saturating_sub(cumulative_shift as usize)
+            } else {
+                edit.start_byte.saturating_add((-cumulative_shift) as usize)
+            };
+            let original_end = if cumulative_shift >= 0 {
+                edit.old_end_byte.saturating_sub(cumulative_shift as usize)
+            } else {
+                edit.old_end_byte.saturating_add((-cumulative_shift) as usize)
+            };
+
+            let is_affected = if original_start == original_end {
+                // Insertions have an empty old range. They still affect nodes that
+                // span the insertion point because those nodes need location updates.
+                original_start >= node_start && original_start <= node_end
+            } else {
+                let edit_range = Range::new(
+                    perl_parser_core::position::Position::new(original_start, 0, 0),
+                    perl_parser_core::position::Position::new(original_end, 0, 0),
+                );
+                let node_range = Range::from(node.location);
+                edit_range.overlaps(&node_range)
+            };
+
+            if is_affected {
+                return true;
+            }
+
+            cumulative_shift += edit.byte_shift();
+        }
+
+        false
     }
 
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
@@ -2122,6 +2157,124 @@ if ($condition) {
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
         assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    fn parse_fresh(source: &str) -> ParseResult<Node> {
+        let mut parser = Parser::new(source);
+        parser.parse()
+    }
+
+    fn pos(byte: usize) -> Position {
+        Position::new(byte, 1, (byte + 1) as u32)
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_literal_edits_reuse_shifted_nodes() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $a = 10; my $b = 20; my $c = 30;";
+        parser.parse(source1)?;
+
+        let first_start =
+            source1.find("10").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let first_old_end = first_start + "10".len();
+        parser.edit(Edit::new(
+            first_start,
+            first_old_end,
+            first_start + "1000".len(),
+            pos(first_start),
+            pos(first_old_end),
+            pos(first_start + "1000".len()),
+        ));
+
+        let second_start_original =
+            source1.find("20").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let second_start = second_start_original + 2; // shift from "10" -> "1000"
+        let second_old_end = second_start + "20".len();
+        parser.edit(Edit::new(
+            second_start,
+            second_old_end,
+            second_start + "7".len(),
+            pos(second_start),
+            pos(second_old_end),
+            pos(second_start + "7".len()),
+        ));
+
+        let source2 = "my $a = 1000; my $b = 7; my $c = 30;";
+        let incremental_tree = parser.parse(source2)?;
+        let fresh_tree = parse_fresh(source2)?;
+
+        assert_eq!(format!("{incremental_tree:?}"), format!("{fresh_tree:?}"));
+        assert!(parser.reused_nodes > 0, "Batch literal edits should reuse unaffected nodes");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_whitespace_and_identifier_edits_keep_ast_equivalent() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $alpha = 1;my $beta = 2;my $gamma = 3;";
+        parser.parse(source1)?;
+
+        let insert_at =
+            source1.find(";my").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)? + 1;
+        parser.edit(Edit::new(
+            insert_at,
+            insert_at,
+            insert_at + 2,
+            pos(insert_at),
+            pos(insert_at),
+            pos(insert_at + 2),
+        ));
+
+        let beta_original =
+            source1.find("beta").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let beta_start = beta_original + 2; // shifted by whitespace insertion
+        let beta_old_end = beta_start + "beta".len();
+        parser.edit(Edit::new(
+            beta_start,
+            beta_old_end,
+            beta_start + "delta".len(),
+            pos(beta_start),
+            pos(beta_old_end),
+            pos(beta_start + "delta".len()),
+        ));
+
+        let source2 = "my $alpha = 1;  my $delta = 2;my $gamma = 3;";
+        let incremental_tree = parser.parse(source2)?;
+        let fresh_tree = parse_fresh(source2)?;
+
+        assert_eq!(format!("{incremental_tree:?}"), format!("{fresh_tree:?}"));
+        assert!(parser.reused_nodes > 0, "Mixed batch edits should still preserve reuse");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_multibyte_edit_shifts_unaffected_nodes_safely() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $left = \"🙂\"; my $right = 42; my $tail = 7;";
+        parser.parse(source1)?;
+
+        let smiley_start =
+            source1.find("🙂").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let smiley_old_end = smiley_start + "🙂".len();
+        parser.edit(Edit::new(
+            smiley_start,
+            smiley_old_end,
+            smiley_start + "🙂🙂🙂".len(),
+            pos(smiley_start),
+            pos(smiley_old_end),
+            pos(smiley_start + "🙂🙂🙂".len()),
+        ));
+
+        let source2 = "my $left = \"🙂🙂🙂\"; my $right = 42; my $tail = 7;";
+        let incremental_tree = parser.parse(source2)?;
+        let fresh_tree = parse_fresh(source2)?;
+
+        assert_eq!(format!("{incremental_tree:?}"), format!("{fresh_tree:?}"));
+        assert!(parser.reused_nodes > 0, "Multibyte edits should still reuse unaffected nodes");
+
         Ok(())
     }
 }
