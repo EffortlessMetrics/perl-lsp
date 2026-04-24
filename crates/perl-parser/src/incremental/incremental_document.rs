@@ -128,16 +128,26 @@ impl IncrementalDocument {
         // Reset metrics for this batch of edits
         self.metrics = ParseMetrics::default();
 
-        // Sort edits by position (reverse order for correct application)
-        let mut sorted_edits = edits.edits.clone();
-        sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+        let Some(sorted_edits) = edits.normalized_for_batch() else {
+            debug!("Batch edits rejected by normalization; falling back to full parse");
+            return self.reparse_fallback_batch(start, edits);
+        };
 
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
+        let mut unmappable_edit = false;
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                unmappable_edit = true;
+                break;
+            }
+        }
+
+        if unmappable_edit {
+            debug!("Batch contains unmappable edit; falling back to full parse");
+            return self.reparse_fallback_batch(start, edits);
         }
 
         // Find all affected ranges
@@ -165,45 +175,92 @@ impl IncrementalDocument {
         Ok(())
     }
 
+    fn reparse_fallback_batch(
+        &mut self,
+        start: Instant,
+        edits: &IncrementalEditSet,
+    ) -> ParseResult<()> {
+        let fallback_source = edits.apply_to_string(&self.source);
+        let mut parser = Parser::new(&fallback_source);
+        let new_root = parser.parse()?;
+        self.source = fallback_source;
+        self.root = Arc::new(new_root);
+        self.cache_subtrees();
+        self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+        Ok(())
+    }
+
     /// Apply edit to source string
     fn apply_edit_to_source(&self, edit: &IncrementalEdit) -> String {
         self.apply_edit_to_string(&self.source, edit)
     }
 
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Invalid backwards edit range: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return source.to_string();
+        }
+
+        if edit.start_byte > source.len() || edit.old_end_byte > source.len() {
+            debug!(
+                "Edit out of bounds for source len {}: start={}, end={}",
+                source.len(),
+                edit.start_byte,
+                edit.old_end_byte
+            );
+            return source.to_string();
+        }
+
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
 
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
         // Ensure we're on UTF-8 boundaries
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            result.push_str(&source[..start]);
+        if source.is_char_boundary(edit.start_byte) && source.is_char_boundary(edit.old_end_byte) {
+            result.push_str(&source[..edit.start_byte]);
             result.push_str(&edit.new_text);
-            result.push_str(&source[end..]);
+            result.push_str(&source[edit.old_end_byte..]);
         } else {
             // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid UTF-8 boundaries in edit: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
             result.push_str(source);
         }
 
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Skipping invalid backwards edit range: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return false;
         }
 
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            source.replace_range(start..end, &edit.new_text);
+        if edit.start_byte > source.len() || edit.old_end_byte > source.len() {
+            debug!(
+                "Edit out of bounds for source len {}: start={}, end={}",
+                source.len(),
+                edit.start_byte,
+                edit.old_end_byte
+            );
+            return false;
+        }
+
+        if source.is_char_boundary(edit.start_byte) && source.is_char_boundary(edit.old_end_byte) {
+            source.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+            true
         } else {
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid UTF-8 boundaries in edit: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            false
         }
     }
 
@@ -308,7 +365,11 @@ impl IncrementalDocument {
         let mut new_root = (*self.root).clone();
 
         // Find and update the affected token
-        if self.update_token_in_tree(&mut new_root, source, edit) { Some(new_root) } else { None }
+        if self.update_token_in_tree(&mut new_root, source, edit) {
+            Some(new_root)
+        } else {
+            None
+        }
     }
 
     /// Update a single token in the tree

@@ -21,6 +21,11 @@ pub struct IncrementalEdit {
 }
 
 impl IncrementalEdit {
+    /// Returns true when the edit range is well-formed (`start <= end`).
+    pub fn has_valid_range(&self) -> bool {
+        self.start_byte <= self.old_end_byte
+    }
+
     /// Create a new incremental edit
     pub fn new(start_byte: usize, old_end_byte: usize, new_text: String) -> Self {
         IncrementalEdit {
@@ -106,6 +111,37 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
+    /// Validate and normalize edits for deterministic reverse-order application.
+    ///
+    /// Returns `None` when ranges are malformed or overlap in the original
+    /// source. Adjacent edits and zero-width insertions are preserved.
+    pub fn normalized_for_batch(&self) -> Option<Vec<IncrementalEdit>> {
+        if self.edits.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let mut by_start = self.edits.clone();
+        by_start.sort_by_key(|e| (e.start_byte, e.old_end_byte));
+
+        let mut previous_end = 0usize;
+        let mut is_first = true;
+        for edit in &by_start {
+            if !edit.has_valid_range() {
+                return None;
+            }
+
+            if !is_first && edit.start_byte < previous_end {
+                return None;
+            }
+
+            previous_end = edit.old_end_byte;
+            is_first = false;
+        }
+
+        by_start.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        Some(by_start)
+    }
+
     /// Apply edits to a string
     pub fn apply_to_string(&self, source: &str) -> String {
         if self.edits.is_empty() {
@@ -177,5 +213,37 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_normalized_for_batch_rejects_overlapping_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "abc".to_string()));
+        edits.add(IncrementalEdit::new(3, 6, "xyz".to_string()));
+
+        assert!(edits.normalized_for_batch().is_none());
+    }
+
+    #[test]
+    fn test_normalized_for_batch_rejects_backwards_range() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(5, 2, "x".to_string()));
+
+        assert!(edits.normalized_for_batch().is_none());
+    }
+
+    #[test]
+    fn test_normalized_for_batch_preserves_zero_width_insertions() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(2, 2, "a".to_string()));
+        edits.add(IncrementalEdit::new(6, 6, "b".to_string()));
+
+        let normalized = edits.normalized_for_batch();
+        assert!(normalized.is_some());
+        if let Some(normalized_edits) = normalized {
+            assert_eq!(normalized_edits.len(), 2);
+            assert_eq!(normalized_edits[0].start_byte, 6);
+            assert_eq!(normalized_edits[1].start_byte, 2);
+        }
     }
 }
