@@ -36,9 +36,21 @@ function makeOutputChannel(): any {
 // ---------------------------------------------------------------------------
 describe('BinaryDownloader.getPlatformTarget', () => {
   let downloader: BinaryDownloader;
+  let androidRootBackup: string | undefined;
+  let androidDataBackup: string | undefined;
+  let termuxVersionBackup: string | undefined;
 
   beforeEach(() => {
     downloader = new BinaryDownloader(makeContext(), makeOutputChannel());
+    androidRootBackup = process.env.ANDROID_ROOT;
+    androidDataBackup = process.env.ANDROID_DATA;
+    termuxVersionBackup = process.env.TERMUX_VERSION;
+  });
+
+  afterEach(() => {
+    process.env.ANDROID_ROOT = androidRootBackup;
+    process.env.ANDROID_DATA = androidDataBackup;
+    process.env.TERMUX_VERSION = termuxVersionBackup;
   });
 
   function getPlatformTarget(dl: any): string {
@@ -60,6 +72,12 @@ describe('BinaryDownloader.getPlatformTarget', () => {
   test('target contains platform component', () => {
     const target = getPlatformTarget(downloader);
     expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
+  });
+
+  test('detects Android/Termux and returns android target triple', () => {
+    process.env.TERMUX_VERSION = '0.118.0';
+    const target = getPlatformTarget(downloader);
+    expect(target).toMatch(/linux-android/);
   });
 });
 
@@ -859,6 +877,24 @@ describe('ensureBinary error classification', () => {
     // Must include the platform string and the manual install setting
     expect(call[0]).toMatch(/arm64-unknown-linux-gnu/);
     expect(call[0]).toMatch(/perl-lsp\.serverPath/);
+  });
+
+  test('android/termux no-binary error includes android guidance', async () => {
+    const termuxVersionBackup = process.env.TERMUX_VERSION;
+    try {
+      process.env.TERMUX_VERSION = '0.118.0';
+      setupDownloadError('No binary found for platform: aarch64-linux-android. Available assets: perllsp-x86_64-unknown-linux-gnu.tar.gz');
+      const vscode = require('vscode');
+      vscode.window.showErrorMessage.mockResolvedValue(undefined);
+
+      await downloader.ensureBinary();
+
+      const call = vscode.window.showErrorMessage.mock.calls[0];
+      expect(call[0]).toMatch(/android environment detected/i);
+      expect(call[0]).toMatch(/termux|build from source|serverPath/i);
+    } finally {
+      process.env.TERMUX_VERSION = termuxVersionBackup;
+    }
   });
 
   test('HTTP 403 rate limit shows GitHub rate limit guidance', async () => {

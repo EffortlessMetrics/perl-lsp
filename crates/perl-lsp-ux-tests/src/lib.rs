@@ -203,6 +203,21 @@ impl UxHarness {
         self.client.did_change_full(&uri, version, updated_content)
     }
 
+    /// Open a file in the LSP server with an explicit language identifier.
+    ///
+    /// Useful for UX regressions where the editor mode intentionally differs
+    /// from the file extension (for example, opening `*.html.ep` as HTML).
+    pub fn open_file_with_language_id(
+        &self,
+        relative_path: &str,
+        content: &str,
+        language_id: &str,
+    ) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_open_with_language_id(&uri, content, language_id)
+    }
+
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
     ///
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).
