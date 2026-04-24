@@ -1182,26 +1182,19 @@ impl<'a> Parser<'a> {
 
     /// Check if we're at a statement boundary
     fn is_at_statement_end(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::WordAnd)
-                | Some(TokenKind::WordOr)
-                | Some(TokenKind::WordXor)
-                | Some(TokenKind::WordNot)
-                | Some(TokenKind::DataMarker)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) if kind.is_recovery_boundary() => true,
+            Some(kind) if kind.is_low_precedence_word_operator() => true,
+            Some(TokenKind::If)
+            | Some(TokenKind::Unless)
+            | Some(TokenKind::While)
+            | Some(TokenKind::Until)
+            | Some(TokenKind::For)
+            | Some(TokenKind::Foreach)
+            | Some(TokenKind::DataMarker)
+            | None => true,
+            _ => false,
+        }
     }
 
     /// Check whether the current peek token is a quote-op name that should be

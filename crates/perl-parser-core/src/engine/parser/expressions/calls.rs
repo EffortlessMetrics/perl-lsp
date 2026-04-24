@@ -87,11 +87,8 @@ impl<'a> Parser<'a> {
 
             // These tokens *cannot* start an indirect object
             match next_kind {
-                TokenKind::Semicolon
-                | TokenKind::RightBrace
-                | TokenKind::RightParen
-                | TokenKind::Comma
-                | TokenKind::Eof => return false,
+                TokenKind::Comma => return false,
+                kind if kind.is_recovery_boundary() => return false,
                 _ => {}
             }
 
@@ -287,10 +284,7 @@ impl<'a> Parser<'a> {
                         // A closing brace/paren/bracket means the call is the
                         // last expression inside a block or parenthesised list,
                         // e.g. `grep { defined $v }` — not an indirect call.
-                        if matches!(
-                            third.kind,
-                            TokenKind::RightBrace | TokenKind::RightParen | TokenKind::RightBracket
-                        ) {
+                        if third.kind.is_close_delimiter() {
                             return false;
                         }
                         // Arrow after $var means method/deref chain: func $obj->method(...)
@@ -301,15 +295,9 @@ impl<'a> Parser<'a> {
                         // Word operators after $var means regular call with low-precedence
                         // operator: func @list or die, func $arg and next, etc.
                         // These are NOT indirect method calls.
-                        if matches!(
-                            third.kind,
-                            TokenKind::WordOr
-                                | TokenKind::WordAnd
-                                | TokenKind::WordXor
-                                | TokenKind::WordNot
-                                | TokenKind::Question
-                                | TokenKind::Semicolon
-                        ) {
+                        if third.kind.is_low_precedence_word_operator()
+                            || matches!(third.kind, TokenKind::Question | TokenKind::Semicolon)
+                        {
                             return false;
                         }
                         return true;
@@ -369,15 +357,7 @@ impl<'a> Parser<'a> {
             && !self.is_statement_modifier_keyword()
             && !matches!(
                 self.peek_kind(),
-                Some(
-                    TokenKind::WordOr
-                        | TokenKind::WordAnd
-                        | TokenKind::WordXor
-                        | TokenKind::WordNot
-                        | TokenKind::RightBrace
-                        | TokenKind::RightParen
-                        | TokenKind::RightBracket
-                )
+                Some(kind) if kind.is_low_precedence_word_operator() || kind.is_close_delimiter()
             )
         {
             // Use parse_assignment instead of parse_expression to avoid grouping by comma operator

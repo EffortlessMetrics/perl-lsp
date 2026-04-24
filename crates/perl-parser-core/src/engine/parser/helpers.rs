@@ -1,7 +1,10 @@
 impl<'a> Parser<'a> {
     #[inline]
     fn is_statement_terminator(kind: Option<TokenKind>) -> bool {
-        matches!(kind, Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None)
+        match kind {
+            Some(token) => matches!(token, TokenKind::Semicolon | TokenKind::Eof),
+            None => true,
+        }
     }
 
     #[inline]
@@ -114,15 +117,9 @@ impl<'a> Parser<'a> {
     /// the modifier token is being autoquoted before `=>`.
     fn should_continue_bare_call_after_block(&mut self) -> bool {
         match self.peek_kind() {
-            Some(TokenKind::Semicolon)
-            | Some(TokenKind::RightBrace)
-            | Some(TokenKind::RightParen)
-            | Some(TokenKind::RightBracket)
-            | Some(TokenKind::Eof)
-            | None => false,
-            Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
-                false
-            }
+            Some(kind) if kind.is_recovery_boundary() => false,
+            None => false,
+            Some(kind) if kind.is_low_precedence_word_operator() => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
@@ -353,51 +350,24 @@ impl<'a> Parser<'a> {
 
     /// Check if a token kind is a binary operator that couldn't start an expression argument.
     fn is_binary_operator(kind: TokenKind) -> bool {
-        matches!(
-            kind,
-            TokenKind::Or
-                | TokenKind::And
-                | TokenKind::DefinedOr
-                | TokenKind::WordOr
-                | TokenKind::WordAnd
-                | TokenKind::WordXor
-                | TokenKind::Equal
-                | TokenKind::NotEqual
-                | TokenKind::Less
-                | TokenKind::Greater
-                | TokenKind::LessEqual
-                | TokenKind::GreaterEqual
-                | TokenKind::Spaceship
-                | TokenKind::StringCompare
-                | TokenKind::Match
-                | TokenKind::NotMatch
-                | TokenKind::SmartMatch
-                | TokenKind::Dot
-                | TokenKind::Range
-                | TokenKind::LeftShift
-                | TokenKind::RightShift
-                | TokenKind::BitwiseAnd
-                | TokenKind::BitwiseOr
-                | TokenKind::BitwiseXor
-                | TokenKind::Question
-                | TokenKind::Colon
-                | TokenKind::Assign
-                | TokenKind::PlusAssign
-                | TokenKind::MinusAssign
-                | TokenKind::StarAssign
-                | TokenKind::SlashAssign
-                | TokenKind::PercentAssign
-                | TokenKind::DotAssign
-                | TokenKind::AndAssign
-                | TokenKind::OrAssign
-                | TokenKind::XorAssign
-                | TokenKind::PowerAssign
-                | TokenKind::LeftShiftAssign
-                | TokenKind::RightShiftAssign
-                | TokenKind::LogicalAndAssign
-                | TokenKind::LogicalOrAssign
-                | TokenKind::DefinedOrAssign
-        )
+        kind.is_assignment_operator()
+            || kind.is_comparison_operator()
+            || matches!(kind, TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor)
+            || matches!(
+                kind,
+                TokenKind::Or
+                    | TokenKind::And
+                    | TokenKind::DefinedOr
+                    | TokenKind::Dot
+                    | TokenKind::Range
+                    | TokenKind::LeftShift
+                    | TokenKind::RightShift
+                    | TokenKind::BitwiseAnd
+                    | TokenKind::BitwiseOr
+                    | TokenKind::BitwiseXor
+                    | TokenKind::Question
+                    | TokenKind::Colon
+            )
     }
 
     /// Peek at the next token's kind
@@ -559,10 +529,7 @@ impl<'a> Parser<'a> {
             }
 
             match self.peek_kind() {
-                Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightBracket) => break,
+                Some(kind) if kind.is_recovery_boundary() && kind != TokenKind::Eof => break,
                 Some(k) if Self::is_stmt_modifier_kind(k) && !self.is_keyword_before_fat_arrow() => {
                     break;
                 }
@@ -578,10 +545,7 @@ impl<'a> Parser<'a> {
                 expressions.push(elem);
 
                 match self.peek_kind() {
-                    Some(TokenKind::Semicolon)
-                    | Some(TokenKind::RightParen)
-                    | Some(TokenKind::RightBrace)
-                    | Some(TokenKind::RightBracket) => break,
+                    Some(kind) if kind.is_recovery_boundary() && kind != TokenKind::Eof => break,
                     Some(k) if Self::is_stmt_modifier_kind(k) => break,
                     _ => expressions.push(self.parse_assignment()?),
                 }
@@ -618,33 +582,29 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                // Statement-starter keywords cannot serve as an expression RHS.
-                // Treating them as "missing operand" allows declaration parsing
-                // to recover cleanly and resume at the next statement boundary.
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::No)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        match self.peek_kind() {
+            Some(k) if k.is_recovery_boundary() => true,
+            // Statement-starter keywords cannot serve as an expression RHS.
+            // Treating them as "missing operand" allows declaration parsing
+            // to recover cleanly and resume at the next statement boundary.
+            Some(TokenKind::My)
+            | Some(TokenKind::Our)
+            | Some(TokenKind::State)
+            | Some(TokenKind::Sub)
+            | Some(TokenKind::Package)
+            | Some(TokenKind::Use)
+            | Some(TokenKind::No)
+            | Some(TokenKind::If)
+            | Some(TokenKind::Unless)
+            | Some(TokenKind::Elsif)
+            | Some(TokenKind::Else)
+            | Some(TokenKind::While)
+            | Some(TokenKind::Until)
+            | Some(TokenKind::For)
+            | Some(TokenKind::Foreach)
+            | None => true,
+            _ => false,
+        }
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
@@ -744,7 +704,6 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Semicolon)
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::LeftBrace)
-                | Some(TokenKind::Eof)
                 | Some(TokenKind::My)
                 | Some(TokenKind::Our)
                 | Some(TokenKind::Local)
@@ -760,6 +719,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::Until)
                 | Some(TokenKind::For)
                 | Some(TokenKind::Foreach)
+                | Some(TokenKind::Eof)
                 | None
         )
     }
@@ -767,8 +727,7 @@ impl<'a> Parser<'a> {
     /// Check if current token is a synchronization point for error recovery
     fn is_sync_point(&mut self) -> bool {
         match self.peek_kind() {
-            Some(TokenKind::Semicolon) => true,
-            Some(TokenKind::RightBrace) => true,
+            Some(kind) if matches!(kind, TokenKind::Semicolon | TokenKind::RightBrace) => true,
             Some(TokenKind::My)
             | Some(TokenKind::Our)
             | Some(TokenKind::Local)

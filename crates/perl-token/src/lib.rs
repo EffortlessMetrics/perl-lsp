@@ -399,6 +399,127 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// Return `true` when this token is an assignment operator.
+    #[inline]
+    pub fn is_assignment_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Assign
+                | TokenKind::PlusAssign
+                | TokenKind::MinusAssign
+                | TokenKind::StarAssign
+                | TokenKind::SlashAssign
+                | TokenKind::PercentAssign
+                | TokenKind::DotAssign
+                | TokenKind::AndAssign
+                | TokenKind::OrAssign
+                | TokenKind::XorAssign
+                | TokenKind::PowerAssign
+                | TokenKind::LeftShiftAssign
+                | TokenKind::RightShiftAssign
+                | TokenKind::LogicalAndAssign
+                | TokenKind::LogicalOrAssign
+                | TokenKind::DefinedOrAssign
+        )
+    }
+
+    /// Return `true` when this token is a comparison operator.
+    #[inline]
+    pub fn is_comparison_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::Less
+                | TokenKind::Greater
+                | TokenKind::LessEqual
+                | TokenKind::GreaterEqual
+                | TokenKind::Spaceship
+                | TokenKind::StringCompare
+                | TokenKind::Match
+                | TokenKind::NotMatch
+                | TokenKind::SmartMatch
+        )
+    }
+
+    /// Return `true` when this token is a logical operator.
+    #[inline]
+    pub fn is_logical_operator(self) -> bool {
+        matches!(self, TokenKind::And | TokenKind::Or | TokenKind::DefinedOr | TokenKind::Not)
+    }
+
+    /// Return `true` when this token is a word-form operator (`and`, `or`, `not`, `xor`).
+    #[inline]
+    pub fn is_word_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordNot | TokenKind::WordXor
+        )
+    }
+
+    /// Return `true` when this token is a low-precedence word operator.
+    #[inline]
+    pub fn is_low_precedence_word_operator(self) -> bool {
+        self.is_word_operator()
+    }
+
+    /// Return `true` when this token opens a delimiter pair.
+    #[inline]
+    pub fn is_open_delimiter(self) -> bool {
+        matches!(self, TokenKind::LeftParen | TokenKind::LeftBrace | TokenKind::LeftBracket)
+    }
+
+    /// Return `true` when this token closes a delimiter pair.
+    #[inline]
+    pub fn is_close_delimiter(self) -> bool {
+        matches!(self, TokenKind::RightParen | TokenKind::RightBrace | TokenKind::RightBracket)
+    }
+
+    /// Return the matching open/close delimiter partner, if this token is a delimiter.
+    #[inline]
+    pub fn matching_delimiter(self) -> Option<TokenKind> {
+        match self {
+            TokenKind::LeftParen => Some(TokenKind::RightParen),
+            TokenKind::RightParen => Some(TokenKind::LeftParen),
+            TokenKind::LeftBrace => Some(TokenKind::RightBrace),
+            TokenKind::RightBrace => Some(TokenKind::LeftBrace),
+            TokenKind::LeftBracket => Some(TokenKind::RightBracket),
+            TokenKind::RightBracket => Some(TokenKind::LeftBracket),
+            _ => None,
+        }
+    }
+
+    /// Return `true` when this token is a quote-like literal/operator token.
+    #[inline]
+    pub fn is_quote_like(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Regex
+                | TokenKind::Substitution
+                | TokenKind::Transliteration
+                | TokenKind::QuoteSingle
+                | TokenKind::QuoteDouble
+                | TokenKind::QuoteWords
+                | TokenKind::QuoteCommand
+                | TokenKind::HeredocStart
+        )
+    }
+
+    /// Return `true` when this token is a conservative expression recovery boundary.
+    ///
+    /// These tokens always end or strongly delimit the current expression context.
+    #[inline]
+    pub fn is_recovery_boundary(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Semicolon
+                | TokenKind::RightParen
+                | TokenKind::RightBrace
+                | TokenKind::RightBracket
+                | TokenKind::Eof
+        )
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.
