@@ -2,6 +2,32 @@
 
 use super::*;
 
+fn shared_safe_evaluator() -> &'static SafeEvaluator {
+    static SAFE_EVALUATOR: OnceLock<SafeEvaluator> = OnceLock::new();
+    SAFE_EVALUATOR.get_or_init(SafeEvaluator::new)
+}
+
+fn evaluate_error_from_lines(lines: &[String]) -> Option<String> {
+    lines.iter().rev().find_map(|line| {
+        let text = DebugAdapter::normalize_debugger_output_line(line);
+        let trimmed = text.trim();
+        if trimmed.is_empty() || prompt_re().is_some_and(|re| re.is_match(trimmed)) {
+            return None;
+        }
+
+        if error_re().is_some_and(|re| re.is_match(trimmed))
+            || trimmed.starts_with("Undefined subroutine")
+            || trimmed.starts_with("Can't")
+            || trimmed.starts_with("syntax error")
+            || trimmed.contains("Compilation failed")
+        {
+            return Some(trimmed.to_string());
+        }
+
+        None
+    })
+}
+
 impl DebugAdapter {
     /// Handle evaluate request with policy validation and timeout enforcement.
     ///
@@ -73,8 +99,7 @@ impl DebugAdapter {
 
                 // Re-run through microcrate validator to keep evaluation policy aligned
                 // with shared DAP security logic.
-                let evaluator = SafeEvaluator::new();
-                if let Err(error) = evaluator.validate(expression) {
+                if let Err(error) = shared_safe_evaluator().validate(expression) {
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -149,12 +174,25 @@ impl DebugAdapter {
             self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
         });
 
-        let parsed = framed_lines
-            .as_ref()
-            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-            .or_else(|| self.parse_evaluate_result_from_output(expression));
+        let parsed = if let Some(lines) = framed_lines.as_ref() {
+            Self::parse_evaluate_result_from_lines(lines, expression, false)
+        } else {
+            self.parse_evaluate_result_from_output(expression)
+        };
 
         let Some((result, result_type)) = parsed else {
+            if let Some(lines) = framed_lines.as_ref()
+                && let Some(message) = evaluate_error_from_lines(lines)
+            {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some(format!("evaluate failed: {message}")),
+                };
+            }
             return DapMessage::Response {
                 seq,
                 request_seq,
@@ -458,5 +496,28 @@ impl DebugAdapter {
             body: serde_json::to_value(&body).ok(),
             message: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evaluate_error_from_lines_detects_runtime_failure() {
+        let lines = vec![
+            "DB<3>".to_string(),
+            "Undefined subroutine &main::missing called at script.pl line 7.".to_string(),
+            "DB<4>".to_string(),
+        ];
+        let err = evaluate_error_from_lines(&lines);
+        assert!(err.is_some());
+        assert!(err.unwrap_or_default().contains("Undefined subroutine"));
+    }
+
+    #[test]
+    fn evaluate_error_from_lines_ignores_regular_values() {
+        let lines = vec!["$x = 42".to_string()];
+        assert!(evaluate_error_from_lines(&lines).is_none());
     }
 }

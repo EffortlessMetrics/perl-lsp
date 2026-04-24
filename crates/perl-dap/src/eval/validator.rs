@@ -5,6 +5,19 @@
 //! the interpreter.
 
 use super::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
+use once_cell::sync::Lazy;
+use regex::Regex;
+
+static ASSIGNMENT_OPS_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
+    let mut ops: Vec<String> = ASSIGNMENT_OPERATORS
+        .iter()
+        .filter(|op| **op != "=")
+        .map(|op| regex::escape(op))
+        .collect();
+    ops.sort_by_key(|op| std::cmp::Reverse(op.len()));
+    let pattern = format!("({}|=)", ops.join("|"));
+    Regex::new(&pattern)
+});
 
 /// Error type for unsafe expression detection
 #[derive(Debug, Clone, thiserror::Error)]
@@ -83,12 +96,7 @@ impl SafeEvaluator {
             return Err(ValidationError::Backticks);
         }
 
-        // Check for assignment operators
-        for op in ASSIGNMENT_OPERATORS {
-            if expression.contains(op) {
-                return Err(ValidationError::AssignmentOperator(op.to_string()));
-            }
-        }
+        self.check_assignment_operators(expression)?;
 
         // Check for increment/decrement operators
         if expression.contains("++") || expression.contains("--") {
@@ -100,6 +108,32 @@ impl SafeEvaluator {
 
         // Check for regex mutation operators
         self.check_regex_mutation(expression)?;
+
+        Ok(())
+    }
+
+    /// Check for assignment operators while excluding comparison/match operators.
+    fn check_assignment_operators(&self, expression: &str) -> ValidationResult {
+        let Some(re) = ASSIGNMENT_OPS_RE.as_ref().ok() else {
+            // Keep permissive behavior if regex compilation fails.
+            return Ok(());
+        };
+
+        for mat in re.find_iter(expression) {
+            let op = mat.as_str();
+            let start = mat.start();
+            let end = mat.end();
+
+            if is_in_single_quotes(expression, start) {
+                continue;
+            }
+
+            if op == "=" && is_non_assignment_equals(expression, start, end) {
+                continue;
+            }
+
+            return Err(ValidationError::AssignmentOperator(op.to_string()));
+        }
 
         Ok(())
     }
@@ -298,6 +332,16 @@ fn is_escape_sequence(s: &str, match_start: usize) -> bool {
         return false;
     }
     s.as_bytes()[match_start - 1] == b'\\'
+}
+
+fn is_non_assignment_equals(s: &str, start: usize, end: usize) -> bool {
+    let bytes = s.as_bytes();
+    let prev = (start > 0).then(|| bytes[start - 1]);
+    let next = (end < bytes.len()).then(|| bytes[end]);
+
+    // Comparison/match operators that include '=' are not assignment.
+    matches!(prev, Some(b'=' | b'!' | b'<' | b'>' | b'~'))
+        || matches!(next, Some(b'=' | b'~' | b'>'))
 }
 
 #[cfg(test)]

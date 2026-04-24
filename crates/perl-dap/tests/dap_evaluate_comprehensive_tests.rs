@@ -205,14 +205,15 @@ fn test_evaluate_string_expressions_are_safe() -> TestResult {
 #[test]
 fn test_evaluate_comparison_expressions_are_safe() -> TestResult {
     let mut adapter = new_adapter();
-    // Note: the SafeEvaluator microcrate (perl-dap-eval) does a naive
-    // `contains("=")` check for assignment operators, which means expressions
-    // containing `==`, `!=`, `<=`, `>=` are also blocked even though they are
-    // read-only comparisons.  The evaluate pipeline runs BOTH validators, so
-    // we only test expressions that pass both.
+    // Comparison operators are read-only lookups and should remain admissible
+    // in safe mode.
     for expr in [
         "$a < $b",
         "$a > $b",
+        "$a == $b",
+        "$a != $b",
+        "$a <= $b",
+        "$a >= $b",
         "$a eq $b",
         "$a ne $b",
         "$a lt $b",
@@ -232,28 +233,17 @@ fn test_evaluate_comparison_expressions_are_safe() -> TestResult {
     Ok(())
 }
 
-/// Test that the SafeEvaluator microcrate blocks equality operators that contain `=`.
-/// This is a known limitation of the perl-dap-eval crate (naive substring check).
-/// Filed separately for follow-up.
+/// Equality operators should not be misclassified as assignment in evaluate.
 #[test]
-fn test_evaluate_equality_operators_blocked_by_microcrate_validator() -> TestResult {
+fn test_evaluate_equality_operators_are_safe() -> TestResult {
     let mut adapter = new_adapter();
-    // These are read-only comparisons, but the microcrate blocks them due to
-    // substring `=` match.  This test documents the current behavior.
     for expr in ["$a == $b", "$a != $b", "$a <= $b", "$a >= $b"] {
         let response = adapter.handle_request(
             1,
             "evaluate",
             Some(json!({ "expression": expr, "allowSideEffects": false })),
         );
-        // Currently blocked — documents known microcrate limitation.
-        match response {
-            DapMessage::Response { success, command, .. } => {
-                assert_eq!(command, "evaluate");
-                assert!(!success, "expected microcrate to block {expr:?}");
-            }
-            other => return Err(format!("expected Response, got {other:?}").into()),
-        }
+        assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")?;
     }
     Ok(())
 }

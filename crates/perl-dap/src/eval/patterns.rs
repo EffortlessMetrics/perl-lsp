@@ -123,7 +123,7 @@ pub const DANGEROUS_OPERATIONS: &[&str] = &[
 /// Assignment operators that indicate mutation
 pub const ASSIGNMENT_OPERATORS: &[&str] = &[
     "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=", "||=",
-    "//=",
+    "//=", "x=",
 ];
 
 /// Compiled regex for dangerous operations
