@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 impl LspServer {
     /// Handle initialize request
@@ -206,9 +206,16 @@ impl LspServer {
             }
 
             // Initialize workspace folders
-            if let Some(workspace_folders) =
-                params.get("workspaceFolders").and_then(|f| f.as_array())
-            {
+            let workspace_folders = params
+                .get("workspaceFolders")
+                .or_else(|| {
+                    params
+                        .get("initializationOptions")
+                        .and_then(|opts| opts.get("workspaceFolders"))
+                })
+                .and_then(|f| f.as_array());
+
+            if let Some(workspace_folders) = workspace_folders {
                 let uris = extract_workspace_folder_uris(workspace_folders);
                 if let Some(first_uri) = uris.first() {
                     self.set_root_uri(first_uri);
@@ -428,8 +435,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
+    use crate::protocol::capabilities::BuildFlags;
     use serde_json::json;
 
     #[test]
@@ -510,6 +517,39 @@ mod tests {
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
             "root path should come from first workspace folder"
         );
+    }
+
+    #[test]
+    fn initialize_with_init_options_workspace_folders_sets_root_path_and_resolves_modules()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workspace = tempfile::tempdir()?;
+        let lib_dir = workspace.path().join("lib").join("Acme");
+        std::fs::create_dir_all(&lib_dir)?;
+        std::fs::write(lib_dir.join("Thing.pm"), "package Acme::Thing;\n1;\n")?;
+        let workspace_uri = url::Url::from_directory_path(workspace.path())
+            .map_err(|_| "failed to convert workspace path to file URI")?
+            .to_string();
+
+        let server = LspServer::new();
+        let params = json!({
+            "initializationOptions": {
+                "workspaceFolders": [
+                    { "uri": workspace_uri, "name": "workspace" }
+                ]
+            },
+            "capabilities": {}
+        });
+
+        let result = server.handle_initialize(Some(params));
+        assert!(result.is_ok(), "initialize should succeed");
+
+        let expected_root = workspace.path().to_path_buf();
+        let root_path = server.root_path.lock().clone();
+        assert_eq!(root_path, Some(expected_root.clone()));
+
+        let module_path = server.resolve_module_path("Acme::Thing", None);
+        assert_eq!(module_path, Some(expected_root.join("lib").join("Acme").join("Thing.pm")));
+        Ok(())
     }
 
     #[test]
