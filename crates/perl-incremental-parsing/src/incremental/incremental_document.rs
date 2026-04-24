@@ -1200,20 +1200,65 @@ mod tests {
 
     #[test]
     fn test_batch_edits_reuse_shifted_nodes() -> ParseResult<()> {
-        let source = r#"
-            my $x = 1;
-            my $y = $x + 1;
-        "#;
+        // Regression test: a batch insert at byte 0 shifts all cached node positions.
+        // After the fix, find_reusable_for_ranges computes cumulative_shift_before and
+        // calls adjust_node_position so nodes splice into the fresh parse correctly.
+        //
+        // NOTE: `nodes_reused > 0` alone is insufficient — on master that metric is
+        // incremented in find_reusable_for_ranges even when the splice later silently
+        // fails due to stale positions.  We additionally verify the root end-position
+        // matches a full re-parse of the new source.
+        let source = "my $x = 1;\nmy $y = $x + 1;";
+        let header = "# inserted header\n";
+        let new_source = format!("{header}{source}");
+
         let mut doc = IncrementalDocument::new(source.to_string())?;
 
         let mut edits = IncrementalEditSet::new();
-        edits.add(IncrementalEdit::new(0, 0, "# inserted header\n".to_string()));
-
+        edits.add(IncrementalEdit::new(0, 0, header.to_string()));
         doc.apply_edits(&edits)?;
 
+        // The root node produced by apply_edits must span the full new source.
+        let full_root = Parser::new(&new_source).parse()?;
+        assert_eq!(
+            doc.root.location.end,
+            full_root.location.end,
+            "incremental root end ({}) must match full-parse root end ({})",
+            doc.root.location.end,
+            full_root.location.end,
+        );
         assert!(
             doc.metrics.nodes_reused > 0,
             "Batch edits should reuse nodes even when edit shifts all positions"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_two_insertions_cumulative_shift() -> ParseResult<()> {
+        // Two insertions at different positions exercise the cumulative_shift_before
+        // summation: nodes after both insertions must be shifted by the total delta.
+        let source = "my $a = 1;\nmy $b = 2;\nmy $c = 3;";
+        let insert1 = "# A\n"; // 4 bytes at position 0
+        let insert2 = "# C\n"; // 4 bytes before "my $c"
+        let pos2 = source.find("my $c").expect("test source must contain 'my $c'");
+        let new_source = format!("{insert1}{}{insert2}{}", &source[..pos2], &source[pos2..]);
+
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+        let mut edits = IncrementalEditSet::new();
+        // Edits in ascending order; apply_edits re-sorts them descending internally.
+        edits.add(IncrementalEdit::new(0, 0, insert1.to_string()));
+        edits.add(IncrementalEdit::new(pos2, pos2, insert2.to_string()));
+        doc.apply_edits(&edits)?;
+
+        let full_root = Parser::new(&new_source).parse()?;
+        assert_eq!(
+            doc.root.location.end,
+            full_root.location.end,
+            "root end after two insertions: incremental={}, full-parse={}",
+            doc.root.location.end,
+            full_root.location.end,
         );
 
         Ok(())
