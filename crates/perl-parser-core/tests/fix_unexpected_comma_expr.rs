@@ -293,6 +293,25 @@ fn test_hash_slice_at_sigil() {
 }
 
 #[test]
+fn test_hash_slice_with_map_and_values() {
+    // Regression: App::Cpan pattern that previously emitted unexpected_comma_expr.
+    let source = r#"@ops_seen{ map split(/ /), values %ops } = ();"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_percent_hash_slice_without_arrow() {
+    let source = r#"%seen{$key1, $key2};"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_arrow_hash_deref_still_parses() {
+    let source = r#"$ref->{ $expr };"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_array_slice() {
     let source = r#"my @selected = @array[0, 2, 4];"#;
     assert_clean_parse(source);
