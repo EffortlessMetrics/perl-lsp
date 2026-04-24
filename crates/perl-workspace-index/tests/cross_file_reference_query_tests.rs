@@ -5,6 +5,70 @@ fn file_url(path: &str) -> Result<Url, Box<dyn std::error::Error>> {
     Ok(Url::parse(&format!("file://{}", path))?)
 }
 
+// --- edge cases added by deep-review ---
+
+#[test]
+fn query_symbol_references_returns_none_on_empty_index() {
+    let index = WorkspaceIndex::new();
+    assert!(index.query_symbol_references("anything").is_none());
+    assert!(index.query_symbol_references("A::B::C").is_none());
+    assert!(index.query_symbol_references("").is_none());
+}
+
+#[test]
+fn query_symbol_references_definition_always_in_references(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // The spec says references includes the definition site even when there are no callers.
+    let index = WorkspaceIndex::new();
+    index.index_file(
+        file_url("/workspace/lib/Standalone.pm")?,
+        "package Standalone;\nsub lone_wolf { 1 }\n".to_string(),
+    )?;
+
+    let query = index
+        .query_symbol_references("Standalone::lone_wolf")
+        .ok_or("query should resolve")?;
+
+    assert!(
+        query.references.iter().any(|loc| loc.uri == query.definition.uri),
+        "definition site must be present in references vec"
+    );
+    assert_eq!(query.definition.uri, "file:///workspace/lib/Standalone.pm");
+    Ok(())
+}
+
+#[test]
+fn query_symbol_references_is_stable_after_reindex() -> Result<(), Box<dyn std::error::Error>> {
+    // Idempotency: re-indexing a file with identical content must not change results.
+    let index = WorkspaceIndex::new();
+    let def_uri = file_url("/workspace/lib/Svc.pm")?;
+    let caller_uri = file_url("/workspace/lib/Cli.pm")?;
+    let src = "package Svc;\nsub run { 1 }\n".to_string();
+
+    index.index_file(def_uri.clone(), src.clone())?;
+    index.index_file(caller_uri, "package Cli;\nSvc::run();\n".to_string())?;
+
+    let first = index.query_symbol_references("Svc::run").ok_or("first query must resolve")?;
+
+    // Re-index the definition file with identical content — must be idempotent.
+    index.index_file(def_uri, src)?;
+
+    let second = index.query_symbol_references("Svc::run").ok_or("second query must resolve")?;
+
+    assert_eq!(
+        first.symbol.stable_key, second.symbol.stable_key,
+        "stable_key must not change on reindex with same content"
+    );
+    assert_eq!(
+        first.references.len(),
+        second.references.len(),
+        "reference count must be stable after reindex with same content"
+    );
+    Ok(())
+}
+
+// --- original builder tests ---
+
 #[test]
 fn query_symbol_references_returns_cross_file_definition_and_references(
 ) -> Result<(), Box<dyn std::error::Error>> {

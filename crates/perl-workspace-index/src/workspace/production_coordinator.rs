@@ -440,11 +440,21 @@ impl ProductionIndexCoordinator {
     }
 
     /// Resolve symbol identity + definition + references for cross-file planning.
+    ///
+    /// Returns `None` when no definition can be resolved for `symbol_name`.
+    /// SLO-tracked under `FindReferences` (same budget as find_references, same latency class).
     pub fn query_symbol_references(
         &self,
         symbol_name: &str,
     ) -> Option<super::workspace_index::CrossFileReferenceQueryResult> {
-        self.index.query_symbol_references(symbol_name)
+        let start = self.slo_tracker.start_operation(OperationType::FindReferences);
+        let result = self.index.query_symbol_references(symbol_name);
+        self.slo_tracker.record_operation_type(
+            OperationType::FindReferences,
+            start,
+            OperationResult::Success,
+        );
+        result
     }
 
     /// Invalidate the index.
