@@ -144,6 +144,13 @@ fn test_comma_as_sequence_operator() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_shift_then_return_sequence_operator() {
+    // Seen in File::Spec::Win32 (`shift, return ...`)
+    let source = r#"shift, return _canon_cat("/", @_);"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]
@@ -273,6 +280,12 @@ fn test_map_with_comma_expr() {
 #[test]
 fn test_sort_with_custom_comparison() {
     let source = r#"my @sorted = sort { $a->{name} cmp $b->{name} } @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_subname_list_form() {
+    let source = r#"my @sorted = sort by_name @items;"#;
     assert_clean_parse(source);
 }
 
