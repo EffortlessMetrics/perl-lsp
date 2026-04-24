@@ -53,6 +53,27 @@ pub enum CheckpointContext {
 }
 
 impl LexerCheckpoint {
+    fn reset_to_position(&mut self, position: usize) {
+        self.position = position;
+        self.mode = LexerMode::ExpectTerm;
+        self.delimiter_stack.clear();
+        self.in_prototype = false;
+        self.prototype_depth = 0;
+        self.after_sub = false;
+        self.after_arrow = false;
+        self.hash_brace_depth = 0;
+        self.after_var_subscript = false;
+        self.paren_depth = 0;
+        self.current_pos = Position::new(position, 1, 1);
+        self.context = CheckpointContext::Normal;
+    }
+
+    fn invalidate_line_column(&mut self) {
+        // We only receive byte-length deltas here, not replacement text,
+        // so line/column cannot be updated safely. Keep byte in sync.
+        self.current_pos = Position::new(self.position, 1, 1);
+    }
+
     /// Create a new checkpoint with default values
     pub fn new() -> Self {
         Self {
@@ -100,28 +121,17 @@ impl LexerCheckpoint {
 
     /// Apply an edit to this checkpoint
     pub fn apply_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
+        let edit_end = start.saturating_add(old_len);
         if self.position > start {
-            if self.position >= start + old_len {
+            if self.position >= edit_end {
                 // Checkpoint is after the edit
-                self.position = self.position - old_len + new_len;
+                self.position = self.position.saturating_sub(old_len).saturating_add(new_len);
+                self.invalidate_line_column();
             } else {
                 // Checkpoint is inside the edit - invalidate
-                self.position = start;
-                self.mode = LexerMode::ExpectTerm;
-                self.delimiter_stack.clear();
-                self.in_prototype = false;
-                self.prototype_depth = 0;
-                self.after_sub = false;
-                self.after_arrow = false;
-                self.hash_brace_depth = 0;
-                self.after_var_subscript = false;
-                self.paren_depth = 0;
-                self.context = CheckpointContext::Normal;
+                self.reset_to_position(start);
             }
         }
-
-        // Update position tracking
-        // In a real implementation, we'd update line/column based on the edit
     }
 
     /// Validate that this checkpoint is valid for the given input
@@ -307,9 +317,13 @@ impl CheckpointCache {
             *pos = checkpoint.position;
         }
 
-        // Remove invalid checkpoints
-        self.checkpoints
-            .retain(|(_, cp)| !matches!(cp.context, CheckpointContext::Normal) || cp.position > 0);
+        // Rebuild ordering/dedup invariants after edits.
+        self.checkpoints.sort_by_key(|(pos, _)| *pos);
+        self.checkpoints.dedup_by_key(|(pos, _)| *pos);
+
+        if self.checkpoints.len() > self.max_checkpoints {
+            self.checkpoints.truncate(self.max_checkpoints);
+        }
     }
 }
 
@@ -345,6 +359,9 @@ mod tests {
         // Edit before checkpoint
         cp.apply_edit(10, 5, 10);
         assert_eq!(cp.position, 55); // Shifted by +5
+        assert_eq!(cp.current_pos.byte, 55);
+        assert_eq!(cp.current_pos.line, 1);
+        assert_eq!(cp.current_pos.column, 1);
 
         // Edit after checkpoint
         let mut cp2 = LexerCheckpoint::at_position(50);
@@ -355,6 +372,41 @@ mod tests {
         let mut cp3 = LexerCheckpoint::at_position(50);
         cp3.apply_edit(45, 10, 5);
         assert_eq!(cp3.position, 45); // Reset to edit start
+        assert_eq!(cp3.current_pos, Position::new(45, 1, 1));
+    }
+
+    #[test]
+    fn test_checkpoint_edit_spanning_checkpoint_resets_context() {
+        let mut cp = LexerCheckpoint::at_position(50);
+        cp.mode = LexerMode::ExpectOperator;
+        cp.delimiter_stack.push('{');
+        cp.context = CheckpointContext::Regex { delimiter: '/', flags_position: Some(10) };
+
+        cp.apply_edit(40, 20, 4);
+
+        assert_eq!(cp.position, 40);
+        assert_eq!(cp.mode, LexerMode::ExpectTerm);
+        assert!(cp.delimiter_stack.is_empty());
+        assert_eq!(cp.context, CheckpointContext::Normal);
+        assert_eq!(cp.current_pos, Position::new(40, 1, 1));
+    }
+
+    #[test]
+    fn test_checkpoint_edit_handles_overflowing_ranges_without_panic() {
+        let mut cp = LexerCheckpoint::at_position(usize::MAX - 5);
+        cp.apply_edit(usize::MAX - 2, usize::MAX, 10);
+        assert!(cp.position <= usize::MAX);
+    }
+
+    #[test]
+    fn test_checkpoint_line_column_invalidation_after_edit_before_checkpoint() {
+        let mut cp = LexerCheckpoint::at_position(100);
+        cp.current_pos = Position::new(100, 20, 30);
+
+        cp.apply_edit(5, 1, 3);
+
+        assert_eq!(cp.position, 102);
+        assert_eq!(cp.current_pos, Position::new(102, 1, 1));
     }
 
     #[test]
@@ -440,5 +492,19 @@ mod tests {
         );
         assert!(cache.find_before(100).is_none());
         assert!(cache.find_after(0).is_none());
+    }
+
+    #[test]
+    fn test_checkpoint_cache_apply_edit_preserves_sorting_and_uniqueness() {
+        let mut cache = CheckpointCache::new(10);
+        cache.add(LexerCheckpoint::at_position(10));
+        cache.add(LexerCheckpoint::at_position(15));
+        cache.add(LexerCheckpoint::at_position(25));
+
+        // 15 is inside edit -> reset to 10, 25 is shifted backward to 20
+        cache.apply_edit(10, 5, 0);
+
+        let positions: Vec<usize> = cache.checkpoints.iter().map(|(pos, _)| *pos).collect();
+        assert_eq!(positions, vec![10, 20]);
     }
 }
