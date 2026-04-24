@@ -383,6 +383,49 @@ mod tests {
     }
 
     #[test]
+    fn keyword_inventory_counts_are_stable() {
+        // These exact counts intentionally lock down curated inventories so
+        // accidental additions/removals fail loudly.
+        assert_eq!(KEYWORDS.len(), 127, "KEYWORDS count changed");
+        assert_eq!(LSP_COMPLETION_KEYWORDS.len(), 68, "LSP_COMPLETION_KEYWORDS count changed");
+        assert_eq!(DAP_COMPLETION_KEYWORDS.len(), 72, "DAP_COMPLETION_KEYWORDS count changed");
+        assert_eq!(
+            LSP_RUNTIME_COMPLETION_KEYWORDS.len(),
+            40,
+            "LSP_RUNTIME_COMPLETION_KEYWORDS count changed"
+        );
+        assert_eq!(RENAME_KEYWORDS.len(), 25, "RENAME_KEYWORDS count changed");
+        assert_eq!(PARSER_LSP_KEYWORDS.len(), 32, "PARSER_LSP_KEYWORDS count changed");
+        assert_eq!(LEXER_KEYWORDS.len(), 67, "LEXER_KEYWORDS count changed");
+    }
+
+    #[test]
+    fn keyword_inventory_relationships_are_explicit() {
+        for &item in LSP_COMPLETION_KEYWORDS {
+            assert!(is_keyword(item), "LSP completion keyword {item} not in KEYWORDS");
+        }
+        for &item in DAP_COMPLETION_KEYWORDS {
+            assert!(is_keyword(item), "DAP completion keyword {item} not in KEYWORDS");
+        }
+        for &item in LSP_RUNTIME_COMPLETION_KEYWORDS {
+            assert!(is_keyword(item), "runtime completion keyword {item} not in KEYWORDS");
+        }
+        for &item in RENAME_KEYWORDS {
+            assert!(is_keyword(item), "rename keyword {item} not in KEYWORDS");
+            assert!(
+                is_lsp_completion_keyword(item),
+                "rename keyword {item} not in LSP_COMPLETION_KEYWORDS"
+            );
+        }
+        for &item in PARSER_LSP_KEYWORDS {
+            assert!(is_keyword(item), "parser LSP keyword {item} not in KEYWORDS");
+        }
+        for &item in LEXER_KEYWORDS {
+            assert!(is_keyword(item), "lexer keyword {item} not in KEYWORDS");
+        }
+    }
+
+    #[test]
     fn known_keywords_are_present() {
         assert!(is_keyword("my"));
         assert!(is_keyword("foreach"));
