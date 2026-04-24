@@ -425,15 +425,12 @@ impl TypeHierarchyProvider {
         }
 
         // Build the lists to merge: linearization of each parent + the parents list itself
-        let mut parent_mros: Vec<Vec<String>> = parents
-            .iter()
-            .map(|p| {
-                let mut sub_result = Vec::new();
-                let mut sub_visited = BTreeSet::new();
-                self.c3_linearize(p, index, &mut sub_result, &mut sub_visited);
-                sub_result
-            })
-            .collect();
+        let mut parent_mros: Vec<Vec<String>> = Vec::with_capacity(parents.len());
+        for parent in &parents {
+            let mut sub_result = Vec::new();
+            self.c3_linearize(parent, index, &mut sub_result, visited);
+            parent_mros.push(sub_result);
+        }
         // Append the direct parents list as the last list to merge
         parent_mros.push(parents.clone());
 
@@ -993,5 +990,98 @@ use parent 'Outer';
         let subtypes = provider.find_subtypes(&ast, &outer_item);
         // Both Inner and Other inherit from Outer
         assert_eq!(subtypes.len(), 2, "Should find both Inner and Other as subtypes");
+    }
+
+    #[test]
+    fn test_c3_mro_handles_inheritance_cycles() {
+        let code = r#"package A;
+our @ISA = ('B');
+
+package B;
+our @ISA = ('A');
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let mro = provider.c3_mro(&ast, "A");
+        assert_eq!(mro, vec!["A".to_string(), "B".to_string()]);
+    }
+
+    /// Querying from the other side of a 2-cycle must also terminate and not panic.
+    #[test]
+    fn test_c3_mro_cycle_from_other_end() {
+        let code = r#"package A;
+our @ISA = ('B');
+
+package B;
+our @ISA = ('A');
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let mro = provider.c3_mro(&ast, "B");
+        // B sees its own cycle too — result must be non-empty and start with B.
+        assert!(!mro.is_empty(), "c3_mro from B side of cycle must not be empty");
+        assert_eq!(mro[0], "B", "c3_mro must start with the queried package");
+    }
+
+    /// 3-class chain cycle A→B→C→A must terminate without stack overflow.
+    #[test]
+    fn test_c3_mro_handles_three_way_cycle() {
+        let code = r#"package A;
+our @ISA = ('B');
+
+package B;
+our @ISA = ('C');
+
+package C;
+our @ISA = ('A');
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let mro = provider.c3_mro(&ast, "A");
+        // Must not panic, must start with A, must contain all three packages.
+        assert_eq!(mro[0], "A", "MRO must start with queried package");
+        let mro_set: std::collections::BTreeSet<&str> =
+            mro.iter().map(String::as_str).collect();
+        assert!(mro_set.contains("B"), "B must appear in MRO of 3-cycle");
+        assert!(mro_set.contains("C"), "C must appear in MRO of 3-cycle");
+    }
+
+    /// Diamond inheritance A→(B,C)→D: D must appear exactly once in the MRO.
+    #[test]
+    fn test_c3_mro_diamond_inheritance() {
+        let code = r#"package D;
+
+package B;
+our @ISA = ('D');
+
+package C;
+our @ISA = ('D');
+
+package A;
+our @ISA = ('B', 'C');
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = TypeHierarchyProvider::new();
+
+        let mro = provider.c3_mro(&ast, "A");
+        assert_eq!(mro[0], "A", "MRO must start with A");
+        // C3 linearization of diamond: A, B, C, D
+        assert_eq!(
+            mro,
+            vec![
+                "A".to_string(),
+                "B".to_string(),
+                "C".to_string(),
+                "D".to_string(),
+            ],
+            "Diamond MRO must be A, B, C, D with D appearing exactly once"
+        );
     }
 }
