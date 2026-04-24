@@ -274,7 +274,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -307,7 +311,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Add a new segment to the cache.
@@ -347,6 +355,14 @@ pub struct IncrementalStats {
     pub right_checkpoint_distance: usize,
     /// Total bytes relexed during incremental parsing
     pub bytes_relexed: usize,
+    /// Bytes relexed during the most recent incremental parse
+    pub last_bytes_relexed: usize,
+    /// Relex window start used by the most recent incremental parse
+    pub last_relex_start: usize,
+    /// Relex window end used by the most recent incremental parse
+    pub last_relex_end: usize,
+    /// Number of times the right relex bound was tightened without weakening correctness
+    pub tightened_relex_windows: usize,
     /// Count of segments reused before the edit (cache efficiency metric)
     pub segments_reused_before: usize,
     /// Count of segments reused after the edit (cache efficiency metric)
@@ -370,6 +386,9 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
         writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
         writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
+        writeln!(f, "  Last bytes relexed: {}", self.last_bytes_relexed)?;
+        writeln!(f, "  Last relex window: [{}..{})", self.last_relex_start, self.last_relex_end)?;
+        writeln!(f, "  Tightened relex windows: {}", self.tightened_relex_windows)?;
         writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
@@ -584,19 +603,40 @@ impl CheckpointedIncrementalParser {
         right_checkpoint: Option<LexerCheckpoint>,
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
-        // Calculate relex bounds using checkpoint positions
-        let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
+        // Calculate relex bounds using checkpoint positions.
+        // Keep the fallback conservative: never move the left bound forward when
+        // we cannot prove prefix correctness.
+        let mut relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
+        let edit_end = edit.start + edit.new_text.len();
+        let mut relex_end =
             right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
 
-        // Track checkpoint distances for statistics
-        let edit_end = edit.start + edit.new_text.len();
-        if edit.start >= relex_start {
-            self.stats.left_checkpoint_distance = edit.start - relex_start;
+        // Normalize bounds to the current source and ensure the edited span is
+        // always fully covered even if checkpoint positions are stale.
+        relex_start = relex_start.min(self.source.len());
+        relex_end = relex_end.min(self.source.len()).max(edit_end).max(relex_start);
+
+        // Tighten an obviously-too-wide right bound when we can prove suffix
+        // correctness: byte-stable edit and a cached suffix that starts exactly
+        // at the edited boundary.
+        let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
+        if byte_shift == 0 {
+            if let Some(cached_after_edit_end) = self.token_cache.get_tokens_from(edit_end) {
+                if cached_after_edit_end.first().is_some_and(|tok| tok.start == edit_end)
+                    && edit_end < relex_end
+                {
+                    relex_end = edit_end;
+                    self.stats.tightened_relex_windows += 1;
+                }
+            }
         }
-        if relex_end >= edit_end {
-            self.stats.right_checkpoint_distance = relex_end - edit_end;
-        }
+
+        self.stats.last_relex_start = relex_start;
+        self.stats.last_relex_end = relex_end;
+
+        // Track checkpoint distances for statistics.
+        self.stats.left_checkpoint_distance = edit.start.saturating_sub(relex_start);
+        self.stats.right_checkpoint_distance = relex_end.saturating_sub(edit_end);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -631,7 +671,7 @@ impl CheckpointedIncrementalParser {
         }
 
         let mut raw_relexed: Vec<perl_lexer::Token> = Vec::new();
-        let mut bytes_relexed_this_phase = 0usize;
+        let mut bytes_relexed_this_parse = 0usize;
 
         loop {
             match lexer.next_token() {
@@ -641,7 +681,7 @@ impl CheckpointedIncrementalParser {
                     let token_start = token.start;
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
-                    bytes_relexed_this_phase += token_end - token_start;
+                    bytes_relexed_this_parse += token_end - token_start;
                     if token_end >= relex_end {
                         break;
                     }
@@ -649,14 +689,11 @@ impl CheckpointedIncrementalParser {
                 None => break,
             }
         }
-        self.stats.bytes_relexed += bytes_relexed_this_phase;
 
         let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
         parser_tokens.extend(converted);
 
         // --- Phase 3: reuse cached tokens after the right checkpoint ---
-        let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
-
         let segments_after = self.token_cache.get_segments_after(relex_end);
         self.stats.segments_reused_after += segments_after.len();
 
@@ -685,11 +722,16 @@ impl CheckpointedIncrementalParser {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                let token_len = token.end.saturating_sub(token.start);
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
+                bytes_relexed_this_parse += token_len;
             }
             parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
+
+        self.stats.last_bytes_relexed = bytes_relexed_this_parse;
+        self.stats.bytes_relexed += bytes_relexed_this_parse;
 
         // Update token cache with the final merged token list.
         if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
@@ -834,6 +876,42 @@ mod tests {
             format!("{full_tree:?}"),
             "incremental tree diverged from fresh full parse"
         );
+    }
+
+    #[test]
+    fn test_relex_bytes_include_tail_fallback_bytes() {
+        let source = "my $value = 1;\n".repeat(80);
+
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 125, end: 126, new_text: "999".to_string() };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(stats.full_tail_fallbacks > 0, "expected conservative full-tail fallback");
+        assert!(stats.last_bytes_relexed > 0, "expected relex bytes to be tracked per parse");
+        assert!(
+            stats.bytes_relexed >= stats.last_bytes_relexed,
+            "total bytes should include latest parse bytes"
+        );
+    }
+
+    #[test]
+    fn test_relex_window_stats_cover_edited_span() {
+        let source = "my $v = 10;\nmy $w = 11;\n".repeat(10);
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse(source));
+
+        let edit = SimpleEdit { start: 9, end: 11, new_text: "42".to_string() };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        let edit_end = edit.start + edit.new_text.len();
+        assert!(stats.last_relex_start <= edit.start, "window must include edit start");
+        assert!(stats.last_relex_end >= edit_end, "window must include edit end");
+        assert_eq!(stats.left_checkpoint_distance, edit.start - stats.last_relex_start);
+        assert_eq!(stats.right_checkpoint_distance, stats.last_relex_end - edit_end);
     }
 
     #[test]
