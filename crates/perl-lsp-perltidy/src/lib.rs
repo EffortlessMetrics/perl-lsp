@@ -255,6 +255,11 @@ impl PerlTidyFormatter {
         start_line: u32,
         end_line: u32,
     ) -> Result<String, String> {
+        if start_line > end_line {
+            return Err("Invalid line range: start line must be less than or equal to end line"
+                .to_string());
+        }
+
         let lines: Vec<&str> = code.lines().collect();
 
         if start_line as usize >= lines.len() || end_line as usize >= lines.len() {
@@ -286,15 +291,29 @@ impl PerlTidyFormatter {
         let orig_lines: Vec<&str> = code.lines().collect();
         let fmt_lines: Vec<&str> = formatted.lines().collect();
         let mut suggestions = Vec::new();
+        let max_lines = orig_lines.len().max(fmt_lines.len());
 
-        for (i, (orig, fmt)) in orig_lines.iter().zip(fmt_lines.iter()).enumerate() {
-            if orig != fmt {
-                suggestions.push(FormatSuggestion {
+        for i in 0..max_lines {
+            match (orig_lines.get(i), fmt_lines.get(i)) {
+                (Some(orig), Some(fmt)) if orig != fmt => suggestions.push(FormatSuggestion {
                     line: i as u32,
                     original: (*orig).to_string(),
                     formatted: (*fmt).to_string(),
                     description: "Line formatting change".to_string(),
-                });
+                }),
+                (Some(orig), None) => suggestions.push(FormatSuggestion {
+                    line: i as u32,
+                    original: (*orig).to_string(),
+                    formatted: String::new(),
+                    description: "Line removed by formatting".to_string(),
+                }),
+                (None, Some(fmt)) => suggestions.push(FormatSuggestion {
+                    line: i as u32,
+                    original: String::new(),
+                    formatted: (*fmt).to_string(),
+                    description: "Line added by formatting".to_string(),
+                }),
+                _ => {}
             }
         }
 
@@ -340,9 +359,8 @@ impl BuiltInFormatter {
 
         for line in code.lines() {
             let trimmed = line.trim();
-            if trimmed.starts_with('}') || trimmed.starts_with(')') || trimmed.starts_with(']') {
-                indent_level = indent_level.saturating_sub(1);
-            }
+            let leading_closers = count_leading_closers(trimmed) as i32;
+            indent_level = indent_level.saturating_sub(leading_closers);
 
             if !trimmed.is_empty() {
                 for _ in 0..indent_level {
@@ -352,11 +370,73 @@ impl BuiltInFormatter {
             }
             result.push('\n');
 
-            if trimmed.ends_with('{') || trimmed.ends_with('(') || trimmed.ends_with('[') {
-                indent_level += 1;
-            }
+            // net_delimiter_delta counts all delimiters including leading closers.
+            // We already decremented by leading_closers before printing, so add them
+            // back to avoid double-counting: the net change for the *next* line is
+            // delta + leading_closers (leading closers cancel in the net formula).
+            indent_level =
+                (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
         }
 
         result
     }
+}
+
+fn count_leading_closers(line: &str) -> usize {
+    line.chars().take_while(|ch| matches!(ch, '}' | ')' | ']')).count()
+}
+
+fn net_delimiter_delta(line: &str) -> i32 {
+    let mut delta = 0_i32;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for ch in line.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' {
+            escaped = true;
+            continue;
+        }
+
+        if in_single {
+            if ch == '\'' {
+                in_single = false;
+            }
+            continue;
+        }
+
+        if in_double {
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+
+        if ch == '\'' {
+            in_single = true;
+            continue;
+        }
+
+        if ch == '"' {
+            in_double = true;
+            continue;
+        }
+
+        if ch == '#' {
+            break;
+        }
+
+        match ch {
+            '{' | '(' | '[' => delta += 1,
+            '}' | ')' | ']' => delta -= 1,
+            _ => {}
+        }
+    }
+
+    delta
 }

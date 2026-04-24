@@ -105,8 +105,42 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Quote operators produce strings
                 let interpolated = matches!(token.kind, TokenKind::QuoteDouble);
+                let text = token.text.as_ref();
+
+                // Detect unclosed bracket-style delimiters in operator strings
+                // (e.g. q{...}, qq[...], q(...), q<...>).  Normal 'x' / "x" strings
+                // are already handled by the lexer's own unterminated-string detection.
+                let op_len = if text.starts_with("qq") {
+                    2
+                } else if text.starts_with('q') {
+                    1
+                } else {
+                    0
+                };
+                if op_len > 0 {
+                    let after_op = &text[op_len..];
+                    if let Some(open) = after_op.chars().next() {
+                        let close = match open {
+                            '(' => ')',
+                            '[' => ']',
+                            '{' => '}',
+                            '<' => '>',
+                            c => c, // symmetric delimiter closes with itself
+                        };
+                        if !after_op.ends_with(close) {
+                            self.record_error(ParseError::syntax(
+                                format!(
+                                    "Unclosed {} delimiter in string operator before end of file",
+                                    open
+                                ),
+                                token.start,
+                            ));
+                        }
+                    }
+                }
+
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.to_string(), interpolated },
+                    NodeKind::String { value: text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -118,22 +152,37 @@ impl<'a> Parser<'a> {
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
-                    // Find the delimiter and extract content
-                    let (content_str, _delimiter) = if let Some(rest) = content.strip_prefix('(') {
-                        (rest.strip_suffix(')').unwrap_or(rest), '(')
-                    } else if let Some(rest) = content.strip_prefix('[') {
-                        (rest.strip_suffix(']').unwrap_or(rest), '[')
-                    } else if let Some(rest) = content.strip_prefix('{') {
-                        (rest.strip_suffix('}').unwrap_or(rest), '{')
-                    } else if let Some(rest) = content.strip_prefix('<') {
-                        (rest.strip_suffix('>').unwrap_or(rest), '<')
-                    } else {
-                        // Other delimiter - find matching pair
-                        let delim = content.chars().next().unwrap_or(' ');
-                        let inner = &content[delim.len_utf8()..];
-                        let trimmed = inner.trim_end_matches(delim);
-                        (trimmed, delim)
-                    };
+                    // Find the delimiter and extract content.
+                    // Track whether the closing delimiter was present so we can record an error
+                    // when the qw() is unclosed (e.g. qw(one two three at EOF).
+                    let (content_str, _delimiter, delim_closed) =
+                        if let Some(rest) = content.strip_prefix('(') {
+                            let closed = rest.strip_suffix(')').is_some();
+                            (rest.strip_suffix(')').unwrap_or(rest), '(', closed)
+                        } else if let Some(rest) = content.strip_prefix('[') {
+                            let closed = rest.strip_suffix(']').is_some();
+                            (rest.strip_suffix(']').unwrap_or(rest), '[', closed)
+                        } else if let Some(rest) = content.strip_prefix('{') {
+                            let closed = rest.strip_suffix('}').is_some();
+                            (rest.strip_suffix('}').unwrap_or(rest), '{', closed)
+                        } else if let Some(rest) = content.strip_prefix('<') {
+                            let closed = rest.strip_suffix('>').is_some();
+                            (rest.strip_suffix('>').unwrap_or(rest), '<', closed)
+                        } else {
+                            // Other delimiter - find matching pair
+                            let delim = content.chars().next().unwrap_or(' ');
+                            let inner = &content[delim.len_utf8()..];
+                            let trimmed = inner.trim_end_matches(delim);
+                            let closed = trimmed.len() < inner.len();
+                            (trimmed, delim, closed)
+                        };
+
+                    if !delim_closed {
+                        self.record_error(ParseError::syntax(
+                            "Unclosed qw() delimiter: missing closing delimiter before end of file",
+                            start,
+                        ));
+                    }
 
                     // Split into words, stripping # line comments first (perlop).
                     let cleaned = strip_qw_comments(content_str);
@@ -233,7 +282,34 @@ impl<'a> Parser<'a> {
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
                 let (search, replace, modifiers) =
-                    quote_parser::extract_transliteration_parts(&token.text);
+                    quote_parser::extract_transliteration_parts_strict(&token.text).map_err(
+                        |e| {
+                            let message = match e {
+                                quote_parser::TransliterationError::InvalidModifier(c) => {
+                                    format!(
+                                        "Invalid transliteration modifier '{}'. Valid modifiers are: c, d, s, r",
+                                        c
+                                    )
+                                }
+                                quote_parser::TransliterationError::MissingDelimiter => {
+                                    "Missing delimiter after transliteration operator".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingSearch => {
+                                    "Missing search list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingReplacement => {
+                                    "Missing replacement list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingClosingDelimiter => {
+                                    "Missing closing delimiter in transliteration".to_string()
+                                }
+                            };
+                            ParseError::SyntaxError {
+                                message,
+                                location: token.start,
+                            }
+                        },
+                    )?;
 
                 // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(
