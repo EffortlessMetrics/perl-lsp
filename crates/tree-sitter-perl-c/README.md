@@ -87,6 +87,33 @@ for snippet in &["my $x = 1;", "print $x;"] {
 - `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
 - `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
 
+
+## Snapshot Provenance & Refresh
+
+This crate ships a vendored C snapshot. The canonical provenance record is
+[`UPSTREAM_SNAPSHOT.md`](./UPSTREAM_SNAPSHOT.md), which captures:
+
+- upstream repository and branch/reference
+- snapshot identity (commit/ref when known, plus local artifact checksums)
+- generator version used for `parser.c`
+- the exact local refresh and validation workflow
+
+If you are updating `c-src/`, follow that file end-to-end and update it in the
+same commit as the vendored C changes.
+
+## What is vendored vs local
+
+- **Vendored upstream grammar snapshot (`c-src/`)**
+  - `parser.c`, `scanner.c`, `tsp_unicode.h`, `bsearch.h`
+  - `tree_sitter/parser.h`, `tree_sitter/array.h`, `tree_sitter/alloc.h`
+- **Local wrapper/integration code (maintained in this repo)**
+  - `build.rs` (C compilation + rerun wiring)
+  - `src/lib.rs` (FFI symbol declaration + Rust API helpers)
+  - `src/bin/*` (CLI parse and benchmark helpers)
+
+Do not hand-edit vendored grammar files under `c-src/`; regenerate/refresh them
+from upstream and record the provenance update.
+
 ## Build Requirements
 
 Only a C compiler is required. No `libclang` or other FFI-generator toolchain

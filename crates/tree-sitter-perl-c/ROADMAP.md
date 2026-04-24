@@ -27,6 +27,23 @@ Breaking changes will follow semver.
 - The crate does not expose tree-sitter query helpers — use the
   `tree-sitter` crate directly with the `language()` return value.
 
+
+## Snapshot Governance
+
+`tree-sitter-perl-c` treats `c-src/` as a vendored upstream artifact boundary:
+
+- **Upstream-owned content:** grammar snapshot files in `c-src/`
+- **Local-owned content:** Rust wrapper/build integration in `src/` and `build.rs`
+
+Snapshot provenance and refresh instructions live in
+[`UPSTREAM_SNAPSHOT.md`](./UPSTREAM_SNAPSHOT.md).
+
+Maintenance policy:
+
+1. Grammar fixes happen upstream first.
+2. Snapshot refreshes are pull-through updates (no local edits inside `c-src/`).
+3. Every refresh commit updates provenance metadata and reruns the local validation checklist.
+
 ## Planned Work
 
 ### Maintenance (ongoing)
