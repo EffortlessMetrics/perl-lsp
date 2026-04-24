@@ -66,6 +66,12 @@ fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
 }
 
 fn mask_non_code_regions(code: &str) -> String {
+    fn push_masked_char(masked: &mut String, ch: char) {
+        for _ in 0..ch.len_utf8() {
+            masked.push(' ');
+        }
+    }
+
     let mut masked = String::with_capacity(code.len());
     let mut in_single_quote = false;
     let mut in_double_quote = false;
@@ -78,7 +84,7 @@ fn mask_non_code_regions(code: &str) -> String {
                 in_line_comment = false;
                 masked.push('\n');
             } else {
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             continue;
         }
@@ -91,7 +97,7 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '\'' {
                 in_single_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
@@ -103,22 +109,22 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '"' {
                 in_double_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
         match ch {
             '#' => {
                 in_line_comment = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '\'' => {
                 in_single_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '"' => {
                 in_double_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             _ => masked.push(ch),
         }
@@ -859,5 +865,22 @@ my $s = "BEGIN { my $x = <<'END'; END }";
 
         let diagnostics = detector.detect_all(code);
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_format_detection_handles_utf8_in_masked_regions() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"# comment with emoji 😀
+format REPORT =
+<<'END'
+Body
+END
+.
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(
+            diagnostics.iter().any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. }))
+        );
     }
 }
