@@ -3,6 +3,7 @@ use std::io::{self, Read, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use encoding_rs::GB18030;
 use perl_parser::{Node, ParseError, Parser};
 
 #[derive(Default)]
@@ -304,6 +305,11 @@ fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
         Ok(source) => Ok(source),
         Err(err) => {
             let raw = err.into_bytes();
+            let (decoded_gb18030, _, had_gb18030_errors) = GB18030.decode(&raw);
+            if !had_gb18030_errors {
+                return Ok(decoded_gb18030.into_owned());
+            }
+
             let mut decoded = String::with_capacity(raw.len());
             for byte in raw {
                 decoded.push(char::from(byte));
@@ -446,6 +452,14 @@ mod tests {
         // "Sår" in ISO-8859-1 bytes
         let decoded = read_source_bytes(vec![0x53, 0xE5, 0x72, 0x0A])?;
         assert_eq!(decoded, "Sår\n");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_gb18030() -> Result<(), Box<dyn std::error::Error>> {
+        // "中文" in GB18030-compatible bytes
+        let decoded = read_source_bytes(vec![0xD6, 0xD0, 0xCE, 0xC4, 0x0A])?;
+        assert_eq!(decoded, "中文\n");
         Ok(())
     }
 }

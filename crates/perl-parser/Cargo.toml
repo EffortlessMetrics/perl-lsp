@@ -43,6 +43,7 @@ regex.workspace = true
 lsp-types = { workspace = true, optional = true }
 url.workspace = true
 rustc-hash = "2.1.2"
+encoding_rs = "0.8.35"
 # Core dependencies for position mapping (unconditional, all targets)
 ropey = "1.6.1"
 
