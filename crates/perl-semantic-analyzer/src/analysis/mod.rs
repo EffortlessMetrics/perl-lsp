@@ -11,6 +11,8 @@ pub mod index;
 /// Scope analysis for variable and subroutine resolution.
 #[allow(missing_docs)]
 pub mod scope_analyzer;
+/// Read-only semantic query facade spanning parser/semantic/workspace.
+pub mod query;
 /// Semantic analyzer and token classification.
 pub mod semantic;
 /// Symbol extraction and symbol table construction.
