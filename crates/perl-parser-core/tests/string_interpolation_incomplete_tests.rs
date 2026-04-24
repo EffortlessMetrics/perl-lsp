@@ -36,6 +36,33 @@ fn double_quote_complete_interpolation_still_works() {
     assert_clean_parse(source);
 }
 
+// Verify that a backslash-escaped quote inside an incomplete subscript is consumed
+// as an escape and does NOT trigger premature string termination.
+// Input: "$hash{key\"more" — the \" should be skipped, the final " terminates.
+#[test]
+fn double_quote_incomplete_with_escaped_quote_inside_subscript() {
+    // The \" is consumed as an escape sequence; the trailing " terminates the string.
+    let source = r#"my $x = "val: $hash{key\"more";"#;
+    assert_clean_parse(source);
+}
+
+// Verify recovery for the ${...} block-variable form, e.g. "${incomplete".
+// Before the fix, consume_balanced_segment would swallow the closing " and
+// produce an unterminated-string error.
+#[test]
+fn double_quote_incomplete_block_variable_form() {
+    let source = r#"my $x = "val: ${incomplete";"#;
+    assert_clean_parse(source);
+}
+
+// Verify recovery for an incomplete method-call argument list:
+// "$obj->method(incomplete" — the ( is never closed.
+#[test]
+fn double_quote_incomplete_method_call_args() {
+    let source = r#"my $x = "val: $obj->method(incomplete";"#;
+    assert_clean_parse(source);
+}
+
 #[test]
 fn lexer_preserves_base_variable_parts_for_incomplete_indexing() {
     let src = r#""Key: $hash{incomplete""#;
