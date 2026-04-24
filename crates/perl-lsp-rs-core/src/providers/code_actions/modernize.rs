@@ -24,6 +24,8 @@ pub fn get_modernize_actions(source: &str) -> Vec<CodeAction> {
 fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
     let mut actions = Vec::new();
 
+    let line_offsets = line_start_offsets(source);
+
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
 
@@ -65,7 +67,7 @@ fn find_two_arg_open(source: &str) -> Vec<CodeAction> {
                 )
             };
 
-            let line_start = line_start_offset(source, line_idx);
+            let line_start = line_offsets[line_idx];
             let line_end = line_start + line.len();
 
             actions.push(CodeAction {
@@ -154,6 +156,7 @@ fn find_deprecated_defined(source: &str) -> Vec<CodeAction> {
 /// Detect `require 5.006` and suggest `use v5.6`.
 fn find_legacy_require_version(source: &str) -> Vec<CodeAction> {
     let mut actions = Vec::new();
+    let line_offsets = line_start_offsets(source);
 
     for (line_idx, line) in source.lines().enumerate() {
         let trimmed = line.trim();
@@ -169,7 +172,7 @@ fn find_legacy_require_version(source: &str) -> Vec<CodeAction> {
         }
 
         if let Some(modern_version) = modernize_version(after_require) {
-            let line_start = line_start_offset(source, line_idx);
+            let line_start = line_offsets[line_idx];
             let line_end = line_start + line.len();
             let indent = &line[..line.len() - trimmed.len()];
 
@@ -283,6 +286,7 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
     let already_uses_carp = source.contains("use Carp");
     let mut actions = Vec::new();
     let lines: Vec<&str> = source.lines().collect();
+    let line_offsets = line_start_offsets(source);
 
     for (line_idx, line) in lines.iter().enumerate() {
         let trimmed = line.trim();
@@ -308,7 +312,7 @@ fn find_die_in_module(source: &str) -> Vec<CodeAction> {
             }
         }
 
-        let line_start = line_start_offset(source, line_idx);
+        let line_start = line_offsets[line_idx];
         let indent_len = line.len() - trimmed.len();
         let die_start = line_start + indent_len;
         let die_end = die_start + 3; // len("die")
@@ -523,15 +527,17 @@ fn modernize_version(ver: &str) -> Option<String> {
     }
 }
 
-fn line_start_offset(source: &str, line_idx: usize) -> usize {
-    let mut offset = 0;
-    for (i, line) in source.lines().enumerate() {
-        if i == line_idx {
-            return offset;
+fn line_start_offsets(source: &str) -> Vec<usize> {
+    let mut offsets = Vec::new();
+    offsets.push(0);
+
+    for (idx, byte) in source.bytes().enumerate() {
+        if byte == b'\n' {
+            offsets.push(idx + 1);
         }
-        offset += line.len() + 1;
     }
-    offset
+
+    offsets
 }
 
 fn find_pragma_insert_pos(source: &str) -> usize {
