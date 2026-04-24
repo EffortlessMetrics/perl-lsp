@@ -329,6 +329,7 @@ fn constant_names_from_use_args(args: &[String]) -> Vec<String> {
 
 fn qw_names(arg: &str) -> Option<Vec<String>> {
     let content = arg.strip_prefix("qw").and_then(|rest| {
+        let rest = rest.trim_start();
         rest.strip_prefix('(')
             .and_then(|s| s.strip_suffix(')'))
             .or_else(|| rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')))
@@ -511,6 +512,13 @@ mod tests {
     #[test]
     fn constant_names_supports_qw_and_deduplicates_entries() {
         let args = vec!["qw(ONE TWO ONE)".to_string()];
+
+        assert_eq!(constant_names_from_use_args(&args), vec!["ONE".to_string(), "TWO".to_string()]);
+    }
+
+    #[test]
+    fn constant_names_supports_qw_with_space_before_delimiter() {
+        let args = vec!["qw [ONE TWO]".to_string()];
 
         assert_eq!(constant_names_from_use_args(&args), vec!["ONE".to_string(), "TWO".to_string()]);
     }
