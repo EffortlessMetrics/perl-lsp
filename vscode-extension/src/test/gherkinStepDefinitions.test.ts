@@ -96,6 +96,17 @@ describe('gherkin step definition support', () => {
     ])).toBe('ambiguous');
   });
 
+  test('does not treat named-capture groups as expensive (no false positive)', () => {
+    const step = parseGherkinStepLine('Then I have 5 items in the cart', 1);
+    expect(step).not.toBeNull();
+
+    // Named captures (?<name>...) are safe and must not be blocked
+    const result = classifyStepDefinitionStatus(step!, [
+      'Then qr/I have (?<count>\\d+) items in the cart/, sub { return; };',
+    ]);
+    expect(result).not.toBe('ambiguous');
+  });
+
   test('suggests a deterministic feature-relative target file', () => {
     expect(
       suggestStepDefinitionPath(

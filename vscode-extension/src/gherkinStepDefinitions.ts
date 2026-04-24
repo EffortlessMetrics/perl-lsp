@@ -12,7 +12,7 @@ const DEFAULT_EXCLUDE_GLOB = '{**/node_modules/**,**/blib/**}';
 const MAX_STEP_DEFINITION_FILES = 500;
 const MAX_MATCH_REGEX_LENGTH = 256;
 const MAX_MATCH_STEP_TEXT_LENGTH = 512;
-const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\)|\[[^\]]+\])[+*{]|\\[1-9]|\(\?<|(\(\?[!=])/;
+const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\)|\[[^\]]+\])[+*{]|\\[1-9]|\(\?<[=!]|(\(\?[!=])/;
 
 export type StepKeyword = 'Given' | 'When' | 'Then' | 'And' | 'But';
 export type StepDefinitionStatus = 'defined' | 'undefined' | 'ambiguous';

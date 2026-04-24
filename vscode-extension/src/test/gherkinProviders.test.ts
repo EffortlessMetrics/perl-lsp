@@ -130,6 +130,33 @@ describe('gherkin outline providers', () => {
     expect(links).toHaveLength(0);
   });
 
+  test('does not skip named-capture group step definitions (no false positive)', () => {
+    const featureText = [
+      'Feature: Cart',
+      '  Scenario: Add items',
+      '    Given I have 3 items in the cart',
+    ].join('\n');
+
+    const links = provideGherkinStepDefinitionLinks(
+      featureText,
+      { line: 2, character: 15 } as vscode.Position,
+      [
+        {
+          uri: vscode.Uri.file('/project/features/step_definitions/cart_steps.pm'),
+          text: [
+            'use Test::BDD::Cucumber::StepFile;',
+            '',
+            'Given qr/I have (?<count>\\d+) items in the cart/, sub {',
+            '};',
+          ].join('\n'),
+        },
+      ]
+    );
+
+    // Named captures are safe — must NOT be filtered by the expensive-regex guard
+    expect(links).toHaveLength(1);
+  });
+
   test('resolves And steps using the previous Given/When/Then context', () => {
     const featureText = [
       'Feature: Checkout',
