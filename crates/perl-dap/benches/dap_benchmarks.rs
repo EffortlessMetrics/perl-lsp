@@ -37,9 +37,11 @@ use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
+use perl_lsp_rs_core::transport::framing::frame;
 use serde_json::json;
 use std::collections::HashMap;
 use std::hint::black_box;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -348,6 +350,54 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+/// Benchmark DAP frame writing on hot transport paths.
+///
+/// Compares the previous "frame then write" approach against streaming frame
+/// headers and payload bytes directly to the sink.
+fn benchmark_dap_transport_output(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dap_transport");
+    group.measurement_time(Duration::from_secs(10));
+
+    let message = json!({
+        "seq": 2001,
+        "type": "event",
+        "event": "output",
+        "body": {
+            "category": "stdout",
+            "output": "benchmark output event payload\n"
+        }
+    });
+    let payload = serde_json::to_vec(&message).unwrap_or_default();
+
+    group.bench_function("frame_alloc_and_write", |b| {
+        b.iter(|| {
+            let framed = frame(black_box(&payload));
+            let mut cursor = std::io::Cursor::new(Vec::with_capacity(framed.len()));
+            let _ = cursor.write_all(black_box(&framed));
+            let _ = cursor.flush();
+            black_box(cursor.position());
+        })
+    });
+
+    group.bench_function("stream_header_and_payload_write", |b| {
+        b.iter(|| {
+            let estimated_capacity = payload.len() + 32;
+            let mut cursor = std::io::Cursor::new(Vec::with_capacity(estimated_capacity));
+            let _ = write!(cursor, "Content-Length: {}\r\n\r\n", payload.len());
+            let _ = cursor.write_all(black_box(&payload));
+            let _ = cursor.flush();
+            black_box(cursor.position());
+        })
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    session_benches,
+    benchmark_dap_initialization,
+    benchmark_dap_dispatch,
+    benchmark_dap_transport_output
+);
 
 criterion_main!(configuration_benches, platform_benches, session_benches);

@@ -3,6 +3,16 @@
 use super::*;
 
 impl DebugAdapter {
+    fn write_framed_payload<W: Write>(writer: &mut W, payload: &[u8]) -> io::Result<()> {
+        write!(writer, "Content-Length: {}\r\n\r\n", payload.len())?;
+        writer.write_all(payload)
+    }
+
+    fn write_framed_message<W: Write>(writer: &mut W, message: &DapMessage) -> io::Result<()> {
+        let payload = serde_json::to_vec(message).map_err(io::Error::other)?;
+        Self::write_framed_payload(writer, &payload)
+    }
+
     /// Run the debug adapter server
     pub(crate) fn run(&mut self) -> io::Result<()> {
         self.run_with_io(io::stdin(), io::stdout())
@@ -40,20 +50,26 @@ impl DebugAdapter {
 
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                let framed = match serde_json::to_vec(&msg) {
-                    Ok(payload) => frame(&payload),
-                    Err(e) => {
-                        tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
-                        continue;
-                    }
-                };
-
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(&framed) {
-                    tracing::error!(error = %e, "Failed to write DAP frame in event handler");
+                if let Err(e) = Self::write_framed_message(&mut *writer, &msg) {
+                    tracing::error!(error = %e, message = ?msg, "Failed to write DAP frame in event handler");
                     continue;
                 }
-                if let Err(e) = writer.flush() {
+
+                let mut should_flush = true;
+                while let Ok(next_msg) = rx.try_recv() {
+                    if let Err(e) = Self::write_framed_message(&mut *writer, &next_msg) {
+                        tracing::error!(
+                            error = %e,
+                            message = ?next_msg,
+                            "Failed to write queued DAP frame in event handler"
+                        );
+                        should_flush = false;
+                        break;
+                    }
+                }
+
+                if should_flush && let Err(e) = writer.flush() {
                     tracing::error!(error = %e, "Failed to flush DAP frame in event handler");
                 }
             }
@@ -103,9 +119,8 @@ impl DebugAdapter {
                     }
                 };
 
-                let framed = frame(&payload);
                 let mut writer = lock_or_recover(&shared_writer, "response_writer");
-                writer.write_all(&framed)?;
+                Self::write_framed_payload(&mut *writer, &payload)?;
                 writer.flush()?;
 
                 // DAP requires this event only after initialize response is sent.
