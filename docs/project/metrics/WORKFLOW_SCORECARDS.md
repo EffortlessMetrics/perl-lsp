@@ -67,3 +67,15 @@ The schema and fixture matrix land before a full measured emitter. That keeps
 the contract honest: the workflow inventory is executable today, the current
 component rows are backed by exact scenario assertions today, and the broader
 UX scorecard can expand only when those stronger assertions exist.
+
+
+## Published Artifact + Ratchet Policy
+
+- `cargo xtask ux-scorecard --format json` emits a stable machine artifact at
+  `.ci/metrics/editor_ux_scorecard.json` and refreshes
+  `docs/project/status/editor_ux.json` from the same source payload.
+- The UX scorecard uses **regression-only ratcheting** via
+  `.ci/metrics/baselines/editor_ux.json` +
+  `cargo xtask metrics ratchet-check editor_ux --current .ci/metrics/editor_ux_scorecard.json`.
+- There are no fixed absolute pass/fail thresholds in this path: better numbers
+  are always allowed, regressions relative to baseline are blocked.

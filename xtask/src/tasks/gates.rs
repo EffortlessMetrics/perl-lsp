@@ -222,6 +222,8 @@ pub struct AgentReceipt {
     pub failures: AgentFailures,
     pub baselines: Vec<String>,
     pub next_actions: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ux_scorecard: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -804,6 +806,7 @@ fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
         failures: AgentFailures { blocking, repro },
         baselines,
         next_actions,
+        ux_scorecard: crate::tasks::ux_scorecard::load_compact_summary(root),
     }
 }
 
@@ -1699,7 +1702,8 @@ mod tests {
         // EnvironmentInfo, AgentReceipt, …) by hand.  compare_receipts only
         // reads receipt.gates and receipt.metadata.timestamp, so the rest can
         // be placeholder values.
-        let mut receipt: Receipt = serde_json::from_str(r#"{
+        let mut receipt: Receipt = serde_json::from_str(
+            r#"{
             "schema_version": "1",
             "metadata": {
                 "timestamp": "2026-04-23T00:00:00Z",
@@ -1734,7 +1738,9 @@ mod tests {
                 "baselines": [],
                 "next_actions": []
             }
-        }"#).expect("minimal receipt JSON is valid");
+        }"#,
+        )
+        .expect("minimal receipt JSON is valid");
         receipt.gates.push(GateResult {
             gate_name: "tests".to_string(),
             tier: "pr_fast".to_string(),

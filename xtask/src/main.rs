@@ -922,6 +922,13 @@ enum Commands {
         only: Option<update_status::StatusSubsystem>,
     },
 
+    /// Publish measured editor UX scorecard artifacts.
+    UxScorecard {
+        /// Output format.
+        #[arg(long, default_value = "human")]
+        format: ux_scorecard::OutputFormat,
+    },
+
     /// Generate SRP microcrate inventory and split-candidate report
     SrpMicrocrates {
         /// Optional output path (default: docs/SRP_MICROCRATES.md)
@@ -1573,6 +1580,7 @@ fn main() -> Result<()> {
             FeaturesCommand::Report => features::report(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
+        Commands::UxScorecard { format } => ux_scorecard::run(format),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })

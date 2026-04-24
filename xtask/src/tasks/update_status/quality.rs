@@ -8,8 +8,11 @@ use std::path::Path;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::Result;
+#[cfg(test)]
+use color_eyre::eyre::Context;
 use regex::Regex;
+#[cfg(test)]
 use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
@@ -134,11 +137,13 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct EditorUxFixtureMatrix {
     workflows: Vec<EditorUxWorkflow>,
 }
 
+#[cfg(test)]
 #[derive(Debug, Deserialize)]
 struct EditorUxWorkflow {
     // ci_tier is present in the JSON but not used for signal counting;
@@ -148,6 +153,7 @@ struct EditorUxWorkflow {
     confidence_signals: Vec<String>,
 }
 
+#[cfg(test)]
 pub(super) fn collect_editor_ux_confidence_counts(root: &Path) -> Result<BTreeMap<String, usize>> {
     let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
     let matrix_raw = fs::read_to_string(&matrix_path)
@@ -221,74 +227,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 }
 
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
-    let scenario_files = collect_ux_scenario_files(root);
-    let scenario_count = scenario_files.len();
-    let confidence_counts = collect_editor_ux_confidence_counts(root)?;
-
-    let receipt = serde_json::json!({
-        "schema_version": 1,
-        "receipt_kind": "planning_scaffold",
-        "scorecard": "editor_ux",
-        "harness": {
-            "crate": "crates/perl-lsp-ux-tests",
-            "scenario_count": scenario_count,
-            "scenario_files": scenario_files,
-        },
-        "top_line_metrics": [
-            {
-                "name": "workflow_pass_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "workflow_stability_rate",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-            {
-                "name": "p95_time_to_first_useful_result_ms",
-                "state": "planned",
-                "owner": "perl-lsp-ux-tests",
-            },
-        ],
-        "confidence_signals": [
-            {
-                "name": "manual_editor_smoke",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("manual_editor_smoke")
-                    .copied()
-                    .unwrap_or(0),
-            },
-            {
-                "name": "first_five_minutes_harness",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("first_five_minutes_harness")
-                    .copied()
-                    .unwrap_or(0),
-            },
-            {
-                "name": "issue_burndown_regression_guard",
-                "state": "tracked",
-                "owner": "perl-lsp-ux-tests",
-                "workflow_count": confidence_counts
-                    .get("issue_burndown_regression_guard")
-                    .copied()
-                    .unwrap_or(0),
-            },
-        ],
-        "integration_points": {
-            "ci_lane": "just ux-tests",
-            "release_lane": "just ux-tests-full",
-            "status_update": "cargo xtask update-status --only quality",
-            "quality_surface": "docs/project/status/quality.md",
-        },
-    });
-
-    serde_json::to_string_pretty(&receipt).context("serializing editor UX receipt")
+    crate::tasks::ux_scorecard::generated_status_json(root)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +237,7 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use color_eyre::eyre::{Result, eyre};
+    use color_eyre::eyre::Result;
 
     #[test]
     fn test_collect_per_crate_mutation_from_mock_file() -> Result<()> {
@@ -359,62 +298,17 @@ index_builds: test
         let root = crate::utils::project_root()?;
         let receipt_raw = generate_editor_ux_receipt(&root)?;
         let receipt: serde_json::Value = serde_json::from_str(&receipt_raw)?;
-        assert_eq!(receipt["schema_version"], 1);
-        assert_eq!(receipt["receipt_kind"], "planning_scaffold");
+        assert_eq!(receipt["schema_version"], 2);
+        assert_eq!(receipt["receipt_kind"], "measured_scorecard");
         assert_eq!(receipt["scorecard"], "editor_ux");
-        assert_eq!(receipt["harness"]["crate"], "crates/perl-lsp-ux-tests");
+        assert_eq!(receipt["scenario_count"].as_u64(), Some(4));
+        assert!(receipt["metrics_pct"]["hover_correctness_pct"].as_f64().is_some());
+        assert!(receipt["latency_ms_by_request_class"]["hover"]["p50_ms"].as_f64().is_some());
         assert_eq!(
-            receipt["harness"]["scenario_count"].as_u64(),
-            Some(count_ux_scenarios(&root) as u64)
+            receipt["provenance"]["fixture"],
+            "crates/perl-lsp-ux-tests/fixtures/editor_ux_scorecard_fixture.json"
         );
-        let top_line_names = receipt["top_line_metrics"]
-            .as_array()
-            .ok_or_else(|| eyre!("top_line_metrics must be an array"))?
-            .iter()
-            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("top_line metric name missing")))
-            .collect::<Result<std::collections::BTreeSet<_>>>()?;
-        assert_eq!(
-            top_line_names,
-            std::collections::BTreeSet::from([
-                "workflow_pass_rate",
-                "workflow_stability_rate",
-                "p95_time_to_first_useful_result_ms",
-            ])
-        );
-        assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
-        let confidence_signals = receipt["confidence_signals"]
-            .as_array()
-            .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
-        let confidence_names: std::collections::BTreeSet<&str> = confidence_signals
-            .iter()
-            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("confidence signal name missing")))
-            .collect::<Result<_>>()?;
-        assert_eq!(
-            confidence_names,
-            std::collections::BTreeSet::from([
-                "manual_editor_smoke",
-                "first_five_minutes_harness",
-                "issue_burndown_regression_guard",
-            ])
-        );
-        // Cross-check: receipt workflow_count values must match what
-        // collect_editor_ux_confidence_counts computes from the fixture tags.
-        // This catches stale hardcoded JSON and verifies the emit path uses
-        // the same source-of-truth function.
-        let live_counts = super::collect_editor_ux_confidence_counts(&root)?;
-        for row in confidence_signals {
-            let name = row["name"].as_str().ok_or_else(|| eyre!("name missing"))?;
-            let receipt_count = row["workflow_count"]
-                .as_u64()
-                .ok_or_else(|| eyre!("workflow_count missing for {name}"))?;
-            let live_count = *live_counts.get(name).unwrap_or(&0) as u64;
-            assert_eq!(
-                receipt_count, live_count,
-                "receipt workflow_count for `{name}` ({receipt_count}) diverges from \
-                 live fixture count ({live_count}) — re-run `cargo xtask update-status` to sync"
-            );
-            assert!(receipt_count > 0, "signal `{name}` has zero workflow coverage");
-        }
+        assert_eq!(receipt["ratchet_policy"]["mode"], "regression_only");
         Ok(())
     }
 }

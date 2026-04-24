@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "scenario_id": "simple_file_smoke",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_samples_ms": {
+        "hover": [12.0, 15.0, 18.0],
+        "completion": [18.0, 22.0, 25.0],
+        "definition": [20.0, 22.0, 27.0],
+        "symbol": [30.0, 35.0],
+        "cross_file": [28.0, 33.0]
+      }
+    },
+    {
+      "scenario_id": "multi_file_workspace_navigation",
+      "hover_correct": true,
+      "completion_top1_correct": false,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_samples_ms": {
+        "hover": [14.0, 19.0],
+        "completion": [25.0, 31.0],
+        "definition": [24.0, 29.0],
+        "symbol": [39.0, 42.0],
+        "cross_file": [36.0, 41.0]
+      }
+    },
+    {
+      "scenario_id": "workspace_folder_removal_freshness",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": false,
+      "symbol_correct": true,
+      "cross_file_success": true,
+      "latency_samples_ms": {
+        "hover": [20.0],
+        "completion": [35.0],
+        "definition": [38.0],
+        "symbol": [55.0, 61.0],
+        "cross_file": [48.0, 52.0]
+      }
+    },
+    {
+      "scenario_id": "deleted_file_churn_freshness",
+      "hover_correct": true,
+      "completion_top1_correct": true,
+      "completion_top5_correct": true,
+      "definition_exact_hit": true,
+      "symbol_correct": false,
+      "cross_file_success": false,
+      "latency_samples_ms": {
+        "hover": [21.0],
+        "completion": [34.0],
+        "definition": [40.0],
+        "symbol": [62.0],
+        "cross_file": [59.0]
+      }
+    }
+  ]
+}

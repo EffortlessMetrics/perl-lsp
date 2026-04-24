@@ -1,4 +1,16 @@
 {
+  "schema_version": 1,
+  "measured_at": "2026-04-24T06:12:46.807186917+00:00",
+  "subsystem": "editor_ux",
+  "scenario_count": 4,
+  "metrics_pct": {
+    "completion_top1_pct": 75.0,
+    "completion_top5_pct": 100.0,
+    "cross_file_success_pct": 75.0,
+    "definition_exact_hit_pct": 75.0,
+    "hover_correctness_pct": 100.0,
+    "symbol_correctness_pct": 75.0
+  },
   "latency_ms_by_request_class": {
     "completion": {
       "p50_ms": 25.0,
@@ -21,15 +33,27 @@
       "p95_ms": 62.0
     }
   },
-  "measured_at": "2026-04-24T06:12:46.807186917+00:00",
-  "metrics_pct": {
+  "generated_at": "2026-04-24T06:12:46.807186917+00:00",
+  "commit": "HEAD",
+  "floor_metrics": {
     "completion_top1_pct": 75.0,
     "completion_top5_pct": 100.0,
     "cross_file_success_pct": 75.0,
     "definition_exact_hit_pct": 75.0,
     "hover_correctness_pct": 100.0,
+    "latency_completion_p50_ms": 25.0,
+    "latency_completion_p95_ms": 35.0,
+    "latency_cross_file_p50_ms": 41.0,
+    "latency_cross_file_p95_ms": 59.0,
+    "latency_definition_p50_ms": 27.0,
+    "latency_definition_p95_ms": 40.0,
+    "latency_hover_p50_ms": 18.0,
+    "latency_hover_p95_ms": 21.0,
+    "latency_symbol_p50_ms": 42.0,
+    "latency_symbol_p95_ms": 62.0,
     "symbol_correctness_pct": 75.0
   },
+  "improvement_metrics": {},
   "provenance": {
     "fixture": "crates/perl-lsp-ux-tests/fixtures/editor_ux_scorecard_fixture.json",
     "generator": "cargo xtask ux-scorecard --format json"
@@ -37,9 +61,5 @@
   "ratchet_policy": {
     "baseline": ".ci/metrics/baselines/editor_ux.json (checked via cargo xtask metrics ratchet-check editor_ux --current .ci/metrics/editor_ux_scorecard.json)",
     "mode": "regression_only"
-  },
-  "receipt_kind": "measured_scorecard",
-  "scenario_count": 4,
-  "schema_version": 2,
-  "scorecard": "editor_ux"
+  }
 }
