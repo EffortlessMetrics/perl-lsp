@@ -52,8 +52,12 @@ impl LspServer {
         };
 
         // Check AI config
-        let ai_config = self.config.lock().ai_completion.clone();
-        if !ai_config.enabled || !ai_config.streaming.enabled {
+        let (ai_enabled, streaming_enabled, max_output_tokens, timeout_ms, fallback) = {
+            let guard = self.config.lock();
+            let ai = &guard.ai_completion;
+            (ai.enabled, ai.streaming.enabled, ai.max_output_tokens, ai.timeout_ms, ai.fallback)
+        };
+        if !ai_enabled || !streaming_enabled {
             // Fall back to one-shot
             return self.handle_inline_completion(Some(params));
         }
@@ -75,11 +79,8 @@ impl LspServer {
         };
 
         // Build request
-        let req = perl_lsp_inline_completion::BackendRequest {
-            context,
-            max_output_tokens: ai_config.max_output_tokens,
-            timeout_ms: ai_config.timeout_ms,
-        };
+        let req =
+            perl_lsp_inline_completion::BackendRequest { context, max_output_tokens, timeout_ms };
 
         let session_id = session.session_id.clone();
         let token_clone = token.clone();
@@ -88,7 +89,7 @@ impl LspServer {
         let backend = match self.ai_backend() {
             Some(b) => b,
             None => {
-                if ai_config.fallback {
+                if fallback {
                     return self.handle_inline_completion(Some(params));
                 }
                 // No backend and no fallback -- emit empty final and return

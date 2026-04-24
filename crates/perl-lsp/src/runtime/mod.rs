@@ -384,37 +384,48 @@ impl LspServer {
     /// Called during initialization (after project config is loaded) and on every
     /// `didChangeConfiguration` notification that touches the `aiCompletion` section.
     pub(crate) fn refresh_ai_backend(&self) {
-        let ai_config = self.config.lock().ai_completion.clone();
+        // Copy config values while holding lock, then release lock for slow operations
+        let (enabled, api_key_env, endpoint, model, timeout_ms, rate_limit_rps, max_inflight) = {
+            let guard = self.config.lock();
+            let ai = &guard.ai_completion;
+            (
+                ai.enabled,
+                ai.api_key_env.clone(),
+                ai.endpoint.clone(),
+                ai.model.clone(),
+                ai.timeout_ms,
+                ai.rate_limit_rps,
+                ai.max_inflight,
+            )
+        };
 
-        if !ai_config.enabled {
+        if !enabled {
             *self.ai_inline_backend.lock() = None;
             return;
         }
 
         // Resolve API key from environment variable
-        let api_key = std::env::var(&ai_config.api_key_env).unwrap_or_default();
+        let api_key = std::env::var(&api_key_env).unwrap_or_default();
         if api_key.is_empty() {
-            tracing::warn!(env_var = %ai_config.api_key_env, "AI completion enabled but env var is empty or unset");
+            tracing::warn!(env_var = %api_key_env, "AI completion enabled but env var is empty or unset");
             *self.ai_inline_backend.lock() = None;
             return;
         }
 
-        let provider_config = perl_lsp_ai_provider::OpenAiConfig {
-            endpoint: ai_config.endpoint.clone(),
-            model: ai_config.model.clone(),
-            api_key,
-            timeout_ms: ai_config.timeout_ms,
-        };
+        // Clone endpoint/model for logging before moving into config
+        let endpoint_for_log = endpoint.clone();
+        let model_for_log = model.clone();
 
-        let limiter = Arc::new(perl_lsp_ai_provider::RateLimiter::new(
-            ai_config.rate_limit_rps,
-            ai_config.max_inflight,
-        ));
+        let provider_config =
+            perl_lsp_ai_provider::OpenAiConfig { endpoint, model, api_key, timeout_ms };
+
+        let limiter =
+            Arc::new(perl_lsp_ai_provider::RateLimiter::new(rate_limit_rps, max_inflight));
 
         let provider = perl_lsp_ai_provider::OpenAiProvider::new(provider_config, limiter);
         *self.ai_inline_backend.lock() = Some(Arc::new(provider));
 
-        tracing::info!(endpoint = %ai_config.endpoint, model = %ai_config.model, "AI inline completion backend configured");
+        tracing::info!(endpoint = %endpoint_for_log, model = %model_for_log, "AI inline completion backend configured");
     }
 
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).
