@@ -70,7 +70,7 @@ use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::sync::Arc;
@@ -1102,6 +1102,10 @@ pub struct FileIndex {
     references: HashMap<String, Vec<SymbolReference>>,
     /// Dependencies (modules this file imports)
     dependencies: HashSet<String>,
+    /// Canonical module name declared by this file, if any.
+    module_name: Option<String>,
+    /// Exported symbol names declared by this file.
+    exported_symbols: Vec<String>,
     /// Content hash for early-exit optimization
     content_hash: u64,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
@@ -1119,6 +1123,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Export symbol table: (module_name, symbol_name) -> definition location.
+    export_symbols: Arc<RwLock<BTreeMap<(String, String), Location>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1143,6 +1149,51 @@ impl WorkspaceIndex {
                 symbols.insert(symbol.name.clone(), symbol.uri.clone());
             }
         }
+    }
+
+    fn rebuild_export_cache(
+        files: &HashMap<String, FileIndex>,
+        export_symbols: &mut BTreeMap<(String, String), Location>,
+    ) {
+        export_symbols.clear();
+        let mut file_keys: Vec<&String> = files.keys().collect();
+        file_keys.sort();
+
+        for key in file_keys {
+            let Some(file_index) = files.get(key) else {
+                continue;
+            };
+            let Some(module_name) = file_index.module_name.as_ref() else {
+                continue;
+            };
+
+            for exported_symbol in &file_index.exported_symbols {
+                if let Some(location) =
+                    Self::definition_location_for_export(file_index, module_name, exported_symbol)
+                {
+                    export_symbols
+                        .entry((module_name.clone(), exported_symbol.clone()))
+                        .or_insert(location);
+                }
+            }
+        }
+    }
+
+    fn definition_location_for_export(
+        file_index: &FileIndex,
+        module_name: &str,
+        symbol_name: &str,
+    ) -> Option<Location> {
+        file_index.symbols.iter().find_map(|symbol| {
+            let qualified_match = symbol.qualified_name.as_ref().is_some_and(|qualified_name| {
+                qualified_name == &format!("{module_name}::{symbol_name}")
+            });
+            if symbol.name == symbol_name || qualified_match {
+                Some(Location { uri: symbol.uri.clone(), range: symbol.range })
+            } else {
+                None
+            }
+        })
     }
 
     /// Incrementally remove one file's symbols from the global cache,
@@ -1286,6 +1337,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            export_symbols: Arc::new(RwLock::new(BTreeMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1324,6 +1376,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            export_symbols: Arc::new(RwLock::new(BTreeMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1467,6 +1520,8 @@ impl WorkspaceIndex {
         };
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
         visitor.visit(&ast, &mut file_index);
+        file_index.exported_symbols.sort();
+        file_index.exported_symbols.dedup();
 
         // Update the index, refresh the global symbol cache, and replace this file's
         // contribution in the global reference index.
@@ -1500,6 +1555,9 @@ impl WorkspaceIndex {
                     }
                 }
             }
+
+            let mut export_symbols = self.export_symbols.write();
+            Self::rebuild_export_cache(&files, &mut export_symbols);
         }
 
         Ok(())
@@ -1552,6 +1610,9 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+
+            let mut export_symbols = self.export_symbols.write();
+            Self::rebuild_export_cache(&files, &mut export_symbols);
         }
     }
 
@@ -1784,6 +1845,8 @@ impl WorkspaceIndex {
             };
             let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone(), folder_uri);
             visitor.visit(&ast, &mut file_index);
+            file_index.exported_symbols.sort();
+            file_index.exported_symbols.dedup();
 
             parsed.push((key, uri_str, file_index));
         }
@@ -1793,6 +1856,7 @@ impl WorkspaceIndex {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
             let mut global_refs = self.global_references.write();
+            let mut export_symbols = self.export_symbols.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
             // Each symbol is indexed under both its qualified name and bare name.
@@ -1823,6 +1887,7 @@ impl WorkspaceIndex {
 
             // Single rebuild at the end
             Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_export_cache(&files, &mut export_symbols);
         }
 
         errors
@@ -2054,6 +2119,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.export_symbols.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
@@ -2432,6 +2498,21 @@ impl WorkspaceIndex {
         let files = self.files.read();
 
         files.get(&key).map(|fi| fi.dependencies.clone()).unwrap_or_default()
+    }
+
+    /// Look up an exported symbol definition by module and symbol name.
+    ///
+    /// This read-only API intentionally hides internal file-index structures so
+    /// callers only need `(module_name, symbol_name)` to resolve export locations.
+    pub fn find_exported_symbol_definition(
+        &self,
+        module_name: &str,
+        symbol_name: &str,
+    ) -> Option<Location> {
+        self.export_symbols
+            .read()
+            .get(&(module_name.to_string(), symbol_name.to_string()))
+            .cloned()
     }
 
     /// Find all files that depend on a module
@@ -2816,6 +2897,9 @@ impl IndexVisitor {
 
                 // Update the current package (replaces the previous one, not a stack)
                 self.current_package = Some(package_name.clone());
+                if file_index.module_name.is_none() {
+                    file_index.module_name = Some(package_name.clone());
+                }
 
                 file_index.symbols.push(WorkspaceSymbol {
                     name: package_name.clone(),
@@ -2878,6 +2962,11 @@ impl IndexVisitor {
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
+                    if (var_name == "@EXPORT" || var_name == "@EXPORT_OK")
+                        && let Some(init) = initializer
+                    {
+                        file_index.exported_symbols.extend(extract_export_symbol_names(init));
+                    }
 
                     file_index.symbols.push(WorkspaceSymbol {
                         name: var_name.clone(),
@@ -3051,6 +3140,9 @@ impl IndexVisitor {
 
                 if let NodeKind::Variable { sigil, name } = &lhs.kind {
                     let var_name = format!("{}{}", sigil, name);
+                    if var_name == "@EXPORT" || var_name == "@EXPORT_OK" {
+                        file_index.exported_symbols.extend(extract_export_symbol_names(rhs));
+                    }
 
                     // For compound assignments, it's a read first
                     if is_compound {
@@ -3406,6 +3498,48 @@ fn extract_module_names_from_use_args(args: &[String]) -> Vec<String> {
     }
 
     modules
+}
+
+fn extract_export_symbol_names(node: &Node) -> Vec<String> {
+    fn collect(node: &Node, out: &mut BTreeSet<String>) {
+        match &node.kind {
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    collect(element, out);
+                }
+            }
+            NodeKind::String { value, .. } => {
+                for token in value.split_whitespace() {
+                    let cleaned = token
+                        .trim_matches(|ch: char| "()[]{}',\"".contains(ch))
+                        .trim_start_matches('&');
+                    if !cleaned.is_empty() {
+                        out.insert(cleaned.to_string());
+                    }
+                }
+            }
+            NodeKind::Identifier { name } => {
+                if !name.is_empty() {
+                    out.insert(name.clone());
+                }
+            }
+            NodeKind::Variable { name, .. } => {
+                if !name.is_empty() {
+                    out.insert(name.clone());
+                }
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    collect(arg, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut symbols = BTreeSet::new();
+    collect(node, &mut symbols);
+    symbols.into_iter().collect()
 }
 
 fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
