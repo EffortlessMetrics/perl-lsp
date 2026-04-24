@@ -200,6 +200,30 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_indented_terminator_with_tabs() -> R {
+    let input = "<<~EOF\n\t\tpayload\n\tEOF\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    assert!(
+        sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart)),
+        "expected HeredocStart"
+    );
+    Ok(())
+}
+
+#[test]
+fn heredoc_quoted_label_requires_exact_terminator() -> R {
+    let input = "<<'EOF'\nbody\neof\n";
+    assert_terminates(input);
+    let toks = tokens(input);
+    assert!(
+        toks.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        "expected UnknownRest when quoted label terminator differs by case"
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================

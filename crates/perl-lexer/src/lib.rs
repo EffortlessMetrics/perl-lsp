@@ -382,13 +382,41 @@ impl<'a> PerlLexer<'a> {
         while end < bytes.len() && bytes[end] != b'\n' && bytes[end] != b'\r' {
             end += 1;
         }
-        // Visible end strips trailing \r if followed by \n
-        let visible_end = if end > start && end > 0 && bytes[end.saturating_sub(1)] == b'\r' {
-            end - 1
-        } else {
-            end
-        };
+        let visible_end = end;
         (end, visible_end)
+    }
+
+    #[inline]
+    fn parse_quoted_heredoc_delimiter(&mut self, quote: char, text: &mut String) -> Option<String> {
+        text.push(quote);
+        self.advance();
+
+        let mut delim = String::new();
+        while self.position < self.input.len() {
+            let Some(ch) = self.current_char() else {
+                break;
+            };
+
+            if ch == quote {
+                text.push(ch);
+                self.advance();
+                return Some(delim);
+            }
+
+            // Delimiter quoting cannot span a line. If we hit CR/LF before the
+            // closing quote, this is not a valid heredoc opener.
+            if ch == '\n' || ch == '\r' {
+                return None;
+            }
+
+            delim.push(ch);
+            text.push(ch);
+            self.advance();
+        }
+
+        // Unterminated quoted delimiter: degrade gracefully by treating this as
+        // not-a-heredoc so normal tokenization can continue.
+        None
     }
 
     /// Advance the lexer and return the next token.
@@ -1128,69 +1156,11 @@ impl<'a> PerlLexer<'a> {
         // Parse delimiter
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
-                Some('"') if !backslashed => {
-                    // Double-quoted delimiter
-                    text.push('"');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '"' {
-                                text.push('"');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    delim
-                }
+                Some('"') if !backslashed => self.parse_quoted_heredoc_delimiter('"', &mut text)?,
                 Some('\'') if !backslashed => {
-                    // Single-quoted delimiter
-                    text.push('\'');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '\'' {
-                                text.push('\'');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    delim
+                    self.parse_quoted_heredoc_delimiter('\'', &mut text)?
                 }
-                Some('`') if !backslashed => {
-                    // Backtick delimiter
-                    text.push('`');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '`' {
-                                text.push('`');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                    delim
-                }
+                Some('`') if !backslashed => self.parse_quoted_heredoc_delimiter('`', &mut text)?,
                 Some(c) if is_perl_identifier_start(c) => {
                     // Bare word delimiter
                     let mut delim = String::new();
@@ -2030,14 +2000,11 @@ impl<'a> PerlLexer<'a> {
                         // Consume the rest of the line (the marker line)
                         while self.position < self.input.len()
                             && self.input_bytes[self.position] != b'\n'
+                            && self.input_bytes[self.position] != b'\r'
                         {
                             self.advance();
                         }
-                        if self.position < self.input.len()
-                            && self.input_bytes[self.position] == b'\n'
-                        {
-                            self.advance();
-                        }
+                        self.consume_newline();
 
                         // Switch to data section mode
                         self.mode = LexerMode::InDataSection;
