@@ -377,6 +377,7 @@ fn keyword_kinds() -> Vec<TokenKind> {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
     ]
 }
 
@@ -404,8 +405,8 @@ fn sigil_kinds() -> Vec<TokenKind> {
 }
 
 #[test]
-fn keyword_count_is_40() {
-    assert_eq!(keyword_kinds().len(), 40);
+fn keyword_count_is_41() {
+    assert_eq!(keyword_kinds().len(), 41);
 }
 
 #[test]

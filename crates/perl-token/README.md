@@ -22,6 +22,16 @@ let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
 ```
 
+`TokenKind` includes newer literal/sigil/specialized forms too:
+
+```rust
+use perl_token::TokenKind;
+
+assert!(TokenKind::all().contains(&TokenKind::VString));
+assert!(TokenKind::all().contains(&TokenKind::GlobSigil));
+assert_eq!(TokenKind::DataMarker.display_name(), "__DATA__");
+```
+
 ## Workspace Role
 
 Foundational crate consumed by `perl-lexer`, `perl-tokenizer`, `perl-parser-core`,

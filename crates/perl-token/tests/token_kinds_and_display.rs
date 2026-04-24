@@ -156,6 +156,7 @@ fn is_literal(kind: TokenKind) -> bool {
             | TokenKind::FormatBody
             | TokenKind::DataMarker
             | TokenKind::DataBody
+            | TokenKind::VString
             | TokenKind::UnknownRest
             | TokenKind::HeredocDepthLimit
     )
@@ -177,147 +178,8 @@ fn is_special(kind: TokenKind) -> bool {
     matches!(kind, TokenKind::Eof | TokenKind::Unknown)
 }
 
-/// Every variant in TokenKind, including Field and Goto.
-fn all_kinds() -> Vec<TokenKind> {
-    vec![
-        // Keywords (41)
-        TokenKind::My,
-        TokenKind::Our,
-        TokenKind::Local,
-        TokenKind::State,
-        TokenKind::Sub,
-        TokenKind::If,
-        TokenKind::Elsif,
-        TokenKind::Else,
-        TokenKind::Unless,
-        TokenKind::While,
-        TokenKind::Until,
-        TokenKind::For,
-        TokenKind::Foreach,
-        TokenKind::Return,
-        TokenKind::Package,
-        TokenKind::Use,
-        TokenKind::No,
-        TokenKind::Begin,
-        TokenKind::End,
-        TokenKind::Check,
-        TokenKind::Init,
-        TokenKind::Unitcheck,
-        TokenKind::Eval,
-        TokenKind::Do,
-        TokenKind::Given,
-        TokenKind::When,
-        TokenKind::Default,
-        TokenKind::Try,
-        TokenKind::Catch,
-        TokenKind::Finally,
-        TokenKind::Continue,
-        TokenKind::Next,
-        TokenKind::Last,
-        TokenKind::Redo,
-        TokenKind::Goto,
-        TokenKind::Class,
-        TokenKind::Method,
-        TokenKind::Field,
-        TokenKind::Format,
-        TokenKind::Undef,
-        TokenKind::Defer,
-        // Operators (56)
-        TokenKind::Assign,
-        TokenKind::Plus,
-        TokenKind::Minus,
-        TokenKind::Star,
-        TokenKind::Slash,
-        TokenKind::Percent,
-        TokenKind::Power,
-        TokenKind::LeftShift,
-        TokenKind::RightShift,
-        TokenKind::BitwiseAnd,
-        TokenKind::BitwiseOr,
-        TokenKind::BitwiseXor,
-        TokenKind::BitwiseNot,
-        TokenKind::PlusAssign,
-        TokenKind::MinusAssign,
-        TokenKind::StarAssign,
-        TokenKind::SlashAssign,
-        TokenKind::PercentAssign,
-        TokenKind::DotAssign,
-        TokenKind::AndAssign,
-        TokenKind::OrAssign,
-        TokenKind::XorAssign,
-        TokenKind::PowerAssign,
-        TokenKind::LeftShiftAssign,
-        TokenKind::RightShiftAssign,
-        TokenKind::LogicalAndAssign,
-        TokenKind::LogicalOrAssign,
-        TokenKind::DefinedOrAssign,
-        TokenKind::Equal,
-        TokenKind::NotEqual,
-        TokenKind::Match,
-        TokenKind::NotMatch,
-        TokenKind::SmartMatch,
-        TokenKind::Less,
-        TokenKind::Greater,
-        TokenKind::LessEqual,
-        TokenKind::GreaterEqual,
-        TokenKind::Spaceship,
-        TokenKind::StringCompare,
-        TokenKind::And,
-        TokenKind::Or,
-        TokenKind::Not,
-        TokenKind::DefinedOr,
-        TokenKind::WordAnd,
-        TokenKind::WordOr,
-        TokenKind::WordNot,
-        TokenKind::WordXor,
-        TokenKind::Arrow,
-        TokenKind::FatArrow,
-        TokenKind::Dot,
-        TokenKind::Range,
-        TokenKind::Ellipsis,
-        TokenKind::Increment,
-        TokenKind::Decrement,
-        TokenKind::DoubleColon,
-        TokenKind::Question,
-        TokenKind::Colon,
-        TokenKind::Backslash,
-        // Delimiters (8)
-        TokenKind::LeftParen,
-        TokenKind::RightParen,
-        TokenKind::LeftBrace,
-        TokenKind::RightBrace,
-        TokenKind::LeftBracket,
-        TokenKind::RightBracket,
-        TokenKind::Semicolon,
-        TokenKind::Comma,
-        // Literals (16)
-        TokenKind::Number,
-        TokenKind::String,
-        TokenKind::Regex,
-        TokenKind::Substitution,
-        TokenKind::Transliteration,
-        TokenKind::QuoteSingle,
-        TokenKind::QuoteDouble,
-        TokenKind::QuoteWords,
-        TokenKind::QuoteCommand,
-        TokenKind::HeredocStart,
-        TokenKind::HeredocBody,
-        TokenKind::FormatBody,
-        TokenKind::DataMarker,
-        TokenKind::DataBody,
-        TokenKind::UnknownRest,
-        TokenKind::HeredocDepthLimit,
-        // Identifiers/Sigils (6)
-        TokenKind::Identifier,
-        TokenKind::ScalarSigil,
-        TokenKind::ArraySigil,
-        TokenKind::HashSigil,
-        TokenKind::SubSigil,
-        TokenKind::GlobSigil,
-        // Special (2)
-        TokenKind::Eof,
-        TokenKind::Unknown,
-    ]
+fn all_kinds() -> &'static [TokenKind] {
+    TokenKind::all()
 }
 
 // ===========================================================================
@@ -475,6 +337,7 @@ fn display_name_literals() {
         (TokenKind::FormatBody, "format body"),
         (TokenKind::DataMarker, "__DATA__"),
         (TokenKind::DataBody, "data section"),
+        (TokenKind::VString, "version string"),
         (TokenKind::UnknownRest, "unparsed content"),
         (TokenKind::HeredocDepthLimit, "heredoc depth limit"),
     ];
@@ -556,6 +419,7 @@ fn display_name_keyword_variants_are_quoted() {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
     ];
     for kind in &keywords {
         let name = kind.display_name();
@@ -639,6 +503,7 @@ fn display_name_literal_variants_are_unquoted() {
         TokenKind::HeredocBody,
         TokenKind::FormatBody,
         TokenKind::DataBody,
+        TokenKind::VString,
         TokenKind::UnknownRest,
         TokenKind::HeredocDepthLimit,
     ];
@@ -659,12 +524,12 @@ fn display_name_literal_variants_are_unquoted() {
 fn every_variant_has_exactly_one_category() {
     for kind in all_kinds() {
         let categories = [
-            is_keyword(kind),
-            is_operator(kind),
-            is_delimiter(kind),
-            is_literal(kind),
-            is_identifier_or_sigil(kind),
-            is_special(kind),
+            is_keyword(*kind),
+            is_operator(*kind),
+            is_delimiter(*kind),
+            is_literal(*kind),
+            is_identifier_or_sigil(*kind),
+            is_special(*kind),
         ];
         let count = categories.iter().filter(|&&b| b).count();
         assert_eq!(count, 1, "{kind:?} belongs to {count} categories (expected exactly 1)");
@@ -692,7 +557,7 @@ fn delimiter_classification_count() {
 #[test]
 fn literal_classification_count() {
     let count = all_kinds().iter().filter(|k| is_literal(**k)).count();
-    assert_eq!(count, 16, "expected 16 literal variants");
+    assert_eq!(count, 17, "expected 17 literal variants");
 }
 
 #[test]
@@ -709,8 +574,8 @@ fn special_classification_count() {
 
 #[test]
 fn total_variant_count() {
-    // 41 keywords + 58 operators + 8 delimiters + 16 literals + 6 ident/sigil + 2 special = 131
-    assert_eq!(all_kinds().len(), 131, "expected 131 total TokenKind variants");
+    // 41 keywords + 58 operators + 8 delimiters + 17 literals + 6 ident/sigil + 2 special = 132
+    assert_eq!(all_kinds().len(), 132, "expected 132 total TokenKind variants");
 }
 
 // ===========================================================================
@@ -770,6 +635,11 @@ fn comma_is_delimiter_not_operator() {
 #[test]
 fn data_marker_is_literal() {
     assert!(is_literal(TokenKind::DataMarker));
+}
+
+#[test]
+fn vstring_is_literal() {
+    assert!(is_literal(TokenKind::VString));
 }
 
 #[test]
