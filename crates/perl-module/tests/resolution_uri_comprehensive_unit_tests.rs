@@ -179,6 +179,29 @@ fn workspace_folder_with_dot_include_path() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn workspace_whitespace_only_include_paths_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Trimmed/Path.pm")?;
+
+    let result = resolve_module_uri(
+        "Trimmed::Path",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "\n\t".to_string(), " lib ".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("Trimmed/Path.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
 fn workspace_folder_multiple_include_paths_first_match_wins()
 -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
@@ -373,6 +396,44 @@ fn system_inc_missing_file_returns_not_found() {
     assert_eq!(result, ModuleUriResolution::NotFound);
 }
 
+#[test]
+fn duplicate_system_inc_entries_do_not_change_resolution_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let inc1 = temp.path().join("inc1");
+    let file1 = inc1.join("Stable.pm");
+    std::fs::create_dir_all(&inc1)?;
+    std::fs::write(&file1, "1;")?;
+
+    let inc2 = temp.path().join("inc2");
+    let file2 = inc2.join("Stable.pm");
+    std::fs::create_dir_all(&inc2)?;
+    std::fs::write(&file2, "1;")?;
+
+    let result = resolve_module_uri(
+        "Stable",
+        &[],
+        &[],
+        &[],
+        true,
+        &[
+            PathBuf::from(" . "),
+            PathBuf::from(" "),
+            PathBuf::from(&inc1),
+            PathBuf::from(&inc1),
+            PathBuf::from(&inc2),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => assert!(uri.contains("inc1")),
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
 // ===========================================================================
 // Search precedence: open docs > workspace > system @INC
 // ===========================================================================
@@ -426,6 +487,38 @@ fn workspace_beats_system_inc() -> Result<(), Box<dyn std::error::Error>> {
         ModuleUriResolution::Resolved(uri) => {
             // Workspace match should win; URI should reference the workspace path
             assert!(!uri.contains("inc"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+    Ok(())
+}
+
+#[test]
+fn precedence_is_stable_after_include_path_normalization() -> Result<(), Box<dyn std::error::Error>>
+{
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Stable/Order.pm")?;
+
+    let temp2 = tempfile::tempdir()?;
+    let system_root = temp2.path().join("sys");
+    let system_module = system_root.join("Stable").join("Order.pm");
+    std::fs::create_dir_all(must_some(system_module.parent()))?;
+    std::fs::write(&system_module, "1;")?;
+
+    let result = resolve_module_uri(
+        "Stable::Order",
+        &[],
+        &[workspace_uri],
+        &["  ".to_string(), "./".to_string(), "lib/".to_string(), " lib ".to_string()],
+        true,
+        &[PathBuf::from(""), PathBuf::from(" . "), PathBuf::from(&system_root)],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("workspace"));
+            assert!(uri.ends_with("Stable/Order.pm"));
+            assert!(!uri.contains("/sys/"));
         }
         other => return Err(format!("expected Resolved, got {other:?}").into()),
     }
