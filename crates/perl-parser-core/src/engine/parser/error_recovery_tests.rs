@@ -86,6 +86,34 @@ fn test_recovery_missing_rhs_before_sub_declaration_keyword() {
 }
 
 #[test]
+fn test_recovery_missing_rhs_before_class_declaration_keyword() {
+    // Missing RHS before `class Foo { ... }` should recover at `class` as a
+    // statement boundary, preserving the following declaration node.
+    let code = "my $x = class Foo { method bar () { 1 } }";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover missing assignment RHS before class decl");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 2, "Should recover and keep the following class declaration");
+        assert!(
+            matches!(statements[0].kind, NodeKind::VariableDeclaration { .. }),
+            "First statement should stay a recovered variable declaration"
+        );
+        assert!(
+            matches!(statements[1].kind, NodeKind::Class { .. }),
+            "Second statement should parse as class declaration"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(!parser.errors().is_empty(), "Recovery should record a missing operand diagnostic");
+}
+
+#[test]
 fn test_no_recovery_for_anonymous_sub_assignment_rhs() {
     let code = "local $SIG{__WARN__} = sub { };";
     let mut parser = Parser::new(code);
