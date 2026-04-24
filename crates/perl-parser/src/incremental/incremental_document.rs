@@ -248,7 +248,7 @@ impl IncrementalDocument {
     }
 
     fn nodes_match(left: &Node, right: &Node) -> bool {
-        format!("{left:?}") == format!("{right:?}")
+        left == right
     }
 
     /// Find subtrees that can be reused (outside the edited range)
