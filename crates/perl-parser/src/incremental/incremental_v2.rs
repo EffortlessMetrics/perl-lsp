@@ -528,20 +528,17 @@ impl IncrementalParserV2 {
     /// Parse with whitespace/comment optimizations
     fn incremental_parse_whitespace(
         &mut self,
-        _source: &str,
+        source: &str,
         last_tree: &IncrementalTree,
     ) -> Option<Node> {
-        // For whitespace-only changes, we can often reuse the entire tree
-        // with just position adjustments
-        let shift = self.calculate_total_shift();
-        self.reused_nodes = self.count_nodes(&last_tree.root);
-        self.reparsed_nodes = 0;
-        Some(self.clone_with_shifted_positions(&last_tree.root, shift))
-    }
-
-    /// Calculate the total byte shift from all edits
-    fn calculate_total_shift(&self) -> isize {
-        self.pending_edits.edits().iter().map(|edit| edit.byte_shift()).sum()
+        // Whitespace/comment edits can still produce different position shifts
+        // at different points in the tree, so reuse with per-node shift mapping.
+        let new_root = self.clone_and_update_node(&last_tree.root, source, &last_tree.source);
+        if !self.validate_incremental_result(&new_root, source) {
+            return None;
+        }
+        self.count_reuse_potential(&last_tree.root, &new_root);
+        Some(new_root)
     }
 
     fn incremental_parse_simple(
@@ -835,7 +832,7 @@ impl IncrementalParserV2 {
     fn calculate_shift_at(&self, position: usize) -> isize {
         let mut shift = 0;
         for edit in self.pending_edits.edits() {
-            let original_old_end = (edit.old_end_byte as isize - shift) as usize;
+            let original_old_end = self.map_position_to_original(edit.old_end_byte, shift);
 
             if original_old_end <= position {
                 let edit_shift = edit.byte_shift();
@@ -943,21 +940,59 @@ impl IncrementalParserV2 {
         // Calculate how much the content of this node changed by examining
         // edits that fall within the node's original range.
         let mut delta = 0;
-        let mut shift = 0;
-        for edit in self.pending_edits.edits() {
-            let start = (edit.start_byte as isize - shift) as usize;
-            let end = (edit.old_end_byte as isize - shift) as usize;
+        self.visit_edits_in_original_coordinates(|start, end, byte_shift| {
             if start >= node.location.start && end <= node.location.end {
-                delta += edit.byte_shift();
+                delta += byte_shift;
             }
-            shift += edit.byte_shift();
-        }
+        });
         delta
     }
 
     fn is_node_affected(&self, node: &Node) -> bool {
         let node_range = Range::from(node.location);
-        self.pending_edits.affects_range(&node_range)
+        self.any_edit_in_original_coordinates(|start, end, _| {
+            let start_pos = perl_parser_core::position::Position::new(start, 1, 1);
+            let end_pos = perl_parser_core::position::Position::new(end, 1, 1);
+            let edit_range = Range::new(start_pos, end_pos);
+            edit_range.overlaps(&node_range)
+        })
+    }
+
+    fn visit_edits_in_original_coordinates<F>(&self, mut visitor: F)
+    where
+        F: FnMut(usize, usize, isize),
+    {
+        let mut cumulative_shift = 0;
+        for edit in self.pending_edits.edits() {
+            let start = self.map_position_to_original(edit.start_byte, cumulative_shift);
+            let end = self.map_position_to_original(edit.old_end_byte, cumulative_shift);
+            visitor(start, end, edit.byte_shift());
+            cumulative_shift += edit.byte_shift();
+        }
+    }
+
+    fn any_edit_in_original_coordinates<F>(&self, mut predicate: F) -> bool
+    where
+        F: FnMut(usize, usize, isize) -> bool,
+    {
+        let mut cumulative_shift = 0;
+        for edit in self.pending_edits.edits() {
+            let start = self.map_position_to_original(edit.start_byte, cumulative_shift);
+            let end = self.map_position_to_original(edit.old_end_byte, cumulative_shift);
+            if predicate(start, end, edit.byte_shift()) {
+                return true;
+            }
+            cumulative_shift += edit.byte_shift();
+        }
+        false
+    }
+
+    fn map_position_to_original(&self, position: usize, cumulative_shift: isize) -> usize {
+        if cumulative_shift >= 0 {
+            position.saturating_sub(cumulative_shift as usize)
+        } else {
+            position.saturating_add((-cumulative_shift) as usize)
+        }
     }
 
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
@@ -2121,6 +2156,88 @@ if ($condition) {
         ));
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    fn apply_batch_edit(
+        parser: &mut IncrementalParserV2,
+        source: &mut String,
+        old_text: &str,
+        new_text: &str,
+    ) -> bool {
+        let Some(start_byte) = source.find(old_text) else {
+            return false;
+        };
+        let old_end_byte = start_byte + old_text.len();
+        let new_end_byte = start_byte + new_text.len();
+        let start_column = (start_byte.saturating_add(1).min(u32::MAX as usize)) as u32;
+        let old_end_column = (old_end_byte.saturating_add(1).min(u32::MAX as usize)) as u32;
+        let new_end_column = (new_end_byte.saturating_add(1).min(u32::MAX as usize)) as u32;
+        parser.edit(Edit::new(
+            start_byte,
+            old_end_byte,
+            new_end_byte,
+            Position::new(start_byte, 1, start_column),
+            Position::new(old_end_byte, 1, old_end_column),
+            Position::new(new_end_byte, 1, new_end_column),
+        ));
+        *source = source.replacen(old_text, new_text, 1);
+        true
+    }
+
+    fn assert_incremental_matches_full(
+        parser: &mut IncrementalParserV2,
+        updated_source: &str,
+    ) -> ParseResult<()> {
+        let incremental_tree = parser.parse(updated_source)?;
+        let mut fresh_parser = Parser::new(updated_source);
+        let full_tree = fresh_parser.parse()?;
+        assert_eq!(format!("{full_tree:#?}"), format!("{incremental_tree:#?}"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_two_non_overlapping_literal_edits_reuse_shifted_nodes() -> ParseResult<()> {
+        let original_source = "my $a = 10;\nmy $b = 20;\nmy $c = 30;";
+        let mut parser = IncrementalParserV2::new();
+        parser.parse(original_source)?;
+
+        let mut updated_source = original_source.to_string();
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, "10", "1000"));
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, "30", "3"));
+
+        assert_incremental_matches_full(&mut parser, &updated_source)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_mixed_whitespace_and_identifier_edits_reuse_nodes() -> ParseResult<()> {
+        let original_source = "my $foo = 1;\nmy $bar = $foo + 2;\nmy $baz = $bar + 3;";
+        let mut parser = IncrementalParserV2::new();
+        parser.parse(original_source)?;
+
+        let mut updated_source = original_source.to_string();
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, " = ", "    = "));
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, "$bar", "$renamed"));
+
+        assert_incremental_matches_full(&mut parser, &updated_source)?;
+        assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_multibyte_text_edit_preserves_shifted_unaffected_nodes() -> ParseResult<()> {
+        let original_source = "my $emoji = \"🙂\";\nmy $value = 42;\nmy $tail = $value + 1;";
+        let mut parser = IncrementalParserV2::new();
+        parser.parse(original_source)?;
+
+        let mut updated_source = original_source.to_string();
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, "\"🙂\"", "\"🙂🙂🙂\""));
+        assert!(apply_batch_edit(&mut parser, &mut updated_source, "42", "4200"));
+
+        assert_incremental_matches_full(&mut parser, &updated_source)?;
         assert!(parser.reused_nodes > 0);
         Ok(())
     }
