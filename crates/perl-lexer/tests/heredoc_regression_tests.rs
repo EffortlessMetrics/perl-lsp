@@ -85,3 +85,21 @@ fn lexer_handles_malformed_heredoc_gracefully() {
         assert!(token_count < 20, "Too many tokens, possible infinite loop");
     }
 }
+
+#[test]
+fn lexer_handles_unterminated_quoted_heredoc_labels_without_runaway_scan() {
+    // Unterminated quoted labels should not consume arbitrary following lines.
+    let samples = ["<<\"EOF\nprint 1;\n", "<<'EOF\rprint 1;\r", "<<`CMD\r\nprint 1;\r\n"];
+
+    for input in samples {
+        let mut lx = PerlLexer::new(input);
+        let mut token_count = 0;
+        while let Some(token) = lx.next_token() {
+            token_count += 1;
+            if matches!(token.token_type, perl_lexer::TokenType::EOF) {
+                break;
+            }
+            assert!(token_count < 40, "Too many tokens, possible infinite loop for {input:?}");
+        }
+    }
+}

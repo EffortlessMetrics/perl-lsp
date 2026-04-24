@@ -38,3 +38,21 @@ fn test_heredoc_timeout() {
 
     assert!(duration < Duration::from_secs(10), "Lexer should not hang for more than 10 seconds");
 }
+
+#[test]
+fn test_unterminated_quoted_heredoc_label_stays_bounded() {
+    let mut code = String::from("my $x = <<\"EOF\n");
+    for _ in 0..50_000 {
+        code.push_str("line with content\r\n");
+    }
+
+    let start = Instant::now();
+    let mut lexer = PerlLexer::new(&code);
+    let _tokens = lexer.collect_tokens();
+    let duration = start.elapsed();
+
+    assert!(
+        duration < Duration::from_secs(10),
+        "Lexer should keep malformed quoted heredoc handling bounded"
+    );
+}

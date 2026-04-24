@@ -391,6 +391,54 @@ impl<'a> PerlLexer<'a> {
         (end, visible_end)
     }
 
+    /// Parse a quoted heredoc label, bounded to the current logical line.
+    ///
+    /// Returns `Some(label)` only when a matching closing quote is found before
+    /// any newline (`\n`, `\r`, or `\r\n`). Returns `None` for unterminated or
+    /// malformed quoted labels so callers can fall back to non-heredoc parsing.
+    #[inline]
+    fn parse_quoted_heredoc_label(&mut self, quote: char, text: &mut String) -> Option<String> {
+        text.push(quote);
+        self.advance(); // consume opening quote
+
+        let mut delim = String::new();
+        while self.position < self.input.len() {
+            let ch = self.current_char()?;
+
+            // Heredoc labels must terminate on the same line as the `<<` marker.
+            if matches!(ch, '\n' | '\r') {
+                return None;
+            }
+
+            if ch == '\\' {
+                // Keep escaped quote/backslash sequences intact in the raw label.
+                text.push(ch);
+                self.advance();
+
+                if self.position < self.input.len()
+                    && let Some(escaped) = self.current_char()
+                {
+                    delim.push(escaped);
+                    text.push(escaped);
+                    self.advance();
+                }
+                continue;
+            }
+
+            if ch == quote {
+                text.push(quote);
+                self.advance(); // consume closing quote
+                return Some(delim);
+            }
+
+            delim.push(ch);
+            text.push(ch);
+            self.advance();
+        }
+
+        None
+    }
+
     /// Advance the lexer and return the next token.
     ///
     /// Returns `None` only after an `EOF` token has already been emitted.
@@ -1129,66 +1177,27 @@ impl<'a> PerlLexer<'a> {
         let delimiter = if self.position < self.input.len() {
             match self.current_char() {
                 Some('"') if !backslashed => {
-                    // Double-quoted delimiter
-                    text.push('"');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '"' {
-                                text.push('"');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
+                    // Double-quoted delimiter (must close on this line)
+                    let Some(delim) = self.parse_quoted_heredoc_label('"', &mut text) else {
+                        self.position = start;
+                        return None;
+                    };
                     delim
                 }
                 Some('\'') if !backslashed => {
-                    // Single-quoted delimiter
-                    text.push('\'');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '\'' {
-                                text.push('\'');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
+                    // Single-quoted delimiter (must close on this line)
+                    let Some(delim) = self.parse_quoted_heredoc_label('\'', &mut text) else {
+                        self.position = start;
+                        return None;
+                    };
                     delim
                 }
                 Some('`') if !backslashed => {
-                    // Backtick delimiter
-                    text.push('`');
-                    self.advance();
-                    let mut delim = String::new();
-                    while self.position < self.input.len() {
-                        if let Some(ch) = self.current_char() {
-                            if ch == '`' {
-                                text.push('`');
-                                self.advance();
-                                break;
-                            }
-                            delim.push(ch);
-                            text.push(ch);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
+                    // Backtick delimiter (must close on this line)
+                    let Some(delim) = self.parse_quoted_heredoc_label('`', &mut text) else {
+                        self.position = start;
+                        return None;
+                    };
                     delim
                 }
                 Some(c) if is_perl_identifier_start(c) => {
@@ -2027,17 +2036,10 @@ impl<'a> PerlLexer<'a> {
                     // Check if rest of line is only whitespace
                     // Only treat as data marker if line has no trailing junk
                     if Self::trailing_ws_only(self.input_bytes, self.position) {
-                        // Consume the rest of the line (the marker line)
-                        while self.position < self.input.len()
-                            && self.input_bytes[self.position] != b'\n'
-                        {
-                            self.advance();
-                        }
-                        if self.position < self.input.len()
-                            && self.input_bytes[self.position] == b'\n'
-                        {
-                            self.advance();
-                        }
+                        // Consume exactly the marker line, supporting LF/CRLF/CR.
+                        let (line_end, _) = Self::find_line_end(self.input_bytes, self.position);
+                        self.position = line_end;
+                        self.consume_newline();
 
                         // Switch to data section mode
                         self.mode = LexerMode::InDataSection;

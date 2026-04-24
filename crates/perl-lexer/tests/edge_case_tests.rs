@@ -200,6 +200,32 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_indented_with_tab_terminator() -> R {
+    let input = "<<~END\n\tline\n\tEND\nmy $x = 1;\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    let has_heredoc = sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart));
+    let has_my =
+        sig.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
+    assert!(has_heredoc, "expected HeredocStart");
+    assert!(has_my, "expected tokenization to continue after <<~ terminator");
+    Ok(())
+}
+
+#[test]
+fn data_marker_with_cr_line_end_switches_cleanly() -> R {
+    let input = "print 1;\r__DATA__\rpayload\r";
+    let sig = significant(input);
+
+    let has_marker = sig.iter().any(|t| matches!(t.token_type, TokenType::DataMarker(_)));
+    let has_body = sig.iter().any(|t| matches!(t.token_type, TokenType::DataBody(_)));
+
+    assert!(has_marker, "expected __DATA__ marker to be detected with CR line endings");
+    assert!(has_body, "expected data body token after marker");
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================
