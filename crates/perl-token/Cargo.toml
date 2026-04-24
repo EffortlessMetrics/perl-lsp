@@ -21,3 +21,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+perl-lexer.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[[bench]]
+name = "token_scorecard"
+harness = false

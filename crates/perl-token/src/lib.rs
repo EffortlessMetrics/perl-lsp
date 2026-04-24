@@ -414,6 +414,158 @@ impl TokenKind {
     /// assert_eq!(TokenKind::Sub.display_name(), "'sub'");
     /// assert_eq!(TokenKind::Number.display_name(), "number");
     /// ```
+    /// Return `true` when this kind is a Perl keyword token.
+    pub fn is_keyword(self) -> bool {
+        matches!(
+            self,
+            Self::My
+                | Self::Our
+                | Self::Local
+                | Self::State
+                | Self::Sub
+                | Self::If
+                | Self::Elsif
+                | Self::Else
+                | Self::Unless
+                | Self::While
+                | Self::Until
+                | Self::For
+                | Self::Foreach
+                | Self::Return
+                | Self::Package
+                | Self::Use
+                | Self::No
+                | Self::Begin
+                | Self::End
+                | Self::Check
+                | Self::Init
+                | Self::Unitcheck
+                | Self::Eval
+                | Self::Do
+                | Self::Given
+                | Self::When
+                | Self::Default
+                | Self::Try
+                | Self::Catch
+                | Self::Finally
+                | Self::Continue
+                | Self::Next
+                | Self::Last
+                | Self::Redo
+                | Self::Goto
+                | Self::Class
+                | Self::Method
+                | Self::Field
+                | Self::Format
+                | Self::Undef
+                | Self::Defer
+        )
+    }
+
+    /// Return `true` when this kind is an operator token.
+    pub fn is_operator(self) -> bool {
+        matches!(
+            self,
+            Self::Assign
+                | Self::Plus
+                | Self::Minus
+                | Self::Star
+                | Self::Slash
+                | Self::Percent
+                | Self::Power
+                | Self::LeftShift
+                | Self::RightShift
+                | Self::BitwiseAnd
+                | Self::BitwiseOr
+                | Self::BitwiseXor
+                | Self::BitwiseNot
+                | Self::PlusAssign
+                | Self::MinusAssign
+                | Self::StarAssign
+                | Self::SlashAssign
+                | Self::PercentAssign
+                | Self::DotAssign
+                | Self::AndAssign
+                | Self::OrAssign
+                | Self::XorAssign
+                | Self::PowerAssign
+                | Self::LeftShiftAssign
+                | Self::RightShiftAssign
+                | Self::LogicalAndAssign
+                | Self::LogicalOrAssign
+                | Self::DefinedOrAssign
+                | Self::Equal
+                | Self::NotEqual
+                | Self::Match
+                | Self::NotMatch
+                | Self::SmartMatch
+                | Self::Less
+                | Self::Greater
+                | Self::LessEqual
+                | Self::GreaterEqual
+                | Self::Spaceship
+                | Self::StringCompare
+                | Self::And
+                | Self::Or
+                | Self::Not
+                | Self::DefinedOr
+                | Self::WordAnd
+                | Self::WordOr
+                | Self::WordNot
+                | Self::WordXor
+                | Self::Arrow
+                | Self::FatArrow
+                | Self::Dot
+                | Self::Range
+                | Self::Ellipsis
+                | Self::Increment
+                | Self::Decrement
+                | Self::DoubleColon
+                | Self::Question
+                | Self::Colon
+                | Self::Backslash
+        )
+    }
+
+    /// Return `true` when this kind is a delimiter or punctuation token.
+    pub fn is_delimiter(self) -> bool {
+        matches!(
+            self,
+            Self::LeftParen
+                | Self::RightParen
+                | Self::LeftBrace
+                | Self::RightBrace
+                | Self::LeftBracket
+                | Self::RightBracket
+                | Self::Semicolon
+                | Self::Comma
+        )
+    }
+
+    /// Return `true` when this kind is a literal-like token.
+    pub fn is_literal(self) -> bool {
+        matches!(
+            self,
+            Self::Number
+                | Self::String
+                | Self::Regex
+                | Self::Substitution
+                | Self::Transliteration
+                | Self::QuoteSingle
+                | Self::QuoteDouble
+                | Self::QuoteWords
+                | Self::QuoteCommand
+                | Self::HeredocStart
+                | Self::HeredocBody
+                | Self::FormatBody
+                | Self::DataMarker
+                | Self::DataBody
+                | Self::VString
+                | Self::UnknownRest
+                | Self::HeredocDepthLimit
+        )
+    }
+
     pub fn display_name(self) -> &'static str {
         match self {
             // Keywords
@@ -560,5 +712,33 @@ impl TokenKind {
             TokenKind::Eof => "end of input",
             TokenKind::Unknown => "unknown token",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenKind;
+
+    fn p95_index(sample_count: usize) -> usize {
+        ((sample_count * 95 + 99) / 100).saturating_sub(1).min(sample_count.saturating_sub(1))
+    }
+
+    #[test]
+    fn token_kind_category_predicates_classify_correctly() {
+        assert!(TokenKind::My.is_keyword());
+        assert!(!TokenKind::My.is_operator());
+
+        assert!(TokenKind::Assign.is_operator());
+        assert!(!TokenKind::Assign.is_delimiter());
+
+        assert!(TokenKind::LeftBrace.is_delimiter());
+        assert!(TokenKind::String.is_literal());
+        assert!(!TokenKind::Identifier.is_literal());
+    }
+
+    #[test]
+    fn corrected_p95_formula_does_not_return_max_for_n20() {
+        assert_eq!(p95_index(20), 18);
+        assert_eq!(p95_index(5), 4);
     }
 }
