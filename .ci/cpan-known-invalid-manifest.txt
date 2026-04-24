@@ -1,0 +1,6 @@
+# CPAN corpus files intentionally treated as known-invalid Perl templates/skeletons.
+target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/default/lib/AppFile.pm
+target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/tutorial/lib/AppFile.pm
+target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/tutorial/lib/AppFile/Schema.pm
+target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/tutorial/lib/AppFile/Schema/Result/Entry.pm
+target/cpan-corpus/lib/perl5/auto/share/dist/Dancer2/skel/tutorial/lib/AppFile/Schema/Result/User.pm

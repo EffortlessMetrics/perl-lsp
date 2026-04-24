@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use perl_parser::{Node, NodeKind, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
@@ -159,6 +159,12 @@ pub struct SweepReport {
     pub files_unreadable: usize,
     pub clean_files: usize,
     pub files_with_errors: usize,
+    /// Files that could not be read as UTF-8 text.
+    ///
+    /// Introduced in schema 1.4.0. Captured regardless of verbose mode so
+    /// classification manifests can explicitly track unreadable files.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub unreadable_files: Vec<String>,
     pub total_error_nodes: usize,
     pub first_error_buckets: BTreeMap<String, usize>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
@@ -266,6 +272,186 @@ pub struct RatchetViolation {
     pub metric: String,
     pub baseline_value: String,
     pub current_value: String,
+}
+
+#[derive(Debug, Clone)]
+struct DirtyClassification {
+    clean_files: usize,
+    valid_parser_gaps: BTreeSet<String>,
+    expected_recovery_only: BTreeSet<String>,
+    known_invalid: BTreeSet<String>,
+    unreadable: BTreeSet<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ClassificationManifests {
+    valid_parser_gap: BTreeSet<String>,
+    expected_recovery_only: BTreeSet<String>,
+    known_invalid: BTreeSet<String>,
+    unreadable: BTreeSet<String>,
+}
+
+fn parse_path_manifest(path: &Path) -> Result<BTreeSet<String>> {
+    let file = fs::File::open(path)
+        .with_context(|| format!("Failed to open path manifest: {}", path.display()))?;
+    let reader = std::io::BufReader::new(file);
+    let mut entries = BTreeSet::new();
+    for line in reader.lines() {
+        let line = line.context("Failed to read path manifest line")?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        entries.insert(trimmed.to_string());
+    }
+    Ok(entries)
+}
+
+fn profile_manifest_paths(profile: &str) -> Option<[(String, PathBuf); 4]> {
+    let prefix = match profile {
+        "system" => "parser",
+        "cpan" => "cpan",
+        _ => return None,
+    };
+    let root = super::cpan_corpus::workspace_root();
+    Some([
+        (
+            "valid_parser_gap".to_string(),
+            root.join(format!(".ci/{prefix}-valid-parser-gap-manifest.txt")),
+        ),
+        (
+            "expected_recovery_only".to_string(),
+            root.join(format!(".ci/{prefix}-known-recovery-manifest.txt")),
+        ),
+        (
+            "known_invalid".to_string(),
+            root.join(format!(".ci/{prefix}-known-invalid-manifest.txt")),
+        ),
+        (
+            "unreadable".to_string(),
+            root.join(format!(".ci/{prefix}-known-unreadable-manifest.txt")),
+        ),
+    ])
+}
+
+fn load_classification_manifests(profile: &str) -> Result<Option<ClassificationManifests>> {
+    let Some(paths) = profile_manifest_paths(profile) else {
+        return Ok(None);
+    };
+
+    let mut parsed = BTreeMap::new();
+    for (name, path) in paths {
+        if !path.exists() {
+            return Err(color_eyre::eyre::eyre!(
+                "Missing {profile} classification manifest '{name}': {}",
+                path.display(),
+            ));
+        }
+        parsed.insert(name, parse_path_manifest(&path)?);
+    }
+
+    Ok(Some(ClassificationManifests {
+        valid_parser_gap: parsed.remove("valid_parser_gap").unwrap_or_default(),
+        expected_recovery_only: parsed.remove("expected_recovery_only").unwrap_or_default(),
+        known_invalid: parsed.remove("known_invalid").unwrap_or_default(),
+        unreadable: parsed.remove("unreadable").unwrap_or_default(),
+    }))
+}
+
+fn classify_dirty_files(
+    report: &SweepReport,
+    manifests: &ClassificationManifests,
+) -> Result<DirtyClassification> {
+    let mut valid_parser_gaps = BTreeSet::new();
+    let mut expected_recovery_only = BTreeSet::new();
+    let mut known_invalid = BTreeSet::new();
+    let unreadable: BTreeSet<String> = report.unreadable_files.iter().cloned().collect();
+    let dirty_errors: BTreeSet<String> =
+        report.files_by_bucket.values().flat_map(|v| v.iter().cloned()).collect();
+
+    let mut violations = Vec::new();
+
+    for file in &unreadable {
+        let mut categories = 0usize;
+        if manifests.unreadable.contains(file) {
+            categories += 1;
+        }
+        if manifests.valid_parser_gap.contains(file) {
+            categories += 1;
+        }
+        if manifests.expected_recovery_only.contains(file) {
+            categories += 1;
+        }
+        if manifests.known_invalid.contains(file) {
+            categories += 1;
+        }
+        if categories != 1 {
+            violations.push(format!(
+                "Unreadable file must be classified exactly once: {file} (matches {categories} categories)",
+            ));
+        }
+    }
+
+    for file in &dirty_errors {
+        let mut matches = Vec::new();
+        if manifests.valid_parser_gap.contains(file) {
+            matches.push("valid_parser_gap");
+        }
+        if manifests.expected_recovery_only.contains(file) {
+            matches.push("expected_recovery_only");
+        }
+        if manifests.known_invalid.contains(file) {
+            matches.push("known_invalid");
+        }
+        if manifests.unreadable.contains(file) {
+            matches.push("unreadable");
+        }
+
+        match matches.len() {
+            1 => match matches[0] {
+                "valid_parser_gap" => {
+                    valid_parser_gaps.insert(file.clone());
+                }
+                "expected_recovery_only" => {
+                    expected_recovery_only.insert(file.clone());
+                }
+                "known_invalid" => {
+                    known_invalid.insert(file.clone());
+                }
+                _ => violations
+                    .push(format!("Error file cannot be categorized as unreadable: {file}",)),
+            },
+            0 => violations.push(format!("Unclassified dirty file: {file}")),
+            _ => violations.push(format!(
+                "Dirty file appears in multiple categories ({}): {file}",
+                matches.join(", ")
+            )),
+        }
+    }
+
+    if !violations.is_empty() {
+        return Err(color_eyre::eyre::eyre!(
+            "Dirty-file classification failed:\n{}",
+            violations.join("\n")
+        ));
+    }
+
+    Ok(DirtyClassification {
+        clean_files: report.clean_files,
+        valid_parser_gaps,
+        expected_recovery_only,
+        known_invalid,
+        unreadable,
+    })
+}
+
+fn print_classification_summary(summary: &DirtyClassification) {
+    println!("\n--- Dirty file classification ---");
+    println!("Clean files:             {}", summary.clean_files);
+    println!("Valid parser gaps:       {}", summary.valid_parser_gaps.len());
+    println!("Expected recovery-only:  {}", summary.expected_recovery_only.len());
+    println!("Known invalid Perl:      {}", summary.known_invalid.len());
+    println!("Unreadable files:        {}", summary.unreadable.len());
 }
 
 /// Default high-level corpus root directories for system Perl
@@ -679,6 +865,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_unreadable = 0usize;
     let mut clean_files = 0usize;
     let mut files_with_errors = 0usize;
+    let mut unreadable_files: Vec<String> = Vec::new();
     let mut total_error_nodes = 0usize;
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -710,6 +897,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
+                unreadable_files.push(portable_path.clone());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
@@ -824,7 +1012,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
 
     let report = SweepReport {
-        schema_version: "1.3.0".to_string(),
+        schema_version: "1.4.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
         corpus_profile: corpus_profile.clone(),
@@ -839,6 +1027,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_unreadable,
         clean_files,
         files_with_errors,
+        unreadable_files,
         total_error_nodes,
         first_error_buckets,
         files_by_bucket,
@@ -923,10 +1112,44 @@ pub fn run(config: SweepConfig) -> Result<()> {
         }
 
         if config.enforce {
+            let mut classification_pair: Option<(DirtyClassification, DirtyClassification)> = None;
+            if let Some(manifests) = load_classification_manifests(&corpus_profile)? {
+                let current_classification = classify_dirty_files(&report, &manifests)?;
+                print_classification_summary(&current_classification);
+                let baseline_classification = classify_dirty_files(&baseline, &manifests)?;
+                classification_pair = Some((current_classification, baseline_classification));
+            }
+
             let violations = enforce_ratchet(&report, &baseline);
-            if !violations.is_empty() {
+            let mut all_violations = violations;
+            if let Some((current, baseline)) = classification_pair {
+                if !current.valid_parser_gaps.is_subset(&baseline.valid_parser_gaps) {
+                    let new_gaps: Vec<String> = current
+                        .valid_parser_gaps
+                        .difference(&baseline.valid_parser_gaps)
+                        .cloned()
+                        .collect();
+                    all_violations.push(RatchetViolation {
+                        metric: "valid_parser_gap_new_files".to_string(),
+                        baseline_value: baseline.valid_parser_gaps.len().to_string(),
+                        current_value: format!(
+                            "{} (+{})",
+                            current.valid_parser_gaps.len(),
+                            new_gaps.len()
+                        ),
+                    });
+                }
+                if current.valid_parser_gaps.len() > baseline.valid_parser_gaps.len() {
+                    all_violations.push(RatchetViolation {
+                        metric: "valid_parser_gap_count".to_string(),
+                        baseline_value: baseline.valid_parser_gaps.len().to_string(),
+                        current_value: current.valid_parser_gaps.len().to_string(),
+                    });
+                }
+            }
+            if !all_violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
-                for v in &violations {
+                for v in &all_violations {
                     println!(
                         "  VIOLATION: {} — baseline: {}, current: {}",
                         v.metric, v.baseline_value, v.current_value
@@ -934,7 +1157,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 }
                 return Err(color_eyre::eyre::eyre!(
                     "Ratchet enforcement failed: {} violation(s) detected",
-                    violations.len(),
+                    all_violations.len(),
                 ));
             }
             println!("Ratchet: all checks passed");
@@ -1160,6 +1383,7 @@ mod tests {
             files_unreadable,
             clean_files,
             files_with_errors,
+            unreadable_files: vec![],
             total_error_nodes,
             first_error_buckets,
             files_by_bucket: BTreeMap::new(),

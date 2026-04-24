@@ -27,6 +27,7 @@ use crate::utils::project_root;
 mod dap;
 mod lsp;
 mod parser;
+mod parser_classification;
 mod quality;
 mod tests;
 mod workspace;

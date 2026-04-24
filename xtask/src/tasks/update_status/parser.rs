@@ -9,11 +9,8 @@ use std::time::Duration;
 use color_eyre::eyre::Result;
 use regex::Regex;
 
+use super::parser_classification::classify_for_status;
 use super::replace_block;
-
-// ---------------------------------------------------------------------------
-// Parser metrics struct
-// ---------------------------------------------------------------------------
 
 pub(super) struct ParserMetrics {
     pub syntax_sections: usize,
@@ -89,22 +86,23 @@ fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
 
-// ---------------------------------------------------------------------------
-// Generator
-// ---------------------------------------------------------------------------
-
 pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) -> Result<String> {
+    let root = crate::utils::project_root()?;
     let system_row = metrics.system_receipt.as_ref().map_or_else(
         || {
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classified = classify_for_status(&root, "system", report);
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, clean `{}`, valid-gaps `{}`, recovery-only `{}`, known-invalid `{}`, unreadable `{}`, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
-                report.files_unreadable,
-                report.files_with_errors,
+                report.clean_files,
+                classified.valid_parser_gap,
+                classified.expected_recovery_only,
+                classified.known_invalid,
+                classified.unreadable,
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +113,15 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classified = classify_for_status(&root, "cpan", report);
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; clean `{}`, valid-gaps `{}`, recovery-only `{}`, known-invalid `{}`, unreadable `{}`, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
-                report.files_unreadable,
-                report.files_with_errors,
+                report.clean_files,
+                classified.valid_parser_gap,
+                classified.expected_recovery_only,
+                classified.known_invalid,
+                classified.unreadable,
                 short_day(&report.timestamp),
             )
         },
@@ -245,10 +247,6 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     Ok(text)
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -362,6 +360,7 @@ mod tests {
             files_unreadable: 0,
             clean_files: 10,
             files_with_errors: 0,
+            unreadable_files: vec![],
             total_error_nodes: 0,
             first_error_buckets: BTreeMap::new(),
             files_by_bucket: BTreeMap::new(),
