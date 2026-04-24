@@ -857,6 +857,11 @@ pub fn run(config: SweepConfig) -> Result<()> {
                 }
             }
             RecoverySalvageClass::CatastrophicFailure => {
+                // This arm is unreachable in this branch: `from_parse` is always
+                // called with `catastrophic=false` here.  True catastrophic failures
+                // are handled above via the `Err(_)` arm which calls `continue`.
+                // Keeping the arm to satisfy the exhaustive match; clippy will flag
+                // it as unreachable if the enum ever gains a structural invariant.
                 files_with_errors += 1;
                 total_dirty_files += 1;
                 files_with_catastrophic_parse_failure += 1;

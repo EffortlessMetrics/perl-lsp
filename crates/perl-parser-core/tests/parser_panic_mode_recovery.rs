@@ -418,12 +418,26 @@ fn parser_recovery_profiles_error_nodes_as_accuracy_issue() -> ParseResult<()> {
     let mut parser = Parser::new("my $x = 1 + ; my $y = 2;");
     let ast = parser.parse()?;
     let profile = RecoverySalvageProfile::from_parse(&ast, parser.errors(), false);
+    // The class must not be Clean — the parser saw a malformed expression.
+    assert_ne!(
+        profile.class,
+        RecoverySalvageClass::Clean,
+        "recovery profile must not be Clean for malformed input: {:?}",
+        profile.class
+    );
+    // At least one recovery signal must be present: either an ERROR node or a
+    // Recovered diagnostic.  Both counts together prove `from_parse` walked the
+    // AST and scanned diagnostics rather than returning a zero-filled struct.
     assert!(
-        matches!(
-            profile.class,
-            RecoverySalvageClass::ErrorNodesPresent | RecoverySalvageClass::StructuredRecoveryOnly
-        ),
-        "recovery profile should classify malformed expression as dirty: {:?}",
+        profile.error_node_count > 0 || profile.recovered_count > 0,
+        "profile must record at least one error or recovery signal: {:?}",
+        profile
+    );
+    // Catastrophic is also wrong — parse() returned Ok above.
+    assert_ne!(
+        profile.class,
+        RecoverySalvageClass::CatastrophicFailure,
+        "parse() succeeded so catastrophic must not be set: {:?}",
         profile.class
     );
     Ok(())
