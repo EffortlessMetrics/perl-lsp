@@ -153,13 +153,13 @@ fn collect_names_from_expr(node: &Node, names: &mut Vec<(String, usize, usize)>)
 
 /// Fallback: scan source text for `@EXPORT` / `@EXPORT_OK` assignments with `qw()`.
 fn collect_exported_names_from_source(source: &str, names: &mut Vec<(String, usize, usize)>) {
-    for (i, line) in source.lines().enumerate() {
+    let mut line_start = 0usize;
+    for line in source.lines() {
         let trimmed = line.trim();
         if !trimmed.contains("@EXPORT") {
+            line_start += line.len() + 1;
             continue;
         }
-
-        let line_start = source.lines().take(i).map(|l| l.len() + 1).sum::<usize>();
 
         if let Some(qw_start) = trimmed.find("qw") {
             let after_qw = &trimmed[qw_start + 2..];
@@ -171,6 +171,7 @@ fn collect_exported_names_from_source(source: &str, names: &mut Vec<(String, usi
                 }
             }
         }
+        line_start += line.len() + 1;
     }
 }
 
