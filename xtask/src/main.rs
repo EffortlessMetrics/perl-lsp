@@ -16,6 +16,7 @@ use tasks::gates::{GateTier, OutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
+use tasks::ux_scorecard::UxScorecardFormat;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -963,6 +964,25 @@ enum Commands {
         command: MetricsCommand,
     },
 
+    /// Publish structured editor UX scorecard artifact/status from harness fixtures.
+    UxScorecard {
+        /// Output format for stdout.
+        #[arg(long, value_enum, default_value = "human")]
+        format: UxScorecardOutputFormat,
+        /// Optional path to scenario measurements JSON.
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Optional path to emitted scorecard JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+        /// Enforce regression-only ratchet against committed baseline.
+        #[arg(long)]
+        ratchet_check: bool,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -1289,6 +1309,12 @@ enum PrepCratesMode {
     All,
 }
 
+#[derive(ValueEnum, Clone)]
+enum UxScorecardOutputFormat {
+    Human,
+    Json,
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
@@ -1597,6 +1623,13 @@ fn main() -> Result<()> {
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
+        Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
+            let format = match format {
+                UxScorecardOutputFormat::Human => UxScorecardFormat::Human,
+                UxScorecardOutputFormat::Json => UxScorecardFormat::Json,
+            };
+            ux_scorecard::run(format, input, output, status_md, ratchet_check)
+        }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {
