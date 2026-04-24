@@ -441,6 +441,10 @@ pub struct DebugAdapter {
     next_goto_target_id: Arc<Mutex<i64>>,
     /// Workspace root for path validation (set during launch)
     workspace_root: Arc<Mutex<Option<PathBuf>>>,
+    /// Monotonic token describing execution/attach state changes relevant to stack frames.
+    stack_trace_epoch: Arc<AtomicU64>,
+    /// Cached stack frames for the current stack-trace epoch.
+    stack_trace_cache: Arc<Mutex<Option<StackTraceCache>>>,
 }
 
 /// Active debug session
@@ -457,6 +461,12 @@ struct DebugSession {
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+}
+
+#[derive(Debug, Clone)]
+struct StackTraceCache {
+    epoch: u64,
+    frames: Vec<StackFrame>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -557,6 +567,8 @@ impl DebugAdapter {
             goto_targets: Arc::new(Mutex::new(HashMap::new())),
             next_goto_target_id: Arc::new(Mutex::new(1)),
             workspace_root: Arc::new(Mutex::new(None)),
+            stack_trace_epoch: Arc::new(AtomicU64::new(1)),
+            stack_trace_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -722,6 +734,27 @@ impl DebugAdapter {
                 }
             }
         }
+    }
+
+    /// Invalidate stack-frame cache whenever execution or attach state changes.
+    fn invalidate_stack_trace_cache(&self) {
+        self.stack_trace_epoch.fetch_add(1, Ordering::AcqRel);
+        let mut cache = lock_or_recover(&self.stack_trace_cache, "debug_adapter.stack_trace_cache");
+        *cache = None;
+    }
+
+    /// Cache stack frames for the current execution epoch.
+    fn cache_stack_frames(&self, frames: Vec<StackFrame>) {
+        let epoch = self.stack_trace_epoch.load(Ordering::Acquire);
+        let mut cache = lock_or_recover(&self.stack_trace_cache, "debug_adapter.stack_trace_cache");
+        *cache = Some(StackTraceCache { epoch, frames });
+    }
+
+    /// Read stack-frame cache for the current execution epoch.
+    fn cached_stack_frames(&self) -> Option<Vec<StackFrame>> {
+        let epoch = self.stack_trace_epoch.load(Ordering::Acquire);
+        let cache = lock_or_recover(&self.stack_trace_cache, "debug_adapter.stack_trace_cache");
+        cache.as_ref().filter(|entry| entry.epoch == epoch).map(|entry| entry.frames.clone())
     }
 }
 #[cfg(test)]

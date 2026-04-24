@@ -379,6 +379,7 @@ impl DebugAdapter {
                             .to_string(),
                     );
                 }
+                self.invalidate_stack_trace_cache();
 
                 // Apply any function breakpoints configured before launch.
                 self.apply_stored_function_breakpoints();
@@ -489,6 +490,8 @@ impl DebugAdapter {
         let last_exception_message = self.last_exception_message.clone();
         let tcp_session = self.tcp_session.clone();
         let attached_pid = self.attached_pid.clone();
+        let stack_trace_epoch = self.stack_trace_epoch.clone();
+        let stack_trace_cache = self.stack_trace_cache.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -545,6 +548,10 @@ impl DebugAdapter {
                 match reader.read_line(&mut line) {
                     Ok(0) => {
                         tracing::debug!("Perl debugger process terminated");
+                        stack_trace_epoch.fetch_add(1, Ordering::AcqRel);
+                        if let Ok(mut cache) = stack_trace_cache.lock() {
+                            *cache = None;
+                        }
                         DebugAdapter::clear_active_session_state_with_state(
                             &session,
                             &tcp_session,
@@ -804,6 +811,11 @@ impl DebugAdapter {
                                 continue;
                             }
 
+                            stack_trace_epoch.fetch_add(1, Ordering::AcqRel);
+                            if let Ok(mut cache) = stack_trace_cache.lock() {
+                                *cache = None;
+                            }
+
                             if should_emit_stopped
                                 && let Some(ref sender) = sender
                                 && !emit_event_safe(
@@ -887,6 +899,10 @@ impl DebugAdapter {
                             };
 
                             // Send stopped event with robust error handling
+                            stack_trace_epoch.fetch_add(1, Ordering::AcqRel);
+                            if let Ok(mut cache) = stack_trace_cache.lock() {
+                                *cache = None;
+                            }
                             if let Some(ref sender) = sender
                                 && !emit_event_safe(
                                     sender,
@@ -975,6 +991,7 @@ impl DebugAdapter {
                 if let Ok(mut guard) = self.attached_pid.lock() {
                     *guard = Some(pid);
                 }
+                self.invalidate_stack_trace_cache();
 
                 let stop_on_entry =
                     args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
@@ -1133,6 +1150,7 @@ impl DebugAdapter {
                         if let Ok(mut guard) = self.tcp_session.lock() {
                             *guard = Some(session);
                         }
+                        self.invalidate_stack_trace_cache();
 
                         // Start reader thread
                         if let Ok(mut guard) = self.tcp_session.lock() {
@@ -1294,6 +1312,7 @@ impl DebugAdapter {
 
     /// Clear active process session, TCP session, and PID-attach mode state.
     pub(super) fn clear_active_session_state(&self) {
+        self.invalidate_stack_trace_cache();
         Self::clear_active_session_state_with_state(
             &self.session,
             &self.tcp_session,
@@ -1478,6 +1497,7 @@ impl DebugAdapter {
                 // stop) and auto-continue until a user breakpoint is hit.
                 session.state = DebugState::Running;
                 session.last_resume_mode = ResumeMode::RunToBreakpoint;
+                self.invalidate_stack_trace_cache();
                 let _ = stdin.write_all(b"c\n");
                 let _ = stdin.flush();
             }

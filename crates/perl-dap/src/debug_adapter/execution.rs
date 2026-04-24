@@ -26,10 +26,12 @@ impl DebugAdapter {
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
             session.variables.clear();
+            self.invalidate_stack_trace_cache();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
             let _ = self.send_continue_signal(pid);
+            self.invalidate_stack_trace_cache();
             thread_id = Self::i64_to_i32_saturating(i64::from(pid));
         }
 
@@ -70,6 +72,7 @@ impl DebugAdapter {
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
             session.variables.clear();
+            self.invalidate_stack_trace_cache();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -106,6 +109,7 @@ impl DebugAdapter {
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
             session.variables.clear();
+            self.invalidate_stack_trace_cache();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -143,6 +147,7 @@ impl DebugAdapter {
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
             session.variables.clear();
+            self.invalidate_stack_trace_cache();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",

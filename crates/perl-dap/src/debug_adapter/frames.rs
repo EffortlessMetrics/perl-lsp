@@ -16,6 +16,22 @@ impl DebugAdapter {
             args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
         let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
         let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
+        if let Some(cached_frames) = self.cached_stack_frames() {
+            let stack_frames =
+                Self::paginate_stack_frames(cached_frames, start_frame, requested_count);
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "stackTrace".to_string(),
+                body: Some(json!({
+                    "stackFrames": stack_frames,
+                    "totalFrames": stack_frames.len()
+                })),
+                message: None,
+            };
+        }
+
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -40,21 +56,15 @@ impl DebugAdapter {
             }
         }
 
-        let parsed_frames = if let Some(lines) = framed_output_lines.as_ref() {
+        let framed_frames = if let Some(lines) = framed_output_lines.as_ref() {
             let output = lines.join("\n");
-            let framed_frames =
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
-            if framed_frames.is_empty() {
-                let output_lines = self.snapshot_recent_output_lines();
-                if output_lines.is_empty() {
-                    Vec::new()
-                } else {
-                    let output = output_lines.join("\n");
-                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-                }
-            } else {
-                framed_frames
-            }
+            Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
+        } else {
+            Vec::new()
+        };
+
+        let parsed_frames = if Self::is_valid_stack_trace_snapshot(&framed_frames) {
+            framed_frames
         } else {
             let output_lines = self.snapshot_recent_output_lines();
             if output_lines.is_empty() {
@@ -71,12 +81,17 @@ impl DebugAdapter {
             {
                 session.stack_frames = parsed_frames.clone();
             }
+            self.cache_stack_frames(parsed_frames.clone());
             parsed_frames
         } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            Self::filter_user_visible_frames(session.stack_frames.clone())
+            let cached = Self::filter_user_visible_frames(session.stack_frames.clone());
+            if !cached.is_empty() {
+                self.cache_stack_frames(cached.clone());
+            }
+            cached
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
-            vec![StackFrame {
+            let attached = vec![StackFrame {
                 id: Self::i64_to_i32_saturating(i64::from(pid)),
                 name: format!("attached::process::{pid}"),
                 source: Source {
@@ -88,10 +103,12 @@ impl DebugAdapter {
                 column: 1,
                 end_line: None,
                 end_column: None,
-            }]
+            }];
+            self.cache_stack_frames(attached.clone());
+            attached
         } else {
             // No session - return placeholder frame for testing
-            vec![StackFrame {
+            let placeholder = vec![StackFrame {
                 id: 1,
                 name: "main::hello".to_string(),
                 source: Source {
@@ -103,7 +120,9 @@ impl DebugAdapter {
                 column: 1,
                 end_line: None,
                 end_column: None,
-            }]
+            }];
+            self.cache_stack_frames(placeholder.clone());
+            placeholder
         };
         let stack_frames = Self::paginate_stack_frames(stack_frames, start_frame, requested_count);
 
@@ -184,6 +203,16 @@ impl DebugAdapter {
 }
 
 impl DebugAdapter {
+    fn is_valid_stack_trace_snapshot(frames: &[StackFrame]) -> bool {
+        !frames.is_empty()
+            && frames.iter().any(|frame| {
+                frame.line > 0
+                    && !frame.name.trim().is_empty()
+                    && frame.source.path != "<unknown>"
+                    && !frame.source.path.trim().is_empty()
+            })
+    }
+
     fn paginate_stack_frames(
         stack_frames: Vec<StackFrame>,
         start_frame: usize,

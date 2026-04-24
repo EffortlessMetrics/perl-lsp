@@ -144,3 +144,37 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
 
     Ok(())
 }
+
+#[test]
+fn test_stack_trace_repeated_requests_remain_stable() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+
+    let first = adapter.handle_request(1, "stackTrace", None);
+    let second = adapter.handle_request(2, "stackTrace", None);
+
+    let DapMessage::Response { success: first_success, body: first_body, .. } = first else {
+        return Err("Expected first response message".into());
+    };
+    let DapMessage::Response { success: second_success, body: second_body, .. } = second else {
+        return Err("Expected second response message".into());
+    };
+
+    assert!(first_success);
+    assert!(second_success);
+
+    let first_frames = first_body
+        .ok_or("Expected first response body")?
+        .get("stackFrames")
+        .and_then(|v| v.as_array())
+        .ok_or("Expected first stackFrames array")?
+        .clone();
+    let second_frames = second_body
+        .ok_or("Expected second response body")?
+        .get("stackFrames")
+        .and_then(|v| v.as_array())
+        .ok_or("Expected second stackFrames array")?
+        .clone();
+
+    assert_eq!(first_frames, second_frames);
+    Ok(())
+}
