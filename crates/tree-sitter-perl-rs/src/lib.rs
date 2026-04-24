@@ -52,8 +52,12 @@
     clippy::missing_panics_doc
 )]
 
-use perl_ast::Node as AstNode;
+use perl_ast::{Node as AstNode, NodeKind as AstNodeKind};
+use perl_module::import::resolve_known_export_tag;
 use perl_parser_core::Parser as CoreParser;
+use perl_pragma::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::semantic::SemanticModel;
+use perl_semantic_analyzer::symbol::SymbolKind;
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -199,6 +203,42 @@ pub fn language() -> PerlLanguage {
 /// The [`PerlLanguage`] descriptor as a constant.
 pub static LANGUAGE: PerlLanguage = PerlLanguage { kind_names: perl_ast::NodeKind::ALL_KIND_NAMES };
 
+/// A provisional semantic definition result from [`Tree::definition_at_offset`].
+///
+/// This API is intentionally small and read-only while semantic overlay support
+/// is under active development.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct SemanticDefinition {
+    /// Symbol name under the queried offset.
+    pub name: String,
+    /// Fully-qualified symbol name.
+    pub qualified_name: String,
+    /// Symbol classification.
+    pub kind: SymbolKind,
+    /// Start byte offset of the definition.
+    pub start_byte: usize,
+    /// End byte offset of the definition.
+    pub end_byte: usize,
+}
+
+/// A provisional visible import record from [`Tree::visible_imports_at_offset`].
+///
+/// The values are derived from lexical `use` statements that are in scope at
+/// the queried offset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Imported module name from `use <module>`.
+    pub module: String,
+    /// Import arguments normalized into bare symbols when possible.
+    pub symbols: Vec<String>,
+    /// Start byte offset for the import statement.
+    pub start_byte: usize,
+    /// End byte offset for the import statement.
+    pub end_byte: usize,
+}
+
 /// The result of a successful parse: an owned syntax tree and the source text.
 ///
 /// Use [`root_node`][Tree::root_node] to begin traversal.
@@ -240,6 +280,125 @@ impl Tree {
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
     }
+
+    /// Resolve a definition at a byte offset using the shared semantic model facade.
+    ///
+    /// This method is intentionally limited and read-only while the semantic
+    /// overlay API for this crate is still in development.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<SemanticDefinition> {
+        let model = SemanticModel::build(&self.root, &self.source);
+        let symbol = model.definition_at(offset)?;
+        Some(SemanticDefinition {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            kind: symbol.kind,
+            start_byte: symbol.location.start,
+            end_byte: symbol.location.end,
+        })
+    }
+
+    /// Resolve a definition for a byte span by querying at `start_byte`.
+    ///
+    /// This is a convenience wrapper around [`definition_at_offset`][Tree::definition_at_offset].
+    pub fn definition_at_span(
+        &self,
+        start_byte: usize,
+        _end_byte: usize,
+    ) -> Option<SemanticDefinition> {
+        self.definition_at_offset(start_byte)
+    }
+
+    /// Return lexical `use` imports visible at a byte offset.
+    ///
+    /// This first semantic-overlay query is intentionally scoped: it only reports
+    /// visible imports and does not attempt to model mutable editor overlays.
+    pub fn visible_imports_at_offset(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut out = Vec::new();
+        collect_visible_imports(&self.root, offset, &mut out);
+        out
+    }
+
+    /// Return the effective pragma state at `offset`.
+    ///
+    /// This delegates to the shared pragma tracker facade and returns the
+    /// computed compile-time state (`strict`, `warnings`, `feature`, etc.).
+    pub fn effective_pragma_state_at_offset(&self, offset: usize) -> PragmaState {
+        let map = PragmaTracker::build(&self.root);
+        PragmaTracker::state_for_offset(&map, offset)
+    }
+}
+
+fn collect_visible_imports(node: &AstNode, offset: usize, out: &mut Vec<VisibleImport>) {
+    match &node.kind {
+        AstNodeKind::Program { statements } | AstNodeKind::Block { statements } => {
+            for statement in statements {
+                if statement.location.start > offset {
+                    break;
+                }
+                if let Some(import) = to_visible_import(statement) {
+                    out.push(import);
+                }
+                if offset >= statement.location.start && offset <= statement.location.end {
+                    collect_visible_imports(statement, offset, out);
+                }
+            }
+        }
+        AstNodeKind::Subroutine { body, .. } => {
+            if offset >= body.location.start && offset <= body.location.end {
+                collect_visible_imports(body, offset, out);
+            }
+        }
+        AstNodeKind::Package { block, .. } => {
+            if let Some(body) = block
+                && offset >= body.location.start
+                && offset <= body.location.end
+            {
+                collect_visible_imports(body, offset, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn to_visible_import(node: &AstNode) -> Option<VisibleImport> {
+    if let AstNodeKind::Use { module, args, .. } = &node.kind {
+        let mut symbols = Vec::new();
+        for arg in args {
+            if let Some(expanded) = resolve_known_export_tag(module, arg) {
+                symbols.extend(expanded.iter().map(|name| (*name).to_string()));
+            } else if let Some(items) = parse_qw_items(arg) {
+                symbols.extend(items);
+            } else {
+                let normalized = arg.trim_matches(|ch| ch == '\'' || ch == '"').to_string();
+                if !normalized.is_empty() {
+                    symbols.push(normalized);
+                }
+            }
+        }
+
+        return Some(VisibleImport {
+            module: module.clone(),
+            symbols,
+            start_byte: node.location.start,
+            end_byte: node.location.end,
+        });
+    }
+
+    None
+}
+
+fn parse_qw_items(arg: &str) -> Option<Vec<String>> {
+    let trimmed = arg.trim();
+    if !trimmed.starts_with("qw") {
+        return None;
+    }
+
+    let body = trimmed.trim_start_matches("qw").trim();
+    let content = body
+        .trim_start_matches(|ch: char| "([{/<|!".contains(ch))
+        .trim_end_matches(|ch: char| ")]}/>!|".contains(ch));
+
+    Some(content.split_whitespace().map(std::string::ToString::to_string).collect())
 }
 
 /// A borrowed reference to a node in the syntax tree.
@@ -968,7 +1127,10 @@ mod tests {
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
-        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+        assert!(
+            !node.kind().is_empty(),
+            "cursor should remain at valid node after exhausting siblings"
+        );
     }
 
     #[test]
@@ -1009,11 +1171,7 @@ mod tests {
 
         // reset() should bring us back to root
         cursor.reset();
-        assert_eq!(
-            cursor.node().grammar_kind(),
-            "source_file",
-            "reset must return cursor to root"
-        );
+        assert_eq!(cursor.node().grammar_kind(), "source_file", "reset must return cursor to root");
     }
 
     #[test]
@@ -1073,10 +1231,7 @@ mod tests {
             sibling_count += 1;
         }
 
-        assert_eq!(
-            sibling_count, child_count,
-            "sibling count should match root.child_count()"
-        );
+        assert_eq!(sibling_count, child_count, "sibling count should match root.child_count()");
     }
 
     #[test]
