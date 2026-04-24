@@ -168,23 +168,6 @@ impl TokenCache {
         self.segments.iter().filter(|seg| seg.is_after(position)).cloned().collect()
     }
 
-    /// Return all segments that overlap with the given range.
-    ///
-    /// This is useful for determining which segments would be affected by
-    /// an edit or for finding cached tokens in a specific region.
-    ///
-    /// # Arguments
-    ///
-    /// * `start` - Start byte position of the range.
-    /// * `end` - End byte position of the range.
-    ///
-    /// # Returns
-    ///
-    /// A vector of segments overlapping the range `[start, end)`, in source order.
-    fn get_segments_in_range(&self, start: usize, end: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.overlaps(start, end)).cloned().collect()
-    }
-
     /// Add a new segment to the cache, maintaining sorted order.
     ///
     /// If the new segment overlaps with existing segments, those segments are
@@ -204,44 +187,64 @@ impl TokenCache {
         self.segments.insert(idx, segment);
     }
 
-    /// Invalidate segments that overlap with the given range.
-    ///
-    /// Unlike the monolithic cache which cleared entirely on any overlap,
-    /// this only removes the affected segments, preserving unrelated cached
-    /// tokens.
-    ///
-    /// # Arguments
-    ///
-    /// * `start` - Start byte position of the range to invalidate.
-    /// * `end` - End byte position of the range to invalidate.
-    fn invalidate_range(&mut self, start: usize, end: usize) {
-        self.segments.retain(|seg| !seg.overlaps(start, end));
+    fn segment_from_tokens(tokens: Vec<Token>) -> Option<TokenSegment> {
+        match (tokens.first(), tokens.last()) {
+            (Some(first), Some(last)) => Some(TokenSegment::new(first.start, last.end, tokens)),
+            _ => None,
+        }
     }
 
-    /// Adjust segment positions after an edit.
+    /// Invalidate and shift cache segments for a source edit.
     ///
-    /// Segments that start after `edit_start` have their positions shifted
-    /// by the difference between `new_len` and `old_len`. This keeps the
-    /// cache consistent with the modified source.
-    ///
-    /// # Arguments
-    ///
-    /// * `edit_start` - Start byte position of the edit.
-    /// * `old_len` - Length of the removed text.
-    /// * `new_len` - Length of the inserted text.
-    fn adjust_positions(&mut self, edit_start: usize, old_len: usize, new_len: usize) {
+    /// This keeps unaffected prefix/suffix token slices from overlapping
+    /// segments, rather than dropping whole segments on any overlap.
+    /// Returns the number of original segments that intersected the edit.
+    fn apply_edit(&mut self, edit_start: usize, old_len: usize, new_len: usize) -> usize {
+        let edit_end = edit_start + old_len;
         let delta = new_len as isize - old_len as isize;
+        let mut invalidated = 0usize;
+        let mut updated_segments = Vec::with_capacity(self.segments.len() + 1);
 
-        if delta == 0 {
-            return;
-        }
+        for segment in &self.segments {
+            if segment.end <= edit_start {
+                updated_segments.push(segment.clone());
+                continue;
+            }
 
-        for segment in &mut self.segments {
-            if segment.start >= edit_start {
-                segment.start = (segment.start as isize + delta) as usize;
-                segment.end = (segment.end as isize + delta) as usize;
+            if segment.start >= edit_end {
+                let mut shifted = segment.clone();
+                shifted.start = (shifted.start as isize + delta) as usize;
+                shifted.end = (shifted.end as isize + delta) as usize;
+                for token in &mut shifted.tokens {
+                    token.start = (token.start as isize + delta) as usize;
+                    token.end = (token.end as isize + delta) as usize;
+                }
+                updated_segments.push(shifted);
+                continue;
+            }
+
+            invalidated += 1;
+
+            let left_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.end <= edit_start).cloned().collect();
+            if let Some(left_segment) = Self::segment_from_tokens(left_tokens) {
+                updated_segments.push(left_segment);
+            }
+
+            let mut right_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.start >= edit_end).cloned().collect();
+            for token in &mut right_tokens {
+                token.start = (token.start as isize + delta) as usize;
+                token.end = (token.end as isize + delta) as usize;
+            }
+            if let Some(right_segment) = Self::segment_from_tokens(right_tokens) {
+                updated_segments.push(right_segment);
             }
         }
+
+        updated_segments.sort_by_key(|seg| seg.start);
+        self.segments = updated_segments;
+        invalidated
     }
 
     /// Return cached tokens whose `start` is `>= position`.
@@ -440,20 +443,13 @@ impl CheckpointedIncrementalParser {
         let new_content = &edit.new_text;
         self.source.replace_range(edit.start..edit.end, new_content);
 
-        // Track segments that will be invalidated before invalidating
-        let invalidated_segments = self.token_cache.get_segments_in_range(edit.start, edit.end);
-        self.stats.segments_invalidated += invalidated_segments.len();
-
-        // Invalidate token cache for edited range
-        self.token_cache.invalidate_range(edit.start, edit.end);
-
-        // Update checkpoint cache
         let old_len = edit.end - edit.start;
         let new_len = new_content.len();
-        self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
+        self.stats.segments_invalidated +=
+            self.token_cache.apply_edit(edit.start, old_len, new_len);
 
-        // Adjust token cache segment positions for the edit
-        self.token_cache.adjust_positions(edit.start, old_len, new_len);
+        // Update checkpoint cache
+        self.checkpoint_cache.apply_edit(edit.start, old_len, new_len);
 
         // Find nearest checkpoints before and after the edit for two-sided window
         let left_checkpoint = self.checkpoint_cache.find_before(edit.start);
@@ -588,6 +584,7 @@ impl CheckpointedIncrementalParser {
         let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
         let relex_end =
             right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
+        let has_right_checkpoint = right_checkpoint.is_some();
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
@@ -637,14 +634,14 @@ impl CheckpointedIncrementalParser {
             match lexer.next_token() {
                 Some(token) if matches!(token.token_type, perl_lexer::TokenType::EOF) => break,
                 Some(token) => {
+                    if has_right_checkpoint && token.start >= relex_end {
+                        break;
+                    }
                     let token_end = token.end;
                     let token_start = token.start;
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
                     bytes_relexed_this_phase += token_end - token_start;
-                    if token_end >= relex_end {
-                        break;
-                    }
                 }
                 None => break,
             }
@@ -675,8 +672,9 @@ impl CheckpointedIncrementalParser {
             }
         } else {
             self.stats.cache_misses += 1;
-            // Track full tail fallback when no segments are found after relex_end
-            if segments_after.is_empty() {
+            // Track full-tail fallback when either no right checkpoint exists
+            // or no suffix cache can be proven reusable from relex_end.
+            if !has_right_checkpoint || segments_after.is_empty() {
                 self.stats.full_tail_fallbacks += 1;
             }
             // No cache hit — lex the remainder of the source.
@@ -862,5 +860,34 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_insertion_preserves_suffix_segment_and_avoids_full_tail_fallback() {
+        let prefix = format!("{} {}", "a".repeat(100), "b".repeat(399));
+        let source = format!("{prefix};\nmy $x = 1;\nmy $y = 2;\n");
+        let mut parser = CheckpointedIncrementalParser::new();
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 150, end: 150, new_text: "z".to_string() };
+        let incremental_tree = must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(stats.segments_invalidated >= 1, "expected overlapping segment invalidation");
+        assert_eq!(
+            stats.full_tail_fallbacks, 0,
+            "expected right-side segment reuse to avoid full-tail fallback: {stats:?}"
+        );
+
+        let mut expected_source = source;
+        expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+        let mut full = CheckpointedIncrementalParser::new();
+        let full_tree = must(full.parse(expected_source));
+
+        assert_eq!(
+            format!("{incremental_tree:?}"),
+            format!("{full_tree:?}"),
+            "incremental tree diverged from fresh full parse"
+        );
     }
 }
