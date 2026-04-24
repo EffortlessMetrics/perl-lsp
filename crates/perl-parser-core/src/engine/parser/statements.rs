@@ -1047,6 +1047,27 @@ impl<'a> Parser<'a> {
     /// - `Identifier Colon (` — parenthesized expression
     /// - `Identifier Colon Keyword` — if, while, for, my, print, etc.
     /// - `Identifier Colon Identifier` — print, return, etc.
+    /// Check if the 3rd token in a lookahead sequence cannot start a Perl statement.
+    ///
+    /// Tokens like `?`, `:`, `=>`, `;`, `,`, `)`, `]`, `}` are used in expression
+    /// contexts (ternary operators, hash constructors, list separators) and cannot
+    /// start a statement. When the token after `Identifier:` is one of these, the
+    /// colon belongs to a ternary/hash/label expression, not a label statement.
+    fn third_token_cannot_start_statement(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Question      // ternary `?` operator
+            | TokenKind::Colon       // chained ternary else-part
+            | TokenKind::Semicolon  // immediate statement end
+            | TokenKind::Comma      // expression continuation
+            | TokenKind::FatArrow   // hash key-value context
+            | TokenKind::RightParen // closing paren
+            | TokenKind::RightBracket // closing bracket
+            | TokenKind::RightBrace // orphan closing brace
+            | TokenKind::Eof        // end of input
+        )
+    }
+
     fn is_label_start(&mut self) -> bool {
         // We need an identifier followed by a colon
         if self.peek_kind() != Some(TokenKind::Identifier) {
@@ -1054,36 +1075,26 @@ impl<'a> Parser<'a> {
         }
 
         // Check if the second token is a colon
-        if let Ok(second_token) = self.tokens.peek_second() {
-            if second_token.kind == TokenKind::Colon {
-                // Check the 3rd token (token after the colon)
-                // If it can't start a statement, this is not a label
-                if let Ok(third_token) = self.tokens.peek_third() {
-                    match third_token.kind {
-                        // These tokens cannot start a statement,
-                        // so this is not a label
-                        TokenKind::Question      // ternary `?` operator
-                        | TokenKind::Colon       // chained ternary else-part
-                        | TokenKind::Semicolon  // immediate statement end
-                        | TokenKind::Comma      // expression continuation
-                        | TokenKind::FatArrow   // hash key-value context
-                        | TokenKind::RightParen // closing paren
-                        | TokenKind::RightBracket // closing bracket
-                        | TokenKind::RightBrace // orphan closing brace
-                        | TokenKind::Eof => return false, // end of input
-                        // Other tokens (keywords, identifiers, operators,
-                        // left delimiters) can start a statement
-                        _ => {}
-                    }
-                }
-                // Qualified identifiers use `::` which tokenizes as
-                // DoubleColon, so `Identifier Colon` (single colon) is
-                // unambiguously a label — even for uppercase names like
-                // OUTER:, LOOP:, LINE: which are idiomatic Perl labels.
-                return true;
+        let Ok(second_token) = self.tokens.peek_second() else {
+            return false;
+        };
+        if second_token.kind != TokenKind::Colon {
+            return false;
+        }
+
+        // Check the 3rd token (token after the colon)
+        // If it can't start a statement, this is not a label
+        if let Ok(third_token) = self.tokens.peek_third() {
+            if Self::third_token_cannot_start_statement(third_token.kind) {
+                return false;
             }
         }
-        false
+
+        // Single colon (`:`, not `::`) unambiguously indicates a label in Perl.
+        // Qualified identifiers use `::` which tokenizes as DoubleColon, so
+        // `Identifier Colon` (single colon) is always a label — even for
+        // uppercase names like OUTER:, LOOP:, LINE: which are idiomatic Perl labels.
+        true
     }
 
     /// Parse a labeled statement (LABEL: statement)
