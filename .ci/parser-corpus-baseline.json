@@ -233,5 +233,12 @@
       "/usr/share/perl/5.38.2/Pod/Perldoc.pm"
     ]
   },
-  "elapsed_secs": 5.267180426
+  "elapsed_secs": 5.267180426,
+  "dirty_classification": {
+    "clean_files": 6890,
+    "valid_parser_gaps": 79,
+    "expected_recovery_only": 0,
+    "known_invalid": 0,
+    "unreadable": 48
+  }
 }

@@ -24,6 +24,10 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default path for the full CPAN corpus baseline report
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
+const CPAN_VALID_PARSER_GAP_MANIFEST_PATH: &str = ".ci/cpan-valid-parser-gap-manifest.txt";
+const CPAN_KNOWN_INVALID_MANIFEST_PATH: &str = ".ci/cpan-known-invalid-manifest.txt";
+const CPAN_KNOWN_RECOVERY_MANIFEST_PATH: &str = ".ci/cpan-known-recovery-manifest.txt";
+const CPAN_KNOWN_UNREADABLE_MANIFEST_PATH: &str = ".ci/cpan-known-unreadable-manifest.txt";
 /// Default install target directory (relative to workspace root)
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
 /// Temp report path used by ratchet (relative to workspace root)
@@ -634,6 +638,10 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
         enforce,
         verbose: config.verbose,
         receipt: true,
+        valid_parser_gap_manifest: Some(workspace_path(CPAN_VALID_PARSER_GAP_MANIFEST_PATH)),
+        known_invalid_manifest: Some(workspace_path(CPAN_KNOWN_INVALID_MANIFEST_PATH)),
+        expected_recovery_manifest: Some(workspace_path(CPAN_KNOWN_RECOVERY_MANIFEST_PATH)),
+        known_unreadable_manifest: Some(workspace_path(CPAN_KNOWN_UNREADABLE_MANIFEST_PATH)),
     };
 
     parser_corpus_sweep::run(sweep_config)?;
@@ -678,6 +686,10 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
                 enforce: true,
                 verbose: config.verbose,
                 receipt: false,
+                valid_parser_gap_manifest: None,
+                known_invalid_manifest: None,
+                expected_recovery_manifest: None,
+                known_unreadable_manifest: None,
             };
             parser_corpus_sweep::run(manifest_sweep)?;
         }
@@ -723,6 +735,10 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
         enforce: false,
         verbose: true,
         receipt: false,
+        valid_parser_gap_manifest: Some(workspace_path(CPAN_VALID_PARSER_GAP_MANIFEST_PATH)),
+        known_invalid_manifest: Some(workspace_path(CPAN_KNOWN_INVALID_MANIFEST_PATH)),
+        expected_recovery_manifest: Some(workspace_path(CPAN_KNOWN_RECOVERY_MANIFEST_PATH)),
+        known_unreadable_manifest: Some(workspace_path(CPAN_KNOWN_UNREADABLE_MANIFEST_PATH)),
     };
 
     parser_corpus_sweep::run(sweep_config)?;

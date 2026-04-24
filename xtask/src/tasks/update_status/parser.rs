@@ -99,12 +99,20 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classification_notes = report.dirty_classification.as_ref().map_or_else(
+                || format!("`{}` unreadable, `{}` with errors", report.files_unreadable, report.files_with_errors),
+                |dc| {
+                    format!(
+                        "`{}` valid gaps, `{}` recovery-only, `{}` known-invalid, `{}` unreadable",
+                        dc.valid_parser_gaps, dc.expected_recovery_only, dc.known_invalid, dc.unreadable
+                    )
+                },
+            );
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
-                report.files_unreadable,
-                report.files_with_errors,
+                classification_notes,
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +123,19 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classification_notes = report.dirty_classification.as_ref().map_or_else(
+                || format!("`{}` unreadable, `{}` with errors", report.files_unreadable, report.files_with_errors),
+                |dc| {
+                    format!(
+                        "`{}` valid gaps, `{}` recovery-only, `{}` known-invalid, `{}` unreadable",
+                        dc.valid_parser_gaps, dc.expected_recovery_only, dc.known_invalid, dc.unreadable
+                    )
+                },
+            );
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
-                report.files_unreadable,
-                report.files_with_errors,
+                classification_notes,
                 short_day(&report.timestamp),
             )
         },

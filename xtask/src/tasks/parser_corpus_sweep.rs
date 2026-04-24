@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use perl_parser::{Node, NodeKind, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
@@ -136,6 +136,14 @@ pub struct SweepConfig {
     pub verbose: bool,
     /// Write receipt JSON to target/receipts/<profile>-corpus-sweep.json
     pub receipt: bool,
+    /// Files that are true parser gaps (ratchet down only)
+    pub valid_parser_gap_manifest: Option<PathBuf>,
+    /// Files that are known-invalid Perl and intentionally excluded from parser-gap ratchet
+    pub known_invalid_manifest: Option<PathBuf>,
+    /// Files expected to require recovery-only parsing
+    pub expected_recovery_manifest: Option<PathBuf>,
+    /// Files known to be unreadable in this environment/baseline
+    pub known_unreadable_manifest: Option<PathBuf>,
 }
 
 /// Overall sweep report (serialized to JSON)
@@ -184,6 +192,19 @@ pub struct SweepReport {
     /// present; empty when no per-file timings were recorded.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub slowest_files: Vec<SlowestFileEntry>,
+    /// Classification summary for non-clean files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub dirty_classification: Option<DirtyClassificationSummary>,
+}
+
+/// Classification summary for dirty files.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DirtyClassificationSummary {
+    pub clean_files: usize,
+    pub valid_parser_gaps: usize,
+    pub expected_recovery_only: usize,
+    pub known_invalid: usize,
+    pub unreadable: usize,
 }
 
 /// Phase-timing breakdown of a corpus sweep in milliseconds.
@@ -584,6 +605,114 @@ struct FileMeasurement {
     error_node_count: usize,
 }
 
+#[derive(Debug)]
+struct ClassificationManifests {
+    valid_parser_gap: BTreeSet<String>,
+    known_invalid: BTreeSet<String>,
+    expected_recovery: BTreeSet<String>,
+    unreadable: BTreeSet<String>,
+}
+
+fn default_manifest_path(corpus_profile: &str, kind: &str) -> PathBuf {
+    let file = format!("{corpus_profile}-{kind}-manifest.txt");
+    PathBuf::from(".ci").join(file)
+}
+
+fn parse_manifest_optional(path: Option<&PathBuf>) -> Result<BTreeSet<String>> {
+    match path {
+        Some(p) if p.exists() => Ok(parse_manifest(p)?.into_iter().collect()),
+        _ => Ok(BTreeSet::new()),
+    }
+}
+
+fn unreadable_slot(slot: usize) -> String {
+    format!("__UNREADABLE_SLOT_{slot}__")
+}
+
+fn classify_dirty(
+    report: &SweepReport,
+    manifests: &ClassificationManifests,
+) -> Result<DirtyClassificationSummary> {
+    let error_files: BTreeSet<String> =
+        report.files_by_bucket.values().flatten().cloned().collect();
+    let unreadable_files: BTreeSet<String> = if !report.file_results.is_empty() {
+        report
+            .file_results
+            .iter()
+            .filter(|f| f.status == "unreadable")
+            .map(|f| f.path.clone())
+            .collect()
+    } else {
+        (1..=report.files_unreadable).map(unreadable_slot).collect()
+    };
+
+    let mut valid_parser_gaps = 0usize;
+    let mut known_invalid = 0usize;
+    let mut expected_recovery_only = 0usize;
+
+    let mut unclassified: Vec<String> = Vec::new();
+    let mut overlaps: Vec<String> = Vec::new();
+
+    for file in &error_files {
+        let hits = [
+            manifests.valid_parser_gap.contains(file),
+            manifests.known_invalid.contains(file),
+            manifests.expected_recovery.contains(file),
+        ]
+        .into_iter()
+        .filter(|hit| *hit)
+        .count();
+        match hits {
+            0 => unclassified.push(file.clone()),
+            1 => {
+                if manifests.valid_parser_gap.contains(file) {
+                    valid_parser_gaps += 1;
+                } else if manifests.known_invalid.contains(file) {
+                    known_invalid += 1;
+                } else {
+                    expected_recovery_only += 1;
+                }
+            }
+            _ => overlaps.push(file.clone()),
+        }
+    }
+
+    let unreadable = unreadable_files.len();
+    let unreadable_missing: Vec<String> = unreadable_files
+        .iter()
+        .filter(|f| !manifests.unreadable.contains(*f))
+        .cloned()
+        .collect();
+    let unreadable_extra: Vec<String> = manifests
+        .unreadable
+        .iter()
+        .filter(|f| !unreadable_files.contains(*f))
+        .cloned()
+        .collect();
+
+    if !overlaps.is_empty()
+        || !unclassified.is_empty()
+        || !unreadable_missing.is_empty()
+        || !unreadable_extra.is_empty()
+    {
+        return Err(color_eyre::eyre::eyre!(
+            "Dirty-file classification failed (overlaps={}, unclassified={}, unreadable_missing={}, unreadable_extra={})",
+            overlaps.len(),
+            unclassified.len(),
+            unreadable_missing.len(),
+            unreadable_extra.len(),
+        ));
+    }
+
+    Ok(DirtyClassificationSummary {
+        clean_files: report.clean_files,
+        valid_parser_gaps,
+        expected_recovery_only,
+        known_invalid,
+        unreadable,
+    })
+}
+
 /// Select the top `limit` slowest files by parse duration (descending).
 ///
 /// Ties are broken by path for determinism so repeated runs over the same
@@ -823,7 +952,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let median_error_density_per_1k_loc = compute_median_error_density(&measurements);
     let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
 
-    let report = SweepReport {
+    let mut report = SweepReport {
         schema_version: "1.3.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
@@ -847,7 +976,32 @@ pub fn run(config: SweepConfig) -> Result<()> {
         phase_timings: Some(phase_timings),
         median_error_density_per_1k_loc,
         slowest_files,
+        dirty_classification: None,
     };
+
+    let valid_parser_gap_manifest = config
+        .valid_parser_gap_manifest
+        .clone()
+        .unwrap_or_else(|| default_manifest_path(&corpus_profile, "valid-parser-gap"));
+    let known_invalid_manifest = config
+        .known_invalid_manifest
+        .clone()
+        .unwrap_or_else(|| default_manifest_path(&corpus_profile, "known-invalid"));
+    let expected_recovery_manifest = config
+        .expected_recovery_manifest
+        .clone()
+        .unwrap_or_else(|| default_manifest_path(&corpus_profile, "known-recovery"));
+    let known_unreadable_manifest = config
+        .known_unreadable_manifest
+        .clone()
+        .unwrap_or_else(|| default_manifest_path(&corpus_profile, "known-unreadable"));
+    let manifests = ClassificationManifests {
+        valid_parser_gap: parse_manifest_optional(Some(&valid_parser_gap_manifest))?,
+        known_invalid: parse_manifest_optional(Some(&known_invalid_manifest))?,
+        expected_recovery: parse_manifest_optional(Some(&expected_recovery_manifest))?,
+        unreadable: parse_manifest_optional(Some(&known_unreadable_manifest))?,
+    };
+    report.dirty_classification = Some(classify_dirty(&report, &manifests)?);
 
     // Print summary
     print_summary(&report);
@@ -924,6 +1078,20 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
         if config.enforce {
             let violations = enforce_ratchet(&report, &baseline);
+            if let (Some(current), Some(previous)) =
+                (report.dirty_classification.as_ref(), baseline.dirty_classification.as_ref())
+                && current.valid_parser_gaps > previous.valid_parser_gaps
+            {
+                println!(
+                    "  VIOLATION: valid_parser_gaps — baseline: {}, current: {}",
+                    previous.valid_parser_gaps, current.valid_parser_gaps
+                );
+                return Err(color_eyre::eyre::eyre!(
+                    "Ratchet enforcement failed: valid_parser_gaps increased ({} -> {})",
+                    previous.valid_parser_gaps,
+                    current.valid_parser_gaps
+                ));
+            }
             if !violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
                 for v in &violations {
@@ -1079,6 +1247,14 @@ pub fn print_summary(report: &SweepReport) {
     println!("With errors:       {}", report.files_with_errors);
     println!("Total ERROR nodes: {}", report.total_error_nodes);
     println!("Elapsed:           {:.1}s", report.elapsed_secs);
+    if let Some(classification) = &report.dirty_classification {
+        println!("\n--- Dirty-file classification ---");
+        println!("  Clean files:            {}", classification.clean_files);
+        println!("  Valid parser gaps:      {}", classification.valid_parser_gaps);
+        println!("  Expected recovery-only: {}", classification.expected_recovery_only);
+        println!("  Known invalid:          {}", classification.known_invalid);
+        println!("  Unreadable:             {}", classification.unreadable);
+    }
 
     if let Some(ref timings) = report.phase_timings {
         println!("\n--- Phase timings ---");

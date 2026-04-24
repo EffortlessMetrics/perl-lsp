@@ -1506,6 +1506,10 @@ fn main() -> Result<()> {
                 enforce,
                 verbose,
                 receipt,
+                valid_parser_gap_manifest: None,
+                known_invalid_manifest: None,
+                expected_recovery_manifest: None,
+                known_unreadable_manifest: None,
             })
         }
         Commands::CpanCorpus { command } => {

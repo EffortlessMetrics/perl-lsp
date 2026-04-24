@@ -1,0 +1,7 @@
+# CPAN corpus unreadable slots (baseline has count-only unreadable tracking).
+__UNREADABLE_SLOT_1__
+__UNREADABLE_SLOT_2__
+__UNREADABLE_SLOT_3__
+__UNREADABLE_SLOT_4__
+__UNREADABLE_SLOT_5__
+__UNREADABLE_SLOT_6__

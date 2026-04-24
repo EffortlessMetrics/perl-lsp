@@ -533,5 +533,12 @@
       "target/cpan-corpus/lib/perl5/Log/Message.pm"
     ]
   },
-  "elapsed_secs": 6.100542583
+  "elapsed_secs": 6.100542583,
+  "dirty_classification": {
+    "clean_files": 8931,
+    "valid_parser_gaps": 216,
+    "expected_recovery_only": 2,
+    "known_invalid": 1,
+    "unreadable": 6
+  }
 }

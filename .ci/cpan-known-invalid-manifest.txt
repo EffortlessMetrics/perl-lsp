@@ -1,0 +1,2 @@
+# CPAN corpus files that are known-invalid Perl and intentionally excluded from parser-gap ratchet.
+target/cpan-corpus/lib/perl5/ExtUtils/MM_VMS.pm

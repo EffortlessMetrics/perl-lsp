@@ -1,0 +1,3 @@
+# CPAN corpus files expected to remain recovery-only parses.
+target/cpan-corpus/lib/perl5/IO/Async/Function.pm
+target/cpan-corpus/lib/perl5/IO/Async/Resolver.pm
