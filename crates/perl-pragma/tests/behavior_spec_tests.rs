@@ -85,6 +85,17 @@ fn given_use_strict_when_querying_after_statement_then_all_strict_modes_are_enab
 }
 
 #[test]
+fn given_use_strict_qw_and_quoted_args_when_querying_then_normalized_categories_are_enabled() {
+    let ast = program(vec![use_node("strict", &["qw(vars refs)", "'subs'"], 0, 36)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+}
+
+#[test]
 fn given_use_strict_when_no_strict_refs_in_inner_block_then_refs_is_restored_outside_block() {
     let ast = program(vec![
         use_node("strict", &[], 0, 12),
@@ -139,6 +150,34 @@ fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available
     assert!(state.has_builtin_import("true"));
     assert!(state.has_builtin_import("false"));
     assert!(state.has_builtin_import("ceil"));
+}
+
+#[test]
+fn given_conditional_no_builtin_when_querying_scope_then_requested_import_is_removed() {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true false ceil)"], 0, 30),
+        no_node("if", &["$cond", "builtin", "'false'"], 31, 60),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 50);
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("false"));
+    assert!(state.has_builtin_import("ceil"));
+}
+
+#[test]
+fn given_use_feature_all_when_no_feature_all_then_features_are_cleared_symmetrically() {
+    let ast = program(vec![
+        use_node("feature", &["':all'"], 0, 20),
+        no_node("feature", &["':all'"], 21, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 32);
+    assert!(state.features.is_empty());
+    assert!(!state.unicode_strings);
+    assert!(!state.signatures_strict);
 }
 
 #[test]
