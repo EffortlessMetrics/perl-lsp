@@ -1545,10 +1545,39 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         return;
     }
 
+    const isWithinBasePath = (basePath: string, targetPath: string): boolean => {
+        const relative = path.relative(basePath, targetPath);
+        return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+
+    const hasSafeExistingAncestor = (workspaceRealPath: string, candidatePath: string): boolean => {
+        let current = candidatePath;
+        while (!fs.existsSync(current)) {
+            const parent = path.dirname(current);
+            if (parent === current) {
+                return false;
+            }
+            current = parent;
+        }
+
+        try {
+            const ancestorRealPath = fs.realpathSync(current);
+            return isWithinBasePath(workspaceRealPath, ancestorRealPath);
+        } catch {
+            return false;
+        }
+    };
+
     for (const folder of workspaceFolders) {
         const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
         const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
         const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        let workspaceRealPath: string;
+        try {
+            workspaceRealPath = fs.realpathSync(folder.uri.fsPath);
+        } catch {
+            continue;
+        }
         const missingPaths = includePaths.filter(includePath => {
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             return !fs.existsSync(resolved);
@@ -1580,7 +1609,11 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             }
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             const relative = path.relative(folder.uri.fsPath, resolved);
-            return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+            if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+                return false;
+            }
+
+            return hasSafeExistingAncestor(workspaceRealPath, resolved);
         });
         const actions = ['Open Settings'];
         if (creatablePaths.length > 0) {
@@ -1601,7 +1634,7 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             const createdPaths: string[] = [];
             for (const includePath of creatablePaths) {
                 const resolved = path.resolve(folder.uri.fsPath, includePath);
-                if (!fs.existsSync(resolved)) {
+                if (!fs.existsSync(resolved) && hasSafeExistingAncestor(workspaceRealPath, resolved)) {
                     fs.mkdirSync(resolved, { recursive: true });
                     createdPaths.push(includePath);
                 }

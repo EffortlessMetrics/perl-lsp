@@ -150,6 +150,54 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('does not offer directory creation when include path traverses a symlink outside workspace', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-symlink-'));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-outside-'));
+    const symlinkPath = path.join(workspaceDir, 'linked');
+    try {
+      fs.symlinkSync(outsideDir, symlinkPath, 'dir');
+    } catch {
+      return;
+    }
+
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['linked/created-from-warning']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('linked/created-from-warning'),
+      'Open Settings'
+    );
+    expect(showWarningMessage).not.toHaveBeenCalledWith(
+      expect.any(String),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+    expect(fs.existsSync(path.join(outsideDir, 'created-from-warning'))).toBe(false);
+  });
+
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
     const context = makeContext('0.12.3');
     let warnedMajor: string | undefined;
