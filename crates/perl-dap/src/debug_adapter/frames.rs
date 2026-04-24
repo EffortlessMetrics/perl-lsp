@@ -16,6 +16,33 @@ impl DebugAdapter {
             args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
         let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
         let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
+        let current_generation = self.current_stack_snapshot_generation();
+
+        // Reuse parsed stack frames when execution state has not changed.
+        if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && matches!(session.state, DebugState::Stopped)
+            && session.stack_frames_generation == current_generation
+            && !session.stack_frames.is_empty()
+        {
+            let stack_frames = Self::paginate_stack_frames(
+                Self::filter_user_visible_frames(session.stack_frames.clone()),
+                start_frame,
+                requested_count,
+            );
+
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "stackTrace".to_string(),
+                body: Some(json!({
+                    "stackFrames": stack_frames,
+                    "totalFrames": stack_frames.len()
+                })),
+                message: None,
+            };
+        }
+
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -40,36 +67,35 @@ impl DebugAdapter {
             }
         }
 
-        let parsed_frames = if let Some(lines) = framed_output_lines.as_ref() {
+        let mut parsed_frames = Vec::new();
+        let mut requires_recent_output_fallback = framed_output_lines.is_none();
+
+        if let Some(lines) = framed_output_lines.as_ref() {
             let output = lines.join("\n");
             let framed_frames =
                 Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
-            if framed_frames.is_empty() {
-                let output_lines = self.snapshot_recent_output_lines();
-                if output_lines.is_empty() {
-                    Vec::new()
-                } else {
-                    let output = output_lines.join("\n");
-                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
-                }
+            if framed_frames.is_empty() || Self::are_frames_clearly_invalid(&framed_frames) {
+                requires_recent_output_fallback = true;
             } else {
-                framed_frames
+                parsed_frames = framed_frames;
             }
-        } else {
+        }
+
+        if requires_recent_output_fallback {
             let output_lines = self.snapshot_recent_output_lines();
-            if output_lines.is_empty() {
-                Vec::new()
-            } else {
+            if !output_lines.is_empty() {
                 let output = output_lines.join("\n");
-                Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
+                parsed_frames =
+                    Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output));
             }
-        };
+        }
 
         let stack_frames = if !parsed_frames.is_empty() {
             // Keep parsed frames as best-effort latest snapshot.
             if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             {
                 session.stack_frames = parsed_frames.clone();
+                session.stack_frames_generation = current_generation;
             }
             parsed_frames
         } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
@@ -184,6 +210,15 @@ impl DebugAdapter {
 }
 
 impl DebugAdapter {
+    fn are_frames_clearly_invalid(frames: &[StackFrame]) -> bool {
+        frames.iter().all(|frame| {
+            frame.name.trim().is_empty()
+                || frame.line <= 0
+                || frame.source.path.trim().is_empty()
+                || frame.source.path == "<unknown>"
+        })
+    }
+
     fn paginate_stack_frames(
         stack_frames: Vec<StackFrame>,
         start_frame: usize,
@@ -194,5 +229,38 @@ impl DebugAdapter {
             Some(limit) => iter.take(limit).collect(),
             None => iter.collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(name: &str, path: &str, line: i32) -> StackFrame {
+        StackFrame {
+            id: 1,
+            name: name.to_string(),
+            source: Source {
+                name: Some("file.pl".to_string()),
+                path: path.to_string(),
+                source_reference: None,
+            },
+            line,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    #[test]
+    fn stack_frames_invalid_when_all_unknown_or_zero() {
+        let frames = vec![frame("main", "<unknown>", 0), frame("", "<unknown>", 1)];
+        assert!(DebugAdapter::are_frames_clearly_invalid(&frames));
+    }
+
+    #[test]
+    fn stack_frames_valid_when_any_frame_has_source_and_line() {
+        let frames = vec![frame("main::run", "/tmp/app.pl", 42), frame("helper", "<unknown>", 0)];
+        assert!(!DebugAdapter::are_frames_clearly_invalid(&frames));
     }
 }

@@ -23,8 +23,11 @@ impl DebugAdapter {
         {
             let _ = stdin.write_all(b"c\n");
             let _ = stdin.flush();
+            let snapshot_generation = self.bump_stack_snapshot_generation();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
+            session.stack_frames.clear();
+            session.stack_frames_generation = snapshot_generation;
             session.variables.clear();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
@@ -67,8 +70,11 @@ impl DebugAdapter {
         {
             let _ = stdin.write_all(b"n\n");
             let _ = stdin.flush();
+            let snapshot_generation = self.bump_stack_snapshot_generation();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
+            session.stack_frames.clear();
+            session.stack_frames_generation = snapshot_generation;
             session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
@@ -103,8 +109,11 @@ impl DebugAdapter {
         {
             let _ = stdin.write_all(b"s\n");
             let _ = stdin.flush();
+            let snapshot_generation = self.bump_stack_snapshot_generation();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
+            session.stack_frames.clear();
+            session.stack_frames_generation = snapshot_generation;
             session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
@@ -140,8 +149,11 @@ impl DebugAdapter {
         {
             let _ = stdin.write_all(b"r\n");
             let _ = stdin.flush();
+            let snapshot_generation = self.bump_stack_snapshot_generation();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
+            session.stack_frames.clear();
+            session.stack_frames_generation = snapshot_generation;
             session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
@@ -354,8 +366,11 @@ impl DebugAdapter {
             let goto_cmd = format!("c {}\n", target_line);
             let _ = stdin.write_all(goto_cmd.as_bytes());
             let _ = stdin.flush();
+            let snapshot_generation = self.bump_stack_snapshot_generation();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Goto;
+            session.stack_frames.clear();
+            session.stack_frames_generation = snapshot_generation;
             session.variables.clear();
             let t_id = session.thread_id;
 

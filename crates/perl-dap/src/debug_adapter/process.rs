@@ -368,6 +368,7 @@ impl DebugAdapter {
                     variables: HashMap::new(),
                     thread_id,
                     last_resume_mode: ResumeMode::Unknown,
+                    stack_frames_generation: self.current_stack_snapshot_generation(),
                 };
 
                 if let Ok(mut guard) = self.session.lock() {
@@ -489,6 +490,7 @@ impl DebugAdapter {
         let last_exception_message = self.last_exception_message.clone();
         let tcp_session = self.tcp_session.clone();
         let attached_pid = self.attached_pid.clone();
+        let stack_snapshot_generation = self.stack_snapshot_generation.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -719,6 +721,9 @@ impl DebugAdapter {
                                             end_line: None,
                                             end_column: None,
                                         }];
+                                        s.stack_frames_generation = stack_snapshot_generation
+                                            .fetch_add(1, Ordering::Relaxed)
+                                            .saturating_add(1);
                                     }
 
                                     if matches!(s.state, DebugState::Running) {
@@ -862,6 +867,9 @@ impl DebugAdapter {
                                             end_column: None,
                                         };
                                         s.stack_frames = vec![frame];
+                                        s.stack_frames_generation = stack_snapshot_generation
+                                            .fetch_add(1, Ordering::Relaxed)
+                                            .saturating_add(1);
                                     } else {
                                         // Provide a fallback frame for when we don't have perfect context
                                         let frame = StackFrame {
@@ -878,6 +886,9 @@ impl DebugAdapter {
                                             end_column: None,
                                         };
                                         s.stack_frames = vec![frame];
+                                        s.stack_frames_generation = stack_snapshot_generation
+                                            .fetch_add(1, Ordering::Relaxed)
+                                            .saturating_add(1);
                                     }
                                     s.state = DebugState::Stopped;
                                     s.thread_id
@@ -971,6 +982,7 @@ impl DebugAdapter {
 
                 // Reset existing process/tcp attachment state before switching to PID mode.
                 self.clear_active_session_state();
+                self.bump_stack_snapshot_generation();
 
                 if let Ok(mut guard) = self.attached_pid.lock() {
                     *guard = Some(pid);
@@ -1129,6 +1141,7 @@ impl DebugAdapter {
                 // Attempt to connect
                 match session.connect(&config) {
                     Ok(()) => {
+                        self.bump_stack_snapshot_generation();
                         // Store session
                         if let Ok(mut guard) = self.tcp_session.lock() {
                             *guard = Some(session);
@@ -1476,8 +1489,11 @@ impl DebugAdapter {
                 // ResumeMode::RunToBreakpoint signals the output reader to
                 // silently skip non-breakpoint stops (the implicit first-line
                 // stop) and auto-continue until a user breakpoint is hit.
+                let snapshot_generation = self.bump_stack_snapshot_generation();
                 session.state = DebugState::Running;
                 session.last_resume_mode = ResumeMode::RunToBreakpoint;
+                session.stack_frames.clear();
+                session.stack_frames_generation = snapshot_generation;
                 let _ = stdin.write_all(b"c\n");
                 let _ = stdin.flush();
             }

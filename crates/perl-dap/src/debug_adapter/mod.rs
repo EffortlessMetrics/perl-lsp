@@ -427,6 +427,8 @@ pub struct DebugAdapter {
     exception_break_on_warn: Arc<Mutex<bool>>,
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
+    /// Monotonic generation for stack snapshot cache invalidation.
+    stack_snapshot_generation: Arc<AtomicU64>,
     /// Cancellation flag for in-progress requests.
     cancel_requested: Arc<AtomicBool>,
     /// Data breakpoints (watchpoints) stored with REPLACE semantics
@@ -457,6 +459,8 @@ struct DebugSession {
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+    /// Stack snapshot generation tied to `stack_frames`.
+    stack_frames_generation: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -550,6 +554,7 @@ impl DebugAdapter {
             exception_break_on_die: Arc::new(Mutex::new(false)),
             exception_break_on_warn: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
+            stack_snapshot_generation: Arc::new(AtomicU64::new(1)),
             cancel_requested: Arc::new(AtomicBool::new(false)),
             data_breakpoints: Arc::new(Mutex::new(Vec::new())),
             last_exception_message: Arc::new(Mutex::new(None)),
@@ -607,6 +612,16 @@ impl DebugAdapter {
     /// Allocate a unique marker id used for framed debugger output capture.
     fn next_debugger_marker_id(&self) -> u64 {
         self.debugger_output_marker.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Return current stack snapshot generation.
+    pub(super) fn current_stack_snapshot_generation(&self) -> u64 {
+        self.stack_snapshot_generation.load(Ordering::Relaxed)
+    }
+
+    /// Bump stack snapshot generation and return the updated value.
+    pub(super) fn bump_stack_snapshot_generation(&self) -> u64 {
+        self.stack_snapshot_generation.fetch_add(1, Ordering::Relaxed).saturating_add(1)
     }
 
     /// Write a debugger command and flush immediately so output framing remains ordered.

@@ -13,6 +13,7 @@
 //! These integration tests focus on the public API behavior.
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use serde_json::json;
 
 /// Helper to create a test adapter
 fn create_test_adapter() -> DebugAdapter {
@@ -141,6 +142,35 @@ fn test_stack_trace_response_sequence_numbers() -> Result<(), Box<dyn std::error
 
     assert_eq!(resp_req_seq, request_seq, "Response request_seq must match request");
     assert_eq!(command, "stackTrace");
+
+    Ok(())
+}
+
+#[test]
+fn test_stack_trace_attach_process_fallback_frame() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+    let _ = adapter.handle_request(1, "attach", Some(json!({ "processId": 4242 })));
+    let response = adapter.handle_request(2, "stackTrace", Some(json!({"threadId": 4242})));
+
+    let DapMessage::Response { success, body, .. } = response else {
+        return Err("Expected Response message".into());
+    };
+    assert!(success);
+
+    let body = body.ok_or("Expected body")?;
+    let frames = body
+        .get("stackFrames")
+        .and_then(|value| value.as_array())
+        .ok_or("Expected stackFrames array")?;
+    assert_eq!(frames.len(), 1, "PID attach fallback should return one synthetic frame");
+
+    let frame = frames.first().ok_or("Expected fallback frame")?;
+    assert_eq!(frame.get("name").and_then(|v| v.as_str()), Some("attached::process::4242"));
+    let source = frame
+        .get("source")
+        .and_then(|value| value.as_object())
+        .ok_or("Expected source object")?;
+    assert_eq!(source.get("path").and_then(|v| v.as_str()), Some("pid://4242"));
 
     Ok(())
 }
