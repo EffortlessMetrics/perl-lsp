@@ -5761,8 +5761,8 @@ sub other_sub {
     // ========================================================================
 
     #[test]
-    fn test_require_with_variable_target_is_not_indexed()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_with_variable_target_is_not_indexed() -> Result<(), Box<dyn std::error::Error>>
+    {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/require-var.pl"));
         let src = r#"package Test;
@@ -5780,8 +5780,7 @@ require $loader;
     }
 
     #[test]
-    fn test_multiple_import_calls_on_same_module()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_multiple_import_calls_on_same_module() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/multi-import.pl"));
         let src = r#"package Test;
@@ -5801,8 +5800,7 @@ Toolkit->import(qw(func_b func_c));
     }
 
     #[test]
-    fn test_require_string_vs_bareword_normalization()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_string_vs_bareword_normalization() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/require-string.pl"));
         let src = r#"package Consumer;
@@ -5846,8 +5844,7 @@ orphaned();
     }
 
     #[test]
-    fn test_nested_blocks_preserve_require_scope()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_nested_blocks_preserve_require_scope() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/nested.pl"));
         let src = r#"package Test;
@@ -5871,8 +5868,7 @@ orphaned();
     }
 
     #[test]
-    fn test_require_path_without_pm_extension()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_require_path_without_pm_extension() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/no-ext.pl"));
         let src = r#"package Test;
@@ -5890,8 +5886,7 @@ My::Module->import('func');
     }
 
     #[test]
-    fn test_qw_with_bracket_delimiters()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_qw_with_bracket_delimiters() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/qw-delim.pl"));
         let src = r#"package Test;
@@ -5905,15 +5900,15 @@ DelimModule->import(qw{sym3 sym4});
             let refs = index.find_references(symbol);
             assert!(
                 !refs.is_empty(),
-                "symbols from qw with bracket delimiters should be indexed: {}", symbol
+                "symbols from qw with bracket delimiters should be indexed: {}",
+                symbol
             );
         }
         Ok(())
     }
 
     #[test]
-    fn test_array_literal_import_args()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_array_literal_import_args() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/array-import.pl"));
         let src = r#"package Test;
@@ -5926,7 +5921,8 @@ ArrayModule->import(['sym_x', 'sym_y']);
             let refs = index.find_references(symbol);
             assert!(
                 !refs.is_empty(),
-                "symbols from array literal import should be indexed: {}", symbol
+                "symbols from array literal import should be indexed: {}",
+                symbol
             );
         }
         Ok(())
@@ -5956,8 +5952,7 @@ if (1) {
     }
 
     #[test]
-    fn test_mixed_string_and_bareword_imports()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_mixed_string_and_bareword_imports() -> Result<(), Box<dyn std::error::Error>> {
         let index = WorkspaceIndex::new();
         let uri = must(url::Url::parse("file:///test/mixed-import.pl"));
         let src = r#"package Test;
@@ -5971,10 +5966,7 @@ MixedMod->import(qw(qw_one qw_two));
         assert!(deps.contains("MixedMod"), "require should register dependency");
         for symbol in &["string_sym", "qw_one", "qw_two"] {
             let refs = index.find_references(symbol);
-            assert!(
-                !refs.is_empty(),
-                "all import forms should index symbols: {}", symbol
-            );
+            assert!(!refs.is_empty(), "all import forms should index symbols: {}", symbol);
         }
         Ok(())
     }
