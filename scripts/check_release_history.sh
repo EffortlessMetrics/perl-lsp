@@ -33,10 +33,6 @@ warn() {
 # Get all v* tags, strip "v" prefix, exclude prerelease tags (v*-rc*)
 # shellcheck disable=SC2046
 mapfile -t ALL_TAGS < <(git tag --list 'v*' | sed 's/^v//' | grep -v 'rc')
-# sort_tags — Sort tags by semantic version (used by NEWEST_TAG calculation)
-sort_tags() {
-    printf '%s\n' "${ALL_TAGS[@]}"
-}
 
 # ── Parse RELEASE_HISTORY.md ──────────────────────────────────────────────────
 
