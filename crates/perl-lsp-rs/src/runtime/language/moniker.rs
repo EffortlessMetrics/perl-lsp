@@ -330,45 +330,6 @@ impl LspServer {
             }
         }
 
-        fn module_runtime_alias(expr: &crate::ast::Node) -> Option<(String, String)> {
-            let (alias_name, call_node) = match &expr.kind {
-                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
-                    let NodeKind::Variable { name, .. } = &lhs.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
-                    let NodeKind::Variable { name, .. } = &variable.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                _ => return None,
-            };
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
-        }
-
         fn arg_matches_symbol(module: &str, arg: &crate::ast::Node, symbol: &str) -> bool {
             match &arg.kind {
                 NodeKind::String { value, .. } => {
@@ -403,12 +364,7 @@ impl LspServer {
             }
         }
 
-        fn import_call_exports(
-            expr: &crate::ast::Node,
-            module: &str,
-            symbol: &str,
-            aliases: &std::collections::HashMap<String, String>,
-        ) -> bool {
+        fn import_call_exports(expr: &crate::ast::Node, module: &str, symbol: &str) -> bool {
             let NodeKind::MethodCall { object, method, args } = &expr.kind else {
                 return false;
             };
@@ -417,7 +373,6 @@ impl LspServer {
             }
             let object_name = match &object.kind {
                 NodeKind::Identifier { name } => Some(name.as_str()),
-                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
                 _ => return false,
             };
             let Some(object_name) = object_name else {
@@ -427,7 +382,7 @@ impl LspServer {
                 return false;
             }
             if args.is_empty() {
-                return true;
+                return false;
             }
             args.iter().any(|arg| arg_matches_symbol(module, arg, symbol))
         }
@@ -473,24 +428,14 @@ impl LspServer {
                     }
                 }
                 NodeKind::Program { statements } | NodeKind::Block { statements } => {
-                    let mut required_modules: Vec<String> = statements
+                    let required_modules: Vec<String> = statements
                         .iter()
                         .filter_map(|stmt| require_module_name(inner_expr(stmt)))
                         .collect();
-                    let mut aliases: std::collections::HashMap<String, String> =
-                        std::collections::HashMap::new();
-                    for stmt in statements {
-                        if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
-                            aliases.insert(alias, module.clone());
-                            if !required_modules.contains(&module) {
-                                required_modules.push(module);
-                            }
-                        }
-                    }
                     for stmt in statements {
                         let expr = inner_expr(stmt);
                         for module in &required_modules {
-                            if import_call_exports(expr, module, name, &aliases) {
+                            if import_call_exports(expr, module, name) {
                                 return Some(module.clone());
                             }
                         }
@@ -587,8 +532,8 @@ mod tests {
     }
 
     #[test]
-    fn find_import_source_supports_require_default_import() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn find_import_source_require_default_import_stays_unresolved()
+    -> Result<(), Box<dyn std::error::Error>> {
         use crate::Parser;
         let server =
             LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
@@ -598,16 +543,15 @@ mod tests {
 
         let source_module = server.find_import_source(&ast, "sum");
         assert_eq!(
-            source_module.as_deref(),
-            Some("List::Util"),
-            "sum should resolve through require+default import (best-effort)"
+            source_module, None,
+            "sum should remain unresolved for default import() in static literal mode"
         );
         Ok(())
     }
 
     #[test]
-    fn find_import_source_supports_module_runtime_alias() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn find_import_source_module_runtime_alias_stays_unresolved()
+    -> Result<(), Box<dyn std::error::Error>> {
         use crate::Parser;
         let server =
             LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(Vec::<u8>::new()));
@@ -617,9 +561,8 @@ mod tests {
 
         let source_module = server.find_import_source(&ast, "baz");
         assert_eq!(
-            source_module.as_deref(),
-            Some("Foo::Bar"),
-            "baz should resolve through use_module+import alias"
+            source_module, None,
+            "module runtime alias imports are out-of-scope for static literal mode"
         );
         Ok(())
     }

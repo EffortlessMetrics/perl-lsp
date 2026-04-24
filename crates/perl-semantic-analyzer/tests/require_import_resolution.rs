@@ -137,15 +137,16 @@ load_data();
 }
 
 #[test]
-fn module_runtime_alias_then_import_resolves_pkg() {
-    let code = r#"my $loader = use_module('My::Loader');
+fn dynamic_import_object_stays_unresolved() {
+    let code = r#"require My::Loader;
+my $loader = 'My::Loader';
 $loader->import('load_data');
 load_data();
 "#;
     let pkg = parse_and_symbol_at(code, "load_data()");
-    assert_eq!(
+    assert_ne!(
         pkg.as_deref(),
         Some("My::Loader"),
-        "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
+        "dynamic import object should stay unresolved in static literal mode"
     );
 }
