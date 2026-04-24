@@ -2696,6 +2696,8 @@ struct IndexVisitor {
     uri: String,
     current_package: Option<String>,
     workspace_folder_uri: Option<String>,
+    imports_module_runtime_use_module: bool,
+    imports_module_runtime_require_module: bool,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2742,6 +2744,8 @@ impl IndexVisitor {
             uri,
             current_package: Some("main".to_string()),
             workspace_folder_uri,
+            imports_module_runtime_use_module: false,
+            imports_module_runtime_require_module: false,
         }
     }
 
@@ -2988,6 +2992,17 @@ impl IndexVisitor {
                     }
                 }
 
+                if module_runtime_function_call_is_dependency(
+                    name,
+                    self.imports_module_runtime_use_module,
+                    self.imports_module_runtime_require_module,
+                ) && let Some(module_name) = literal_module_name_from_runtime_call_arg(args.first())
+                {
+                    file_index
+                        .dependencies
+                        .insert(normalize_dependency_module_name(&module_name));
+                }
+
                 // Visit arguments
                 for arg in args {
                     self.visit_node(arg, file_index);
@@ -2997,6 +3012,13 @@ impl IndexVisitor {
             NodeKind::Use { module, args, .. } => {
                 let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
+
+                if module == "Module::Runtime" {
+                    let (imports_use_module, imports_require_module) =
+                        module_runtime_import_kinds(args);
+                    self.imports_module_runtime_use_module |= imports_use_module;
+                    self.imports_module_runtime_require_module |= imports_require_module;
+                }
 
                 // Also track actual parent/base class names for dependency discovery.
                 // `use parent 'Foo::Bar'` stores module="parent" and args=["'Foo::Bar'"],
@@ -3452,6 +3474,57 @@ fn legacy_perl_module_name(name: &str) -> String {
 /// Converts legacy `'` separators to `::` so stored keys are canonical.
 fn normalize_dependency_module_name(module_name: &str) -> String {
     canonicalize_perl_module_name(module_name)
+}
+
+fn module_runtime_import_kinds(args: &[String]) -> (bool, bool) {
+    let mut imports_use_module = false;
+    let mut imports_require_module = false;
+    for arg in args {
+        if arg == "use_module" {
+            imports_use_module = true;
+            continue;
+        }
+        if arg == "require_module" {
+            imports_require_module = true;
+            continue;
+        }
+        if !arg.starts_with("qw") {
+            continue;
+        }
+        let content = arg
+            .trim_start_matches("qw")
+            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+        for token in content.split_whitespace() {
+            if token == "use_module" {
+                imports_use_module = true;
+            } else if token == "require_module" {
+                imports_require_module = true;
+            }
+        }
+    }
+    (imports_use_module, imports_require_module)
+}
+
+fn module_runtime_function_call_is_dependency(
+    name: &str,
+    imports_use_module: bool,
+    imports_require_module: bool,
+) -> bool {
+    matches!(name, "Module::Runtime::use_module" | "Module::Runtime::require_module")
+        || (imports_use_module && name == "use_module")
+        || (imports_require_module && name == "require_module")
+}
+
+fn literal_module_name_from_runtime_call_arg(arg: Option<&Node>) -> Option<String> {
+    let NodeKind::String { value, .. } = &arg?.kind else {
+        return None;
+    };
+    let module = value.trim_matches('\'').trim_matches('"').trim();
+    if module.is_empty() {
+        return None;
+    }
+    Some(module.to_string())
 }
 
 fn extract_qw_words(input: &str) -> (Vec<String>, String) {
@@ -4998,6 +5071,28 @@ Utils::process_data();
         let deps = index.file_dependencies(consumer_url.as_str());
         assert!(deps.contains("My::App::Role"));
         Ok(())
+    }
+
+    #[test]
+    fn test_index_dependency_via_module_runtime_require_module_literal() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/runtime-require.pl"));
+        let src = "package Consumer;\nuse Module::Runtime qw(require_module);\nrequire_module('My::Loader');\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("My::Loader"));
+    }
+
+    #[test]
+    fn test_index_dependency_via_module_runtime_require_module_dynamic_is_conservative() {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/runtime-require-dynamic.pl"));
+        let src = "package Consumer;\nuse Module::Runtime qw(require_module);\nmy $mod = 'My::Loader';\nrequire_module($mod);\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(!deps.contains("My::Loader"));
     }
 
     #[test]

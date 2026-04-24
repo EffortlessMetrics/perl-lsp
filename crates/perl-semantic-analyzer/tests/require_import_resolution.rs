@@ -149,3 +149,34 @@ load_data();
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
     );
 }
+
+#[test]
+fn module_runtime_require_module_then_import_resolves_pkg() {
+    let code = r#"use Module::Runtime qw(require_module);
+require_module('My::Loader');
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "require_module('My::Loader') should participate in require+import resolution, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_dynamic_name_remains_unresolved() {
+    let code = r#"use Module::Runtime qw(require_module);
+my $target = 'My::Loader';
+require_module($target);
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "dynamic require_module target should stay conservative and unresolved"
+    );
+}
