@@ -155,28 +155,103 @@ mod tests {
         let result = server.handle_initialized_dispatch();
 
         assert!(result.is_err(), "initialized before initialize must error");
+        if let Err(err) = result {
+            assert_eq!(err.code, -32002, "must report ServerNotInitialized");
+        }
         assert!(!server.is_initialized(), "server must remain uninitialized");
     }
 
     #[test]
     fn initialized_can_only_be_sent_once() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let init = server.handle_initialize(None);
+        assert!(init.is_ok(), "initialize request should succeed");
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        if let Err(err) = second {
+            assert_eq!(err.code, -32600, "must report InvalidRequest for duplicate initialized");
+        }
     }
 
     #[test]
     fn auto_initialize_for_compat_promotes_initialized_state() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let init = server.handle_initialize(None);
+        assert!(init.is_ok(), "initialize request should succeed");
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+    }
+
+    #[test]
+    fn auto_initialize_for_compat_requires_initialize_request() {
+        let server = LspServer::new();
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(
+            !server.is_initialized(),
+            "compatibility path must not initialize server before initialize request"
+        );
+    }
+
+    #[test]
+    fn auto_initialize_for_compat_noop_when_already_initialized() {
+        let server = LspServer::new();
+        let init = server.handle_initialize(None);
+        assert!(init.is_ok(), "initialize request should succeed");
+        let first_initialized = server.handle_initialized_dispatch();
+        assert!(first_initialized.is_ok(), "first initialized notification should succeed");
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(server.is_initialized(), "server should remain initialized");
+    }
+
+    #[test]
+    fn set_trace_accepts_known_values() {
+        let server = LspServer::new();
+
+        let result_messages =
+            server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })));
+        assert!(result_messages.is_ok(), "setTrace(messages) should succeed");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "messages",
+            "setTrace(messages) should store messages level"
+        );
+
+        let result_verbose = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
+        assert!(result_verbose.is_ok(), "setTrace(verbose) should succeed");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "verbose",
+            "setTrace(verbose) should store verbose level"
+        );
+    }
+
+    #[test]
+    fn set_trace_invalid_value_defaults_to_off() {
+        let server = LspServer::new();
+        let set_messages = server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })));
+        assert!(set_messages.is_ok(), "setTrace(messages) should succeed");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "messages",
+            "precondition: messages level should be set"
+        );
+
+        let invalid = server.handle_set_trace_dispatch(Some(json!({ "value": "invalid" })));
+        assert!(invalid.is_ok(), "setTrace(invalid) should still be accepted as notification");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "off",
+            "invalid trace level must be coerced to off"
+        );
     }
 }
