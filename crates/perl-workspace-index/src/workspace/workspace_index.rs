@@ -2925,28 +2925,14 @@ impl IndexVisitor {
                 // our @EXPORT = qw(foo bar);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    let location = Location { uri: uri.clone(), range };
-                    let entry = ExportEntry {
-                        module: package.clone(),
-                        symbol: symbol.clone(),
-                        location,
-                        kind: ExportKind::Explicit,
-                    };
-                    file_index.exports.insert(symbol, entry);
+                    self.insert_export_entry(&package, &uri, range, &symbol, ExportKind::Explicit, file_index);
                 }
             }
             ("EXPORT_OK", "@") => {
                 // our @EXPORT_OK = qw(baz qux);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    let location = Location { uri: uri.clone(), range };
-                    let entry = ExportEntry {
-                        module: package.clone(),
-                        symbol: symbol.clone(),
-                        location,
-                        kind: ExportKind::Ok,
-                    };
-                    file_index.exports.insert(symbol, entry);
+                    self.insert_export_entry(&package, &uri, range, &symbol, ExportKind::Ok, file_index);
                 }
             }
             ("EXPORT_TAGS", "%") => {
@@ -2958,6 +2944,31 @@ impl IndexVisitor {
         }
     }
 
+    /// Insert a single export entry into the file index.
+    ///
+    /// This helper reduces duplication between EXPORT, EXPORT_OK, and EXPORT_TAGS handling.
+    fn insert_export_entry(
+        &self,
+        package: &str,
+        uri: &str,
+        range: Range,
+        symbol: &str,
+        kind: ExportKind,
+        file_index: &mut FileIndex,
+    ) {
+        let location = Location {
+            uri: uri.to_string(),
+            range,
+        };
+        let entry = ExportEntry {
+            module: package.to_string(),
+            symbol: symbol.to_string(),
+            location,
+            kind,
+        };
+        file_index.exports.insert(symbol.to_string(), entry);
+    }
+
     /// Extract export entries from a %EXPORT_TAGS hash.
     ///
     /// Each hash entry has a key (tag name) and a value (array of symbol names).
@@ -2967,16 +2978,9 @@ impl IndexVisitor {
             for pair in pairs {
                 // Each pair is (Node, Node) - (key, value) where key is tag name and value is array of symbols
                 let tag_symbols = collect_symbol_names(&pair.1);
+                let range = self.node_to_range(&pair.1);
                 for symbol in tag_symbols {
-                    let location =
-                        Location { uri: self.uri.clone(), range: self.node_to_range(&pair.1) };
-                    let entry = ExportEntry {
-                        module: package.to_string(),
-                        symbol: symbol.clone(),
-                        location: location.clone(),
-                        kind: ExportKind::Tag,
-                    };
-                    file_index.exports.insert(symbol, entry);
+                    self.insert_export_entry(package, &self.uri, range, &symbol, ExportKind::Tag, file_index);
                 }
             }
         }
