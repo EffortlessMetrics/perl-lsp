@@ -4,6 +4,7 @@
 //! names (e.g., `Foo::Bar`) and module file paths (e.g., `Foo/Bar.pm`).
 
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 /// Normalize legacy package separator `'` to canonical `::`.
 #[must_use]
@@ -49,6 +50,44 @@ pub fn file_path_to_module_name(file_path: &str) -> String {
         .filter(|segment| !segment.is_empty())
         .unwrap_or(without_ext)
         .to_string()
+}
+
+/// Normalize Windows 8.3 short paths into long-form paths.
+///
+/// On non-Windows platforms this returns `path` unchanged.
+#[must_use]
+pub fn canonicalize_path_long_form(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::ffi::OsString;
+        use std::iter;
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+
+        let wide_path = path.as_os_str().encode_wide().chain(iter::once(0)).collect::<Vec<u16>>();
+
+        // SAFETY: `wide_path` is NUL-terminated and lives for the duration of the call.
+        let required_len = unsafe { GetLongPathNameW(wide_path.as_ptr(), std::ptr::null_mut(), 0) };
+        if required_len == 0 {
+            return path.to_path_buf();
+        }
+
+        let mut long_path = vec![0_u16; required_len as usize + 1];
+        // SAFETY: input is NUL-terminated, output buffer is valid for `long_path.len()` UTF-16 code units.
+        let written_len = unsafe {
+            GetLongPathNameW(wide_path.as_ptr(), long_path.as_mut_ptr(), long_path.len() as u32)
+        };
+        if written_len == 0 {
+            return path.to_path_buf();
+        }
+
+        return PathBuf::from(OsString::from_wide(&long_path[..written_len as usize]));
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.to_path_buf()
+    }
 }
 
 fn strip_to_lib_relative_path(path: &str) -> Option<&str> {

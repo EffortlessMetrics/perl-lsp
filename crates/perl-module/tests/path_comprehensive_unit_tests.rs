@@ -7,8 +7,10 @@
 //! - `file_path_to_module_name`
 
 use perl_module::path::{
-    file_path_to_module_name, module_name_to_path, module_path_to_name, normalize_package_separator,
+    canonicalize_path_long_form, file_path_to_module_name, module_name_to_path,
+    module_path_to_name, normalize_package_separator,
 };
+use std::path::Path;
 
 // ── normalize_package_separator ─────────────────────────────────────
 
@@ -366,5 +368,24 @@ fn file_path_lib_segment_in_filename_not_directory() -> Result<(), Box<dyn std::
 fn file_path_empty_string() -> Result<(), Box<dyn std::error::Error>> {
     let result = file_path_to_module_name("");
     assert_eq!(result, "");
+    Ok(())
+}
+
+#[test]
+fn canonicalize_long_form_non_windows_noop() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(windows))]
+    {
+        let input = Path::new("lib/Foo/Bar.pm");
+        let normalized = canonicalize_path_long_form(input);
+        assert_eq!(normalized, input);
+    }
+    Ok(())
+}
+
+#[test]
+fn canonicalize_long_form_nonexistent_path_is_stable() -> Result<(), Box<dyn std::error::Error>> {
+    let input = Path::new("this/path/does/not/exist.pm");
+    let normalized = canonicalize_path_long_form(input);
+    assert_eq!(normalized, input);
     Ok(())
 }
