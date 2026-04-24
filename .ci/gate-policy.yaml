@@ -171,6 +171,24 @@ gates:
       - test
       - unit
 
+  - name: perl_token_leaf_contract
+    tier: pr_fast
+    description: "perl-token must remain a stable std-only leaf crate"
+    required: true
+    command: >-
+      bash ./.ci/scripts/check-perl-token-leaf.sh &&
+      cargo test -p perl-token --test leaf_contract --locked
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - test
+      - api
+      - dependency
+      - perl-token
+
   # ===========================================================================
   # Tier: merge_gate
   # ===========================================================================

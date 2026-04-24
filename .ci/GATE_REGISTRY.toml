@@ -123,6 +123,22 @@ cost_tier = "low"
 failure_impact = "medium"
 
 [[gate]]
+id = "perl-token-leaf-contract"
+name = "perl-token Leaf Contract"
+type = "quality"
+blocking = true
+timeout_seconds = 120
+command = "bash ./.ci/scripts/check-perl-token-leaf.sh && cargo test -p perl-token --test leaf_contract --locked"
+evidence_pattern = "^✅"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Ensures perl-token stays std-only and enforces API/metadata conformance"
+docs_url = "crates/perl-token/README.md#api-stability-contract"
+cost_tier = "low"
+failure_impact = "high"
+
+[[gate]]
 id = "no-nested-lock"
 name = "Nested Lockfile Check"
 type = "hygiene"

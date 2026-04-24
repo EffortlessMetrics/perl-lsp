@@ -28,6 +28,13 @@ Foundational crate consumed by `perl-lexer`, `perl-tokenizer`, `perl-parser-core
 and downstream parser/LSP crates. Part of the
 [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
+## API Stability Contract
+
+- `perl-token` is a leaf crate and must keep **zero runtime dependencies** beyond `std`.
+- `Token` and `TokenKind` are treated as stable public contracts; intentional changes require conformance snapshot updates.
+- TokenKind metadata and conformance tests are ratcheted together in CI to prevent drift.
+- TokenKind variant count: 132
+
 ## License
 
 MIT OR Apache-2.0
