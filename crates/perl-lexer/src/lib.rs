@@ -897,6 +897,56 @@ impl<'a> PerlLexer<'a> {
         None
     }
 
+    /// Like `consume_balanced_segment`, but stops before an unescaped string terminator.
+    ///
+    /// This is used for interpolation tails inside double-quoted strings (e.g. `$h{key}`).
+    /// If the interpolation subscript/index is incomplete (missing `}` or `]`) and a closing
+    /// `"` is reached, we must *not* consume through that quote, otherwise the entire string
+    /// is misclassified as unterminated.
+    #[inline]
+    fn consume_balanced_segment_until_terminator(
+        &mut self,
+        open: char,
+        close: char,
+        terminator: char,
+    ) -> Option<usize> {
+        if self.current_char() != Some(open) {
+            return None;
+        }
+
+        let mut depth = 1usize;
+        self.advance();
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                c if c == open => {
+                    depth += 1;
+                    self.advance();
+                }
+                c if c == close => {
+                    self.advance();
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(self.position);
+                    }
+                }
+                c if c == terminator => {
+                    // Incomplete interpolation segment; leave the terminator in the stream
+                    // so the outer string parser can close the string token cleanly.
+                    return None;
+                }
+                _ => self.advance(),
+            }
+        }
+
+        None
+    }
+
     /// Fast byte-level check for ASCII characters
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
@@ -2847,13 +2897,17 @@ impl<'a> PerlLexer<'a> {
 
                                     match self.current_char() {
                                         Some('[') => {
-                                            let _ = self.consume_balanced_segment('[', ']');
+                                            let _ = self.consume_balanced_segment_until_terminator(
+                                                '[', ']', '"',
+                                            );
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('{') => {
-                                            let _ = self.consume_balanced_segment('{', '}');
+                                            let _ = self.consume_balanced_segment_until_terminator(
+                                                '{', '}', '"',
+                                            );
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2898,13 +2952,15 @@ impl<'a> PerlLexer<'a> {
                                     }
                                 } else if self.current_char() == Some('[') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('[', ']');
+                                    let _ = self
+                                        .consume_balanced_segment_until_terminator('[', ']', '"');
                                     parts.push(StringPart::ArraySlice(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));
                                 } else if self.current_char() == Some('{') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('{', '}');
+                                    let _ = self
+                                        .consume_balanced_segment_until_terminator('{', '}', '"');
                                     parts.push(StringPart::Expression(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));

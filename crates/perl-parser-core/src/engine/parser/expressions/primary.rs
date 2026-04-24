@@ -1,4 +1,95 @@
 impl<'a> Parser<'a> {
+    fn record_incomplete_interpolation_indexing(&mut self, token_text: &str, token_start: usize) {
+        if !token_text.starts_with('"') || token_text.len() < 2 {
+            return;
+        }
+
+        let body = &token_text[1..token_text.len() - 1];
+        let bytes = body.as_bytes();
+        let mut i = 0usize;
+
+        while i < bytes.len() {
+            if bytes[i] == b'\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+
+            if bytes[i] != b'$' {
+                i += 1;
+                continue;
+            }
+
+            let mut j = i + 1;
+            if j >= bytes.len() {
+                break;
+            }
+
+            let starts_ident = (bytes[j] as char).is_ascii_alphabetic() || bytes[j] == b'_';
+            if !starts_ident {
+                i += 1;
+                continue;
+            }
+
+            j += 1;
+            while j < bytes.len()
+                && ((bytes[j] as char).is_ascii_alphanumeric() || bytes[j] == b'_')
+            {
+                j += 1;
+            }
+
+            let mut opener_idx = None;
+            let mut open = b' ';
+            let mut close = b' ';
+
+            if j < bytes.len() && bytes[j] == b'[' {
+                opener_idx = Some(j);
+                open = b'[';
+                close = b']';
+            } else if j < bytes.len() && bytes[j] == b'{' {
+                opener_idx = Some(j);
+                open = b'{';
+                close = b'}';
+            } else if j + 2 < bytes.len() && bytes[j] == b'-' && bytes[j + 1] == b'>' && bytes[j + 2] == b'{' {
+                opener_idx = Some(j + 2);
+                open = b'{';
+                close = b'}';
+            }
+
+            if let Some(start_idx) = opener_idx {
+                let mut depth = 1usize;
+                let mut k = start_idx + 1;
+                while k < bytes.len() {
+                    if bytes[k] == b'\\' {
+                        k = k.saturating_add(2);
+                        continue;
+                    }
+                    if bytes[k] == open {
+                        depth += 1;
+                    } else if bytes[k] == close {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    k += 1;
+                }
+
+                if depth > 0 {
+                    let delim = if open == b'{' { "{...}" } else { "[...]" };
+                    self.record_error(ParseError::syntax(
+                        format!("Incomplete interpolation indexing: missing closing delimiter for {}", delim),
+                        token_start,
+                    ));
+                    return;
+                }
+                i = k + 1;
+                continue;
+            }
+
+            i = j;
+        }
+    }
+
     /// Parse qualified identifier (may contain ::)
     fn parse_qualified_identifier(&mut self) -> ParseResult<Node> {
         // Note: qualified identifier parsing is not recursive - no guard needed
@@ -71,6 +162,9 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
+                if interpolated {
+                    self.record_incomplete_interpolation_indexing(&token.text, token.start);
+                }
                 Ok(Node::new(
                     NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
