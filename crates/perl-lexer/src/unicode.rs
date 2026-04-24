@@ -12,6 +12,42 @@ use unicode_ident::{is_xid_continue, is_xid_start};
 static UNICODE_CHAR_CHECKS: AtomicU64 = AtomicU64::new(0);
 static UNICODE_EMOJI_HITS: AtomicU64 = AtomicU64::new(0);
 
+#[inline]
+fn is_emoji_identifier_start(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        // Emoji and symbols
+        0x1F300..=0x1F6FF |  // Miscellaneous Symbols and Pictographs (includes 🚀)
+            0x1F900..=0x1F9FF |  // Supplemental Symbols and Pictographs
+            0x2600..=0x26FF |    // Miscellaneous Symbols (includes ♥)
+            0x2700..=0x27BF |    // Dingbats
+            0x1F000..=0x1F02F |  // Mahjong Tiles
+            0x1F0A0..=0x1F0FF |  // Playing Cards
+            0x1F100..=0x1F1FF |  // Enclosed Alphanumeric Supplement
+            0x1F200..=0x1F2FF |  // Enclosed Ideographic Supplement
+            0x1F700..=0x1F77F |  // Alchemical Symbols
+            0x1F780..=0x1F7FF |  // Geometric Shapes Extended
+            0x1F800..=0x1F8FF |  // Supplemental Arrows-C
+            0x1FA00..=0x1FA6F |  // Chess Symbols
+            0x1FA70..=0x1FAFF    // Symbols and Pictographs Extended-A
+    )
+}
+
+#[inline]
+fn is_emoji_identifier_continue(ch: char) -> bool {
+    matches!(
+        ch as u32,
+        // Unicode join controls used in emoji and script shaping.
+        0x200C | 0x200D |
+            // Standard variation selectors (e.g. U+FE0F) used to keep emoji presentation.
+            0xFE00..=0xFE0F |
+            // Supplementary variation selectors.
+            0xE0100..=0xE01EF |
+            // Fitzpatrick skin-tone modifiers.
+            0x1F3FB..=0x1F3FF
+    )
+}
+
 /// Get Unicode processing statistics for debugging
 #[allow(dead_code)]
 pub fn get_unicode_stats() -> (u64, u64) {
@@ -37,22 +73,7 @@ pub fn is_perl_identifier_start(ch: char) -> bool {
 
     // Check additional Unicode blocks that Perl allows
     // but aren't included in XID_Start (primarily emoji)
-    let is_emoji = matches!(ch as u32,
-        // Emoji and symbols
-        0x1F300..=0x1F6FF |  // Miscellaneous Symbols and Pictographs (includes 🚀)
-        0x1F900..=0x1F9FF |  // Supplemental Symbols and Pictographs
-        0x2600..=0x26FF |    // Miscellaneous Symbols (includes ♥)
-        0x2700..=0x27BF |    // Dingbats
-        0x1F000..=0x1F02F |  // Mahjong Tiles
-        0x1F0A0..=0x1F0FF |  // Playing Cards
-        0x1F100..=0x1F1FF |  // Enclosed Alphanumeric Supplement
-        0x1F200..=0x1F2FF |  // Enclosed Ideographic Supplement
-        0x1F700..=0x1F77F |  // Alchemical Symbols
-        0x1F780..=0x1F7FF |  // Geometric Shapes Extended
-        0x1F800..=0x1F8FF |  // Supplemental Arrows-C
-        0x1FA00..=0x1FA6F |  // Chess Symbols
-        0x1FA70..=0x1FAFF    // Symbols and Pictographs Extended-A
-    );
+    let is_emoji = is_emoji_identifier_start(ch);
 
     if is_emoji {
         UNICODE_EMOJI_HITS.fetch_add(1, Ordering::Relaxed);
@@ -69,15 +90,7 @@ pub fn is_perl_identifier_continue(ch: char) -> bool {
     is_perl_identifier_start(ch)
         || is_xid_continue(ch)
         || ch == '\''
-        || matches!(
-            ch as u32,
-            // Unicode join controls used in emoji and script shaping.
-            0x200C | 0x200D |
-            // Standard variation selectors (e.g. U+FE0F) used to keep emoji presentation.
-            0xFE00..=0xFE0F |
-            // Fitzpatrick skin-tone modifiers.
-            0x1F3FB..=0x1F3FF
-        )
+        || is_emoji_identifier_continue(ch)
 }
 
 /// Validate Unicode string complexity for performance monitoring
@@ -139,6 +152,7 @@ mod tests {
         assert!(is_perl_identifier_continue('\u{200C}'));
         assert!(is_perl_identifier_continue('\u{200D}'));
         assert!(is_perl_identifier_continue('\u{FE0F}'));
+        assert!(is_perl_identifier_continue('\u{E0100}'));
         assert!(is_perl_identifier_continue('\u{1F3FB}'));
         assert!(is_perl_identifier_continue('\u{1F3FD}'));
         assert!(!is_perl_identifier_continue(' '));

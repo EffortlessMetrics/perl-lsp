@@ -44,6 +44,18 @@ fn assert_terminates(input: &str) {
             input.len()
         );
         assert!(t.start <= t.end, "Token {:?} has start {} > end {}", t.token_type, t.start, t.end);
+        assert!(
+            input.is_char_boundary(t.start),
+            "Token {:?} start {} is not a char boundary",
+            t.token_type,
+            t.start
+        );
+        assert!(
+            input.is_char_boundary(t.end),
+            "Token {:?} end {} is not a char boundary",
+            t.token_type,
+            t.end
+        );
     }
     assert!(
         toks.iter().any(|t| matches!(t.token_type, TokenType::EOF)),

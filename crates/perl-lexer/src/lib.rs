@@ -176,6 +176,7 @@ const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
 const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
 const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
+const UTF8_BOM_BYTES: [u8; 3] = [0xEF, 0xBB, 0xBF];
 
 /// Maximum scan iterations for a single regex literal.
 /// This is a lexer parse budget, not regex-engine backtracking detection.
@@ -332,9 +333,9 @@ impl<'a> PerlLexer<'a> {
     /// Normalize file start by skipping BOM if present
     fn normalize_file_start(&mut self) {
         // Skip UTF-8 BOM (EF BB BF) if at file start
-        if self.position == 0 && self.matches_bytes(&[0xEF, 0xBB, 0xBF]) {
-            self.position = 3;
-            self.line_start_offset = 3;
+        if self.position == 0 && self.matches_bytes(&UTF8_BOM_BYTES) {
+            self.position = UTF8_BOM_BYTES.len();
+            self.line_start_offset = UTF8_BOM_BYTES.len();
         }
     }
 
@@ -396,6 +397,8 @@ impl<'a> PerlLexer<'a> {
     /// Returns `None` only after an `EOF` token has already been emitted.
     /// The final meaningful call returns `Some(Token { token_type: TokenType::EOF, .. })`.
     pub fn next_token(&mut self) -> Option<Token> {
+        debug_assert!(self.input.is_char_boundary(self.position));
+
         // Normalize file start (BOM) once
         if self.position == 0 {
             self.normalize_file_start();
