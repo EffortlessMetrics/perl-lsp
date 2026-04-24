@@ -147,6 +147,29 @@ fn test_multi_file_cross_file_search() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn test_cross_file_static_require_manual_import_symbols_are_indexed() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let module_uri = file_url("/lib/Foo.pm")?;
+    let consumer_uri = file_url("/app/main.pl")?;
+
+    index.index_file(module_uri, "package Foo;\nsub bar { 1 }\n1;\n".to_string())?;
+    index.index_file(
+        consumer_uri,
+        "require Foo;\nFoo->import('bar');\nbar();\n".to_string(),
+    )?;
+
+    let definition = must_some(index.find_definition("Foo::bar"));
+    assert!(definition.uri.contains("Foo.pm"));
+
+    let references = index.find_references("bar");
+    assert!(
+        references.iter().any(|location| location.uri.contains("main.pl")),
+        "consumer file call-site should be indexed for imported symbol usage"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_remove_file() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
     let uri = file_url("/removeme.pl")?;

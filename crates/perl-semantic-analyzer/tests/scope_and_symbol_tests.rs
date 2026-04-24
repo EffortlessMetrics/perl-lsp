@@ -1914,6 +1914,67 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_static_require_manual_import_string() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+My::Loader->import('load_data');
+print load_data;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should treat static require + import('...') names as imported barewords"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_static_require_manual_import_qw() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+My::Loader->import(qw(alpha beta));
+print alpha;
+print beta;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for symbol in ["alpha", "beta"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == symbol
+            }),
+            "strict 'subs' should treat static require + import(qw(...)) symbol '{symbol}' as imported"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn strict_subs_dynamic_require_manual_import_is_not_assumed() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $module = 'My::Loader';
+require $module;
+My::Loader->import('load_data');
+print load_data;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "dynamic require target should remain unresolved and continue to trigger strict bareword checks"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;

@@ -149,3 +149,18 @@ load_data();
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
     );
 }
+
+#[test]
+fn dynamic_require_target_does_not_resolve_import_source() {
+    let code = r#"my $module = 'My::Loader';
+require $module;
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "dynamic require target should stay unresolved for declaration lookup"
+    );
+}

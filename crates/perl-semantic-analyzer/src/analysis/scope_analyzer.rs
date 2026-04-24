@@ -1865,6 +1865,99 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
+    fn require_module_name(node: &Node) -> Option<String> {
+        let args = match &node.kind {
+            NodeKind::FunctionCall { name, args } if name == "require" => args,
+            _ => return None,
+        };
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                let module = cleaned.trim_end_matches(".pm").replace('/', "::");
+                if module.is_empty() { None } else { Some(module) }
+            }
+            _ => None,
+        }
+    }
+
+    fn inner_expr(node: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &node.kind {
+            expression
+        } else {
+            node
+        }
+    }
+
+    fn import_receiver_name(node: &Node) -> Option<&str> {
+        let NodeKind::MethodCall { object, method, .. } = &node.kind else {
+            return None;
+        };
+        if method != "import" {
+            return None;
+        }
+        match &object.kind {
+            NodeKind::Identifier { name } => Some(name),
+            _ => None,
+        }
+    }
+
+    fn collect_manual_require_imports(
+        statements: &[Node],
+        imported: &mut std::collections::HashSet<String>,
+    ) {
+        let mut required_modules: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for statement in statements {
+            if let Some(module) = require_module_name(inner_expr(statement)) {
+                required_modules.insert(module);
+            }
+        }
+        if required_modules.is_empty() {
+            return;
+        }
+
+        for statement in statements {
+            let expr = inner_expr(statement);
+            let NodeKind::MethodCall { args, .. } = &expr.kind else {
+                continue;
+            };
+            let Some(receiver) = import_receiver_name(expr) else {
+                continue;
+            };
+            if !required_modules.contains(receiver) {
+                continue;
+            }
+
+            for arg in args {
+                match &arg.kind {
+                    NodeKind::String { value, .. } => push_symbol(imported, receiver, value),
+                    NodeKind::Identifier { name } => {
+                        if name.starts_with("qw") {
+                            let content = name
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            for token in content.split_whitespace() {
+                                push_symbol(imported, receiver, token);
+                            }
+                        } else {
+                            push_symbol(imported, receiver, name);
+                        }
+                    }
+                    NodeKind::ArrayLiteral { elements } => {
+                        for element in elements {
+                            if let NodeKind::String { value, .. } = &element.kind {
+                                push_symbol(imported, receiver, value);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
@@ -1880,6 +1973,13 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
                     push_symbol(imported, module, arg);
                 }
             }
+        }
+
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                collect_manual_require_imports(statements, imported);
+            }
+            _ => {}
         }
 
         for child in node.children() {
