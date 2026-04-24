@@ -438,6 +438,82 @@ mod tests {
         Ok(())
     }
 
+    /// Verify that `generate_parser_status` renders scorecard values correctly
+    /// when a populated `ParserPerformanceScorecard` is provided.  All prior
+    /// tests pass `performance_scorecard: None`, leaving the `Some` branch of
+    /// `format_perf_metric_row` completely untested.
+    #[test]
+    fn test_parser_performance_table_renders_with_scorecard() -> Result<()> {
+        use std::collections::BTreeMap;
+
+        let mut metrics_map = BTreeMap::new();
+        metrics_map.insert(
+            "cold_parse".to_string(),
+            ParserPerfMetric { iterations: 30, median_ns: 44_708, p95_ns: 98_033, mean_ns: 69_888 },
+        );
+        metrics_map.insert(
+            "warm_reparse".to_string(),
+            ParserPerfMetric {
+                iterations: 35,
+                median_ns: 118_046,
+                p95_ns: 277_118,
+                mean_ns: 242_863,
+            },
+        );
+        // Include one metric intentionally absent from the map so the None
+        // branch of format_perf_metric_row is also exercised in this test.
+
+        let scorecard = ParserPerformanceScorecard {
+            generated_at_epoch_s: 1_777_010_864,
+            metrics: metrics_map,
+        };
+
+        let metrics = ParserMetrics {
+            syntax_sections: 611,
+            system_receipt: None,
+            cpan_receipt: None,
+            project_corpus: None,
+            common_corpus_receipt: None,
+            common_corpus_pinned: 10,
+            performance_scorecard: Some(scorecard),
+        };
+
+        let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
+                        <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
+                        <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
+                        <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+
+        let result = generate_parser_status(&metrics, template)?;
+
+        // cold_parse row: median=44708 ns = 0.045 ms, p95=98033 ns = 0.098 ms
+        assert!(
+            result.contains("0.045"),
+            "cold_parse median_ns 44708 should render as ~0.045 ms, got: {}",
+            &result[result.find("cold parse").unwrap_or(0)..][..120.min(result.len())]
+        );
+        assert!(result.contains("0.098"), "cold_parse p95_ns 98033 should render as ~0.098 ms");
+        assert!(result.contains("30 samples"), "cold_parse iterations should show 30 samples");
+
+        // warm_reparse row: median=118046 ns = 0.118 ms
+        assert!(result.contains("0.118"), "warm_reparse median should render as ~0.118 ms");
+
+        // incremental_small_edit was not inserted — must render as UNVERIFIED
+        assert!(
+            result.contains("UNVERIFIED"),
+            "missing metric key should render as UNVERIFIED, not panic"
+        );
+
+        // Receipt note in bullets should use the epoch, not "UNVERIFIED"
+        assert!(
+            result.contains("1777010864"),
+            "perf receipt note should show epoch 1777010864"
+        );
+
+        Ok(())
+    }
+
     #[test]
     fn test_parser_strict_clean_row_with_receipt() -> Result<()> {
         use std::collections::BTreeMap;
