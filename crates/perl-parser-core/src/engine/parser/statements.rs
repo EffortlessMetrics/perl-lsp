@@ -1047,7 +1047,8 @@ impl<'a> Parser<'a> {
     /// - `Identifier Colon (` — parenthesized expression
     /// - `Identifier Colon Keyword` — if, while, for, my, print, etc.
     /// - `Identifier Colon Identifier` — print, return, etc.
-    /// Check if the 3rd token in a lookahead sequence cannot start a Perl statement.
+    ///
+    ///   Check if the 3rd token in a lookahead sequence cannot start a Perl statement.
     ///
     /// Tokens like `?`, `:`, `=>`, `;`, `,`, `)`, `]`, `}` are used in expression
     /// contexts (ternary operators, hash constructors, list separators) and cannot
