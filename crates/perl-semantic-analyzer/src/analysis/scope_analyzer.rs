@@ -917,12 +917,12 @@ impl ScopeAnalyzer {
                             // Use name.len() instead of node.location.end because the
                             // FunctionCall node's location includes the parentheses (),
                             // but we only want the range to cover the bareword name itself.
-                            let name_end = node.location.start + name.len();
+                            let bareword_end_offset = node.location.start + name.len();
                             issues.push(ScopeIssue {
                                 kind: IssueKind::UnquotedBareword,
                                 variable_name: name.to_string(),
                                 line: context.get_line(node.location.start),
-                                range: (node.location.start, name_end),
+                                range: (node.location.start, bareword_end_offset),
                                 description: format!(
                                     "Bareword '{}' not allowed under 'use strict'",
                                     name
