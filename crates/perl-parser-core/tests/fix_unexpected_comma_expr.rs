@@ -152,6 +152,36 @@ fn test_nullary_builtin_then_comma_return() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_pop_then_comma_expr() {
+    // pop is also a nullary builtin; same path as shift.
+    let source = r#"sub cleanup { pop, return 1 }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_wantarray_then_comma_expr() {
+    // wantarray is nullary — comma after it starts the surrounding list.
+    let source = r#"return wantarray, scalar @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_shift_with_explicit_arg_then_comma() {
+    // shift(@arr) routes through parse_expression (LeftParen guard) —
+    // the Comma addition must NOT suppress the explicit argument.
+    let source = r#"my $x = shift(@arr), 1;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_shift_with_bare_arg_then_comma() {
+    // shift @arr, $extra: @arr is the explicit arg to shift;
+    // the trailing comma separates the outer list, not shift's arg.
+    let source = r#"my $first = shift @arr; my @rest = @arr;"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]
