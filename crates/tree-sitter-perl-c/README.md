@@ -74,12 +74,16 @@ for snippet in &["my $x = 1;", "print $x;"] {
 
 | Function | Description |
 |----------|-------------|
+| `ParsePerlError` | Typed parse error enum for parser setup, parse-none, and I/O failures |
 | `language()` | Returns the tree-sitter `Language` for Perl |
 | `try_create_parser()` | Creates a `tree_sitter::Parser` (returns `Result`) |
+| `try_parse_perl_bytes(code)` | Parses bytes and returns `Result<Tree, ParsePerlError>` |
+| `try_parse_perl_code(code)` | Parses `&str` and returns `Result<Tree, ParsePerlError>` |
+| `try_parse_perl_file(path)` | Reads and parses a file with typed `ParsePerlError` failures |
 | `create_parser()` | Creates a parser, silently ignoring language-set errors |
-| `parse_perl_bytes(code)` | Parses raw bytes (including non-UTF-8 Perl source) |
-| `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
-| `parse_perl_file(path)` | Reads and parses a file (non-UTF-8 safe) |
+| `parse_perl_bytes(code)` | Compatibility wrapper around `try_parse_perl_bytes` |
+| `parse_perl_code(code)` | Compatibility wrapper around `try_parse_perl_code` |
+| `parse_perl_file(path)` | Compatibility wrapper around `try_parse_perl_file` |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 
 ## Binaries
