@@ -316,6 +316,86 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         println!("   Parse errors: {} (no baseline file)", current_errors);
     }
 
+    // Parser scorecard ratchets (if configured in .ci/metrics/baselines/parser.json).
+    let parser_baseline_path = std::path::Path::new(".ci/metrics/baselines/parser.json");
+    if parser_baseline_path.exists() {
+        let baseline_raw = fs::read_to_string(parser_baseline_path)
+            .context("Failed to read parser scorecard baseline")?;
+        let baseline_json: serde_json::Value =
+            serde_json::from_str(&baseline_raw).context("Failed to parse parser scorecard")?;
+
+        let tolerance_pct =
+            baseline_json.get("tolerance_pct").and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+
+        let floor_metric = |name: &str| -> Option<f64> {
+            baseline_json
+                .get("floor_metrics")
+                .and_then(|m| m.get(name))
+                .and_then(serde_json::Value::as_f64)
+                .or_else(|| {
+                    baseline_json
+                        .get("improvement_metrics")
+                        .and_then(|m| m.get(name))
+                        .and_then(serde_json::Value::as_f64)
+                })
+        };
+
+        let current_nodekind_coverage = if report.nodekind_coverage.total_count == 0 {
+            0.0
+        } else {
+            report.nodekind_coverage.covered_count as f64
+                / report.nodekind_coverage.total_count as f64
+        };
+        let current_recovery_salvage_rate = if report.parse_outcomes.total == 0 {
+            1.0
+        } else {
+            (report.parse_outcomes.ok + report.parse_outcomes.error) as f64
+                / report.parse_outcomes.total as f64
+        };
+
+        if let Some(baseline_gap_count) = floor_metric("valid_parser_gap_count") {
+            let current_gap_count = current_errors as f64;
+            if current_gap_count > baseline_gap_count + f64::EPSILON {
+                failures.push(format!(
+                    "Valid parser gap regression: {:.0} > {:.0} baseline",
+                    current_gap_count, baseline_gap_count
+                ));
+            }
+            println!(
+                "   Valid parser gaps: {:.0} (baseline: {:.0})",
+                current_gap_count, baseline_gap_count
+            );
+        }
+
+        if let Some(baseline_nodekind_coverage) = floor_metric("node_kind_coverage") {
+            let min_allowed = baseline_nodekind_coverage * (1.0 - tolerance_pct);
+            if current_nodekind_coverage + f64::EPSILON < min_allowed {
+                failures.push(format!(
+                    "NodeKind coverage regression: {:.3} < {:.3} minimum",
+                    current_nodekind_coverage, min_allowed
+                ));
+            }
+            println!(
+                "   NodeKind coverage: {:.3} (baseline: {:.3}, tolerance: {:.3})",
+                current_nodekind_coverage, baseline_nodekind_coverage, tolerance_pct
+            );
+        }
+
+        if let Some(baseline_salvage_rate) = floor_metric("recovery_salvage_rate") {
+            let min_allowed = baseline_salvage_rate * (1.0 - tolerance_pct);
+            if current_recovery_salvage_rate + f64::EPSILON < min_allowed {
+                failures.push(format!(
+                    "Recovery salvage regression: {:.3} < {:.3} minimum",
+                    current_recovery_salvage_rate, min_allowed
+                ));
+            }
+            println!(
+                "   Recovery salvage: {:.3} (baseline: {:.3}, tolerance: {:.3})",
+                current_recovery_salvage_rate, baseline_salvage_rate, tolerance_pct
+            );
+        }
+    }
+
     // Timeouts should always be zero
     if report.parse_outcomes.timeout > 0 {
         failures.push(format!("Parse timeouts: {} files timed out", report.parse_outcomes.timeout));

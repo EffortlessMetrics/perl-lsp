@@ -144,6 +144,70 @@ docs_url = "justfile#ci-check-no-nested-lock"
 cost_tier = "low"  # <1 second
 failure_impact = "medium"
 
+[[gate]]
+id = "common-corpus-clean"
+name = "Common Corpus Clean"
+type = "correctness"
+blocking = true
+timeout_seconds = 120
+command = "cargo run --locked -p xtask -- parser-corpus-sweep --manifest .ci/common-corpus-manifest.txt --enforce --receipt"
+evidence_pattern = "Strict clean: all"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Pinned strict-clean Perl modules must remain 100% clean"
+docs_url = "justfile#common-corpus-check"
+cost_tier = "low"
+failure_impact = "high"
+
+[[gate]]
+id = "system-corpus-ratchet"
+name = "System Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo run --locked -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Parser system-corpus clean/error-node baseline ratchet"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "CPAN Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 900
+command = "cargo run --locked -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed|CPAN known-clean manifest"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Parser CPAN clean/error-node baseline ratchet with known-clean manifest"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "high"
+
+[[gate]]
+id = "parser-feature-ratchet"
+name = "Parser Feature Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo run --locked -p xtask --no-default-features -- corpus-audit --fresh --check --corpus-path . --output corpus_audit_report.json"
+evidence_pattern = "CI gate passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Ratchet parser valid-gap count, NodeKind coverage, and recovery salvage"
+docs_url = "justfile#ci-parser-features-check"
+cost_tier = "medium"
+failure_impact = "high"
+
 # ============================================================================
 # Extended Gates (RECOMMENDED for large changes, ci-full)
 # ============================================================================
