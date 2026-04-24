@@ -36,7 +36,7 @@ const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
 /// Hard timeout for a batch cpanm invocation. Batch installs fall back to
 /// per-distribution retries when one distribution wedges inside configure/build.
-const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(120);
+const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(300);
 /// Hard timeout for a single-distribution retry. Native-heavy distributions
 /// such as `PDL` legitimately need more wall-clock time than a whole batch
 /// should get before we split it apart.
@@ -264,7 +264,7 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     fs::create_dir_all(&cpanm_home).context("Failed to create cpanm cache directory")?;
 
     // Install in batches to avoid overly long command lines
-    let batch_size = 50;
+    let batch_size = 25;
     let mut installed = 0usize;
     let mut failed = 0usize;
 
