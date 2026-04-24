@@ -144,6 +144,22 @@ docs_url = "justfile#ci-check-no-nested-lock"
 cost_tier = "low"  # <1 second
 failure_impact = "medium"
 
+[[gate]]
+id = "perl-token-contract"
+name = "perl-token Leaf/API Contract"
+type = "correctness"
+blocking = true
+timeout_seconds = 120
+command = "cargo test -p perl-token --test api_contract --test leaf_dependency_contract --locked"
+evidence_pattern = "test result: ok"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces perl-token as a std-only leaf crate with stable TokenKind metadata/API ratchets"
+docs_url = "crates/perl-token/README.md#stability-contract"
+cost_tier = "low"
+failure_impact = "high"
+
 # ============================================================================
 # Extended Gates (RECOMMENDED for large changes, ci-full)
 # ============================================================================

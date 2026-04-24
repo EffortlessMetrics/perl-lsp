@@ -269,6 +269,27 @@ gates:
       - common
       - strict
 
+  - name: perl_token_contract
+    tier: merge_gate
+    description: "Ratchet perl-token leaf dependency and TokenKind API/metadata contracts"
+    required: true
+    command: >-
+      cargo test
+      -p perl-token
+      --test api_contract
+      --test leaf_dependency_contract
+      --locked
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - test
+      - perl-token
+      - api-stability
+      - dependencies
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"

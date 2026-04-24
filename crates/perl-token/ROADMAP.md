@@ -19,6 +19,9 @@ Token definitions for Perl parser
 ### v0.15.0 Stability Contract
 - Lock down public API for semantic versioning.
 - Guarantee stability across supported platforms.
+- Keep `perl-token` as a std-only leaf crate (no runtime deps without explicit allowlisting).
+- Require TokenKind metadata + docs + conformance test updates for new variants.
+- TokenKind variants: 132
 
 ## Internal Dependencies
 - Aligns with project-wide capability goals defined in `features.toml`.

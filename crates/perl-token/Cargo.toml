@@ -16,6 +16,10 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 # No external dependencies for now (Arc is std)
 
+[package.metadata.perl-token-contract]
+# Explicit allowlist for exceptional runtime dependencies. Keep empty by default.
+allowed-runtime-dependencies = []
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
