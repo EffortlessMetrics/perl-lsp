@@ -6,12 +6,12 @@
 //! every microcrate-collapse facade.
 
 use perl_symbol::{
-    SymbolDecl, SymbolIndex, SymbolKind, VarKind,
+    SymbolDecl, SymbolIndex, SymbolKind, SymbolRef, SymbolRefKind, VarKind,
     cursor::{
         CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source,
         get_symbol_range_at_position, is_modchar, is_word_boundary, token_under_cursor,
     },
-    extract_symbol_decls,
+    extract_symbol_decls, extract_symbol_refs,
 };
 
 #[test]
@@ -63,4 +63,10 @@ fn surface_decl_accessible() {
     // Compilation verifies the paths; the tiny runtime check binds the
     // function to a compatible type signature.
     let _fn: fn(&perl_ast::Node, Option<&str>) -> Vec<SymbolDecl> = extract_symbol_decls;
+}
+
+#[test]
+fn surface_ref_accessible() {
+    let _kind = SymbolRefKind::SubroutineCall;
+    let _fn: fn(&perl_ast::Node) -> Vec<SymbolRef> = extract_symbol_refs;
 }
