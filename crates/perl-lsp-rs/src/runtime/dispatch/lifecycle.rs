@@ -155,28 +155,75 @@ mod tests {
         let result = server.handle_initialized_dispatch();
 
         assert!(result.is_err(), "initialized before initialize must error");
+        let Err(error) = result else {
+            return;
+        };
+        assert_eq!(
+            error.code, -32002,
+            "initialized before initialize must return ServerNotInitialized",
+        );
+        assert_eq!(error.message, "Server not initialized");
         assert!(!server.is_initialized(), "server must remain uninitialized");
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
-        let first = server.handle_initialized_dispatch();
+        let first = server.handle_initialized_dispatch()?;
         let second = server.handle_initialized_dispatch();
 
-        assert!(first.is_ok(), "first initialized must succeed");
+        assert!(first.is_none(), "initialized notification should not return a payload");
         assert!(second.is_err(), "second initialized must error");
+        let Err(error) = second else {
+            return Ok(());
+        };
+        assert_eq!(error.code, -32600, "second initialized must be InvalidRequest");
+        assert_eq!(
+            error.message, "initialized notification may only be sent once",
+            "second initialized message must explain one-time semantics",
+        );
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn auto_initialize_for_compat_requires_initialize_request() {
+        let server = LspServer::new();
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(
+            !server.is_initialized(),
+            "compatibility path must not initialize server without initialize request",
+        );
+    }
+
+    #[test]
+    fn shutdown_dispatch_clears_cancellation_state() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        let cancelled_id = json!(9);
+        server.cancel_mark(&cancelled_id);
+        assert!(server.is_cancelled(&cancelled_id), "sanity check: cancel marker must be set");
+
+        let response = server.handle_shutdown_dispatch()?;
+
+        assert_eq!(response, Some(json!(null)), "shutdown should reply with null");
+        assert!(
+            !server.is_cancelled(&cancelled_id),
+            "shutdown must clear pending cancellation markers",
+        );
+        Ok(())
     }
 }
