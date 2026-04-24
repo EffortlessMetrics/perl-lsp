@@ -52,7 +52,7 @@
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
-    SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
+    fs_path_to_uri, normalize_var, uri_to_fs_path, SymKind, SymbolKey, WorkspaceIndex,
 };
 use perl_module::path::module_name_to_path;
 use regex::Regex;
@@ -119,6 +119,14 @@ static IMPORT_BLOCK_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 /// Get the import block regex, returning None if compilation failed
 fn get_import_block_regex() -> Option<&'static Regex> {
     IMPORT_BLOCK_RE.get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")).as_ref().ok()
+}
+
+fn is_package_name_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':'
+}
+
+fn is_identifier_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
 }
 
 /// A file edit as part of a refactoring operation
@@ -520,6 +528,148 @@ impl WorkspaceRefactor {
         Ok(RefactorResult {
             file_edits,
             description: "Optimize imports across workspace".to_string(),
+            warnings: vec![],
+        })
+    }
+
+    /// Rewrite import sites for a moved module across the indexed workspace.
+    ///
+    /// This first slice is intentionally conservative and only updates:
+    /// - `use Old::Module ...` statements where the imported package is exactly `old_module`
+    /// - obvious fully-qualified references such as `Old::Module::function`
+    ///
+    /// Ambiguous occurrences in strings and comments are left unchanged.
+    pub fn rewrite_moved_module_imports(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Result<RefactorResult, RefactorError> {
+        if old_module.is_empty() {
+            return Err(RefactorError::InvalidInput("Old module name cannot be empty".to_string()));
+        }
+        if new_module.is_empty() {
+            return Err(RefactorError::InvalidInput("New module name cannot be empty".to_string()));
+        }
+        if old_module == new_module {
+            return Err(RefactorError::InvalidInput(
+                "Old and new module names are identical".to_string(),
+            ));
+        }
+
+        let mut file_edits = Vec::new();
+        let old_bytes = old_module.as_bytes();
+
+        for doc in self._index.document_store().all_documents() {
+            let Some(file_path) = uri_to_fs_path(&doc.uri) else { continue };
+            let mut edits = Vec::new();
+            let mut line_start = 0;
+
+            for line in doc.text.split_inclusive('\n') {
+                let line_no_nl = line.strip_suffix('\n').unwrap_or(line);
+                let leading_ws = line_no_nl.len() - line_no_nl.trim_start().len();
+                let trimmed = &line_no_nl[leading_ws..];
+
+                if let Some(after_use) = trimmed.strip_prefix("use ") {
+                    let token_len = after_use
+                        .as_bytes()
+                        .iter()
+                        .take_while(|&&b| is_package_name_char(b))
+                        .count();
+                    if token_len > 0 && &after_use[..token_len] == old_module {
+                        let token_start = line_start + leading_ws + "use ".len();
+                        edits.push(TextEdit {
+                            start: token_start,
+                            end: token_start + token_len,
+                            new_text: new_module.to_string(),
+                        });
+                    }
+                }
+
+                let mut i = 0;
+                let mut in_single = false;
+                let mut in_double = false;
+                let mut escaped = false;
+                let bytes = line_no_nl.as_bytes();
+                while i < bytes.len() {
+                    let byte = bytes[i];
+                    if escaped {
+                        escaped = false;
+                        i += 1;
+                        continue;
+                    }
+
+                    if in_single {
+                        if byte == b'\\' {
+                            escaped = true;
+                        } else if byte == b'\'' {
+                            in_single = false;
+                        }
+                        i += 1;
+                        continue;
+                    }
+
+                    if in_double {
+                        if byte == b'\\' {
+                            escaped = true;
+                        } else if byte == b'"' {
+                            in_double = false;
+                        }
+                        i += 1;
+                        continue;
+                    }
+
+                    if byte == b'#' {
+                        break;
+                    }
+                    if byte == b'\'' {
+                        in_single = true;
+                        i += 1;
+                        continue;
+                    }
+                    if byte == b'"' {
+                        in_double = true;
+                        i += 1;
+                        continue;
+                    }
+
+                    if i + old_bytes.len() <= bytes.len()
+                        && &bytes[i..i + old_bytes.len()] == old_bytes
+                    {
+                        let before_ok = i == 0 || !is_package_name_char(bytes[i - 1]);
+                        let after_start = i + old_bytes.len();
+                        let has_qualified_suffix = after_start + 2 < bytes.len()
+                            && &bytes[after_start..after_start + 2] == b"::"
+                            && is_identifier_start(bytes[after_start + 2]);
+                        if before_ok && has_qualified_suffix {
+                            edits.push(TextEdit {
+                                start: line_start + i,
+                                end: line_start + i + old_bytes.len(),
+                                new_text: new_module.to_string(),
+                            });
+                            i += old_bytes.len();
+                            continue;
+                        }
+                    }
+
+                    i += 1;
+                }
+
+                line_start += line.len();
+            }
+
+            edits.sort_by_key(|edit| (edit.start, edit.end));
+            edits.dedup_by_key(|edit| (edit.start, edit.end));
+            if !edits.is_empty() {
+                file_edits.push(FileEdit { file_path, edits });
+            }
+        }
+
+        Ok(RefactorResult {
+            file_edits,
+            description: format!(
+                "Rewrite moved-module imports from '{}' to '{}'",
+                old_module, new_module
+            ),
             warnings: vec![],
         })
     }
@@ -976,7 +1126,7 @@ impl WorkspaceRefactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{TempDir, tempdir};
+    use tempfile::{tempdir, TempDir};
 
     fn setup_index(
         files: Vec<(&str, &str)>,
@@ -1016,8 +1166,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_module_qualified_name_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_extract_module_qualified_name_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
@@ -1048,8 +1198,8 @@ mod tests {
     }
 
     #[test]
-    fn test_move_subroutine_qualified_target_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_move_subroutine_qualified_target_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
@@ -1336,6 +1486,50 @@ use JSON; # Duplicate
         // Check that we actually have some optimization suggestions
         let has_optimizations = result.file_edits.iter().any(|edit| !edit.edits.is_empty());
         assert!(has_optimizations);
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_moved_module_imports_updates_multiple_consumers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, _paths) = setup_index(vec![
+            ("consumer_one.pl", "use Old::Name;\nmy $x = Old::Name::build();\nprint $x;\n"),
+            ("consumer_two.pl", "use strict;\nuse Old::Name qw(run);\nOld::Name::run();\n"),
+        ])?;
+        let refactor = WorkspaceRefactor::new(index);
+
+        let result = refactor.rewrite_moved_module_imports("Old::Name", "New::Name")?;
+        assert_eq!(result.file_edits.len(), 2);
+
+        for file_edit in result.file_edits {
+            assert!(
+                !file_edit.edits.is_empty(),
+                "expected at least one edit for {}",
+                file_edit.file_path.display()
+            );
+            assert!(
+                file_edit.edits.iter().any(|edit| edit.new_text == "New::Name"),
+                "expected a New::Name replacement in {}",
+                file_edit.file_path.display()
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_moved_module_imports_leaves_ambiguous_sites_untouched(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, _paths) = setup_index(vec![(
+            "ambiguous.pl",
+            "my $quoted = \"Old::Name::run\";\n# Old::Name::run should stay in comment\nmy $code = Old::Name::run();\n",
+        )])?;
+        let refactor = WorkspaceRefactor::new(index);
+
+        let result = refactor.rewrite_moved_module_imports("Old::Name", "New::Name")?;
+        assert_eq!(result.file_edits.len(), 1);
+        let edits = &result.file_edits[0].edits;
+        assert_eq!(edits.len(), 1);
+        assert_eq!(edits[0].new_text, "New::Name");
         Ok(())
     }
 
