@@ -544,15 +544,9 @@ impl<'a> Parser<'a> {
                                 {
                                     // No comma — treat the block as a filehandle and parse the list.
                                     while !self.is_at_statement_end()
-                                        && !matches!(
-                                            self.peek_kind(),
-                                            Some(
-                                                TokenKind::WordOr
-                                                    | TokenKind::WordAnd
-                                                    | TokenKind::WordXor
-                                                    | TokenKind::WordNot
-                                            )
-                                        )
+                                        && !self
+                                            .peek_kind()
+                                            .is_some_and(TokenKind::is_low_precedence_word_operator)
                                     {
                                         if matches!(
                                             self.peek_kind(),
@@ -871,15 +865,9 @@ impl<'a> Parser<'a> {
                                     // Word operators terminate argument collection since
                                     // they bind less tightly than list operators.
                                     while !self.is_at_statement_end()
-                                        && !matches!(
-                                            self.peek_kind(),
-                                            Some(
-                                                TokenKind::WordOr
-                                                    | TokenKind::WordAnd
-                                                    | TokenKind::WordXor
-                                                    | TokenKind::WordNot
-                                            )
-                                        )
+                                        && !self
+                                            .peek_kind()
+                                            .is_some_and(TokenKind::is_low_precedence_word_operator)
                                     {
                                         // Skip comma or fat arrow if present
                                         if matches!(
@@ -927,15 +915,9 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_ternary()?);
 
                                     while !self.is_at_statement_end()
-                                        && !matches!(
-                                            self.peek_kind(),
-                                            Some(
-                                                TokenKind::WordOr
-                                                    | TokenKind::WordAnd
-                                                    | TokenKind::WordXor
-                                                    | TokenKind::WordNot
-                                            )
-                                        )
+                                        && !self
+                                            .peek_kind()
+                                            .is_some_and(TokenKind::is_low_precedence_word_operator)
                                     {
                                         if matches!(
                                             self.peek_kind(),
@@ -961,15 +943,9 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_ternary()?);
 
                                     while !self.is_at_statement_end()
-                                        && !matches!(
-                                            self.peek_kind(),
-                                            Some(
-                                                TokenKind::WordOr
-                                                    | TokenKind::WordAnd
-                                                    | TokenKind::WordXor
-                                                    | TokenKind::WordNot
-                                            )
-                                        )
+                                        && !self
+                                            .peek_kind()
+                                            .is_some_and(TokenKind::is_low_precedence_word_operator)
                                     {
                                         if matches!(
                                             self.peek_kind(),
@@ -1081,26 +1057,19 @@ impl<'a> Parser<'a> {
                                             Some(
                                                 TokenKind::Comma
                                                     | TokenKind::FatArrow
-                                                    | TokenKind::WordOr
-                                                    | TokenKind::WordAnd
-                                                    | TokenKind::WordXor
-                                                    | TokenKind::WordNot
                                             )
                                         )
+                                        && !self
+                                            .peek_kind()
+                                            .is_some_and(TokenKind::is_low_precedence_word_operator)
                                     {
                                         // No comma after first arg — it's an indirect object
                                         // (filehandle for print/say/printf, socket for send).
                                         // Parse the remaining args.
                                         while !self.is_at_statement_end()
-                                            && !matches!(
-                                                self.peek_kind(),
-                                                Some(
-                                                    TokenKind::WordOr
-                                                        | TokenKind::WordAnd
-                                                        | TokenKind::WordXor
-                                                        | TokenKind::WordNot
-                                                )
-                                            )
+                                            && !self
+                                                .peek_kind()
+                                                .is_some_and(TokenKind::is_low_precedence_word_operator)
                                         {
                                             if matches!(
                                                 self.peek_kind(),
@@ -1182,26 +1151,22 @@ impl<'a> Parser<'a> {
 
     /// Check if we're at a statement boundary
     fn is_at_statement_end(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::WordAnd)
-                | Some(TokenKind::WordOr)
-                | Some(TokenKind::WordXor)
-                | Some(TokenKind::WordNot)
-                | Some(TokenKind::DataMarker)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        self.peek_kind().is_some_and(|kind| {
+            kind.is_close_delimiter()
+                || kind == TokenKind::Semicolon
+                || kind == TokenKind::DataMarker
+                || kind == TokenKind::Eof
+                || kind.is_low_precedence_word_operator()
+                || matches!(
+                    kind,
+                    TokenKind::If
+                        | TokenKind::Unless
+                        | TokenKind::While
+                        | TokenKind::Until
+                        | TokenKind::For
+                        | TokenKind::Foreach
+                )
+        }) || self.peek_kind().is_none()
     }
 
     /// Check whether the current peek token is a quote-op name that should be

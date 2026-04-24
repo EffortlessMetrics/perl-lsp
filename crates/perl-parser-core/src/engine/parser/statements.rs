@@ -875,15 +875,9 @@ impl<'a> Parser<'a> {
                             // e.g., `sort @list or die` => (sort @list) or (die)
                             if Self::is_block_list_func(func_name.as_ref()) {
                                 while !self.is_at_statement_end()
-                                    && !matches!(
-                                        self.peek_kind(),
-                                        Some(
-                                            TokenKind::WordOr
-                                                | TokenKind::WordAnd
-                                                | TokenKind::WordXor
-                                                | TokenKind::WordNot
-                                        )
-                                    )
+                                    && !self
+                                        .peek_kind()
+                                        .is_some_and(TokenKind::is_low_precedence_word_operator)
                                 {
                                     // Skip optional comma or fat arrow
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {

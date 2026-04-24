@@ -399,6 +399,132 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// Returns true for assignment operators (`=`, `+=`, `&&=`, `//=`, ...).
+    pub fn is_assignment_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Assign
+                | TokenKind::PlusAssign
+                | TokenKind::MinusAssign
+                | TokenKind::StarAssign
+                | TokenKind::SlashAssign
+                | TokenKind::PercentAssign
+                | TokenKind::DotAssign
+                | TokenKind::AndAssign
+                | TokenKind::OrAssign
+                | TokenKind::XorAssign
+                | TokenKind::PowerAssign
+                | TokenKind::LeftShiftAssign
+                | TokenKind::RightShiftAssign
+                | TokenKind::LogicalAndAssign
+                | TokenKind::LogicalOrAssign
+                | TokenKind::DefinedOrAssign
+        )
+    }
+
+    /// Returns true for comparison operators (`==`, `!=`, `cmp`, `=~`, ...).
+    pub fn is_comparison_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::Less
+                | TokenKind::Greater
+                | TokenKind::LessEqual
+                | TokenKind::GreaterEqual
+                | TokenKind::Spaceship
+                | TokenKind::StringCompare
+                | TokenKind::Match
+                | TokenKind::NotMatch
+                | TokenKind::SmartMatch
+        )
+    }
+
+    /// Returns true for logical operators (`&&`, `||`, `!`, `//`).
+    pub fn is_logical_operator(self) -> bool {
+        matches!(self, TokenKind::And | TokenKind::Or | TokenKind::Not | TokenKind::DefinedOr)
+    }
+
+    /// Returns true for word-style logical operators (`and`, `or`, `not`, `xor`).
+    pub fn is_word_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordNot | TokenKind::WordXor
+        )
+    }
+
+    /// Returns true for low-precedence word operators (`and`, `or`, `not`, `xor`).
+    pub fn is_low_precedence_word_operator(self) -> bool {
+        self.is_word_operator()
+    }
+
+    /// Returns true for opening delimiters (`(`, `{`, `[`).
+    pub fn is_open_delimiter(self) -> bool {
+        matches!(self, TokenKind::LeftParen | TokenKind::LeftBrace | TokenKind::LeftBracket)
+    }
+
+    /// Returns true for closing delimiters (`)`, `}`, `]`).
+    pub fn is_close_delimiter(self) -> bool {
+        matches!(self, TokenKind::RightParen | TokenKind::RightBrace | TokenKind::RightBracket)
+    }
+
+    /// Returns the matching delimiter token for paired delimiters.
+    pub fn matching_delimiter(self) -> Option<TokenKind> {
+        match self {
+            TokenKind::LeftParen => Some(TokenKind::RightParen),
+            TokenKind::RightParen => Some(TokenKind::LeftParen),
+            TokenKind::LeftBrace => Some(TokenKind::RightBrace),
+            TokenKind::RightBrace => Some(TokenKind::LeftBrace),
+            TokenKind::LeftBracket => Some(TokenKind::RightBracket),
+            TokenKind::RightBracket => Some(TokenKind::LeftBracket),
+            _ => None,
+        }
+    }
+
+    /// Returns true for quote-like tokens (`q`, `qq`, `qw`, regex, heredoc start, ...).
+    pub fn is_quote_like(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Regex
+                | TokenKind::Substitution
+                | TokenKind::Transliteration
+                | TokenKind::QuoteSingle
+                | TokenKind::QuoteDouble
+                | TokenKind::QuoteWords
+                | TokenKind::QuoteCommand
+                | TokenKind::HeredocStart
+        )
+    }
+
+    /// Returns true for strong parser recovery boundaries.
+    pub fn is_recovery_boundary(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Semicolon
+                | TokenKind::Eof
+                | TokenKind::RightParen
+                | TokenKind::RightBrace
+                | TokenKind::RightBracket
+                | TokenKind::DataMarker
+                | TokenKind::My
+                | TokenKind::Our
+                | TokenKind::Local
+                | TokenKind::State
+                | TokenKind::Sub
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                | TokenKind::If
+                | TokenKind::Unless
+                | TokenKind::Elsif
+                | TokenKind::Else
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+        )
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.

@@ -120,9 +120,7 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::RightBracket)
             | Some(TokenKind::Eof)
             | None => false,
-            Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
-                false
-            }
+            Some(kind) if kind.is_low_precedence_word_operator() => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
@@ -618,33 +616,30 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
+        self.peek_kind().is_some_and(|kind| kind == TokenKind::Semicolon || kind.is_close_delimiter())
+            || matches!(
+                self.peek_kind(),
                 // Statement-starter keywords cannot serve as an expression RHS.
                 // Treating them as "missing operand" allows declaration parsing
                 // to recover cleanly and resume at the next statement boundary.
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::No)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::Eof)
-                | None
-        )
+                Some(TokenKind::My)
+                    | Some(TokenKind::Our)
+                    | Some(TokenKind::State)
+                    | Some(TokenKind::Sub)
+                    | Some(TokenKind::Package)
+                    | Some(TokenKind::Use)
+                    | Some(TokenKind::No)
+                    | Some(TokenKind::If)
+                    | Some(TokenKind::Unless)
+                    | Some(TokenKind::Elsif)
+                    | Some(TokenKind::Else)
+                    | Some(TokenKind::While)
+                    | Some(TokenKind::Until)
+                    | Some(TokenKind::For)
+                    | Some(TokenKind::Foreach)
+                    | Some(TokenKind::Eof)
+                    | None
+            )
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
