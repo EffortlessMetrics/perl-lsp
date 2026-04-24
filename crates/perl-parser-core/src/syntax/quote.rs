@@ -337,7 +337,8 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
             return (search, String::new(), String::new());
         }
         extract_unpaired_body_skip_strings(rest1, closing)
-    } else if is_paired {
+    } else {
+        // is_paired == true: paired delimiters (tr{abc}{xyz})
         let trimmed = rest1.trim_start();
         if let Some(repl_delimiter) = starts_with_paired_delimiter(trimmed) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
@@ -345,8 +346,6 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         } else {
             return (search, String::new(), String::new());
         }
-    } else {
-        (String::new(), rest1, false)
     };
     if !replacement_closed {
         return (search, replacement, String::new());
