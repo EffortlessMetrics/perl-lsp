@@ -131,6 +131,33 @@ fn given_use_v5_40_when_querying_state_then_effective_strict_warnings_and_featur
 }
 
 #[test]
+fn given_built_query_map_when_asking_for_final_state_then_no_sentinel_offset_is_needed() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let query_map = PragmaTracker::build_map(&ast);
+
+    let final_state = query_map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+}
+
+#[test]
+fn given_query_cursor_when_reading_forward_offsets_then_state_tracks_lexical_transitions() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 13, 31),
+        use_node("warnings", &[], 32, 47),
+    ]);
+    let query_map = PragmaTracker::build_map(&ast);
+    let mut cursor = query_map.cursor();
+
+    assert!(cursor.state_at(8).strict_refs);
+    assert!(!cursor.state_at(20).strict_refs);
+    assert!(cursor.state_at(40).warnings);
+}
+
+#[test]
 fn given_use_builtin_qw_when_querying_scope_then_each_imported_name_is_available() {
     let ast = program(vec![use_node("builtin", &["qw(true false ceil)"], 0, 30)]);
     let map = PragmaTracker::build(&ast);

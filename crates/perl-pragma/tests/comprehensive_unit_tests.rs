@@ -5,7 +5,9 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaMap, PragmaState, PragmaTracker, features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1008,6 +1010,49 @@ fn state_for_offset_between_two_pragmas() -> Result<(), Box<dyn std::error::Erro
     let state = PragmaTracker::state_for_offset(&map, 50);
     assert!(state.strict_vars);
     assert!(!state.warnings);
+    Ok(())
+}
+
+#[test]
+fn pragma_map_final_state_matches_legacy_high_offset_query()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 50, 65)]);
+    let map = PragmaTracker::build(&ast);
+    let query_map = PragmaTracker::build_map(&ast);
+
+    assert_eq!(query_map.final_state(), PragmaTracker::state_for_offset(&map, usize::MAX));
+    Ok(())
+}
+
+#[test]
+fn pragma_map_state_at_matches_legacy_wrapper() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 20, 35),
+        use_node("warnings", &[], 40, 55),
+    ]);
+    let raw_map = PragmaTracker::build(&ast);
+    let query_map = PragmaTracker::build_map(&ast);
+
+    assert_eq!(query_map.state_at(10), PragmaTracker::state_for_offset(&raw_map, 10));
+    assert_eq!(query_map.state_at(30), PragmaTracker::state_for_offset(&raw_map, 30));
+    assert_eq!(query_map.state_at(50), PragmaTracker::state_for_offset(&raw_map, 50));
+    Ok(())
+}
+
+#[test]
+fn pragma_map_cursor_supports_repeated_queries() -> Result<(), Box<dyn std::error::Error>> {
+    let query_map = PragmaMap::from_ranges(vec![
+        (0..12, PragmaState::all_strict()),
+        (20..30, PragmaState::default()),
+        (40..50, PragmaState { warnings: true, ..PragmaState::default() }),
+    ]);
+    let mut cursor = query_map.cursor();
+
+    assert!(cursor.state_at(5).strict_vars);
+    assert!(!cursor.state_at(25).strict_vars);
+    assert!(cursor.state_at(45).warnings);
+    assert!(cursor.final_state().warnings);
     Ok(())
 }
 
