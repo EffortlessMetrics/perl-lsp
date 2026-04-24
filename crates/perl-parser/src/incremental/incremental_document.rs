@@ -128,16 +128,18 @@ impl IncrementalDocument {
         // Reset metrics for this batch of edits
         self.metrics = ParseMetrics::default();
 
-        // Sort edits by position (reverse order for correct application)
-        let mut sorted_edits = edits.edits.clone();
-        sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+        let Some(sorted_edits) = edits.normalize_for_source(&self.source) else {
+            return self.fallback_parse_batch(edits, start);
+        };
 
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                return self.fallback_parse_batch(edits, start);
+            }
         }
 
         // Find all affected ranges
@@ -147,12 +149,25 @@ impl IncrementalDocument {
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
 
-        // Parse with reuse when possible
-        let new_root = if !reusable.is_empty() {
-            self.parse_with_reuse(&new_source, reusable)?
+        // Parse with reuse when possible, then validate against a fresh parse.
+        // If reuse produces a divergent tree, conservatively fall back to
+        // the fresh parse result.
+        let reused_root = if !reusable.is_empty() {
+            Some(self.parse_with_reuse(&new_source, reusable)?)
         } else {
-            let mut parser = Parser::new(&new_source);
-            parser.parse()?
+            None
+        };
+        let mut parser = Parser::new(&new_source);
+        let fresh_root = parser.parse()?;
+        let new_root = if let Some(reused_root) = reused_root {
+            if Self::nodes_match(&reused_root, &fresh_root) {
+                reused_root
+            } else {
+                debug!("Batch incremental reuse diverged from fresh parse; using fallback result");
+                fresh_root
+            }
+        } else {
+            fresh_root
         };
 
         // Update state
@@ -165,46 +180,75 @@ impl IncrementalDocument {
         Ok(())
     }
 
+    fn fallback_parse_batch(
+        &mut self,
+        edits: &IncrementalEditSet,
+        start: Instant,
+    ) -> ParseResult<()> {
+        let new_source = edits.apply_to_string(&self.source);
+        let mut parser = Parser::new(&new_source);
+        let new_root = parser.parse()?;
+        self.source = new_source;
+        self.root = Arc::new(new_root);
+        self.cache_subtrees();
+        self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+        Ok(())
+    }
+
     /// Apply edit to source string
     fn apply_edit_to_source(&self, edit: &IncrementalEdit) -> String {
         self.apply_edit_to_string(&self.source, edit)
     }
 
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
+        let Some((start, end)) = Self::map_edit_range(source, edit) else {
+            debug!(
+                "Invalid edit mapping: start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            return source.to_string();
+        };
+
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
-
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        // Ensure we're on UTF-8 boundaries
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            result.push_str(&source[..start]);
-            result.push_str(&edit.new_text);
-            result.push_str(&source[end..]);
-        } else {
-            // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
-            result.push_str(source);
-        }
-
+        result.push_str(&source[..start]);
+        result.push_str(&edit.new_text);
+        result.push_str(&source[end..]);
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        let Some((start, end)) = Self::map_edit_range(source, edit) else {
+            debug!(
+                "Invalid edit mapping: start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            return false;
+        };
 
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
-        }
+        source.replace_range(start..end, &edit.new_text);
+        true
+    }
 
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            source.replace_range(start..end, &edit.new_text);
-        } else {
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+    fn map_edit_range(source: &str, edit: &IncrementalEdit) -> Option<(usize, usize)> {
+        if edit.start_byte > edit.old_end_byte {
+            return None;
         }
+        if edit.old_end_byte > source.len() {
+            return None;
+        }
+        if !source.is_char_boundary(edit.start_byte) || !source.is_char_boundary(edit.old_end_byte)
+        {
+            return None;
+        }
+        Some((edit.start_byte, edit.old_end_byte))
+    }
+
+    fn nodes_match(left: &Node, right: &Node) -> bool {
+        format!("{left:?}") == format!("{right:?}")
     }
 
     /// Find subtrees that can be reused (outside the edited range)
