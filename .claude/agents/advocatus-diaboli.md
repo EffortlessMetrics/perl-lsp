@@ -29,7 +29,7 @@ builder time on work that shouldn't exist.
 
 This repo trends heavily toward architecture, verification, and locking
 things in — "rust-as-spec." The codebase has:
-- 134 workspace crates with microcrate architecture
+- ~30 focused workspace crates with strong modular boundaries (post-v0.13.0 collapse from ~135)
 - Extensive BDD-style tests with non-functional requirements (NFR)
 - Multi-layer verification pipeline (scout → accuracy → research → plan-review)
 - Typed error handling, no unwrap/expect in production code

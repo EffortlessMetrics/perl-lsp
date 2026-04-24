@@ -52,7 +52,7 @@ These aren't "next-step" operations — they're background context to carry as y
 
 ## The perl-lsp quality bar
 
-- 134 microcrates, typed errors, BDD tests with NFR
+- ~30 focused microcrates with strong boundaries, typed errors, BDD tests with NFR
 - No `unwrap()` in production, no LGTM reviews, no undocumented features
 - Every PR gets improved by reviewers — "LGTM, no changes" is a red flag
 - Tests use `Result<()>` with `?`, `perl_tdd_support::must`/`must_some`
