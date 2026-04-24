@@ -106,20 +106,64 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
+    /// Normalize edits for strict batch application.
+    ///
+    /// Returns edits in reverse byte order (end-to-start), or `None` when the
+    /// batch contains backwards ranges, out-of-bounds ranges, or overlaps.
+    pub fn normalized_reverse_non_overlapping(
+        &self,
+        source_len: usize,
+    ) -> Option<Vec<IncrementalEdit>> {
+        let mut ascending = self.edits.clone();
+        ascending.sort_by_key(|edit| (edit.start_byte, edit.old_end_byte));
+
+        for edit in &ascending {
+            if edit.start_byte > edit.old_end_byte {
+                return None;
+            }
+            if edit.old_end_byte > source_len {
+                return None;
+            }
+        }
+
+        for pair in ascending.windows(2) {
+            let first = &pair[0];
+            let second = &pair[1];
+            if first.old_end_byte > second.start_byte {
+                return None;
+            }
+        }
+
+        let mut reverse = ascending;
+        reverse.sort_by_key(|edit| std::cmp::Reverse(edit.start_byte));
+        Some(reverse)
+    }
+
     /// Apply edits to a string
     pub fn apply_to_string(&self, source: &str) -> String {
         if self.edits.is_empty() {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start
+        // Sort edits in reverse order to apply from end to start.
         let mut sorted_edits = self.edits.clone();
         sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
 
         let mut result = source.to_string();
+        let mut next_disjoint_start = usize::MAX;
         for edit in &sorted_edits {
-            let start = edit.start_byte.min(result.len());
-            let end = edit.old_end_byte.min(result.len());
+            if edit.start_byte > edit.old_end_byte {
+                continue;
+            }
+            if edit.old_end_byte > result.len() {
+                continue;
+            }
+            if edit.old_end_byte > next_disjoint_start {
+                continue;
+            }
+
+            let start = edit.start_byte;
+            let end = edit.old_end_byte;
 
             if start > end {
                 continue;
@@ -130,6 +174,7 @@ impl IncrementalEditSet {
             }
 
             result.replace_range(start..end, &edit.new_text);
+            next_disjoint_start = start;
         }
 
         result

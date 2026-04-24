@@ -128,13 +128,20 @@ impl IncrementalDocument {
         // Reset metrics for this batch of edits
         self.metrics = ParseMetrics::default();
 
-        // Sort edits by position (reverse order for correct application)
-        let mut sorted_edits = edits.edits.clone();
-        sorted_edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+        let Some(sorted_edits) = self.normalized_mappable_batch(edits) else {
+            debug!("Falling back to conservative batch application for unmappable edit set");
+            let new_source = edits.apply_to_string(&self.source);
+            let mut parser = Parser::new(&new_source);
+            let new_root = parser.parse()?;
 
-        // Apply all edits to source in-place.
-        // Reverse ordering keeps byte offsets stable while avoiding repeated
-        // full-string allocations for each edit.
+            self.source = new_source;
+            self.root = Arc::new(new_root);
+            self.cache_subtrees();
+            self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+
+            return Ok(());
+        };
+
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
             self.apply_edit_in_place(&mut new_source, edit);
@@ -165,6 +172,22 @@ impl IncrementalDocument {
         Ok(())
     }
 
+    fn normalized_mappable_batch(
+        &self,
+        edits: &IncrementalEditSet,
+    ) -> Option<Vec<IncrementalEdit>> {
+        let sorted = edits.normalized_reverse_non_overlapping(self.source.len())?;
+
+        if sorted.iter().any(|edit| {
+            !self.source.is_char_boundary(edit.start_byte)
+                || !self.source.is_char_boundary(edit.old_end_byte)
+        }) {
+            return None;
+        }
+
+        Some(sorted)
+    }
+
     /// Apply edit to source string
     fn apply_edit_to_source(&self, edit: &IncrementalEdit) -> String {
         self.apply_edit_to_string(&self.source, edit)
@@ -173,9 +196,25 @@ impl IncrementalDocument {
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
 
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Invalid edit range (backwards): start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return source.to_string();
+        }
+        if edit.old_end_byte > source.len() {
+            debug!(
+                "Invalid edit range (out of bounds): start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            return source.to_string();
+        }
+
+        let start = edit.start_byte;
+        let end = edit.old_end_byte;
 
         // Ensure we're on UTF-8 boundaries
         if source.is_char_boundary(start) && source.is_char_boundary(end) {
@@ -192,8 +231,25 @@ impl IncrementalDocument {
     }
 
     fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Skipping invalid edit range (backwards): start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return;
+        }
+        if edit.old_end_byte > source.len() {
+            debug!(
+                "Skipping invalid edit range (out of bounds): start={}, end={}, source_len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            return;
+        }
+
+        let start = edit.start_byte;
+        let end = edit.old_end_byte;
 
         if start > end {
             debug!("Skipping invalid edit range: start={}, end={}", start, end);
