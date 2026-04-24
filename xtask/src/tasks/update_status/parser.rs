@@ -131,11 +131,24 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |summary| {
             format!(
-                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
-                format_clean_rate(summary.ok_files, summary.total_files),
+                "| **Project corpus** | {} salvage (`{}/{}`) | Deterministic regression baseline; `{}` total (`{}` `test_corpus/` + `{}` `perl-corpus`), `{}` clean, `{}` dirty, `{}` structured-only recovery, `{}` with ERROR nodes, `{}` catastrophic (`{}` parse-error files), `{}` recovered nodes, first unrecovered `{}`, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                format!("{:.1}%", summary.recovery_salvage_rate * 100.0),
+                summary.structured_recovery_only_files,
+                summary.dirty_files,
+                summary.total_files,
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
+                summary.ok_files,
+                summary.dirty_files,
+                summary.structured_recovery_only_files,
+                summary.files_with_error_nodes,
+                summary.catastrophic_parse_failures,
                 summary.error_files,
+                summary.recovered_node_count,
+                summary
+                    .first_unrecovered_error_node
+                    .as_deref()
+                    .unwrap_or("none"),
                 summary.timeout_files,
                 summary.panic_files,
                 summary.nodekind_covered,
@@ -176,7 +189,15 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             .map_or_else(|| "?".to_string(), |r| r.files_unreadable.to_string());
         let proj_detail = metrics.project_corpus.as_ref().map_or_else(
             || "Project: UNVERIFIED".to_string(),
-            |s| format!("Project: {} timeout, {} panic, 0 unread", s.timeout_files, s.panic_files,),
+            |s| {
+                format!(
+                    "Project: {} timeout, {} panic, {} catastrophic, {} with ERROR nodes",
+                    s.timeout_files,
+                    s.panic_files,
+                    s.catastrophic_parse_failures,
+                    s.files_with_error_nodes,
+                )
+            },
         );
         format!(
             "| **Reliability** | Ubuntu: {} unread / CPAN: {} unread / {} | -- | `.ci/*-baseline.json` |",
@@ -288,6 +309,13 @@ mod tests {
             error_files: 0,
             timeout_files: 0,
             panic_files: 0,
+            dirty_files: 2,
+            structured_recovery_only_files: 1,
+            files_with_error_nodes: 1,
+            catastrophic_parse_failures: 0,
+            recovered_node_count: 3,
+            first_unrecovered_error_node: Some("Missing semicolon".to_string()),
+            recovery_salvage_rate: 0.5,
             test_corpus_files: 69,
             perl_corpus_files: 22,
             nodekind_covered: 65,
@@ -309,6 +337,9 @@ mod tests {
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
+        assert!(result.contains("50.0% salvage"), "project row missing salvage rate");
+        assert!(result.contains("1/2"), "project row missing salvage fraction");
+        assert!(result.contains("with ERROR nodes"), "project row missing ERROR-node detail");
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");

@@ -595,6 +595,19 @@ impl ParseOutput {
     pub fn error_count(&self) -> usize {
         self.diagnostics.len()
     }
+
+    /// Returns true when all diagnostics are structured recovery markers.
+    ///
+    /// This is used by parser closeout metrics to classify salvaged parses
+    /// separately from unrecovered syntax failures.
+    pub fn has_structured_recovery_only(&self) -> bool {
+        !self.diagnostics.is_empty() && self.diagnostics.iter().all(ParseError::is_recovered)
+    }
+
+    /// Count diagnostics that are not `ParseError::Recovered`.
+    pub fn unrecovered_diagnostic_count(&self) -> usize {
+        self.diagnostics.iter().filter(|diagnostic| !diagnostic.is_recovered()).count()
+    }
 }
 
 impl ParseError {
@@ -652,6 +665,22 @@ impl ParseError {
         location: usize,
     ) -> Self {
         ParseError::UnexpectedToken { expected: expected.into(), found: found.into(), location }
+    }
+
+    /// True when this diagnostic represents successful structured recovery.
+    pub fn is_recovered(&self) -> bool {
+        matches!(self, ParseError::Recovered { .. })
+    }
+
+    /// True when the parser could not continue and returned `Err` from `parse()`.
+    pub fn is_catastrophic_failure(&self) -> bool {
+        matches!(
+            self,
+            ParseError::RecursionLimit
+                | ParseError::NestingTooDeep { .. }
+                | ParseError::Cancelled
+                | ParseError::LexerError { .. }
+        )
     }
 
     /// Get the byte location of the error if available
@@ -746,6 +775,7 @@ pub fn get_error_contexts(errors: &[ParseError], source: &str) -> Vec<ErrorConte
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_ast::{NodeKind, SourceLocation};
 
     #[test]
     fn test_parse_budget_defaults() {
@@ -1039,5 +1069,61 @@ mod tests {
 
         assert_eq!(output.recovered_count, 1);
         assert!(!output.terminated_early);
+    }
+    #[test]
+    fn test_parse_output_structured_recovery_only() {
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                location: 12,
+            },
+            ParseError::Recovered {
+                site: RecoverySite::InfixRhs,
+                kind: RecoveryKind::MissingOperand,
+                location: 25,
+            },
+        ];
+        let output = ParseOutput::with_errors(ast, errors);
+        assert!(output.has_structured_recovery_only());
+        assert_eq!(output.unrecovered_diagnostic_count(), 0);
+    }
+
+    #[test]
+    fn test_parse_output_unrecovered_diagnostic_count() {
+        let ast = Node::new(
+            NodeKind::Program { statements: vec![] },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let errors = vec![
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                location: 12,
+            },
+            ParseError::syntax("missing token", 40),
+        ];
+        let output = ParseOutput::with_errors(ast, errors);
+        assert!(!output.has_structured_recovery_only());
+        assert_eq!(output.unrecovered_diagnostic_count(), 1);
+    }
+
+    #[test]
+    fn test_parse_error_catastrophic_classification() {
+        assert!(ParseError::RecursionLimit.is_catastrophic_failure());
+        assert!(ParseError::LexerError { message: "bad".to_string() }.is_catastrophic_failure());
+        assert!(!ParseError::syntax("missing ;", 5).is_catastrophic_failure());
+        assert!(
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                location: 1,
+            }
+            .is_recovered()
+        );
     }
 }

@@ -303,3 +303,11 @@ fn sibling_statement_survives_after_truncated_arrow() {
         sexp
     );
 }
+
+#[test]
+fn closeout_classifies_structured_recovery_as_salvage() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let output = parser.parse_with_recovery();
+    assert!(output.has_structured_recovery_only());
+    assert_eq!(output.unrecovered_diagnostic_count(), 0);
+}

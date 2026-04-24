@@ -410,3 +410,12 @@ fn parser_recovery_preserves_good_code() -> ParseResult<()> {
     }
     Ok(())
 }
+
+#[test]
+fn closeout_reports_unrecovered_diagnostics_for_error_nodes() -> ParseResult<()> {
+    let mut parser = Parser::new("my $x = ; my $y = 1;");
+    let output = parser.parse_with_recovery();
+    assert!(output.unrecovered_diagnostic_count() > 0);
+    assert!(!output.has_structured_recovery_only());
+    Ok(())
+}

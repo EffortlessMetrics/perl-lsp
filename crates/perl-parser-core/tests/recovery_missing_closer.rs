@@ -333,3 +333,11 @@ fn clean_inputs_produce_zero_inserted_closer() {
         );
     }
 }
+
+#[test]
+fn closeout_missing_closer_counts_as_structured_salvage() {
+    let mut parser = Parser::new("foo($x;");
+    let output = parser.parse_with_recovery();
+    assert!(output.has_structured_recovery_only());
+    assert_eq!(output.unrecovered_diagnostic_count(), 0);
+}

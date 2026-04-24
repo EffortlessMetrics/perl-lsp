@@ -78,6 +78,13 @@ pub struct StatusSummary {
     pub error_files: usize,
     pub timeout_files: usize,
     pub panic_files: usize,
+    pub dirty_files: usize,
+    pub structured_recovery_only_files: usize,
+    pub files_with_error_nodes: usize,
+    pub catastrophic_parse_failures: usize,
+    pub recovered_node_count: usize,
+    pub first_unrecovered_error_node: Option<String>,
+    pub recovery_salvage_rate: f64,
     pub test_corpus_files: usize,
     pub perl_corpus_files: usize,
     pub nodekind_covered: usize,
@@ -101,15 +108,57 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
     let mut error_files = 0usize;
     let mut timeout_files = 0usize;
     let mut panic_files = 0usize;
+    let mut dirty_files = 0usize;
+    let mut structured_recovery_only_files = 0usize;
+    let mut files_with_error_nodes = 0usize;
+    let mut recovered_node_count = 0usize;
+    let mut first_unrecovered_error_node: Option<String> = None;
 
     for outcome in parse_results.values() {
         match outcome {
-            ParseOutcome::Ok { .. } => ok_files += 1,
-            ParseOutcome::Error { .. } => error_files += 1,
-            ParseOutcome::Timeout { .. } => timeout_files += 1,
-            ParseOutcome::Panic { .. } => panic_files += 1,
+            ParseOutcome::Ok { recovered_count, unrecovered_diagnostics, error_nodes, .. } => {
+                recovered_node_count += *recovered_count;
+                let is_clean = *recovered_count == 0
+                    && *unrecovered_diagnostics == 0
+                    && error_nodes.count == 0;
+                if is_clean {
+                    ok_files += 1;
+                } else {
+                    dirty_files += 1;
+                    if *recovered_count > 0
+                        && *unrecovered_diagnostics == 0
+                        && error_nodes.count == 0
+                    {
+                        structured_recovery_only_files += 1;
+                    }
+                    if error_nodes.count > 0 {
+                        files_with_error_nodes += 1;
+                        if first_unrecovered_error_node.is_none() {
+                            first_unrecovered_error_node = error_nodes.first_message.clone();
+                        }
+                    }
+                }
+            }
+            ParseOutcome::Error { .. } => {
+                error_files += 1;
+                dirty_files += 1;
+            }
+            ParseOutcome::Timeout { .. } => {
+                timeout_files += 1;
+                dirty_files += 1;
+            }
+            ParseOutcome::Panic { .. } => {
+                panic_files += 1;
+                dirty_files += 1;
+            }
         }
     }
+    let catastrophic_parse_failures = error_files;
+    let recovery_salvage_rate = if dirty_files == 0 {
+        1.0
+    } else {
+        structured_recovery_only_files as f64 / dirty_files as f64
+    };
 
     let mut test_corpus_files = 0usize;
     let mut perl_corpus_files = 0usize;
@@ -127,6 +176,13 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
         error_files,
         timeout_files,
         panic_files,
+        dirty_files,
+        structured_recovery_only_files,
+        files_with_error_nodes,
+        catastrophic_parse_failures,
+        recovered_node_count,
+        first_unrecovered_error_node,
+        recovery_salvage_rate,
         test_corpus_files,
         perl_corpus_files,
         nodekind_covered: nodekind_stats.covered_count,
@@ -246,9 +302,20 @@ fn print_audit_summary(report: &AuditReport) {
     println!("   Total files: {}", report.inventory.total_files);
     println!("   Parse results:");
     println!("     - OK: {} ✅", report.parse_outcomes.ok);
-    println!("     - Error: {} ❌", report.parse_outcomes.error);
+    println!("     - Catastrophic parse failures: {} ❌", report.parse_outcomes.error);
+    println!(
+        "     - Structured recovery only: {} 🛟",
+        report.parse_outcomes.structured_recovery_only
+    );
+    println!("     - Files with ERROR nodes: {} ⚠️", report.parse_outcomes.files_with_error_nodes);
+    println!("     - Dirty total: {}", report.parse_outcomes.dirty_total);
     println!("     - Timeout: {} ⏱️", report.parse_outcomes.timeout);
     println!("     - Panic: {} 💥", report.parse_outcomes.panic);
+    println!("     - Recovered node count: {}", report.parse_outcomes.recovered_node_count);
+    println!(
+        "     - Recovery salvage rate: {:.1}%",
+        report.parse_outcomes.recovery_salvage_rate * 100.0
+    );
     println!(
         "   NodeKind coverage: {}/{} ({:.1}%)",
         report.nodekind_coverage.covered_count,

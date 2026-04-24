@@ -47,14 +47,29 @@ pub struct ReportMetadata {
 pub struct ParseOutcomesSummary {
     /// Total files parsed
     pub total: usize,
-    /// Successfully parsed files
+    /// Successfully parsed files with zero diagnostics and zero ERROR nodes
     pub ok: usize,
-    /// Files with parse errors
+    /// Files with catastrophic parser failure (`Parser::parse()` returned Err)
     pub error: usize,
     /// Files that timed out
     pub timeout: usize,
     /// Files that caused panics
     pub panic: usize,
+    /// Total non-clean files across all classes.
+    pub dirty_total: usize,
+    /// Files that only used structured recovery (Recovered diagnostics only).
+    pub structured_recovery_only: usize,
+    /// Files that retained one or more ERROR nodes in the AST.
+    pub files_with_error_nodes: usize,
+    /// Catastrophic parse failures (alias of `error` for explicit closeout reporting).
+    pub catastrophic_parse_failures: usize,
+    /// Total recovered-node diagnostics across all parsed files.
+    pub recovered_node_count: usize,
+    /// First unrecovered ERROR node message seen in corpus order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_unrecovered_error_node: Option<String>,
+    /// Fraction of dirty files that were recovered without ERROR nodes/catastrophic failure.
+    pub recovery_salvage_rate: f64,
     /// Error breakdown by category (Issue #180)
     #[serde(default)]
     pub error_by_category: HashMap<String, usize>,
@@ -211,14 +226,43 @@ fn generate_parse_outcomes_summary(
     let mut error = 0;
     let mut timeout = 0;
     let mut panic = 0;
+    let mut dirty_total = 0;
+    let mut structured_recovery_only = 0;
+    let mut files_with_error_nodes = 0;
+    let mut recovered_node_count = 0;
+    let mut first_unrecovered_error_node: Option<String> = None;
     let mut error_by_category: HashMap<String, usize> = HashMap::new();
     let mut failing_files: Vec<FailingFile> = Vec::new();
 
     for (path, outcome) in parse_results {
         match outcome {
-            ParseOutcome::Ok { .. } => ok += 1,
+            ParseOutcome::Ok { recovered_count, unrecovered_diagnostics, error_nodes, .. } => {
+                recovered_node_count += recovered_count;
+
+                let is_clean = *recovered_count == 0
+                    && *unrecovered_diagnostics == 0
+                    && error_nodes.count == 0;
+                if is_clean {
+                    ok += 1;
+                } else {
+                    dirty_total += 1;
+                    if *recovered_count > 0
+                        && *unrecovered_diagnostics == 0
+                        && error_nodes.count == 0
+                    {
+                        structured_recovery_only += 1;
+                    }
+                    if error_nodes.count > 0 {
+                        files_with_error_nodes += 1;
+                        if first_unrecovered_error_node.is_none() {
+                            first_unrecovered_error_node = error_nodes.first_message.clone();
+                        }
+                    }
+                }
+            }
             ParseOutcome::Error { message } => {
                 error += 1;
+                dirty_total += 1;
 
                 // Categorize the error
                 let source = sources.get(path).map(|s| s.as_str()).unwrap_or("");
@@ -256,9 +300,13 @@ fn generate_parse_outcomes_summary(
                     code_snippet,
                 });
             }
-            ParseOutcome::Timeout { .. } => timeout += 1,
+            ParseOutcome::Timeout { .. } => {
+                timeout += 1;
+                dirty_total += 1;
+            }
             ParseOutcome::Panic { message } => {
                 panic += 1;
+                dirty_total += 1;
                 // Panics are also added to failing files for visibility
                 failing_files.push(FailingFile {
                     path: path.display().to_string(),
@@ -277,7 +325,26 @@ fn generate_parse_outcomes_summary(
     // Sort failing files by path for consistent output
     failing_files.sort_by(|a, b| a.path.cmp(&b.path));
 
-    ParseOutcomesSummary { total, ok, error, timeout, panic, error_by_category, failing_files }
+    let catastrophic_parse_failures = error;
+    let recovery_salvage_rate =
+        if dirty_total == 0 { 1.0 } else { structured_recovery_only as f64 / dirty_total as f64 };
+
+    ParseOutcomesSummary {
+        total,
+        ok,
+        error,
+        timeout,
+        panic,
+        dirty_total,
+        structured_recovery_only,
+        files_with_error_nodes,
+        catastrophic_parse_failures,
+        recovered_node_count,
+        first_unrecovered_error_node,
+        recovery_salvage_rate,
+        error_by_category,
+        failing_files,
+    }
 }
 
 #[cfg(test)]
@@ -287,7 +354,15 @@ mod tests {
     #[test]
     fn test_generate_parse_outcomes_summary() {
         let mut results = std::collections::HashMap::new();
-        results.insert(PathBuf::from("test1.pl"), ParseOutcome::Ok { duration_ms: 100 });
+        results.insert(
+            PathBuf::from("test1.pl"),
+            ParseOutcome::Ok {
+                duration_ms: 100,
+                recovered_count: 0,
+                unrecovered_diagnostics: 0,
+                error_nodes: super::super::timeout_detection::ErrorNodeSummary::default(),
+            },
+        );
         results.insert(
             PathBuf::from("test2.pl"),
             ParseOutcome::Error { message: "error".to_string() },
@@ -305,9 +380,12 @@ mod tests {
 
         assert_eq!(summary.total, 4);
         assert_eq!(summary.ok, 1);
+        assert_eq!(summary.dirty_total, 3);
         assert_eq!(summary.error, 1);
         assert_eq!(summary.timeout, 1);
         assert_eq!(summary.panic, 1);
+        assert_eq!(summary.catastrophic_parse_failures, 1);
+        assert_eq!(summary.recovery_salvage_rate, 0.0);
         // Error should be categorized as General when no source is provided
         assert_eq!(summary.error_by_category.get("General"), Some(&1));
         assert_eq!(summary.failing_files.len(), 2); // error + panic
