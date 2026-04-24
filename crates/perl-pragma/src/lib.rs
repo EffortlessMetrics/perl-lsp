@@ -223,8 +223,17 @@ fn enable_effective_version_semantics(state: &mut PragmaState, version: PerlVers
     state.signatures_strict = false;
 }
 
-fn feature_items(arg: &str) -> Vec<String> {
-    pragma_arg_items(arg)
+fn for_each_pragma_item(mut arg: &str, mut visit: impl FnMut(&str)) {
+    arg = arg.trim().trim_matches('\'').trim_matches('"');
+
+    if let Some(inner) = arg.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
+        for item in inner.split_whitespace() {
+            visit(item);
+        }
+        return;
+    }
+
+    visit(arg);
 }
 
 fn known_feature_name(name: &str) -> Option<&'static str> {
@@ -298,7 +307,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
     let mut changed = false;
 
     for arg in args {
-        for item in feature_items(arg) {
+        for_each_pragma_item(arg, |item| {
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -306,7 +315,7 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
                 state.unicode_strings = false;
                 state.signatures_strict = false;
                 changed |= had_features;
-                continue;
+                return;
             }
 
             if let Some(version) = item.strip_prefix(':').and_then(parse_perl_version) {
@@ -317,42 +326,43 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
                         disable_feature_name(state, feature)
                     };
                 }
-                continue;
+                return;
             }
 
             changed |= if enabled {
-                enable_feature_name(state, &item)
+                enable_feature_name(state, item)
             } else {
-                disable_feature_name(state, &item)
+                disable_feature_name(state, item)
             };
-        }
+        });
     }
 
     changed
 }
 
-fn builtin_import_names(arg: &str) -> Vec<String> {
+fn for_each_builtin_import_name(arg: &str, mut visit: impl FnMut(&str)) {
     let trimmed = arg.trim();
 
     if let Some(inner) = trimmed.strip_prefix("qw(").and_then(|s| s.strip_suffix(')')) {
-        return inner
-            .split_whitespace()
-            .filter(|name| !name.is_empty())
-            .map(|name| name.trim_matches('\'').trim_matches('"').to_string())
-            .collect();
+        for name in inner.split_whitespace().filter(|name| !name.is_empty()) {
+            visit(name.trim_matches('\'').trim_matches('"'));
+        }
+        return;
     }
 
     let name = trimmed.trim_matches('\'').trim_matches('"');
-    if name.is_empty() { Vec::new() } else { vec![name.to_string()] }
+    if !name.is_empty() {
+        visit(name);
+    }
 }
 
 fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     for arg in args {
-        for name in builtin_import_names(arg) {
-            if !state.builtin_imports.iter().any(|import| import == &name) {
-                state.builtin_imports.push(name);
+        for_each_builtin_import_name(arg, |name| {
+            if !state.builtin_imports.iter().any(|import| import == name) {
+                state.builtin_imports.push(name.to_string());
             }
-        }
+        });
     }
 }
 
@@ -394,7 +404,11 @@ fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
             tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
         }
         "feature" => !tail.is_empty(),
-        "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
+        "builtin" => tail.iter().any(|arg| {
+            let mut has_import = false;
+            for_each_builtin_import_name(arg, |_| has_import = true);
+            has_import
+        }),
         _ => false,
     }
 }
@@ -417,16 +431,33 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 pub struct PragmaTracker;
 
 impl PragmaTracker {
+    fn push_state_range(
+        ranges: &mut Vec<(Range<usize>, PragmaState)>,
+        range: Range<usize>,
+        state: &PragmaState,
+        requires_sort: &mut bool,
+    ) {
+        if let Some((last_range, _)) = ranges.last()
+            && last_range.start > range.start
+        {
+            *requires_sort = true;
+        }
+        ranges.push((range, state.clone()));
+    }
+
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
         let mut ranges = Vec::new();
         let mut current_state = PragmaState::default();
+        let mut requires_sort = false;
 
         // Build the pragma map by walking the AST
-        Self::build_ranges(ast, &mut current_state, &mut ranges);
+        Self::build_ranges(ast, &mut current_state, &mut ranges, &mut requires_sort);
 
-        // Sort by start offset
-        ranges.sort_by_key(|(range, _)| range.start);
+        if requires_sort {
+            // Sort by start offset when traversal inserted out-of-order ranges.
+            ranges.sort_by_key(|(range, _)| range.start);
+        }
 
         ranges
     }
@@ -463,17 +494,24 @@ impl PragmaTracker {
         body: &Node,
         current_state: &mut PragmaState,
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
+        requires_sort: &mut bool,
     ) {
         let saved_state = current_state.clone();
-        Self::build_ranges(body, current_state, ranges);
+        Self::build_ranges(body, current_state, ranges, requires_sort);
+        Self::push_state_range(
+            ranges,
+            body.location.end..body.location.end,
+            &saved_state,
+            requires_sort,
+        );
         *current_state = saved_state;
-        ranges.push((body.location.end..body.location.end, current_state.clone()));
     }
 
     fn build_ranges(
         node: &Node,
         current_state: &mut PragmaState,
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
+        requires_sort: &mut bool,
     ) {
         match &node.kind {
             NodeKind::Use { module, args, .. } => {
@@ -497,37 +535,45 @@ impl PragmaTracker {
                                     }
                                 }
                             }
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "warnings" => {
                             current_state.warnings = true;
                             current_state.disabled_warning_categories.clear();
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "utf8" => {
                             current_state.utf8 = true;
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "encoding" => {
                             current_state.encoding = conditional_args
                                 .first()
                                 .map(|arg| normalized_pragma_token(arg).to_string());
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "locale" => {
@@ -535,36 +581,44 @@ impl PragmaTracker {
                             current_state.locale_scope = conditional_args
                                 .first()
                                 .map(|arg| normalized_pragma_token(arg).to_string());
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "feature" => {
                             if apply_feature_state(current_state, conditional_args, true) {
-                                ranges.push((
+                                Self::push_state_range(
+                                    ranges,
                                     node.location.start..node.location.end,
-                                    current_state.clone(),
-                                ));
+                                    current_state,
+                                    requires_sort,
+                                );
                             }
                             return;
                         }
                         "builtin" => {
                             apply_builtin_imports(current_state, conditional_args);
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         _ => {
                             if let Some(version) = parse_perl_version(conditional_module) {
                                 enable_effective_version_semantics(current_state, version);
-                                ranges.push((
+                                Self::push_state_range(
+                                    ranges,
                                     node.location.start..node.location.end,
-                                    current_state.clone(),
-                                ));
+                                    current_state,
+                                    requires_sort,
+                                );
                             }
                             return;
                         }
@@ -598,57 +652,85 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "warnings" => {
                         current_state.warnings = true;
                         // `use warnings` re-enables all warnings; clear any previously
                         // disabled categories so they are active again.
                         current_state.disabled_warning_categories.clear();
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "utf8" => {
                         current_state.utf8 = true;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "encoding" => {
                         current_state.encoding = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "locale" => {
                         current_state.locale = true;
                         current_state.locale_scope = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "feature" => {
                         if apply_feature_state(current_state, args, true) {
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                         }
                     }
                     "builtin" => {
                         apply_builtin_imports(current_state, args);
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
                             enable_effective_version_semantics(current_state, version);
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                         }
                     }
                 }
@@ -674,10 +756,12 @@ impl PragmaTracker {
                                     }
                                 }
                             }
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "warnings" => {
@@ -698,43 +782,53 @@ impl PragmaTracker {
                                     }
                                 }
                             }
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "utf8" => {
                             current_state.utf8 = false;
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "encoding" => {
                             current_state.encoding = None;
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "locale" => {
                             current_state.locale = false;
                             current_state.locale_scope = None;
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                             return;
                         }
                         "feature" => {
                             if apply_feature_state(current_state, conditional_args, false) {
-                                ranges.push((
+                                Self::push_state_range(
+                                    ranges,
                                     node.location.start..node.location.end,
-                                    current_state.clone(),
-                                ));
+                                    current_state,
+                                    requires_sort,
+                                );
                             }
                             return;
                         }
@@ -769,8 +863,12 @@ impl PragmaTracker {
                         }
 
                         // Record the state change at this location
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "warnings" => {
                         if args.is_empty() {
@@ -796,31 +894,49 @@ impl PragmaTracker {
                                 }
                             }
                         }
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "utf8" => {
                         current_state.utf8 = false;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "encoding" => {
                         current_state.encoding = None;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "locale" => {
                         current_state.locale = false;
                         current_state.locale_scope = None;
-                        ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                        Self::push_state_range(
+                            ranges,
+                            node.location.start..node.location.end,
+                            current_state,
+                            requires_sort,
+                        );
                     }
                     "feature" => {
                         if apply_feature_state(current_state, args, false) {
-                            ranges.push((
+                            Self::push_state_range(
+                                ranges,
                                 node.location.start..node.location.end,
-                                current_state.clone(),
-                            ));
+                                current_state,
+                                requires_sort,
+                            );
                         }
                     }
                     _ => {}
@@ -832,77 +948,82 @@ impl PragmaTracker {
 
                 // Process statements in the block
                 for stmt in statements {
-                    Self::build_ranges(stmt, current_state, ranges);
+                    Self::build_ranges(stmt, current_state, ranges, requires_sort);
                 }
 
                 // Restore state after block
+                Self::push_state_range(
+                    ranges,
+                    node.location.end..node.location.end,
+                    &saved_state,
+                    requires_sort,
+                );
                 *current_state = saved_state;
-                ranges.push((node.location.end..node.location.end, current_state.clone()));
             }
             NodeKind::Program { statements } => {
                 // Process all top-level statements
                 for stmt in statements {
-                    Self::build_ranges(stmt, current_state, ranges);
+                    Self::build_ranges(stmt, current_state, ranges, requires_sort);
                 }
             }
             // For subroutines and other container nodes, recurse into their bodies
             NodeKind::Subroutine { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
             }
             NodeKind::Method { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
             }
             NodeKind::Class { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
             }
             NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
-                Self::build_scoped_body(then_branch, current_state, ranges);
+                Self::build_scoped_body(then_branch, current_state, ranges, requires_sort);
                 for (_, elsif_body) in elsif_branches {
-                    Self::build_scoped_body(elsif_body, current_state, ranges);
+                    Self::build_scoped_body(elsif_body, current_state, ranges, requires_sort);
                 }
                 if let Some(else_b) = else_branch {
-                    Self::build_scoped_body(else_b, current_state, ranges);
+                    Self::build_scoped_body(else_b, current_state, ranges, requires_sort);
                 }
             }
             NodeKind::While { body, continue_block, .. }
             | NodeKind::For { body, continue_block, .. }
             | NodeKind::Foreach { body, continue_block, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
                 if let Some(continue_block) = continue_block {
-                    Self::build_scoped_body(continue_block, current_state, ranges);
+                    Self::build_scoped_body(continue_block, current_state, ranges, requires_sort);
                 }
             }
             NodeKind::Eval { block } => {
                 if matches!(block.kind, NodeKind::Block { .. }) {
-                    Self::build_scoped_body(block, current_state, ranges);
+                    Self::build_scoped_body(block, current_state, ranges, requires_sort);
                 }
             }
             NodeKind::Do { block } | NodeKind::Defer { block } => {
-                Self::build_scoped_body(block, current_state, ranges);
+                Self::build_scoped_body(block, current_state, ranges, requires_sort);
             }
             NodeKind::PhaseBlock { block, .. } => {
-                Self::build_scoped_body(block, current_state, ranges);
+                Self::build_scoped_body(block, current_state, ranges, requires_sort);
             }
             NodeKind::Given { body, .. }
             | NodeKind::When { body, .. }
             | NodeKind::Default { body } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
             }
             NodeKind::Try { body, catch_blocks, finally_block } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, current_state, ranges, requires_sort);
                 for (_, catch_body) in catch_blocks {
-                    Self::build_scoped_body(catch_body, current_state, ranges);
+                    Self::build_scoped_body(catch_body, current_state, ranges, requires_sort);
                 }
                 if let Some(finally_block) = finally_block {
-                    Self::build_scoped_body(finally_block, current_state, ranges);
+                    Self::build_scoped_body(finally_block, current_state, ranges, requires_sort);
                 }
             }
             NodeKind::LabeledStatement { statement, .. } => {
-                Self::build_ranges(statement, current_state, ranges);
+                Self::build_ranges(statement, current_state, ranges, requires_sort);
             }
             NodeKind::StatementModifier { statement, condition, .. } => {
-                Self::build_ranges(statement, current_state, ranges);
-                Self::build_ranges(condition, current_state, ranges);
+                Self::build_ranges(statement, current_state, ranges, requires_sort);
+                Self::build_ranges(condition, current_state, ranges, requires_sort);
             }
             // `package Foo { ... }` — the block form is lexically scoped.
             // Save/restore state around the block so pragmas declared inside
@@ -911,7 +1032,7 @@ impl PragmaTracker {
             // `package Foo;` (no block) has no inner scope to walk — its
             // siblings in `Program` already accumulate state normally.
             NodeKind::Package { block: Some(pkg_block), .. } => {
-                Self::build_scoped_body(pkg_block, current_state, ranges);
+                Self::build_scoped_body(pkg_block, current_state, ranges, requires_sort);
             }
             // Other node types don't contain use/no statements
             _ => {}

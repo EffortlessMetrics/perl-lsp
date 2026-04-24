@@ -21,3 +21,10 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "pragma_benchmarks"
+harness = false
