@@ -3825,15 +3825,8 @@ sub helper { }
         let root = temp.path().join("lib");
 
         // Build a path 9 levels deep: root/a/b/c/d/e/f/g/h/
-        let deep_dir = root
-            .join("a")
-            .join("b")
-            .join("c")
-            .join("d")
-            .join("e")
-            .join("f")
-            .join("g")
-            .join("h"); // depth 8 — should be scanned
+        let deep_dir =
+            root.join("a").join("b").join("c").join("d").join("e").join("f").join("g").join("h"); // depth 8 — should be scanned
         let too_deep = deep_dir.join("x"); // depth 9 — must be skipped
         fs::create_dir_all(&too_deep)?;
         fs::write(deep_dir.join("AtLimit.pm"), "package A::B::C::D::E::F::G::H::AtLimit;\n1;\n")?;
