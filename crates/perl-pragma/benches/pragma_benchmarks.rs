@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
 use perl_pragma::PragmaTracker;
@@ -92,16 +92,6 @@ fn synthetic_large_ast(statement_count: usize) -> Node {
     }
 
     program(statements)
-}
-
-fn realistic_parsed_ast() -> Node {
-    let source = include_str!("../../../demo_workspace/main.pl");
-    let mut parser = perl_parser::Parser::new(source);
-
-    match parser.parse() {
-        Ok(ast) => ast,
-        Err(_) => synthetic_large_ast(250),
-    }
 }
 
 fn deterministic_offsets(limit: usize, count: usize) -> Vec<usize> {
@@ -201,8 +191,37 @@ fn bench_final_state_lookup(c: &mut Criterion) {
     });
 }
 
+/// Build a synthetic AST that exercises version-implied feature bundles.
+///
+/// `demo_workspace/main.pl` only has `use strict; use warnings` — no version
+/// pragma — so `has_feature("say")` / `has_feature("builtin")` would always
+/// return false, leaving the feature-lookup branch unmeasured.  This fixture
+/// uses an explicit `use v5.36` so the feature set is populated.
+fn synthetic_version_ast() -> Node {
+    program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 28),
+        // v5.36 implies: say, state, unicode_strings, unicode_eval, evalbytes,
+        // current_sub, fc, postfix_deref, try, signatures, defer, isa
+        use_node("v5.36", &[], 29, 40),
+        block(
+            vec![
+                // Explicit no-warnings experiment inside a sub-scope
+                no_node("warnings", &["experimental"], 45, 73),
+                use_node("feature", &["'signatures'"], 74, 98),
+            ],
+            42,
+            102,
+        ),
+        // builtin is a v5.40+ feature; add it explicitly so has_feature("builtin") fires
+        use_node("feature", &["'builtin'"], 103, 124),
+    ])
+}
+
 fn bench_version_compat_walk_style(c: &mut Criterion) {
-    let ast = realistic_parsed_ast();
+    // Use a synthetic AST with a version pragma so feature lookups are
+    // non-trivial (has_feature returns true for known features).
+    let ast = synthetic_version_ast();
     let map = PragmaTracker::build(&ast);
     let max_offset = map.last().map_or(512, |(range, _)| range.end).max(512);
     let offsets: Vec<usize> = (0..512).map(|idx| idx * max_offset / 512).collect();
@@ -233,12 +252,15 @@ fn bench_scope_analyzer_walk_style(c: &mut Criterion) {
     let max_offset = map.last().map_or(2_048, |(range, _)| range.end).max(2_048);
     let offsets = deterministic_offsets(max_offset, 4_096);
 
+    // Use bench_function so Criterion registers the stable ID as
+    // "scope_analyzer_walk_style" (not "scope_analyzer_walk_style/dense_offsets"
+    // which bench_with_input + BenchmarkId would produce).
     let mut group = c.benchmark_group("scope_analyzer_walk_style");
     group.throughput(Throughput::Elements(offsets.len() as u64));
-    group.bench_with_input(BenchmarkId::from_parameter("dense_offsets"), &offsets, |b, offsets| {
+    group.bench_function("scope_analyzer_walk_style", |b| {
         b.iter(|| {
             let mut scopes_with_strict = 0usize;
-            for offset in offsets {
+            for offset in &offsets {
                 let state = PragmaTracker::state_for_offset(black_box(&map), *offset);
                 if state.strict_vars && state.strict_subs && state.strict_refs {
                     scopes_with_strict = scopes_with_strict.saturating_add(1);
