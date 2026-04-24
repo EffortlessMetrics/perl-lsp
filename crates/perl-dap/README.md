@@ -46,3 +46,31 @@ You can verify availability with:
 ```bash
 perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
 ```
+
+## Benchmarks
+
+```bash
+# All DAP benchmarks (config/platform + live-session)
+cargo bench -p perl-dap --bench dap_benchmarks
+
+# Existing baseline groups
+cargo bench -p perl-dap --bench dap_benchmarks -- configuration
+cargo bench -p perl-dap --bench dap_benchmarks -- platform
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_session
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_dispatch
+
+# New live-session hot paths
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/launch_cold
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/launch_warm
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/attach_loopback
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/set_breakpoints_100
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/step_continue_p95
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/stack_trace_live
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/variables_root
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/variables_child_page
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/evaluate_safe_blocked
+cargo bench -p perl-dap --bench dap_benchmarks -- dap_live/evaluate_live_simple
+
+# Machine-readable Criterion output for trend diffing
+cargo bench -p perl-dap --bench dap_benchmarks -- --message-format=json
+```
