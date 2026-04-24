@@ -591,12 +591,8 @@ impl CheckpointedIncrementalParser {
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
-        if edit.start >= relex_start {
-            self.stats.left_checkpoint_distance = edit.start - relex_start;
-        }
-        if relex_end >= edit_end {
-            self.stats.right_checkpoint_distance = relex_end - edit_end;
-        }
+        self.stats.left_checkpoint_distance = edit.start.saturating_sub(relex_start);
+        self.stats.right_checkpoint_distance = relex_end.saturating_sub(edit_end);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -623,6 +619,13 @@ impl CheckpointedIncrementalParser {
             self.stats.tokens_reused += reused_count;
         }
 
+        // Resolve suffix cache up front so we can keep phase-2 relexing tightly
+        // bounded and avoid re-lexing tokens that are already known reusable.
+        let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
+        let segments_after = self.token_cache.get_segments_after(relex_end);
+        self.stats.segments_reused_after += segments_after.len();
+        let cached_after = self.token_cache.get_tokens_from(relex_end);
+
         // --- Phase 2: re-lex the region between checkpoints ---
         // Restore lexer at left checkpoint position (or start of source)
         let mut lexer = PerlLexer::new(&self.source);
@@ -639,9 +642,17 @@ impl CheckpointedIncrementalParser {
                 Some(token) => {
                     let token_end = token.end;
                     let token_start = token.start;
+
+                    // If we can reuse a cached suffix, keep phase-2 bounded to the
+                    // relex window and avoid re-lexing tokens wholly beyond it.
+                    if cached_after.is_some() && token_start >= relex_end {
+                        break;
+                    }
+
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
-                    bytes_relexed_this_phase += token_end - token_start;
+                    let bytes_in_window = token_end.min(relex_end).saturating_sub(token_start);
+                    bytes_relexed_this_phase += bytes_in_window;
                     if token_end >= relex_end {
                         break;
                     }
@@ -655,12 +666,7 @@ impl CheckpointedIncrementalParser {
         parser_tokens.extend(converted);
 
         // --- Phase 3: reuse cached tokens after the right checkpoint ---
-        let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
-
-        let segments_after = self.token_cache.get_segments_after(relex_end);
-        self.stats.segments_reused_after += segments_after.len();
-
-        if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
+        if let Some(cached) = cached_after {
             self.stats.cache_hits += 1;
             for token in cached {
                 // Adjust byte positions to account for the inserted/removed bytes.
@@ -862,5 +868,56 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_checkpoint_distances_refresh_across_repeated_edits() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let mut source = "my $v = 1;\n".repeat(40);
+        must(parser.parse(source.clone()));
+
+        let first = SimpleEdit { start: 8, end: 9, new_text: "42".to_string() };
+        must(parser.apply_edit(&first));
+        source.replace_range(first.start..first.end, &first.new_text);
+
+        let first_left = parser.stats().left_checkpoint_distance;
+        let first_right = parser.stats().right_checkpoint_distance;
+
+        let second = SimpleEdit {
+            start: source.len() - 2,
+            end: source.len() - 1,
+            new_text: "7".to_string(),
+        };
+        must(parser.apply_edit(&second));
+
+        let stats = parser.stats();
+        assert!(
+            stats.left_checkpoint_distance != first_left
+                || stats.right_checkpoint_distance != first_right,
+            "expected checkpoint distances to refresh for each edit, got {stats:?}"
+        );
+    }
+
+    #[test]
+    fn test_relexed_bytes_bounded_by_checkpoint_window() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $value = 1;\n".repeat(80);
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 125, end: 126, new_text: "999".to_string() };
+        let bytes_before = parser.stats().bytes_relexed;
+
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        let bytes_for_edit = stats.bytes_relexed - bytes_before;
+        let edit_end = edit.start + edit.new_text.len();
+        let relex_start = edit.start.saturating_sub(stats.left_checkpoint_distance);
+        let relex_end = edit_end + stats.right_checkpoint_distance;
+        let planned_window = relex_end.saturating_sub(relex_start);
+        assert!(
+            bytes_for_edit <= planned_window,
+            "bytes relexed should not exceed checkpoint window: bytes={bytes_for_edit}, window={planned_window}, stats={stats:?}"
+        );
     }
 }
