@@ -391,14 +391,7 @@ impl IncrementalParserV2 {
             return false;
         }
 
-        // Track cumulative shift so we can map each edit back to the
-        // coordinates in the original source code represented by `tree`.
-        let mut cumulative_shift: isize = 0;
-
-        for edit in self.pending_edits.edits() {
-            let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
-            let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
-
+        for (original_start, original_end, _) in self.edits_with_original_ranges() {
             let affected_node = tree.find_containing_node(original_start, original_end);
 
             match affected_node {
@@ -410,7 +403,6 @@ impl IncrementalParserV2 {
                             if original_start >= node.location.start
                                 && original_end <= node.location.end
                             {
-                                cumulative_shift += edit.byte_shift();
                                 continue;
                             } else {
                                 return false;
@@ -421,7 +413,6 @@ impl IncrementalParserV2 {
                             if original_start >= node.location.start
                                 && original_end <= node.location.end
                             {
-                                cumulative_shift += edit.byte_shift();
                                 continue;
                             } else {
                                 return false;
@@ -432,7 +423,6 @@ impl IncrementalParserV2 {
                             if original_start >= node.location.start
                                 && original_end <= node.location.end
                             {
-                                cumulative_shift += edit.byte_shift();
                                 continue;
                             } else {
                                 return false;
@@ -454,7 +444,7 @@ impl IncrementalParserV2 {
 
     /// Check if all edits only affect whitespace or comments
     fn is_whitespace_or_comment_edit(&self, tree: &IncrementalTree, source: &str) -> bool {
-        for edit in self.pending_edits.edits() {
+        for (old_start, old_end, edit) in self.edits_with_original_ranges() {
             // Validate both sides of the edit:
             // - old source text being replaced
             // - new source text inserted by the edit
@@ -462,8 +452,9 @@ impl IncrementalParserV2 {
             if !self.is_edit_non_structural(
                 tree,
                 source,
+                old_start,
+                old_end,
                 edit.start_byte,
-                edit.old_end_byte,
                 edit.new_end_byte,
             ) {
                 return false;
@@ -476,19 +467,46 @@ impl IncrementalParserV2 {
         &self,
         tree: &IncrementalTree,
         source: &str,
-        start: usize,
+        old_start: usize,
         old_end: usize,
+        new_start: usize,
         new_end: usize,
     ) -> bool {
-        if old_end > start && !self.is_in_non_structural_content(&tree.source, start, old_end) {
+        if old_end > old_start
+            && !self.is_in_non_structural_content(&tree.source, old_start, old_end)
+        {
             return false;
         }
 
-        if new_end > start && !self.is_in_non_structural_content(source, start, new_end) {
+        if new_end > new_start && !self.is_in_non_structural_content(source, new_start, new_end) {
             return false;
         }
 
         true
+    }
+
+    fn edits_with_original_ranges(&self) -> Vec<(usize, usize, &Edit)> {
+        let mut normalized = Vec::with_capacity(self.pending_edits.len());
+        let mut cumulative_shift: isize = 0;
+
+        for edit in self.pending_edits.edits() {
+            let old_start = (edit.start_byte as isize - cumulative_shift) as usize;
+            let old_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+            normalized.push((old_start, old_end, edit));
+            cumulative_shift += edit.byte_shift();
+        }
+
+        normalized
+    }
+
+    fn is_range_affected(&self, start: usize, end: usize) -> bool {
+        self.edits_with_original_ranges().into_iter().any(|(edit_start, edit_end, _)| {
+            if edit_start == edit_end {
+                start <= edit_start && edit_start <= end
+            } else {
+                edit_start < end && edit_end > start
+            }
+        })
     }
 
     /// Check if the given range only contains whitespace or comments
@@ -843,9 +861,7 @@ impl IncrementalParserV2 {
     /// splitting characters across edit boundaries.
     fn calculate_shift_at(&self, position: usize) -> isize {
         let mut shift = 0;
-        for edit in self.pending_edits.edits() {
-            let original_old_end = (edit.old_end_byte as isize - shift) as usize;
-
+        for (_, original_old_end, edit) in self.edits_with_original_ranges() {
             if original_old_end <= position {
                 let edit_shift = edit.byte_shift();
                 shift += edit_shift;
@@ -952,21 +968,17 @@ impl IncrementalParserV2 {
         // Calculate how much the content of this node changed by examining
         // edits that fall within the node's original range.
         let mut delta = 0;
-        let mut shift = 0;
-        for edit in self.pending_edits.edits() {
-            let start = (edit.start_byte as isize - shift) as usize;
-            let end = (edit.old_end_byte as isize - shift) as usize;
+        for (start, end, edit) in self.edits_with_original_ranges() {
             if start >= node.location.start && end <= node.location.end {
                 delta += edit.byte_shift();
             }
-            shift += edit.byte_shift();
         }
         delta
     }
 
     fn is_node_affected(&self, node: &Node) -> bool {
         let node_range = Range::from(node.location);
-        self.pending_edits.affects_range(&node_range)
+        self.is_range_affected(node_range.start.byte, node_range.end.byte)
     }
 
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
