@@ -139,6 +139,117 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bdd_parse_utf8_bom_prefixed_source_returns_tree() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse utf8 bom prefixed source");
+    let source = "\u{FEFF}my $value = 1;\nprint $value;\n";
+
+    scenario.given("a Perl snippet prefixed with a UTF-8 BOM codepoint");
+    scenario.when("parse_perl_code is invoked");
+    let tree_result = parse_perl_code(source);
+
+    scenario.then("parsing should not hard-fail and should return a tree");
+    let tree = tree_result?;
+    assert_eq!(tree.root_node().kind(), "source_file");
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_empty_source_returns_empty_tree_without_errors() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse empty source");
+
+    scenario.given("an empty Perl file payload");
+    scenario.when("parse_perl_code is invoked");
+    let tree_result = parse_perl_code("");
+
+    scenario.then("parsing should succeed and produce an error-free source_file tree");
+    let tree = tree_result?;
+    assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(!tree.root_node().has_error());
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_recoverable_malformed_assignment_returns_tree_with_errors()
+-> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse recoverable malformed assignment");
+    let source = "my $x = ;\nmy $y = 2;\nprint $y;\n";
+
+    scenario.given("a malformed statement followed by valid statements");
+    scenario.when("parse_perl_code is invoked");
+    let tree_result = parse_perl_code(source);
+
+    scenario.then("parsing should return a tree with syntax error nodes instead of hard-failing");
+    let tree = tree_result?;
+    assert!(tree.root_node().has_error());
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_heredoc_heavy_input_returns_tree() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse heredoc heavy input");
+    let source = r#"my $sql = <<'SQL';
+SELECT * FROM widgets;
+SQL
+my $json = <<"JSON";
+{"enabled":true}
+JSON
+my $tmpl = <<'TPL';
+Hello ${name}
+TPL
+"#;
+
+    scenario.given("multiple heredocs with mixed quoting styles");
+    scenario.when("parse_perl_code is invoked");
+    let tree_result = parse_perl_code(source);
+
+    scenario.then("the parser should recover and return a syntax tree");
+    let tree = tree_result?;
+    assert_eq!(tree.root_node().kind(), "source_file");
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_quote_like_operators_returns_tree() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse quote like operators");
+    let source = r#"my $single = q{alpha};
+my $double = qq(beta $single);
+my @parts = qw/foo bar baz/;
+my $regex = qr{^foo\d+$};
+my $replace = qx/echo hi/;
+"#;
+
+    scenario.given("quote-like operator forms used in production Perl");
+    scenario.when("parse_perl_code is invoked");
+    let tree_result = parse_perl_code(source);
+
+    scenario.then("the parser should return a tree and avoid hard parse failure");
+    let tree = tree_result?;
+    assert_eq!(tree.root_node().kind(), "source_file");
+    Ok(())
+}
+
+#[test]
+fn bdd_parse_perl_file_with_recoverable_errors_returns_tree_with_errors()
+-> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file with recoverable errors");
+    let file = unique_temp_file("parse_file_recoverable_error");
+
+    scenario.given("a Perl file containing recoverable syntax errors");
+    fs::write(&file, "my $x = ;\nmy $ok = 42;\n")?;
+
+    scenario.when("parse_perl_file is invoked");
+    let tree_result = parse_perl_file(&file);
+
+    scenario.then("parsing should still succeed but return a tree flagged with errors");
+    let tree = tree_result?;
+    assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(tree.root_node().has_error());
+
+    fs::remove_file(&file)?;
+    Ok(())
+}
+
+#[test]
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
