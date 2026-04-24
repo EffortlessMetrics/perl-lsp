@@ -156,6 +156,7 @@ fn is_literal(kind: TokenKind) -> bool {
             | TokenKind::FormatBody
             | TokenKind::DataMarker
             | TokenKind::DataBody
+            | TokenKind::VString
             | TokenKind::UnknownRest
             | TokenKind::HeredocDepthLimit
     )
@@ -305,6 +306,7 @@ fn all_kinds() -> Vec<TokenKind> {
         TokenKind::FormatBody,
         TokenKind::DataMarker,
         TokenKind::DataBody,
+        TokenKind::VString,
         TokenKind::UnknownRest,
         TokenKind::HeredocDepthLimit,
         // Identifiers/Sigils (6)
@@ -475,6 +477,7 @@ fn display_name_literals() {
         (TokenKind::FormatBody, "format body"),
         (TokenKind::DataMarker, "__DATA__"),
         (TokenKind::DataBody, "data section"),
+        (TokenKind::VString, "version string"),
         (TokenKind::UnknownRest, "unparsed content"),
         (TokenKind::HeredocDepthLimit, "heredoc depth limit"),
     ];
@@ -692,7 +695,7 @@ fn delimiter_classification_count() {
 #[test]
 fn literal_classification_count() {
     let count = all_kinds().iter().filter(|k| is_literal(**k)).count();
-    assert_eq!(count, 16, "expected 16 literal variants");
+    assert_eq!(count, 17, "expected 17 literal variants");
 }
 
 #[test]
@@ -709,8 +712,8 @@ fn special_classification_count() {
 
 #[test]
 fn total_variant_count() {
-    // 41 keywords + 58 operators + 8 delimiters + 16 literals + 6 ident/sigil + 2 special = 131
-    assert_eq!(all_kinds().len(), 131, "expected 131 total TokenKind variants");
+    // 41 keywords + 58 operators + 8 delimiters + 17 literals + 6 ident/sigil + 2 special = 132
+    assert_eq!(all_kinds().len(), 132, "expected 132 total TokenKind variants");
 }
 
 // ===========================================================================

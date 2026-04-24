@@ -398,7 +398,445 @@ pub enum TokenKind {
     Unknown,
 }
 
+/// Coarse token grouping used by diagnostics and audit tests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TokenCategory {
+    Keyword,
+    Operator,
+    Delimiter,
+    Literal,
+    IdentifierOrSigil,
+    Recovery,
+    Special,
+}
+
+impl TokenCategory {
+    /// Stable lowercase name used in snapshot tests and debug reporting.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TokenCategory::Keyword => "keyword",
+            TokenCategory::Operator => "operator",
+            TokenCategory::Delimiter => "delimiter",
+            TokenCategory::Literal => "literal",
+            TokenCategory::IdentifierOrSigil => "identifier_or_sigil",
+            TokenCategory::Recovery => "recovery",
+            TokenCategory::Special => "special",
+        }
+    }
+}
+
 impl TokenKind {
+    /// Stable token kind listing for exhaustive tests and audits.
+    pub const ALL: &[Self] = &[
+        TokenKind::My,
+        TokenKind::Our,
+        TokenKind::Local,
+        TokenKind::State,
+        TokenKind::Sub,
+        TokenKind::If,
+        TokenKind::Elsif,
+        TokenKind::Else,
+        TokenKind::Unless,
+        TokenKind::While,
+        TokenKind::Until,
+        TokenKind::For,
+        TokenKind::Foreach,
+        TokenKind::Return,
+        TokenKind::Package,
+        TokenKind::Use,
+        TokenKind::No,
+        TokenKind::Begin,
+        TokenKind::End,
+        TokenKind::Check,
+        TokenKind::Init,
+        TokenKind::Unitcheck,
+        TokenKind::Eval,
+        TokenKind::Do,
+        TokenKind::Given,
+        TokenKind::When,
+        TokenKind::Default,
+        TokenKind::Try,
+        TokenKind::Catch,
+        TokenKind::Finally,
+        TokenKind::Continue,
+        TokenKind::Next,
+        TokenKind::Last,
+        TokenKind::Redo,
+        TokenKind::Goto,
+        TokenKind::Class,
+        TokenKind::Method,
+        TokenKind::Field,
+        TokenKind::Format,
+        TokenKind::Undef,
+        TokenKind::Defer,
+        TokenKind::Assign,
+        TokenKind::Plus,
+        TokenKind::Minus,
+        TokenKind::Star,
+        TokenKind::Slash,
+        TokenKind::Percent,
+        TokenKind::Power,
+        TokenKind::LeftShift,
+        TokenKind::RightShift,
+        TokenKind::BitwiseAnd,
+        TokenKind::BitwiseOr,
+        TokenKind::BitwiseXor,
+        TokenKind::BitwiseNot,
+        TokenKind::PlusAssign,
+        TokenKind::MinusAssign,
+        TokenKind::StarAssign,
+        TokenKind::SlashAssign,
+        TokenKind::PercentAssign,
+        TokenKind::DotAssign,
+        TokenKind::AndAssign,
+        TokenKind::OrAssign,
+        TokenKind::XorAssign,
+        TokenKind::PowerAssign,
+        TokenKind::LeftShiftAssign,
+        TokenKind::RightShiftAssign,
+        TokenKind::LogicalAndAssign,
+        TokenKind::LogicalOrAssign,
+        TokenKind::DefinedOrAssign,
+        TokenKind::Equal,
+        TokenKind::NotEqual,
+        TokenKind::Match,
+        TokenKind::NotMatch,
+        TokenKind::SmartMatch,
+        TokenKind::Less,
+        TokenKind::Greater,
+        TokenKind::LessEqual,
+        TokenKind::GreaterEqual,
+        TokenKind::Spaceship,
+        TokenKind::StringCompare,
+        TokenKind::And,
+        TokenKind::Or,
+        TokenKind::Not,
+        TokenKind::DefinedOr,
+        TokenKind::WordAnd,
+        TokenKind::WordOr,
+        TokenKind::WordNot,
+        TokenKind::WordXor,
+        TokenKind::Arrow,
+        TokenKind::FatArrow,
+        TokenKind::Dot,
+        TokenKind::Range,
+        TokenKind::Ellipsis,
+        TokenKind::Increment,
+        TokenKind::Decrement,
+        TokenKind::DoubleColon,
+        TokenKind::Question,
+        TokenKind::Colon,
+        TokenKind::Backslash,
+        TokenKind::LeftParen,
+        TokenKind::RightParen,
+        TokenKind::LeftBrace,
+        TokenKind::RightBrace,
+        TokenKind::LeftBracket,
+        TokenKind::RightBracket,
+        TokenKind::Semicolon,
+        TokenKind::Comma,
+        TokenKind::Number,
+        TokenKind::String,
+        TokenKind::Regex,
+        TokenKind::Substitution,
+        TokenKind::Transliteration,
+        TokenKind::QuoteSingle,
+        TokenKind::QuoteDouble,
+        TokenKind::QuoteWords,
+        TokenKind::QuoteCommand,
+        TokenKind::HeredocStart,
+        TokenKind::HeredocBody,
+        TokenKind::FormatBody,
+        TokenKind::DataMarker,
+        TokenKind::DataBody,
+        TokenKind::VString,
+        TokenKind::UnknownRest,
+        TokenKind::HeredocDepthLimit,
+        TokenKind::Identifier,
+        TokenKind::ScalarSigil,
+        TokenKind::ArraySigil,
+        TokenKind::HashSigil,
+        TokenKind::SubSigil,
+        TokenKind::GlobSigil,
+        TokenKind::Eof,
+        TokenKind::Unknown,
+    ];
+
+    /// Coarse category used to keep token display naming audits compact.
+    pub fn category(self) -> TokenCategory {
+        match self {
+            TokenKind::My
+            | TokenKind::Our
+            | TokenKind::Local
+            | TokenKind::State
+            | TokenKind::Sub
+            | TokenKind::If
+            | TokenKind::Elsif
+            | TokenKind::Else
+            | TokenKind::Unless
+            | TokenKind::While
+            | TokenKind::Until
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::Return
+            | TokenKind::Package
+            | TokenKind::Use
+            | TokenKind::No
+            | TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck
+            | TokenKind::Eval
+            | TokenKind::Do
+            | TokenKind::Given
+            | TokenKind::When
+            | TokenKind::Default
+            | TokenKind::Try
+            | TokenKind::Catch
+            | TokenKind::Finally
+            | TokenKind::Continue
+            | TokenKind::Next
+            | TokenKind::Last
+            | TokenKind::Redo
+            | TokenKind::Goto
+            | TokenKind::Class
+            | TokenKind::Method
+            | TokenKind::Field
+            | TokenKind::Format
+            | TokenKind::Undef
+            | TokenKind::Defer => TokenCategory::Keyword,
+            TokenKind::Assign
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+            | TokenKind::Power
+            | TokenKind::LeftShift
+            | TokenKind::RightShift
+            | TokenKind::BitwiseAnd
+            | TokenKind::BitwiseOr
+            | TokenKind::BitwiseXor
+            | TokenKind::BitwiseNot
+            | TokenKind::PlusAssign
+            | TokenKind::MinusAssign
+            | TokenKind::StarAssign
+            | TokenKind::SlashAssign
+            | TokenKind::PercentAssign
+            | TokenKind::DotAssign
+            | TokenKind::AndAssign
+            | TokenKind::OrAssign
+            | TokenKind::XorAssign
+            | TokenKind::PowerAssign
+            | TokenKind::LeftShiftAssign
+            | TokenKind::RightShiftAssign
+            | TokenKind::LogicalAndAssign
+            | TokenKind::LogicalOrAssign
+            | TokenKind::DefinedOrAssign
+            | TokenKind::Equal
+            | TokenKind::NotEqual
+            | TokenKind::Match
+            | TokenKind::NotMatch
+            | TokenKind::SmartMatch
+            | TokenKind::Less
+            | TokenKind::Greater
+            | TokenKind::LessEqual
+            | TokenKind::GreaterEqual
+            | TokenKind::Spaceship
+            | TokenKind::StringCompare
+            | TokenKind::And
+            | TokenKind::Or
+            | TokenKind::Not
+            | TokenKind::DefinedOr
+            | TokenKind::WordAnd
+            | TokenKind::WordOr
+            | TokenKind::WordNot
+            | TokenKind::WordXor
+            | TokenKind::Arrow
+            | TokenKind::FatArrow
+            | TokenKind::Dot
+            | TokenKind::Range
+            | TokenKind::Ellipsis
+            | TokenKind::Increment
+            | TokenKind::Decrement
+            | TokenKind::DoubleColon
+            | TokenKind::Question
+            | TokenKind::Colon
+            | TokenKind::Backslash => TokenCategory::Operator,
+            TokenKind::LeftParen
+            | TokenKind::RightParen
+            | TokenKind::LeftBrace
+            | TokenKind::RightBrace
+            | TokenKind::LeftBracket
+            | TokenKind::RightBracket
+            | TokenKind::Semicolon
+            | TokenKind::Comma => TokenCategory::Delimiter,
+            TokenKind::Number
+            | TokenKind::String
+            | TokenKind::Regex
+            | TokenKind::Substitution
+            | TokenKind::Transliteration
+            | TokenKind::QuoteSingle
+            | TokenKind::QuoteDouble
+            | TokenKind::QuoteWords
+            | TokenKind::QuoteCommand
+            | TokenKind::HeredocStart
+            | TokenKind::HeredocBody
+            | TokenKind::FormatBody
+            | TokenKind::DataMarker
+            | TokenKind::DataBody
+            | TokenKind::VString => TokenCategory::Literal,
+            TokenKind::UnknownRest | TokenKind::HeredocDepthLimit => TokenCategory::Recovery,
+            TokenKind::Identifier
+            | TokenKind::ScalarSigil
+            | TokenKind::ArraySigil
+            | TokenKind::HashSigil
+            | TokenKind::SubSigil
+            | TokenKind::GlobSigil => TokenCategory::IdentifierOrSigil,
+            TokenKind::Eof | TokenKind::Unknown => TokenCategory::Special,
+        }
+    }
+
+    /// Canonical source lexeme for fixed-syntax tokens.
+    pub fn canonical_lexeme(self) -> Option<&'static str> {
+        match self {
+            TokenKind::My => Some("my"),
+            TokenKind::Our => Some("our"),
+            TokenKind::Local => Some("local"),
+            TokenKind::State => Some("state"),
+            TokenKind::Sub => Some("sub"),
+            TokenKind::If => Some("if"),
+            TokenKind::Elsif => Some("elsif"),
+            TokenKind::Else => Some("else"),
+            TokenKind::Unless => Some("unless"),
+            TokenKind::While => Some("while"),
+            TokenKind::Until => Some("until"),
+            TokenKind::For => Some("for"),
+            TokenKind::Foreach => Some("foreach"),
+            TokenKind::Return => Some("return"),
+            TokenKind::Package => Some("package"),
+            TokenKind::Use => Some("use"),
+            TokenKind::No => Some("no"),
+            TokenKind::Begin => Some("BEGIN"),
+            TokenKind::End => Some("END"),
+            TokenKind::Check => Some("CHECK"),
+            TokenKind::Init => Some("INIT"),
+            TokenKind::Unitcheck => Some("UNITCHECK"),
+            TokenKind::Eval => Some("eval"),
+            TokenKind::Do => Some("do"),
+            TokenKind::Given => Some("given"),
+            TokenKind::When => Some("when"),
+            TokenKind::Default => Some("default"),
+            TokenKind::Try => Some("try"),
+            TokenKind::Catch => Some("catch"),
+            TokenKind::Finally => Some("finally"),
+            TokenKind::Continue => Some("continue"),
+            TokenKind::Next => Some("next"),
+            TokenKind::Last => Some("last"),
+            TokenKind::Redo => Some("redo"),
+            TokenKind::Goto => Some("goto"),
+            TokenKind::Class => Some("class"),
+            TokenKind::Method => Some("method"),
+            TokenKind::Field => Some("field"),
+            TokenKind::Format => Some("format"),
+            TokenKind::Undef => Some("undef"),
+            TokenKind::Defer => Some("defer"),
+            TokenKind::Assign => Some("="),
+            TokenKind::Plus => Some("+"),
+            TokenKind::Minus => Some("-"),
+            TokenKind::Star => Some("*"),
+            TokenKind::Slash => Some("/"),
+            TokenKind::Percent => Some("%"),
+            TokenKind::Power => Some("**"),
+            TokenKind::LeftShift => Some("<<"),
+            TokenKind::RightShift => Some(">>"),
+            TokenKind::BitwiseAnd => Some("&"),
+            TokenKind::BitwiseOr => Some("|"),
+            TokenKind::BitwiseXor => Some("^"),
+            TokenKind::BitwiseNot => Some("~"),
+            TokenKind::PlusAssign => Some("+="),
+            TokenKind::MinusAssign => Some("-="),
+            TokenKind::StarAssign => Some("*="),
+            TokenKind::SlashAssign => Some("/="),
+            TokenKind::PercentAssign => Some("%="),
+            TokenKind::DotAssign => Some(".="),
+            TokenKind::AndAssign => Some("&="),
+            TokenKind::OrAssign => Some("|="),
+            TokenKind::XorAssign => Some("^="),
+            TokenKind::PowerAssign => Some("**="),
+            TokenKind::LeftShiftAssign => Some("<<="),
+            TokenKind::RightShiftAssign => Some(">>="),
+            TokenKind::LogicalAndAssign => Some("&&="),
+            TokenKind::LogicalOrAssign => Some("||="),
+            TokenKind::DefinedOrAssign => Some("//="),
+            TokenKind::Equal => Some("=="),
+            TokenKind::NotEqual => Some("!="),
+            TokenKind::Match => Some("=~"),
+            TokenKind::NotMatch => Some("!~"),
+            TokenKind::SmartMatch => Some("~~"),
+            TokenKind::Less => Some("<"),
+            TokenKind::Greater => Some(">"),
+            TokenKind::LessEqual => Some("<="),
+            TokenKind::GreaterEqual => Some(">="),
+            TokenKind::Spaceship => Some("<=>"),
+            TokenKind::StringCompare => Some("cmp"),
+            TokenKind::And => Some("&&"),
+            TokenKind::Or => Some("||"),
+            TokenKind::Not => Some("!"),
+            TokenKind::DefinedOr => Some("//"),
+            TokenKind::WordAnd => Some("and"),
+            TokenKind::WordOr => Some("or"),
+            TokenKind::WordNot => Some("not"),
+            TokenKind::WordXor => Some("xor"),
+            TokenKind::Arrow => Some("->"),
+            TokenKind::FatArrow => Some("=>"),
+            TokenKind::Dot => Some("."),
+            TokenKind::Range => Some(".."),
+            TokenKind::Ellipsis => Some("..."),
+            TokenKind::Increment => Some("++"),
+            TokenKind::Decrement => Some("--"),
+            TokenKind::DoubleColon => Some("::"),
+            TokenKind::Question => Some("?"),
+            TokenKind::Colon => Some(":"),
+            TokenKind::Backslash => Some("\\"),
+            TokenKind::LeftParen => Some("("),
+            TokenKind::RightParen => Some(")"),
+            TokenKind::LeftBrace => Some("{"),
+            TokenKind::RightBrace => Some("}"),
+            TokenKind::LeftBracket => Some("["),
+            TokenKind::RightBracket => Some("]"),
+            TokenKind::Semicolon => Some(";"),
+            TokenKind::Comma => Some(","),
+            TokenKind::DataMarker => Some("__DATA__"),
+            TokenKind::ScalarSigil => Some("$"),
+            TokenKind::ArraySigil => Some("@"),
+            TokenKind::HashSigil => Some("%"),
+            TokenKind::SubSigil => Some("&"),
+            TokenKind::GlobSigil => Some("*"),
+            TokenKind::Number
+            | TokenKind::String
+            | TokenKind::Regex
+            | TokenKind::Substitution
+            | TokenKind::Transliteration
+            | TokenKind::QuoteSingle
+            | TokenKind::QuoteDouble
+            | TokenKind::QuoteWords
+            | TokenKind::QuoteCommand
+            | TokenKind::HeredocStart
+            | TokenKind::HeredocBody
+            | TokenKind::FormatBody
+            | TokenKind::DataBody
+            | TokenKind::VString
+            | TokenKind::UnknownRest
+            | TokenKind::HeredocDepthLimit
+            | TokenKind::Identifier
+            | TokenKind::Eof
+            | TokenKind::Unknown => None,
+        }
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.
