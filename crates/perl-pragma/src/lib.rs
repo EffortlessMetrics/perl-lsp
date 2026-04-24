@@ -65,6 +65,78 @@ pub struct PragmaState {
     pub builtin_imports: Vec<String>,
 }
 
+/// Immutable compile-time pragma snapshot at a source position.
+#[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
+pub struct PragmaSnapshot {
+    state: PragmaState,
+}
+
+impl PragmaSnapshot {
+    /// Build a snapshot from the given raw state.
+    #[must_use]
+    pub fn new(state: PragmaState) -> Self {
+        Self { state }
+    }
+
+    /// Return the full raw pragma state.
+    #[must_use]
+    pub fn state(&self) -> &PragmaState {
+        &self.state
+    }
+
+    /// Return whether all `strict` categories are active.
+    #[must_use]
+    pub fn strict(&self) -> bool {
+        self.state.strict_vars && self.state.strict_subs && self.state.strict_refs
+    }
+
+    /// Return whether warnings are globally enabled.
+    #[must_use]
+    pub fn warnings(&self) -> bool {
+        self.state.warnings
+    }
+
+    /// Return whether a warning category is active.
+    #[must_use]
+    pub fn warning_category_active(&self, category: &str) -> bool {
+        self.state.is_warning_active(category)
+    }
+
+    /// Return whether a feature is enabled in the current lexical scope.
+    #[must_use]
+    pub fn feature_enabled(&self, feature: &str) -> bool {
+        self.state.has_feature(feature)
+    }
+}
+
+/// Queryable compile-time pragma environment for a file.
+#[derive(Debug, Clone, Default, PartialEq)]
+#[non_exhaustive]
+pub struct PragmaEnvironment {
+    ranges: Vec<(Range<usize>, PragmaState)>,
+}
+
+impl PragmaEnvironment {
+    /// Build a pragma environment from a parsed Perl AST.
+    #[must_use]
+    pub fn from_ast(ast: &Node) -> Self {
+        Self { ranges: PragmaTracker::build(ast) }
+    }
+
+    /// Query the effective compile-time pragma snapshot at `offset`.
+    #[must_use]
+    pub fn snapshot_at(&self, offset: usize) -> PragmaSnapshot {
+        PragmaSnapshot::new(PragmaTracker::state_for_offset(&self.ranges, offset))
+    }
+
+    /// Expose the underlying sorted range table used by this environment.
+    #[must_use]
+    pub fn ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.ranges
+    }
+}
+
 impl PragmaState {
     /// Create a new pragma state with all strict modes enabled
     pub fn all_strict() -> Self {
@@ -416,14 +488,32 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
+#[derive(Debug, Clone)]
+struct SavedPragmaState(PragmaState);
+
+#[derive(Debug, Clone, Default)]
+struct PragmaCursor {
+    current: PragmaState,
+}
+
+impl PragmaCursor {
+    fn snapshot(&self) -> SavedPragmaState {
+        SavedPragmaState(self.current.clone())
+    }
+
+    fn restore(&mut self, saved: SavedPragmaState) {
+        self.current = saved.0;
+    }
+}
+
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
         let mut ranges = Vec::new();
-        let mut current_state = PragmaState::default();
+        let mut cursor = PragmaCursor::default();
 
         // Build the pragma map by walking the AST
-        Self::build_ranges(ast, &mut current_state, &mut ranges);
+        Self::build_ranges(ast, &mut cursor, &mut ranges);
 
         // Sort by start offset
         ranges.sort_by_key(|(range, _)| range.start);
@@ -461,18 +551,18 @@ impl PragmaTracker {
     /// effects are still lexical to the block body rather than file-wide.
     fn build_scoped_body(
         body: &Node,
-        current_state: &mut PragmaState,
+        cursor: &mut PragmaCursor,
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
     ) {
-        let saved_state = current_state.clone();
-        Self::build_ranges(body, current_state, ranges);
-        *current_state = saved_state;
-        ranges.push((body.location.end..body.location.end, current_state.clone()));
+        let saved_state = cursor.snapshot();
+        Self::build_ranges(body, cursor, ranges);
+        cursor.restore(saved_state);
+        ranges.push((body.location.end..body.location.end, cursor.current.clone()));
     }
 
     fn build_ranges(
         node: &Node,
-        current_state: &mut PragmaState,
+        cursor: &mut PragmaCursor,
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
     ) {
         match &node.kind {
@@ -484,86 +574,86 @@ impl PragmaTracker {
                     match conditional_module {
                         "strict" => {
                             if conditional_args.is_empty() {
-                                current_state.strict_vars = true;
-                                current_state.strict_subs = true;
-                                current_state.strict_refs = true;
+                                cursor.current.strict_vars = true;
+                                cursor.current.strict_subs = true;
+                                cursor.current.strict_refs = true;
                             } else {
                                 for arg in conditional_args {
                                     match normalized_pragma_token(arg) {
-                                        "vars" => current_state.strict_vars = true,
-                                        "subs" => current_state.strict_subs = true,
-                                        "refs" => current_state.strict_refs = true,
+                                        "vars" => cursor.current.strict_vars = true,
+                                        "subs" => cursor.current.strict_subs = true,
+                                        "refs" => cursor.current.strict_refs = true,
                                         _ => {}
                                     }
                                 }
                             }
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         "warnings" => {
-                            current_state.warnings = true;
-                            current_state.disabled_warning_categories.clear();
+                            cursor.current.warnings = true;
+                            cursor.current.disabled_warning_categories.clear();
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         "utf8" => {
-                            current_state.utf8 = true;
+                            cursor.current.utf8 = true;
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         "encoding" => {
-                            current_state.encoding = conditional_args
+                            cursor.current.encoding = conditional_args
                                 .first()
                                 .map(|arg| normalized_pragma_token(arg).to_string());
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         "locale" => {
-                            current_state.locale = true;
-                            current_state.locale_scope = conditional_args
+                            cursor.current.locale = true;
+                            cursor.current.locale_scope = conditional_args
                                 .first()
                                 .map(|arg| normalized_pragma_token(arg).to_string());
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         "feature" => {
-                            if apply_feature_state(current_state, conditional_args, true) {
+                            if apply_feature_state(&mut cursor.current, conditional_args, true) {
                                 ranges.push((
                                     node.location.start..node.location.end,
-                                    current_state.clone(),
+                                    cursor.current.clone(),
                                 ));
                             }
                             return;
                         }
                         "builtin" => {
-                            apply_builtin_imports(current_state, conditional_args);
+                            apply_builtin_imports(&mut cursor.current, conditional_args);
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                             return;
                         }
                         _ => {
                             if let Some(version) = parse_perl_version(conditional_module) {
-                                enable_effective_version_semantics(current_state, version);
+                                enable_effective_version_semantics(&mut cursor.current, version);
                                 ranges.push((
                                     node.location.start..node.location.end,
-                                    current_state.clone(),
+                                    cursor.current.clone(),
                                 ));
                             }
                             return;
@@ -576,21 +666,21 @@ impl PragmaTracker {
                     "strict" => {
                         if args.is_empty() {
                             // use strict; enables all categories
-                            current_state.strict_vars = true;
-                            current_state.strict_subs = true;
-                            current_state.strict_refs = true;
+                            cursor.current.strict_vars = true;
+                            cursor.current.strict_subs = true;
+                            cursor.current.strict_refs = true;
                         } else {
                             // Parse specific categories
                             for arg in args {
                                 match arg.as_str() {
                                     "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = true
+                                        cursor.current.strict_vars = true
                                     }
                                     "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = true
+                                        cursor.current.strict_subs = true
                                     }
                                     "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = true
+                                        cursor.current.strict_refs = true
                                     }
                                     _ => {}
                                 }
@@ -599,55 +689,55 @@ impl PragmaTracker {
 
                         // Record the state change at this location
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "warnings" => {
-                        current_state.warnings = true;
+                        cursor.current.warnings = true;
                         // `use warnings` re-enables all warnings; clear any previously
                         // disabled categories so they are active again.
-                        current_state.disabled_warning_categories.clear();
+                        cursor.current.disabled_warning_categories.clear();
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "utf8" => {
-                        current_state.utf8 = true;
+                        cursor.current.utf8 = true;
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "encoding" => {
-                        current_state.encoding = args
+                        cursor.current.encoding = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "locale" => {
-                        current_state.locale = true;
-                        current_state.locale_scope = args
+                        cursor.current.locale = true;
+                        cursor.current.locale_scope = args
                             .first()
                             .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "feature" => {
-                        if apply_feature_state(current_state, args, true) {
+                        if apply_feature_state(&mut cursor.current, args, true) {
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                         }
                     }
                     "builtin" => {
-                        apply_builtin_imports(current_state, args);
+                        apply_builtin_imports(&mut cursor.current, args);
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     _ => {
                         if let Some(version) = parse_perl_version(module) {
-                            enable_effective_version_semantics(current_state, version);
+                            enable_effective_version_semantics(&mut cursor.current, version);
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                         }
                     }
@@ -659,21 +749,21 @@ impl PragmaTracker {
                     "strict" => {
                         if args.is_empty() {
                             // no strict; disables all categories
-                            current_state.strict_vars = false;
-                            current_state.strict_subs = false;
-                            current_state.strict_refs = false;
+                            cursor.current.strict_vars = false;
+                            cursor.current.strict_subs = false;
+                            cursor.current.strict_refs = false;
                         } else {
                             // Parse specific categories
                             for arg in args {
                                 match arg.as_str() {
                                     "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = false
+                                        cursor.current.strict_vars = false
                                     }
                                     "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = false
+                                        cursor.current.strict_subs = false
                                     }
                                     "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = false
+                                        cursor.current.strict_refs = false
                                     }
                                     _ => {}
                                 }
@@ -682,13 +772,13 @@ impl PragmaTracker {
 
                         // Record the state change at this location
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "warnings" => {
                         if args.is_empty() {
                             // `no warnings;` — disable all warnings globally
-                            current_state.warnings = false;
-                            current_state.disabled_warning_categories.clear();
+                            cursor.current.warnings = false;
+                            cursor.current.disabled_warning_categories.clear();
                         } else {
                             // `no warnings 'CATEGORY'` — disable only the named
                             // categories; the global flag stays true so that other
@@ -697,41 +787,43 @@ impl PragmaTracker {
                                 // Strip any surrounding single or double quotes that
                                 // the parser may have left on the argument.
                                 let category = arg.trim_matches('\'').trim_matches('"');
-                                if !current_state
+                                if !cursor
+                                    .current
                                     .disabled_warning_categories
                                     .iter()
                                     .any(|c| c == category)
                                 {
-                                    current_state
+                                    cursor
+                                        .current
                                         .disabled_warning_categories
                                         .push(category.to_string());
                                 }
                             }
                         }
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "utf8" => {
-                        current_state.utf8 = false;
+                        cursor.current.utf8 = false;
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "encoding" => {
-                        current_state.encoding = None;
+                        cursor.current.encoding = None;
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "locale" => {
-                        current_state.locale = false;
-                        current_state.locale_scope = None;
+                        cursor.current.locale = false;
+                        cursor.current.locale_scope = None;
                         ranges
-                            .push((node.location.start..node.location.end, current_state.clone()));
+                            .push((node.location.start..node.location.end, cursor.current.clone()));
                     }
                     "feature" => {
-                        if apply_feature_state(current_state, args, false) {
+                        if apply_feature_state(&mut cursor.current, args, false) {
                             ranges.push((
                                 node.location.start..node.location.end,
-                                current_state.clone(),
+                                cursor.current.clone(),
                             ));
                         }
                     }
@@ -739,77 +831,72 @@ impl PragmaTracker {
                 }
             }
             NodeKind::Block { statements } => {
-                // Save current state
-                let saved_state = current_state.clone();
-
-                // Process statements in the block
+                let saved_state = cursor.snapshot();
                 for stmt in statements {
-                    Self::build_ranges(stmt, current_state, ranges);
+                    Self::build_ranges(stmt, cursor, ranges);
                 }
-
-                // Restore state after block
-                *current_state = saved_state;
-                ranges.push((node.location.end..node.location.end, current_state.clone()));
+                cursor.restore(saved_state);
+                ranges.push((node.location.end..node.location.end, cursor.current.clone()));
             }
             NodeKind::Program { statements } => {
                 // Process all top-level statements
                 for stmt in statements {
-                    Self::build_ranges(stmt, current_state, ranges);
+                    Self::build_ranges(stmt, cursor, ranges);
                 }
             }
             // For subroutines and other container nodes, recurse into their bodies
             NodeKind::Subroutine { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
             }
             NodeKind::Method { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
             }
             NodeKind::Class { body, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
             }
             NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
-                Self::build_scoped_body(then_branch, current_state, ranges);
+                Self::build_scoped_body(then_branch, cursor, ranges);
                 for (_, elsif_body) in elsif_branches {
-                    Self::build_scoped_body(elsif_body, current_state, ranges);
+                    Self::build_scoped_body(elsif_body, cursor, ranges);
                 }
                 if let Some(else_b) = else_branch {
-                    Self::build_scoped_body(else_b, current_state, ranges);
+                    Self::build_scoped_body(else_b, cursor, ranges);
                 }
             }
             NodeKind::While { body, continue_block, .. }
             | NodeKind::For { body, continue_block, .. }
             | NodeKind::Foreach { body, continue_block, .. } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
                 if let Some(continue_block) = continue_block {
-                    Self::build_scoped_body(continue_block, current_state, ranges);
+                    Self::build_scoped_body(continue_block, cursor, ranges);
                 }
             }
             NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
-                Self::build_scoped_body(block, current_state, ranges);
+                Self::build_scoped_body(block, cursor, ranges);
             }
             NodeKind::PhaseBlock { block, .. } => {
-                Self::build_scoped_body(block, current_state, ranges);
+                Self::build_scoped_body(block, cursor, ranges);
             }
             NodeKind::Given { body, .. }
             | NodeKind::When { body, .. }
             | NodeKind::Default { body } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
             }
             NodeKind::Try { body, catch_blocks, finally_block } => {
-                Self::build_scoped_body(body, current_state, ranges);
+                Self::build_scoped_body(body, cursor, ranges);
                 for (_, catch_body) in catch_blocks {
-                    Self::build_scoped_body(catch_body, current_state, ranges);
+                    Self::build_scoped_body(catch_body, cursor, ranges);
                 }
                 if let Some(finally_block) = finally_block {
-                    Self::build_scoped_body(finally_block, current_state, ranges);
+                    Self::build_scoped_body(finally_block, cursor, ranges);
                 }
             }
             NodeKind::LabeledStatement { statement, .. } => {
-                Self::build_ranges(statement, current_state, ranges);
+                Self::build_ranges(statement, cursor, ranges);
             }
             NodeKind::StatementModifier { statement, condition, .. } => {
-                Self::build_ranges(statement, current_state, ranges);
-                Self::build_ranges(condition, current_state, ranges);
+                Self::build_ranges(statement, cursor, ranges);
+                Self::build_ranges(condition, cursor, ranges);
             }
             // `package Foo { ... }` — the block form is lexically scoped.
             // Save/restore state around the block so pragmas declared inside
@@ -818,7 +905,7 @@ impl PragmaTracker {
             // `package Foo;` (no block) has no inner scope to walk — its
             // siblings in `Program` already accumulate state normally.
             NodeKind::Package { block: Some(pkg_block), .. } => {
-                Self::build_scoped_body(pkg_block, current_state, ranges);
+                Self::build_scoped_body(pkg_block, cursor, ranges);
             }
             // Other node types don't contain use/no statements
             _ => {}

@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_pragma::{PragmaEnvironment, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -101,6 +101,23 @@ fn given_use_strict_when_no_strict_refs_in_inner_block_then_refs_is_restored_out
     assert!(outside.strict_subs);
     assert!(outside.strict_refs);
     assert!(outside.warnings);
+}
+
+#[test]
+fn pragma_environment_query_does_not_leak_inner_no_strict() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 15, 31)], 13, 33),
+        use_node("warnings", &[], 34, 49),
+    ]);
+    let environment = PragmaEnvironment::from_ast(&ast);
+
+    let inside = environment.snapshot_at(25);
+    assert!(!inside.state().strict_refs);
+
+    let outside = environment.snapshot_at(40);
+    assert!(outside.state().strict_refs);
+    assert!(outside.warnings());
 }
 
 #[test]
@@ -264,6 +281,53 @@ fn given_end_block_with_use_warnings_when_querying_after_block_then_warnings_is_
 
     let after_end = PragmaTracker::state_for_offset(&map, 24);
     assert!(!after_end.warnings);
+}
+
+#[test]
+fn pragma_environment_query_restores_outer_state_after_eval_block() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        Node {
+            kind: NodeKind::Eval {
+                block: Box::new(block(vec![no_node("strict", &["subs"], 20, 36)], 18, 38)),
+            },
+            location: loc(14, 39),
+        },
+        use_node("warnings", &[], 40, 55),
+    ]);
+    let environment = PragmaEnvironment::from_ast(&ast);
+
+    let inside_eval = environment.snapshot_at(30);
+    assert!(!inside_eval.state().strict_subs);
+
+    let after_eval = environment.snapshot_at(45);
+    assert!(after_eval.state().strict_subs);
+    assert!(after_eval.warnings());
+}
+
+#[test]
+fn pragma_environment_query_keeps_string_eval_conservative() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        Node {
+            kind: NodeKind::FunctionCall {
+                name: "eval".to_string(),
+                args: vec![Node {
+                    kind: NodeKind::String {
+                        value: "no strict 'refs'; use warnings;".to_string(),
+                        interpolated: true,
+                    },
+                    location: loc(20, 53),
+                }],
+            },
+            location: loc(15, 54),
+        },
+    ]);
+    let environment = PragmaEnvironment::from_ast(&ast);
+
+    let snapshot = environment.snapshot_at(60);
+    assert!(snapshot.strict());
+    assert!(!snapshot.warnings());
 }
 
 #[test]
