@@ -472,6 +472,11 @@
         "fixture-backed UX requests stay green end-to-end",
         "rename response yields workspace edits",
         "diagnostics settle down after an in-place fix edit"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
   ]
