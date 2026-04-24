@@ -279,7 +279,7 @@ pub struct WidenerRule {
 /// All architectural widener rules. The order matters for lane generation
 /// (earlier rules fire first), but deduplication ensures idempotent output.
 pub static WIDENER_RULES: &[WidenerRule] = &[
-    // Rule 1: parser / lexer / parser-core → semantic, workspace-index, LSP, DAP
+    // Rule 1: parser / lexer / parser-core → semantic, workspace, LSP, DAP
     WidenerRule {
         trigger_prefixes: &["perl-parser", "perl-lexer", "perl-parser-core"],
         targets: &["perl-semantic-analyzer", "perl-workspace", "perl-lsp-rs", "perl-dap"],
