@@ -137,7 +137,24 @@ impl IncrementalDocument {
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                debug!(
+                    "Falling back to full reparse due to unmappable batch edit: start={}, end={}, len={}",
+                    edit.start_byte,
+                    edit.old_end_byte,
+                    self.source.len()
+                );
+
+                // Conservative fallback:
+                // if any edit in a batch cannot be mapped safely, avoid partial
+                // source mutation and keep the existing source/tree in sync.
+                let mut parser = Parser::new(&self.source);
+                let new_root = parser.parse()?;
+                self.root = Arc::new(new_root);
+                self.cache_subtrees();
+                self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+                return Ok(());
+            }
         }
 
         // Find all affected ranges
@@ -173,38 +190,56 @@ impl IncrementalDocument {
     fn apply_edit_to_string(&self, source: &str, edit: &IncrementalEdit) -> String {
         let mut result = String::with_capacity(source.len() + edit.new_text.len());
 
-        // Safely handle byte positions with bounds checking
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        // Ensure we're on UTF-8 boundaries
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+        if let Some((start, end)) = self.normalized_edit_range(source, edit) {
             result.push_str(&source[..start]);
             result.push_str(&edit.new_text);
             result.push_str(&source[end..]);
         } else {
             // Fallback: if boundaries are invalid, use the original source
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid edit range in apply_edit_to_string: start={}, end={}, len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
             result.push_str(source);
         }
 
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
-        }
-
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        if let Some((start, end)) = self.normalized_edit_range(source, edit) {
             source.replace_range(start..end, &edit.new_text);
+            true
         } else {
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            debug!(
+                "Invalid edit range in apply_edit_in_place: start={}, end={}, len={}",
+                edit.start_byte,
+                edit.old_end_byte,
+                source.len()
+            );
+            false
         }
+    }
+
+    fn normalized_edit_range(
+        &self,
+        source: &str,
+        edit: &IncrementalEdit,
+    ) -> Option<(usize, usize)> {
+        let start = edit.start_byte;
+        let end = edit.old_end_byte;
+
+        if start > source.len() || end > source.len() || start > end {
+            return None;
+        }
+
+        if !source.is_char_boundary(start) || !source.is_char_boundary(end) {
+            return None;
+        }
+
+        Some((start, end))
     }
 
     /// Find subtrees that can be reused (outside the edited range)
@@ -1406,6 +1441,127 @@ mod tests {
             .count();
         assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_rejects_out_of_bounds_ranges() -> ParseResult<()> {
+        let source = "my $x = 1;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(source.len() + 10, source.len() + 10, "2".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(doc.text(), source, "Invalid out-of-bounds edit must not mutate source");
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_rejects_start_greater_than_end() -> ParseResult<()> {
+        let source = "my $x = 1;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(8, 6, "2".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(doc.text(), source, "start > end edit must use fallback without mutation");
+        Ok(())
+    }
+
+    #[test]
+    fn test_apply_edits_rejects_mid_codepoint_boundaries() -> ParseResult<()> {
+        let source = "my $x = \"é\";";
+        let char_pos =
+            source.find('é').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain 'é'".to_string(),
+                location: 0,
+            })?;
+
+        let mut doc_insert = IncrementalDocument::new(source.to_string())?;
+        let mut insert_edits = IncrementalEditSet::new();
+        insert_edits.add(IncrementalEdit::new(char_pos + 1, char_pos + 1, "Z".to_string()));
+        doc_insert.apply_edits(&insert_edits)?;
+        assert_eq!(
+            doc_insert.text(),
+            source,
+            "Mid-codepoint insertion must fall back without mutating source"
+        );
+
+        let mut doc_delete = IncrementalDocument::new(source.to_string())?;
+        let mut delete_edits = IncrementalEditSet::new();
+        delete_edits.add(IncrementalEdit::new(char_pos + 1, char_pos + 2, "".to_string()));
+        doc_delete.apply_edits(&delete_edits)?;
+        assert_eq!(
+            doc_delete.text(),
+            source,
+            "Mid-codepoint delete must fall back without mutating source"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_with_unmappable_edit_falls_back_without_partial_mutation() -> ParseResult<()> {
+        let source = "my $x = \"é\";\nmy $y = 1;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+        let mut edits = IncrementalEditSet::new();
+
+        let y_pos =
+            source.find('1').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '1'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(y_pos, y_pos + 1, "2".to_string()));
+
+        let char_pos =
+            source.find('é').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain 'é'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(char_pos + 1, char_pos + 1, "Z".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        assert_eq!(
+            doc.text(),
+            source,
+            "Batch must not partially mutate source when any edit is unmappable"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_supported_batch_edits_match_fresh_full_parse() -> ParseResult<()> {
+        let source = "my $x = 1;\nmy $y = 2;\n";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+        let mut edits = IncrementalEditSet::new();
+
+        let x_pos =
+            source.find('1').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '1'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(x_pos, x_pos + 1, "10".to_string()));
+
+        let y_pos =
+            source.find('2').ok_or_else(|| perl_parser_core::error::ParseError::SyntaxError {
+                message: "test source should contain '2'".to_string(),
+                location: 0,
+            })?;
+        edits.add(IncrementalEdit::new(y_pos, y_pos + 1, "20".to_string()));
+
+        let expected_source = edits.apply_to_string(source);
+        doc.apply_edits(&edits)?;
+
+        let mut parser = Parser::new(&expected_source);
+        let expected_root = parser.parse()?;
+
+        assert_eq!(doc.text(), expected_source);
+        assert_eq!(*doc.tree(), expected_root);
         Ok(())
     }
 }
