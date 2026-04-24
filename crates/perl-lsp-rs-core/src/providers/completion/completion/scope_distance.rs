@@ -40,6 +40,59 @@ impl ScopeDistance {
     }
 }
 
+/// Build a stable sort fragment that includes both distance tier and lexical hops.
+///
+/// Format is `<tier><hops:02>`, for example:
+/// - immediate scope: `a00`
+/// - nearest parent: `b01`
+/// - grandparent: `b02`
+/// - package/global: `c00`
+/// - workspace/external: `d00`
+///
+/// This allows completions in parent scopes to be ordered by closeness rather
+/// than only by name.
+pub fn scope_sort_fragment(
+    symbol_table: &SymbolTable,
+    cursor_scope: ScopeId,
+    symbol_scope: ScopeId,
+) -> String {
+    if cursor_scope == symbol_scope {
+        return "a00".to_string();
+    }
+
+    let mut current = cursor_scope;
+    let mut hops = 0u32;
+
+    while let Some(scope) = symbol_table.scopes.get(&current) {
+        let Some(parent_id) = scope.parent else {
+            break;
+        };
+
+        hops += 1;
+        if parent_id == symbol_scope {
+            if let Some(parent_scope) = symbol_table.scopes.get(&parent_id)
+                && matches!(parent_scope.kind, ScopeKind::Global | ScopeKind::Package)
+            {
+                return "c00".to_string();
+            }
+            return format!("b{:02}", hops);
+        }
+
+        current = parent_id;
+        if hops > 100 {
+            break;
+        }
+    }
+
+    if let Some(sym_scope) = symbol_table.scopes.get(&symbol_scope)
+        && matches!(sym_scope.kind, ScopeKind::Global | ScopeKind::Package)
+    {
+        return "c00".to_string();
+    }
+
+    "d00".to_string()
+}
+
 fn last_unmatched_open_brace(source: &str) -> Option<usize> {
     let mut stack = Vec::new();
     for (idx, ch) in source.char_indices() {
@@ -371,5 +424,12 @@ mod tests {
         assert!(ScopeDistance::Immediate.sort_key() < ScopeDistance::Parent.sort_key());
         assert!(ScopeDistance::Parent.sort_key() < ScopeDistance::PackageLevel.sort_key());
         assert!(ScopeDistance::PackageLevel.sort_key() < ScopeDistance::Workspace.sort_key());
+    }
+
+    #[test]
+    fn test_scope_sort_fragment_orders_parent_hops() {
+        let table = build_test_table();
+        assert_eq!(scope_sort_fragment(&table, 3, 2), "b01");
+        assert_eq!(scope_sort_fragment(&table, 3, 1), "c00");
     }
 }

@@ -3,7 +3,7 @@
 //! Provides completion for user-defined subroutines with scope-distance ranking.
 //! Functions defined in the same package rank higher than those from outer scopes.
 
-use super::scope_distance::compute_scope_distance;
+use super::scope_distance::scope_sort_fragment;
 use super::{context::CompletionContext, items::CompletionItem};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
@@ -23,8 +23,8 @@ pub fn add_function_completions(
             if (symbol.kind == SymbolKind::Subroutine || symbol.kind == SymbolKind::Constant)
                 && name.starts_with(prefix_without_amp)
             {
-                let distance =
-                    compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
+                let scope_sort =
+                    scope_sort_fragment(symbol_table, context.cursor_scope_id, symbol.scope_id);
                 let (kind, detail, insert_text, sort_tier) = if symbol.kind == SymbolKind::Constant
                 {
                     (
@@ -47,7 +47,7 @@ pub fn add_function_completions(
                     detail,
                     documentation: symbol.documentation.clone(),
                     insert_text,
-                    sort_text: Some(format!("{sort_tier}{}_{}", distance.sort_key(), name)),
+                    sort_text: Some(format!("{sort_tier}{scope_sort}_{name}")),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),

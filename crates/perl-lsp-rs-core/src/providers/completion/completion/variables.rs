@@ -4,7 +4,7 @@
 //! Variables are ranked by scope distance: immediate scope > parent scope >
 //! package level, giving users the most relevant completions first.
 
-use super::scope_distance::compute_scope_distance;
+use super::scope_distance::scope_sort_fragment;
 use super::{context::CompletionContext, items::CompletionItem};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
@@ -27,8 +27,8 @@ pub fn add_variable_completions(
             if symbol.kind == kind && name.starts_with(prefix_without_sigil) {
                 let insert_text = format!("{}{}", sigil, name);
 
-                let distance =
-                    compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
+                let scope_sort =
+                    scope_sort_fragment(symbol_table, context.cursor_scope_id, symbol.scope_id);
 
                 completions.push(CompletionItem {
                     label: insert_text.clone(),
@@ -45,7 +45,7 @@ pub fn add_variable_completions(
                     ),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(insert_text),
-                    sort_text: Some(format!("1{}_{}", distance.sort_key(), name)),
+                    sort_text: Some(format!("1{scope_sort}_{name}")),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
@@ -133,7 +133,7 @@ pub fn add_all_variables(
             for symbol in symbols {
                 if symbol.kind.is_variable() && name.starts_with(&context.prefix) {
                     let sigil = symbol.kind.sigil().unwrap_or("");
-                    let distance = compute_scope_distance(
+                    let scope_sort = scope_sort_fragment(
                         symbol_table,
                         context.cursor_scope_id,
                         symbol.scope_id,
@@ -147,7 +147,7 @@ pub fn add_all_variables(
                         )),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(format!("{}{}", sigil, name)),
-                        sort_text: Some(format!("5{}_{}", distance.sort_key(), name)),
+                        sort_text: Some(format!("5{scope_sort}_{name}")),
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
                         text_edit_range: Some((context.prefix_start, context.position)),

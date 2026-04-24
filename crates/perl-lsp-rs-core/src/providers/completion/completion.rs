@@ -2399,6 +2399,36 @@ $"#;
     }
 
     #[test]
+    fn test_completion_prefers_nearest_parent_scope_over_grandparent() {
+        let code = concat!(
+            "sub process {\n",
+            "    my $a_far = 1;\n",
+            "    if (1) {\n",
+            "        my $z_near = 2;\n",
+            "        if (1) {\n",
+            "            $\n",
+            "        }\n",
+            "    }\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let completions = provider.get_completions(code, must_some(code.find("$\n")) + 1);
+
+        let near_item = must_some(completions.iter().find(|c| c.label == "$z_near"));
+        let far_item = must_some(completions.iter().find(|c| c.label == "$a_far"));
+
+        assert!(
+            near_item.sort_text < far_item.sort_text,
+            "nearest lexical parent should outrank grandparent regardless of name: near={:?}, far={:?}",
+            near_item.sort_text,
+            far_item.sort_text
+        );
+    }
+
+    #[test]
     fn test_package_member_completion() {
         // Create workspace index with a module exporting a function
         let index = Arc::new(WorkspaceIndex::new());
