@@ -4,8 +4,111 @@ use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_tdd_support::{must, must_some};
 use std::hint::black_box;
+use std::sync::Once;
+
+#[path = "support/scorecard.rs"]
+mod scorecard;
+
+static SCORECARD_ONCE: Once = Once::new();
+
+fn emit_incremental_scorecard() {
+    SCORECARD_ONCE.call_once(|| {
+        let source = r#"
+use strict;
+use warnings;
+
+sub process_data {
+    my ($data) = @_;
+
+    # Process each item
+    for my $item (@$data) {
+        my $result = transform($item);
+        print "Result: $result\n";
+    }
+
+    return 1;
+}
+
+sub transform {
+    my ($value) = @_;
+    return $value * 2;
+}
+
+my $items = [1, 2, 3, 4, 5];
+process_data($items);
+"#
+        .to_string();
+
+        let transform_start = must_some(source.find("transform"));
+        let transform_end = transform_start + "transform".len();
+        let path = scorecard::scorecard_path();
+
+        let cold_parse = scorecard::measure_samples_us(|| {
+            let state = IncrementalState::new(source.clone());
+            black_box(&state.ast);
+        });
+        let _ = scorecard::upsert_metric(&path, "cold_parse", "incremental_benchmark", cold_parse);
+
+        let warm_reparse = scorecard::measure_samples_us(|| {
+            let mut state = IncrementalState::new(source.clone());
+            must(apply_edits(&mut state, &[]));
+            black_box(&state.ast);
+        });
+        let _ =
+            scorecard::upsert_metric(&path, "warm_reparse", "incremental_benchmark", warm_reparse);
+
+        let small_edit = scorecard::measure_samples_us(|| {
+            let mut state = IncrementalState::new(source.clone());
+            let edit = Edit {
+                start_byte: transform_start,
+                old_end_byte: transform_end,
+                new_end_byte: transform_start + "process".len(),
+                new_text: "process".to_string(),
+            };
+            must(apply_edits(&mut state, &[edit]));
+            black_box(&state.ast);
+        });
+        let _ = scorecard::upsert_metric(
+            &path,
+            "incremental_small_edit",
+            "incremental_benchmark",
+            small_edit,
+        );
+
+        let tiny = "my $x = 1;\nmy $y = 2;\nmy $z = 3;\nprint \"$x $y $z\\n\";\n".to_string();
+        let pos_1 = must_some(tiny.find("= 1")) + 2;
+        let pos_2 = must_some(tiny.find("= 2")) + 2;
+        let multiple_edits = scorecard::measure_samples_us(|| {
+            let mut state = IncrementalState::new(tiny.clone());
+            let edits = vec![
+                Edit {
+                    start_byte: pos_1,
+                    old_end_byte: pos_1 + 1,
+                    new_end_byte: pos_1 + 2,
+                    new_text: "10".to_string(),
+                },
+                Edit {
+                    start_byte: pos_2,
+                    old_end_byte: pos_2 + 1,
+                    new_end_byte: pos_2 + 2,
+                    new_text: "20".to_string(),
+                },
+            ];
+            must(apply_edits(&mut state, &edits));
+            black_box(&state.ast);
+        });
+        let _ = scorecard::upsert_metric(
+            &path,
+            "incremental_multiple_edits",
+            "incremental_benchmark",
+            multiple_edits,
+        );
+    });
+}
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
+    emit_incremental_scorecard();
+
     let source = r#"
 use strict;
 use warnings;
@@ -54,6 +157,8 @@ process_data($items);
 }
 
 fn bench_full_reparse(c: &mut Criterion) {
+    emit_incremental_scorecard();
+
     let source = r#"
 use strict;
 use warnings;
@@ -105,6 +210,8 @@ process_data($items);
 ///   reused, single small edit applied via the checkpoint-driven incremental
 ///   lexing path.
 fn bench_warm_reparse(c: &mut Criterion) {
+    emit_incremental_scorecard();
+
     let source = r#"
 use strict;
 use warnings;
@@ -146,6 +253,8 @@ process_data($items);
 }
 
 fn bench_multiple_edits(c: &mut Criterion) {
+    emit_incremental_scorecard();
+
     let source = r#"
 my $x = 1;
 my $y = 2;

@@ -7,6 +7,12 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
+use std::sync::Once;
+
+#[path = "support/scorecard.rs"]
+mod scorecard;
+
+static SCORECARD_ONCE: Once = Once::new();
 
 const SIMPLE_SCRIPT: &str = r#"
 my $x = 42;
@@ -71,7 +77,46 @@ sub fibonacci {
 1;
 "#;
 
+fn emit_parser_scorecard() {
+    SCORECARD_ONCE.call_once(|| {
+        use perl_lexer::{PerlLexer, TokenType};
+
+        let scorecard_path = scorecard::scorecard_path();
+
+        let lexer_only = scorecard::measure_samples_us(|| {
+            let mut lexer = PerlLexer::new(COMPLEX_SCRIPT);
+            let mut count = 0;
+
+            while let Some(token) = lexer.next_token() {
+                if matches!(token.token_type, TokenType::EOF) {
+                    break;
+                }
+                count += 1;
+            }
+
+            black_box(count);
+        });
+        let _ =
+            scorecard::upsert_metric(&scorecard_path, "lexer_only", "parser_benchmark", lexer_only);
+
+        let scope_analysis = scorecard::measure_samples_us(|| {
+            let mut parser = Parser::new(COMPLEX_SCRIPT);
+            let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
+            let analyzer = ScopeAnalyzer::new();
+            let pragma_map = vec![];
+            analyzer.analyze(&ast, COMPLEX_SCRIPT, &pragma_map);
+        });
+        let _ = scorecard::upsert_metric(
+            &scorecard_path,
+            "scope_analysis",
+            "parser_benchmark",
+            scope_analysis,
+        );
+    });
+}
+
 fn benchmark_simple_parsing(c: &mut Criterion) {
+    emit_parser_scorecard();
     c.bench_function("parse_simple_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(SIMPLE_SCRIPT));
@@ -81,6 +126,7 @@ fn benchmark_simple_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_complex_parsing(c: &mut Criterion) {
+    emit_parser_scorecard();
     c.bench_function("parse_complex_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(COMPLEX_SCRIPT));
@@ -90,6 +136,7 @@ fn benchmark_complex_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_ast_generation(c: &mut Criterion) {
+    emit_parser_scorecard();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
 
@@ -101,6 +148,7 @@ fn benchmark_ast_generation(c: &mut Criterion) {
 }
 
 fn benchmark_isolated_components(c: &mut Criterion) {
+    emit_parser_scorecard();
     // Benchmark just the lexer phase
     c.bench_function("lexer_only", |b| {
         use perl_lexer::{PerlLexer, TokenType};
@@ -125,6 +173,7 @@ fn benchmark_isolated_components(c: &mut Criterion) {
 }
 
 fn benchmark_scope_analysis(c: &mut Criterion) {
+    emit_parser_scorecard();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
     let analyzer = ScopeAnalyzer::new();

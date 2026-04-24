@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "metrics": {
+    "cold_parse": {
+      "median_us": 44.573,
+      "p95_us": 67.291,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "incremental_benchmark"
+    },
+    "incremental_multiple_edits": {
+      "median_us": 34.049,
+      "p95_us": 54.265,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "incremental_benchmark"
+    },
+    "incremental_small_edit": {
+      "median_us": 57.513000000000005,
+      "p95_us": 92.53,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "incremental_benchmark"
+    },
+    "lexer_only": {
+      "median_us": 24.253,
+      "p95_us": 38.559000000000005,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "parser_benchmark"
+    },
+    "scope_analysis": {
+      "median_us": 159.109,
+      "p95_us": 222.062,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "parser_benchmark"
+    },
+    "warm_reparse": {
+      "median_us": 110.931,
+      "p95_us": 157.195,
+      "samples": 25,
+      "unit": "us",
+      "source_bench": "incremental_benchmark"
+    }
+  }
+}

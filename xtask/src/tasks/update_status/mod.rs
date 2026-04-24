@@ -206,6 +206,17 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         if updated_parser != original_parser {
             files_to_update.push(("docs/project/status/parser.md", parser_path, updated_parser));
         }
+
+        let perf_path = root.join("docs/project/status/parser_performance_scorecard.json");
+        let original_perf = fs::read_to_string(&perf_path).unwrap_or_default();
+        let updated_perf = parser::render_performance_scorecard_json(&parser_metrics)?;
+        if updated_perf != original_perf {
+            files_to_update.push((
+                "docs/project/status/parser_performance_scorecard.json",
+                perf_path,
+                updated_perf,
+            ));
+        }
     }
 
     // --- Quality subsystem ---
@@ -317,6 +328,7 @@ mod mod_tests {
             "editor_ux.schema.json",
             "dap.md",
             "workspace.md",
+            "parser_performance_scorecard.json",
         ] {
             let path = status_dir.join(name);
             assert!(path.exists(), "subsystem file missing: {}", path.display());
