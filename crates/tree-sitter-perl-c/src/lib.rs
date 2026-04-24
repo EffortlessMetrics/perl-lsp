@@ -162,8 +162,13 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read(path)?;
+    let path = path.as_ref();
+    let path_display = path.display();
+
+    let code = std::fs::read(path)
+        .map_err(|error| format!("Failed to read Perl file '{}': {error}", path_display))?;
     parse_perl_bytes(&code)
+        .map_err(|error| format!("Failed to parse Perl file '{}': {error}", path_display).into())
 }
 
 /// Returns the scanner backend identifier for this crate.
@@ -282,6 +287,35 @@ mod tests {
         let tree = parse_perl_bytes(b"")?;
         assert_eq!(tree.root_node().kind(), "source_file");
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_file_missing_includes_path_context() {
+        let missing_path = Path::new("tests/fixtures/does-not-exist.pl");
+        let result = parse_perl_file(missing_path);
+        assert!(result.is_err(), "expected missing file to error");
+        let error_text = match result {
+            Ok(_) => String::new(),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(error_text.contains("Failed to read Perl file"));
+        assert!(error_text.contains("tests/fixtures/does-not-exist.pl"));
+    }
+
+    #[test]
+    fn test_parse_file_directory_includes_path_context() {
+        let dir_path = Path::new(".");
+
+        let result = parse_perl_file(dir_path);
+        assert!(result.is_err(), "expected directory read to error");
+        let error_text = match result {
+            Ok(_) => String::new(),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(error_text.contains("Failed to read Perl file"));
+        assert!(error_text.contains(&dir_path.display().to_string()));
     }
 }
 
