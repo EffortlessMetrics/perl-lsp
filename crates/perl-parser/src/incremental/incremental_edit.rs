@@ -106,30 +106,78 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
+    /// Validate and normalize edits for a specific source buffer.
+    ///
+    /// Returns edits sorted by start byte on success.
+    /// Returns `None` when any edit is unmappable or the batch has overlap.
+    pub fn normalized_for_source(&self, source: &str) -> Option<Vec<IncrementalEdit>> {
+        if self.edits.is_empty() {
+            return Some(Vec::new());
+        }
+
+        let mut normalized = self.edits.clone();
+        normalized.sort_by_key(|edit| (edit.start_byte, edit.old_end_byte));
+
+        for edit in &normalized {
+            if edit.start_byte > edit.old_end_byte {
+                return None;
+            }
+
+            if edit.old_end_byte > source.len() {
+                return None;
+            }
+
+            if !source.is_char_boundary(edit.start_byte)
+                || !source.is_char_boundary(edit.old_end_byte)
+            {
+                return None;
+            }
+        }
+
+        for pair in normalized.windows(2) {
+            if Self::edits_overlap(&pair[0], &pair[1]) {
+                return None;
+            }
+        }
+
+        Some(normalized)
+    }
+
+    fn edits_overlap(left: &IncrementalEdit, right: &IncrementalEdit) -> bool {
+        let left_is_insertion = left.start_byte == left.old_end_byte;
+        let right_is_insertion = right.start_byte == right.old_end_byte;
+
+        match (left_is_insertion, right_is_insertion) {
+            (true, true) => false,
+            (true, false) => {
+                left.start_byte > right.start_byte && left.start_byte < right.old_end_byte
+            }
+            (false, true) => {
+                right.start_byte > left.start_byte && right.start_byte < left.old_end_byte
+            }
+            (false, false) => {
+                left.start_byte < right.old_end_byte && left.old_end_byte > right.start_byte
+            }
+        }
+    }
+
     /// Apply edits to a string
     pub fn apply_to_string(&self, source: &str) -> String {
-        if self.edits.is_empty() {
+        let Some(normalized) = self.normalized_for_source(source) else {
+            return source.to_string();
+        };
+
+        if normalized.is_empty() {
             return source.to_string();
         }
 
         // Sort edits in reverse order to apply from end to start
-        let mut sorted_edits = self.edits.clone();
+        let mut sorted_edits = normalized;
         sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            let start = edit.start_byte.min(result.len());
-            let end = edit.old_end_byte.min(result.len());
-
-            if start > end {
-                continue;
-            }
-
-            if !result.is_char_boundary(start) || !result.is_char_boundary(end) {
-                continue;
-            }
-
-            result.replace_range(start..end, &edit.new_text);
+            result.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
         }
 
         result
@@ -177,5 +225,35 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_edit_set_normalized_rejects_backwards_ranges() {
+        let source = "hello";
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(4, 2, "x".to_string()));
+
+        assert!(edits.normalized_for_source(source).is_none());
+        assert_eq!(edits.apply_to_string(source), source);
+    }
+
+    #[test]
+    fn test_edit_set_normalized_rejects_overlaps() {
+        let source = "abcdef";
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "y".to_string()));
+
+        assert!(edits.normalized_for_source(source).is_none());
+    }
+
+    #[test]
+    fn test_edit_set_normalized_accepts_zero_width_insertions() {
+        let source = "abc";
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 1, "X".to_string()));
+        edits.add(IncrementalEdit::new(1, 1, "Y".to_string()));
+
+        assert!(edits.normalized_for_source(source).is_some());
     }
 }
