@@ -28,6 +28,8 @@ use std::time::Duration;
 #[cfg(feature = "workspace")]
 use std::time::Instant;
 #[cfg(feature = "workspace")]
+use std::{fs, io};
+#[cfg(feature = "workspace")]
 use url::Url;
 
 const WORKSPACE_CONFIGURATION_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -47,6 +49,19 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
         return false;
     }
     is_skipped_dir_name(&entry.file_name().to_string_lossy())
+}
+
+#[cfg(feature = "workspace")]
+fn decode_text_with_latin1_fallback(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(err) => err.into_bytes().into_iter().map(char::from).collect(),
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn read_text_file_with_latin1_fallback(path: &Path) -> io::Result<String> {
+    fs::read(path).map(decode_text_with_latin1_fallback)
 }
 
 #[cfg(feature = "workspace")]
@@ -897,7 +912,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_file_with_latin1_fallback(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -928,7 +943,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_text_file_with_latin1_fallback(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1046,7 +1061,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_text_file_with_latin1_fallback(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1297,7 +1312,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_file_with_latin1_fallback(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1370,7 +1385,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_text_file_with_latin1_fallback(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1620,7 +1635,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_text_file_with_latin1_fallback(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1863,7 +1878,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_text_file_with_latin1_fallback(&path).ok())
     }
 }
 
@@ -2156,5 +2171,20 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn latin1_fallback_keeps_valid_utf8_unchanged() {
+        let decoded = super::decode_text_with_latin1_fallback("my $x = 1;\n".as_bytes().to_vec());
+        assert_eq!(decoded, "my $x = 1;\n");
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn latin1_fallback_decodes_non_utf8_bytes_losslessly() {
+        // "Café\n" in ISO-8859-1 bytes.
+        let decoded = super::decode_text_with_latin1_fallback(vec![0x43, 0x61, 0x66, 0xE9, 0x0A]);
+        assert_eq!(decoded, "Café\n");
     }
 }
