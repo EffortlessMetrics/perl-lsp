@@ -20,6 +20,9 @@ use perl_token::{Token, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+
+let version = Token::new(TokenKind::VString, "v5.38.0", 4, 11);
+assert_eq!(version.kind, TokenKind::VString);
 ```
 
 ## Workspace Role
