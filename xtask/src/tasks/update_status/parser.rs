@@ -4,11 +4,15 @@
 
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use regex::Regex;
 use serde::Deserialize;
+use serde_json::Value;
+use walkdir::WalkDir;
 
 use super::replace_block;
 
@@ -26,6 +30,7 @@ pub(super) struct ParserMetrics {
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
     pub performance_scorecard: Option<ParserPerformanceScorecard>,
+    pub token_health: TokenHealthMetrics,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -41,6 +46,44 @@ struct ParserPerfMetric {
     p95_ns: u128,
     mean_ns: u128,
 }
+
+#[derive(Debug, Clone)]
+pub(super) struct TokenHealthMetrics {
+    pub variant_count: usize,
+    pub metadata_coverage_count: usize,
+    pub display_name_coverage_count: usize,
+    pub category_partition_status: String,
+    pub lexer_parser_conformance_status: String,
+    pub runtime_dependency_count: usize,
+    pub metadata_coverage_status: String,
+    pub benchmark_rows: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+struct TokenHealthBaseline {
+    #[serde(default)]
+    minimum_metadata_coverage: Option<usize>,
+    #[serde(default)]
+    minimum_display_name_coverage: Option<usize>,
+    #[serde(default)]
+    expected_variant_count: Option<usize>,
+    #[serde(default)]
+    max_runtime_dependencies: Option<usize>,
+    #[serde(default)]
+    minimum_parser_lexer_references: Option<usize>,
+}
+
+static TOKEN_ENUM_VARIANT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*([A-Z][A-Za-z0-9_]*)\s*,\s*$").expect("token variant regex is valid")
+});
+
+static TOKEN_MATCH_ARM_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*TokenKind::([A-Z][A-Za-z0-9_]*)\s*=>").expect("token match arm regex is valid")
+});
+
+static TOKEN_KIND_USAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"TokenKind::([A-Z][A-Za-z0-9_]*)").expect("token usage regex is valid")
+});
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
     let common_corpus_receipt =
@@ -58,6 +101,7 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         common_corpus_receipt,
         common_corpus_pinned,
         performance_scorecard: read_parser_performance_scorecard(root),
+        token_health: collect_token_health(root),
     }
 }
 
@@ -81,6 +125,325 @@ fn read_parser_performance_scorecard(root: &Path) -> Option<ParserPerformanceSco
     let path = root.join("docs/project/status/parser_performance_scorecard.json");
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()
+}
+
+fn collect_token_health(root: &Path) -> TokenHealthMetrics {
+    let token_lib_path = root.join("crates/perl-token/src/lib.rs");
+    let token_toml_path = root.join("crates/perl-token/Cargo.toml");
+    let baseline_path = root.join(".ci/metrics/baselines/token.json");
+
+    let variant_names = parse_token_variants(&token_lib_path);
+    let variant_count = variant_names.len();
+    let display_names = parse_token_display_names(&token_lib_path);
+    let display_name_coverage_count = display_names.len();
+
+    let metadata_coverage_count = display_name_coverage_count;
+    let categories = count_token_categories(&token_lib_path);
+    let category_partition_status = {
+        let categorized_total: usize = categories.values().sum();
+        if categorized_total == variant_count && !categories.is_empty() {
+            let breakdown = [
+                ("keywords", categories.get("keywords").copied().unwrap_or(0)),
+                ("operators", categories.get("operators").copied().unwrap_or(0)),
+                ("delimiters", categories.get("delimiters").copied().unwrap_or(0)),
+                ("literals", categories.get("literals").copied().unwrap_or(0)),
+                ("identifiers", categories.get("identifiers").copied().unwrap_or(0)),
+                ("special", categories.get("special").copied().unwrap_or(0)),
+            ]
+            .into_iter()
+            .map(|(name, count)| format!("{name}:{count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+            format!("PASS ({breakdown})")
+        } else {
+            format!("WARN ({categorized_total}/{variant_count} categorized)")
+        }
+    };
+
+    let runtime_dependency_count = count_runtime_dependencies(&token_toml_path);
+    let baseline = read_token_health_baseline(&baseline_path);
+
+    let metadata_coverage_status = evaluate_metadata_coverage_status(
+        variant_count,
+        metadata_coverage_count,
+        display_name_coverage_count,
+        runtime_dependency_count,
+        baseline.as_ref(),
+    );
+
+    let (lexer_refs, parser_refs, unknown_refs) =
+        collect_lexer_parser_token_refs(root, &variant_names);
+    let combined_refs = lexer_refs + parser_refs;
+    let lexer_parser_conformance_status = if !unknown_refs.is_empty() {
+        format!("FAIL (unknown TokenKind references: {})", unknown_refs.join(", "))
+    } else if lexer_refs == 0 || parser_refs == 0 {
+        format!(
+            "WARN (lexer refs: {lexer_refs}, parser refs: {parser_refs}; expected both sides to reference TokenKind)"
+        )
+    } else if combined_refs == 0 {
+        "UNVERIFIED (no lexer/parser references found)".to_string()
+    } else if baseline
+        .as_ref()
+        .and_then(|b| b.minimum_parser_lexer_references)
+        .is_some_and(|min| combined_refs < min)
+    {
+        let min = baseline.as_ref().and_then(|b| b.minimum_parser_lexer_references).unwrap_or(0);
+        format!("WARN ({combined_refs} references; baseline floor {min})")
+    } else {
+        format!("PASS (lexer refs: {lexer_refs}, parser refs: {parser_refs})")
+    };
+
+    let benchmark_rows = read_token_benchmark_rows(&baseline_path);
+
+    TokenHealthMetrics {
+        variant_count,
+        metadata_coverage_count,
+        display_name_coverage_count,
+        category_partition_status,
+        lexer_parser_conformance_status,
+        runtime_dependency_count,
+        metadata_coverage_status,
+        benchmark_rows,
+    }
+}
+
+fn parse_token_variants(path: &Path) -> std::collections::BTreeSet<String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return std::collections::BTreeSet::new();
+    };
+
+    let mut inside_enum = false;
+    let mut variants = std::collections::BTreeSet::new();
+    for line in raw.lines() {
+        if line.contains("pub enum TokenKind") {
+            inside_enum = true;
+            continue;
+        }
+        if inside_enum && line.trim() == "}" {
+            break;
+        }
+        if inside_enum && let Some(caps) = TOKEN_ENUM_VARIANT_RE.captures(line) {
+            variants.insert(caps[1].to_string());
+        }
+    }
+    variants
+}
+
+fn parse_token_display_names(path: &Path) -> std::collections::BTreeSet<String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return std::collections::BTreeSet::new();
+    };
+
+    let mut inside_display = false;
+    let mut names = std::collections::BTreeSet::new();
+    for line in raw.lines() {
+        if line.contains("pub fn display_name(self)") {
+            inside_display = true;
+            continue;
+        }
+        if inside_display && line.trim() == "}" {
+            continue;
+        }
+        if inside_display && let Some(caps) = TOKEN_MATCH_ARM_RE.captures(line) {
+            names.insert(caps[1].to_string());
+        }
+    }
+    names
+}
+
+fn count_token_categories(path: &Path) -> std::collections::BTreeMap<String, usize> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return std::collections::BTreeMap::new();
+    };
+    let mut current: Option<&str> = None;
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.contains("===== Keywords") {
+            current = Some("keywords");
+        } else if trimmed.contains("===== Operators") {
+            current = Some("operators");
+        } else if trimmed.contains("===== Delimiters") {
+            current = Some("delimiters");
+        } else if trimmed.contains("===== Literals") {
+            current = Some("literals");
+        } else if trimmed.contains("===== Identifiers and Variables") {
+            current = Some("identifiers");
+        } else if trimmed.contains("===== Special") {
+            current = Some("special");
+        } else if let Some(category) = current
+            && TOKEN_ENUM_VARIANT_RE.is_match(trimmed)
+        {
+            *counts.entry(category.to_string()).or_default() += 1;
+        }
+    }
+    counts
+}
+
+fn count_runtime_dependencies(path: &Path) -> usize {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return 0;
+    };
+    let Ok(value) = raw.parse::<toml::Table>() else {
+        return 0;
+    };
+    value.get("dependencies").and_then(|v| v.as_table()).map_or(0, |t| t.len())
+}
+
+fn read_token_health_baseline(path: &Path) -> Option<TokenHealthBaseline> {
+    let raw = fs::read_to_string(path).ok()?;
+    let json: Value = serde_json::from_str(&raw).ok()?;
+    serde_json::from_value(json.get("health_floor")?.clone()).ok()
+}
+
+fn evaluate_metadata_coverage_status(
+    variant_count: usize,
+    metadata_coverage_count: usize,
+    display_name_coverage_count: usize,
+    runtime_dependency_count: usize,
+    baseline: Option<&TokenHealthBaseline>,
+) -> String {
+    let mut warnings = Vec::new();
+
+    if metadata_coverage_count < variant_count {
+        warnings
+            .push(format!("metadata coverage dropped ({metadata_coverage_count}/{variant_count})"));
+    }
+    if display_name_coverage_count < variant_count {
+        warnings.push(format!(
+            "display-name coverage dropped ({display_name_coverage_count}/{variant_count})"
+        ));
+    }
+
+    if let Some(base) = baseline {
+        if let Some(expected_variant_count) = base.expected_variant_count
+            && variant_count < expected_variant_count
+        {
+            warnings.push(format!(
+                "variant count dropped ({variant_count} < baseline {expected_variant_count})"
+            ));
+        }
+        if let Some(min_meta) = base.minimum_metadata_coverage
+            && metadata_coverage_count < min_meta
+        {
+            warnings.push(format!(
+                "metadata coverage below baseline ({metadata_coverage_count} < {min_meta})"
+            ));
+        }
+        if let Some(min_display) = base.minimum_display_name_coverage
+            && display_name_coverage_count < min_display
+        {
+            warnings.push(format!(
+                "display-name coverage below baseline ({display_name_coverage_count} < {min_display})"
+            ));
+        }
+        if let Some(max_runtime) = base.max_runtime_dependencies
+            && runtime_dependency_count > max_runtime
+        {
+            warnings.push(format!(
+                "runtime deps increased ({runtime_dependency_count} > baseline {max_runtime})"
+            ));
+        }
+    }
+
+    if warnings.is_empty() { "PASS".to_string() } else { format!("WARN ({})", warnings.join("; ")) }
+}
+
+fn collect_lexer_parser_token_refs(
+    root: &Path,
+    variants: &std::collections::BTreeSet<String>,
+) -> (usize, usize, Vec<String>) {
+    let lexer_refs = collect_token_refs_in_tree(root.join("crates/perl-lexer/src"), variants);
+    let parser_refs =
+        collect_token_refs_in_tree(root.join("crates/perl-parser-core/src"), variants);
+    let mut unknown = std::collections::BTreeSet::new();
+    for name in lexer_refs.1.into_iter().chain(parser_refs.1) {
+        unknown.insert(name);
+    }
+    (lexer_refs.0, parser_refs.0, unknown.into_iter().collect())
+}
+
+fn collect_token_refs_in_tree(
+    root: PathBuf,
+    variants: &std::collections::BTreeSet<String>,
+) -> (usize, Vec<String>) {
+    if !root.exists() {
+        return (0, Vec::new());
+    }
+    let mut refs = std::collections::BTreeSet::new();
+    let mut unknown = std::collections::BTreeSet::new();
+
+    for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() || !entry.path().extension().is_some_and(|ext| ext == "rs")
+        {
+            continue;
+        }
+        let Ok(raw) = fs::read_to_string(entry.path()) else {
+            continue;
+        };
+        for caps in TOKEN_KIND_USAGE_RE.captures_iter(&raw) {
+            let name = caps[1].to_string();
+            if variants.contains(&name) {
+                refs.insert(name);
+            } else {
+                unknown.insert(name);
+            }
+        }
+    }
+
+    (refs.len(), unknown.into_iter().collect())
+}
+
+fn read_token_benchmark_rows(path: &Path) -> Vec<String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return vec![
+            "| `display_name` lookup | UNVERIFIED | scorecard missing | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| `Token::new` construction | UNVERIFIED | scorecard missing | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| span ops (`len`/`is_empty`) | UNVERIFIED | scorecard missing | `.ci/metrics/baselines/token.json` |".to_string(),
+        ];
+    };
+    let Ok(json) = serde_json::from_str::<Value>(&raw) else {
+        return vec![
+            "| `display_name` lookup | UNVERIFIED | invalid scorecard JSON | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| `Token::new` construction | UNVERIFIED | invalid scorecard JSON | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| span ops (`len`/`is_empty`) | UNVERIFIED | invalid scorecard JSON | `.ci/metrics/baselines/token.json` |".to_string(),
+        ];
+    };
+    let Some(bench) = json.get("benchmarks").and_then(|v| v.as_object()) else {
+        return vec![
+            "| `display_name` lookup | UNVERIFIED | no benchmark section in baseline | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| `Token::new` construction | UNVERIFIED | no benchmark section in baseline | `.ci/metrics/baselines/token.json` |".to_string(),
+            "| span ops (`len`/`is_empty`) | UNVERIFIED | no benchmark section in baseline | `.ci/metrics/baselines/token.json` |".to_string(),
+        ];
+    };
+
+    let key_map = [
+        ("display_name_lookup_ns", "`display_name` lookup"),
+        ("token_new_ns", "`Token::new` construction"),
+        ("span_ops_ns", "span ops (`len`/`is_empty`)"),
+    ];
+
+    key_map
+        .into_iter()
+        .map(|(key, label)| {
+            let Some(obj) = bench.get(key).and_then(|v| v.as_object()) else {
+                return format!(
+                    "| {label} | UNVERIFIED | `{key}` missing from scorecard | `.ci/metrics/baselines/token.json` |"
+                );
+            };
+            let median = obj.get("median_ns").and_then(|v| v.as_u64());
+            let p95 = obj.get("p95_ns").and_then(|v| v.as_u64());
+            match (median, p95) {
+                (Some(median), Some(p95)) => format!(
+                    "| {label} | median {median} ns / p95 {p95} ns | key op latency | `.ci/metrics/baselines/token.json` |"
+                ),
+                _ => format!(
+                    "| {label} | UNVERIFIED | `{key}` missing median_ns/p95_ns | `.ci/metrics/baselines/token.json` |"
+                ),
+            }
+        })
+        .collect()
 }
 
 pub(super) fn count_corpus_sections(root: &Path) -> usize {
@@ -280,6 +643,37 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     );
 
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
+    let token_rows = [
+        format!(
+            "| **TokenKind variants** | {} | shared token vocabulary size | `crates/perl-token/src/lib.rs` |",
+            metrics.token_health.variant_count
+        ),
+        format!(
+            "| **Metadata coverage** | {}/{} | {} | `crates/perl-token/src/lib.rs` + `.ci/metrics/baselines/token.json` |",
+            metrics.token_health.metadata_coverage_count,
+            metrics.token_health.variant_count,
+            metrics.token_health.metadata_coverage_status
+        ),
+        format!(
+            "| **Category partition** | {} | category buckets must partition the enum | `crates/perl-token/src/lib.rs` |",
+            metrics.token_health.category_partition_status
+        ),
+        format!(
+            "| **Display-name coverage** | {}/{} | user-facing parser diagnostics text | `TokenKind::display_name` |",
+            metrics.token_health.display_name_coverage_count,
+            metrics.token_health.variant_count
+        ),
+        format!(
+            "| **Lexer/parser conformance** | {} | checks TokenKind references in `perl-lexer` + `perl-parser-core` | source scan |",
+            metrics.token_health.lexer_parser_conformance_status
+        ),
+        format!(
+            "| **Runtime dependencies** | {} | `perl-token` runtime dependency surface | `crates/perl-token/Cargo.toml` |",
+            metrics.token_health.runtime_dependency_count
+        ),
+    ]
+    .join("\n");
+    let token_bench_rows = metrics.token_health.benchmark_rows.join("\n");
 
     let parser_coverage_bullets = format!(
         "- **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.\n\
@@ -329,6 +723,18 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: TOKEN_HEALTH_TABLE -->",
+        "<!-- END: TOKEN_HEALTH_TABLE -->",
+        &token_rows,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: TOKEN_BENCHMARK_TABLE -->",
+        "<!-- END: TOKEN_BENCHMARK_TABLE -->",
+        &token_bench_rows,
+    )?;
     Ok(text)
 }
 
@@ -340,6 +746,21 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
 mod tests {
     use super::*;
     use color_eyre::eyre::Result;
+
+    fn sample_token_health() -> TokenHealthMetrics {
+        TokenHealthMetrics {
+            variant_count: 132,
+            metadata_coverage_count: 132,
+            display_name_coverage_count: 132,
+            category_partition_status: "PASS".to_string(),
+            lexer_parser_conformance_status: "PASS".to_string(),
+            runtime_dependency_count: 0,
+            metadata_coverage_status: "PASS".to_string(),
+            benchmark_rows: vec![
+                "| `display_name` lookup | median 91 ns / p95 140 ns | key op latency | `.ci/metrics/baselines/token.json` |".to_string(),
+            ],
+        }
+    }
 
     #[test]
     fn test_corpus_section_count() -> Result<()> {
@@ -390,13 +811,15 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_health: sample_token_health(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
+                        <!-- BEGIN: TOKEN_BENCHMARK_TABLE -->\nold\n<!-- END: TOKEN_BENCHMARK_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
@@ -419,13 +842,15 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_health: sample_token_health(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
+                        <!-- BEGIN: TOKEN_BENCHMARK_TABLE -->\nold\n<!-- END: TOKEN_BENCHMARK_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
             result.contains("10 modules (unverified)"),
@@ -476,6 +901,7 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: Some(scorecard),
+            token_health: sample_token_health(),
         };
 
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
@@ -483,7 +909,8 @@ mod tests {
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
+                        <!-- BEGIN: TOKEN_BENCHMARK_TABLE -->\nold\n<!-- END: TOKEN_BENCHMARK_TABLE -->\n";
 
         let result = generate_parser_status(&metrics, template)?;
 
@@ -543,13 +970,15 @@ mod tests {
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_health: sample_token_health(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n\
+                        <!-- BEGIN: TOKEN_BENCHMARK_TABLE -->\nold\n<!-- END: TOKEN_BENCHMARK_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
         assert!(result.contains("100%"), "strict-clean row missing 100%");
@@ -557,6 +986,33 @@ mod tests {
             result.contains("10 pinned modules"),
             "strict-clean row missing pinned modules note"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_metadata_coverage_warns_on_drop() {
+        let status = evaluate_metadata_coverage_status(132, 130, 130, 0, None);
+        assert!(status.starts_with("WARN"), "expected WARN status, got {status}");
+        assert!(status.contains("metadata coverage dropped"));
+    }
+
+    #[test]
+    fn test_token_benchmark_rows_from_baseline_json() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let baseline = dir.path().join("token.json");
+        fs::write(
+            &baseline,
+            r#"{
+  "benchmarks": {
+    "display_name_lookup_ns": { "median_ns": 91, "p95_ns": 140 },
+    "token_new_ns": { "median_ns": 37, "p95_ns": 65 },
+    "span_ops_ns": { "median_ns": 12, "p95_ns": 19 }
+  }
+}"#,
+        )?;
+        let rows = read_token_benchmark_rows(&baseline);
+        assert!(rows.iter().any(|row| row.contains("median 91 ns / p95 140 ns")));
+        assert!(rows.iter().all(|row| !row.contains("UNVERIFIED")));
         Ok(())
     }
 }
