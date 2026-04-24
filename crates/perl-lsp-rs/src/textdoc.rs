@@ -39,6 +39,66 @@ pub enum PosEnc {
     Utf8,
 }
 
+/// Outcome of applying a batch of LSP text changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApplyChangesOutcome {
+    /// When true, at least one change could not be mapped with strong confidence
+    /// (e.g. malformed range ordering or split multi-byte boundary), so callers
+    /// should avoid parser incremental-edit fast paths for this batch.
+    pub requires_conservative_parse: bool,
+}
+
+fn pos_leq(a: Position, b: Position) -> bool {
+    (a.line, a.character) <= (b.line, b.character)
+}
+
+fn lsp_pos_to_char_with_alignment(rope: &Rope, pos: Position, enc: PosEnc) -> (usize, bool) {
+    // Out-of-range line offsets are clamped to EOF and treated as ambiguous.
+    if pos.line as usize >= rope.len_lines() {
+        return (rope.len_chars(), false);
+    }
+
+    let line_char0 = rope.line_to_char(pos.line as usize);
+    let line_slice = rope.line(pos.line as usize);
+    let mut char_idx = 0usize;
+    let mut offset = 0u32;
+    let mut exact = true;
+
+    match enc {
+        PosEnc::Utf8 => {
+            for ch in line_slice.chars() {
+                let next = offset + ch.len_utf8() as u32;
+                if next > pos.character {
+                    exact = offset == pos.character;
+                    break;
+                }
+                offset = next;
+                char_idx += 1;
+            }
+        }
+        PosEnc::Utf16 => {
+            for ch in line_slice.chars() {
+                let next = offset + ch.len_utf16() as u32;
+                if next > pos.character {
+                    exact = offset == pos.character;
+                    break;
+                }
+                offset = next;
+                char_idx += 1;
+            }
+        }
+    }
+
+    // Past-end columns are clamped to EOL and treated as ambiguous.
+    let line_chars = line_slice.chars().count();
+    if char_idx == line_chars && pos.character > offset {
+        exact = false;
+    }
+
+    let target_char = (line_char0 + char_idx.min(line_chars)).min(rope.len_chars());
+    (target_char, exact)
+}
+
 /// Convert LSP position to char index with UTF-16/UTF-8 encoding support
 ///
 /// This function handles the conversion from LSP Position (line, character)
@@ -53,53 +113,7 @@ pub enum PosEnc {
 /// # Returns
 /// Char index clamped to valid rope boundaries
 pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
-    // Handle edge case: if line is beyond document end, clamp to end
-    if pos.line as usize >= rope.len_lines() {
-        return rope.len_chars();
-    }
-
-    let line_char0 = rope.line_to_char(pos.line as usize);
-    let line_slice = rope.line(pos.line as usize);
-
-    let col_chars = match enc {
-        PosEnc::Utf8 => {
-            // UTF-8: pos.character is byte offset within line
-            let mut char_idx = 0usize;
-            let mut bytes = 0u32;
-            for ch in line_slice.chars() {
-                let next = bytes + ch.len_utf8() as u32;
-                if next > pos.character {
-                    break; // clamp before splitting multi-byte char
-                }
-                bytes = next;
-                char_idx += 1;
-            }
-            char_idx
-        }
-        PosEnc::Utf16 => {
-            // UTF-16: pos.character is UTF-16 code unit offset
-            // Must clamp BEFORE splitting surrogate pair (2-unit chars like emoji)
-            let mut char_idx = 0usize;
-            let mut utf16_units = 0u32;
-
-            for ch in line_slice.chars() {
-                let next = utf16_units + ch.len_utf16() as u32;
-                if next > pos.character {
-                    break; // clamp before splitting surrogate pair
-                }
-                utf16_units = next;
-                char_idx += 1;
-            }
-            char_idx
-        }
-    };
-
-    // Clamp to line boundaries
-    let line_chars = line_slice.chars().count();
-    let clamped_col = col_chars.min(line_chars);
-    let target_char = line_char0 + clamped_col;
-
-    target_char.min(rope.len_chars())
+    lsp_pos_to_char_with_alignment(rope, pos, enc).0
 }
 
 /// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
@@ -213,19 +227,56 @@ pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 /// Ropey's `remove` and `insert` operate on **char indices**, not byte offsets.
 /// This function correctly converts LSP positions to char indices for rope operations.
 pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], enc: PosEnc) {
+    let _ = apply_changes_with_outcome(doc, changes, enc, None);
+}
+
+/// Apply LSP text changes while surfacing whether conservative parse fallback
+/// should be used by higher layers.
+///
+/// `incoming_version` may be provided by callers that track didChange sequencing.
+/// If it is stale (`<= doc.version`), the batch is ignored and marked conservative.
+pub fn apply_changes_with_outcome(
+    doc: &mut Doc,
+    changes: &[TextDocumentContentChangeEvent],
+    enc: PosEnc,
+    incoming_version: Option<i32>,
+) -> ApplyChangesOutcome {
+    let mut requires_conservative_parse = false;
+
+    if let Some(version) = incoming_version {
+        if version <= doc.version {
+            return ApplyChangesOutcome { requires_conservative_parse: true };
+        }
+    }
+
     for ch in changes {
         if let Some(r) = &ch.range {
+            if !pos_leq(r.start, r.end) {
+                requires_conservative_parse = true;
+                continue;
+            }
+
             // IMPORTANT: Rope::remove and Rope::insert use char indices, not byte offsets
-            let (s, e) = range_to_chars(&doc.rope, r, enc);
+            let (s, start_exact) = lsp_pos_to_char_with_alignment(&doc.rope, r.start, enc);
+            let (e, end_exact) = lsp_pos_to_char_with_alignment(&doc.rope, r.end, enc);
+            if !start_exact || !end_exact {
+                requires_conservative_parse = true;
+            }
+
             if s <= e {
                 doc.rope.remove(s..e);
                 doc.rope.insert(s, &ch.text);
+            } else {
+                requires_conservative_parse = true;
             }
         } else {
             // Full document replace
             doc.rope = Rope::from_str(&ch.text);
+            requires_conservative_parse = true;
         }
     }
+
+    ApplyChangesOutcome { requires_conservative_parse }
 }
 
 #[cfg(test)]
@@ -310,5 +361,36 @@ mod tests {
         assert_eq!(pos2.line, 1);
         let back2 = lsp_pos_to_byte(&rope, pos2, PosEnc::Utf16);
         assert_eq!(back2, 9, "Roundtrip on second line should work");
+    }
+
+    #[test]
+    fn test_apply_changes_marks_malformed_range_conservative() {
+        let mut doc = Doc { rope: Rope::from_str("abcdef"), version: 1 };
+        let changes = vec![TextDocumentContentChangeEvent {
+            range: Some(Range {
+                start: Position { line: 0, character: 4 },
+                end: Position { line: 0, character: 2 },
+            }),
+            range_length: None,
+            text: "X".to_string(),
+        }];
+
+        let outcome = apply_changes_with_outcome(&mut doc, &changes, PosEnc::Utf16, Some(2));
+        assert!(outcome.requires_conservative_parse);
+        assert_eq!(doc.rope.to_string(), "abcdef");
+    }
+
+    #[test]
+    fn test_apply_changes_marks_stale_version_conservative() {
+        let mut doc = Doc { rope: Rope::from_str("abc"), version: 4 };
+        let changes = vec![TextDocumentContentChangeEvent {
+            range: None,
+            range_length: None,
+            text: "zzz".to_string(),
+        }];
+
+        let outcome = apply_changes_with_outcome(&mut doc, &changes, PosEnc::Utf16, Some(4));
+        assert!(outcome.requires_conservative_parse);
+        assert_eq!(doc.rope.to_string(), "abc");
     }
 }
