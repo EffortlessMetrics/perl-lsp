@@ -62,6 +62,19 @@ fn extended_extracts_parent_module_and_converts_to_path() {
 }
 
 #[test]
+fn extended_extracts_legacy_ascii_separator_module_from_parent_qw() {
+    let line = "use parent qw(Base'Class Other'Parent);";
+    let cursor = line.find("Other'Parent").unwrap_or(0);
+
+    let reference = find_module_reference_extended(line, cursor);
+    assert!(reference.is_some());
+    if let Some(reference) = reference {
+        let canonical = reference.canonical_module_name();
+        assert_eq!(canonical, "Other::Parent");
+        assert_eq!(module_name_to_path(&canonical), "Other/Parent.pm");
+    }
+}
+#[test]
 fn extended_extracts_base_module_and_converts_to_path() {
     let line = "use base 'Exporter';";
     let cursor = line.find("Exporter").unwrap_or(0);

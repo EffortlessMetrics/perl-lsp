@@ -147,12 +147,13 @@ fn find_parent_base_module_in_line<'a>(
         }
 
         let token_start_in_args = i;
-        let token_end_in_args = scan_canonical_module_token(bytes, i);
+        let token_end_in_args = scan_module_token(bytes, i);
         let token_start_in_line = args_start_in_line + token_start_in_args;
         let token_end_in_line = args_start_in_line + token_end_in_args;
         let module_name = &args_area[token_start_in_args..token_end_in_args];
 
         let is_module_like = module_name.contains("::")
+            || module_name.contains('\'')
             || module_name.as_bytes().first().is_some_and(u8::is_ascii_uppercase);
 
         if is_module_like
@@ -173,7 +174,7 @@ fn find_parent_base_module_in_line<'a>(
     None
 }
 
-fn scan_canonical_module_token(bytes: &[u8], start: usize) -> usize {
+fn scan_module_token(bytes: &[u8], start: usize) -> usize {
     let mut i = start;
 
     loop {
@@ -188,9 +189,19 @@ fn scan_canonical_module_token(bytes: &[u8], start: usize) -> usize {
             && is_module_start_byte(bytes[i + 2])
         {
             i += 2;
-        } else {
-            break;
+            continue;
         }
+
+        if i < bytes.len()
+            && bytes[i] == b'\''
+            && i + 1 < bytes.len()
+            && is_module_start_byte(bytes[i + 1])
+        {
+            i += 1;
+            continue;
+        }
+
+        break;
     }
 
     i
