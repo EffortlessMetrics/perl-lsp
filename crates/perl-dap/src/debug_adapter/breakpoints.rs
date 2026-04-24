@@ -46,35 +46,40 @@ impl DebugAdapter {
 
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
+        let new_breakpoint_records = if let Some(ref source_path) = args.source.path {
+            self.breakpoints.get_breakpoints(source_path)
+        } else {
+            Vec::new()
+        };
 
         // If a session is active, also sync the breakpoints to the Perl debugger
         if let Ok(mut guard) = self.session.lock()
             && let Some(ref mut session) = *guard
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
+                let mut sync_commands = String::new();
+
                 // Clear only the old breakpoints for this specific file
                 for old_bp in &old_breakpoints {
                     if old_bp.verified {
-                        let cmd = format!("B {}\n", old_bp.line);
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
+                        sync_commands.push_str(&format!("B {}\n", old_bp.line));
                     }
                 }
 
                 // Set new breakpoints that were successfully verified
-                for bp in &verified_breakpoints {
-                    if bp.verified {
-                        // Retrieve the record to get the original condition
-                        let cmd = if let Some(record) = self.breakpoints.get_breakpoint_by_id(bp.id)
-                            && let Some(cond) = record.condition
-                        {
-                            format!("b {} {}\n", bp.line, cond)
+                for record in &new_breakpoint_records {
+                    if record.verified {
+                        if let Some(cond) = &record.condition {
+                            sync_commands.push_str(&format!("b {} {}\n", record.line, cond));
                         } else {
-                            format!("b {}\n", bp.line)
-                        };
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
+                            sync_commands.push_str(&format!("b {}\n", record.line));
+                        }
                     }
+                }
+
+                if !sync_commands.is_empty() {
+                    let _ = stdin.write_all(sync_commands.as_bytes());
+                    let _ = stdin.flush();
                 }
             }
         }
