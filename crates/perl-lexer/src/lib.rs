@@ -1291,9 +1291,10 @@ impl<'a> PerlLexer<'a> {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
+                    let text_arc: Arc<str> = Arc::from(text);
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1314,9 +1315,10 @@ impl<'a> PerlLexer<'a> {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
+                    let text_arc: Arc<str> = Arc::from(text);
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1337,9 +1339,10 @@ impl<'a> PerlLexer<'a> {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
+                    let text_arc: Arc<str> = Arc::from(text);
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1442,10 +1445,11 @@ impl<'a> PerlLexer<'a> {
         // Avoid string slicing for common number cases - use Arc::from directly on slice
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
+        let text_arc: Arc<str> = Arc::from(text);
 
         Some(Token {
-            token_type: TokenType::Number(Arc::from(text)),
-            text: Arc::from(text),
+            token_type: TokenType::Number(text_arc.clone()),
+            text: text_arc,
             start,
             end: self.position,
         })
@@ -1496,10 +1500,11 @@ impl<'a> PerlLexer<'a> {
 
         let text = &self.input[start..self.position];
         self.mode = LexerMode::ExpectOperator;
+        let text_arc: Arc<str> = Arc::from(text);
 
         Some(Token {
-            token_type: TokenType::Number(Arc::from(text)),
-            text: Arc::from(text),
+            token_type: TokenType::Number(text_arc.clone()),
+            text: text_arc,
             start,
             end: self.position,
         })
@@ -2239,7 +2244,8 @@ impl<'a> PerlLexer<'a> {
                     }
                     _ => {}
                 }
-                TokenType::Keyword(Arc::from(text))
+                let text_arc: Arc<str> = Arc::from(text);
+                TokenType::Keyword(text_arc)
             } else {
                 // Mirror parser bare-builtin handling so `/` after builtins like
                 // `join` or `print` is lexed as a regex term, not division.
@@ -2248,14 +2254,19 @@ impl<'a> PerlLexer<'a> {
                 } else {
                     self.mode = LexerMode::ExpectOperator;
                 }
-                TokenType::Identifier(Arc::from(text))
+                let text_arc: Arc<str> = Arc::from(text);
+                TokenType::Identifier(text_arc)
             };
 
             self.after_arrow = false;
             // A keyword/identifier is not a variable; `{` after it is a block opener.
             self.after_var_subscript = false;
             // hash_brace_depth is managed by { and } handlers, not cleared per-token
-            Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+            let text_arc = match &token_type {
+                TokenType::Keyword(value) | TokenType::Identifier(value) => value.clone(),
+                _ => Arc::from(text),
+            };
+            Some(Token { token_type, text: text_arc, start, end: self.position })
         } else {
             None
         }
@@ -2558,9 +2569,10 @@ impl<'a> PerlLexer<'a> {
             self.mode = LexerMode::ExpectTerm;
         }
 
+        let text_arc: Arc<str> = Arc::from(text);
         Some(Token {
-            token_type: TokenType::Operator(Arc::from(text)),
-            text: Arc::from(text),
+            token_type: TokenType::Operator(text_arc.clone()),
+            text: text_arc,
             start,
             end: self.position,
         })
