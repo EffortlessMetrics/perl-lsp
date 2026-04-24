@@ -3,7 +3,7 @@
 //! This module provides timeout protection for parsing operations and
 //! detection of files that may cause timeouts or hangs.
 
-use perl_parser::Parser;
+use perl_parser::{Node, NodeKind, ParseError, Parser};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -138,8 +138,14 @@ pub enum ParseOutcome {
     Ok {
         /// Time taken to parse
         duration_ms: u64,
+        /// Number of structured recovery diagnostics (`ParseError::Recovered`).
+        recovered_count: usize,
+        /// Number of unrecovered `NodeKind::Error` nodes left in the AST.
+        error_node_count: usize,
+        /// Byte offset for the first unrecovered `NodeKind::Error`, if present.
+        first_error_node_location: Option<usize>,
     },
-    /// Parse failed with error
+    /// Parse failed catastrophically and did not yield a useful AST.
     Error {
         /// Error message
         message: String,
@@ -166,7 +172,7 @@ impl ParseOutcome {
     /// Get the duration in milliseconds if parse succeeded
     pub fn duration_ms(&self) -> Option<u64> {
         match self {
-            ParseOutcome::Ok { duration_ms } => Some(*duration_ms),
+            ParseOutcome::Ok { duration_ms, .. } => Some(*duration_ms),
             _ => None,
         }
     }
@@ -215,12 +221,27 @@ pub fn parse_with_timeout(
     let handle = std::thread::spawn(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut parser = Parser::new(&content_clone);
-            parser.parse()
+            let parse_result = parser.parse();
+            let recovered_count = parser
+                .errors()
+                .iter()
+                .filter(|error| matches!(error, ParseError::Recovered { .. }))
+                .count();
+            (parse_result, recovered_count)
         }));
 
         let outcome = match result {
-            Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
-            Ok(Err(e)) => ParseOutcome::Error { message: e.to_string() },
+            Ok((Ok(ast), recovered_count)) => {
+                let first_error_node_location = first_error_node_location(&ast);
+                let error_node_count = count_error_nodes(&ast);
+                ParseOutcome::Ok {
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    recovered_count,
+                    error_node_count,
+                    first_error_node_location,
+                }
+            }
+            Ok((Err(e), _)) => ParseOutcome::Error { message: e.to_string() },
             Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
         };
 
@@ -239,6 +260,29 @@ pub fn parse_with_timeout(
         }
         Err(_) => ParseOutcome::Error { message: "Channel disconnected unexpectedly".to_string() },
     }
+}
+
+fn count_error_nodes(node: &Node) -> usize {
+    let mut total = 0usize;
+    if matches!(node.kind, NodeKind::Error { .. }) {
+        total += 1;
+    }
+    for child in node.children() {
+        total += count_error_nodes(child);
+    }
+    total
+}
+
+fn first_error_node_location(node: &Node) -> Option<usize> {
+    if matches!(node.kind, NodeKind::Error { .. }) {
+        return Some(node.location.start);
+    }
+    for child in node.children() {
+        if let Some(location) = first_error_node_location(child) {
+            return Some(location);
+        }
+    }
+    None
 }
 
 /// Detect timeout and hang risks in corpus files
@@ -503,7 +547,15 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_is_ok() {
-        assert!(ParseOutcome::Ok { duration_ms: 100 }.is_ok());
+        assert!(
+            ParseOutcome::Ok {
+                duration_ms: 100,
+                recovered_count: 0,
+                error_node_count: 0,
+                first_error_node_location: None
+            }
+            .is_ok()
+        );
         assert!(!ParseOutcome::Error { message: "error".to_string() }.is_ok());
         assert!(!ParseOutcome::Timeout { timeout_ms: 1000 }.is_ok());
         assert!(!ParseOutcome::Panic { message: "panic".to_string() }.is_ok());
@@ -511,7 +563,16 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_duration_ms() {
-        assert_eq!(ParseOutcome::Ok { duration_ms: 100 }.duration_ms(), Some(100));
+        assert_eq!(
+            ParseOutcome::Ok {
+                duration_ms: 100,
+                recovered_count: 0,
+                error_node_count: 0,
+                first_error_node_location: None
+            }
+            .duration_ms(),
+            Some(100)
+        );
         assert_eq!(ParseOutcome::Error { message: "error".to_string() }.duration_ms(), None);
     }
 

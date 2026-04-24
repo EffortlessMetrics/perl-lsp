@@ -14,7 +14,7 @@ mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
 use perl_parser_core::Parser;
-use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{ParseCloseoutClass, ParseError, RecoveryKind, RecoverySite};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -228,6 +228,15 @@ fn clean_logical_or_does_not_emit_recovered() {
 fn clean_defined_or_assign_does_not_emit_recovered() {
     let errors = parse_errors("$x //= 'default';");
     assert_not_recovered(&errors, RecoverySite::InfixRhs, RecoveryKind::MissingOperand);
+}
+
+#[test]
+fn phase2_recovery_is_classified_as_structured_salvage() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let output = parser.parse_with_recovery();
+    assert_eq!(output.closeout_class(), ParseCloseoutClass::StructuredRecoveryOnly);
+    assert_eq!(output.error_node_count(), 0);
+    assert!(output.recovered_count > 0);
 }
 
 // ──────────────────────────────────────────────────────────────

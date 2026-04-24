@@ -85,6 +85,10 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
     format!("{clean_pct:.1}% clean (`{clean_files}/{total_files}`)")
 }
 
+fn format_pct(value: Option<f64>) -> String {
+    value.map_or_else(|| "N/A".to_string(), |v| format!("{:.1}%", v * 100.0))
+}
+
 fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
@@ -135,7 +139,7 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
                 format_clean_rate(summary.ok_files, summary.total_files),
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
-                summary.error_files,
+                summary.dirty_files,
                 summary.timeout_files,
                 summary.panic_files,
                 summary.nodekind_covered,
@@ -161,6 +165,23 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             format!(
                 "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds | `corpus_audit` |",
                 summary.nodekind_covered, summary.nodekind_total, pct, never_seen,
+            )
+        },
+    );
+
+    let recovery_row = metrics.project_corpus.as_ref().map_or_else(
+        || {
+            "| **Recovery salvage** | UNVERIFIED | run `just parser-audit` for recovery breakdown | `corpus_audit` |".to_string()
+        },
+        |summary| {
+            format!(
+                "| **Recovery salvage** | {} | dirty `{}`, structured-only `{}`, ERROR-node files `{}`, catastrophic `{}`, recovered nodes `{}` | `corpus_audit` |",
+                format_pct(summary.salvage_rate),
+                summary.dirty_files,
+                summary.structured_recovery_only_files,
+                summary.error_node_files,
+                summary.catastrophic_parse_failure_files,
+                summary.recovered_node_count,
             )
         },
     );
@@ -242,6 +263,12 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_RECOVERY_ROW -->",
+        "<!-- END: PARSER_RECOVERY_ROW -->",
+        &recovery_row,
+    )?;
     Ok(text)
 }
 
@@ -285,9 +312,14 @@ mod tests {
         let summary = super::super::super::corpus_audit::StatusSummary {
             total_files: 91,
             ok_files: 91,
-            error_files: 0,
+            dirty_files: 0,
+            structured_recovery_only_files: 0,
+            error_node_files: 0,
+            catastrophic_parse_failure_files: 0,
+            recovered_node_count: 0,
             timeout_files: 0,
             panic_files: 0,
+            salvage_rate: None,
             test_corpus_files: 69,
             perl_corpus_files: 22,
             nodekind_covered: 65,
@@ -307,6 +339,7 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_RECOVERY_ROW -->\nold\n<!-- END: PARSER_RECOVERY_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
@@ -334,6 +367,7 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_RECOVERY_ROW -->\nold\n<!-- END: PARSER_RECOVERY_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
@@ -383,6 +417,7 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_RECOVERY_ROW -->\nold\n<!-- END: PARSER_RECOVERY_ROW -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");

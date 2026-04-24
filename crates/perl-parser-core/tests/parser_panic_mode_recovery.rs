@@ -3,6 +3,7 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
+use perl_parser_core::error::ParseCloseoutClass;
 use perl_parser_core::{NodeKind, ParseResult, Parser};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
@@ -265,6 +266,24 @@ fn parser_ac9_performance_overhead_check() -> ParseResult<()> {
         assert!(statements.len() >= 3, "Should parse all statements");
     }
     Ok(())
+}
+
+#[test]
+fn closeout_class_marks_error_nodes_as_accuracy_issue() {
+    let candidates =
+        ["my @arr = (1, 2,\n", "my $x = (;\n", "sub f { my $x = ; ; ; }", "my $x = $obj->->foo;"];
+
+    for source in candidates {
+        let mut parser = Parser::new(source);
+        let output = parser.parse_with_recovery();
+        if output.closeout_class() == ParseCloseoutClass::HasErrorNodes {
+            assert!(output.error_node_count() > 0);
+            assert!(output.first_unrecovered_error_node_location().is_some());
+            return;
+        }
+    }
+
+    panic!("expected at least one candidate to yield unrecovered ERROR nodes");
 }
 
 // AC10: Test suite includes panic mode recovery scenarios

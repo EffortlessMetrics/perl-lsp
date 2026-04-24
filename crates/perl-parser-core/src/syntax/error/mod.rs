@@ -489,7 +489,7 @@ pub mod classifier;
 /// Error recovery strategies and traits for the Perl parser.
 pub mod recovery;
 
-use perl_ast::Node;
+use perl_ast::{Node, NodeKind};
 
 /// Structured output from parsing, combining AST with all diagnostics.
 ///
@@ -540,6 +540,19 @@ pub struct ParseOutput {
     /// LSP providers use this as a confidence signal: `0` means a clean parse,
     /// `> 0` means at least one synthetic repair was made.
     pub recovered_count: usize,
+}
+
+/// Per-file closeout classification used by parser accuracy metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseCloseoutClass {
+    /// No diagnostics and no `ERROR` nodes.
+    Clean,
+    /// Structured recovery diagnostics only (no unrecovered `ERROR` nodes).
+    StructuredRecoveryOnly,
+    /// Parse completed but left one or more unrecovered `ERROR` nodes in AST.
+    HasErrorNodes,
+    /// Parse failed catastrophically (no usable AST, non-recovery diagnostic).
+    CatastrophicFailure,
 }
 
 impl ParseOutput {
@@ -594,6 +607,46 @@ impl ParseOutput {
     /// Get the error count.
     pub fn error_count(&self) -> usize {
         self.diagnostics.len()
+    }
+
+    /// Count unrecovered `NodeKind::Error` nodes left in the AST.
+    pub fn error_node_count(&self) -> usize {
+        fn count(node: &Node) -> usize {
+            let here = usize::from(matches!(node.kind, NodeKind::Error { .. }));
+            here + node.children().into_iter().map(count).sum::<usize>()
+        }
+        count(&self.ast)
+    }
+
+    /// Return the byte offset of the first unrecovered `NodeKind::Error` node.
+    pub fn first_unrecovered_error_node_location(&self) -> Option<usize> {
+        fn first(node: &Node) -> Option<usize> {
+            if matches!(node.kind, NodeKind::Error { .. }) {
+                return Some(node.location.start);
+            }
+            for child in node.children() {
+                if let Some(location) = first(child) {
+                    return Some(location);
+                }
+            }
+            None
+        }
+        first(&self.ast)
+    }
+
+    /// Classify this parse for recovery-salvage closeout reporting.
+    pub fn closeout_class(&self) -> ParseCloseoutClass {
+        let error_node_count = self.error_node_count();
+        if self.terminated_early && self.ast.count_nodes() <= 1 {
+            return ParseCloseoutClass::CatastrophicFailure;
+        }
+        if error_node_count > 0 {
+            return ParseCloseoutClass::HasErrorNodes;
+        }
+        if self.recovered_count > 0 {
+            return ParseCloseoutClass::StructuredRecoveryOnly;
+        }
+        ParseCloseoutClass::Clean
     }
 }
 
