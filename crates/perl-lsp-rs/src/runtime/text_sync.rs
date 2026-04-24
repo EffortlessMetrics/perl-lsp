@@ -1409,6 +1409,58 @@ mod tests {
         );
     }
 
+    /// After a deletion the cumulative_shift is negative; a second edit that targets
+    /// text AFTER the deleted region must be correctly mapped back via checked_add
+    /// (the negative-shift branch of map_offset_to_original_space).
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_negative_shift_uses_checked_add() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        // Original: "abcde" (5 bytes, all ASCII).
+        let original = ropey::Rope::from_str("abcde");
+        let changes = vec![
+            // Edit 0: delete [1,3) → removes "bc", leaving evolving doc "ade".
+            // cumulative_shift becomes 0 - (3-1) = -2.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 3 },
+                }),
+                range_length: None,
+                text: String::new(),
+            },
+            // Edit 1: replace [1,2) on evolving "ade" (the 'd') with "D".
+            // evolving_start=1, evolving_end=2, cumulative_shift=-2.
+            // map_offset(1, -2) = 1.checked_add(2) = Some(3)  (in original-doc space: 'd' = byte 3).
+            // map_offset(2, -2) = 2.checked_add(2) = Some(4)  (in original-doc space: 'e' = byte 4).
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 2 },
+                }),
+                range_length: None,
+                text: "D".to_string(),
+            },
+        ];
+
+        let edit_set = build_incremental_edit_set(&original, &changes)
+            .expect("deletion batch followed by suffix edit should be mappable");
+        assert_eq!(edit_set.edits.len(), 2, "both edits should be in the set");
+
+        // Edit 0 maps 1..1 in original space (zero-length deletion start at byte 1 was already
+        // calculated with cumulative_shift=0).
+        assert_eq!(edit_set.edits[0].start_byte, 1);
+        assert_eq!(edit_set.edits[0].old_end_byte, 3);
+
+        // Edit 1: evolving [1,2) + cumulative_shift=-2 → original [3,4).
+        assert_eq!(
+            edit_set.edits[1].start_byte, 3,
+            "negative cumulative_shift must use checked_add to map back to original space"
+        );
+        assert_eq!(edit_set.edits[1].old_end_byte, 4);
+    }
+
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
     #[cfg(feature = "incremental")]
     #[test]
