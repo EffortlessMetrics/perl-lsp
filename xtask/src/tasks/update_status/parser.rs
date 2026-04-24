@@ -5,6 +5,7 @@
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
+use std::{cmp::Reverse, collections::BTreeMap};
 
 use color_eyre::eyre::Result;
 use regex::Regex;
@@ -24,6 +25,35 @@ pub(super) struct ParserMetrics {
     pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum FailureCluster {
+    TransliterationQuote,
+    DeclarationPackage,
+    HeredocDelimiter,
+    RecoveryOnly,
+    EncodingMultibyte,
+    Other,
+}
+
+impl FailureCluster {
+    fn label(self) -> &'static str {
+        match self {
+            Self::TransliterationQuote => "transliteration / quote parsing",
+            Self::DeclarationPackage => "declaration / package parsing",
+            Self::HeredocDelimiter => "heredoc / delimiter handling",
+            Self::RecoveryOnly => "recovery-only failures",
+            Self::EncodingMultibyte => "encoding / multibyte failures",
+            Self::Other => "other",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ClusterStats {
+    count: usize,
+    examples: Vec<(String, String)>,
 }
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
@@ -87,6 +117,125 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
 
 fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
+}
+
+fn classify_bucket(bucket: &str) -> FailureCluster {
+    let name = bucket.to_ascii_lowercase();
+    if name.contains("encoding")
+        || name.contains("unicode")
+        || name.contains("utf")
+        || name.contains("multibyte")
+        || name.contains("wide_char")
+    {
+        return FailureCluster::EncodingMultibyte;
+    }
+    if name.contains("heredoc")
+        || name.contains("delimiter")
+        || name.contains("unclosed_substitution")
+    {
+        return FailureCluster::HeredocDelimiter;
+    }
+    if name.contains("translit")
+        || name.contains("transliteration")
+        || name.contains("quote")
+        || name.contains("substitution")
+    {
+        return FailureCluster::TransliterationQuote;
+    }
+    if name.contains("package")
+        || name.contains("signature")
+        || name.contains("module")
+        || name.contains("subroutine")
+        || name.contains("expected_identifier")
+    {
+        return FailureCluster::DeclarationPackage;
+    }
+    if name.starts_with("expected_")
+        || name.starts_with("unexpected_")
+        || name.starts_with("unclosed_")
+        || name == "catastrophic_parse_failure"
+    {
+        return FailureCluster::RecoveryOnly;
+    }
+    FailureCluster::Other
+}
+
+fn collect_failure_clusters(metrics: &ParserMetrics) -> BTreeMap<FailureCluster, ClusterStats> {
+    let mut by_cluster: BTreeMap<FailureCluster, ClusterStats> = BTreeMap::new();
+
+    for report in [&metrics.system_receipt, &metrics.cpan_receipt].into_iter().flatten() {
+        for (bucket, count) in &report.first_error_buckets {
+            let cluster = classify_bucket(bucket);
+            let stats = by_cluster
+                .entry(cluster)
+                .or_insert_with(|| ClusterStats { count: 0, examples: Vec::new() });
+            stats.count += count;
+
+            if let Some(paths) = report.files_by_bucket.get(bucket) {
+                for path in paths.iter().take(3) {
+                    stats.examples.push((bucket.clone(), path.clone()));
+                }
+            }
+        }
+    }
+
+    for stats in by_cluster.values_mut() {
+        stats.examples.sort();
+        stats.examples.dedup();
+        if stats.examples.len() > 3 {
+            stats.examples.truncate(3);
+        }
+    }
+
+    by_cluster
+}
+
+fn render_failure_worklist(metrics: &ParserMetrics) -> String {
+    let clusters = collect_failure_clusters(metrics);
+    if clusters.is_empty() {
+        return "- No parser corpus failures were available from baseline receipts.".to_string();
+    }
+
+    let mut lines = vec![
+        "| Cluster | Files | Representative examples |".to_string(),
+        "| --- | ---: | --- |".to_string(),
+    ];
+
+    let mut rows: Vec<(FailureCluster, ClusterStats)> = clusters.into_iter().collect();
+    rows.sort_by_key(|(cluster, stats)| (Reverse(stats.count), *cluster));
+
+    for (cluster, stats) in rows {
+        let examples = if stats.examples.is_empty() {
+            "n/a".to_string()
+        } else {
+            stats
+                .examples
+                .iter()
+                .map(|(bucket, path)| format!("`{bucket}` → `{path}`"))
+                .collect::<Vec<_>>()
+                .join("<br>")
+        };
+        lines.push(format!("| {} | {} | {} |", cluster.label(), stats.count, examples));
+    }
+
+    lines.join("\n")
+}
+
+fn render_never_seen_nodekinds(metrics: &ParserMetrics) -> String {
+    let Some(summary) = metrics.project_corpus.as_ref() else {
+        return "- UNVERIFIED: live repo scan unavailable.".to_string();
+    };
+    if summary.nodekind_never_seen.is_empty() {
+        return "- None: all declared NodeKinds are represented in the project corpus.".to_string();
+    }
+
+    let list = summary
+        .nodekind_never_seen
+        .iter()
+        .map(|name| format!("`{name}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("- Missing NodeKinds ({}): {list}", summary.nodekind_never_seen.len())
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +391,18 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_FAILURE_WORKLIST -->",
+        "<!-- END: PARSER_FAILURE_WORKLIST -->",
+        &render_failure_worklist(metrics),
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->",
+        "<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->",
+        &render_never_seen_nodekinds(metrics),
+    )?;
     Ok(text)
 }
 
@@ -292,6 +453,12 @@ mod tests {
             perl_corpus_files: 22,
             nodekind_covered: 65,
             nodekind_total: 69,
+            nodekind_never_seen: vec![
+                "DereferenceExpression".to_string(),
+                "FormatStatement".to_string(),
+                "GivenStatement".to_string(),
+                "WhenStatement".to_string(),
+            ],
             ga_covered: 12,
             ga_total: 12,
         };
@@ -307,6 +474,8 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
@@ -334,6 +503,8 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
@@ -383,6 +554,8 @@ mod tests {
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
                         <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
@@ -391,6 +564,80 @@ mod tests {
             result.contains("10 pinned modules"),
             "strict-clean row missing pinned modules note"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_failure_worklist_and_never_seen_section() -> Result<()> {
+        use std::collections::BTreeMap;
+
+        let summary = super::super::super::corpus_audit::StatusSummary {
+            total_files: 91,
+            ok_files: 90,
+            error_files: 1,
+            timeout_files: 0,
+            panic_files: 0,
+            test_corpus_files: 69,
+            perl_corpus_files: 22,
+            nodekind_covered: 65,
+            nodekind_total: 69,
+            nodekind_never_seen: vec!["GivenStatement".to_string(), "WhenStatement".to_string()],
+            ga_covered: 12,
+            ga_total: 12,
+        };
+        let receipt = super::super::super::parser_corpus_sweep::SweepReport {
+            schema_version: "1".to_string(),
+            commit: "abc".to_string(),
+            timestamp: "2026-04-11T00:00:00Z".to_string(),
+            corpus_profile: "cpan".to_string(),
+            corpus_roots: vec![],
+            resolved_roots_count: 0,
+            perl_version: "5.038".to_string(),
+            total_files: 10,
+            files_unreadable: 0,
+            clean_files: 8,
+            files_with_errors: 2,
+            total_error_nodes: 2,
+            first_error_buckets: BTreeMap::from([
+                ("unexpected_token_package".to_string(), 1),
+                ("unclosed_substitution_delimiter".to_string(), 1),
+            ]),
+            files_by_bucket: BTreeMap::from([
+                (
+                    "unexpected_token_package".to_string(),
+                    vec!["target/cpan-corpus/lib/perl5/Foo/Bar.pm".to_string()],
+                ),
+                (
+                    "unclosed_substitution_delimiter".to_string(),
+                    vec!["target/cpan-corpus/lib/perl5/Baz.pm".to_string()],
+                ),
+            ]),
+            file_results: vec![],
+            elapsed_secs: 1.0,
+            phase_timings: None,
+            median_error_density_per_1k_loc: None,
+            slowest_files: vec![],
+        };
+        let metrics = ParserMetrics {
+            syntax_sections: 611,
+            system_receipt: None,
+            cpan_receipt: Some(receipt),
+            project_corpus: Some(summary),
+            common_corpus_receipt: None,
+            common_corpus_pinned: 10,
+        };
+        let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
+                        <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
+                        <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
+                        <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_FAILURE_WORKLIST -->\nold\n<!-- END: PARSER_FAILURE_WORKLIST -->\n\
+                        <!-- BEGIN: PARSER_NEVER_SEEN_NODEKINDS -->\nold\n<!-- END: PARSER_NEVER_SEEN_NODEKINDS -->\n\
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+        let result = generate_parser_status(&metrics, template)?;
+        assert!(result.contains("declaration / package parsing"));
+        assert!(result.contains("heredoc / delimiter handling"));
+        assert!(result.contains("GivenStatement"));
+        assert!(result.contains("WhenStatement"));
         Ok(())
     }
 }
