@@ -68,6 +68,7 @@ pub mod analysis;
 pub use analysis::class_model;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::declaration;
+pub use analysis::import_surface;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;
 pub use analysis::scope_analyzer;

@@ -6,6 +6,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
+use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -1399,43 +1400,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
     }
 
-    fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
-        match (module, tag) {
-            // POSIX tag sets commonly used in system scripts.
-            ("POSIX", ":sys_wait_h") => {
-                &["WEXITSTATUS", "WIFEXITED", "WIFSIGNALED", "WIFSTOPPED", "WTERMSIG"]
-            }
-            ("POSIX", ":fcntl_h") => &["F_GETFD", "F_SETFD", "F_GETFL", "F_SETFL", "FD_CLOEXEC"],
-            ("POSIX", ":termios_h") => {
-                &["B9600", "B19200", "B38400", "TCSANOW", "TCSADRAIN", "TCSAFLUSH"]
-            }
-            // File::Find exports.
-            ("File::Find", ":find") => &["find", "finddepth"],
-            // Fcntl exports.
-            ("Fcntl", ":seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
-            ("Fcntl", ":lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
-            // Encode exports.
-            ("Encode", ":fallback") => &[
-                "FB_DEFAULT",
-                "FB_CROAK",
-                "FB_QUIET",
-                "FB_WARN",
-                "FB_PERLQQ",
-                "FB_HTMLCREF",
-                "FB_XMLCREF",
-            ],
-            _ => &[],
-        }
-    }
-
-    fn tag_imports_symbol(module: &str, import_token: &str, symbol_name: &str) -> bool {
-        if !import_token.starts_with(':') {
-            return false;
-        }
-        export_tag_members(module, import_token).contains(&symbol_name)
-    }
-
     fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        let import_surface = crate::analysis::import_surface::ImportSurface::from_ast(ast);
+        if let Some(module) = import_surface.first_source_package_for(symbol_name) {
+            return Some(module.to_string());
+        }
+
         /// Extract the module name from a `require Module;` statement node.
         ///
         /// Matches both `require Foo::Bar` (Identifier arg) and
@@ -1517,7 +1487,10 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                     // Strip surrounding single/double quotes that some code
                     // paths leave in the value (e.g. qw in quotes.rs).
                     let bare = value.trim_matches('\'').trim_matches('"');
-                    bare == symbol || tag_imports_symbol(module, bare, symbol)
+                    bare == symbol
+                        || (bare.starts_with(':')
+                            && resolve_known_export_tag(module, bare)
+                                .is_some_and(|names| names.contains(&symbol)))
                 }
                 NodeKind::Identifier { name } => {
                     if name == symbol {
@@ -1530,9 +1503,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                             .trim_start_matches("qw")
                             .trim_start_matches(|c: char| "([{/<|!".contains(c))
                             .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                        return content
-                            .split_whitespace()
-                            .any(|tok| tok == symbol || tag_imports_symbol(module, tok, symbol));
+                        return content.split_whitespace().any(|tok| {
+                            tok == symbol
+                                || (tok.starts_with(':')
+                                    && resolve_known_export_tag(module, tok)
+                                        .is_some_and(|names| names.contains(&symbol)))
+                        });
                     }
                     false
                 }
@@ -1632,46 +1608,6 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
 
         fn find(node: &Node, name: &str) -> Option<String> {
-            if let NodeKind::Use { module, args, .. } = &node.kind {
-                // Skip `use constant` — constants are not import-list symbols
-                if module == "constant" {
-                    // Fall through to children
-                } else {
-                    for arg in args {
-                        if arg == name {
-                            return Some(module.clone());
-                        }
-                        if tag_imports_symbol(module, arg, name) {
-                            return Some(module.clone());
-                        }
-                        if arg.starts_with("qw") {
-                            let content = arg
-                                .trim_start_matches("qw")
-                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
-                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
-                            for import_token in content.split_whitespace() {
-                                if import_token == name
-                                    || tag_imports_symbol(module, import_token, name)
-                                {
-                                    return Some(module.clone());
-                                }
-                            }
-                        } else {
-                            // Parenthesized import list: use Foo ('bar', 'baz')
-                            // The parser emits each token as a separate arg including commas
-                            // and string literals with their surrounding quotes.
-                            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
-                            if bare == name {
-                                return Some(module.clone());
-                            }
-                            if tag_imports_symbol(module, bare, name) {
-                                return Some(module.clone());
-                            }
-                        }
-                    }
-                }
-            }
-
             // Scan block/program statement lists for `require M; M->import(sym)` patterns.
             let stmts = match &node.kind {
                 NodeKind::Program { statements } => Some(statements.as_slice()),
