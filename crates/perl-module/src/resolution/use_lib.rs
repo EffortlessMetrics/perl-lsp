@@ -38,9 +38,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+    for statement in split_perl_statements(source) {
+        if let Some(rest) = strip_use_lib_prefix(statement) {
             extract_paths_from_args(rest, &mut paths);
         }
     }
@@ -53,9 +52,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = strip_use_lib_prefix(trimmed) {
+    for statement in split_perl_statements(source) {
+        if let Some(rest) = strip_use_lib_prefix(statement) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
             if !paths.is_empty() {
@@ -64,7 +62,7 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
             continue;
         }
 
-        if let Some(rest) = strip_no_lib_prefix(trimmed) {
+        if let Some(rest) = strip_no_lib_prefix(statement) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
             if !paths.is_empty() {
@@ -161,6 +159,49 @@ pub fn resolve_use_lib_paths_from_source_at_offset(
         }
     }
     resolved
+}
+
+
+fn split_perl_statements(source: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut start = 0;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+
+    for (index, ch) in source.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_single || in_double => {
+                escaped = true;
+            }
+            '\'' if !in_double => {
+                in_single = !in_single;
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+            }
+            ';' if !in_single && !in_double => {
+                let statement = source[start..index].trim();
+                if !statement.is_empty() {
+                    statements.push(statement);
+                }
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+
+    let trailing = source[start..].trim();
+    if !trailing.is_empty() {
+        statements.push(trailing);
+    }
+
+    statements
 }
 
 fn strip_use_lib_prefix(trimmed: &str) -> Option<&str> {
