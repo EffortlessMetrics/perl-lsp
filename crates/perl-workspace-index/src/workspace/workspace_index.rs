@@ -989,6 +989,19 @@ pub struct Location {
     pub range: Range,
 }
 
+/// Outcome for a symbol safe-delete preflight check.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum SafeDeletePreflight {
+    /// No external references were found; symbol can be safely deleted.
+    SafeToDelete,
+    /// External references were found and should block delete.
+    Blocked {
+        /// Cross-file reference locations that still point at the symbol.
+        external_references: Vec<Location>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1974,6 +1987,46 @@ impl WorkspaceIndex {
         }
 
         seen.len()
+    }
+
+    /// Preflight a symbol delete by checking for cross-file references.
+    ///
+    /// Returns [`SafeDeletePreflight::Blocked`] when references exist in files
+    /// other than the symbol's defining file URI.
+    pub fn safe_delete_symbol_preflight(
+        &self,
+        symbol_name: &str,
+        definition_uri: &str,
+    ) -> SafeDeletePreflight {
+        let definition_uri_key = uri_key(definition_uri);
+        let mut external_references: Vec<Location> = self
+            .find_references(symbol_name)
+            .into_iter()
+            .filter(|loc| uri_key(&loc.uri) != definition_uri_key)
+            .collect();
+
+        external_references.sort_by(|left, right| {
+            (
+                left.uri.as_str(),
+                left.range.start.line,
+                left.range.start.column,
+                left.range.end.line,
+                left.range.end.column,
+            )
+                .cmp(&(
+                    right.uri.as_str(),
+                    right.range.start.line,
+                    right.range.start.column,
+                    right.range.end.line,
+                    right.range.end.column,
+                ))
+        });
+
+        if external_references.is_empty() {
+            SafeDeletePreflight::SafeToDelete
+        } else {
+            SafeDeletePreflight::Blocked { external_references }
+        }
     }
 
     fn is_qualified_variant_of(candidate: &str, bare_symbol: &str) -> bool {
