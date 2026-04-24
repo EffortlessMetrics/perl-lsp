@@ -59,7 +59,6 @@ use perl_parser_core::{
     edit::{Edit, EditSet},
     error::ParseResult,
     parser::Parser,
-    position::Range,
 };
 use std::collections::HashMap;
 
@@ -848,6 +847,12 @@ impl IncrementalParserV2 {
         shift
     }
 
+    fn edit_original_range(&self, edit: &Edit, cumulative_shift: isize) -> (usize, usize) {
+        let original_start = (edit.start_byte as isize - cumulative_shift) as usize;
+        let original_end = (edit.old_end_byte as isize - cumulative_shift) as usize;
+        (original_start, original_end)
+    }
+
     /// Ensure position falls on a valid Unicode character boundary
     ///
     /// Adjusts position to the nearest valid character boundary if needed,
@@ -943,21 +948,41 @@ impl IncrementalParserV2 {
         // Calculate how much the content of this node changed by examining
         // edits that fall within the node's original range.
         let mut delta = 0;
-        let mut shift = 0;
+        let mut cumulative_shift = 0;
         for edit in self.pending_edits.edits() {
-            let start = (edit.start_byte as isize - shift) as usize;
-            let end = (edit.old_end_byte as isize - shift) as usize;
+            let (start, end) = self.edit_original_range(edit, cumulative_shift);
             if start >= node.location.start && end <= node.location.end {
                 delta += edit.byte_shift();
             }
-            shift += edit.byte_shift();
+            cumulative_shift += edit.byte_shift();
         }
         delta
     }
 
     fn is_node_affected(&self, node: &Node) -> bool {
-        let node_range = Range::from(node.location);
-        self.pending_edits.affects_range(&node_range)
+        let node_start = node.location.start;
+        let node_end = node.location.end;
+
+        let mut cumulative_shift = 0;
+        for edit in self.pending_edits.edits() {
+            let (edit_start, edit_end) = self.edit_original_range(edit, cumulative_shift);
+
+            // Pure insertions have an empty old range, so treat them as affecting
+            // the immediate insertion boundary to keep reuse safe.
+            let overlaps = if edit_start == edit_end {
+                edit_start >= node_start && edit_start <= node_end
+            } else {
+                edit_start < node_end && edit_end > node_start
+            };
+
+            if overlaps {
+                return true;
+            }
+
+            cumulative_shift += edit.byte_shift();
+        }
+
+        false
     }
 
     fn clone_with_shifted_positions(&self, node: &Node, shift: isize) -> Node {
@@ -2122,6 +2147,86 @@ if ($condition) {
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
         assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    fn queue_replacement_edit(
+        parser: &mut IncrementalParserV2,
+        current_source: &str,
+        old_text: &str,
+        new_text: &str,
+    ) -> ParseResult<String> {
+        let start =
+            current_source.find(old_text).ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let old_end = start + old_text.len();
+        let new_end = start + new_text.len();
+
+        parser.edit(Edit::new(
+            start,
+            old_end,
+            new_end,
+            Position::new(start, 1, (start + 1) as u32),
+            Position::new(old_end, 1, (old_end + 1) as u32),
+            Position::new(new_end, 1, (new_end + 1) as u32),
+        ));
+
+        let mut updated = String::with_capacity(
+            current_source.len().saturating_sub(old_text.len()).saturating_add(new_text.len()),
+        );
+        updated.push_str(&current_source[..start]);
+        updated.push_str(new_text);
+        updated.push_str(&current_source[old_end..]);
+        Ok(updated)
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_literal_edits_reuse_shifted_nodes() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $a = 10; my $b = 20; my $c = 30;";
+        parser.parse(source1)?;
+
+        let source2 = queue_replacement_edit(&mut parser, source1, "10", "1000")?;
+        let source3 = queue_replacement_edit(&mut parser, &source2, "30", "3")?;
+        let incremental = parser.parse(&source3)?;
+        let full = Parser::new(&source3).parse()?;
+
+        assert_eq!(format!("{incremental:?}"), format!("{full:?}"));
+        assert!(parser.reused_nodes > 0, "batch literal edits should reuse unaffected nodes");
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_mixed_whitespace_and_identifier_edits_reuse_shifted_nodes() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $foo = 1;\nmy $bar = 2;";
+        parser.parse(source1)?;
+
+        let source2 = queue_replacement_edit(&mut parser, source1, "my $foo", "my   $foo")?;
+        let source3 = queue_replacement_edit(&mut parser, &source2, "$bar", "$bar_value")?;
+        let incremental = parser.parse(&source3)?;
+        let full = Parser::new(&source3).parse()?;
+
+        assert_eq!(format!("{incremental:?}"), format!("{full:?}"));
+        assert!(
+            parser.reused_nodes > 0,
+            "mixed whitespace/identifier batch edits should still reuse unaffected nodes"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_multibyte_edit_shifts_unaffected_nodes_safely() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $alpha = 1;\nmy $msg = \"héllo\";\nmy $omega = 3;";
+        parser.parse(source1)?;
+
+        let source2 = queue_replacement_edit(&mut parser, source1, "héllo", "你好世界")?;
+        let source3 = queue_replacement_edit(&mut parser, &source2, "$omega", "$om")?;
+        let incremental = parser.parse(&source3)?;
+        let full = Parser::new(&source3).parse()?;
+
+        assert_eq!(format!("{incremental:?}"), format!("{full:?}"));
+        assert!(parser.reused_nodes > 0, "multibyte batch edit should preserve reusable nodes");
         Ok(())
     }
 }
