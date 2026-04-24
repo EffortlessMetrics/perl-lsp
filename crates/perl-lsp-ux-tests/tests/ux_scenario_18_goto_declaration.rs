@@ -26,8 +26,17 @@ my $result = inc($value);
 print "$result\n";
 "#;
 
+fn binary_available() -> bool {
+    perl_lsp_ux_tests::resolve_binary().is_ok()
+}
+
 #[test]
 fn scenario_18_declaration_request_does_not_error() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_18 declaration: perl-lsp binary not found");
+        return Ok(());
+    }
+
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 
@@ -46,6 +55,11 @@ fn scenario_18_declaration_request_does_not_error() -> Result<()> {
 
 #[test]
 fn scenario_18_declaration_result_is_location_or_empty() -> Result<()> {
+    if !binary_available() {
+        eprintln!("SKIP scenario_18 declaration: perl-lsp binary not found");
+        return Ok(());
+    }
+
     let harness =
         UxHarness::new(ScenarioConfig::default().with_file("declaration.pl", DECLARATION_FIXTURE))?;
 

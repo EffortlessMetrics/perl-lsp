@@ -63,14 +63,9 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
         "Expected at least one diagnostic for BROKEN_SOURCE (unterminated expression); \
          got none — check the fixture content"
     );
-    // Drain so the next wait_for_diagnostics sees only the post-edit notification.
-    harness.collect_notifications();
-
-    harness
-        .change_file_full("edit_diag.pl", FIXED_SOURCE)
+    let updated = harness
+        .apply_edit_and_collect_diagnostics("edit_diag.pl", FIXED_SOURCE, Duration::from_secs(5))
         .expect("didChange full document should succeed");
-
-    let updated = harness.wait_for_diagnostics("edit_diag.pl", Duration::from_secs(5));
     for diag in &updated {
         assert!(
             diag.get("range").is_some() && diag.get("message").is_some(),

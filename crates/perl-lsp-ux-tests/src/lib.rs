@@ -57,6 +57,7 @@ pub use workspace::FakeWorkspace;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -157,6 +158,22 @@ pub struct UxHarness {
     document_versions: Mutex<HashMap<String, i32>>,
 }
 
+/// 0-based UTF-16 cursor position used by LSP text document requests.
+#[derive(Debug, Clone, Copy)]
+pub struct CursorPosition {
+    /// Line number (0-based).
+    pub line: u32,
+    /// Character offset in UTF-16 code units (0-based).
+    pub character: u32,
+}
+
+impl CursorPosition {
+    /// Construct a cursor position.
+    pub fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
 impl UxHarness {
     /// Spawn a fresh LSP server and set up a clean workspace.
     pub fn new(config: ScenarioConfig) -> Result<Self> {
@@ -188,6 +205,11 @@ impl UxHarness {
         self.client.did_open(&uri, content)?;
         self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
         Ok(())
+    }
+
+    /// Open a fixture file in the temporary workspace and send `didOpen`.
+    pub fn open_fixture(&self, relative_path: &str, content: &str) -> Result<()> {
+        self.open_file(relative_path, content)
     }
 
     /// Apply a full-document text replacement and send `textDocument/didChange`.
@@ -223,12 +245,17 @@ impl UxHarness {
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).
     /// Returns `Err` only if the server returned a JSON-RPC error or timed out.
     pub fn hover(&self, relative_path: &str, line: u32, character: u32) -> Result<Option<Value>> {
+        self.hover_at(relative_path, CursorPosition::new(line, character))
+    }
+
+    /// Request hover information at a cursor position.
+    pub fn hover_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Option<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/hover",
             json!({
                 "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character }
+                "position": { "line": cursor.line, "character": cursor.character }
             }),
             self.config.timeout,
         )?;
@@ -240,12 +267,17 @@ impl UxHarness {
 
     /// Request completion at `(line, character)`.
     pub fn completion(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        self.completion_at(relative_path, CursorPosition::new(line, character))
+    }
+
+    /// Request completion at a cursor position.
+    pub fn completion_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/completion",
             json!({
                 "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character },
+                "position": { "line": cursor.line, "character": cursor.character },
                 "context": { "triggerKind": 1 }
             }),
             self.config.timeout,
@@ -436,12 +468,17 @@ impl UxHarness {
 
     /// Request go-to-definition.
     pub fn definition(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        self.definition_at(relative_path, CursorPosition::new(line, character))
+    }
+
+    /// Request go-to-definition at a cursor position.
+    pub fn definition_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/definition",
             json!({
                 "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character }
+                "position": { "line": cursor.line, "character": cursor.character }
             }),
             self.config.timeout,
         )?;
@@ -468,12 +505,21 @@ impl UxHarness {
         line: u32,
         character: u32,
     ) -> Result<Vec<Value>> {
+        self.declaration_at(relative_path, CursorPosition::new(line, character))
+    }
+
+    /// Request go-to-declaration at a cursor position.
+    pub fn declaration_at(
+        &self,
+        relative_path: &str,
+        cursor: CursorPosition,
+    ) -> Result<Vec<Value>> {
         let uri = self.workspace.uri(relative_path);
         let resp = self.client.request(
             "textDocument/declaration",
             json!({
                 "textDocument": { "uri": uri },
-                "position": { "line": line, "character": character }
+                "position": { "line": cursor.line, "character": cursor.character }
             }),
             self.config.timeout,
         )?;
@@ -491,6 +537,55 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Request references at a cursor position.
+    pub fn references_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": cursor.line, "character": cursor.character },
+                "context": { "includeDeclaration": true }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
+    /// Apply a full-document edit and collect the next diagnostics update.
+    pub fn apply_edit_and_collect_diagnostics(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        timeout: Duration,
+    ) -> Result<Vec<Value>> {
+        self.collect_notifications();
+        self.change_file_full(relative_path, updated_content)?;
+        Ok(self.wait_for_diagnostics(relative_path, timeout))
+    }
+
+    /// Normalize URIs/ranges and compare the response to an expected JSON value.
+    pub fn assert_normalized_response_eq(&self, actual: &Value, expected: &Value) {
+        let normalized_actual = normalize_value(actual, self.workspace.dir.path());
+        let normalized_expected = normalize_value(expected, self.workspace.dir.path());
+        assert_eq!(
+            normalized_actual, normalized_expected,
+            "normalized response mismatch\nactual: {normalized_actual:#}\nexpected: {normalized_expected:#}"
+        );
     }
 
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
@@ -666,4 +761,44 @@ pub fn find_perltidy() -> Option<String> {
 /// Utility: find `perlcritic` on PATH, returning its path or `None`.
 pub fn find_perlcritic() -> Option<String> {
     which::which("perlcritic").ok().map(|p| p.to_string_lossy().to_string())
+}
+
+fn normalize_value(value: &Value, workspace_root: &Path) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(
+            items.iter()
+                .map(|item| normalize_value(item, workspace_root))
+                .collect(),
+        ),
+        Value::Object(map) => {
+            let mut normalized = serde_json::Map::new();
+            for (key, item) in map {
+                if key == "uri" || key.ends_with("Uri") {
+                    if let Some(uri) = item.as_str() {
+                        normalized.insert(key.clone(), Value::String(normalize_uri(uri, workspace_root)));
+                    } else {
+                        normalized.insert(key.clone(), normalize_value(item, workspace_root));
+                    }
+                } else {
+                    normalized.insert(key.clone(), normalize_value(item, workspace_root));
+                }
+            }
+            Value::Object(normalized)
+        }
+        _ => value.clone(),
+    }
+}
+
+fn normalize_uri(uri: &str, workspace_root: &Path) -> String {
+    if let Ok(url) = url::Url::parse(uri)
+        && url.scheme() == "file"
+        && let Ok(path) = url.to_file_path()
+    {
+        if let Ok(relative) = path.strip_prefix(workspace_root) {
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            return format!("$WORKSPACE/{}", relative.trim_start_matches('/'));
+        }
+        return path.to_string_lossy().replace('\\', "/");
+    }
+    uri.replace('\\', "/")
 }

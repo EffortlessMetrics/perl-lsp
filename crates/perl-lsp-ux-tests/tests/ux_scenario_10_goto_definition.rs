@@ -13,7 +13,8 @@
 //!   pointing back into that file.
 //! - No crash signatures after the request.
 
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{CursorPosition, ScenarioConfig, UxHarness};
+use serde_json::json;
 use std::time::Duration;
 
 fn binary_available() -> bool {
@@ -80,21 +81,18 @@ fn scenario_10_definition_result_is_location_or_empty() {
 
     std::thread::sleep(Duration::from_millis(500));
 
-    let defs = harness.definition("greet.pl", 8, 0).expect("definition must not error");
+    let defs = harness
+        .definition_at("greet.pl", CursorPosition::new(8, 0))
+        .expect("definition must not error");
 
     // If results are returned they must be well-formed Location objects.
     for loc in &defs {
-        assert!(
-            loc.get("uri").is_some() && loc.get("range").is_some(),
-            "Definition result must have 'uri' and 'range' fields, got: {:?}",
-            loc
-        );
-        // The location must point to our file (not some unrelated URI).
-        let uri = loc["uri"].as_str().unwrap_or("");
-        assert!(
-            uri.ends_with("greet.pl"),
-            "Definition location should point to greet.pl, got uri={:?}",
-            uri
+        harness.assert_normalized_response_eq(
+            loc,
+            &json!({
+                "uri": "$WORKSPACE/greet.pl",
+                "range": loc["range"].clone(),
+            }),
         );
     }
 
