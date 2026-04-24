@@ -3,6 +3,42 @@
 use super::*;
 
 impl DebugAdapter {
+    fn validate_evaluate_expression(expression: &str) -> Option<String> {
+        if let Some(error) = validate_safe_expression(expression) {
+            return Some(error);
+        }
+
+        // Re-run through the shared SafeEvaluator microcrate to keep evaluation
+        // policy aligned with crate-level DAP security logic.
+        static SAFE_EVALUATOR: std::sync::LazyLock<SafeEvaluator> =
+            std::sync::LazyLock::new(SafeEvaluator::new);
+        SAFE_EVALUATOR.validate(expression).err().map(|error| error.to_string())
+    }
+
+    fn classify_evaluate_error_from_lines(lines: &[String]) -> Option<String> {
+        for line in lines.iter().rev() {
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
+            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+                continue;
+            }
+
+            if let Some(re) = error_re()
+                && re.is_match(text)
+            {
+                return Some(format!("Evaluate failed: {text}"));
+            }
+
+            if let Some(re) = exception_re()
+                && re.is_match(text)
+            {
+                return Some(format!("Evaluate exception: {text}"));
+            }
+        }
+
+        None
+    }
+
     /// Handle evaluate request with policy validation and timeout enforcement.
     ///
     /// AC10.1: Evaluates expressions in stack frame context
@@ -58,32 +94,18 @@ impl DebugAdapter {
             // This is admission control, not a real sandbox.
             let allow_side_effects = args.allow_side_effects.unwrap_or(false);
 
-            // Validate expression safety if side effects are not allowed
-            if !allow_side_effects {
-                if let Some(error) = validate_safe_expression(expression) {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "evaluate".to_string(),
-                        body: None,
-                        message: Some(error),
-                    };
-                }
-
-                // Re-run through microcrate validator to keep evaluation policy aligned
-                // with shared DAP security logic.
-                let evaluator = SafeEvaluator::new();
-                if let Err(error) = evaluator.validate(expression) {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "evaluate".to_string(),
-                        body: None,
-                        message: Some(error.to_string()),
-                    };
-                }
+            // Validate expression safety if side effects are not allowed.
+            if !allow_side_effects
+                && let Some(error) = Self::validate_evaluate_expression(expression)
+            {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some(error),
+                };
             }
         }
 
@@ -149,32 +171,51 @@ impl DebugAdapter {
             self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
         });
 
-        let parsed = framed_lines
-            .as_ref()
-            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-            .or_else(|| self.parse_evaluate_result_from_output(expression));
+        let parsed = if let Some(lines) = framed_lines.as_ref() {
+            // Prefer deterministic, per-request framed output and only fall back
+            // to a raw-line rendering for that same framed payload.
+            Self::parse_evaluate_result_from_lines(lines, expression, false)
+                .or_else(|| Self::parse_evaluate_result_from_lines(lines, expression, true))
+        } else {
+            // If framing failed, fall back to recent output to keep behavior
+            // backwards compatible with older debugger transports.
+            self.parse_evaluate_result_from_output(expression)
+        };
 
-        let Some((result, result_type)) = parsed else {
+        if let Some((result, result_type)) = parsed {
+            let eval_body =
+                EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "evaluate".to_string(),
+                body: serde_json::to_value(&eval_body).ok(),
+                message: None,
+            };
+        }
+
+        if let Some(lines) = framed_lines.as_ref()
+            && let Some(message) = Self::classify_evaluate_error_from_lines(lines)
+        {
             return DapMessage::Response {
                 seq,
                 request_seq,
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some(format!("evaluate timed out after {timeout_ms}ms")),
+                message: Some(message),
             };
-        };
-
-        let eval_body =
-            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+        }
 
         DapMessage::Response {
             seq,
             request_seq,
-            success: true,
+            success: false,
             command: "evaluate".to_string(),
-            body: serde_json::to_value(&eval_body).ok(),
-            message: None,
+            body: None,
+            message: Some(format!("evaluate timed out after {timeout_ms}ms")),
         }
     }
 

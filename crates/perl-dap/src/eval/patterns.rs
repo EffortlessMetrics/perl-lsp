@@ -120,12 +120,6 @@ pub const DANGEROUS_OPERATIONS: &[&str] = &[
     "shmctl",
 ];
 
-/// Assignment operators that indicate mutation
-pub const ASSIGNMENT_OPERATORS: &[&str] = &[
-    "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=", "||=",
-    "//=",
-];
-
 /// Compiled regex for dangerous operations
 ///
 /// Pattern matches word boundaries around operation names.
@@ -140,6 +134,16 @@ pub static DANGEROUS_OPS_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 pub static REGEX_MUTATION_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
     Regex::new(r"\b(?:s|tr|y)[^\w\s]")
+});
+
+/// Compiled regex for assignment-like operator tokens.
+///
+/// This allows the validator to distinguish true assignment operators from
+/// read-only comparisons like `==`, `!=`, `<=`, and `>=`.
+pub static ASSIGNMENT_OPS_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
+    // Tokenize operator runs and let the validator decide which tokens are
+    // true assignment operators vs read-only comparisons.
+    Regex::new(r"([!~^&|+\-*/%=<>]+)")
 });
 
 #[cfg(test)]

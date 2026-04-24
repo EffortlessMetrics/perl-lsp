@@ -210,7 +210,9 @@ pub(super) fn validate_safe_expression(expression: &str) -> Option<String> {
 
     // Check for dynamic subroutine calls &{...}
     // This blocks tricks like &{"sys"."tem"}("ls")
-    if let Some(re) = deref_re() {
+    if expression.contains("&{")
+        && let Some(re) = deref_re()
+    {
         if re.is_match(expression) {
             return Some(
                 "Safe evaluation mode: dynamic subroutine calls (&{...}) not allowed (use allowSideEffects: true)"
@@ -221,7 +223,9 @@ pub(super) fn validate_safe_expression(expression: &str) -> Option<String> {
 
     // Check for glob operations <*...> (anywhere in expression)
     // This blocks filesystem access via globs
-    if let Some(re) = glob_re() {
+    if expression.contains("<*")
+        && let Some(re) = glob_re()
+    {
         if re.is_match(expression) {
             return Some(
                 "Safe evaluation mode: glob operations (<*...>) not allowed (use allowSideEffects: true)"

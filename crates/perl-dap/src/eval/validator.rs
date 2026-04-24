@@ -4,7 +4,7 @@
 //! operations in Perl expressions during debug evaluation. It does not sandbox
 //! the interpreter.
 
-use super::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
+use super::patterns::{ASSIGNMENT_OPS_RE, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
 
 /// Error type for unsafe expression detection
 #[derive(Debug, Clone, thiserror::Error)]
@@ -83,10 +83,24 @@ impl SafeEvaluator {
             return Err(ValidationError::Backticks);
         }
 
-        // Check for assignment operators
-        for op in ASSIGNMENT_OPERATORS {
-            if expression.contains(op) {
-                return Err(ValidationError::AssignmentOperator(op.to_string()));
+        // Check for assignment operators.
+        // Uses token-aware matching to avoid flagging read-only comparisons
+        // such as `==`, `!=`, `<=`, and `>=`.
+        if let Some(re) = ASSIGNMENT_OPS_RE.as_ref().ok() {
+            for mat in re.find_iter(expression) {
+                let op = mat.as_str();
+                let start = mat.start();
+                if is_in_single_quotes(expression, start) {
+                    continue;
+                }
+
+                match op {
+                    "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "&=" | "|=" | "^="
+                    | "<<=" | ">>=" | "&&=" | "||=" | "//=" | "x=" => {
+                        return Err(ValidationError::AssignmentOperator(op.to_string()));
+                    }
+                    _ => {}
+                }
             }
         }
 
