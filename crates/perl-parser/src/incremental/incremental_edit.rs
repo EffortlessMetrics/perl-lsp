@@ -75,6 +75,15 @@ pub struct IncrementalEditSet {
     pub edits: Vec<IncrementalEdit>,
 }
 
+/// Validation failures for incremental edit batches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IncrementalEditSetValidationError {
+    /// An edit had a backward range (`start_byte > old_end_byte`).
+    BackwardRange { edit_index: usize, start_byte: usize, old_end_byte: usize },
+    /// Two edits overlap after normalization.
+    OverlappingEdits { first_edit_index: usize, second_edit_index: usize },
+}
+
 impl IncrementalEditSet {
     /// Create a new empty edit set
     pub fn new() -> Self {
@@ -93,7 +102,7 @@ impl IncrementalEditSet {
 
     /// Sort edits in reverse order (for applying from end to start)
     pub fn sort_reverse(&mut self) {
-        self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        self.edits.sort_by(Self::reverse_application_order);
     }
 
     /// Check if the edit set is empty
@@ -106,6 +115,64 @@ impl IncrementalEditSet {
         self.edits.iter().map(|e| e.byte_shift()).sum()
     }
 
+    /// Build a deterministically ordered copy for reverse application (end to start).
+    pub fn normalized_for_reverse_application(&self) -> Self {
+        let mut edits = self.edits.clone();
+        edits.sort_by(Self::reverse_application_order);
+        Self { edits }
+    }
+
+    /// Normalize and validate a batch of edits.
+    ///
+    /// The returned set is sorted for reverse application order.
+    ///
+    /// If `allow_overlapping` is `false`, overlapping edits are rejected.
+    /// If `filter_no_ops` is `true`, strictly obvious no-ops are removed.
+    pub fn normalize_and_validate(
+        &self,
+        allow_overlapping: bool,
+        filter_no_ops: bool,
+    ) -> Result<Self, IncrementalEditSetValidationError> {
+        let mut indexed_edits = Vec::with_capacity(self.edits.len());
+
+        for (edit_index, edit) in self.edits.iter().enumerate() {
+            if edit.start_byte > edit.old_end_byte {
+                return Err(IncrementalEditSetValidationError::BackwardRange {
+                    edit_index,
+                    start_byte: edit.start_byte,
+                    old_end_byte: edit.old_end_byte,
+                });
+            }
+
+            let should_keep = !(filter_no_ops
+                && edit.start_byte == edit.old_end_byte
+                && edit.new_text.is_empty());
+            if should_keep {
+                indexed_edits.push((edit_index, edit.clone()));
+            }
+        }
+
+        if !allow_overlapping {
+            let mut forward_order = indexed_edits.clone();
+            forward_order.sort_by(Self::forward_validation_order);
+
+            for pair in forward_order.windows(2) {
+                if let [previous, current] = pair
+                    && previous.1.old_end_byte > current.1.start_byte
+                {
+                    return Err(IncrementalEditSetValidationError::OverlappingEdits {
+                        first_edit_index: previous.0,
+                        second_edit_index: current.0,
+                    });
+                }
+            }
+        }
+
+        indexed_edits.sort_by(Self::indexed_reverse_application_order);
+        let edits = indexed_edits.into_iter().map(|(_, edit)| edit).collect();
+        Ok(Self { edits })
+    }
+
     /// Apply edits to a string
     pub fn apply_to_string(&self, source: &str) -> String {
         if self.edits.is_empty() {
@@ -113,8 +180,7 @@ impl IncrementalEditSet {
         }
 
         // Sort edits in reverse order to apply from end to start
-        let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        let sorted_edits = self.normalized_for_reverse_application().edits;
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
@@ -133,6 +199,42 @@ impl IncrementalEditSet {
         }
 
         result
+    }
+
+    fn reverse_application_order(
+        left: &IncrementalEdit,
+        right: &IncrementalEdit,
+    ) -> std::cmp::Ordering {
+        right
+            .start_byte
+            .cmp(&left.start_byte)
+            .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+            .then_with(|| right.new_text.len().cmp(&left.new_text.len()))
+            .then_with(|| right.new_text.cmp(&left.new_text))
+            .then_with(|| right.start_position.byte.cmp(&left.start_position.byte))
+            .then_with(|| right.start_position.line.cmp(&left.start_position.line))
+            .then_with(|| right.start_position.column.cmp(&left.start_position.column))
+            .then_with(|| right.old_end_position.byte.cmp(&left.old_end_position.byte))
+            .then_with(|| right.old_end_position.line.cmp(&left.old_end_position.line))
+            .then_with(|| right.old_end_position.column.cmp(&left.old_end_position.column))
+    }
+
+    fn indexed_reverse_application_order(
+        left: &(usize, IncrementalEdit),
+        right: &(usize, IncrementalEdit),
+    ) -> std::cmp::Ordering {
+        Self::reverse_application_order(&left.1, &right.1).then_with(|| left.0.cmp(&right.0))
+    }
+
+    fn forward_validation_order(
+        left: &(usize, IncrementalEdit),
+        right: &(usize, IncrementalEdit),
+    ) -> std::cmp::Ordering {
+        left.1
+            .start_byte
+            .cmp(&right.1.start_byte)
+            .then_with(|| left.1.old_end_byte.cmp(&right.1.old_end_byte))
+            .then_with(|| left.0.cmp(&right.0))
     }
 }
 
