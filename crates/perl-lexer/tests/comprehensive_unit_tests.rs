@@ -714,6 +714,34 @@ fn interpolated_string_preserves_complex_tails() -> R {
                 StringPart::MethodCall(Arc::from("->{key}")),
             ],
         ),
+        (
+            r#""$hash{incomplete""#,
+            vec![
+                StringPart::Variable(Arc::from("$hash")),
+                StringPart::Expression(Arc::from("{incomplete")),
+            ],
+        ),
+        (
+            r#""$array[0""#,
+            vec![
+                StringPart::Variable(Arc::from("$array")),
+                StringPart::ArraySlice(Arc::from("[0")),
+            ],
+        ),
+        (
+            r#""$obj->{field""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->{field")),
+            ],
+        ),
+        (
+            r#""$array[$i""#,
+            vec![
+                StringPart::Variable(Arc::from("$array")),
+                StringPart::ArraySlice(Arc::from("[$i")),
+            ],
+        ),
     ];
 
     for (input, expected_parts) in cases {

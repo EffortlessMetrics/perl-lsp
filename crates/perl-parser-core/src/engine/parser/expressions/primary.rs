@@ -45,6 +45,139 @@ impl<'a> Parser<'a> {
         self.with_recursion_guard(|s| s.parse_primary_inner())
     }
 
+    fn record_unclosed_interpolation_delimiter(&mut self, text: &str, token_start: usize) {
+        if let Some(delim) = Self::find_unclosed_interpolation_delimiter(text) {
+            self.record_error(ParseError::syntax(
+                format!(
+                    "Unclosed {} delimiter in interpolated string before closing quote",
+                    delim
+                ),
+                token_start,
+            ));
+        }
+    }
+
+    fn find_unclosed_interpolation_delimiter(text: &str) -> Option<char> {
+        let bytes = text.as_bytes();
+        if bytes.len() < 2 || bytes.first() != Some(&b'"') {
+            return None;
+        }
+
+        let mut i = 1usize;
+        let quote_end = bytes.len() - 1;
+        while i < quote_end {
+            let ch = bytes[i] as char;
+            if ch == '\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+
+            if ch == '$' {
+                i += 1;
+                if i >= quote_end {
+                    break;
+                }
+
+                if bytes[i] == b'{' {
+                    if !Self::consume_balanced_in_interpolated_string(bytes, i, b'{', b'}', quote_end)
+                    {
+                        return Some('{');
+                    }
+                    continue;
+                }
+
+                if Self::is_identifier_start(bytes[i]) {
+                    i += 1;
+                    while i < quote_end && Self::is_identifier_continue(bytes[i]) {
+                        i += 1;
+                    }
+
+                    if i + 1 < quote_end && bytes[i] == b'-' && bytes[i + 1] == b'>' {
+                        i += 2;
+                        if i < quote_end && bytes[i] == b'{' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'{', b'}', quote_end,
+                            ) {
+                                return Some('{');
+                            }
+                            continue;
+                        }
+                        if i < quote_end && bytes[i] == b'[' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'[', b']', quote_end,
+                            ) {
+                                return Some('[');
+                            }
+                            continue;
+                        }
+                    }
+
+                    if i < quote_end && bytes[i] == b'{' {
+                        if !Self::consume_balanced_in_interpolated_string(
+                            bytes, i, b'{', b'}', quote_end,
+                        ) {
+                            return Some('{');
+                        }
+                        continue;
+                    }
+
+                    if i < quote_end && bytes[i] == b'[' {
+                        if !Self::consume_balanced_in_interpolated_string(
+                            bytes, i, b'[', b']', quote_end,
+                        ) {
+                            return Some('[');
+                        }
+                        continue;
+                    }
+
+                    continue;
+                }
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    fn consume_balanced_in_interpolated_string(
+        bytes: &[u8],
+        start: usize,
+        open: u8,
+        close: u8,
+        quote_end: usize,
+    ) -> bool {
+        let mut i = start + 1;
+        let mut depth = 1usize;
+
+        while i < quote_end {
+            let b = bytes[i];
+            if b == b'\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+            if b == open {
+                depth += 1;
+            } else if b == close {
+                depth -= 1;
+                if depth == 0 {
+                    return true;
+                }
+            }
+            i += 1;
+        }
+
+        false
+    }
+
+    fn is_identifier_start(byte: u8) -> bool {
+        byte.is_ascii_alphabetic() || byte == b'_'
+    }
+
+    fn is_identifier_continue(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || byte == b'_'
+    }
+
     /// Inner implementation of parse_primary (called under recursion guard)
     fn parse_primary_inner(&mut self) -> ParseResult<Node> {
         let token = self.tokens.peek()?;
@@ -71,6 +204,9 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
+                if interpolated {
+                    self.record_unclosed_interpolation_delimiter(&token.text, token.start);
+                }
                 Ok(Node::new(
                     NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
