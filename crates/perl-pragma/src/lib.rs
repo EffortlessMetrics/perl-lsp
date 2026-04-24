@@ -6,6 +6,8 @@
 use perl_ast::ast::{Node, NodeKind};
 use std::ops::Range;
 
+const MAX_DISABLED_WARNING_CATEGORIES: usize = 256;
+
 /// Parsed Perl version from a lexical `use v...;` or `use 5.xxx;` pragma.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PerlVersion {
@@ -356,6 +358,22 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
     }
 }
 
+fn add_disabled_warning_category(state: &mut PragmaState, category: &str) {
+    if category.is_empty() {
+        return;
+    }
+
+    if state.disabled_warning_categories.iter().any(|c| c == category) {
+        return;
+    }
+
+    if state.disabled_warning_categories.len() >= MAX_DISABLED_WARNING_CATEGORIES {
+        return;
+    }
+
+    state.disabled_warning_categories.push(category.to_string());
+}
+
 fn pragma_arg_items(arg: &str) -> Vec<String> {
     let trimmed = arg.trim().trim_matches('\'').trim_matches('"');
 
@@ -687,15 +705,7 @@ impl PragmaTracker {
                             } else {
                                 for arg in conditional_args {
                                     let category = normalized_pragma_token(arg);
-                                    if !current_state
-                                        .disabled_warning_categories
-                                        .iter()
-                                        .any(|c| c == category)
-                                    {
-                                        current_state
-                                            .disabled_warning_categories
-                                            .push(category.to_string());
-                                    }
+                                    add_disabled_warning_category(current_state, category);
                                 }
                             }
                             ranges.push((
@@ -785,15 +795,7 @@ impl PragmaTracker {
                                 // Strip any surrounding single or double quotes that
                                 // the parser may have left on the argument.
                                 let category = arg.trim_matches('\'').trim_matches('"');
-                                if !current_state
-                                    .disabled_warning_categories
-                                    .iter()
-                                    .any(|c| c == category)
-                                {
-                                    current_state
-                                        .disabled_warning_categories
-                                        .push(category.to_string());
-                                }
+                                add_disabled_warning_category(current_state, category);
                             }
                         }
                         ranges
