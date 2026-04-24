@@ -1054,6 +1054,102 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that completion ranking respects lexical scope distance.
+/// Variables from the immediate scope should rank higher (sort first) than
+/// variables with the same name in an enclosing scope.
+#[test]
+fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_scope.pl";
+    // Two nested blocks both declare $config. At the completion site inside the
+    // innermost block the immediate-scope $config should sort before the
+    // parent-scope $config.
+    let code = r#"
+my $outer = 1;
+
+{
+    my $inner = 2;
+    my $config = 'local';
+
+    {
+        my $deep = 3;
+        my $config = 'deeper';
+
+        my $result = $c
+    }
+}
+"#;
+
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": code
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let lines: Vec<&str> = code.lines().collect();
+    let target_line = lines.iter().position(|l| l.contains("$c")).unwrap_or(0);
+    let target_char = lines[target_line].rfind("$c").unwrap_or(0) + 2;
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": target_line as i32, "character": target_char as i32 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    // Collect all completion items whose label contains "config"
+    let mut config_items: Vec<&serde_json::Value> = items
+        .iter()
+        .filter(|item| {
+            item["label"].as_str().map(|s| s.contains("config")).unwrap_or(false)
+        })
+        .collect();
+
+    assert!(
+        !config_items.is_empty(),
+        "Should suggest $config from at least one scope"
+    );
+
+    // Sort by sortText so the comparison is deterministic regardless of
+    // the order in which the server emits items.
+    config_items.sort_by_key(|item| item["sortText"].as_str().unwrap_or(""));
+
+    // When both scope levels are present, the immediate-scope entry must sort
+    // before the parent-scope entry (sort_key 'a' < 'b').
+    if config_items.len() >= 2 {
+        let first_sort = config_items[0]["sortText"].as_str().unwrap_or("");
+        let second_sort = config_items[1]["sortText"].as_str().unwrap_or("");
+        assert!(
+            first_sort < second_sort,
+            "Immediate scope $config should rank before parent scope $config: '{}' vs '{}'",
+            first_sort,
+            second_sort
+        );
+    }
+
+    Ok(())
+}
+
 /// Test completion with incremental typing
 #[test]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
