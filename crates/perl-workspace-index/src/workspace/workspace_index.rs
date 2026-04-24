@@ -989,6 +989,17 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone)]
+/// Stable cross-file symbol query result for rename/delete planning.
+pub struct CrossFileReferenceQueryResult {
+    /// Best stable identity for this symbol (qualified name when available).
+    pub symbol_identity: String,
+    /// Definition location for this symbol.
+    pub definition: Location,
+    /// Deterministically ordered reference locations across indexed files.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -2022,6 +2033,108 @@ impl WorkspaceIndex {
         }
 
         None
+    }
+
+    fn ordered_symbol_candidates<'a>(
+        files: &'a HashMap<String, FileIndex>,
+        symbol_name: &str,
+    ) -> Vec<&'a WorkspaceSymbol> {
+        let mut matches: Vec<&WorkspaceSymbol> = files
+            .values()
+            .flat_map(|file_index| file_index.symbols.iter())
+            .filter(|symbol| {
+                symbol.name == symbol_name || symbol.qualified_name.as_deref() == Some(symbol_name)
+            })
+            .collect();
+
+        matches.sort_by(|left, right| {
+            let left_key = left.qualified_name.as_deref().unwrap_or(left.name.as_str());
+            let right_key = right.qualified_name.as_deref().unwrap_or(right.name.as_str());
+            left_key
+                .cmp(right_key)
+                .then_with(|| left.uri.cmp(&right.uri))
+                .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+                .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+        });
+
+        matches
+    }
+
+    fn collect_reference_locations(
+        global_refs: &HashMap<String, Vec<Location>>,
+        query_key: &str,
+        bare_name: &str,
+    ) -> Vec<Location> {
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
+        let mut locations = Vec::new();
+
+        if let Some(refs) = global_refs.get(query_key) {
+            for loc in refs {
+                let key = (
+                    loc.uri.clone(),
+                    loc.range.start.line,
+                    loc.range.start.column,
+                    loc.range.end.line,
+                    loc.range.end.column,
+                );
+                if seen.insert(key) {
+                    locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                }
+            }
+        }
+
+        if query_key != bare_name
+            && let Some(refs) = global_refs.get(bare_name)
+        {
+            for loc in refs {
+                let key = (
+                    loc.uri.clone(),
+                    loc.range.start.line,
+                    loc.range.start.column,
+                    loc.range.end.line,
+                    loc.range.end.column,
+                );
+                if seen.insert(key) {
+                    locations.push(Location { uri: loc.uri.clone(), range: loc.range });
+                }
+            }
+        }
+
+        locations.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+                .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+        });
+
+        locations
+    }
+
+    /// Query a symbol's stable identity, definition, and cross-file references.
+    ///
+    /// Returns `None` when no indexed symbol matches `symbol_name`.
+    pub fn query_cross_file_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<CrossFileReferenceQueryResult> {
+        let files = self.files.read();
+        let symbol = Self::ordered_symbol_candidates(&files, symbol_name).into_iter().next()?;
+        let symbol_identity = symbol.qualified_name.clone().unwrap_or_else(|| symbol.name.clone());
+        let definition = Location { uri: symbol.uri.clone(), range: symbol.range };
+        let bare_name =
+            symbol_identity.rsplit_once("::").map_or(symbol_identity.as_str(), |(_, bare)| bare);
+        drop(files);
+
+        let global_refs = self.global_references.read();
+        let references =
+            Self::collect_reference_locations(&global_refs, &symbol_identity, bare_name);
+        drop(global_refs);
+
+        Some(CrossFileReferenceQueryResult { symbol_identity, definition, references })
     }
 
     /// Get all symbols in the workspace
@@ -3946,6 +4059,71 @@ RefDemo::helper();
         assert!(
             bare_refs.len() >= qualified_refs.len(),
             "bare-name reference lookup should include qualified calls"
+        );
+    }
+
+    #[test]
+    fn test_query_cross_file_references_returns_definition_and_references_across_files() {
+        let index = WorkspaceIndex::new();
+        let lib_uri = must(url::Url::parse("file:///workspace/lib/Utils.pm"));
+        let caller_uri = must(url::Url::parse("file:///workspace/bin/run.pl"));
+
+        must(index.index_file(
+            lib_uri,
+            "package Utils;\nsub process_data { return 1; }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            caller_uri.clone(),
+            "package main;\nuse Utils;\nprocess_data();\nUtils::process_data();\n1;\n".to_string(),
+        ));
+
+        let query = must_some(index.query_cross_file_references("Utils::process_data"));
+        assert_eq!(query.symbol_identity, "Utils::process_data");
+        assert_eq!(query.definition.uri, "file:///workspace/lib/Utils.pm");
+        assert!(
+            query.references.iter().any(|loc| loc.uri == caller_uri.to_string()),
+            "expected caller file references in cross-file query"
+        );
+        assert!(
+            query.references.windows(2).all(|pair| {
+                pair[0].uri <= pair[1].uri
+                    && (pair[0].uri != pair[1].uri
+                        || pair[0].range.start.line <= pair[1].range.start.line)
+            }),
+            "references should be deterministically ordered"
+        );
+    }
+
+    #[test]
+    fn test_query_cross_file_references_not_found_is_none() {
+        let index = WorkspaceIndex::new();
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/Only.pm")),
+            "package Only;\nsub present { 1 }\n1;\n".to_string(),
+        ));
+
+        assert!(
+            index.query_cross_file_references("Only::missing").is_none(),
+            "query should return None when symbol is not found"
+        );
+    }
+
+    #[test]
+    fn test_query_cross_file_references_does_not_match_similar_names() {
+        let index = WorkspaceIndex::new();
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/Alpha.pm")),
+            "package Alpha;\nsub process {}\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/Beta.pm")),
+            "package Beta;\nsub process_data {}\n1;\n".to_string(),
+        ));
+
+        let alpha = must_some(index.query_cross_file_references("Alpha::process"));
+        assert!(
+            alpha.references.iter().all(|loc| !loc.uri.ends_with("Beta.pm")),
+            "cross-file query should avoid false positives from similarly named symbols"
         );
     }
 

@@ -439,6 +439,14 @@ impl ProductionIndexCoordinator {
         result
     }
 
+    /// Query a symbol identity with definition and cross-file references.
+    pub fn query_cross_file_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<super::workspace_index::CrossFileReferenceQueryResult> {
+        self.index.query_cross_file_references(symbol_name)
+    }
+
     /// Invalidate the index.
     ///
     /// # Arguments
