@@ -435,50 +435,56 @@ impl LspServer {
         query: &str,
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let mut all_symbols = Vec::new();
-
-        // Collect lightweight snapshots without holding lock during iteration.
-        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
-
-        for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
-            // Cooperative yield every 8 documents
-            if i & 0x7 == 0 {
-                std::thread::yield_now();
-            }
-
-            // Early exit if we've hit the result cap
-            if all_symbols.len() >= cap {
-                break;
-            }
-
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
+        let mut text_fallback_docs = Vec::new();
+        for (uri, text, ast) in &docs_snapshot {
+            source_map.insert(uri.clone(), text.clone());
             if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
-
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
+                provider.index_document(uri, ast, text);
             } else {
-                // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(text, uri, query);
-                let remaining = cap.saturating_sub(all_symbols.len());
-                all_symbols.extend(text_symbols.into_iter().take(remaining));
+                text_fallback_docs.push((uri.clone(), text.clone()));
             }
         }
 
-        // Truncate to cap in case we went slightly over
+        let candidates = if query.is_empty() {
+            Vec::new()
+        } else {
+            let index = self.symbol_index.lock();
+            let mut merged = index.search_prefix(query);
+            merged.extend(index.search_fuzzy(query));
+            let mut seen = std::collections::HashSet::new();
+            merged.retain(|symbol| seen.insert(symbol.clone()));
+            merged
+        };
+
+        let provider_symbols = if candidates.is_empty() {
+            provider.search(query, &source_map)
+        } else {
+            provider.search_with_candidates(query, &source_map, &candidates)
+        };
+        let mut all_symbols: Vec<Value> =
+            provider_symbols.into_iter().map(|symbol| json!(symbol)).collect();
+
+        for (uri, text) in text_fallback_docs {
+            if all_symbols.len() >= cap {
+                break;
+            }
+            let remaining = cap.saturating_sub(all_symbols.len());
+            all_symbols.extend(
+                self.extract_text_based_symbols(&text, &uri, query)
+                    .into_iter()
+                    .take(remaining)
+                    .map(|symbol| json!(symbol)),
+            );
+        }
+
         all_symbols.truncate(cap);
         tracing::debug!(
             count = all_symbols.len(),

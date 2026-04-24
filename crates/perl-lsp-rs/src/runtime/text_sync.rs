@@ -153,6 +153,7 @@ impl LspServer {
                         incremental_state: None,
                     },
                 );
+                self.symbol_index.lock().remove_document(&normalized_uri);
 
                 if let Err(e) = self.notify(
                     "textDocument/publishDiagnostics",
@@ -200,6 +201,7 @@ impl LspServer {
                         incremental_state: None,
                     },
                 );
+                self.symbol_index.lock().remove_document(&normalized_uri);
 
                 if let Err(e) = self.notify(
                     "textDocument/publishDiagnostics",
@@ -243,6 +245,7 @@ impl LspServer {
                         incremental_state: None,
                     },
                 );
+                self.symbol_index.lock().remove_document(&normalized_uri);
 
                 if let Err(e) = self.notify(
                     "textDocument/publishDiagnostics",
@@ -373,31 +376,7 @@ impl LspServer {
             );
 
             // Index symbols for workspace search
-            // Note: Indexing is a MUTATION operation - use coordinator.index() directly
-            // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
             if let Some(ref _ast) = ast_arc {
-                // Update the fast symbol index with symbols from workspace index
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
-                    let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols
-                        .into_iter()
-                        .filter(|s| s.uri == uri)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut index = self.symbol_index.lock();
-                    for symbol in symbols {
-                        index.add_symbol(symbol);
-                    }
-                }
-                #[cfg(not(feature = "workspace"))]
-                {
-                    let _index = self.symbol_index.lock();
-                    // Just ensure the index exists even without workspace feature
-                }
-
                 // Update the workspace-wide index for cross-file features.
                 // Indexing runs in a background task so the handler returns
                 // immediately without blocking on file I/O or symbol extraction.
@@ -409,12 +388,23 @@ impl LspServer {
                         let coordinator_clone = Arc::clone(coordinator);
                         let text_owned = text.to_string();
                         let uri_owned = uri.to_string();
+                        let normalized_uri_owned = normalized_uri.clone();
+                        let symbol_index = Arc::clone(&self.symbol_index);
                         let task_counter = Arc::clone(&self.pending_index_task_count);
                         task_counter.fetch_add(1, Ordering::SeqCst);
 
                         let task = move || {
                             match workspace_index.index_file(url, text_owned) {
                                 Ok(()) => {
+                                    let symbols = workspace_index
+                                        .find_symbols("")
+                                        .into_iter()
+                                        .filter(|symbol| symbol.uri == uri_owned)
+                                        .map(|symbol| symbol.name)
+                                        .collect::<Vec<_>>();
+                                    symbol_index
+                                        .lock()
+                                        .replace_document_symbols(&normalized_uri_owned, symbols);
                                     if matches!(
                                         coordinator_clone.state(),
                                         IndexState::Building { phase: IndexPhase::Idle, .. }
@@ -464,6 +454,9 @@ impl LspServer {
             #[cfg(feature = "workspace")]
             if let Some(coordinator) = self.coordinator() {
                 coordinator.notify_parse_complete(uri);
+            }
+            if ast_arc.is_none() {
+                self.symbol_index.lock().remove_document(&normalized_uri);
             }
 
             // Send diagnostics (use original URI for client notification)
@@ -652,6 +645,7 @@ impl LspServer {
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
+                    self.symbol_index.lock().remove_document(&normalized_uri);
 
                     if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
@@ -697,6 +691,7 @@ impl LspServer {
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
+                    self.symbol_index.lock().remove_document(&normalized_uri);
 
                     if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
@@ -738,6 +733,7 @@ impl LspServer {
                     };
                     documents.insert(normalized_uri.clone(), doc_state);
                     drop(documents);
+                    self.symbol_index.lock().remove_document(&normalized_uri);
 
                     if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
@@ -976,12 +972,24 @@ impl LspServer {
                             let coordinator_clone = Arc::clone(coordinator);
                             let doc_content = text.clone();
                             let uri_owned = uri.to_string();
+                            let normalized_uri_owned = normalized_uri.clone();
+                            let symbol_index = Arc::clone(&self.symbol_index);
                             let task_counter = Arc::clone(&self.pending_index_task_count);
                             task_counter.fetch_add(1, Ordering::SeqCst);
 
                             let task = move || {
                                 if let Err(e) = workspace_index.index_file(url, doc_content) {
                                     tracing::warn!("Failed to index file {}: {}", uri_owned, e);
+                                } else {
+                                    let symbols = workspace_index
+                                        .find_symbols("")
+                                        .into_iter()
+                                        .filter(|symbol| symbol.uri == uri_owned)
+                                        .map(|symbol| symbol.name)
+                                        .collect::<Vec<_>>();
+                                    symbol_index
+                                        .lock()
+                                        .replace_document_symbols(&normalized_uri_owned, symbols);
                                 }
                                 coordinator_clone.notify_parse_complete(&uri_owned);
                                 task_counter.fetch_sub(1, Ordering::SeqCst);
@@ -1011,6 +1019,9 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 if let Some(coordinator) = self.coordinator() {
                     coordinator.notify_parse_complete(uri);
+                }
+                if ast_arc.is_none() {
+                    self.symbol_index.lock().remove_document(&normalized_uri);
                 }
 
                 // Fast path: immediately publish parse-error diagnostics.
@@ -1056,6 +1067,7 @@ impl LspServer {
             // Remove from documents
             let mut documents = self.documents.lock();
             documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
+            self.symbol_index.lock().remove_document(&normalized_uri);
 
             // Cancel any in-progress parse and clean up the cancellation flag.
             {
