@@ -4,6 +4,7 @@
 //! being inserted, enabling efficient incremental parsing with subtree reuse.
 
 use perl_parser_core::position::Position;
+use std::fmt;
 
 /// Enhanced edit with text content for incremental parsing
 #[derive(Debug, Clone, PartialEq)]
@@ -69,6 +70,64 @@ impl IncrementalEdit {
     }
 }
 
+/// Options that influence edit-batch normalization behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IncrementalEditNormalizationOptions {
+    /// Allow edits with overlapping byte ranges.
+    pub allow_overlaps: bool,
+    /// Drop obvious no-op edits (zero-width insertion of empty text).
+    pub filter_obvious_noops: bool,
+}
+
+/// Outcome details for normalization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct IncrementalEditNormalizationResult {
+    /// Number of edits removed while filtering obvious no-ops.
+    pub removed_noop_edits: usize,
+}
+
+/// Validation failures for malformed edit batches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IncrementalEditBatchError {
+    /// One edit has a backward range where `start_byte > old_end_byte`.
+    BackwardRange { index: usize, start_byte: usize, old_end_byte: usize },
+    /// Two edits in a normalized batch overlap.
+    OverlappingEdits {
+        first_index: usize,
+        first_start_byte: usize,
+        first_old_end_byte: usize,
+        second_index: usize,
+        second_start_byte: usize,
+        second_old_end_byte: usize,
+    },
+}
+
+impl fmt::Display for IncrementalEditBatchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IncrementalEditBatchError::BackwardRange { index, start_byte, old_end_byte } => {
+                write!(
+                    f,
+                    "edit at index {index} has backward range: start_byte ({start_byte}) > old_end_byte ({old_end_byte})"
+                )
+            }
+            IncrementalEditBatchError::OverlappingEdits {
+                first_index,
+                first_start_byte,
+                first_old_end_byte,
+                second_index,
+                second_start_byte,
+                second_old_end_byte,
+            } => write!(
+                f,
+                "overlapping edits in normalized batch: #{first_index} [{first_start_byte}, {first_old_end_byte}) overlaps #{second_index} [{second_start_byte}, {second_old_end_byte})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for IncrementalEditBatchError {}
+
 /// Collection of incremental edits
 #[derive(Debug, Clone, Default)]
 pub struct IncrementalEditSet {
@@ -94,6 +153,69 @@ impl IncrementalEditSet {
     /// Sort edits in reverse order (for applying from end to start)
     pub fn sort_reverse(&mut self) {
         self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+    }
+
+    /// Normalize and validate edits for deterministic reverse-application order.
+    pub fn normalize_and_validate(
+        &mut self,
+        options: IncrementalEditNormalizationOptions,
+    ) -> Result<IncrementalEditNormalizationResult, IncrementalEditBatchError> {
+        let mut indexed_edits: Vec<(usize, IncrementalEdit)> =
+            self.edits.drain(..).enumerate().collect();
+
+        let mut removed_noop_edits = 0;
+        if options.filter_obvious_noops {
+            indexed_edits.retain(|(_, edit)| {
+                let keep = !(edit.start_byte == edit.old_end_byte && edit.new_text.is_empty());
+                if !keep {
+                    removed_noop_edits += 1;
+                }
+                keep
+            });
+        }
+
+        for (index, edit) in &indexed_edits {
+            if edit.start_byte > edit.old_end_byte {
+                return Err(IncrementalEditBatchError::BackwardRange {
+                    index: *index,
+                    start_byte: edit.start_byte,
+                    old_end_byte: edit.old_end_byte,
+                });
+            }
+        }
+
+        if !options.allow_overlaps {
+            let mut ranges: Vec<(usize, &IncrementalEdit)> =
+                indexed_edits.iter().map(|(index, edit)| (*index, edit)).collect();
+            ranges.sort_by_key(|(index, edit)| (edit.start_byte, edit.old_end_byte, *index));
+
+            for pair in ranges.windows(2) {
+                if let [first, second] = pair {
+                    if first.1.overlaps(second.1.start_byte, second.1.old_end_byte) {
+                        return Err(IncrementalEditBatchError::OverlappingEdits {
+                            first_index: first.0,
+                            first_start_byte: first.1.start_byte,
+                            first_old_end_byte: first.1.old_end_byte,
+                            second_index: second.0,
+                            second_start_byte: second.1.start_byte,
+                            second_old_end_byte: second.1.old_end_byte,
+                        });
+                    }
+                }
+            }
+        }
+
+        indexed_edits.sort_by(|(left_index, left), (right_index, right)| {
+            right
+                .start_byte
+                .cmp(&left.start_byte)
+                .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+                .then_with(|| left_index.cmp(right_index))
+        });
+
+        self.edits = indexed_edits.into_iter().map(|(_, edit)| edit).collect();
+
+        Ok(IncrementalEditNormalizationResult { removed_noop_edits })
     }
 
     /// Check if the edit set is empty
