@@ -980,13 +980,37 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 
 // Using lsp_types for Position and Range
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Internal location type used during Navigate/Analyze workflows.
 pub struct Location {
     /// File URI where the symbol is located
     pub uri: String,
     /// Line and character range within the file
     pub range: Range,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Stable symbol identity returned by cross-file reference queries.
+pub struct SymbolIdentity {
+    /// Canonical stable key for the symbol (qualified when available).
+    pub stable_key: String,
+    /// Bare symbol name.
+    pub name: String,
+    /// Fully qualified symbol name when available.
+    pub qualified_name: Option<String>,
+    /// Symbol kind (subroutine, package, variable, ...).
+    pub kind: SymbolKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Read-only cross-file query result used by rename/safe-delete planners.
+pub struct CrossFileReferenceQueryResult {
+    /// Identity for the resolved symbol.
+    pub symbol: SymbolIdentity,
+    /// Definition site for the resolved symbol.
+    pub definition: Location,
+    /// All reference locations (including definition) in deterministic order.
+    pub references: Vec<Location>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1129,6 +1153,22 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_sort_key(location: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            location.uri.as_str(),
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line,
+            location.range.end.column,
+        )
+    }
+
+    fn sort_locations_deterministically(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            Self::location_sort_key(left).cmp(&Self::location_sort_key(right))
+        });
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1245,6 +1285,7 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
+        let mut candidates: Vec<(Location, String)> = Vec::new();
         for file_index in files.values() {
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
@@ -1256,7 +1297,7 @@ impl WorkspaceIndex {
                 if symbol.name == symbol_name
                     || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
-                    return Some((
+                    candidates.push((
                         Location { uri: symbol.uri.clone(), range: symbol.range },
                         symbol.uri.clone(),
                     ));
@@ -1264,7 +1305,88 @@ impl WorkspaceIndex {
             }
         }
 
-        None
+        candidates.sort_by(|left, right| {
+            Self::location_sort_key(&left.0).cmp(&Self::location_sort_key(&right.0))
+        });
+        candidates.into_iter().next()
+    }
+
+    fn find_symbol_by_definition(
+        &self,
+        definition: &Location,
+        symbol_name: &str,
+    ) -> Option<WorkspaceSymbol> {
+        let files = self.files.read();
+        files
+            .values()
+            .flat_map(|file_index| file_index.symbols.iter())
+            .filter(|symbol| {
+                symbol.uri == definition.uri
+                    && symbol.range == definition.range
+                    && (symbol.name == symbol_name
+                        || symbol.qualified_name.as_deref() == Some(symbol_name))
+            })
+            .min_by(|left, right| {
+                (
+                    left.qualified_name.as_deref().unwrap_or_default(),
+                    left.name.as_str(),
+                    left.kind.to_lsp_kind(),
+                )
+                    .cmp(&(
+                        right.qualified_name.as_deref().unwrap_or_default(),
+                        right.name.as_str(),
+                        right.kind.to_lsp_kind(),
+                    ))
+            })
+            .cloned()
+    }
+
+    fn has_unique_symbol_name_and_kind(&self, target: &WorkspaceSymbol) -> bool {
+        let files = self.files.read();
+        files
+            .values()
+            .flat_map(|file_index| file_index.symbols.iter())
+            .filter(|symbol| symbol.name == target.name && symbol.kind == target.kind)
+            .take(2)
+            .count()
+            == 1
+    }
+
+    fn collect_symbol_references(&self, symbol: &WorkspaceSymbol) -> Vec<Location> {
+        let mut names_to_query: Vec<&str> = Vec::new();
+        if let Some(qualified_name) = symbol.qualified_name.as_deref() {
+            names_to_query.push(qualified_name);
+            if self.has_unique_symbol_name_and_kind(symbol) {
+                names_to_query.push(symbol.name.as_str());
+            }
+        } else {
+            names_to_query.push(symbol.name.as_str());
+        }
+
+        let global_refs = self.global_references.read();
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
+        let mut locations = Vec::new();
+
+        for symbol_name in names_to_query {
+            if let Some(refs) = global_refs.get(symbol_name) {
+                for location in refs {
+                    let key = (
+                        location.uri.clone(),
+                        location.range.start.line,
+                        location.range.start.column,
+                        location.range.end.line,
+                        location.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations.push(location.clone());
+                    }
+                }
+            }
+        }
+        drop(global_refs);
+
+        Self::sort_locations_deterministically(&mut locations);
+        locations
     }
 
     /// Create a new empty index
@@ -1916,7 +2038,42 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations_deterministically(&mut locations);
         locations
+    }
+
+    /// Resolve a symbol and return its definition/reference set for cross-file planning.
+    ///
+    /// Returns `None` when no definition can be resolved for `symbol_name`.
+    pub fn query_symbol_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<CrossFileReferenceQueryResult> {
+        let definition = self.find_definition(symbol_name)?;
+        let symbol = self.find_symbol_by_definition(&definition, symbol_name)?;
+
+        let stable_key = symbol.qualified_name.clone().unwrap_or_else(|| {
+            format!(
+                "{}@{}:{}:{}",
+                symbol.name, symbol.uri, symbol.range.start.line, symbol.range.start.column
+            )
+        });
+        let mut references = self.collect_symbol_references(&symbol);
+        if !references.iter().any(|location| location == &definition) {
+            references.push(definition.clone());
+            Self::sort_locations_deterministically(&mut references);
+        }
+
+        Some(CrossFileReferenceQueryResult {
+            symbol: SymbolIdentity {
+                stable_key,
+                name: symbol.name,
+                qualified_name: symbol.qualified_name,
+                kind: symbol.kind,
+            },
+            definition,
+            references,
+        })
     }
 
     /// Count non-definition references (usages) of a symbol.
