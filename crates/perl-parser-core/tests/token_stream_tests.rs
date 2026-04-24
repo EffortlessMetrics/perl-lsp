@@ -56,3 +56,15 @@ fn stream_processes_multiple_tokens() -> Result<(), Box<dyn std::error::Error>> 
     assert!(count >= 4, "should have at least 4 tokens, got {}", count);
     Ok(())
 }
+
+#[test]
+fn tokenizes_scalar_deref_then_hash_subscript() -> Result<(), Box<dyn std::error::Error>> {
+    let mut stream = TokenStream::new(r#"${$ref}{m};"#);
+    let mut tokens = Vec::new();
+    while !stream.is_eof() {
+        let token = must(stream.next());
+        tokens.push(token.text.to_string());
+    }
+    assert_eq!(tokens, vec!["$", "{", "$ref", "}", "{", "m", "}", ";"]);
+    Ok(())
+}

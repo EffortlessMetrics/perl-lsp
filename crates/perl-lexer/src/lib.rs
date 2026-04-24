@@ -1834,6 +1834,15 @@ impl<'a> PerlLexer<'a> {
         (None, None)
     }
 
+    /// Return the previous non-whitespace character before `index`.
+    fn previous_nonspace_before(&self, index: usize) -> Option<char> {
+        self.input
+            .get(..index)?
+            .chars()
+            .rev()
+            .find(|c| !c.is_whitespace())
+    }
+
     /// Is `c` a valid quote-like delimiter? (non-alnum, including paired)
     fn is_quote_delim(c: char) -> bool {
         // Perl allows any non-alphanumeric, non-whitespace character as delimiter,
@@ -2154,6 +2163,11 @@ impl<'a> PerlLexer<'a> {
                             // Fat-arrow autoquoting: `s => value` — `=` followed by `>` is '=>',
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                            // Ambiguity guard: `{m}` is commonly a hash-subscript key.
+                            // If `m` appears immediately after `{` and is immediately
+                            // followed by `}`, prefer bareword tokenization over `m}`.
+                            let is_likely_hash_key = next == '}'
+                                && self.previous_nonspace_before(start) == Some('{');
 
                             // When whitespace precedes the delimiter, only unambiguous
                             // delimiters are accepted:
@@ -2167,6 +2181,7 @@ impl<'a> PerlLexer<'a> {
                             let is_quote_char = matches!(next, '\'' | '"') && op != "s";
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
+                                && !is_likely_hash_key
                                 && (!has_whitespace || is_paired_delim || is_quote_char);
 
                             if is_valid_delim {
