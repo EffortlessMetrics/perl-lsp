@@ -1394,6 +1394,70 @@ mod tests {
     }
 
     #[test]
+    fn test_depth_bounded_cache_does_not_grow_quadratically() -> ParseResult<()> {
+        // Verify that caching a deeply-nested program does not cache every
+        // intermediate node. With unbounded caching a k-deep tree produces O(k)
+        // cache entries per subtree root, leading to O(k^2) total entries.
+        // With depth <= 1 bounding the intermediate nodes are skipped, so the
+        // entry count grows roughly linearly with the number of top-level statements.
+        let deeply_nested = r#"
+            package Outer;
+
+            sub level_one {
+                if (1) {
+                    while (1) {
+                        for my $i (1..10) {
+                            foreach my $j (@items) {
+                                my $deep = $i + $j;
+                            }
+                        }
+                    }
+                }
+            }
+
+            sub level_two {
+                if (1) {
+                    while (1) {
+                        for my $x (1..5) {
+                            my $also_deep = $x * 2;
+                        }
+                    }
+                }
+            }
+        "#;
+
+        let doc = IncrementalDocument::new(deeply_nested.to_string())?;
+
+        // Without depth bounding, every node in the two deeply-nested subs
+        // would be cloned into the cache.  With depth <= 1 bounding, only the
+        // top-level package + two subs (depth 0/1) and leaves/criticals survive.
+        // The exact count is implementation-dependent, but it must be well below
+        // the O(total-nodes^2) worst case.  A generous upper bound of 50 entries
+        // accommodates the critical/leaf nodes while ruling out unbounded growth.
+        let cache_size = doc.subtree_cache.by_range.len();
+        assert!(
+            cache_size <= 50,
+            "depth-bounded cache must not clone every intermediate node; got {} entries",
+            cache_size,
+        );
+
+        // Critical nodes (package, subs) must still be cached for LSP features.
+        let critical_count = doc
+            .subtree_cache
+            .critical_symbols
+            .values()
+            .filter(|&&p| p == SymbolPriority::Critical)
+            .count();
+        assert!(
+            critical_count >= 2, // at least the two subroutine definitions
+            "critical symbols must remain cached regardless of depth; got {}",
+            critical_count,
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_code_lens_reference_preservation() -> ParseResult<()> {
         let source = r#"
             package MyClass;
