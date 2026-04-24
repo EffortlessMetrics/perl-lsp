@@ -84,8 +84,24 @@ for snippet in &["my $x = 1;", "print $x;"] {
 
 ## Binaries
 
-- `parse_c` — parse a Perl file and exit with 0 (success) or 1 (error)
+- `parse_c` — parse a Perl file as raw bytes and exit with 0 (clean parse) or 1 (parse/read errors). Optional flags:
+  - `--root-kind` prints the root node kind
+  - `--has-error` prints `true`/`false` for `root_node().has_error()`
+  - `--sexp` prints the full parse s-expression
 - `bench_parser_c` — parse a Perl file and print timing (requires `--features test-utils`)
+
+Examples:
+
+```bash
+# Default triage flow: parse and return shell-friendly status code
+cargo run -p tree-sitter-perl-c --bin parse_c -- path/to/file.pl
+
+# Parse non-UTF-8 fixtures safely and print high-level diagnostics
+cargo run -p tree-sitter-perl-c --bin parse_c -- --root-kind --has-error path/to/fixture.pl
+
+# Inspect the full tree when narrowing down an error node
+cargo run -p tree-sitter-perl-c --bin parse_c -- --sexp path/to/file.pl
+```
 
 ## Build Requirements
 
