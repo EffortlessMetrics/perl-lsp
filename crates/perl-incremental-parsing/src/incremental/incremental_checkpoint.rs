@@ -979,4 +979,85 @@ mod tests {
             }) if location == invalid_start && message.contains("UTF-8 character boundary")
         ));
     }
+
+    #[test]
+    fn test_apply_edit_rejects_non_char_boundary_end() {
+        // Tests that `end` splitting a multibyte codepoint is caught even when
+        // `start` lands on a valid char boundary. Uses a 4-byte emoji so three
+        // interior bytes are all invalid landing spots.
+        let mut parser = CheckpointedIncrementalParser::new();
+        // 🎉 is U+1F389, encoded as 4 UTF-8 bytes
+        must(parser.parse("my $x = 1; # \u{1F389}\n".to_string()));
+
+        let source = parser.source.clone();
+        let emoji_pos = must_some(source.find('\u{1F389}'));
+        // start = beginning of emoji (valid boundary), end = 1 byte inside (invalid)
+        let valid_start = emoji_pos;
+        let invalid_end = emoji_pos + 1;
+        let edit = SimpleEdit { start: valid_start, end: invalid_end, new_text: "x".to_string() };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "edit whose end splits a 4-byte codepoint should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError { location, .. }) if location == invalid_end
+        ));
+    }
+
+    #[test]
+    fn test_apply_edit_accepts_full_source_replacement() {
+        // Edge: start=0, end=len replaces the entire document — must succeed.
+        let mut parser = CheckpointedIncrementalParser::new();
+        let original = "my $x = 1;\n".to_string();
+        must(parser.parse(original.clone()));
+
+        let edit = SimpleEdit {
+            start: 0,
+            end: original.len(),
+            new_text: "my $y = 2;\n".to_string(),
+        };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "full-document replacement should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_accepts_empty_insert_at_end() {
+        // Edge: start=len, end=len (insertion at document end) must succeed.
+        let mut parser = CheckpointedIncrementalParser::new();
+        let original = "my $x = 1;\n".to_string();
+        must(parser.parse(original.clone()));
+
+        let edit = SimpleEdit {
+            start: original.len(),
+            end: original.len(),
+            new_text: "my $y = 2;\n".to_string(),
+        };
+        let result = parser.apply_edit(&edit);
+        assert!(result.is_ok(), "insert-at-end edit should succeed: {result:?}");
+    }
+
+    #[test]
+    fn test_apply_edit_rejects_three_byte_bmp_boundary() {
+        // Tests a 3-byte BMP character (€ = U+20AC) so the interior bytes
+        // trigger the char-boundary check.
+        let mut parser = CheckpointedIncrementalParser::new();
+        // € is U+20AC, encoded as 3 UTF-8 bytes: 0xE2 0x82 0xAC
+        must(parser.parse("my $cost = 1; # \u{20AC}\n".to_string()));
+
+        let source = parser.source.clone();
+        let euro_pos = must_some(source.find('\u{20AC}'));
+        let invalid_start = euro_pos + 1; // inside the 3-byte sequence
+        let edit = SimpleEdit {
+            start: invalid_start,
+            end: invalid_start + 1,
+            new_text: "e".to_string(),
+        };
+        let result = parser.apply_edit(&edit);
+
+        assert!(result.is_err(), "edit splitting a 3-byte BMP codepoint should return an error");
+        assert!(matches!(
+            result,
+            Err(ParseError::SyntaxError { location, .. }) if location == invalid_start
+        ));
+    }
 }
