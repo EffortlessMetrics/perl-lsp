@@ -36,22 +36,9 @@ mapfile -t ALL_TAGS < <(git tag --list 'v*' | sed 's/^v//' | grep -v 'rc')
 
 # ── Parse RELEASE_HISTORY.md ──────────────────────────────────────────────────
 
-# Grandfathered versions: have "—" in the Notes file column (col 10 in the table)
-# These are older releases that never had notes files - they are grandfathered.
-# We identify them by finding rows where the Tag column has a real tag (not "—")
-# but the Notes file column (last column) has "—".
-#
-# The table format (markdown table):
-# | Version | Tag | GitHub Release | Released | Tag commit | Compare | Assets | crates.io | VS Code Marketplace | Notes file |
-# We extract column 1 (Version) for rows where:
-#   - Column 2 (Tag) is not "—" (has a real tag)
-#   - Column 10 (Notes file) is "—" (no notes file)
-#
-# We parse the links section at the bottom of RELEASE_HISTORY.md:
-# [n-0.7.2]: docs/releases/v0.7.2.md  (or absent if no notes file)
-#
-# The simplest approach: for each tag that has no docs/releases/v<X.Y.Z>.md,
-# if the tag appears in RELEASE_HISTORY with a "—" in the notes column, it's grandfathered.
+# Grandfathered versions: tags with no docs/releases/v<X.Y.Z>.md that appear
+# in RELEASE_HISTORY.md without a [n-X.Y.Z]: link. These are older releases
+# that never had notes files - they are grandfathered.
 
 # Collect all grandfathered versions (tags that have no notes file but are in RELEASE_HISTORY)
 declare -A GRANDFATHERED_VERSIONS
