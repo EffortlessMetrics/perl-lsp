@@ -2902,7 +2902,10 @@ impl IndexVisitor {
     fn project_symbol_declarations(&self, node: &Node, file_index: &mut FileIndex) {
         for decl in extract_symbol_decls(node, self.current_package.as_deref()) {
             let (start, end) = match decl.kind {
-                SymbolKind::Variable(_) => decl.anchor_span.unwrap_or(decl.full_span),
+                SymbolKind::Variable(_) => match decl.anchor_span {
+                    Some(span) => span,
+                    None => decl.full_span,
+                },
                 _ => decl.full_span,
             };
             let ((start_line, start_col), (end_line, end_col)) =
