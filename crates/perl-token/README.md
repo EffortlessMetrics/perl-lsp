@@ -20,6 +20,12 @@ use perl_token::{Token, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+
+let v = Token::new(TokenKind::VString, "v5.38.0", 4, 11);
+assert_eq!(v.kind, TokenKind::VString);
+
+let glob = Token::new(TokenKind::GlobSigil, "*", 12, 13);
+assert_eq!(glob.kind, TokenKind::GlobSigil);
 ```
 
 ## Workspace Role

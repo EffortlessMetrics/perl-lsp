@@ -176,6 +176,7 @@ fn token_kind_debug_keywords() {
         (TokenKind::Field, "Field"),
         (TokenKind::Format, "Format"),
         (TokenKind::Undef, "Undef"),
+        (TokenKind::Defer, "Defer"),
     ];
     for (kind, label) in cases {
         assert_eq!(format!("{kind:?}"), *label);
@@ -242,6 +243,7 @@ fn token_kind_debug_literals() {
         (TokenKind::FormatBody, "FormatBody"),
         (TokenKind::DataMarker, "DataMarker"),
         (TokenKind::DataBody, "DataBody"),
+        (TokenKind::VString, "VString"),
         (TokenKind::UnknownRest, "UnknownRest"),
         (TokenKind::HeredocDepthLimit, "HeredocDepthLimit"),
     ];
@@ -336,76 +338,24 @@ fn token_ne_only_text_differs() {
 // ===========================================================================
 
 fn keyword_kinds() -> Vec<TokenKind> {
-    vec![
-        TokenKind::My,
-        TokenKind::Our,
-        TokenKind::Local,
-        TokenKind::State,
-        TokenKind::Sub,
-        TokenKind::If,
-        TokenKind::Elsif,
-        TokenKind::Else,
-        TokenKind::Unless,
-        TokenKind::While,
-        TokenKind::Until,
-        TokenKind::For,
-        TokenKind::Foreach,
-        TokenKind::Return,
-        TokenKind::Package,
-        TokenKind::Use,
-        TokenKind::No,
-        TokenKind::Begin,
-        TokenKind::End,
-        TokenKind::Check,
-        TokenKind::Init,
-        TokenKind::Unitcheck,
-        TokenKind::Eval,
-        TokenKind::Do,
-        TokenKind::Given,
-        TokenKind::When,
-        TokenKind::Default,
-        TokenKind::Try,
-        TokenKind::Catch,
-        TokenKind::Finally,
-        TokenKind::Continue,
-        TokenKind::Next,
-        TokenKind::Last,
-        TokenKind::Redo,
-        TokenKind::Goto,
-        TokenKind::Class,
-        TokenKind::Method,
-        TokenKind::Field,
-        TokenKind::Format,
-        TokenKind::Undef,
-    ]
+    TokenKind::all().iter().copied().filter(|kind| kind.is_keyword()).collect()
 }
 
 fn delimiter_kinds() -> Vec<TokenKind> {
-    vec![
-        TokenKind::LeftParen,
-        TokenKind::RightParen,
-        TokenKind::LeftBrace,
-        TokenKind::RightBrace,
-        TokenKind::LeftBracket,
-        TokenKind::RightBracket,
-        TokenKind::Semicolon,
-        TokenKind::Comma,
-    ]
+    TokenKind::all().iter().copied().filter(|kind| kind.is_delimiter()).collect()
 }
 
 fn sigil_kinds() -> Vec<TokenKind> {
-    vec![
-        TokenKind::ScalarSigil,
-        TokenKind::ArraySigil,
-        TokenKind::HashSigil,
-        TokenKind::SubSigil,
-        TokenKind::GlobSigil,
-    ]
+    TokenKind::all()
+        .iter()
+        .copied()
+        .filter(|kind| TokenKind::is_identifier_or_sigil(*kind) && *kind != TokenKind::Identifier)
+        .collect()
 }
 
 #[test]
-fn keyword_count_is_40() {
-    assert_eq!(keyword_kinds().len(), 40);
+fn keyword_count_is_41() {
+    assert_eq!(keyword_kinds().len(), 41);
 }
 
 #[test]
