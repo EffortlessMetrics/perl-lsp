@@ -35,7 +35,71 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
+
+/// Byte span carried by a [`Token`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenSpan {
+    /// Starting byte position.
+    pub start: usize,
+    /// Ending byte position.
+    pub end: usize,
+}
+
+impl TokenSpan {
+    /// Create a span from raw byte positions.
+    pub const fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    /// Create a span, returning an error when `end < start`.
+    pub fn try_new(start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        if end < start {
+            return Err(TokenSpanError::EndBeforeStart { start, end });
+        }
+
+        Ok(Self { start, end })
+    }
+
+    /// Span length in bytes.
+    pub const fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Whether the span length is zero bytes.
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Convert this span to a standard `Range`.
+    pub const fn range(self) -> Range<usize> {
+        self.start..self.end
+    }
+}
+
+/// Error type for checked token/span constructors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenSpanError {
+    /// End offset is before start offset.
+    EndBeforeStart { start: usize, end: usize },
+    /// Empty span is only valid for EOF or explicit synthetic tokens.
+    EmptySpanNotAllowed { kind: TokenKind, at: usize },
+}
+
+impl std::fmt::Display for TokenSpanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EndBeforeStart { start, end } => {
+                write!(f, "token span invariant violated: end ({end}) < start ({start})")
+            }
+            Self::EmptySpanNotAllowed { kind, at } => {
+                write!(f, "empty span not allowed for token kind {kind:?} at byte {at}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for TokenSpanError {}
 
 /// Borrowed view over token data for allocation-sensitive paths.
 ///
@@ -115,6 +179,69 @@ impl Token {
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
+    }
+
+    /// Create a token with checked span ordering.
+    ///
+    /// Unlike [`Token::new`], this rejects spans where `end < start`.
+    pub fn try_new(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let span = TokenSpan::try_new(start, end)?;
+        Ok(Self { kind, text: text.into(), start: span.start, end: span.end })
+    }
+
+    /// Create a token while enforcing span invariants.
+    ///
+    /// Rules:
+    /// - `start <= end`
+    /// - zero-length spans are accepted only for EOF tokens
+    pub fn new_checked(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let token = Self::try_new(kind, text, start, end)?;
+        if token.is_empty() && token.kind != TokenKind::Eof {
+            return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
+        }
+
+        Ok(token)
+    }
+
+    /// Create an EOF token at `pos`.
+    pub fn eof_at(pos: usize) -> Self {
+        Self::new(TokenKind::Eof, "", pos, pos)
+    }
+
+    /// Create an unknown (synthetic) token at `start..end`.
+    pub fn unknown_at(text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
+        let bounded_end = end.max(start);
+        Self::new(TokenKind::Unknown, text, start, bounded_end)
+    }
+
+    /// Return this token's byte span.
+    pub fn span(&self) -> TokenSpan {
+        TokenSpan::new(self.start, self.end)
+    }
+
+    /// Return this token's byte span as `Range<usize>`.
+    pub fn range(&self) -> Range<usize> {
+        self.span().range()
+    }
+
+    /// Clone this token with a new checked span.
+    pub fn with_span(&self, start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        Self::new_checked(self.kind, self.text.clone(), start, end)
+    }
+
+    /// Clone this token with a new token kind.
+    pub fn with_kind(&self, kind: TokenKind) -> Self {
+        Self::new(kind, self.text.clone(), self.start, self.end)
     }
 
     /// Return the token span length in bytes.
