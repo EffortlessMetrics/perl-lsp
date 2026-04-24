@@ -132,6 +132,10 @@ fn is_warp_terminal() -> bool {
     matches!(std::env::var("TERM_PROGRAM"), Ok(value) if value.eq_ignore_ascii_case("WarpTerminal"))
 }
 
+fn is_dumb_terminal() -> bool {
+    matches!(std::env::var("TERM"), Ok(value) if value.eq_ignore_ascii_case("dumb"))
+}
+
 fn should_use_ansi(is_terminal: bool) -> bool {
     if std::env::var("NO_COLOR").is_ok() {
         return false;
@@ -144,6 +148,10 @@ fn should_use_ansi(is_terminal: bool) -> bool {
     }
 
     if matches!(env_truthy("CLICOLOR"), Some(false)) {
+        return false;
+    }
+
+    if is_dumb_terminal() {
         return false;
     }
 
@@ -1241,6 +1249,28 @@ mod tests {
         );
     }
 
+    /// Guard: TERM=dumb disables ANSI even when stdout/stderr is a terminal.
+    #[test]
+    fn ansi_term_dumb_disables_ansi() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard_fc = EnvGuard::remove("FORCE_COLOR");
+        let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
+        let _guard_cc = EnvGuard::remove("CLICOLOR");
+        let _guard = EnvGuard::set("TERM", "dumb");
+        assert!(!super::should_use_ansi(true), "TERM=dumb must disable ANSI");
+    }
+
+    /// Guard: explicit force color still wins when TERM=dumb is present.
+    #[test]
+    fn ansi_force_color_overrides_term_dumb() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
+        let _guard_cc = EnvGuard::remove("CLICOLOR");
+        let _guard_term = EnvGuard::set("TERM", "dumb");
+        let _guard_force = EnvGuard::set("FORCE_COLOR", "1");
+        assert!(super::should_use_ansi(false), "FORCE_COLOR=1 must override TERM=dumb");
+    }
+
     /// Guard: is_warp_terminal() must be true when TERM_PROGRAM=WarpTerminal.
     #[test]
     fn ansi_warp_terminal_detection() {
@@ -1263,6 +1293,7 @@ mod tests {
         let _guard_fc = EnvGuard::remove("FORCE_COLOR");
         let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
         let _guard_cc = EnvGuard::remove("CLICOLOR");
+        let _guard_term = EnvGuard::remove("TERM");
         let _guard = EnvGuard::set("TERM_PROGRAM", "vscode");
 
         assert!(
