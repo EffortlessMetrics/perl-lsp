@@ -1,56 +1,103 @@
-/// Minimal reproduction case for transliteration parsing bug discovered in fuzz testing
-///
-/// CRASH DETAILS:
-/// - Input: "tr/abc/xyz/"
-/// - Expected: ("abc", "xyz", "")
-/// - Actual: ("abc", "", "xyz")
-///
-/// This indicates a critical bug in extract_transliteration_parts where the replacement
-/// and modifiers are being swapped for non-paired delimiters.
-///
-/// IMPACT: This affects Perl transliteration operator parsing throughout the entire
-/// parser pipeline, potentially causing incorrect syntax highlighting, code analysis,
-/// and refactoring operations.
-///
-/// REPRODUCTION: Run with `cargo test -p perl-parser --test fuzz_transliteration_crash_repro`
 use perl_parser::quote_parser::extract_transliteration_parts;
 
 #[test]
-fn minimal_transliteration_crash_repro() {
-    let input = "tr/abc/xyz/";
-    let (search, replace, modifiers) = extract_transliteration_parts(input);
-
-    println!("FUZZ BUG REPRODUCED: tr// parsing issue");
-    println!("Input: {}", input);
-    println!("Expected: ('abc', 'xyz', '')");
-    println!("Actual: ('{}', '{}', '{}')", search, replace, modifiers);
-
-    // Demonstrate the bug - these will fail due to the parsing issue
-    assert_eq!(search.as_str(), "abc", "Search pattern incorrect");
-    assert_eq!(replace.as_str(), "xyz", "Replace pattern incorrect");
-    assert_eq!(modifiers.as_str(), "", "Modifiers incorrect");
-}
-
-#[test]
-fn fuzz_transliteration_regression_suite() {
-    // Test additional variants that likely have the same bug
-    let test_cases = vec![
+fn transliteration_non_paired_regressions() {
+    let cases = [
+        ("tr/abc/xyz/", ("abc", "xyz", "")),
         ("y/abc/xyz/", ("abc", "xyz", "")),
         ("tr/a/b/d", ("a", "b", "d")),
         ("y/x/y/g", ("x", "y", "")), // 'g' is not a valid transliteration modifier
-        ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // This might work correctly with paired delimiters
+        ("tr /abc/xyz/cdr", ("abc", "xyz", "cdr")),
     ];
 
-    for (input, expected) in test_cases {
+    for (input, expected) in cases {
         let (search, replace, modifiers) = extract_transliteration_parts(input);
         let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "failed for input {input:?}");
+    }
+}
 
-        println!("Testing: {} -> expected {:?}, got {:?}", input, expected, actual);
+#[test]
+fn transliteration_paired_delimiter_regressions() {
+    let cases = [
+        ("tr{abc}{xyz}d", ("abc", "xyz", "d")),
+        ("y[abc][xyz]s", ("abc", "xyz", "s")),
+        ("tr(abc)(xyz)r", ("abc", "xyz", "r")),
+        ("tr<abc>{xyz}cd", ("abc", "xyz", "cd")),
+        ("tr [a[b]c] {x{y}z} r", ("a[b]c", "x{y}z", "")),
+    ];
 
-        if actual != expected {
-            println!("  BUG CONFIRMED in variant: {}", input);
-        } else {
-            println!("  PASSED: {}", input);
-        }
+    for (input, expected) in cases {
+        let (search, replace, modifiers) = extract_transliteration_parts(input);
+        let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "failed for input {input:?}");
+    }
+}
+
+#[test]
+fn transliteration_malformed_non_panicking_regressions() {
+    let malformed_inputs = [
+        "tr",                // missing delimiter
+        "tr ",               // missing delimiter after whitespace
+        "trabc",             // invalid delimiter
+        "tr/abc",            // missing replacement section
+        "tr/abc/xyz",        // missing closing delimiter
+        "tr{abc",            // missing closing delimiter for search section
+        "tr{abc}{xyz",       // missing closing delimiter for replacement section
+        "tr{abc} xyz",       // paired search with no replacement delimiter
+        "y/a/b/q",           // invalid modifier should be dropped
+        "y/a/b/rq",          // valid + invalid modifier, keep valid prefix
+        "tr#a#b#cd!",        // stop modifiers at first non-alnum
+    ];
+
+    for input in malformed_inputs {
+        let result = std::panic::catch_unwind(|| extract_transliteration_parts(input));
+        assert!(result.is_ok(), "should never panic for malformed input {input:?}");
+    }
+
+    assert_eq!(
+        extract_transliteration_parts("tr/abc"),
+        ("abc".to_string(), String::new(), String::new())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr/abc/xyz"),
+        ("abc".to_string(), String::new(), String::new())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr{abc}{xyz"),
+        ("abc".to_string(), String::new(), String::new())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr{abc} xyz"),
+        ("abc".to_string(), String::new(), String::new())
+    );
+    assert_eq!(
+        extract_transliteration_parts("trabc"),
+        (String::new(), String::new(), String::new())
+    );
+    assert_eq!(
+        extract_transliteration_parts("y/a/b/rq"),
+        ("a".to_string(), "b".to_string(), "r".to_string())
+    );
+    assert_eq!(
+        extract_transliteration_parts("tr#a#b#cd!"),
+        ("a".to_string(), "b".to_string(), "cd".to_string())
+    );
+}
+
+#[test]
+fn transliteration_delimiter_edge_cases() {
+    let cases = [
+        ("tr||", ("", "", "")),
+        ("tr///", ("", "", "")),
+        ("tr#\\##\\##", ("\\#", "\\#", "")),
+        ("tr@@@", ("", "", "")),
+        ("y/🦀/🐪/r", ("🦀", "🐪", "r")),
+    ];
+
+    for (input, expected) in cases {
+        let (search, replace, modifiers) = extract_transliteration_parts(input);
+        let actual = (search.as_str(), replace.as_str(), modifiers.as_str());
+        assert_eq!(actual, expected, "failed for input {input:?}");
     }
 }
