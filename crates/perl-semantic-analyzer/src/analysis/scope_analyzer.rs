@@ -49,10 +49,12 @@
 //! # }
 //! ```
 
+use crate::analysis::class_model::ClassModelBuilder;
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
+use std::collections::{HashMap, HashSet};
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::rc::Rc;
@@ -359,6 +361,7 @@ struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
     imported_barewords: std::collections::HashSet<String>,
+    inherited_barewords: HashMap<String, HashSet<String>>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
@@ -370,6 +373,7 @@ impl<'a> AnalysisContext<'a> {
             code,
             pragma_map,
             imported_barewords: collect_imported_barewords(ast),
+            inherited_barewords: collect_inherited_barewords_by_package(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
@@ -377,6 +381,11 @@ impl<'a> AnalysisContext<'a> {
 
     fn has_imported_bareword(&self, name: &str) -> bool {
         self.imported_barewords.contains(name)
+    }
+
+    fn has_inherited_bareword(&self, name: &str) -> bool {
+        let package = self.current_package.borrow();
+        self.inherited_barewords.get(package.as_str()).is_some_and(|set| set.contains(name))
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -986,6 +995,7 @@ impl ScopeAnalyzer {
                     && !is_known_function(name)
                     && !pragma_state.has_builtin_import(name)
                     && !context.has_imported_bareword(name)
+                    && !context.has_inherited_bareword(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1890,6 +1900,106 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
     let mut imported = std::collections::HashSet::new();
     visit(ast, &mut imported);
     imported
+}
+
+fn collect_inherited_barewords_by_package(ast: &Node) -> HashMap<String, HashSet<String>> {
+    let class_models = ClassModelBuilder::new().build(ast);
+    let parent_map: HashMap<String, Vec<String>> =
+        class_models.into_iter().map(|model| (model.name, model.parents)).collect();
+    let package_methods = collect_package_methods(ast);
+
+    let mut inherited = HashMap::new();
+    for package in parent_map.keys() {
+        let mut inherited_methods = HashSet::new();
+        let mut visited = HashSet::new();
+        collect_parent_methods_recursive(
+            package,
+            &parent_map,
+            &package_methods,
+            &mut visited,
+            &mut inherited_methods,
+        );
+
+        if let Some(local_methods) = package_methods.get(package) {
+            for local in local_methods {
+                inherited_methods.remove(local);
+            }
+        }
+
+        if !inherited_methods.is_empty() {
+            inherited.insert(package.clone(), inherited_methods);
+        }
+    }
+
+    inherited
+}
+
+fn collect_parent_methods_recursive(
+    package: &str,
+    parent_map: &HashMap<String, Vec<String>>,
+    package_methods: &HashMap<String, HashSet<String>>,
+    visited: &mut HashSet<String>,
+    inherited_methods: &mut HashSet<String>,
+) {
+    let Some(parents) = parent_map.get(package) else {
+        return;
+    };
+
+    for parent in parents {
+        if !visited.insert(parent.clone()) {
+            continue;
+        }
+
+        if let Some(methods) = package_methods.get(parent) {
+            inherited_methods.extend(methods.iter().cloned());
+        }
+
+        collect_parent_methods_recursive(
+            parent,
+            parent_map,
+            package_methods,
+            visited,
+            inherited_methods,
+        );
+    }
+}
+
+fn collect_package_methods(ast: &Node) -> HashMap<String, HashSet<String>> {
+    fn walk(node: &Node, current_package: &mut String, methods: &mut HashMap<String, HashSet<String>>) {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                for statement in statements {
+                    walk(statement, current_package, methods);
+                }
+            }
+            NodeKind::Package { name, block, .. } => {
+                if let Some(block_node) = block {
+                    let saved = current_package.clone();
+                    *current_package = name.clone();
+                    walk(block_node, current_package, methods);
+                    *current_package = saved;
+                } else {
+                    *current_package = name.clone();
+                }
+            }
+            NodeKind::Subroutine { name: Some(sub_name), .. } => {
+                methods.entry(current_package.clone()).or_default().insert(sub_name.clone());
+            }
+            NodeKind::Method { name, .. } => {
+                methods.entry(current_package.clone()).or_default().insert(name.clone());
+            }
+            _ => {
+                for child in node.children() {
+                    walk(child, current_package, methods);
+                }
+            }
+        }
+    }
+
+    let mut methods = HashMap::new();
+    let mut current_package = "main".to_string();
+    walk(ast, &mut current_package, &mut methods);
+    methods
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.
