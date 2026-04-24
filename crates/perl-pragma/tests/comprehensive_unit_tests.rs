@@ -281,6 +281,34 @@ fn use_if_encoding_targets_encoding_not_argument() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn no_if_strict_conditionally_disables_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("if", &["$cond", "'strict'"], 13, 33),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 25);
+
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn no_unless_feature_conditionally_disables_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("feature", &["'say'"], 0, 20),
+        no_node("unless", &["$cond", "feature", "'say'"], 21, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 40);
+
+    assert!(!state.has_feature("say"));
+    Ok(())
+}
+
+#[test]
 fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &[], 13, 23)]);
     let map = PragmaTracker::build(&ast);
@@ -908,6 +936,19 @@ fn eval_string_call_is_handled_conservatively() -> Result<(), Box<dyn std::error
         !state_after_eval_string.warnings,
         "string eval content must not be treated as lexical `use warnings`"
     );
+    Ok(())
+}
+
+#[test]
+fn eval_string_expression_is_handled_conservatively() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        eval_node(use_node("warnings", &[], 20, 32), 15, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 30);
+
+    assert!(!state.warnings, "eval STRING should not be interpreted as a lexical pragma scope");
     Ok(())
 }
 
