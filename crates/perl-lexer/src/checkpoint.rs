@@ -98,30 +98,46 @@ impl LexerCheckpoint {
         }
     }
 
+    fn reset_state_to(&mut self, new_position: usize) {
+        self.position = new_position;
+        self.mode = LexerMode::ExpectTerm;
+        self.delimiter_stack.clear();
+        self.in_prototype = false;
+        self.prototype_depth = 0;
+        self.after_sub = false;
+        self.after_arrow = false;
+        self.hash_brace_depth = 0;
+        self.after_var_subscript = false;
+        self.paren_depth = 0;
+        self.context = CheckpointContext::Normal;
+
+        // We know byte offsets, but not line/column deltas from edit text.
+        // `0:0` explicitly means "line/column invalidated; recompute if needed".
+        self.current_pos = Position::new(new_position, 0, 0);
+    }
+
     /// Apply an edit to this checkpoint
     pub fn apply_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
-        if self.position > start {
-            if self.position >= start + old_len {
-                // Checkpoint is after the edit
-                self.position = self.position - old_len + new_len;
-            } else {
-                // Checkpoint is inside the edit - invalidate
-                self.position = start;
-                self.mode = LexerMode::ExpectTerm;
-                self.delimiter_stack.clear();
-                self.in_prototype = false;
-                self.prototype_depth = 0;
-                self.after_sub = false;
-                self.after_arrow = false;
-                self.hash_brace_depth = 0;
-                self.after_var_subscript = false;
-                self.paren_depth = 0;
-                self.context = CheckpointContext::Normal;
-            }
+        let edit_end = start.saturating_add(old_len);
+
+        if self.position < start {
+            // Edit is strictly after this checkpoint.
+            return;
         }
 
-        // Update position tracking
-        // In a real implementation, we'd update line/column based on the edit
+        if self.position >= edit_end {
+            // Checkpoint is at/after the edited range and can be byte-shifted.
+            self.position = self.position.saturating_sub(old_len).saturating_add(new_len);
+
+            // We can preserve byte accuracy, but line/column can be changed by newline edits.
+            self.current_pos.byte = self.position;
+            self.current_pos.line = 0;
+            self.current_pos.column = 0;
+            return;
+        }
+
+        // Checkpoint lies in the replaced range - invalidate to edit start.
+        self.reset_state_to(start);
     }
 
     /// Validate that this checkpoint is valid for the given input
@@ -216,23 +232,7 @@ impl CheckpointCache {
         // Add the new checkpoint
         self.checkpoints.push((position, checkpoint));
 
-        // Sort by position
-        self.checkpoints.sort_by_key(|(pos, _)| *pos);
-
-        // Trim to max size
-        if self.checkpoints.len() > self.max_checkpoints {
-            // Keep checkpoints evenly distributed
-            let total = self.checkpoints.len();
-            let step = total as f64 / self.max_checkpoints as f64;
-            let mut kept = Vec::new();
-            for i in 0..self.max_checkpoints {
-                let idx = (i as f64 * step) as usize;
-                if idx < total {
-                    kept.push(self.checkpoints[idx].clone());
-                }
-            }
-            self.checkpoints = kept;
-        }
+        self.rebalance();
     }
 
     /// Find the nearest checkpoint at or before a given position.
@@ -307,9 +307,29 @@ impl CheckpointCache {
             *pos = checkpoint.position;
         }
 
-        // Remove invalid checkpoints
-        self.checkpoints
-            .retain(|(_, cp)| !matches!(cp.context, CheckpointContext::Normal) || cp.position > 0);
+        self.rebalance();
+    }
+
+    fn rebalance(&mut self) {
+        // Maintain sorted order for binary-search lookups.
+        self.checkpoints.sort_by_key(|(pos, _)| *pos);
+
+        // Ensure position uniqueness after edits can collapse multiple checkpoints.
+        self.checkpoints.dedup_by(|a, b| a.0 == b.0);
+
+        // Trim to max size while preserving broad source coverage.
+        if self.checkpoints.len() > self.max_checkpoints {
+            let total = self.checkpoints.len();
+            let step = total as f64 / self.max_checkpoints as f64;
+            let mut kept = Vec::new();
+            for i in 0..self.max_checkpoints {
+                let idx = (i as f64 * step) as usize;
+                if idx < total {
+                    kept.push(self.checkpoints[idx].clone());
+                }
+            }
+            self.checkpoints = kept;
+        }
     }
 }
 
@@ -345,6 +365,9 @@ mod tests {
         // Edit before checkpoint
         cp.apply_edit(10, 5, 10);
         assert_eq!(cp.position, 55); // Shifted by +5
+        assert_eq!(cp.current_pos.byte, 55);
+        assert_eq!(cp.current_pos.line, 0);
+        assert_eq!(cp.current_pos.column, 0);
 
         // Edit after checkpoint
         let mut cp2 = LexerCheckpoint::at_position(50);
@@ -355,6 +378,32 @@ mod tests {
         let mut cp3 = LexerCheckpoint::at_position(50);
         cp3.apply_edit(45, 10, 5);
         assert_eq!(cp3.position, 45); // Reset to edit start
+        assert_eq!(cp3.mode, LexerMode::ExpectTerm);
+        assert!(cp3.delimiter_stack.is_empty());
+        assert_eq!(cp3.current_pos, Position::new(45, 0, 0));
+    }
+
+    #[test]
+    fn test_checkpoint_edit_newline_line_column_invalidation() {
+        let mut cp = LexerCheckpoint {
+            position: 30,
+            current_pos: Position::new(30, 3, 12),
+            ..LexerCheckpoint::new()
+        };
+
+        // A newline-changing edit before checkpoint means line/column are unknown.
+        cp.apply_edit(5, 1, 2);
+        assert_eq!(cp.position, 31);
+        assert_eq!(cp.current_pos, Position::new(31, 0, 0));
+    }
+
+    #[test]
+    fn test_checkpoint_edit_overflow_inputs_do_not_panic() {
+        let mut cp = LexerCheckpoint::at_position(usize::MAX);
+        cp.apply_edit(usize::MAX - 2, 10, 20);
+
+        // Saturating math prevents panic and yields stable values.
+        assert!(cp.position >= usize::MAX - 2);
     }
 
     #[test]
@@ -440,5 +489,20 @@ mod tests {
         );
         assert!(cache.find_before(100).is_none());
         assert!(cache.find_after(0).is_none());
+    }
+
+    #[test]
+    fn test_cache_apply_edit_preserves_order_and_uniqueness() {
+        let mut cache = CheckpointCache::new(10);
+        cache.add(LexerCheckpoint::at_position(10));
+        cache.add(LexerCheckpoint::at_position(20));
+        cache.add(LexerCheckpoint::at_position(30));
+
+        // Replace [15, 25) -> [15, 20), collapsing former 20 and 30 toward each other.
+        cache.apply_edit(15, 10, 5);
+
+        let positions: Vec<usize> = cache.checkpoints.iter().map(|(pos, _)| *pos).collect();
+        let sorted = positions.windows(2).all(|w| w[0] < w[1]);
+        assert!(sorted, "checkpoints must remain strictly increasing");
     }
 }
