@@ -407,6 +407,8 @@ pub mod builtins;
 pub mod incremental;
 /// Code refactoring, modernization, and import optimization.
 pub mod refactor;
+/// Narrow, typed read-only semantic query façade.
+pub mod semantic_query;
 /// Test-driven development support and test generation.
 pub mod tdd;
 /// Token stream, trivia, and token wrapper utilities.
@@ -549,6 +551,11 @@ pub use incremental::{Edit, IncrementalState, apply_edits};
 pub use semantic::{
     HoverInfo, SemanticAnalyzer, SemanticModel, SemanticToken, SemanticTokenModifier,
     SemanticTokenType,
+};
+/// Read-only semantic query façade and stable response types.
+pub use semantic_query::{
+    DefinitionId, DefinitionLocation, EffectivePragmaState, ParentChain, ParentLink,
+    ResolvedSymbol, SemanticQueryFacade, VisibleImport, VisibleImportKind,
 };
 /// Symbol extraction, table, and reference types for navigation.
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
