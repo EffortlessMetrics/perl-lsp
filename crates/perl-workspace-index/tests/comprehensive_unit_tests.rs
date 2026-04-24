@@ -327,6 +327,42 @@ fn test_find_refs_with_symbol_key() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn test_query_symbol_references_cross_file_returns_definition_and_refs(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri_def = file_url("/lib/Math.pm")?;
+    let uri_use_a = file_url("/app_a.pl")?;
+    let uri_use_b = file_url("/app_b.pl")?;
+
+    index.index_file(uri_def, "package Math;\nsub add { 1 }\n".to_string())?;
+    index.index_file(uri_use_a, "Math::add(1, 2);\n".to_string())?;
+    index.index_file(uri_use_b, "Math::add(3, 4);\n".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("Math"),
+        name: Arc::from("add"),
+        sigil: None,
+        kind: SymKind::Sub,
+    };
+
+    let query = index.query_symbol_references(&key);
+    let definition = must_some(query.definition);
+
+    assert!(definition.uri.ends_with("/lib/Math.pm"));
+    assert_eq!(query.symbol.stable_key, "Math::add");
+    assert_eq!(query.references.len(), 2, "expected exactly two call sites");
+    assert!(
+        query.references[0].uri.ends_with("/app_a.pl"),
+        "references should be deterministically sorted by uri"
+    );
+    assert!(
+        query.references[1].uri.ends_with("/app_b.pl"),
+        "references should be deterministically sorted by uri"
+    );
+    Ok(())
+}
+
 // =========================================================================
 // Content-hash early exit (re-indexing same content is a no-op)
 // =========================================================================

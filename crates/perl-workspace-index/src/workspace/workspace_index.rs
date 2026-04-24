@@ -989,6 +989,26 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// Stable symbol identity payload returned by cross-file reference queries.
+pub struct QuerySymbolIdentity {
+    /// Canonical symbol key used by semantic consumers.
+    pub key: SymbolKey,
+    /// Stable string key that can be persisted in downstream rename flows.
+    pub stable_key: String,
+}
+
+#[derive(Debug, Clone)]
+/// Cross-file symbol query result with definition and reference locations.
+pub struct SymbolReferenceQuery {
+    /// Queried symbol identity.
+    pub symbol: QuerySymbolIdentity,
+    /// Definition location (if indexed and resolvable).
+    pub definition: Option<Location>,
+    /// Non-definition reference locations in deterministic order.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1149,27 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn stable_key_for_symbol(key: &SymbolKey) -> String {
+        if let Some(sigil) = key.sigil {
+            format!("{sigil}{}::{}", key.pkg, key.name)
+        } else if key.kind == SymKind::Pack {
+            key.pkg.to_string()
+        } else {
+            format!("{}::{}", key.pkg, key.name)
+        }
+    }
+
+    fn sort_locations_stably(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then(left.range.start.line.cmp(&right.range.start.line))
+                .then(left.range.start.column.cmp(&right.range.start.column))
+                .then(left.range.end.line.cmp(&right.range.end.line))
+                .then(left.range.end.column.cmp(&right.range.end.column))
+        });
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -2687,6 +2728,26 @@ impl WorkspaceIndex {
         });
 
         all_refs
+    }
+
+    /// Query a symbol across the workspace with stable identity, definition, and references.
+    ///
+    /// This API is designed as a deterministic foundation for workspace-wide rename and safe
+    /// delete operations. Returned references always exclude the definition site and are sorted
+    /// by URI then source range.
+    pub fn query_symbol_references(&self, key: &SymbolKey) -> SymbolReferenceQuery {
+        let definition = self.find_def(key);
+        let mut references = self.find_refs(key);
+        Self::sort_locations_stably(&mut references);
+
+        SymbolReferenceQuery {
+            symbol: QuerySymbolIdentity {
+                key: key.clone(),
+                stable_key: Self::stable_key_for_symbol(key),
+            },
+            definition,
+            references,
+        }
     }
 }
 
