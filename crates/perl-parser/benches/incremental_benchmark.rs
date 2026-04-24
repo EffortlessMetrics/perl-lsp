@@ -4,8 +4,13 @@ use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use perl_tdd_support::{must, must_some};
 use std::hint::black_box;
+use std::sync::OnceLock;
+
+#[path = "support/performance_scorecard.rs"]
+mod performance_scorecard;
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = r#"
 use strict;
 use warnings;
@@ -54,6 +59,7 @@ process_data($items);
 }
 
 fn bench_full_reparse(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = r#"
 use strict;
 use warnings;
@@ -105,6 +111,7 @@ process_data($items);
 ///   reused, single small edit applied via the checkpoint-driven incremental
 ///   lexing path.
 fn bench_warm_reparse(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = r#"
 use strict;
 use warnings;
@@ -146,6 +153,7 @@ process_data($items);
 }
 
 fn bench_multiple_edits(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = r#"
 my $x = 1;
 my $y = 2;
@@ -184,6 +192,7 @@ print "$x $y $z\n";
 }
 
 fn bench_incremental_document_single_edit(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = "my $x = 42; my $y = 100; print $x + $y;";
     let start = must_some(source.find("42"));
     let end = start + 2;
@@ -202,6 +211,7 @@ fn bench_incremental_document_single_edit(c: &mut Criterion) {
 }
 
 fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
+    emit_incremental_scorecard_once();
     let source = "sub calc { my $a = 10; my $b = 20; $a + $b }";
     let pos_a = must_some(source.find("10"));
     let pos_b = must_some(source.find("20"));
@@ -217,6 +227,110 @@ fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
                 black_box(doc.metrics.nodes_reused);
             },
             BatchSize::SmallInput,
+        );
+    });
+}
+
+fn emit_incremental_scorecard_once() {
+    static EMITTED: OnceLock<()> = OnceLock::new();
+    EMITTED.get_or_init(|| {
+        let source = r#"
+use strict;
+use warnings;
+
+sub process_data {
+    my ($data) = @_;
+    for my $item (@$data) {
+        my $result = transform($item);
+        print "Result: $result\n";
+    }
+    return 1;
+}
+
+sub transform {
+    my ($value) = @_;
+    return $value * 2;
+}
+
+my $items = [1, 2, 3, 4, 5];
+process_data($items);
+"#
+        .to_string();
+
+        let rename_start = must_some(source.find("transform"));
+        let rename_end = rename_start + "transform".len();
+
+        let cold_parse = performance_scorecard::measure_scenario(
+            || {
+                let state = IncrementalState::new(source.clone());
+                black_box(&state.ast);
+            },
+            30,
+        );
+        let warm_reparse = performance_scorecard::measure_scenario(
+            || {
+                let mut state = IncrementalState::new(source.clone());
+                let _ = apply_edits(&mut state, &[]);
+                black_box(&state.ast);
+            },
+            30,
+        );
+        let incremental_small_edit = performance_scorecard::measure_scenario(
+            || {
+                let mut state = IncrementalState::new(source.clone());
+                let edit = Edit {
+                    start_byte: rename_start,
+                    old_end_byte: rename_end,
+                    new_end_byte: rename_start + "process".len(),
+                    new_text: "process".to_string(),
+                };
+                let _ = apply_edits(&mut state, &[edit]);
+                black_box(&state.ast);
+            },
+            30,
+        );
+
+        let multi_edit_source = r#"
+my $x = 1;
+my $y = 2;
+my $z = 3;
+print "$x $y $z\n";
+"#
+        .to_string();
+        let pos_1 = must_some(multi_edit_source.find("= 1")) + 2;
+        let pos_2 = must_some(multi_edit_source.find("= 2")) + 2;
+
+        let incremental_multiple_edits = performance_scorecard::measure_scenario(
+            || {
+                let mut state = IncrementalState::new(multi_edit_source.clone());
+                let edits = vec![
+                    Edit {
+                        start_byte: pos_1,
+                        old_end_byte: pos_1 + 1,
+                        new_end_byte: pos_1 + 2,
+                        new_text: "10".to_string(),
+                    },
+                    Edit {
+                        start_byte: pos_2,
+                        old_end_byte: pos_2 + 1,
+                        new_end_byte: pos_2 + 2,
+                        new_text: "20".to_string(),
+                    },
+                ];
+                let _ = apply_edits(&mut state, &edits);
+                black_box(&state.ast);
+            },
+            30,
+        );
+
+        performance_scorecard::write_scorecard(
+            "incremental_benchmark",
+            [
+                ("cold_parse", cold_parse),
+                ("warm_reparse", warm_reparse),
+                ("incremental_small_edit", incremental_small_edit),
+                ("incremental_multiple_edits", incremental_multiple_edits),
+            ],
         );
     });
 }

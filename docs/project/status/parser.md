@@ -10,7 +10,7 @@
 <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 97.1% clean (`6890/7095`) | Compatibility baseline; Perl `5.038002`, `48` unreadable, `157` with errors, baseline `2026-04-09` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) | Ecosystem breadth baseline; `6` unreadable, `435` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`91/91`) | Deterministic regression baseline; `69` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`93/93`) | Deterministic regression baseline; `71` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -24,12 +24,26 @@
 | **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | 10 modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
+
+## Parser Performance Scorecard
+
+| Regime | Value | Notes | Source |
+| --- | --- | --- | --- |
+<!-- BEGIN: PARSER_PERF_SCORECARD -->
+| **Cold parse** | p50 `44.3`µs / p95 `73.8`µs | 30 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+| **Warm reparse** | p50 `114.8`µs / p95 `162.5`µs | 30 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+| **Incremental small edit** | p50 `60.4`µs / p95 `93.8`µs | 30 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+| **Incremental multiple edits** | p50 `36.4`µs / p95 `49.4`µs | 30 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+| **Lexer-only** | p50 `25.3`µs / p95 `46.7`µs | 40 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+| **Scope analysis** | p50 `94.9`µs / p95 `138.8`µs | 25 samples (schema v1) | `target/receipts/parser-performance-scorecard.json` |
+<!-- END: PARSER_PERF_SCORECARD -->
 
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
 - **Three-baseline model**: compatibility is tracked with `just corpus-sweep-check` against Ubuntu system Perl, ecosystem breadth with `just cpan-corpus-check` against the cached CPAN top-1000 install, and deterministic regression coverage with `just parser-audit` against the repo-owned corpus.
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.
 - **Fixture bank**: `tree-sitter-perl/test/corpus` contributes ~611 focused syntax sections for targeted parser cases.
 - **CPAN install hygiene**: `cargo xtask cpan-corpus install` reuses `target/cpan-corpus/.cpanm`; pass `--reset` only for a cold rebuild.
+- **Performance scorecard artifact**: parser benches write `target/receipts/parser-performance-scorecard.json` with p50/p95 for cold/warm/incremental parse regimes plus lexer/scope phase timings.
 <!-- END: PARSER_METRICS_BULLETS -->

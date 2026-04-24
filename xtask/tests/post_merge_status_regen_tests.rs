@@ -254,6 +254,10 @@ fn test_subsystem_files_have_markers() -> Result<(), Box<dyn std::error::Error>>
         parser.contains("<!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->"),
         "parser.md missing PARSER_STRICT_CLEAN_ROW block"
     );
+    assert!(
+        parser.contains("<!-- BEGIN: PARSER_PERF_SCORECARD -->"),
+        "parser.md missing PARSER_PERF_SCORECARD block"
+    );
 
     let quality = fs::read_to_string(status_dir.join("quality.md"))?;
     assert!(

@@ -7,6 +7,10 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
+use std::sync::OnceLock;
+
+#[path = "support/performance_scorecard.rs"]
+mod performance_scorecard;
 
 const SIMPLE_SCRIPT: &str = r#"
 my $x = 42;
@@ -72,6 +76,7 @@ sub fibonacci {
 "#;
 
 fn benchmark_simple_parsing(c: &mut Criterion) {
+    emit_parser_scorecard_once();
     c.bench_function("parse_simple_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(SIMPLE_SCRIPT));
@@ -81,6 +86,7 @@ fn benchmark_simple_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_complex_parsing(c: &mut Criterion) {
+    emit_parser_scorecard_once();
     c.bench_function("parse_complex_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(COMPLEX_SCRIPT));
@@ -90,6 +96,7 @@ fn benchmark_complex_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_ast_generation(c: &mut Criterion) {
+    emit_parser_scorecard_once();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
 
@@ -101,6 +108,7 @@ fn benchmark_ast_generation(c: &mut Criterion) {
 }
 
 fn benchmark_isolated_components(c: &mut Criterion) {
+    emit_parser_scorecard_once();
     // Benchmark just the lexer phase
     c.bench_function("lexer_only", |b| {
         use perl_lexer::{PerlLexer, TokenType};
@@ -125,6 +133,7 @@ fn benchmark_isolated_components(c: &mut Criterion) {
 }
 
 fn benchmark_scope_analysis(c: &mut Criterion) {
+    emit_parser_scorecard_once();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
     let analyzer = ScopeAnalyzer::new();
@@ -134,6 +143,41 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
         b.iter(|| {
             analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
         });
+    });
+}
+
+fn emit_parser_scorecard_once() {
+    static EMITTED: OnceLock<()> = OnceLock::new();
+    EMITTED.get_or_init(|| {
+        let lexer_only = performance_scorecard::measure_scenario(
+            || {
+                use perl_lexer::{PerlLexer, TokenType};
+                let mut lexer = PerlLexer::new(COMPLEX_SCRIPT);
+                loop {
+                    let Some(token) = lexer.next_token() else { break };
+                    if matches!(token.token_type, TokenType::EOF) {
+                        break;
+                    }
+                }
+            },
+            40,
+        );
+        let scope_analysis = performance_scorecard::measure_scenario(
+            || {
+                let mut parser = Parser::new(COMPLEX_SCRIPT);
+                if let Ok(ast) = parser.parse() {
+                    let analyzer = ScopeAnalyzer::new();
+                    let pragma_map = vec![];
+                    let _ = analyzer.analyze(&ast, COMPLEX_SCRIPT, &pragma_map);
+                }
+            },
+            25,
+        );
+
+        performance_scorecard::write_scorecard(
+            "parser_benchmark",
+            [("lexer_only", lexer_only), ("scope_analysis", scope_analysis)],
+        );
     });
 }
 
