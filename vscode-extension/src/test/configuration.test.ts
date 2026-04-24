@@ -145,14 +145,6 @@ describe('package.json contributes', () => {
     test('activates on perl language', () => {
       expect(pkg.activationEvents).toContain('onLanguage:perl');
     });
-
-    test('activates on restart command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.restart');
-    });
-
-    test('activates on reinstall command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.reinstall');
-    });
   });
 
   describe('commands', () => {

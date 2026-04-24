@@ -13,8 +13,9 @@ import {
   offerDebugConfigOnFirstPerlOpen,
   parseDebugTestLaunchTarget,
   resetDebugConfigPromptFlag,
-  rewriteDebugTestLensCommand,
+  rewriteTestLensCommand,
   VSCODE_DEBUG_TEST_COMMAND,
+  VSCODE_RUN_TEST_COMMAND,
 } from '../debugAdapter';
 
 // ---------------------------------------------------------------------------
@@ -235,18 +236,30 @@ describe('debug test command helpers', () => {
       },
     };
 
-    expect(rewriteDebugTestLensCommand(lens).command.command).toBe(VSCODE_DEBUG_TEST_COMMAND);
+    expect(rewriteTestLensCommand(lens).command.command).toBe(VSCODE_DEBUG_TEST_COMMAND);
+  });
+
+test('rewrites server run-test code lenses to the VS Code command', () => {
+    const lens = {
+      command: {
+        title: 'Run Test',
+        command: 'perl.runTest',
+        arguments: ['file:///tmp/basic.t::test_basic'],
+      },
+    };
+
+    expect(rewriteTestLensCommand(lens).command.command).toBe(VSCODE_RUN_TEST_COMMAND);
   });
 
   test('leaves unrelated code lenses unchanged', () => {
     const lens = {
       command: {
-        title: 'Run Test',
-        command: 'perl.runTest',
+        title: 'Go to definition',
+        command: 'perl.goToDefinition',
       },
     };
 
-    expect(rewriteDebugTestLensCommand(lens)).toEqual(lens);
+    expect(rewriteTestLensCommand(lens)).toEqual(lens);
   });
 
   test('parses a code-lens test id into a launch target', () => {

@@ -5,7 +5,7 @@ import { execFile } from 'child_process';
 import { LanguageClient, TransportKind, Trace } from 'vscode-languageclient/node';
 import type { LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
-import { activateDebugger, rewriteDebugTestLensCommand } from './debugAdapter';
+import { activateDebugger, rewriteTestLensCommand, parseDebugTestLaunchTarget } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 import { OnboardingManager } from './onboarding';
 import { WhatsNewManager } from './whatsNew';
@@ -73,15 +73,27 @@ export async function activate(context: vscode.ExtensionContext) {
         await vscode.commands.executeCommand('editor.action.organizeImports');
     });
 
-    const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async () => {
-        const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'perl') {
-            vscode.window.showErrorMessage('No active Perl file to test');
-            return;
+    const runTestsCommand = vscode.commands.registerCommand('perl-lsp.runTests', async (test?: unknown) => {
+        let targetUri: vscode.Uri | undefined;
+
+        if (test) {
+            const target = parseDebugTestLaunchTarget(test);
+            if (target && target.program) {
+                targetUri = vscode.Uri.file(target.program);
+            }
+        }
+
+        if (!targetUri) {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || editor.document.languageId !== 'perl') {
+                vscode.window.showErrorMessage('No active Perl file to test');
+                return;
+            }
+            targetUri = editor.document.uri;
         }
 
         // Restrict to test files (.t, .pl) - .pm files are modules, not test scripts
-        const filePath = editor.document.uri.fsPath;
+        const filePath = targetUri.fsPath;
         if (!filePath.endsWith('.t') && !filePath.endsWith('.pl')) {
             vscode.window.showWarningMessage('Run Tests is only available for .t and .pl files');
             return;
@@ -99,7 +111,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             try {
-                await testAdapter.runFileTests(editor.document.uri);
+                await testAdapter.runFileTests(targetUri);
             } finally {
                 // Restore original state
                 if (statusBarItem && originalText) {
@@ -808,11 +820,11 @@ function createLanguageClient(serverPath: string): LanguageClient {
         middleware: {
             provideCodeLenses: async (document, token, next) => {
                 const lenses = await next(document, token);
-                return lenses?.map(rewriteDebugTestLensCommand);
+                return lenses?.map(rewriteTestLensCommand);
             },
             resolveCodeLens: async (codeLens, token, next) => {
                 const resolved = await next(codeLens, token);
-                return rewriteDebugTestLensCommand(resolved ?? codeLens);
+                return rewriteTestLensCommand(resolved ?? codeLens);
             },
             provideDocumentFormattingEdits: async (document, options, token, next) => {
                 try {

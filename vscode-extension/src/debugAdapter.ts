@@ -256,18 +256,35 @@ export function resetDebugConfigPromptFlag(): void {
     _debugConfigPromptShown = false;
 }
 
-export function rewriteDebugTestLensCommand<T extends { command?: { command?: string } }>(lens: T): T {
-    if (!lens.command || lens.command.command !== SERVER_DEBUG_TEST_COMMAND) {
+const SERVER_RUN_TEST_COMMAND = 'perl.runTest';
+export const VSCODE_RUN_TEST_COMMAND = 'perl-lsp.runTests';
+
+export function rewriteTestLensCommand<T extends { command?: { command?: string } }>(lens: T): T {
+    if (!lens.command) {
         return lens;
     }
 
-    return {
-        ...lens,
-        command: {
-            ...lens.command,
-            command: VSCODE_DEBUG_TEST_COMMAND,
-        },
-    };
+    if (lens.command.command === SERVER_DEBUG_TEST_COMMAND) {
+        return {
+            ...lens,
+            command: {
+                ...lens.command,
+                command: VSCODE_DEBUG_TEST_COMMAND,
+            },
+        };
+    }
+
+    if (lens.command.command === SERVER_RUN_TEST_COMMAND) {
+        return {
+            ...lens,
+            command: {
+                ...lens.command,
+                command: VSCODE_RUN_TEST_COMMAND,
+            },
+        };
+    }
+
+    return lens;
 }
 
 export function parseDebugTestLaunchTarget(test: unknown): DebugTestLaunchTarget | undefined {
