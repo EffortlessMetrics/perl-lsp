@@ -166,10 +166,7 @@ fn use_parens_info(source: &str) -> (String, bool, bool) {
     if let perl_parser_core::NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             if let perl_parser_core::NodeKind::Use {
-                module,
-                args,
-                has_explicit_import_list,
-                ..
+                module, args, has_explicit_import_list, ..
             } = &stmt.kind
             {
                 return (module.clone(), args.is_empty(), *has_explicit_import_list);

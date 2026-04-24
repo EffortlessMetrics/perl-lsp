@@ -1,0 +1,14 @@
+---
+source: crates/perl-diagnostics/tests/snapshot_tests.rs
+expression: "snapshot.join(\"\\n\")"
+---
+PL001    => https://docs.perl-lsp.org/errors/PL001
+PL102    => https://docs.perl-lsp.org/errors/PL102
+PL200    => https://docs.perl-lsp.org/errors/PL200
+PL300    => https://docs.perl-lsp.org/errors/PL300
+PL406    => https://docs.perl-lsp.org/errors/PL406
+PL600    => https://docs.perl-lsp.org/errors/PL600
+PL700    => https://docs.perl-lsp.org/errors/PL700
+PL800    => https://docs.perl-lsp.org/errors/PL800
+PL900    => https://docs.perl-lsp.org/errors/PL900
+PC001    => (none)

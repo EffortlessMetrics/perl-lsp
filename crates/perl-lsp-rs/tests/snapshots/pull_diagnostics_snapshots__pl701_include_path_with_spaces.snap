@@ -1,0 +1,18 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: format_diagnostic(pl701)
+---
+code: PL701
+severity: Warning
+message: Module 'Missing::Module' not found. Searched @INC: /path/with spaces, /another/path. Add to lib path or install the module.
+Suggestion: Install with: cpanm Missing::Module or add to .perl-lsp.toml: include_paths
+source: Some("perl-lsp")
+range: 0:0-0:19
+tags: None
+data: {
+  "category": "Import",
+  "code": "PL701",
+  "fixable": false,
+  "tags": []
+}
+related_information:

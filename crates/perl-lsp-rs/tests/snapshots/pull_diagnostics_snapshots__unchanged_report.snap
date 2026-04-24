@@ -1,0 +1,6 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: format_report(&second)
+---
+kind: Unchanged
+result_id: 114cab42d83095d07c5b00bf955efaf8

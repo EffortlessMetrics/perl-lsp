@@ -1,0 +1,19 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: "format_diagnostic(parse_errors[0])"
+---
+code: PL002
+severity: Error
+message: Unclosed block: expected '}' but reached end of input
+Suggestion: Unclosed `{` -- check for a missing `}` to close the block
+source: Some("perl-lsp")
+range: 2:0-1:14
+tags: None
+data: {
+  "category": "Parser",
+  "code": "PL002",
+  "fixable": false,
+  "tags": []
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 2:0-1:14, message: "Suggestion: Unclosed `{` -- check for a missing `}` to close the block"

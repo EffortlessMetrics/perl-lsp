@@ -1,0 +1,38 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: "formatted.join(\"\\n---\\n\")"
+---
+code: PL102
+severity: Warning
+message: Variable '$unused' is declared but never used -- prefix with '_' or remove it
+Suggestion: Prefix as '_unused'
+source: Some("perl-lsp")
+range: 3:3-3:10
+tags: Some([Unnecessary])
+data: {
+  "category": "StrictWarnings",
+  "code": "PL102",
+  "fixable": true,
+  "tags": [
+    "Unnecessary"
+  ]
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 3:3-3:10, message: "💡 Remove the unused variable or prefix with '_' to indicate it's intentionally unused"
+---
+code: PL103
+severity: Error
+message: Variable '$y' is used but not declared -- add 'my $y' to declare it in this scope
+Suggestion: Add 'my $y;' before this line
+source: Some("perl-lsp")
+range: 2:6-2:8
+tags: None
+data: {
+  "category": "StrictWarnings",
+  "code": "PL103",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 2:6-2:8, message: "💡 Declare the variable with 'my', 'our', 'local', or 'state'"
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 2:6-2:8, message: "ℹ\u{fe0f} Under 'use strict', all variables must be declared before use. Use 'my' for lexical scope or 'our' for package variables."

@@ -2925,14 +2925,28 @@ impl IndexVisitor {
                 // our @EXPORT = qw(foo bar);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    self.insert_export_entry(&package, &uri, range, &symbol, ExportKind::Explicit, file_index);
+                    self.insert_export_entry(
+                        &package,
+                        &uri,
+                        range,
+                        &symbol,
+                        ExportKind::Explicit,
+                        file_index,
+                    );
                 }
             }
             ("EXPORT_OK", "@") => {
                 // our @EXPORT_OK = qw(baz qux);
                 let symbols = collect_symbol_names(initializer);
                 for symbol in symbols {
-                    self.insert_export_entry(&package, &uri, range, &symbol, ExportKind::Ok, file_index);
+                    self.insert_export_entry(
+                        &package,
+                        &uri,
+                        range,
+                        &symbol,
+                        ExportKind::Ok,
+                        file_index,
+                    );
                 }
             }
             ("EXPORT_TAGS", "%") => {
@@ -2956,16 +2970,9 @@ impl IndexVisitor {
         kind: ExportKind,
         file_index: &mut FileIndex,
     ) {
-        let location = Location {
-            uri: uri.to_string(),
-            range,
-        };
-        let entry = ExportEntry {
-            module: package.to_string(),
-            symbol: symbol.to_string(),
-            location,
-            kind,
-        };
+        let location = Location { uri: uri.to_string(), range };
+        let entry =
+            ExportEntry { module: package.to_string(), symbol: symbol.to_string(), location, kind };
         file_index.exports.insert(symbol.to_string(), entry);
     }
 
@@ -2980,7 +2987,14 @@ impl IndexVisitor {
                 let tag_symbols = collect_symbol_names(&pair.1);
                 let range = self.node_to_range(&pair.1);
                 for symbol in tag_symbols {
-                    self.insert_export_entry(package, &self.uri, range, &symbol, ExportKind::Tag, file_index);
+                    self.insert_export_entry(
+                        package,
+                        &self.uri,
+                        range,
+                        &symbol,
+                        ExportKind::Tag,
+                        file_index,
+                    );
                 }
             }
         }

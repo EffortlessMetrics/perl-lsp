@@ -1,0 +1,10 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: "format!(\"{:#}\", snapshot)"
+---
+{
+  "category": "Import",
+  "code": "PL701",
+  "fixable": false,
+  "tags": []
+}

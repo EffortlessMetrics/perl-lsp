@@ -1,0 +1,10 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: "format!(\"{:#}\", snapshot)"
+---
+{
+  "category": "Parser",
+  "code": "PL001",
+  "fixable": true,
+  "tags": []
+}

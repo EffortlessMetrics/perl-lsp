@@ -1,0 +1,103 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: format_report(&report)
+---
+kind: Full
+result_id: 12b60eee6d02dd42c4698e50dc83a3a1
+items_count: 6
+items:
+code: PL001
+severity: Error
+message: Recovered from MissingOperand at InfixRhs (position 6)
+source: Some("perl-lsp")
+range: 0:0-0:1
+tags: None
+data: {
+  "category": "Parser",
+  "code": "PL001",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+
+---
+code: PL100
+severity: Information
+message: Consider adding 'use strict;' for better error checking
+Suggestion: Add 'use strict;' at the top of the file
+source: Some("perl-lsp")
+range: 0:0-0:0
+tags: None
+data: {
+  "category": "StrictWarnings",
+  "code": "PL100",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:0-0:0, message: "💡 Add 'use strict;' at the beginning of your script"
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:0-0:0, message: "ℹ\u{fe0f} The 'use strict' pragma enforces good coding practices by requiring variable declarations, disabling barewords, and preventing symbolic references."
+---
+code: PL101
+severity: Information
+message: Consider adding 'use warnings;' for better error detection
+Suggestion: Add 'use warnings;' at the top of the file
+source: Some("perl-lsp")
+range: 0:0-0:0
+tags: None
+data: {
+  "category": "StrictWarnings",
+  "code": "PL101",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:0-0:0, message: "💡 Add 'use warnings;' at the beginning of your script"
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:0-0:0, message: "ℹ\u{fe0f} The 'use warnings' pragma enables helpful warning messages about questionable constructs, uninitialized values, and deprecated features."
+---
+code: PL102
+severity: Warning
+message: Variable '$x' is declared but never used -- prefix with '_' or remove it
+Suggestion: Prefix as '_x'
+source: Some("perl-lsp")
+range: 0:3-0:5
+tags: Some([Unnecessary])
+data: {
+  "category": "StrictWarnings",
+  "code": "PL102",
+  "fixable": true,
+  "tags": [
+    "Unnecessary"
+  ]
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:3-0:5, message: "💡 Remove the unused variable or prefix with '_' to indicate it's intentionally unused"
+---
+code: TestingAndDebugging::RequireUseStrict
+severity: Warning
+message: Code does not use strict
+source: Some("perl-lsp")
+range: 0:0-0:0
+tags: None
+data: {
+  "category": "Other",
+  "code": "TestingAndDebugging::RequireUseStrict",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+
+---
+code: TestingAndDebugging::RequireUseWarnings
+severity: Warning
+message: Code does not use warnings
+source: Some("perl-lsp")
+range: 0:0-0:0
+tags: None
+data: {
+  "category": "Other",
+  "code": "TestingAndDebugging::RequireUseWarnings",
+  "fixable": true,
+  "tags": []
+}
+related_information:

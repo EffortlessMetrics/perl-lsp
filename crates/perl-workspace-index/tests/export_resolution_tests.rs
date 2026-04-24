@@ -402,8 +402,7 @@ sub opt_b { }
 // auto-imported.
 
 #[test]
-fn test_find_auto_export_only_matches_explicit_export()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_find_auto_export_only_matches_explicit_export() -> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     let module_uri = file_url("/lib/MixedExports.pm")?;
@@ -510,8 +509,8 @@ sub tag_b { }
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_export_table_merges_entries_from_multiple_files_same_package(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn test_export_table_merges_entries_from_multiple_files_same_package()
+-> Result<(), Box<dyn std::error::Error>> {
     let index = WorkspaceIndex::new();
 
     // Two files that extend the same package namespace
@@ -535,14 +534,8 @@ sub from_part2 { 2 }
     let loc1 = index.find_export("MultiPkg", "from_part1");
     let loc2 = index.find_export("MultiPkg", "from_part2");
 
-    assert!(
-        loc1.is_some(),
-        "from_part1 exported from Part1.pm must survive indexing Part2.pm"
-    );
-    assert!(
-        loc2.is_some(),
-        "from_part2 exported from Part2.pm must be present"
-    );
+    assert!(loc1.is_some(), "from_part1 exported from Part1.pm must survive indexing Part2.pm");
+    assert!(loc2.is_some(), "from_part2 exported from Part2.pm must be present");
 
     Ok(())
 }

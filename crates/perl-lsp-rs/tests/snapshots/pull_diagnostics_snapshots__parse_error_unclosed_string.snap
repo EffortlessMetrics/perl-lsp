@@ -1,0 +1,19 @@
+---
+source: crates/perl-lsp-rs/tests/pull_diagnostics_snapshots.rs
+expression: "format_diagnostic(parse_errors[0])"
+---
+code: PL001
+severity: Error
+message: Expected expression, found `unknown token`
+Suggestion: Check for an unclosed string, regex, or heredoc near this position
+source: Some("perl-lsp")
+range: 0:8-0:9
+tags: None
+data: {
+  "category": "Parser",
+  "code": "PL001",
+  "fixable": true,
+  "tags": []
+}
+related_information:
+  - location: Uri(Uri { scheme: Some("file"), authority: Some(Authority { userinfo: None, host: Host { text: "", data: RegName("") }, port: None }), path: "/test.pl", query: None, fragment: None }) 0:8-0:9, message: "Suggestion: Check for an unclosed string, regex, or heredoc near this position"

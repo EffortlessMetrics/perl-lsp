@@ -1,0 +1,8 @@
+---
+source: crates/perl-diagnostics/tests/snapshot_tests.rs
+expression: snapshot
+---
+Error           => 1
+Warning         => 2
+Information     => 3
+Hint            => 4
