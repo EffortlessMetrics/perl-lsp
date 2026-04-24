@@ -31,7 +31,10 @@ fn is_embedded_template_uri(uri: &str) -> bool {
 }
 
 fn is_perl_language_id(language_id: &str) -> bool {
-    matches!(language_id.to_ascii_lowercase().as_str(), "perl" | "perl5" | "perl-cpanfile")
+    matches!(
+        language_id.to_ascii_lowercase().as_str(),
+        "perl" | "perl5" | "perl-cpanfile" | "embedded-perl" | "mojolicious"
+    )
 }
 
 #[cfg(feature = "incremental")]
@@ -2089,6 +2092,51 @@ mod tests {
             "template should remain in no-parse mode after didChange"
         );
         assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_embedded_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "embedded-perl",
+                "version": 1,
+                "text": "<%= my $name = 'world'; %>"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(
+            doc.ast.is_some(),
+            "template with embedded-perl languageId should be parsed as Perl"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_mojolicious_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/index.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "mojolicious",
+                "version": 1,
+                "text": "% my $title = 'Hello';"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(doc.ast.is_some(), "template with mojolicious languageId should be parsed as Perl");
         Ok(())
     }
 

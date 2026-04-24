@@ -15,6 +15,61 @@ use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 
 impl LspServer {
+    fn token_span_at(content: &str, offset: usize) -> Option<(usize, usize)> {
+        let chars: Vec<char> = content.chars().collect();
+        if chars.is_empty() {
+            return None;
+        }
+
+        let is_ident_char = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let is_sigil = |ch: char| ch == '$' || ch == '@' || ch == '%';
+
+        // Allow cursor-at-end and cursor-next-to-token positions by probing the
+        // previous character when needed.
+        let mut probe = offset.min(chars.len().saturating_sub(1));
+        if offset == chars.len()
+            || (!is_ident_char(chars[probe])
+                && !is_sigil(chars[probe])
+                && probe > 0
+                && (is_ident_char(chars[probe - 1]) || is_sigil(chars[probe - 1])))
+        {
+            probe = probe.saturating_sub(1);
+        }
+
+        if !is_ident_char(chars[probe]) && !is_sigil(chars[probe]) {
+            return None;
+        }
+
+        // Skip from sigil to identifier body when the cursor is on sigil.
+        let mut start = probe;
+        if is_sigil(chars[start]) && start + 1 < chars.len() && is_ident_char(chars[start + 1]) {
+            start += 1;
+        }
+
+        while start > 0 && is_ident_char(chars[start - 1]) {
+            start -= 1;
+        }
+        if start > 0 && is_sigil(chars[start - 1]) {
+            start -= 1;
+        }
+
+        let mut end = start;
+        if is_sigil(chars[end]) {
+            end += 1;
+        }
+        while end < chars.len() && is_ident_char(chars[end]) {
+            end += 1;
+        }
+
+        // Require at least one identifier character so we don't rename standalone sigils.
+        let body_start = if is_sigil(chars[start]) { start + 1 } else { start };
+        if body_start >= end {
+            return None;
+        }
+
+        Some((start, end))
+    }
+
     /// Handle textDocument/prepareRename request
     pub(crate) fn handle_prepare_rename(
         &self,
@@ -167,7 +222,12 @@ impl LspServer {
                                 let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                                 let current_pkg =
                                     crate::declaration::current_package_at(ast, offset);
-                                crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_pkg,
+                                    &doc.text,
+                                )
                             })
                         })
                     };
@@ -292,54 +352,60 @@ impl LspServer {
     /// Get token at position (simple implementation)
     pub(crate) fn get_token_at_position(&self, content: &str, offset: usize) -> String {
         let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if chars.is_empty() || offset > chars.len() {
             return String::new();
         }
-
-        // Find word boundaries
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
-            start -= 1;
+        match Self::token_span_at(content, offset) {
+            Some((start, end)) => chars[start..end].iter().collect(),
+            None => String::new(),
         }
-
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-            end += 1;
-        }
-
-        chars[start..end].iter().collect()
     }
 
     /// Get the bounds of the token at the given position
     pub(crate) fn get_token_bounds(&self, content: &str, offset: usize) -> (usize, usize) {
         let chars: Vec<char> = content.chars().collect();
-        if offset >= chars.len() {
+        if chars.is_empty() || offset > chars.len() {
             return (offset, offset);
         }
+        Self::token_span_at(content, offset).unwrap_or((offset, offset))
+    }
+}
 
-        // Find word boundaries
-        let mut start = offset;
-        while start > 0
-            && (chars[start - 1].is_alphanumeric()
-                || chars[start - 1] == '_'
-                || chars[start - 1] == '$'
-                || chars[start - 1] == '@'
-                || chars[start - 1] == '%')
-        {
-            start -= 1;
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        let mut end = offset;
-        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-            end += 1;
-        }
+    #[test]
+    fn token_helpers_support_cursor_on_sigil() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let text = "my $value = 1;";
+        let offset = text.find('$').ok_or("missing sigil")?;
 
-        (start, end)
+        let token = server.get_token_at_position(text, offset);
+        let (start, end) = server.get_token_bounds(text, offset);
+
+        assert_eq!(token, "$value");
+        assert_eq!(
+            &text.chars().collect::<Vec<_>>()[start..end].iter().collect::<String>(),
+            "$value"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn token_helpers_support_cursor_after_identifier() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+        let text = "my $value = 1;";
+        let offset = text.find("$value").ok_or("missing variable")? + "$value".len();
+
+        let token = server.get_token_at_position(text, offset);
+        let (start, end) = server.get_token_bounds(text, offset);
+
+        assert_eq!(token, "$value");
+        assert_eq!(
+            &text.chars().collect::<Vec<_>>()[start..end].iter().collect::<String>(),
+            "$value"
+        );
+        Ok(())
     }
 }
