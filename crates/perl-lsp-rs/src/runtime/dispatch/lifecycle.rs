@@ -101,6 +101,7 @@ impl LspServer {
     ///
     /// Only sends if trace level is "messages" or "verbose".
     /// The verbose field is only included when trace level is "verbose".
+    // Kept for protocol-level tracing hooks that are wired by feature flags in other modules.
     #[allow(dead_code)]
     pub(crate) fn send_log_trace(&self, message: &str, verbose: Option<&str>) {
         let current_level = self.trace_level.lock().clone();
@@ -149,34 +150,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn initialized_requires_initialize_request_first() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
 
         let result = server.handle_initialized_dispatch();
 
         assert!(result.is_err(), "initialized before initialize must error");
         assert!(!server.is_initialized(), "server must remain uninitialized");
+        Ok(())
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        assert!(server.handle_initialize(None).is_ok(), "initialize request should succeed");
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
     }
 }
