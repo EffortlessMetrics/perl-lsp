@@ -222,6 +222,8 @@ describe('extension UX warnings', () => {
             return { workspaceValue: 5 };
           case 'perlcritic.profile':
             return { workspaceValue: '/tmp/.perlcriticrc' };
+          case 'perlcritic.theme':
+            return { workspaceValue: 'classic' };
           default:
             return undefined;
         }
@@ -240,6 +242,7 @@ describe('extension UX warnings', () => {
               enabled: true,
               severity: 5,
               profile: '/tmp/.perlcriticrc',
+              theme: 'classic',
             }),
           }),
         }),

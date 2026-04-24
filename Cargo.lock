@@ -3173,6 +3173,7 @@ version = "0.12.4"
 dependencies = [
  "cc",
  "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]
