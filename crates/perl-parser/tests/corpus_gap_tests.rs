@@ -159,6 +159,24 @@ mod corpus_gap_tests {
         Ok(())
     }
 
+    /// Regression: `local($ENV{PATH})` inside call args should parse as a
+    /// local declaration argument (not an ERROR-producing list declaration).
+    #[test]
+    fn test_local_parenthesized_lvalue_in_call_args() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "foo(local($ENV{PATH}) = '/tmp/bin', $next);";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "expected no ERROR nodes for local(...) call arg, got: {sexp}"
+        );
+        assert!(sexp.contains("local"), "expected local declaration in AST, got: {sexp}");
+        assert!(sexp.contains("PATH"), "expected PATH key in AST, got: {sexp}");
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {

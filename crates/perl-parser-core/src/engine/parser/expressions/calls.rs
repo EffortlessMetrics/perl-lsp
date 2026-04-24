@@ -469,8 +469,33 @@ impl<'a> Parser<'a> {
         let declarator_token = self.consume_token()?;
         let declarator = declarator_token.text.to_string();
 
+        // `local(...)` can contain arbitrary lvalue expressions (e.g. local($ENV{PATH})).
+        // Treat the parenthesized payload as one lvalue expression rather than
+        // forcing list-declaration parsing, which only accepts plain variables.
+        if declarator == "local" && self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.consume_token()?; // consume (
+            let variable = self.parse_assignment()?;
+            self.expect_closing_delimiter(TokenKind::RightParen)?;
+
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_assignment()?))
+            } else {
+                None
+            };
+
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable: Box::new(variable),
+                    attributes: Vec::new(),
+                    initializer,
+                },
+                SourceLocation { start, end },
+            ))
         // Check if we have a list declaration like `my ($x, $y)`
-        if self.peek_kind() == Some(TokenKind::LeftParen) {
+        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
             let mut variables = Vec::new();

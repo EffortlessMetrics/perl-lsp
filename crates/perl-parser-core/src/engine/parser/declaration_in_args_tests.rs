@@ -121,6 +121,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn local_parenthesized_lvalue_in_call_args() {
+        let code = "foo(local($ENV{PATH}) = '/tmp/bin', $next);";
+        assert_no_errors(code);
+
+        let stmt = first_stmt(code);
+        let sexp = stmt.to_sexp();
+        assert!(
+            sexp.contains("local_declaration"),
+            "Expected local_declaration in sexp, got: {sexp}",
+        );
+        assert!(
+            sexp.contains("PATH"),
+            "Expected localized hash element key in sexp, got: {sexp}",
+        );
+        assert!(
+            sexp.contains("(variable $ next)"),
+            "Expected trailing argument to stay separate, got: {sexp}",
+        );
+    }
+
     // ---------------------------------------------------------------
     // Declaration with initializer and trailing args:
     // `foo(my $x = 1, $y)`
