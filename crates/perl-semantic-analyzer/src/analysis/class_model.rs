@@ -199,6 +199,32 @@ pub struct ClassModel {
     pub exports: Vec<String>,
     /// Names available for explicit import via `@EXPORT_OK`
     pub export_ok: Vec<String>,
+    /// Per-file Exporter metadata with subroutine resolution.
+    pub exporter_metadata: Option<ExporterMetadata>,
+}
+
+/// Exporter-derived metadata captured for a package in a single file.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ExporterMetadata {
+    /// Names exported by default via `@EXPORT` that resolve to local subs.
+    pub exports: Vec<ResolvedExport>,
+    /// Names available for explicit import via `@EXPORT_OK` that resolve to local subs.
+    pub export_ok: Vec<ResolvedExport>,
+    /// `%EXPORT_TAGS` entries mapped to local subroutine definitions.
+    pub export_tags: HashMap<String, Vec<ResolvedExport>>,
+    /// Export names referenced in export declarations but not defined as local subs.
+    pub unresolved: Vec<String>,
+}
+
+/// Export symbol that resolves to a same-package subroutine definition.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct ResolvedExport {
+    /// Exported symbol name (without sigil).
+    pub name: String,
+    /// Location of the matching subroutine definition in this file/package.
+    pub location: SourceLocation,
 }
 
 impl ClassModel {
@@ -228,6 +254,8 @@ pub struct ClassModelBuilder {
     current_modifiers: Vec<MethodModifier>,
     current_exports: Vec<String>,
     current_export_ok: Vec<String>,
+    current_export_tags: HashMap<String, Vec<String>>,
+    current_uses_exporter: bool,
     current_package_aliases: HashSet<String>,
     /// Track which packages have framework detection applied
     framework_map: HashMap<String, Framework>,
@@ -256,6 +284,8 @@ impl ClassModelBuilder {
             current_modifiers: Vec::new(),
             current_exports: Vec::new(),
             current_export_ok: Vec::new(),
+            current_export_tags: HashMap::new(),
+            current_uses_exporter: false,
             current_package_aliases: HashSet::new(),
             framework_map: HashMap::new(),
         }
@@ -278,8 +308,10 @@ impl ClassModelBuilder {
             || !self.current_parents.is_empty()
             || !self.current_adjusts.is_empty()
             || !self.current_exports.is_empty()
-            || !self.current_export_ok.is_empty();
+            || !self.current_export_ok.is_empty()
+            || !self.current_export_tags.is_empty();
         if has_oo_indicator {
+            let exporter_metadata = self.build_exporter_metadata_for_current_package();
             let model = ClassModel {
                 name: self.current_package.clone(),
                 framework,
@@ -293,6 +325,7 @@ impl ClassModelBuilder {
                 modifiers: std::mem::take(&mut self.current_modifiers),
                 exports: std::mem::take(&mut self.current_exports),
                 export_ok: std::mem::take(&mut self.current_export_ok),
+                exporter_metadata,
             };
             self.models.push(model);
             self.current_package_aliases.clear();
@@ -308,6 +341,8 @@ impl ClassModelBuilder {
             self.current_modifiers.clear();
             self.current_exports.clear();
             self.current_export_ok.clear();
+            self.current_export_tags.clear();
+            self.current_uses_exporter = false;
             self.current_package_aliases.clear();
         }
     }
@@ -326,6 +361,7 @@ impl ClassModelBuilder {
                 self.current_framework =
                     self.framework_map.get(name).copied().unwrap_or(Framework::None);
                 self.current_mro = MethodResolutionOrder::Dfs;
+                self.current_uses_exporter = false;
 
                 if let Some(block) = block {
                     self.visit_node(block);
@@ -375,6 +411,12 @@ impl ClassModelBuilder {
                             _ => {}
                         }
                     }
+                    if sigil == "%"
+                        && name == "EXPORT_TAGS"
+                        && let Some(init) = initializer
+                    {
+                        merge_export_tags(&mut self.current_export_tags, collect_export_tags(init));
+                    }
                 }
             }
 
@@ -393,6 +435,12 @@ impl ClassModelBuilder {
                         }
                         _ => {}
                     }
+                }
+                if let NodeKind::Variable { sigil, name } = &lhs.kind
+                    && sigil == "%"
+                    && name == "EXPORT_TAGS"
+                {
+                    merge_export_tags(&mut self.current_export_tags, collect_export_tags(rhs));
                 }
             }
 
@@ -524,6 +572,10 @@ impl ClassModelBuilder {
     /// Detect framework from a `use` statement.
     fn detect_framework(&mut self, module: &str, args: &[String]) {
         let framework = match module {
+            "Exporter" => {
+                self.current_uses_exporter = true;
+                return;
+            }
             "Moose" | "Moose::Role" => Framework::Moose,
             "Moo" | "Moo::Role" => Framework::Moo,
             "Mouse" | "Mouse::Role" => Framework::Mouse,
@@ -549,6 +601,8 @@ impl ClassModelBuilder {
                     for name in names {
                         if name == "Class::Accessor" {
                             has_class_accessor = true;
+                        } else if name == "Exporter" {
+                            self.current_uses_exporter = true;
                         } else {
                             captured_parents.push(name);
                         }
@@ -1114,6 +1168,9 @@ impl ClassModelBuilder {
     fn extract_isa_from_node(&mut self, node: &Node) {
         let parents = collect_symbol_names(node);
         if !parents.is_empty() {
+            if parents.iter().any(|parent| parent == "Exporter") {
+                self.current_uses_exporter = true;
+            }
             // Promote to PlainOO if no stronger framework is already set
             if self.current_framework == Framework::None {
                 self.current_framework = Framework::PlainOO;
@@ -1121,6 +1178,38 @@ impl ClassModelBuilder {
             }
             self.current_parents.extend(parents);
         }
+    }
+
+    fn build_exporter_metadata_for_current_package(&mut self) -> Option<ExporterMetadata> {
+        if !self.current_uses_exporter {
+            self.current_export_tags.clear();
+            return None;
+        }
+
+        let method_map: HashMap<&str, SourceLocation> = self
+            .current_methods
+            .iter()
+            .map(|method| (method.name.as_str(), method.location))
+            .collect();
+
+        let (exports, unresolved_exports) = resolve_exports(&self.current_exports, &method_map);
+        let (export_ok, unresolved_export_ok) = resolve_exports(&self.current_export_ok, &method_map);
+
+        let mut export_tags: HashMap<String, Vec<ResolvedExport>> = HashMap::new();
+        let mut unresolved = unresolved_exports;
+        unresolved.extend(unresolved_export_ok);
+
+        for (tag, names) in std::mem::take(&mut self.current_export_tags) {
+            let (resolved, unresolved_names) = resolve_exports(&names, &method_map);
+            if !resolved.is_empty() {
+                export_tags.insert(tag, resolved);
+            }
+            unresolved.extend(unresolved_names);
+        }
+
+        dedupe_preserve_order(&mut unresolved);
+
+        Some(ExporterMetadata { exports, export_ok, export_tags, unresolved })
     }
 
     /// Return true if a variable initializer resolves to the current package name.
@@ -1162,6 +1251,151 @@ fn collect_symbol_names(node: &Node) -> Vec<String> {
         }
         _ => Vec::new(),
     }
+}
+
+fn collect_export_tags(node: &Node) -> HashMap<String, Vec<String>> {
+    let mut tags: HashMap<String, Vec<String>> = HashMap::new();
+    match &node.kind {
+        NodeKind::HashLiteral { pairs } => {
+            for (key, value) in pairs {
+                let Some(tag_name) = collect_single_symbol_name(key) else { continue };
+                let Some(symbols) = collect_static_symbol_names(value) else { continue };
+                if symbols.is_empty() {
+                    continue;
+                }
+                tags.entry(tag_name).or_default().extend(symbols);
+            }
+        }
+        NodeKind::ArrayLiteral { elements } => {
+            for pair in elements.chunks_exact(2) {
+                let Some(tag_name) = collect_single_symbol_name(&pair[0]) else { continue };
+                let Some(symbols) = collect_static_symbol_names(&pair[1]) else { continue };
+                if symbols.is_empty() {
+                    continue;
+                }
+                tags.entry(tag_name).or_default().extend(symbols);
+            }
+        }
+        NodeKind::Binary { op, .. } if op == "," => {
+            let mut flattened = Vec::new();
+            flatten_comma_expression(node, &mut flattened);
+            for element in flattened {
+                if let NodeKind::Binary { op, left, right } = &element.kind
+                    && op == "=>"
+                {
+                    let Some(tag_name) = collect_single_symbol_name(left) else { continue };
+                    let Some(symbols) = collect_static_symbol_names(right) else { continue };
+                    if symbols.is_empty() {
+                        continue;
+                    }
+                    tags.entry(tag_name).or_default().extend(symbols);
+                }
+            }
+        }
+        _ => {}
+    }
+
+    for symbols in tags.values_mut() {
+        dedupe_preserve_order(symbols);
+    }
+    tags
+}
+
+fn collect_single_symbol_name(node: &Node) -> Option<String> {
+    let mut names = collect_static_symbol_names(node)?;
+    dedupe_preserve_order(&mut names);
+    names.into_iter().next()
+}
+
+fn collect_static_symbol_names(node: &Node) -> Option<Vec<String>> {
+    match &node.kind {
+        NodeKind::String { value, .. } => Some(expand_export_name_list(value)),
+        NodeKind::Identifier { name } => Some(expand_export_name_list(name)),
+        NodeKind::ArrayLiteral { elements } => {
+            let mut names = Vec::new();
+            for element in elements {
+                let mut element_names = collect_static_symbol_names(element)?;
+                names.append(&mut element_names);
+            }
+            Some(names)
+        }
+        NodeKind::Binary { op, left, right } if op == "," => {
+            let mut names = collect_static_symbol_names(left)?;
+            let mut right_names = collect_static_symbol_names(right)?;
+            names.append(&mut right_names);
+            Some(names)
+        }
+        _ => None,
+    }
+}
+
+fn resolve_exports(
+    names: &[String],
+    method_map: &HashMap<&str, SourceLocation>,
+) -> (Vec<ResolvedExport>, Vec<String>) {
+    let mut resolved = Vec::new();
+    let mut unresolved = Vec::new();
+    for raw_name in names {
+        for name in expand_export_name_list(raw_name) {
+            if let Some(location) = method_map.get(name.as_str()) {
+                resolved.push(ResolvedExport { name, location: *location });
+            } else {
+                unresolved.push(name);
+            }
+        }
+    }
+    dedupe_resolved_exports(&mut resolved);
+    dedupe_preserve_order(&mut unresolved);
+    (resolved, unresolved)
+}
+
+fn dedupe_resolved_exports(exports: &mut Vec<ResolvedExport>) {
+    let mut seen = HashSet::new();
+    exports.retain(|item| seen.insert(item.name.clone()));
+}
+
+fn dedupe_preserve_order(items: &mut Vec<String>) {
+    let mut seen = HashSet::new();
+    items.retain(|item| seen.insert(item.clone()));
+}
+
+fn merge_export_tags(
+    target: &mut HashMap<String, Vec<String>>,
+    updates: HashMap<String, Vec<String>>,
+) {
+    for (tag, mut symbols) in updates {
+        target.entry(tag).or_default().append(&mut symbols);
+    }
+}
+
+fn flatten_comma_expression<'a>(node: &'a Node, out: &mut Vec<&'a Node>) {
+    if let NodeKind::Binary { op, left, right } = &node.kind
+        && op == ","
+    {
+        flatten_comma_expression(left, out);
+        flatten_comma_expression(right, out);
+    } else {
+        out.push(node);
+    }
+}
+
+fn expand_export_name_list(raw: &str) -> Vec<String> {
+    expand_symbol_list(raw)
+        .into_iter()
+        .filter_map(|name| normalize_export_name(&name))
+        .collect()
+}
+
+fn normalize_export_name(raw: &str) -> Option<String> {
+    let normalized = normalize_symbol_name(raw)?;
+    let stripped = normalized
+        .strip_prefix('&')
+        .or_else(|| normalized.strip_prefix('$'))
+        .or_else(|| normalized.strip_prefix('@'))
+        .or_else(|| normalized.strip_prefix('%'))
+        .unwrap_or(&normalized)
+        .to_string();
+    if stripped.is_empty() { None } else { Some(stripped) }
 }
 
 fn collect_accessor_names(node: &Node) -> Vec<String> {
@@ -2082,6 +2316,84 @@ has 'level' => (is => 'ro');
         let models = build_models(code);
         let model = find_model(&models, "MyLib").expect("MyLib model");
         assert_eq!(model.exports, vec!["func_a".to_string(), "func_b".to_string()]);
+    }
+
+    #[test]
+    fn exporter_metadata_resolves_export_and_export_ok() {
+        let code = r#"
+package MyUtils;
+use Exporter 'import';
+our @EXPORT = qw(foo missing_default);
+our @EXPORT_OK = ('bar', "missing_ok");
+sub foo { 1 }
+sub bar { 1 }
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "MyUtils").expect("MyUtils model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+
+        assert_eq!(metadata.exports.iter().map(|item| item.name.as_str()).collect::<Vec<_>>(), vec!["foo"]);
+        assert_eq!(
+            metadata.export_ok.iter().map(|item| item.name.as_str()).collect::<Vec<_>>(),
+            vec!["bar"]
+        );
+        assert!(metadata.unresolved.contains(&"missing_default".to_string()));
+        assert!(metadata.unresolved.contains(&"missing_ok".to_string()));
+    }
+
+    #[test]
+    fn exporter_metadata_resolves_export_tags() {
+        let code = r#"
+package MyTags;
+use parent 'Exporter';
+our %EXPORT_TAGS = (
+    util => [qw(one two missing)],
+    misc => ['three'],
+);
+sub one { 1 }
+sub two { 1 }
+sub three { 1 }
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "MyTags").expect("MyTags model");
+        let metadata = model.exporter_metadata.as_ref().expect("exporter metadata");
+
+        let util_names = metadata
+            .export_tags
+            .get("util")
+            .expect("util tag")
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>();
+        let misc_names = metadata
+            .export_tags
+            .get("misc")
+            .expect("misc tag")
+            .iter()
+            .map(|item| item.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(util_names, vec!["one", "two"]);
+        assert_eq!(misc_names, vec!["three"]);
+        assert!(metadata.unresolved.contains(&"missing".to_string()));
+    }
+
+    #[test]
+    fn export_lists_without_exporter_usage_do_not_produce_exporter_metadata() {
+        let code = r#"
+package NoExporter;
+our @EXPORT = qw(foo);
+our @EXPORT_OK = qw(bar);
+our %EXPORT_TAGS = (all => [qw(foo bar)]);
+sub foo { 1 }
+sub bar { 1 }
+1;
+"#;
+        let models = build_models(code);
+        let model = find_model(&models, "NoExporter").expect("NoExporter model");
+        assert!(model.exporter_metadata.is_none());
     }
 
     // ---- Gap 2: push @ISA ----
