@@ -608,25 +608,38 @@ fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std
 fn test_normalize_file_path_uri_handling() {
     let provider = ExecuteCommandProvider::new();
 
-    // Test file:// URI scheme stripping
-    let normalized = provider.normalize_file_path("file:///tmp/test.pl");
-    assert_eq!(normalized, "/tmp/test.pl", "Should strip file:// prefix");
-
-    // Test regular path (no URI scheme)
-    let normalized = provider.normalize_file_path("/tmp/test.pl");
-    assert_eq!(normalized, "/tmp/test.pl", "Should leave regular paths unchanged");
-
     // Test empty string
     let normalized = provider.normalize_file_path("");
     assert_eq!(normalized, "", "Should handle empty strings");
 
-    // Test file URI decoding
-    let normalized = provider.normalize_file_path("file:///tmp/path%20with%20spaces/test.pl");
-    assert_eq!(normalized, "/tmp/path with spaces/test.pl", "Should decode file URI path");
+    // Test regular path without URI scheme (platform-neutral: just passes through)
+    let normalized = provider.normalize_file_path("some/relative/path.pl");
+    assert_eq!(normalized, "some/relative/path.pl", "Should leave non-URI paths unchanged");
 
-    // Test localhost authority in file URI
-    let normalized = provider.normalize_file_path("file://localhost/tmp/test.pl");
-    assert_eq!(normalized, "/tmp/test.pl", "Should support localhost file URI");
+    // Unix-specific assertions: file:// URI decoding produces Unix-style paths
+    #[cfg(unix)]
+    {
+        // Test file:// URI scheme stripping
+        let normalized = provider.normalize_file_path("file:///tmp/test.pl");
+        assert_eq!(normalized, "/tmp/test.pl", "Should strip file:// prefix");
+
+        // Test regular absolute path (no URI scheme)
+        let normalized = provider.normalize_file_path("/tmp/test.pl");
+        assert_eq!(normalized, "/tmp/test.pl", "Should leave regular paths unchanged");
+
+        // Test file URI decoding
+        let normalized =
+            provider.normalize_file_path("file:///tmp/path%20with%20spaces/test.pl");
+        assert_eq!(
+            normalized,
+            "/tmp/path with spaces/test.pl",
+            "Should decode file URI path"
+        );
+
+        // Test localhost authority in file URI
+        let normalized = provider.normalize_file_path("file://localhost/tmp/test.pl");
+        assert_eq!(normalized, "/tmp/test.pl", "Should support localhost file URI");
+    }
 }
 
 #[test]
@@ -1057,22 +1070,30 @@ fn test_format_functions_not_default() -> Result<(), Box<dyn std::error::Error>>
 fn test_normalize_file_path_not_hardcoded() {
     let provider = ExecuteCommandProvider::new();
 
-    // Test that normalize_file_path returns actual processed values, not hardcoded ones
-    let file_uri = "file:///home/user/test.pl";
-    let result = provider.normalize_file_path(file_uri);
-    assert_eq!(result, "/home/user/test.pl", "Should properly strip file:// prefix");
+    // Non-URI passthrough: a plain path without file:// scheme is returned unchanged.
+    let plain = "not-a-uri.pl";
+    let result = provider.normalize_file_path(plain);
+    assert_eq!(result, plain, "Should return input unchanged for non-URI paths");
     assert_ne!(result, "", "Should not return empty string");
     assert_ne!(result, "xyzzy", "Should not return hardcoded value");
 
-    let regular_path = "/home/user/test.pl";
-    let result = provider.normalize_file_path(regular_path);
-    assert_eq!(result, regular_path, "Should return input unchanged");
-    assert_ne!(result, "", "Should not return empty string");
-    assert_ne!(result, "xyzzy", "Should not return hardcoded value");
+    // Unix-specific: to_file_path() returns Unix-style paths only on Unix.
+    #[cfg(unix)]
+    {
+        let file_uri = "file:///home/user/test.pl";
+        let result = provider.normalize_file_path(file_uri);
+        assert_eq!(result, "/home/user/test.pl", "Should properly strip file:// prefix");
+        assert_ne!(result, "", "Should not return empty string");
+        assert_ne!(result, "xyzzy", "Should not return hardcoded value");
 
-    let encoded_file_uri = "file:///home/user/my%20test.pl";
-    let result = provider.normalize_file_path(encoded_file_uri);
-    assert_eq!(result, "/home/user/my test.pl", "Should decode URI escaped characters");
+        let regular_path = "/home/user/test.pl";
+        let result = provider.normalize_file_path(regular_path);
+        assert_eq!(result, regular_path, "Should return input unchanged");
+
+        let encoded_file_uri = "file:///home/user/my%20test.pl";
+        let result = provider.normalize_file_path(encoded_file_uri);
+        assert_eq!(result, "/home/user/my test.pl", "Should decode URI escaped characters");
+    }
 }
 
 #[test]
