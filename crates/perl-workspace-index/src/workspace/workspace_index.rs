@@ -989,6 +989,16 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+/// Result for a safe-delete symbol preflight check.
+pub struct SafeDeletePreflight {
+    /// Whether the symbol has no references from other files in the workspace.
+    pub safe_to_delete: bool,
+    /// External reference locations that block a safe delete.
+    pub external_references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -2470,6 +2480,58 @@ impl WorkspaceIndex {
         dependents
     }
 
+    /// Run a symbol-level safe-delete preflight based on workspace references.
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol` - Symbol candidate to evaluate for delete safety.
+    ///
+    /// # Returns
+    ///
+    /// A [`SafeDeletePreflight`] describing whether deletion is safe and, when
+    /// unsafe, where external references were found.
+    pub fn preflight_safe_delete_symbol(&self, symbol: &WorkspaceSymbol) -> SafeDeletePreflight {
+        let mut symbol_names = HashSet::new();
+        if !symbol.name.is_empty() {
+            symbol_names.insert(symbol.name.as_str());
+        }
+        if let Some(qualified_name) = symbol.qualified_name.as_deref() {
+            if !qualified_name.is_empty() {
+                symbol_names.insert(qualified_name);
+            }
+        }
+
+        let symbol_uri = uri_key(symbol.uri.as_str());
+        let mut external_references: Vec<Location> = symbol_names
+            .into_iter()
+            .flat_map(|symbol_name| self.find_references(symbol_name))
+            .filter(|location| uri_key(location.uri.as_str()) != symbol_uri)
+            .collect();
+
+        let mut seen = HashSet::new();
+        external_references.retain(|location| {
+            seen.insert((
+                location.uri.clone(),
+                location.range.start.line,
+                location.range.start.column,
+                location.range.end.line,
+                location.range.end.column,
+            ))
+        });
+
+        external_references.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+                .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+        });
+
+        let safe_to_delete = external_references.is_empty();
+        SafeDeletePreflight { safe_to_delete, external_references }
+    }
+
     /// Get the document store
     ///
     /// # Returns
@@ -3922,6 +3984,70 @@ sub test {
 
         let refs = index.find_references("$x");
         assert!(refs.len() >= 2); // Definition + at least one usage
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_blocks_symbol_with_external_references() {
+        let index = WorkspaceIndex::new();
+        let provider_uri = "file:///workspace/Provider.pm";
+        let consumer_uri = "file:///workspace/Consumer.pm";
+
+        let provider_code = r#"
+package Provider;
+
+sub shared_function {
+    return 42;
+}
+1;
+"#;
+        let consumer_code = r#"
+package Consumer;
+use Provider;
+
+sub run {
+    return Provider::shared_function();
+}
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(provider_uri)), provider_code.to_string()));
+        must(index.index_file(must(url::Url::parse(consumer_uri)), consumer_code.to_string()));
+
+        let provider_symbol = must_some(
+            index
+                .file_symbols(provider_uri)
+                .into_iter()
+                .find(|symbol| symbol.name == "shared_function"),
+        );
+        let preflight = index.preflight_safe_delete_symbol(&provider_symbol);
+
+        assert!(!preflight.safe_to_delete, "safe delete should be blocked by external references");
+        assert_eq!(preflight.external_references.len(), 1, "expected one external reference");
+        assert_eq!(preflight.external_references[0].uri, consumer_uri);
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_allows_symbol_with_no_external_references() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///workspace/Standalone.pm";
+        let code = r#"
+package Standalone;
+
+sub local_only {
+    return 1;
+}
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbol = must_some(
+            index.file_symbols(uri).into_iter().find(|candidate| candidate.name == "local_only"),
+        );
+        let preflight = index.preflight_safe_delete_symbol(&symbol);
+
+        assert!(preflight.safe_to_delete, "safe delete should be allowed without external refs");
+        assert!(preflight.external_references.is_empty());
     }
 
     #[test]
