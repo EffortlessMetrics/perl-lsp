@@ -301,69 +301,47 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
-    // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    // Skip `tr`/`y` prefix, then allow optional whitespace before delimiter.
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
+
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
     // Parse first body (search pattern)
-    let (search, rest1) = extract_delimited_content(content, delimiter, closing);
-
-    // For paired delimiters, skip whitespace and allow any paired opening delimiter for the
-    // replacement list. Perl accepts forms like tr[abc]{xyz} in addition to tr[abc][xyz].
-    let rest2_owned;
-    let rest2 = if is_paired {
-        rest1.trim_start()
-    } else {
-        rest2_owned = format!("{}{}", delimiter, rest1);
-        &rest2_owned
-    };
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
+    if !search_closed {
+        return (String::new(), String::new(), String::new());
+    }
 
     // Parse second body (replacement pattern)
     let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
-        // Manually parse the replacement for non-paired delimiters
-        let chars = rest1.char_indices();
-        let mut body = String::new();
-        let mut escaped = false;
-        let mut end_pos = rest1.len();
-
-        for (i, ch) in chars {
-            if escaped {
-                body.push(ch);
-                escaped = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    body.push(ch);
-                    escaped = true;
-                }
-                c if c == closing => {
-                    end_pos = i + ch.len_utf8();
-                    break;
-                }
-                _ => body.push(ch),
-            }
-        }
-
-        (body, &rest1[end_pos..])
+        // Parse replacement for non-paired delimiters while skipping nested string literals.
+        let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
+        if !found_closing { (body, "") } else { (body, rest) }
     } else if is_paired {
+        let rest2 = rest1.trim_start();
         if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
-            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+            let (body, rest, replacement_closed) =
+                extract_delimited_content_strict(rest2, repl_delimiter, repl_closing);
+            if !replacement_closed { (body, "") } else { (body, rest) }
         } else {
             (String::new(), rest2)
         }
@@ -413,7 +391,8 @@ pub fn extract_transliteration_parts_strict(
     let is_paired = delimiter != closing;
 
     // Parse first body (search).
-    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
     if !search_closed {
         return Err(TransliterationError::MissingClosingDelimiter);
     }
@@ -447,10 +426,7 @@ pub fn extract_transliteration_parts_strict(
 
     // Validate transliteration modifiers strictly.
     let mut modifiers = String::new();
-    for modifier in modifiers_str
-        .chars()
-        .take_while(|c: &char| c.is_ascii_alphanumeric())
-    {
+    for modifier in modifiers_str.chars().take_while(|c: &char| c.is_ascii_alphanumeric()) {
         if matches!(modifier, 'c' | 'd' | 's' | 'r') {
             modifiers.push(modifier);
         } else {
