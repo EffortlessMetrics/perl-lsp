@@ -52,7 +52,7 @@
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
-    SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
+    fs_path_to_uri, normalize_var, uri_to_fs_path, SymKind, SymbolKey, WorkspaceIndex,
 };
 use perl_module::path::module_name_to_path;
 use regex::Regex;
@@ -119,6 +119,60 @@ static IMPORT_BLOCK_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 /// Get the import block regex, returning None if compilation failed
 fn get_import_block_regex() -> Option<&'static Regex> {
     IMPORT_BLOCK_RE.get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")).as_ref().ok()
+}
+
+fn is_module_token_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
+}
+
+fn find_use_module_range(line: &str) -> Option<(usize, usize)> {
+    let trimmed = line.trim_start();
+    if !trimmed.starts_with("use ") {
+        return None;
+    }
+
+    let indent_len = line.len() - trimmed.len();
+    let module_start = indent_len + 4;
+    let mut module_end = module_start;
+    for ch in line[module_start..].chars() {
+        if is_module_token_char(ch) {
+            module_end += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if module_end == module_start {
+        return None;
+    }
+
+    Some((module_start, module_end))
+}
+
+fn contains_ambiguous_text(line: &str) -> bool {
+    line.contains('#') || line.contains('"') || line.contains('\'')
+}
+
+fn find_module_reference_ranges(line: &str, old_module: &str) -> Vec<(usize, usize)> {
+    let mut ranges = Vec::new();
+    let mut cursor = 0;
+
+    while let Some(found) = line[cursor..].find(old_module) {
+        let start = cursor + found;
+        let end = start + old_module.len();
+
+        let previous_char = line[..start].chars().next_back();
+        let previous_ok = previous_char.is_none_or(|ch| !is_module_token_char(ch));
+        let next = &line[end..];
+        let next_ok = next.starts_with("::") || next.starts_with("->");
+
+        if previous_ok && next_ok {
+            ranges.push((start, end));
+        }
+        cursor = end;
+    }
+
+    ranges
 }
 
 /// A file edit as part of a refactoring operation
@@ -367,6 +421,82 @@ impl WorkspaceRefactor {
 
         let description = format!("Rename '{}' to '{}'", old_name, new_name);
         Ok(RefactorResult { file_edits, description, warnings: vec![] })
+    }
+
+    /// Rewrite module imports and conservative fully-qualified references after a module move.
+    ///
+    /// This first slice performs mechanical text rewrites:
+    /// - `use Old::Name ...` becomes `use New::Name ...`
+    /// - `Old::Name::...` / `Old::Name->...` become `New::Name::...` / `New::Name->...`
+    ///
+    /// Ambiguous lines containing comments or quotes are intentionally skipped.
+    pub fn rewrite_moved_module_imports(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Result<RefactorResult, RefactorError> {
+        if old_module.is_empty() {
+            return Err(RefactorError::InvalidInput("Old module cannot be empty".to_string()));
+        }
+        if new_module.is_empty() {
+            return Err(RefactorError::InvalidInput("New module cannot be empty".to_string()));
+        }
+        if old_module == new_module {
+            return Err(RefactorError::InvalidInput(
+                "Old and new module names are identical".to_string(),
+            ));
+        }
+
+        let mut edits_by_path: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
+        let store = self._index.document_store();
+
+        for document in store.all_documents() {
+            let Some(path) = uri_to_fs_path(&document.uri) else {
+                continue;
+            };
+
+            let mut line_start = 0;
+            let mut line_edits = Vec::new();
+            for line in document.text.split_inclusive('\n') {
+                if let Some((module_start, module_end)) = find_use_module_range(line) {
+                    if &line[module_start..module_end] == old_module {
+                        line_edits.push(TextEdit {
+                            start: line_start + module_start,
+                            end: line_start + module_end,
+                            new_text: new_module.to_string(),
+                        });
+                    }
+                } else if !contains_ambiguous_text(line) {
+                    for (start, end) in find_module_reference_ranges(line, old_module) {
+                        line_edits.push(TextEdit {
+                            start: line_start + start,
+                            end: line_start + end,
+                            new_text: new_module.to_string(),
+                        });
+                    }
+                }
+
+                line_start += line.len();
+            }
+
+            if !line_edits.is_empty() {
+                edits_by_path.insert(path, line_edits);
+            }
+        }
+
+        let file_edits = edits_by_path
+            .into_iter()
+            .map(|(file_path, edits)| FileEdit { file_path, edits })
+            .collect();
+
+        Ok(RefactorResult {
+            file_edits,
+            description: format!(
+                "Rewrite module references from '{}' to '{}'",
+                old_module, new_module
+            ),
+            warnings: vec!["Ambiguous lines containing comments or quotes were skipped".to_string()],
+        })
     }
 
     /// Extract selected code into a new module
@@ -976,7 +1106,7 @@ impl WorkspaceRefactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{TempDir, tempdir};
+    use tempfile::{tempdir, TempDir};
 
     fn setup_index(
         files: Vec<(&str, &str)>,
@@ -1016,8 +1146,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_module_qualified_name_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_extract_module_qualified_name_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
@@ -1048,8 +1178,8 @@ mod tests {
     }
 
     #[test]
-    fn test_move_subroutine_qualified_target_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_move_subroutine_qualified_target_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
