@@ -50,7 +50,7 @@ enum TokenStreamInner<'a> {
     /// Live lexer producing tokens on demand from source text.
     Lexer(PerlLexer<'a>),
     /// Pre-lexed token buffer; used by [`TokenStream::from_vec`].
-    Buffered(VecDeque<Token>),
+    Buffered { tokens: VecDeque<Token>, eof_pos: usize },
 }
 
 /// Token stream that wraps perl-lexer or a pre-lexed token buffer.
@@ -108,7 +108,10 @@ impl<'a> TokenStream<'a> {
     /// ```
     pub fn from_vec(tokens: Vec<Token>) -> Self {
         TokenStream {
-            inner: TokenStreamInner::Buffered(VecDeque::from(tokens)),
+            inner: TokenStreamInner::Buffered {
+                eof_pos: tokens.last().map_or(0, |token| token.end),
+                tokens: VecDeque::from(tokens),
+            },
             peeked: None,
             peeked_second: None,
             peeked_third: None,
@@ -298,7 +301,9 @@ impl<'a> TokenStream<'a> {
     fn next_token(&mut self) -> ParseResult<Token> {
         match &mut self.inner {
             TokenStreamInner::Lexer(lexer) => Self::next_token_from_lexer(lexer),
-            TokenStreamInner::Buffered(buf) => Self::next_token_from_buf(buf),
+            TokenStreamInner::Buffered { tokens, eof_pos } => {
+                Self::next_token_from_buf(tokens, eof_pos)
+            }
         }
     }
 
@@ -327,13 +332,13 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Return the next token from the pre-lexed buffer.
-    fn next_token_from_buf(buf: &mut VecDeque<Token>) -> ParseResult<Token> {
+    fn next_token_from_buf(buf: &mut VecDeque<Token>, eof_pos: &mut usize) -> ParseResult<Token> {
         match buf.pop_front() {
-            Some(token) => Ok(token),
-            // Synthesise an EOF at position 0 when the buffer is exhausted.
-            // The caller (parser) makes EOF sticky so position doesn't matter
-            // for correctness; using 0 is safe.
-            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+            Some(token) => {
+                *eof_pos = token.end;
+                Ok(token)
+            }
+            None => Ok(Token::eof_at(*eof_pos)),
         }
     }
 
