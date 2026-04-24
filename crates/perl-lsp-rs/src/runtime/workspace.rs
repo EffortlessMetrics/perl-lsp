@@ -50,6 +50,19 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
 }
 
 #[cfg(feature = "workspace")]
+fn decode_workspace_file_text(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => bytes.iter().map(|byte| char::from(*byte)).collect(),
+    }
+}
+
+#[cfg(feature = "workspace")]
+fn read_workspace_file_text(path: &Path) -> std::io::Result<String> {
+    std::fs::read(path).map(|bytes| decode_workspace_file_text(&bytes))
+}
+
+#[cfg(feature = "workspace")]
 fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
     if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
         tracing::warn!(error = %e, "Failed to send index-ready notification");
@@ -897,7 +910,7 @@ impl LspServer {
             let workspace_index = coordinator.index();
             if is_perl_source_uri(uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_workspace_file_text(&path) {
                         Ok(content) => {
                             if let Ok(url) = url::Url::parse(uri) {
                                 // Clear old index data before re-indexing
@@ -928,7 +941,7 @@ impl LspServer {
             let mut documents = self.documents.lock();
             if let Some(doc) = self.get_document_mut(&mut documents, uri) {
                 if let Some(path) = uri_to_fs_path(uri) {
-                    match std::fs::read_to_string(&path) {
+                    match read_workspace_file_text(&path) {
                         Ok(content) => {
                             doc.text = content;
                             doc.version += 1;
@@ -1046,7 +1059,7 @@ impl LspServer {
                         let workspace_index = coordinator.index();
                         workspace_index.remove_file(old_uri);
                         if let Some(path) = uri_to_fs_path(new_uri) {
-                            if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(content) = read_workspace_file_text(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
                                     if let Err(e) = workspace_index.index_file(url, content.clone())
                                     {
@@ -1297,7 +1310,7 @@ impl LspServer {
                     if let Some(coordinator) = self.coordinator() {
                         if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_workspace_file_text(&path) {
                                     Ok(content) => {
                                         coordinator.notify_change(uri);
                                         if let Ok(url) = url::Url::parse(uri) {
@@ -1370,7 +1383,7 @@ impl LspServer {
                         // Index new file if it's a Perl file
                         if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
-                                match std::fs::read_to_string(&path) {
+                                match read_workspace_file_text(&path) {
                                     Ok(content) => {
                                         if let Ok(url) = url::Url::parse(new_uri) {
                                             match coordinator.index().index_file(url, content) {
@@ -1620,7 +1633,7 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
+                let content = match read_workspace_file_text(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         if is_permission_denied_error(&e) {
@@ -1863,7 +1876,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| read_workspace_file_text(&path).ok())
     }
 }
 
@@ -2080,6 +2093,20 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 mod tests {
     use super::{LspServer, module_name_appears_in_text};
     use serde_json::json;
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_workspace_file_text_supports_latin1_bytes() {
+        let decoded = super::decode_workspace_file_text(b"my $s = \"caf\xe9\";\n");
+        assert_eq!(decoded, "my $s = \"café\";\n");
+    }
+
+    #[cfg(feature = "workspace")]
+    #[test]
+    fn decode_workspace_file_text_preserves_utf8() {
+        let decoded = super::decode_workspace_file_text("my $emoji = \"🦀\";\n".as_bytes());
+        assert_eq!(decoded, "my $emoji = \"🦀\";\n");
+    }
 
     #[test]
     fn test_module_name_appears_exact_match() {
