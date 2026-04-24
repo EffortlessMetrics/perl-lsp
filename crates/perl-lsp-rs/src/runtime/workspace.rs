@@ -1006,29 +1006,36 @@ impl LspServer {
                             }
                         }
 
-                        // Find all files that reference the old module
-                        // Note: Query operation - use coordinator.index() for consistency
+                        // Find all files that reference the old module.
+                        // This starts with dependency edges and then expands to open/indexed
+                        // documents that contain obvious static references (for qualified calls
+                        // without imports, package declarations, and similar safe rewrites).
+                        // Note: Query operation - use coordinator.index() for consistency.
                         #[cfg(feature = "workspace")]
-                        let dependents = if let Some(coordinator) = self.coordinator() {
-                            coordinator.index().find_dependents(&old_module)
+                        let candidates = if let Some(coordinator) = self.coordinator() {
+                            collect_module_move_candidate_uris(
+                                coordinator.index().as_ref(),
+                                old_uri,
+                                &old_module,
+                            )
                         } else {
-                            Vec::new()
+                            std::collections::BTreeSet::new()
                         };
 
                         #[cfg(not(feature = "workspace"))]
-                        let dependents = Vec::<String>::new();
+                        let candidates = std::collections::BTreeSet::<String>::new();
 
-                        for dependent_uri in dependents {
-                            if !planned_workspace_texts.contains_key(&dependent_uri) {
-                                let Some(text) = self.read_workspace_text(&dependent_uri) else {
+                        for candidate_uri in candidates {
+                            if !planned_workspace_texts.contains_key(&candidate_uri) {
+                                let Some(text) = self.read_workspace_text(&candidate_uri) else {
                                     continue;
                                 };
                                 planned_workspace_texts
-                                    .insert(dependent_uri.clone(), (text.clone(), text));
+                                    .insert(candidate_uri.clone(), (text.clone(), text));
                             }
 
                             if let Some((_, current_text)) =
-                                planned_workspace_texts.get_mut(&dependent_uri)
+                                planned_workspace_texts.get_mut(&candidate_uri)
                             {
                                 let planned = plan_module_rename_edits(
                                     current_text,
@@ -1934,6 +1941,36 @@ fn collect_delete_target_module_names(
     }
 
     module_names
+}
+
+#[cfg(feature = "workspace")]
+fn collect_module_move_candidate_uris(
+    index: &perl_parser::workspace_index::WorkspaceIndex,
+    old_uri: &str,
+    old_module: &str,
+) -> std::collections::BTreeSet<String> {
+    let normalized_old_uri = perl_parser::workspace_index::uri_key(old_uri);
+    let mut candidates = std::collections::BTreeSet::new();
+    candidates.insert(normalized_old_uri.clone());
+
+    for dependent_uri in index.find_dependents(old_module) {
+        candidates.insert(dependent_uri);
+    }
+
+    let legacy_old_module = old_module.replace("::", "'");
+    for doc in index.document_store().all_documents() {
+        let normalized_doc_uri = perl_parser::workspace_index::uri_key(&doc.uri);
+        if normalized_doc_uri == normalized_old_uri {
+            continue;
+        }
+        if module_name_appears_in_text(&doc.text, old_module)
+            || module_name_appears_in_text(&doc.text, &legacy_old_module)
+        {
+            candidates.insert(normalized_doc_uri);
+        }
+    }
+
+    candidates
 }
 
 #[cfg(feature = "workspace")]

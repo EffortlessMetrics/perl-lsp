@@ -1404,3 +1404,128 @@ fn test_will_rename_files_updates_package_declaration_in_renamed_file()
     );
     Ok(())
 }
+
+/// Module-move slice: update imports + statically safe qualified references across workspace.
+///
+/// Covers:
+/// - import rewrite in two consumer files
+/// - fully-qualified call rewrite where statically safe
+/// - no rewrite for ambiguous string/comment content
+#[test]
+fn test_will_rename_files_module_move_updates_two_consumers_and_leaves_ambiguous_sites()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    let producer_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/Old/Name.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Old::Name;\nsub run { return 1 }\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(producer_open));
+
+    let consumer_one_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/consumer_one.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Old::Name;\nmy $v = Old::Name::run();\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(consumer_one_open));
+
+    let consumer_two_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/consumer_two.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use Old::Name;\nmy $s = 'Old::Name::run';\n# Old::Name::run in comment\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(consumer_two_open));
+
+    let consumer_three_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/consumer_three.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "my $v = Old::Name::run();\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(consumer_three_open));
+
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/Old/Name.pm",
+            "newUri": "file:///test/workspace/lib/New/Name.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    let first_edits = changes
+        .get("file:///test/workspace/consumer_one.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for consumer_one.pl")?;
+    let first_new_texts: Vec<&str> = first_edits
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str))
+        .collect();
+    assert!(
+        first_new_texts.contains(&"use New::Name;"),
+        "consumer_one import should be rewritten: {first_new_texts:?}"
+    );
+    assert!(
+        first_new_texts.contains(&"my $v = New::Name::run();"),
+        "consumer_one qualified call should be rewritten: {first_new_texts:?}"
+    );
+
+    let second_edits = changes
+        .get("file:///test/workspace/consumer_two.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for consumer_two.pl")?;
+    let second_new_texts: Vec<&str> = second_edits
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str))
+        .collect();
+    assert!(
+        second_new_texts.contains(&"use New::Name;"),
+        "consumer_two import should be rewritten: {second_new_texts:?}"
+    );
+    assert!(
+        !second_new_texts.iter().any(|text| text.contains("'New::Name::run'")),
+        "string literal references must remain untouched: {second_new_texts:?}"
+    );
+    assert!(
+        !second_new_texts.iter().any(|text| text.contains("# New::Name::run")),
+        "comment references must remain untouched: {second_new_texts:?}"
+    );
+
+    let third_edits = changes
+        .get("file:///test/workspace/consumer_three.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for consumer_three.pl")?;
+    let third_new_texts: Vec<&str> = third_edits
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str))
+        .collect();
+    assert!(
+        third_new_texts.contains(&"my $v = New::Name::run();"),
+        "qualified call-only consumer should be rewritten: {third_new_texts:?}"
+    );
+
+    Ok(())
+}
