@@ -139,6 +139,17 @@ fn program_without_pragmas_yields_empty_map() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+#[test]
+fn build_sorts_ranges_for_out_of_order_ast_input() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 20, 30), use_node("warnings", &[], 0, 12)]);
+
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 2);
+    assert_eq!(map[0].0.start, 0);
+    assert_eq!(map[1].0.start, 20);
+    Ok(())
+}
+
 // ===========================================================================
 // use strict / no strict — full and selective
 // ===========================================================================
