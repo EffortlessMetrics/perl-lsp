@@ -10,7 +10,12 @@ fn loc(start: usize, end: usize) -> SourceLocation {
 
 fn use_node(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(start, end),
     )
 }
@@ -21,6 +26,7 @@ fn use_node_with_args(module: &str, args: Vec<&str>, start: usize, end: usize) -
             module: module.to_string(),
             args: args.into_iter().map(|s| s.to_string()).collect(),
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(start, end),
     )

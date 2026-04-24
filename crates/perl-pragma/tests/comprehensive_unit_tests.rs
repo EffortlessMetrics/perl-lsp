@@ -21,6 +21,7 @@ fn use_node(module: &str, args: &[&str], start: usize, end: usize) -> Node {
             module: module.to_string(),
             args: args.iter().map(|s| s.to_string()).collect(),
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         location: loc(start, end),
     }

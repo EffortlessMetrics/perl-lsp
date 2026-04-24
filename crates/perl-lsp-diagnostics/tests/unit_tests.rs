@@ -37,7 +37,12 @@ fn block(stmts: Vec<Node>) -> Node {
 
 fn use_node(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(start, end),
     )
 }

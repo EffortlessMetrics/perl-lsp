@@ -311,7 +311,12 @@ fn for_each_child_leaf_nodes_visit_nothing() -> Result<(), Box<dyn std::error::E
         Node::new(NodeKind::Ellipsis, loc(0, 3)),
         Node::new(NodeKind::Undef, loc(0, 5)),
         Node::new(
-            NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: "strict".to_string(),
+                args: vec![],
+                has_filter_risk: false,
+                has_explicit_import_list: false,
+            },
             loc(0, 11),
         ),
         Node::new(
@@ -869,7 +874,12 @@ fn sexp_transliteration_negated() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_with_filter_risk() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
-        NodeKind::Use { module: "Filter::Simple".to_string(), args: vec![], has_filter_risk: true },
+        NodeKind::Use {
+            module: "Filter::Simple".to_string(),
+            args: vec![],
+            has_filter_risk: true,
+            has_explicit_import_list: false,
+        },
         loc(0, 20),
     );
     let sexp = node.to_sexp();
@@ -884,6 +894,7 @@ fn sexp_use_with_args() -> Result<(), Box<dyn std::error::Error>> {
             module: "strict".to_string(),
             args: vec!["refs".to_string(), "subs".to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 20),
     );
@@ -895,7 +906,12 @@ fn sexp_use_with_args() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_no_args() -> Result<(), Box<dyn std::error::Error>> {
     let node = Node::new(
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 11),
     );
     let sexp = node.to_sexp();
@@ -1586,7 +1602,12 @@ fn all_kind_names_contains_every_variant() -> Result<(), Box<dyn std::error::Err
             negated: false,
         },
         NodeKind::Package { name: "P".to_string(), name_span: loc(0, 1), block: None },
-        NodeKind::Use { module: "M".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "M".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         NodeKind::No { module: "M".to_string(), args: vec![], has_filter_risk: false },
         NodeKind::PhaseBlock {
             phase: "BEGIN".to_string(),

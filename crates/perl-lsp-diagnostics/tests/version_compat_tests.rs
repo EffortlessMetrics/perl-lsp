@@ -25,14 +25,24 @@ fn block(stmts: Vec<Node>) -> Node {
 
 fn use_node(module: &str) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 12),
     )
 }
 
 fn use_node_at(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: module.to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(start, end),
     )
 }
@@ -43,6 +53,7 @@ fn use_feature(feature: &str) -> Node {
             module: "feature".to_string(),
             args: vec![format!("'{}'", feature)],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 20),
     )
@@ -54,6 +65,7 @@ fn use_feature_arg(arg: &str) -> Node {
             module: "feature".to_string(),
             args: vec![arg.to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 20),
     )
@@ -65,6 +77,7 @@ fn use_feature_arg_at(arg: &str, start: usize, end: usize) -> Node {
             module: "feature".to_string(),
             args: vec![arg.to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(start, end),
     )
@@ -1361,6 +1374,7 @@ fn use_builtin_import(import: &str) -> Node {
             module: "builtin".to_string(),
             args: vec![import.to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 22),
     )

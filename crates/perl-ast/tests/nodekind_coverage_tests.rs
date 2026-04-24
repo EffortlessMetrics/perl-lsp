@@ -465,6 +465,7 @@ fn build_cases() -> Vec<(Node, &'static str, usize)> {
                     module: "strict".to_string(),
                     args: vec!["vars".to_string()],
                     has_filter_risk: false,
+                    has_explicit_import_list: false,
                 },
                 loc(),
             ),

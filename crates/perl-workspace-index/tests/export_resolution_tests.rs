@@ -395,6 +395,73 @@ sub opt_b { }
 }
 
 // ---------------------------------------------------------------------------
+// Test: find_auto_export only matches @EXPORT (ExportKind::Explicit)
+// ---------------------------------------------------------------------------
+// This is the Bug 2 regression guard: bare `use Module;` must NOT auto-import
+// symbols from @EXPORT_OK or %EXPORT_TAGS. Only @EXPORT symbols are
+// auto-imported.
+
+#[test]
+fn test_find_auto_export_only_matches_explicit_export()
+-> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+
+    let module_uri = file_url("/lib/MixedExports.pm")?;
+    let module_code = r#"package MixedExports;
+use strict;
+use warnings;
+
+our @EXPORT = qw(auto_a auto_b);
+our @EXPORT_OK = qw(opt_c opt_d);
+our %EXPORT_TAGS = (
+    all => [qw(tag_e)],
+);
+
+sub auto_a { }
+sub auto_b { }
+sub opt_c { }
+sub opt_d { }
+sub tag_e { }
+
+1;
+"#;
+    index.index_file(module_uri, module_code.to_string())?;
+
+    // @EXPORT symbols: find_auto_export should return Some
+    assert!(
+        index.find_auto_export("MixedExports", "auto_a").is_some(),
+        "find_auto_export(MixedExports, auto_a) should return Some — auto_a is in @EXPORT"
+    );
+    assert!(
+        index.find_auto_export("MixedExports", "auto_b").is_some(),
+        "find_auto_export(MixedExports, auto_b) should return Some — auto_b is in @EXPORT"
+    );
+
+    // @EXPORT_OK symbols: find_auto_export should return None
+    // (but find_export should still return Some — the existing method is kind-agnostic)
+    assert!(
+        index.find_auto_export("MixedExports", "opt_c").is_none(),
+        "find_auto_export(MixedExports, opt_c) should return None — opt_c is only in @EXPORT_OK"
+    );
+    assert!(
+        index.find_export("MixedExports", "opt_c").is_some(),
+        "find_export(MixedExports, opt_c) should still return Some — opt_c is in the export table"
+    );
+    assert!(
+        index.find_auto_export("MixedExports", "opt_d").is_none(),
+        "find_auto_export(MixedExports, opt_d) should return None — opt_d is only in @EXPORT_OK"
+    );
+
+    // %EXPORT_TAGS-only symbols: find_auto_export should return None
+    assert!(
+        index.find_auto_export("MixedExports", "tag_e").is_none(),
+        "find_auto_export(MixedExports, tag_e) should return None — tag_e is only in %EXPORT_TAGS"
+    );
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Test: All three export sources (@EXPORT, @EXPORT_OK, %EXPORT_TAGS) work
 // ---------------------------------------------------------------------------
 

@@ -2085,6 +2085,37 @@ impl WorkspaceIndex {
         })
     }
 
+    /// Find a symbol that is auto-imported by a bare `use Module;`.
+    ///
+    /// Unlike [`find_export`], this only matches symbols that were exported via
+    /// `@EXPORT` ([`ExportKind::Explicit`]). Symbols in `@EXPORT_OK`
+    /// ([`ExportKind::Ok`]) or only present in `%EXPORT_TAGS`
+    /// ([`ExportKind::Tag`]) are not auto-imported and therefore must not
+    /// resolve when the consumer wrote `use Module;` with no explicit import list.
+    ///
+    /// If the same symbol appears in the module's export table with multiple
+    /// `ExportKind`s (e.g., both `@EXPORT` and `%EXPORT_TAGS`), the first
+    /// `ExportKind::Explicit` entry wins.
+    ///
+    /// # Arguments
+    ///
+    /// * `module` - Name of the module that should export the symbol
+    /// * `symbol` - Name of the symbol to find
+    ///
+    /// # Returns
+    ///
+    /// `Some(Location)` if the module auto-exports the symbol via `@EXPORT`,
+    /// `None` otherwise.
+    pub fn find_auto_export(&self, module: &str, symbol: &str) -> Option<Location> {
+        let export_table = self.export_table.read();
+        export_table.get(module).and_then(|exports| {
+            exports
+                .iter()
+                .find(|e| e.symbol == symbol && e.kind == ExportKind::Explicit)
+                .map(|e| e.location.clone())
+        })
+    }
+
     /// Get all exported symbols from a specific module.
     ///
     /// Returns a list of all export entries for the given module, regardless of

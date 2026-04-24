@@ -681,7 +681,12 @@ fn sexp_loop_control() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_and_no() -> Result<(), Box<dyn std::error::Error>> {
     let use_stmt = Node::new(
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 11),
     );
     let no_stmt = Node::new(
@@ -700,7 +705,12 @@ fn sexp_use_and_no() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_use_with_filter_risk() -> Result<(), Box<dyn std::error::Error>> {
     let risky = Node::new(
-        NodeKind::Use { module: "Filter::Simple".to_string(), args: vec![], has_filter_risk: true },
+        NodeKind::Use {
+            module: "Filter::Simple".to_string(),
+            args: vec![],
+            has_filter_risk: true,
+            has_explicit_import_list: false,
+        },
         loc(0, 20),
     );
     let sexp = risky.to_sexp();
@@ -1699,7 +1709,12 @@ fn leaf_nodes_have_no_children() -> Result<(), Box<dyn std::error::Error>> {
             loc(0, 3),
         ),
         Node::new(
-            NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: "strict".to_string(),
+                args: vec![],
+                has_filter_risk: false,
+                has_explicit_import_list: false,
+            },
             loc(0, 11),
         ),
         Node::new(

@@ -737,7 +737,7 @@ impl Node {
                 }
             }
 
-            NodeKind::Use { module, args, has_filter_risk } => {
+            NodeKind::Use { module, args, has_filter_risk, .. } => {
                 let risk_marker = if *has_filter_risk { " (risk:filter)" } else { "" };
                 if args.is_empty() {
                     format!("(use {}{})", module, risk_marker)
@@ -1990,6 +1990,15 @@ pub enum NodeKind {
         args: Vec<String>,
         /// Whether this module is a known source filter (security risk)
         has_filter_risk: bool,
+        /// Whether the `use` statement has an explicit import list in parentheses.
+        ///
+        /// This distinguishes `use Module;` (no parens, auto-import @EXPORT)
+        /// from `use Module ();` (empty parens, import nothing) and
+        /// `use Module qw(foo);` (explicit list — note: `qw()` bareword form does NOT set this).
+        ///
+        /// Set to `true` only when `(` ... `)` parens are present in the source.
+        /// Both `use Module ()` and `use Module (foo)` produce `true`.
+        has_explicit_import_list: bool,
     },
 
     /// No statement for disabling features: `no strict;`
@@ -2599,7 +2608,12 @@ mod tests {
                 negated: false,
             },
             NodeKind::Package { name: String::new(), name_span: loc, block: None },
-            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: String::new(),
+                args: vec![],
+                has_filter_risk: false,
+                has_explicit_import_list: false,
+            },
             NodeKind::No { module: String::new(), args: vec![], has_filter_risk: false },
             NodeKind::PhaseBlock {
                 phase: String::new(),

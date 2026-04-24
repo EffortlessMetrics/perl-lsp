@@ -265,20 +265,33 @@ my $result = foo();
     )?;
 
     // The result should be empty or should NOT point to SomeModule.pm
-    // because use SomeModule () means "import nothing"
+    // because use SomeModule () means "import nothing".
+    //
+    // Strengthened assertion: scan ALL returned locations (not just the first)
+    // to ensure the exporter location never leaks through. The result may be
+    // null, empty array, or an array of locations — in all cases, no entry
+    // may reference SomeModule.pm.
     if let Some(locations) = result.as_array() {
-        if !locations.is_empty() {
-            let location = &locations[0];
+        for (idx, location) in locations.iter().enumerate() {
             if let Some(uri) = location.get("uri").and_then(|u| u.as_str()) {
                 assert!(
-                    !uri.contains("SomeModule.pm"),
+                    !uri.contains("SomeModule.pm") && !uri.contains("SomeModule%2Epm"),
                     "use SomeModule () means no symbols are imported, \
                      so foo() should NOT resolve to SomeModule.pm. \
-                     Got URI: {}",
+                     Got URI at index {}: {}",
+                    idx,
                     uri
                 );
             }
         }
+    } else if !result.is_null() {
+        // The response was neither an array nor null — which would be
+        // unexpected for textDocument/definition. Accept but don't silently
+        // pass: surface what was returned.
+        panic!(
+            "textDocument/definition returned unexpected shape (not array, not null): {}",
+            result
+        );
     }
 
     Ok(())

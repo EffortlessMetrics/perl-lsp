@@ -153,3 +153,68 @@ fn use_nested_parens_in_import_list() {
 fn use_version_and_parens() {
     assert_clean_parse(r#"use Module 1.23 ('foo', 'bar');"#);
 }
+
+// ===========================================================================
+// has_explicit_import_list flag (distinguishes `use Module;` from `use Module ();`)
+// ===========================================================================
+
+/// Extract the `has_explicit_import_list` flag from the first Use statement in source.
+///
+/// Returns `(module, args.is_empty(), has_explicit_import_list)`.
+fn use_parens_info(source: &str) -> (String, bool, bool) {
+    let ast = parse(source);
+    if let perl_parser_core::NodeKind::Program { statements } = &ast.kind {
+        for stmt in statements {
+            if let perl_parser_core::NodeKind::Use {
+                module,
+                args,
+                has_explicit_import_list,
+                ..
+            } = &stmt.kind
+            {
+                return (module.clone(), args.is_empty(), *has_explicit_import_list);
+            }
+        }
+    }
+    panic!("no Use statement found for source:\n{}", source);
+}
+
+#[test]
+fn has_explicit_import_list_false_for_bare_use() {
+    // Bare `use Module;` — no parens, auto-import @EXPORT
+    let (_, args_empty, explicit) = use_parens_info("use Foo;");
+    assert!(!explicit, "bare `use Foo;` should have has_explicit_import_list = false");
+    assert!(args_empty, "bare `use Foo;` should have empty args");
+}
+
+#[test]
+fn has_explicit_import_list_true_for_empty_parens() {
+    // `use Module ()` — explicit empty import list, suppresses auto-import
+    let (_, args_empty, explicit) = use_parens_info("use Foo ();");
+    assert!(explicit, "`use Foo ();` should have has_explicit_import_list = true");
+    assert!(args_empty, "`use Foo ();` should have empty args");
+}
+
+#[test]
+fn has_explicit_import_list_true_for_nonempty_parens() {
+    // `use Module (foo)` — explicit parenthesized list
+    let (_, _args_empty, explicit) = use_parens_info("use Foo (bar);");
+    assert!(explicit, "`use Foo (bar);` should have has_explicit_import_list = true");
+}
+
+#[test]
+fn has_explicit_import_list_false_for_qw_form() {
+    // `use Module qw(foo)` — the outer construct has no parens around the
+    // import list; qw is its own form. We therefore leave
+    // has_explicit_import_list = false; the `args.is_empty()` check in
+    // consumers (navigation.rs) filters out qw forms separately.
+    let (_, args_empty, explicit) = use_parens_info("use Foo qw(bar);");
+    assert!(
+        !explicit,
+        "`use Foo qw(bar);` should have has_explicit_import_list = false (qw form, no outer parens)"
+    );
+    assert!(
+        !args_empty,
+        "`use Foo qw(bar);` should have non-empty args so consumers can still suppress auto-import"
+    );
+}

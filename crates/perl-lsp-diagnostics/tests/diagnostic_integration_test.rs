@@ -571,11 +571,21 @@ fn test_clearing_on_fix_lint_diagnostics_also_clear() -> Result<(), Box<dyn std:
 
     // With strict and warnings: both present
     let use_strict = Node::new(
-        NodeKind::Use { module: "strict".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         SourceLocation { start: 0, end: 12 },
     );
     let use_warnings = Node::new(
-        NodeKind::Use { module: "warnings".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "warnings".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         SourceLocation { start: 13, end: 27 },
     );
     let with = Node::new(

@@ -36,6 +36,7 @@ mod moniker_export_import_tests {
                 module: module.to_string(),
                 args: args.iter().map(|s| s.to_string()).collect(),
                 has_filter_risk: false,
+                has_explicit_import_list: false,
             },
             SourceLocation { start: 0, end: 0 },
         )

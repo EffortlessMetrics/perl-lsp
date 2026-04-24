@@ -177,6 +177,7 @@ fn test_use_constant_produces_symbol_decl() {
             module: "constant".to_string(),
             args: vec!["MAX".to_string(), "100".to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 23),
     );
@@ -213,6 +214,7 @@ fn test_use_constant_hash_ref_style_produces_all_symbol_decls() {
                 "}".to_string(),
             ],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 39),
     );
@@ -235,6 +237,7 @@ fn test_use_constant_qw_style_deduplicates_names() {
             module: "constant".to_string(),
             args: vec!["qw(ONE TWO ONE)".to_string()],
             has_filter_risk: false,
+            has_explicit_import_list: false,
         },
         loc(0, 28),
     );
@@ -252,7 +255,12 @@ fn test_use_constant_qw_style_deduplicates_names() {
 #[test]
 fn test_const_fast_my_scalar_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Const::Fast".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 16),
     );
     let variable = Node::new(
@@ -295,7 +303,12 @@ fn test_const_fast_my_scalar_produces_constant_decl() {
 #[test]
 fn test_const_fast_my_array_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Const::Fast".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Const::Fast".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 16),
     );
     let variable = Node::new(
@@ -332,7 +345,12 @@ fn test_const_fast_my_array_produces_constant_decl() {
 #[test]
 fn test_readonly_my_scalar_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 13),
     );
     let variable = Node::new(
@@ -375,7 +393,12 @@ fn test_readonly_my_scalar_produces_constant_decl() {
 #[test]
 fn test_readonly_hash_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 13),
     );
     let variable = Node::new(
@@ -412,7 +435,12 @@ fn test_readonly_hash_produces_constant_decl() {
 #[test]
 fn test_readonly_our_hash_produces_constant_decl() {
     let use_node = Node::new(
-        NodeKind::Use { module: "Readonly".to_string(), args: vec![], has_filter_risk: false },
+        NodeKind::Use {
+            module: "Readonly".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+            has_explicit_import_list: false,
+        },
         loc(0, 12),
     );
     let variable = Node::new(

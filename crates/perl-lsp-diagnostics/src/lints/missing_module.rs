@@ -450,7 +450,12 @@ mod tests {
         // Construct a Program node wrapping a Use node with an empty module name.
         // This simulates what the parser emits during error recovery.
         let use_node = Node::new(
-            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::Use {
+                module: String::new(),
+                args: vec![],
+                has_filter_risk: false,
+                has_explicit_import_list: false,
+            },
             SourceLocation { start: 0, end: 4 },
         );
         let program = Node::new(

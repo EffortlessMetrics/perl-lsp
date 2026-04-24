@@ -609,6 +609,9 @@ impl<'a> Parser<'a> {
                     module,
                     args: cond_args,
                     has_filter_risk,
+                    // `use if COND, MODULE, ARGS` does not use parens-style import lists;
+                    // args here are the conditional expression and module args, not a parenthesized import list.
+                    has_explicit_import_list: false,
                 },
                 SourceLocation { start, end },
             ));
@@ -616,6 +619,10 @@ impl<'a> Parser<'a> {
 
         // Parse optional import list
         let mut args = Vec::new();
+        // Track whether we saw `(`...`)` parens around the import list. Both
+        // `use Module ()` (empty parens) and `use Module (foo)` set this to true,
+        // distinguishing them from bare `use Module;` (no parens — auto-import @EXPORT).
+        let mut has_explicit_import_list = false;
 
         // Loop to handle multiple argument groups separated by commas
         // e.g., qw(FOO) => 1, qw(BAR BAZ) => 2
@@ -965,6 +972,10 @@ impl<'a> Parser<'a> {
             }
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
+            // Mark that this `use` has an explicit parenthesized import list.
+            // This is the key discriminator between `use Module;` (auto-import)
+            // and `use Module ();` / `use Module (foo);` (explicit list — no auto-import).
+            has_explicit_import_list = true;
 
             // Perl import lists can contain arbitrary expressions: backslash refs,
             // sub blocks, nested parens, fat-arrow pairs, etc.  Instead of
@@ -1003,7 +1014,10 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         let has_filter_risk = Self::is_filter_module(&module);
-        Ok(Node::new(NodeKind::Use { module, args, has_filter_risk }, SourceLocation { start, end }))
+        Ok(Node::new(
+            NodeKind::Use { module, args, has_filter_risk, has_explicit_import_list },
+            SourceLocation { start, end },
+        ))
     }
 
     /// Parse special block (AUTOLOAD, DESTROY, etc.)

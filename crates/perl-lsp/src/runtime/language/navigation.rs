@@ -656,23 +656,33 @@ fn inherited_method_definition_location(
     None
 }
 
-/// Collect all module names from `use Module;` statements in the AST.
+/// Collect all module names from bare `use Module;` statements in the AST.
 ///
-/// Excludes:
+/// Only modules that auto-import their default `@EXPORT` list are returned.
+/// This means we include `use Module;` (no parens — auto-import) and exclude:
 /// - `use Module ();` (empty parens means "import nothing")
-/// - `use Module qw(...);` (explicit import list - not an auto-export)
-/// - `use constant ...` (constants are not auto-imported)
+/// - `use Module qw(...);` (explicit qw import list — NOT auto-export; only listed
+///   symbols are imported; `@EXPORT` is suppressed)
+/// - `use Module (foo);` (explicit parenthesized list — same suppression semantics)
+///
+/// The discriminator is `has_explicit_import_list`, which the parser sets to `true`
+/// whenever `(`...`)` appears in the source. For a bare `qw(...)` form (without
+/// surrounding parens) we additionally require `args.is_empty()` to guard against
+/// imports like `use Module qw(foo);` which also suppress auto-import.
+///
+/// Builtin modules like `strict`/`warnings` are additionally filtered later by
+/// `find_auto_export` returning `None` (they never have Explicit-kind exports in
+/// the workspace table).
 #[cfg(feature = "workspace")]
 fn collect_auto_use_modules(ast: &crate::ast::Node) -> Vec<String> {
     fn walk(node: &crate::ast::Node, results: &mut Vec<String>) {
-        if let crate::ast::NodeKind::Use { module, args, .. } = &node.kind {
-            // Only collect use statements with no arguments (use Module;)
-            // This means "import default exports" in Perl.
-            // Skip:
-            // - use Module (); (empty parens means "import nothing")
-            // - use Module qw(a b c); (explicit import list, not auto-export)
-            // Builtin modules like strict/warnings are filtered by find_export returning None
-            if args.is_empty() {
+        if let crate::ast::NodeKind::Use { module, args, has_explicit_import_list, .. } = &node.kind
+        {
+            // Require BOTH conditions for auto-import:
+            //   1) No parenthesized import list (rules out `use Module ()` and `use Module (foo)`)
+            //   2) No args at all (rules out `use Module qw(foo);`)
+            // Only bare `use Module;` auto-imports `@EXPORT`.
+            if !*has_explicit_import_list && args.is_empty() {
                 results.push(module.clone());
             }
         }
@@ -703,10 +713,13 @@ fn resolve_export_definition_location(
     // Collect all use'd modules that might auto-export this symbol
     let modules = collect_auto_use_modules(ast);
 
-    // Try find_export for each module
+    // Try find_auto_export for each module — only @EXPORT (ExportKind::Explicit)
+    // symbols are auto-imported by bare `use Module;`. @EXPORT_OK and %EXPORT_TAGS
+    // symbols require `use Module qw(symbol);` (explicit import), so they must not
+    // resolve via this auto-import fallback.
     let mut found_location = None;
     for module in &modules {
-        if let Some(location) = workspace_index.find_export(module, symbol_name) {
+        if let Some(location) = workspace_index.find_auto_export(module, symbol_name) {
             // If we already found one, this is ambiguous - return None
             if found_location.is_some() {
                 return None;
