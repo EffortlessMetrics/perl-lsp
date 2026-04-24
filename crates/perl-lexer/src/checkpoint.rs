@@ -53,6 +53,8 @@ pub enum CheckpointContext {
 }
 
 impl LexerCheckpoint {
+    const INVALID_LINE_COLUMN: u32 = 0;
+
     /// Create a new checkpoint with default values
     pub fn new() -> Self {
         Self {
@@ -100,28 +102,51 @@ impl LexerCheckpoint {
 
     /// Apply an edit to this checkpoint
     pub fn apply_edit(&mut self, start: usize, old_len: usize, new_len: usize) {
-        if self.position > start {
-            if self.position >= start + old_len {
-                // Checkpoint is after the edit
-                self.position = self.position - old_len + new_len;
-            } else {
-                // Checkpoint is inside the edit - invalidate
-                self.position = start;
-                self.mode = LexerMode::ExpectTerm;
-                self.delimiter_stack.clear();
-                self.in_prototype = false;
-                self.prototype_depth = 0;
-                self.after_sub = false;
-                self.after_arrow = false;
-                self.hash_brace_depth = 0;
-                self.after_var_subscript = false;
-                self.paren_depth = 0;
-                self.context = CheckpointContext::Normal;
-            }
+        let edit_end = start.saturating_add(old_len);
+        let edit_spans_checkpoint = if old_len == 0 {
+            self.position == start
+        } else {
+            self.position >= start && self.position < edit_end
+        };
+
+        if edit_spans_checkpoint {
+            self.reset_to(start);
+            return;
         }
 
-        // Update position tracking
-        // In a real implementation, we'd update line/column based on the edit
+        if self.position > start && self.position >= edit_end {
+            // Checkpoint is after the edit.
+            let position_delta = new_len as isize - old_len as isize;
+            self.position = shift_usize(self.position, position_delta);
+            self.current_pos.byte = shift_usize(self.current_pos.byte, position_delta);
+
+            // We only know exact line/column tracking when byte offset is unchanged.
+            // For edits with net byte movement before the checkpoint, conservatively mark
+            // line/column unknown and let the next lexing pass recompute precise values.
+            if position_delta != 0 {
+                self.current_pos.line = Self::INVALID_LINE_COLUMN;
+                self.current_pos.column = Self::INVALID_LINE_COLUMN;
+            }
+        }
+    }
+
+    fn reset_to(&mut self, position: usize) {
+        self.position = position;
+        self.mode = LexerMode::ExpectTerm;
+        self.delimiter_stack.clear();
+        self.in_prototype = false;
+        self.prototype_depth = 0;
+        self.after_sub = false;
+        self.after_arrow = false;
+        self.hash_brace_depth = 0;
+        self.after_var_subscript = false;
+        self.paren_depth = 0;
+        self.context = CheckpointContext::Normal;
+        self.current_pos = Position {
+            byte: position,
+            line: Self::INVALID_LINE_COLUMN,
+            column: Self::INVALID_LINE_COLUMN,
+        };
     }
 
     /// Validate that this checkpoint is valid for the given input
@@ -307,9 +332,24 @@ impl CheckpointCache {
             *pos = checkpoint.position;
         }
 
-        // Remove invalid checkpoints
-        self.checkpoints
-            .retain(|(_, cp)| !matches!(cp.context, CheckpointContext::Normal) || cp.position > 0);
+        // Restore cache invariants after edits:
+        // 1) sort by position for binary-search lookups,
+        // 2) collapse duplicates caused by edits,
+        // 3) enforce max size.
+        self.checkpoints.sort_by_key(|(pos, _)| *pos);
+        self.checkpoints.dedup_by_key(|(pos, _)| *pos);
+
+        if self.checkpoints.len() > self.max_checkpoints {
+            self.checkpoints.truncate(self.max_checkpoints);
+        }
+    }
+}
+
+fn shift_usize(value: usize, delta: isize) -> usize {
+    if delta >= 0 {
+        value.saturating_add(delta as usize)
+    } else {
+        value.saturating_sub((-delta) as usize)
     }
 }
 
