@@ -989,6 +989,28 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Safe-delete preflight outcome for a symbol.
+pub enum SafeDeleteDecision {
+    /// No cross-file blockers were found.
+    Safe,
+    /// One or more references were found in files other than the target file.
+    BlockedByExternalReferences,
+}
+
+#[derive(Debug, Clone)]
+/// Structured preflight result for safe-delete orchestration.
+pub struct SafeDeletePreflightResult {
+    /// Outcome of the preflight decision.
+    pub decision: SafeDeleteDecision,
+    /// URI of the file containing the deletion target.
+    pub target_uri: String,
+    /// All non-definition references found for the symbol.
+    pub references: Vec<Location>,
+    /// Subset of `references` that are in files other than `target_uri`.
+    pub external_references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -2688,6 +2710,37 @@ impl WorkspaceIndex {
 
         all_refs
     }
+
+    /// Perform a reference-based preflight before deleting a symbol.
+    ///
+    /// This first slice only checks cross-file references:
+    /// - references in other files => blocked
+    /// - no external references => safe
+    pub fn safe_delete_preflight(
+        &self,
+        key: &SymbolKey,
+        target_uri: &str,
+    ) -> SafeDeletePreflightResult {
+        let references = self.find_refs(key);
+        let external_references = references
+            .iter()
+            .filter(|location| location.uri != target_uri)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let decision = if external_references.is_empty() {
+            SafeDeleteDecision::Safe
+        } else {
+            SafeDeleteDecision::BlockedByExternalReferences
+        };
+
+        SafeDeletePreflightResult {
+            decision,
+            target_uri: target_uri.to_string(),
+            references,
+            external_references,
+        }
+    }
 }
 
 /// AST visitor for extracting symbols and references
@@ -3972,6 +4025,73 @@ UsageDemo::helper();
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
         );
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_blocks_on_external_references() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///lib/My/Module.pm";
+        let ref_uri = "file:///script/use_module.pl";
+
+        let def_code = r#"
+package My::Module;
+sub helper {
+    return 1;
+}
+1;
+"#;
+        let ref_code = r#"
+use My::Module;
+My::Module::helper();
+"#;
+
+        must(index.index_file(must(url::Url::parse(def_uri)), def_code.to_string()));
+        must(index.index_file(must(url::Url::parse(ref_uri)), ref_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::Module"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = index.safe_delete_preflight(&key, def_uri);
+
+        assert_eq!(result.decision, SafeDeleteDecision::BlockedByExternalReferences);
+        assert_eq!(result.target_uri, def_uri);
+        assert!(!result.external_references.is_empty(), "expected at least one external reference");
+        assert!(
+            result.external_references.iter().all(|location| location.uri == ref_uri),
+            "all blockers should come from the external file"
+        );
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_is_safe_when_no_references_exist() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///lib/My/Unused.pm";
+        let def_code = r#"
+package My::Unused;
+sub helper {
+    return 1;
+}
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(def_uri)), def_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::Unused"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = index.safe_delete_preflight(&key, def_uri);
+
+        assert_eq!(result.decision, SafeDeleteDecision::Safe);
+        assert!(result.references.is_empty(), "expected no references");
+        assert!(result.external_references.is_empty(), "expected no external blockers");
     }
 
     #[test]
