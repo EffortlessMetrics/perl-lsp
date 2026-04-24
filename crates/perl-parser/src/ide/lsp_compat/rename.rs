@@ -406,7 +406,7 @@ impl RenameProvider {
 
 fn is_valid_perl_symbol_name(new_name: &str) -> bool {
     if new_name.contains('\'') {
-        // Normalize Perl's historical package separator to the canonical `::` form.
+        // Reject Perl's historical package separator — the canonical `::` form must be used.
         return false;
     }
 
@@ -416,6 +416,11 @@ fn is_valid_perl_symbol_name(new_name: &str) -> bool {
             return false;
         }
         has_any_segment = true;
+
+        // Perl identifiers must not start with a digit.
+        if segment.starts_with(|c: char| c.is_ascii_digit()) {
+            return false;
+        }
 
         if !segment
             .chars()
@@ -482,6 +487,8 @@ mod tests {
         assert!(provider.validate_new_name("My'Package").is_err());
         assert!(provider.validate_new_name("naïve").is_err());
         assert!(provider.validate_new_name("if").is_err()); // Keyword
+        assert!(provider.validate_new_name("My::0Module").is_err()); // segment starts with digit
+        assert!(provider.validate_new_name("0::Start").is_err());    // first segment starts with digit
     }
 
     #[test]
