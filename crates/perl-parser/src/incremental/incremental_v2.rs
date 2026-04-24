@@ -1242,7 +1242,7 @@ impl Default for IncrementalParserV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::position::Position;
+    use perl_parser_core::{error::ParseError, position::Position};
     use std::time::Instant;
 
     fn adaptive_perf_budget_micros(base_budget_micros: u128) -> u128 {
@@ -1265,6 +1265,18 @@ mod tests {
         }
 
         budget
+    }
+
+    fn apply_single_edit(
+        source: &str,
+        old: &str,
+        new: &str,
+    ) -> ParseResult<(String, usize, usize)> {
+        let start = source.find(old).ok_or(ParseError::UnexpectedEof)?;
+        let old_end = start + old.len();
+        let updated = source.replacen(old, new, 1);
+        let new_end = start + new.len();
+        Ok((updated, old_end, new_end))
     }
 
     #[test]
@@ -2122,6 +2134,109 @@ if ($condition) {
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
         assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_identifier_and_value_edits_reuse_shifted_nodes() -> ParseResult<()>
+    {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $alpha = 10;\nmy $beta = 20;\nmy $delta = 30;\n";
+        parser.parse(source1)?;
+
+        let first_start = source1.find("10").ok_or(ParseError::UnexpectedEof)?;
+        let first_old_end = first_start + 2;
+        let first_new_end = first_start + 3;
+        parser.edit(Edit::new(
+            first_start,
+            first_old_end,
+            first_new_end,
+            Position::new(first_start, 1, 1),
+            Position::new(first_old_end, 1, 1),
+            Position::new(first_new_end, 1, 1),
+        ));
+
+        let second_original_start = source1.find("$delta").ok_or(ParseError::UnexpectedEof)?;
+        let second_start = second_original_start + 1; // account for first edit shift (+1)
+        let second_old_end = second_start + "$delta".len();
+        let second_new_end = second_start + "$omega".len();
+        parser.edit(Edit::new(
+            second_start,
+            second_old_end,
+            second_new_end,
+            Position::new(second_start, 1, 1),
+            Position::new(second_old_end, 1, 1),
+            Position::new(second_new_end, 1, 1),
+        ));
+
+        let source2 = "my $alpha = 100;\nmy $beta = 20;\nmy $omega = 30;\n";
+        let incremental_tree = parser.parse(source2)?;
+
+        let mut fresh_parser = Parser::new(source2);
+        let fresh_tree = fresh_parser.parse()?;
+
+        assert_eq!(incremental_tree, fresh_tree, "Incremental AST must match fresh parse AST");
+        assert!(
+            parser.reused_nodes >= 6,
+            "Expected substantial reuse for non-overlapping batch edits"
+        );
+        assert!(
+            parser.last_reuse_analysis.is_some(),
+            "Expected advanced reuse analysis for batch edits"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_multi_region_whitespace_and_comment_edits_keep_high_reuse() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $x = 42;\nmy $y = 7;\nmy $z = 9;\n";
+        parser.parse(source1)?;
+
+        let (after_comment, first_old_end, first_new_end) =
+            apply_single_edit(source1, ";\nmy $y", "; # local comment\nmy $y")?;
+        let first_start = source1.find(";\nmy $y").ok_or(ParseError::UnexpectedEof)?;
+        parser.edit(Edit::new(
+            first_start,
+            first_old_end,
+            first_new_end,
+            Position::new(first_start, 1, 1),
+            Position::new(first_old_end, 1, 1),
+            Position::new(first_new_end, 1, 1),
+        ));
+
+        let second_old_start_in_new =
+            after_comment.find("$z = 9").ok_or(ParseError::UnexpectedEof)? + "$z".len();
+        let second_old_end = second_old_start_in_new + 1;
+        let second_new_end = second_old_start_in_new + 3;
+        parser.edit(Edit::new(
+            second_old_start_in_new,
+            second_old_end,
+            second_new_end,
+            Position::new(second_old_start_in_new, 1, 1),
+            Position::new(second_old_end, 1, 1),
+            Position::new(second_new_end, 1, 1),
+        ));
+
+        let source2 = "my $x = 42; # local comment\nmy $y = 7;\nmy $z   = 9;\n";
+        let incremental_tree = parser.parse(source2)?;
+
+        let mut fresh_parser = Parser::new(source2);
+        let fresh_tree = fresh_parser.parse()?;
+
+        assert_eq!(incremental_tree, fresh_tree, "Incremental AST must match fresh parse AST");
+        let total = parser.reused_nodes + parser.reparsed_nodes;
+        let reuse_ratio = if total == 0 { 0.0 } else { parser.reused_nodes as f64 / total as f64 };
+        assert!(
+            reuse_ratio >= 0.6,
+            "Expected at least 60% reuse for separated non-structural edits"
+        );
+        assert!(
+            parser.last_reuse_analysis.is_some(),
+            "Expected advanced reuse analysis in multi-region non-structural edits"
+        );
+
         Ok(())
     }
 }

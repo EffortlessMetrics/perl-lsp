@@ -158,7 +158,13 @@ impl AdvancedReuseAnalyzer {
         self.find_direct_structural_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
         // Strategy 2: Position-shifted matching
-        self.find_position_shifted_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
+        self.find_position_shifted_matches(
+            &old_analysis,
+            &new_analysis,
+            edits,
+            &mut reuse_map,
+            config,
+        );
 
         // Strategy 3: Content-updated matching
         if config.enable_content_reuse {
@@ -367,40 +373,79 @@ impl AdvancedReuseAnalyzer {
         &mut self,
         old_analysis: &TreeAnalysis,
         new_analysis: &TreeAnalysis,
+        edits: &EditSet,
         reuse_map: &mut HashMap<usize, ReuseStrategy>,
         config: &ReuseConfig,
     ) {
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            // Skip if already matched or touched by an edit.
+            if reuse_map.contains_key(old_pos) || self.affected_nodes.contains(old_pos) {
                 continue;
             }
 
-            // Look for content matches that may have shifted position
+            // Estimate where this old node should land after applying all edits.
+            let expected_new_pos = *old_pos as isize + self.estimated_shift_at(*old_pos, edits);
+            let mut best_match: Option<(usize, f64)> = None;
+
+            // Look for structurally equivalent nodes that may have shifted position.
             for (new_pos, new_info) in &new_analysis.node_info {
-                if old_info.content_hash == new_info.content_hash
-                    && old_info.structural_hash == new_info.structural_hash
+                if old_info.structural_hash != new_info.structural_hash
+                    || old_info.content_hash != new_info.content_hash
                 {
-                    let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
-                    if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
-                        if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
-                        }
-                    }
+                    continue;
+                }
+
+                let expected_delta = (*new_pos as isize - expected_new_pos).unsigned_abs();
+                if expected_delta > config.max_position_shift {
+                    continue;
+                }
+
+                // Confidence is based on structural quality and a penalty for distance from
+                // expected shifted position.
+                let base_confidence = self.calculate_match_confidence(old_info, new_info);
+                let distance_penalty =
+                    1.0 - (expected_delta as f64 / config.max_position_shift as f64);
+                let confidence = (base_confidence * 0.95) * distance_penalty.max(0.1);
+
+                if confidence >= config.min_confidence
+                    && best_match
+                        .as_ref()
+                        .is_none_or(|(_, best_confidence)| confidence > *best_confidence)
+                {
+                    best_match = Some((*new_pos, confidence));
                 }
             }
+
+            if let Some((target_position, confidence_score)) = best_match {
+                reuse_map.insert(
+                    *old_pos,
+                    ReuseStrategy {
+                        target_position,
+                        reuse_type: ReuseType::PositionShift,
+                        confidence_score,
+                        position_adjustment: (target_position as isize) - (*old_pos as isize),
+                    },
+                );
+                self.analysis_stats.position_adjustments += 1;
+            }
         }
+    }
+
+    /// Estimate the cumulative byte shift at a given original source position.
+    ///
+    /// This mirrors how incremental edits are applied sequentially, allowing us
+    /// to find expected target positions for unchanged nodes after multi-edit updates.
+    fn estimated_shift_at(&self, position: usize, edits: &EditSet) -> isize {
+        let mut shift = 0isize;
+        for edit in edits.edits() {
+            let original_old_end = (edit.old_end_byte as isize - shift) as usize;
+            if original_old_end <= position {
+                shift += edit.byte_shift();
+            } else {
+                break;
+            }
+        }
+        shift
     }
 
     /// Find content-updated matches (structure same, values changed)
@@ -585,7 +630,11 @@ impl AdvancedReuseAnalyzer {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => statements.len(),
             NodeKind::VariableDeclaration { initializer, .. } => {
-                if initializer.is_some() { 2 } else { 1 } // variable + optional initializer
+                if initializer.is_some() {
+                    2
+                } else {
+                    1
+                } // variable + optional initializer
             }
             NodeKind::Binary { .. } => 2, // left + right
             NodeKind::Unary { .. } => 1,  // operand
@@ -820,7 +869,7 @@ impl ReuseAnalysisResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::{SourceLocation, ast::Node};
+    use perl_parser_core::{ast::Node, SourceLocation};
 
     #[test]
     fn test_advanced_reuse_analyzer_creation() {
