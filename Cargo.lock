@@ -3851,6 +3851,7 @@ dependencies = [
  "peak_alloc",
  "perl-corpus",
  "perl-lsp-rs-core",
+ "perl-lsp-ux-tests",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
