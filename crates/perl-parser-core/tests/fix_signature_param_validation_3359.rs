@@ -165,3 +165,13 @@ fn test_empty_signature_no_diagnostics() {
     let errors = parse_and_collect_errors("sub foo () { }");
     assert!(errors.is_empty(), "Unexpected diagnostics for empty signature, got: {:?}", errors);
 }
+
+#[test]
+fn test_invocant_separator_signature_parses() {
+    let errors = parse_and_collect_errors("sub methodish ($self: $x, $y = 1) { }");
+    assert!(
+        !errors.iter().any(|e| e.contains("Expected comma or closing parenthesis in signature")),
+        "Unexpected signature separator diagnostic for invocant syntax, got: {:?}",
+        errors
+    );
+}

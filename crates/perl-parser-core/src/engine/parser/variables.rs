@@ -693,6 +693,7 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> ParseResult<Vec<Node>> {
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut params = Vec::new();
+        let mut seen_invocant_separator = false;
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             // Parse parameter
@@ -702,6 +703,12 @@ impl<'a> Parser<'a> {
             // Check for comma or end of signature
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?; // consume comma
+            } else if self.peek_kind() == Some(TokenKind::Colon) && !seen_invocant_separator {
+                // Method signatures may use an invocant separator:
+                // `sub m ($self: $arg, $opt = 1) { ... }`
+                // Accept a single `:` between signature parameters.
+                self.tokens.next()?; // consume colon
+                seen_invocant_separator = true;
             } else if self.peek_kind() == Some(TokenKind::RightParen) {
                 break;
             } else {

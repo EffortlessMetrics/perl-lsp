@@ -51,6 +51,18 @@ fn test_check_label_with_last() {
 }
 
 #[test]
+fn test_if_keyword_as_label() {
+    // Non-phase keywords are also valid Perl labels.
+    assert_clean_parse("if: while (1) { last; }");
+}
+
+#[test]
+fn test_last_to_phase_keyword_label() {
+    // Loop control labels may also use phase-keyword barewords.
+    assert_clean_parse("CHECK: while (1) { last CHECK; }");
+}
+
+#[test]
 fn test_phase_block_without_colon_still_works() {
     // Regression: actual phase blocks must still parse correctly
     assert_clean_parse("CHECK { print 'check phase'; }");

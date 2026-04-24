@@ -143,6 +143,16 @@ impl<'a> Parser<'a> {
 
         let kind = self.tokens.peek()?.kind;
 
+        // Labels in Perl are very permissive: any bareword token (including
+        // reserved keywords such as `if`, `CHECK`, etc.) can be used as a
+        // statement label when followed by `:`.
+        //
+        // Dispatch labels before keyword-specific parsers so `if: while (...)`
+        // is treated as a labeled statement rather than an `if` statement.
+        if self.is_keyword_label_start() {
+            return self.parse_keyword_as_label();
+        }
+
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
 
@@ -1073,6 +1083,23 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// Check if we're at the start of a keyword label (`if: ...`, `CHECK: ...`).
+    ///
+    /// This mirrors `is_label_start` but for non-Identifier keyword tokens.
+    /// We intentionally exclude plain identifiers because those are handled by
+    /// `is_label_start`.
+    fn is_keyword_label_start(&mut self) -> bool {
+        let Some(kind) = self.peek_kind() else {
+            return false;
+        };
+
+        if !Self::is_keyword_token(kind) || kind == TokenKind::Identifier {
+            return false;
+        }
+
+        self.tokens.peek_second().ok().is_some_and(|t| t.kind == TokenKind::Colon)
+    }
+
     /// Parse a labeled statement (LABEL: statement)
     fn parse_labeled_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -1103,11 +1130,17 @@ impl<'a> Parser<'a> {
         self.mark_not_stmt_start();
 
         // Check for optional label
-        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
-            let label_token = self.consume_token()?;
-            Some(label_token.text.to_string())
-        } else {
-            None
+        let label = match self.peek_kind() {
+            Some(TokenKind::Identifier)
+            | Some(TokenKind::Begin)
+            | Some(TokenKind::End)
+            | Some(TokenKind::Check)
+            | Some(TokenKind::Init)
+            | Some(TokenKind::Unitcheck) => {
+                let label_token = self.consume_token()?;
+                Some(label_token.text.to_string())
+            }
+            _ => None,
         };
 
         let end = self.previous_position();
