@@ -1,34 +1,11 @@
-//! Incremental parsing support for Perl.
+//! Incremental parsing compatibility shim.
 //!
-//! This crate provides efficient incremental parsing capabilities for Perl code,
-//! enabling Language Server Protocol features to respond quickly to document edits
-//! by reusing portions of the previous parse tree.
-//!
-//! # Overview
-//!
-//! The incremental parser minimizes re-parsing overhead when documents change by:
-//! - Identifying which portions of the AST are affected by an edit
-//! - Reusing unaffected subtrees from the previous parse
-//! - Only re-parsing the modified regions and their dependent nodes
-//!
-//! # Usage
-//!
-//! ```no_run
-//! use perl_incremental_parsing::incremental;
-//! use perl_parser_core::Parser;
-//!
-//! // Initial parse
-//! let source = "sub foo { return 42; }";
-//! let mut parser = Parser::new(source);
-//! let ast = parser.parse();
-//!
-//! // After edit, incrementally reparse only affected portions
-//! // (specific APIs depend on incremental module implementation)
-//! ```
+//! `perl-parser` is the canonical owner of incremental parsing logic.
+//! This crate re-exports `perl_parser::incremental` to preserve compatibility
+//! for existing imports while avoiding code drift between two implementations.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
-#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -67,10 +44,13 @@
     clippy::uninlined_format_args
 )]
 
-pub use perl_parser_core::edit;
-pub use perl_parser_core::{Node, NodeKind, SourceLocation};
-pub use perl_parser_core::{Parser, ast, error, parser, position};
+#[deprecated(
+    since = "0.12.4",
+    note = "Use perl-parser's incremental module directly: perl_parser::incremental"
+)]
+pub use perl_parser::incremental;
 
-/// Incremental parsing implementation and helpers.
-pub mod incremental;
-pub use incremental::*;
+pub use perl_parser::edit;
+pub use perl_parser::incremental::*;
+pub use perl_parser::{Node, NodeKind, SourceLocation};
+pub use perl_parser::{Parser, ast, error, parser, position};
