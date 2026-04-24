@@ -8,6 +8,14 @@ use super::scope_distance::compute_scope_distance;
 use super::{context::CompletionContext, items::CompletionItem};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
+fn flow_order_key(declaration_start: usize, cursor_position: usize) -> char {
+    if declaration_start <= cursor_position {
+        'a'
+    } else {
+        'b'
+    }
+}
+
 /// Add variable completions with scope-distance ranking.
 ///
 /// Variables from the immediate scope rank highest, then parent scopes,
@@ -29,6 +37,7 @@ pub fn add_variable_completions(
 
                 let distance =
                     compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
+                let flow_key = flow_order_key(symbol.location.start, context.position);
 
                 completions.push(CompletionItem {
                     label: insert_text.clone(),
@@ -45,7 +54,7 @@ pub fn add_variable_completions(
                     ),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(insert_text),
-                    sort_text: Some(format!("1{}_{}", distance.sort_key(), name)),
+                    sort_text: Some(format!("1{}{}_{name}", distance.sort_key(), flow_key)),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
@@ -138,6 +147,7 @@ pub fn add_all_variables(
                         context.cursor_scope_id,
                         symbol.scope_id,
                     );
+                    let flow_key = flow_order_key(symbol.location.start, context.position);
                     completions.push(CompletionItem {
                         label: format!("{}{}", sigil, name),
                         kind: super::items::CompletionItemKind::Variable,
@@ -147,7 +157,7 @@ pub fn add_all_variables(
                         )),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(format!("{}{}", sigil, name)),
-                        sort_text: Some(format!("5{}_{}", distance.sort_key(), name)),
+                        sort_text: Some(format!("5{}{}_{name}", distance.sort_key(), flow_key)),
                         filter_text: Some(name.clone()),
                         additional_edits: vec![],
                         text_edit_range: Some((context.prefix_start, context.position)),

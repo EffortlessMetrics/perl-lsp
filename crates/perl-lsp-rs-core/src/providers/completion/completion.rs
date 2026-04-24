@@ -2399,6 +2399,35 @@ $"#;
     }
 
     #[test]
+    fn test_variable_completion_ranks_declaration_before_cursor_ahead_of_later_declaration() {
+        let code = concat!(
+            "sub process {\n",
+            "    my $alpha_before = 1;\n",
+            "    $alp\n",
+            "    my $alpha_after = 2;\n",
+            "}\n"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let cursor = must_some(code.find("$alp")) + "$alp".len();
+        let completions = provider.get_completions(code, cursor);
+
+        let before_item =
+            must_some(completions.iter().find(|completion| completion.label == "$alpha_before"));
+        let after_item =
+            must_some(completions.iter().find(|completion| completion.label == "$alpha_after"));
+
+        assert!(
+            before_item.sort_text < after_item.sort_text,
+            "expected variable declared before cursor to outrank later declaration, got before={:?} after={:?}",
+            before_item.sort_text,
+            after_item.sort_text
+        );
+    }
+
+    #[test]
     fn test_package_member_completion() {
         // Create workspace index with a module exporting a function
         let index = Arc::new(WorkspaceIndex::new());
