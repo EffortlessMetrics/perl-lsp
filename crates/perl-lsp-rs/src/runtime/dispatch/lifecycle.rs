@@ -179,4 +179,65 @@ mod tests {
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
     }
+
+    #[test]
+    fn auto_initialize_for_compat_does_not_initialize_without_initialize_request() {
+        let server = LspServer::new();
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(
+            !server.is_initialized(),
+            "compatibility path must not initialize when initialize request was not received"
+        );
+    }
+
+    #[test]
+    fn auto_initialize_for_compat_is_noop_after_initialized() {
+        let server = LspServer::new();
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
+        let first_initialized = server.handle_initialized_dispatch();
+        assert!(first_initialized.is_ok(), "first initialized should succeed");
+
+        server.auto_initialize_for_compat("textDocument/hover");
+
+        assert!(
+            server.is_initialized(),
+            "compatibility path should leave initialized server initialized"
+        );
+    }
+
+    #[test]
+    fn initialized_before_initialize_returns_server_not_initialized_code() {
+        let server = LspServer::new();
+
+        let result = server.handle_initialized_dispatch();
+
+        assert!(result.is_err(), "initialized before initialize must error");
+        if let Err(error) = result {
+            assert_eq!(error.code, -32002, "must report ServerNotInitialized error code");
+            assert_eq!(error.message, "Server not initialized");
+        }
+    }
+
+    #[test]
+    fn second_initialized_returns_invalid_request_code() {
+        let server = LspServer::new();
+        let initialize_result = server.handle_initialize(None);
+        assert!(initialize_result.is_ok(), "initialize request should succeed");
+        let first = server.handle_initialized_dispatch();
+        assert!(first.is_ok(), "first initialized must succeed");
+
+        let second = server.handle_initialized_dispatch();
+
+        assert!(second.is_err(), "second initialized must error");
+        if let Err(error) = second {
+            assert_eq!(error.code, -32600, "second initialized must be InvalidRequest");
+            assert_eq!(
+                error.message, "initialized notification may only be sent once",
+                "second initialized must return canonical error message"
+            );
+        }
+    }
 }
