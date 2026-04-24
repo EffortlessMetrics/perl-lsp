@@ -5,6 +5,7 @@
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
@@ -26,6 +27,33 @@ pub struct RenameEdit {
     pub edits: Vec<TextEdit>,
 }
 
+/// Why a workspace-wide rename cannot be planned safely.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameRefusal {
+    /// Symbol identity exists but is too weak for safe cross-file edits.
+    WeakIdentity(&'static str),
+    /// Multiple plausible targets were found; refusing avoids unsafe edits.
+    AmbiguousIdentity(&'static str),
+}
+
+impl fmt::Display for RenameRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RenameRefusal::WeakIdentity(reason) => write!(f, "{reason}"),
+            RenameRefusal::AmbiguousIdentity(reason) => write!(f, "{reason}"),
+        }
+    }
+}
+
+impl std::error::Error for RenameRefusal {}
+
+impl RenameRefusal {
+    /// True when the caller can fall back to same-file rename safely.
+    pub fn can_fallback_same_file(&self) -> bool {
+        matches!(self, Self::WeakIdentity(_))
+    }
+}
+
 /// Build a rename edit across the workspace.
 ///
 /// Finds all references to the given symbol and builds text edits to rename them.
@@ -33,7 +61,9 @@ pub fn build_rename_edit(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
     new_name_bare: &str,
-) -> Vec<RenameEdit> {
+) -> Result<Vec<RenameEdit>, RenameRefusal> {
+    ensure_workspace_identity_is_safe(idx, key)?;
+
     // 1) Get all references across the workspace
     let mut locs = idx.find_refs(key);
 
@@ -100,7 +130,28 @@ pub fn build_rename_edit(
     }
 
     // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    Ok(grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect())
+}
+
+fn ensure_workspace_identity_is_safe(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+) -> Result<(), RenameRefusal> {
+    if idx.find_def(key).is_none() {
+        return Err(RenameRefusal::WeakIdentity(
+            "workspace rename refused: symbol definition could not be resolved",
+        ));
+    }
+
+    match key.kind {
+        SymKind::Var => Err(RenameRefusal::WeakIdentity(
+            "workspace rename refused: variable identity is file-local or lexical",
+        )),
+        SymKind::Sub if key.pkg.as_ref() == "main" => Err(RenameRefusal::AmbiguousIdentity(
+            "workspace rename refused: main package subroutine identity is ambiguous",
+        )),
+        SymKind::Sub | SymKind::Pack => Ok(()),
+    }
 }
 
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
@@ -161,10 +212,8 @@ fn is_non_target_package_declaration(
     // Try to read the original source span to detect a qualified name like "Bar::process_data".
     // When the index returns an inverted range (end < start, a known indexer edge case), we fall
     // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
+    let maybe_original =
+        doc.line_index.position_to_offset(start_line, start_char).and_then(|start_off| {
             doc.line_index
                 .position_to_offset(end_line, end_char)
                 .and_then(|end_off| doc.text.get(start_off..end_off))
@@ -275,7 +324,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "new_name");
+        let edits = build_rename_edit(&idx, &key, "new_name")?;
         assert_eq!(edits.len(), 1);
 
         let texts: Vec<String> = edits[0].edits.iter().map(|e| e.new_text.clone()).collect();
@@ -336,7 +385,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "renamed_target");
+        let edits = build_rename_edit(&idx, &key, "renamed_target")?;
 
         // The rename must produce at least one edit (for the definition in A.pm)
         assert!(
@@ -424,7 +473,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "process_records");
+        let edits = build_rename_edit(&idx, &key, "process_records")?;
 
         // Bar.pm must not appear in the edit list
         let bar_edit = edits.iter().find(|e| e.uri.contains("Bar.pm"));
@@ -434,6 +483,25 @@ $var;
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn rename_main_sub_is_refused_as_ambiguous() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+        index_text(&idx, "file:///a.pl", "sub helper { 1 }\nhelper();\n")?;
+        index_text(&idx, "file:///b.pl", "sub helper { 2 }\nhelper();\n")?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("main"),
+            name: Arc::from("helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let refusal = build_rename_edit(&idx, &key, "helper_renamed")
+            .expect_err("main package sub rename should be refused");
+        assert!(matches!(refusal, RenameRefusal::AmbiguousIdentity(_)));
         Ok(())
     }
 }

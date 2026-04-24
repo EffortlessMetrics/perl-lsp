@@ -237,15 +237,32 @@ impl LspServer {
                                     key,
                                     new_name,
                                 );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
+                                match edits {
+                                    Ok(edits) if !edits.is_empty() => {
+                                        tracing::debug!(
+                                            count = edits.len(),
+                                            reason,
+                                            "Rename: served partial-index workspace edits"
+                                        );
+                                        return Ok(Some(
+                                            crate::workspace_rename::to_workspace_edit(edits),
+                                        ));
+                                    }
+                                    Ok(_) => {}
+                                    Err(refusal) => {
+                                        if !refusal.can_fallback_same_file() {
+                                            return Err(JsonRpcError {
+                                                code: -32803,
+                                                message: refusal.to_string(),
+                                                data: None,
+                                            });
+                                        }
+                                        tracing::debug!(
+                                            reason,
+                                            refusal = %refusal,
+                                            "Rename: workspace rename refused, using same-file only"
+                                        );
+                                    }
                                 }
                             }
                             tracing::debug!(
@@ -263,10 +280,27 @@ impl LspServer {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
-                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
-                                return Ok(Some(ws_edit));
+                                match crate::workspace_rename::build_rename_edit(idx, key, new_name)
+                                {
+                                    Ok(edits) => {
+                                        let ws_edit =
+                                            crate::workspace_rename::to_workspace_edit(edits);
+                                        return Ok(Some(ws_edit));
+                                    }
+                                    Err(refusal) => {
+                                        if !refusal.can_fallback_same_file() {
+                                            return Err(JsonRpcError {
+                                                code: -32803,
+                                                message: refusal.to_string(),
+                                                data: None,
+                                            });
+                                        }
+                                        tracing::debug!(
+                                            refusal = %refusal,
+                                            "Rename: workspace rename refused, using same-file only"
+                                        );
+                                    }
+                                }
                             }
                         }
                     }

@@ -302,3 +302,28 @@ fn test_rename_out_of_bounds() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_workspace_rename_refuses_ambiguous_main_package_sub() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let a_uri = "file:///workspace/a.pl";
+    let b_uri = "file:///workspace/b.pl";
+    harness.open(a_uri, "sub helper { 1 }\nhelper();\n")?;
+    harness.open(b_uri, "sub helper { 2 }\nhelper();\n")?;
+
+    let rename = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": a_uri },
+            "position": { "line": 0, "character": 4 },
+            "newName": "helper_new"
+        }),
+    );
+
+    let err = rename.expect_err("ambiguous main-package rename should be refused");
+    assert!(err.contains("ambiguous"), "rename refusal should explain ambiguity, got: {err}");
+
+    Ok(())
+}
