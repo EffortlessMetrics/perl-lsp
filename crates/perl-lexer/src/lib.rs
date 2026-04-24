@@ -2055,8 +2055,7 @@ impl<'a> PerlLexer<'a> {
             // Check for substitution/transliteration operators
             // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y")
-            {
+            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y") {
                 let immediate = self.current_char();
                 let (candidate, char_after_next, has_whitespace) =
                     if immediate.is_some_and(|c| c.is_whitespace()) {
