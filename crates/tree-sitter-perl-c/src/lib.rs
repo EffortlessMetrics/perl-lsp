@@ -162,7 +162,13 @@ pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::err
 pub fn parse_perl_file<P: AsRef<Path>>(
     path: P,
 ) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let code = std::fs::read(path)?;
+    let path_ref = path.as_ref();
+    let code = std::fs::read(path_ref).map_err(|err| {
+        format!(
+            "Failed to read Perl file '{}': {err}",
+            path_ref.display()
+        )
+    })?;
     parse_perl_bytes(&code)
 }
 

@@ -139,6 +139,55 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn bdd_parse_perl_file_missing_path_reports_context() {
+    let scenario = Scenario::new("parse perl file missing path reports context");
+    let missing = unique_temp_file("missing_path");
+
+    scenario.given("a path that does not exist");
+    scenario.when("parse_perl_file is invoked");
+    let error = parse_perl_file(&missing).expect_err("expected missing-file parse to fail");
+    let message = error.to_string();
+
+    scenario.then("the error should include the failing path and underlying reason");
+    assert!(
+        message.contains(&missing.display().to_string()),
+        "expected error to mention missing path, got: {message}"
+    );
+    assert!(
+        message.contains("Failed to read Perl file"),
+        "expected contextual prefix, got: {message}"
+    );
+}
+
+#[test]
+fn bdd_parse_perl_file_unreadable_path_reports_context() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("parse perl file unreadable path reports context");
+    let directory = std::env::temp_dir().join(format!(
+        "tree_sitter_perl_c_unreadable_{}",
+        SystemTime::now().duration_since(UNIX_EPOCH).map_or(0_u128, |duration| duration.as_nanos())
+    ));
+    fs::create_dir(&directory)?;
+
+    scenario.given("a directory path where file bytes cannot be read");
+    scenario.when("parse_perl_file is invoked");
+    let error = parse_perl_file(&directory).expect_err("expected unreadable-path parse to fail");
+    let message = error.to_string();
+
+    scenario.then("the error should include the failing path and context");
+    assert!(
+        message.contains(&directory.display().to_string()),
+        "expected error to mention unreadable path, got: {message}"
+    );
+    assert!(
+        message.contains("Failed to read Perl file"),
+        "expected contextual prefix, got: {message}"
+    );
+
+    fs::remove_dir(&directory)?;
+    Ok(())
+}
+
+#[test]
 fn bdd_injections_query_matches_inline_cpp_heredoc_content() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("injections query matches inline cpp heredoc content");
     let source = "use Inline CPP => <<'END_CPP';\n#include <string>\nclass Greet {};\nEND_CPP\n";
