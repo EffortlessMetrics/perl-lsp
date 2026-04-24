@@ -3,6 +3,7 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
+use perl_parser_core::error::collect_unrecovered_error_summary;
 use perl_parser_core::{NodeKind, ParseResult, Parser};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
@@ -282,6 +283,19 @@ fn parser_ac10_multiple_consecutive_errors() -> ParseResult<()> {
     let errors = parser.errors();
     // We expect errors to be recorded (implementation detail may vary)
     assert!(errors.len() >= 2, "Should record multiple errors");
+    Ok(())
+}
+
+#[test]
+fn parser_recovery_classification_surfaces_error_nodes() -> ParseResult<()> {
+    let code = "my $x = ? ;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let summary = collect_unrecovered_error_summary(&ast);
+    assert!(
+        summary.error_node_count > 0,
+        "invalid input should remain visible via unrecovered ERROR nodes"
+    );
     Ok(())
 }
 

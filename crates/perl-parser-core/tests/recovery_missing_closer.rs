@@ -10,7 +10,9 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
-use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{
+    ParseError, RecoveryKind, RecoverySite, collect_unrecovered_error_summary,
+};
 use perl_parser_core::{NodeKind, Parser};
 use perl_tdd_support::must;
 
@@ -231,6 +233,17 @@ fn recovered_error_has_correct_site_for_array_subscript() {
         "Expected Recovered {{ site: ArraySubscript, kind: InsertedCloser }} for '{}', got: {:?}",
         src, errors
     );
+}
+
+#[test]
+fn missing_bracket_recovery_has_no_unrecovered_error_nodes() {
+    let src = "my $x = $arr[$i; my $y = 2;";
+    let mut parser = Parser::new(src);
+    let ast_result = parser.parse();
+    assert!(ast_result.is_ok(), "expected recoverable parse for '{src}'");
+    let ast = if let Ok(ast) = ast_result { ast } else { unreachable!("checked above") };
+    let summary = collect_unrecovered_error_summary(&ast);
+    assert_eq!(summary.error_node_count, 0, "missing-closing recovery should avoid ERROR nodes");
 }
 
 /// Both inner and outer parens missing — each level independently emits InsertedCloser.

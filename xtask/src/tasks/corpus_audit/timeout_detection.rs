@@ -3,7 +3,7 @@
 //! This module provides timeout protection for parsing operations and
 //! detection of files that may cause timeouts or hangs.
 
-use perl_parser::Parser;
+use perl_parser::{Parser, collect_unrecovered_error_summary};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -138,6 +138,12 @@ pub enum ParseOutcome {
     Ok {
         /// Time taken to parse
         duration_ms: u64,
+        /// Number of `ParseError::Recovered` diagnostics produced by parser recovery.
+        recovered_node_count: usize,
+        /// Number of unrecovered `NodeKind::Error` nodes in the resulting AST.
+        error_node_count: usize,
+        /// Earliest unrecovered `NodeKind::Error` message by source location.
+        first_unrecovered_error_node: Option<String>,
     },
     /// Parse failed with error
     Error {
@@ -166,7 +172,7 @@ impl ParseOutcome {
     /// Get the duration in milliseconds if parse succeeded
     pub fn duration_ms(&self) -> Option<u64> {
         match self {
-            ParseOutcome::Ok { duration_ms } => Some(*duration_ms),
+            ParseOutcome::Ok { duration_ms, .. } => Some(*duration_ms),
             _ => None,
         }
     }
@@ -215,12 +221,25 @@ pub fn parse_with_timeout(
     let handle = std::thread::spawn(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut parser = Parser::new(&content_clone);
-            parser.parse()
+            let parsed = parser.parse();
+            (parsed, parser.errors().to_vec())
         }));
 
         let outcome = match result {
-            Ok(Ok(_)) => ParseOutcome::Ok { duration_ms: start.elapsed().as_millis() as u64 },
-            Ok(Err(e)) => ParseOutcome::Error { message: e.to_string() },
+            Ok((Ok(ast), diagnostics)) => {
+                let recovered_node_count = diagnostics
+                    .iter()
+                    .filter(|error| matches!(error, perl_parser::ParseError::Recovered { .. }))
+                    .count();
+                let ast_error_summary = collect_unrecovered_error_summary(&ast);
+                ParseOutcome::Ok {
+                    duration_ms: start.elapsed().as_millis() as u64,
+                    recovered_node_count,
+                    error_node_count: ast_error_summary.error_node_count,
+                    first_unrecovered_error_node: ast_error_summary.first_unrecovered_error_node,
+                }
+            }
+            Ok((Err(e), _)) => ParseOutcome::Error { message: e.to_string() },
             Err(_) => ParseOutcome::Panic { message: "Parser panicked".to_string() },
         };
 
@@ -503,7 +522,15 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_is_ok() {
-        assert!(ParseOutcome::Ok { duration_ms: 100 }.is_ok());
+        assert!(
+            ParseOutcome::Ok {
+                duration_ms: 100,
+                recovered_node_count: 0,
+                error_node_count: 0,
+                first_unrecovered_error_node: None,
+            }
+            .is_ok()
+        );
         assert!(!ParseOutcome::Error { message: "error".to_string() }.is_ok());
         assert!(!ParseOutcome::Timeout { timeout_ms: 1000 }.is_ok());
         assert!(!ParseOutcome::Panic { message: "panic".to_string() }.is_ok());
@@ -511,7 +538,16 @@ mod tests {
 
     #[test]
     fn test_parse_outcome_duration_ms() {
-        assert_eq!(ParseOutcome::Ok { duration_ms: 100 }.duration_ms(), Some(100));
+        assert_eq!(
+            ParseOutcome::Ok {
+                duration_ms: 100,
+                recovered_node_count: 0,
+                error_node_count: 0,
+                first_unrecovered_error_node: None,
+            }
+            .duration_ms(),
+            Some(100)
+        );
         assert_eq!(ParseOutcome::Error { message: "error".to_string() }.duration_ms(), None);
     }
 

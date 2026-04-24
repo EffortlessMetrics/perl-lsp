@@ -528,6 +528,8 @@ pub use workspace::workspace_rename;
 pub use ast::{Node, NodeKind, SourceLocation};
 /// Parse error and result types for parser output.
 pub use error::{ParseError, ParseResult};
+/// Unrecovered AST error-node summary and collector.
+pub use error::{UnrecoveredErrorSummary, collect_unrecovered_error_summary};
 #[cfg(feature = "incremental")]
 /// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};

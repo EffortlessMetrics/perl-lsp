@@ -14,7 +14,9 @@ mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
 use perl_parser_core::Parser;
-use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{
+    ParseError, RecoveryKind, RecoverySite, collect_unrecovered_error_summary,
+};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -176,6 +178,17 @@ fn truncated_arrow_chain_at_eof_does_not_crash() {
     let mut parser = Parser::new("$a->b->c->");
     let result = parser.parse();
     assert!(result.is_ok(), "Parser must not crash on truncated method chain at EOF");
+}
+
+#[test]
+fn truncated_arrow_recovery_exposes_unrecovered_error_nodes() {
+    let mut parser = Parser::new("my $x = $obj->;");
+    let ast_result = parser.parse();
+    assert!(ast_result.is_ok(), "recovery parse should succeed");
+    let ast = if let Ok(ast) = ast_result { ast } else { unreachable!("checked above") };
+    let summary = collect_unrecovered_error_summary(&ast);
+    assert!(summary.error_node_count > 0, "unrecovered ERROR nodes should stay visible");
+    assert!(summary.first_unrecovered_error_node.is_some(), "first ERROR node should be captured");
 }
 
 // ──────────────────────────────────────────────────────────────

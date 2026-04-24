@@ -131,11 +131,18 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |summary| {
             format!(
-                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
-                format_clean_rate(summary.ok_files, summary.total_files),
+                "| **Project corpus** | {:.1}% salvage (`{}/{}` dirty) | Deterministic regression baseline; `{}` parser-ok files, `{}` parse-Err files, `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` structured-recovery-only, `{}` with ERROR nodes, `{}` catastrophic failures, `{}` recovered nodes, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                summary.recovery_salvage_rate * 100.0,
+                summary.structured_recovery_only_files,
+                summary.total_dirty_files,
+                summary.ok_files,
+                summary.error_files,
                 summary.test_corpus_files,
                 summary.perl_corpus_files,
-                summary.error_files,
+                summary.structured_recovery_only_files,
+                summary.files_with_error_nodes,
+                summary.catastrophic_parse_failure_files,
+                summary.recovered_node_count,
                 summary.timeout_files,
                 summary.panic_files,
                 summary.nodekind_covered,
@@ -176,7 +183,13 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             .map_or_else(|| "?".to_string(), |r| r.files_unreadable.to_string());
         let proj_detail = metrics.project_corpus.as_ref().map_or_else(
             || "Project: UNVERIFIED".to_string(),
-            |s| format!("Project: {} timeout, {} panic, 0 unread", s.timeout_files, s.panic_files,),
+            |s| {
+                let first_error = s.first_unrecovered_error_node.as_deref().unwrap_or("none");
+                format!(
+                    "Project: {} files, {} timeout, {} panic, first ERROR node: {}",
+                    s.total_files, s.timeout_files, s.panic_files, first_error
+                )
+            },
         );
         format!(
             "| **Reliability** | Ubuntu: {} unread / CPAN: {} unread / {} | -- | `.ci/*-baseline.json` |",
@@ -286,6 +299,13 @@ mod tests {
             total_files: 91,
             ok_files: 91,
             error_files: 0,
+            total_dirty_files: 12,
+            structured_recovery_only_files: 9,
+            files_with_error_nodes: 2,
+            catastrophic_parse_failure_files: 1,
+            recovered_node_count: 14,
+            first_unrecovered_error_node: Some("Expected expression".to_string()),
+            recovery_salvage_rate: 0.75,
             timeout_files: 0,
             panic_files: 0,
             test_corpus_files: 69,
@@ -312,6 +332,8 @@ mod tests {
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        assert!(result.contains("75.0% salvage"), "project row missing salvage rate");
+        assert!(result.contains("with ERROR nodes"), "project row missing ERROR-node count");
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"

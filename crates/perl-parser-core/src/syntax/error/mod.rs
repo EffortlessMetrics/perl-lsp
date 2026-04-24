@@ -489,7 +489,7 @@ pub mod classifier;
 /// Error recovery strategies and traits for the Perl parser.
 pub mod recovery;
 
-use perl_ast::Node;
+use perl_ast::{Node, NodeKind};
 
 /// Structured output from parsing, combining AST with all diagnostics.
 ///
@@ -540,6 +540,34 @@ pub struct ParseOutput {
     /// LSP providers use this as a confidence signal: `0` means a clean parse,
     /// `> 0` means at least one synthetic repair was made.
     pub recovered_count: usize,
+}
+
+/// Summary of unrecovered `NodeKind::Error` nodes in a parsed AST.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UnrecoveredErrorSummary {
+    /// Number of unrecovered `NodeKind::Error` nodes.
+    pub error_node_count: usize,
+    /// Message from the earliest unrecovered `NodeKind::Error` node.
+    pub first_unrecovered_error_node: Option<String>,
+}
+
+/// Collect unrecovered AST error-node metrics from a parse tree.
+pub fn collect_unrecovered_error_summary(root: &Node) -> UnrecoveredErrorSummary {
+    fn walk(node: &Node, summary: &mut UnrecoveredErrorSummary, first_start: &mut usize) {
+        if let NodeKind::Error { message, .. } = &node.kind {
+            summary.error_node_count = summary.error_node_count.saturating_add(1);
+            if node.location.start < *first_start {
+                *first_start = node.location.start;
+                summary.first_unrecovered_error_node = Some(message.clone());
+            }
+        }
+        node.for_each_child(|child| walk(child, summary, first_start));
+    }
+
+    let mut summary = UnrecoveredErrorSummary::default();
+    let mut first_start = usize::MAX;
+    walk(root, &mut summary, &mut first_start);
+    summary
 }
 
 impl ParseOutput {
