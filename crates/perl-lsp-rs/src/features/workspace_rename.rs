@@ -5,6 +5,7 @@
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
@@ -24,6 +25,74 @@ pub struct RenameEdit {
     pub uri: String,
     /// The list of text edits for this document
     pub edits: Vec<TextEdit>,
+}
+
+/// Reasons a workspace rename request is refused in phase-1 static mode.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum WorkspaceRenameRefusal {
+    /// Only subroutine rename has strong cross-file identity in this phase.
+    UnsupportedSymbolKind(SymKind),
+    /// Symbol identity cannot be trusted for workspace-wide rewrite.
+    WeakSymbolIdentity,
+    /// More than one symbol definition could match this rename target.
+    AmbiguousSymbolIdentity {
+        /// Fully qualified symbols that conflict with the requested rename target.
+        candidates: Vec<String>,
+    },
+}
+
+impl fmt::Display for WorkspaceRenameRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedSymbolKind(_) => {
+                write!(f, "workspace rename currently supports static subroutines only")
+            }
+            Self::WeakSymbolIdentity => write!(
+                f,
+                "workspace rename requires a strong symbol identity (package-qualified subroutine)"
+            ),
+            Self::AmbiguousSymbolIdentity { .. } => write!(
+                f,
+                "workspace rename refused: symbol identity is ambiguous across multiple definitions"
+            ),
+        }
+    }
+}
+
+/// Build phase-1 workspace rename edits or return a refusal reason.
+pub fn plan_workspace_rename(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+    new_name_bare: &str,
+) -> Result<Vec<RenameEdit>, WorkspaceRenameRefusal> {
+    if key.kind != SymKind::Sub {
+        return Err(WorkspaceRenameRefusal::UnsupportedSymbolKind(key.kind));
+    }
+
+    if key.pkg.as_ref() == "main" {
+        return Err(WorkspaceRenameRefusal::WeakSymbolIdentity);
+    }
+
+    if idx.find_def(key).is_none() {
+        return Err(WorkspaceRenameRefusal::WeakSymbolIdentity);
+    }
+
+    let expected_qname = format!("{}::{}", key.pkg, key.name);
+    let mut candidates: Vec<String> = idx
+        .search_symbols(key.name.as_ref())
+        .into_iter()
+        .filter(|s| s.name == key.name.as_ref())
+        .filter_map(|s| s.qualified_name)
+        .collect();
+    candidates.sort();
+    candidates.dedup();
+    let foreign: Vec<String> =
+        candidates.into_iter().filter(|name| name != &expected_qname).collect();
+    if !foreign.is_empty() {
+        return Err(WorkspaceRenameRefusal::AmbiguousSymbolIdentity { candidates: foreign });
+    }
+
+    Ok(build_rename_edit(idx, key, new_name_bare))
 }
 
 /// Build a rename edit across the workspace.
@@ -161,10 +230,8 @@ fn is_non_target_package_declaration(
     // Try to read the original source span to detect a qualified name like "Bar::process_data".
     // When the index returns an inverted range (end < start, a known indexer edge case), we fall
     // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
+    let maybe_original =
+        doc.line_index.position_to_offset(start_line, start_char).and_then(|start_off| {
             doc.line_index
                 .position_to_offset(end_line, end_char)
                 .and_then(|end_off| doc.text.get(start_off..end_off))
@@ -433,6 +500,53 @@ $var;
             "renaming Foo::process_data must not touch Bar.pm; got edits: {:?}",
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn plan_workspace_rename_refuses_main_package_identity()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+        index_text(&idx, "file:///main.pl", "sub local_helper { return 1 }\nlocal_helper();\n")?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("main"),
+            name: Arc::from("local_helper"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = plan_workspace_rename(&idx, &key, "renamed_helper");
+        assert!(matches!(result, Err(WorkspaceRenameRefusal::WeakSymbolIdentity)));
+        Ok(())
+    }
+
+    #[test]
+    fn plan_workspace_rename_refuses_ambiguous_sub_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let idx = WorkspaceIndex::new();
+        index_text(&idx, "file:///A.pm", "package A;\nsub run { 1 }\n1;\n")?;
+        index_text(&idx, "file:///B.pm", "package B;\nsub run { 2 }\n1;\n")?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("A"),
+            name: Arc::from("run"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let result = plan_workspace_rename(&idx, &key, "execute");
+        match result {
+            Err(WorkspaceRenameRefusal::AmbiguousSymbolIdentity { candidates }) => {
+                assert!(
+                    candidates.iter().any(|name| name == "B::run"),
+                    "expected B::run to be reported as ambiguous candidate: {:?}",
+                    candidates
+                );
+            }
+            other => return Err(format!("expected ambiguous refusal, got {:?}", other).into()),
+        }
 
         Ok(())
     }

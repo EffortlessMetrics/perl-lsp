@@ -292,3 +292,146 @@ fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_workspace_rename_spans_multiple_files() -> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(json!(1)),
+        method: "initialize".to_string(),
+        params: Some(json!({
+            "processId": null,
+            "rootUri": "file:///workspace",
+            "capabilities": {}
+        })),
+    });
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": "file:///workspace/A.pm",
+                "languageId": "perl",
+                "version": 1,
+                "text": "package A;\nsub target_name { return 42; }\n1;\n"
+            }
+        })),
+    });
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": "file:///workspace/B.pm",
+                "languageId": "perl",
+                "version": 1,
+                "text": "package B;\nuse A;\nsub run { return A::target_name(); }\n1;\n"
+            }
+        })),
+    });
+
+    let response = server
+        .handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            id: Some(json!(2)),
+            method: "textDocument/rename".to_string(),
+            params: Some(json!({
+                "textDocument": { "uri": "file:///workspace/A.pm" },
+                "position": { "line": 1, "character": 6 },
+                "newName": "renamed_target"
+            })),
+        })
+        .ok_or("rename request returned no response")?;
+
+    assert!(
+        response.error.is_none(),
+        "rename should succeed for static qualified subroutine: {:?}",
+        response.error
+    );
+    let result = response.result.ok_or("rename result missing")?;
+    let changes = result
+        .get("changes")
+        .and_then(|v| v.as_object())
+        .ok_or("expected WorkspaceEdit.changes object")?;
+    assert!(
+        changes.contains_key("file:///workspace/A.pm"),
+        "definition file must be included in workspace rename changes"
+    );
+    assert!(
+        changes.contains_key("file:///workspace/B.pm"),
+        "call-site file must be included in workspace rename changes"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_workspace_rename_refuses_weak_or_ambiguous_identity()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = LspServer::new();
+
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: Some(json!(1)),
+        method: "initialize".to_string(),
+        params: Some(json!({
+            "processId": null,
+            "rootUri": "file:///workspace",
+            "capabilities": {}
+        })),
+    });
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "initialized".to_string(),
+        params: Some(json!({})),
+    });
+
+    server.handle_request(JsonRpcRequest {
+        _jsonrpc: "2.0".to_string(),
+        id: None,
+        method: "textDocument/didOpen".to_string(),
+        params: Some(json!({
+            "textDocument": {
+                "uri": "file:///workspace/main.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub helper { return 1; }\nhelper();\n"
+            }
+        })),
+    });
+
+    let response = server
+        .handle_request(JsonRpcRequest {
+            _jsonrpc: "2.0".to_string(),
+            id: Some(json!(2)),
+            method: "textDocument/rename".to_string(),
+            params: Some(json!({
+                "textDocument": { "uri": "file:///workspace/main.pl" },
+                "position": { "line": 0, "character": 5 },
+                "newName": "helper_renamed"
+            })),
+        })
+        .ok_or("rename request returned no response")?;
+
+    let error = response.error.ok_or("expected rename refusal error")?;
+    assert_eq!(error.code, -32803);
+    assert!(
+        error.message.contains("strong symbol identity"),
+        "expected weak/ambiguous refusal message, got: {}",
+        error.message
+    );
+
+    Ok(())
+}
