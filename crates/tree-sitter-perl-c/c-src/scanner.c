@@ -261,6 +261,76 @@ static void skip_whitespace(TSLexer *lexer) {
   }
 }
 
+static bool is_autoquote_quotelike_op(TSPString *s) {
+  if (s->length == 1) {
+    int32_t c = s->contents[0];
+    return c == 'q' || c == 'm' || c == 's' || c == 'y';
+  }
+  if (s->length == 2) {
+    int32_t c0 = s->contents[0];
+    int32_t c1 = s->contents[1];
+    return (c0 == 'q' && (c1 == 'q' || c1 == 'r' || c1 == 'w' || c1 == 'x')) ||
+           (c0 == 't' && c1 == 'r');
+  }
+  return false;
+}
+
+static void skip_to_line_end(TSLexer *lexer, int32_t *c) {
+  while (lexer->lookahead && lexer->lookahead != '\n' && lexer->lookahead != '\r') {
+    lexer->advance(lexer, true);
+  }
+  *c = lexer->lookahead;
+}
+
+static bool skip_pod_block(TSLexer *lexer, int32_t *c) {
+  if (*c != '=' || lexer->get_column(lexer) != 0) return false;
+  lexer->advance(lexer, true);
+  int32_t first = lexer->lookahead;
+  if (!is_tsp_id_start(first)) {
+    *c = first;
+    return false;
+  }
+
+  TSPString pod_directive = {0};
+  while (lexer->lookahead && is_tsp_id_continue(lexer->lookahead)) {
+    tspstring_push(&pod_directive, lexer->lookahead);
+    lexer->advance(lexer, true);
+  }
+
+  if (pod_directive.length == 3 && pod_directive.contents[0] == 'c' &&
+      pod_directive.contents[1] == 'u' && pod_directive.contents[2] == 't') {
+    skip_to_line_end(lexer, c);
+    return true;
+  }
+
+  while (!lexer->eof(lexer)) {
+    skip_to_line_end(lexer, c);
+    if (lexer->eof(lexer)) break;
+    if (lexer->lookahead == '\n') {
+      lexer->advance(lexer, true);
+    } else if (lexer->lookahead == '\r') {
+      lexer->advance(lexer, true);
+      if (lexer->lookahead == '\n') lexer->advance(lexer, true);
+    }
+    *c = lexer->lookahead;
+    if (*c != '=' || lexer->get_column(lexer) != 0) continue;
+    lexer->advance(lexer, true);
+    if (lexer->lookahead == 'c') {
+      lexer->advance(lexer, true);
+      if (lexer->lookahead == 'u') {
+        lexer->advance(lexer, true);
+        if (lexer->lookahead == 't') {
+          skip_to_line_end(lexer, c);
+          return true;
+        }
+      }
+    }
+  }
+
+  *c = lexer->lookahead;
+  return true;
+}
+
 static void skip_ws_to_eol(TSLexer *lexer) {
   while (1) {
     int32_t c = lexer->lookahead;
@@ -906,8 +976,10 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
   }
   if (isidfirst(c) &&
       (valid_symbols[TOKEN_FAT_COMMA_AUTOQUOTED] || valid_symbols[TOKEN_BRACE_AUTOQUOTED])) {
+    TSPString ident = {0};
     // we zip until the end of the identifier; then we do a lookeahed to see if it's autoquoted
     do {
+      tspstring_push(&ident, c);
       ADVANCE_C;
     } while (c && isidcont(c));
     MARK_END;
@@ -917,16 +989,24 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
 
     // NOTE - TS is annoying about skipping chars after you've hit done
     // mark_end, so we have to do the regular advance so our token actually shows up
-    while (is_tsp_whitespace(c) || c == '#') {
-      while (is_tsp_whitespace(c)) ADVANCE_C;
+    bool skipped_whitespace = false;
+    while (is_tsp_whitespace(c) || c == '#' || (c == '=' && lexer->get_column(lexer) == 0)) {
+      while (is_tsp_whitespace(c)) {
+        skipped_whitespace = true;
+        ADVANCE_C;
+      }
       // now we need to skip comments - we get in a funny way if we have a quotelike
       // operator followed by a comment as the quote char
       if (c == '#') {
+        if (!skipped_whitespace && is_autoquote_quotelike_op(&ident)) break;
         ADVANCE_C;
         while (lexer->get_column(lexer)) ADVANCE_C;
+        skipped_whitespace = true;
+      }
+      if (c == '=' && lexer->get_column(lexer) == 0 && skip_pod_block(lexer, &c)) {
+        skipped_whitespace = true;
       }
       if (lexer->eof(lexer)) return false;
-      // TODO - in theory there could be POD here that we needa skip over (EYES ROLL)
     }
     c1 = lexer->lookahead;
     ADVANCE_C;

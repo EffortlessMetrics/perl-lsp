@@ -230,3 +230,45 @@ fn bdd_scanner_configuration_is_stable() {
     scenario.then("the backend should report the C scanner");
     assert_eq!(get_scanner_config(), "c-scanner");
 }
+
+#[test]
+fn bdd_autoquoted_fat_comma_skips_comment_lines() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("autoquoted fat comma skips comment lines");
+    let source = "my %h = (\n  alpha # retained comment\n  => 1,\n);\n";
+
+    scenario.given("a bareword key followed by a comment before fat comma");
+    scenario.when("the snippet is parsed");
+    let tree = parse_perl_code(source)?;
+
+    scenario.then("the hash initializer should remain syntax-valid");
+    assert!(!tree.root_node().has_error());
+    Ok(())
+}
+
+#[test]
+fn bdd_autoquoted_brace_key_skips_comment_lines() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("autoquoted brace key skips comment lines");
+    let source = "my $value = $h{alpha # retained comment\n};\n";
+
+    scenario.given("a bareword brace key followed by an end-of-line comment");
+    scenario.when("the snippet is parsed");
+    let tree = parse_perl_code(source)?;
+
+    scenario.then("the brace autoquoted key should remain syntax-valid");
+    assert!(!tree.root_node().has_error());
+    Ok(())
+}
+
+#[test]
+fn bdd_autoquoted_fat_comma_skips_pod_blocks() -> Result<(), Box<dyn Error>> {
+    let scenario = Scenario::new("autoquoted fat comma skips pod blocks");
+    let source = "my %h = (\n  alpha\n=pod\ncommentary\n=cut\n  => 1,\n);\n";
+
+    scenario.given("a bareword key with pod content between it and a fat comma");
+    scenario.when("the snippet is parsed");
+    let tree = parse_perl_code(source)?;
+
+    scenario.then("the scanner should treat pod as ignorable between key and fat comma");
+    assert!(!tree.root_node().has_error());
+    Ok(())
+}
