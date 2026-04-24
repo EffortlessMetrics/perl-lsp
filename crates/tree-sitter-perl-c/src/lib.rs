@@ -266,6 +266,21 @@ mod tests {
         Ok(())
     }
 
+    /// Verify that error state from one parse does not bleed into the next.
+    /// A parser reused after parsing invalid Perl must produce a clean tree
+    /// for the subsequent valid input.
+    #[test]
+    fn test_reusable_parser_error_state_does_not_bleed() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = PerlParser::new()?;
+        // First parse: syntactically invalid Perl — tree must exist but have error nodes.
+        let bad_tree = parser.parse_code("my $x = @@@@@@;")?;
+        assert!(bad_tree.root_node().has_error(), "invalid Perl should produce error nodes");
+        // Second parse: valid Perl — must produce a clean tree despite the previous error.
+        let good_tree = parser.parse_code("my $y = 42;")?;
+        assert!(!good_tree.root_node().has_error(), "valid Perl after error parse must be clean");
+        Ok(())
+    }
+
     #[test]
     fn test_inline_cpp_injection_query_matches_heredoc_body()
     -> Result<(), Box<dyn std::error::Error>> {
