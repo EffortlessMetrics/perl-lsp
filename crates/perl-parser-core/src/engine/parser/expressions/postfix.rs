@@ -551,6 +551,7 @@ impl<'a> Parser<'a> {
                                                     | TokenKind::WordAnd
                                                     | TokenKind::WordXor
                                                     | TokenKind::WordNot
+                                                    | TokenKind::Question
                                             )
                                         )
                                     {
@@ -1099,6 +1100,7 @@ impl<'a> Parser<'a> {
                                                         | TokenKind::WordAnd
                                                         | TokenKind::WordXor
                                                         | TokenKind::WordNot
+                                                        | TokenKind::Question
                                                 )
                                             )
                                         {
@@ -1198,6 +1200,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::WordOr)
                 | Some(TokenKind::WordXor)
                 | Some(TokenKind::WordNot)
+                | Some(TokenKind::Question)
                 | Some(TokenKind::DataMarker)
                 | Some(TokenKind::Eof)
                 | None
