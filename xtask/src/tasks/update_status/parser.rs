@@ -2,8 +2,10 @@
 //!
 //! Owns corpus tracking, sweep report loading, and parser.md generation.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use color_eyre::eyre::Result;
@@ -16,6 +18,7 @@ use super::replace_block;
 // ---------------------------------------------------------------------------
 
 pub(super) struct ParserMetrics {
+    pub root: PathBuf,
     pub syntax_sections: usize,
     pub system_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     pub cpan_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
@@ -31,6 +34,7 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         read_sweep_report(&root.join("target/receipts/common-corpus-sweep.json"));
     let common_corpus_pinned = count_common_corpus_pinned(root);
     ParserMetrics {
+        root: root.to_path_buf(),
         syntax_sections: count_corpus_sections(root),
         system_receipt: read_sweep_report(&root.join(".ci/parser-corpus-baseline.json")),
         cpan_receipt: read_sweep_report(&root.join(".ci/cpan-corpus-baseline.json")),
@@ -89,6 +93,52 @@ fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
 
+fn parse_list(path: &Path) -> BTreeSet<String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return BTreeSet::new();
+    };
+    raw.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn classification_counts(
+    root: &Path,
+    profile: &str,
+    report: &super::super::parser_corpus_sweep::SweepReport,
+) -> Option<(usize, usize, usize)> {
+    let (gap, recovery, invalid) = match profile {
+        "system" => (
+            ".ci/system-valid-parser-gap-manifest.txt",
+            ".ci/system-known-recovery-manifest.txt",
+            ".ci/system-known-invalid-manifest.txt",
+        ),
+        "cpan" => (
+            ".ci/cpan-valid-parser-gap-manifest.txt",
+            ".ci/cpan-known-recovery-manifest.txt",
+            ".ci/cpan-known-invalid-manifest.txt",
+        ),
+        _ => return None,
+    };
+
+    let gaps = parse_list(&root.join(gap));
+    let recoveries = parse_list(&root.join(recovery));
+    let invalids = parse_list(&root.join(invalid));
+
+    let mut dirty: BTreeSet<String> = BTreeSet::new();
+    for files in report.files_by_bucket.values() {
+        dirty.extend(files.iter().cloned());
+    }
+
+    Some((
+        dirty.intersection(&gaps).count(),
+        dirty.intersection(&recoveries).count(),
+        dirty.intersection(&invalids).count(),
+    ))
+}
+
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -99,12 +149,22 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let class_note = classification_counts(&metrics.root, "system", report).map_or_else(
+                || "".to_string(),
+                |(gap, recovery, invalid)| {
+                    format!(
+                        "; clean `{}`, valid gaps `{}`, recovery-only `{}`, known-invalid `{}`, unreadable `{}`",
+                        report.clean_files, gap, recovery, invalid, report.files_unreadable
+                    )
+                },
+            );
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors{}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
                 report.files_unreadable,
                 report.files_with_errors,
+                class_note,
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +175,21 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let class_note = classification_counts(&metrics.root, "cpan", report).map_or_else(
+                || "".to_string(),
+                |(gap, recovery, invalid)| {
+                    format!(
+                        "; clean `{}`, valid gaps `{}`, recovery-only `{}`, known-invalid `{}`, unreadable `{}`",
+                        report.clean_files, gap, recovery, invalid, report.files_unreadable
+                    )
+                },
+            );
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors{}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.files_unreadable,
                 report.files_with_errors,
+                class_note,
                 short_day(&report.timestamp),
             )
         },
@@ -296,6 +366,7 @@ mod tests {
             ga_total: 12,
         };
         let metrics = ParserMetrics {
+            root: PathBuf::from("."),
             syntax_sections: 611,
             system_receipt: None,
             cpan_receipt: None,
@@ -323,6 +394,7 @@ mod tests {
     #[test]
     fn test_parser_strict_clean_row_no_receipt() -> Result<()> {
         let metrics = ParserMetrics {
+            root: PathBuf::from("."),
             syntax_sections: 611,
             system_receipt: None,
             cpan_receipt: None,
@@ -360,6 +432,7 @@ mod tests {
             perl_version: "5.038".to_string(),
             total_files: 10,
             files_unreadable: 0,
+            unreadable_files: vec![],
             clean_files: 10,
             files_with_errors: 0,
             total_error_nodes: 0,
@@ -372,6 +445,7 @@ mod tests {
             slowest_files: vec![],
         };
         let metrics = ParserMetrics {
+            root: PathBuf::from("."),
             syntax_sections: 611,
             system_receipt: None,
             cpan_receipt: None,

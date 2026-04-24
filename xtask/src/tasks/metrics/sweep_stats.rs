@@ -43,7 +43,7 @@ pub fn run(input: Option<PathBuf>) -> Result<()> {
     println!("Profile: {}", report.corpus_profile);
     println!("Perl:    {}", report.perl_version);
 
-    print_summary(&report);
+    print_summary(&report, None);
 
     // Schema-compatibility note: older receipts deserialize with None
     // phase timings and empty slowest_files. Tell the user explicitly so

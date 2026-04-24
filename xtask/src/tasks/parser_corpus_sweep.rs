@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use perl_parser::{Node, NodeKind, Parser};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
@@ -157,6 +157,8 @@ pub struct SweepReport {
     pub perl_version: String,
     pub total_files: usize,
     pub files_unreadable: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub unreadable_files: Vec<String>,
     pub clean_files: usize,
     pub files_with_errors: usize,
     pub total_error_nodes: usize,
@@ -268,6 +270,43 @@ pub struct RatchetViolation {
     pub current_value: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassificationSummary {
+    pub clean_files: usize,
+    pub valid_parser_gaps: usize,
+    pub expected_recovery_only: usize,
+    pub known_invalid: usize,
+    pub unreadable: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ClassificationSets {
+    valid_parser_gap: BTreeSet<String>,
+    expected_recovery: BTreeSet<String>,
+    known_invalid: BTreeSet<String>,
+    known_unreadable: BTreeSet<String>,
+}
+
+fn manifest_paths_for_profile(
+    profile: &str,
+) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+    match profile {
+        "system" => Some((
+            ".ci/system-valid-parser-gap-manifest.txt",
+            ".ci/system-known-recovery-manifest.txt",
+            ".ci/system-known-invalid-manifest.txt",
+            ".ci/system-known-unreadable-manifest.txt",
+        )),
+        "cpan" => Some((
+            ".ci/cpan-valid-parser-gap-manifest.txt",
+            ".ci/cpan-known-recovery-manifest.txt",
+            ".ci/cpan-known-invalid-manifest.txt",
+            ".ci/cpan-known-unreadable-manifest.txt",
+        )),
+        _ => None,
+    }
+}
+
 /// Default high-level corpus root directories for system Perl
 pub fn default_base_roots() -> Vec<PathBuf> {
     vec![
@@ -362,6 +401,81 @@ pub fn parse_manifest(manifest_path: &Path) -> Result<Vec<String>> {
         modules.push(trimmed.to_string());
     }
     Ok(modules)
+}
+
+fn parse_file_manifest(manifest_path: &Path) -> Result<BTreeSet<String>> {
+    Ok(parse_manifest(manifest_path)?.into_iter().collect())
+}
+
+fn load_classification_sets(profile: &str) -> Result<Option<ClassificationSets>> {
+    let Some((gap, recovery, invalid, unreadable)) = manifest_paths_for_profile(profile) else {
+        return Ok(None);
+    };
+    let root = super::cpan_corpus::workspace_root();
+    let load = |rel: &str| -> Result<BTreeSet<String>> {
+        let path = root.join(rel);
+        parse_file_manifest(&path)
+            .with_context(|| format!("Failed to read classification manifest {}", path.display()))
+    };
+
+    Ok(Some(ClassificationSets {
+        valid_parser_gap: load(gap)?,
+        expected_recovery: load(recovery)?,
+        known_invalid: load(invalid)?,
+        known_unreadable: load(unreadable)?,
+    }))
+}
+
+fn classify_dirty_files(
+    report: &SweepReport,
+    sets: &ClassificationSets,
+) -> Result<ClassificationSummary> {
+    let mut dirty_files: BTreeSet<String> = BTreeSet::new();
+    for files in report.files_by_bucket.values() {
+        dirty_files.extend(files.iter().cloned());
+    }
+    dirty_files.extend(report.unreadable_files.iter().cloned());
+
+    let mut overlaps = Vec::new();
+    let mut missing = Vec::new();
+
+    for file in &dirty_files {
+        let mut hits = 0usize;
+        hits += usize::from(sets.valid_parser_gap.contains(file));
+        hits += usize::from(sets.expected_recovery.contains(file));
+        hits += usize::from(sets.known_invalid.contains(file));
+        hits += usize::from(sets.known_unreadable.contains(file));
+        if hits == 0 {
+            missing.push(file.clone());
+        } else if hits > 1 {
+            overlaps.push(file.clone());
+        }
+    }
+
+    if !missing.is_empty() || !overlaps.is_empty() {
+        let mut message = String::from("Dirty corpus classification is incomplete");
+        if !missing.is_empty() {
+            message.push_str(&format!("\n- Missing classification ({}):", missing.len()));
+            for file in missing.iter().take(20) {
+                message.push_str(&format!("\n  {file}"));
+            }
+        }
+        if !overlaps.is_empty() {
+            message.push_str(&format!("\n- Multi-category files ({}):", overlaps.len()));
+            for file in overlaps.iter().take(20) {
+                message.push_str(&format!("\n  {file}"));
+            }
+        }
+        return Err(color_eyre::eyre::eyre!(message));
+    }
+
+    Ok(ClassificationSummary {
+        clean_files: report.clean_files,
+        valid_parser_gaps: dirty_files.intersection(&sets.valid_parser_gap).count(),
+        expected_recovery_only: dirty_files.intersection(&sets.expected_recovery).count(),
+        known_invalid: dirty_files.intersection(&sets.known_invalid).count(),
+        unreadable: dirty_files.intersection(&sets.known_unreadable).count(),
+    })
 }
 
 /// Resolve module names to file paths via a single `perl` invocation.
@@ -677,6 +791,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     let mut total_files = 0usize;
     let mut files_unreadable = 0usize;
+    let mut unreadable_files: Vec<String> = Vec::new();
     let mut clean_files = 0usize;
     let mut files_with_errors = 0usize;
     let mut total_error_nodes = 0usize;
@@ -710,6 +825,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
             Ok(s) => s,
             Err(_) => {
                 files_unreadable += 1;
+                unreadable_files.push(portable_path.clone());
                 if config.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
@@ -837,6 +953,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
         perl_version: get_perl_version(),
         total_files,
         files_unreadable,
+        unreadable_files,
         clean_files,
         files_with_errors,
         total_error_nodes,
@@ -849,8 +966,24 @@ pub fn run(config: SweepConfig) -> Result<()> {
         slowest_files,
     };
 
+    let classification_sets = load_classification_sets(&corpus_profile)?;
+    let classification = if let Some(ref sets) = classification_sets {
+        match classify_dirty_files(&report, sets) {
+            Ok(summary) => Some(summary),
+            Err(err) => {
+                if config.enforce {
+                    return Err(err);
+                }
+                eprintln!("Skipping dirty-file classification: {err}");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Print summary
-    print_summary(&report);
+    print_summary(&report, classification.as_ref());
 
     // Write output if requested
     if let Some(ref output_path) = config.output_path {
@@ -923,7 +1056,21 @@ pub fn run(config: SweepConfig) -> Result<()> {
         }
 
         if config.enforce {
-            let violations = enforce_ratchet(&report, &baseline);
+            let mut violations = enforce_ratchet(&report, &baseline);
+            if let Some(ref current_classification) = classification {
+                if let Some(ref sets) = classification_sets {
+                    let baseline_classification = classify_dirty_files(&baseline, sets)?;
+                    if current_classification.valid_parser_gaps
+                        > baseline_classification.valid_parser_gaps
+                    {
+                        violations.push(RatchetViolation {
+                            metric: "valid_parser_gap_files".to_string(),
+                            baseline_value: baseline_classification.valid_parser_gaps.to_string(),
+                            current_value: current_classification.valid_parser_gaps.to_string(),
+                        });
+                    }
+                }
+            }
             if !violations.is_empty() {
                 println!("\n--- Ratchet violations ---");
                 for v in &violations {
@@ -1070,7 +1217,7 @@ fn get_git_commit() -> String {
 /// receipt carries the optional schema-1.3.0 fields (phase timings, median
 /// error density, slowest-file list, per-file measurements) they are
 /// rendered as additional sections.
-pub fn print_summary(report: &SweepReport) {
+pub fn print_summary(report: &SweepReport, classification: Option<&ClassificationSummary>) {
     let clean_pct = 100.0 * report.clean_files as f64 / report.total_files.max(1) as f64;
     println!("\n=== Parser Corpus Sweep Results ===");
     println!("Total files:       {}", report.total_files);
@@ -1079,6 +1226,15 @@ pub fn print_summary(report: &SweepReport) {
     println!("With errors:       {}", report.files_with_errors);
     println!("Total ERROR nodes: {}", report.total_error_nodes);
     println!("Elapsed:           {:.1}s", report.elapsed_secs);
+
+    if let Some(classification) = classification {
+        println!("\n--- Dirty-file classification ---");
+        println!("  Clean files:             {}", classification.clean_files);
+        println!("  Valid parser gaps:       {}", classification.valid_parser_gaps);
+        println!("  Expected recovery-only:  {}", classification.expected_recovery_only);
+        println!("  Known invalid:           {}", classification.known_invalid);
+        println!("  Unreadable:              {}", classification.unreadable);
+    }
 
     if let Some(ref timings) = report.phase_timings {
         println!("\n--- Phase timings ---");
@@ -1158,6 +1314,7 @@ mod tests {
             perl_version: "unknown".to_string(),
             total_files: clean_files + files_with_errors + files_unreadable,
             files_unreadable,
+            unreadable_files: vec![],
             clean_files,
             files_with_errors,
             total_error_nodes,
@@ -2196,7 +2353,7 @@ mod tests {
             }],
             ..test_report(5, 1, 2, 0, BTreeMap::from([("unclosed_brace".to_string(), 1)]))
         };
-        print_summary(&report);
+        print_summary(&report, None);
     }
 
     #[test]
@@ -2204,6 +2361,6 @@ mod tests {
         // Smoke test for the old-schema path: no timings, no density, no
         // slowest list — summary must still render headline counters.
         let report = test_report(5, 1, 2, 0, BTreeMap::new());
-        print_summary(&report);
+        print_summary(&report, None);
     }
 }
