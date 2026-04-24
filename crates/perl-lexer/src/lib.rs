@@ -954,11 +954,15 @@ impl<'a> PerlLexer<'a> {
                         // Loop naturally continues to next iteration
                     }
                 }
-                b'\t' => {
-                    // Batch skip tabs
+                b'\t' | 0x0B | 0x0C => {
+                    // Batch skip horizontal tab, vertical tab, and form feed.
+                    // Perl treats these as whitespace separators.
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && Self::byte_at(self.input_bytes, self.position) == b'\t'
+                        && matches!(
+                            Self::byte_at(self.input_bytes, self.position),
+                            b'\t' | 0x0B | 0x0C
+                        )
                     {
                         self.position += 1;
                     }
@@ -989,9 +993,9 @@ impl<'a> PerlLexer<'a> {
                     // Skip line comment using memchr for fast newline search
                     self.position += 1; // Skip # directly
 
-                    // Use memchr to find newline quickly
+                    // Use memchr2 to find CR/LF line endings quickly (supports LF, CRLF, and CR)
                     if let Some(newline_offset) =
-                        memchr::memchr(b'\n', &self.input_bytes[self.position..])
+                        memchr::memchr2(b'\n', b'\r', &self.input_bytes[self.position..])
                     {
                         self.position += newline_offset;
                     } else {
@@ -1000,7 +1004,8 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
                 b'=' if self.position == 0
-                    || (self.position > 0 && self.input_bytes[self.position - 1] == b'\n') =>
+                    || (self.position > 0
+                        && matches!(self.input_bytes[self.position - 1], b'\n' | b'\r')) =>
                 {
                     // Check if this starts a POD section (=pod, =head, =over, etc.)
                     // Use byte-safe checks — avoid slicing &str at arbitrary byte positions
@@ -1022,15 +1027,21 @@ impl<'a> PerlLexer<'a> {
                         let mut i = search_start;
                         while i < bytes.len() {
                             // Look for =cut at the start of a line
-                            if (i == 0 || bytes[i - 1] == b'\n') && bytes[i..].starts_with(b"=cut")
+                            if (i == 0 || matches!(bytes[i - 1], b'\n' | b'\r'))
+                                && bytes[i..].starts_with(b"=cut")
                             {
                                 i += 4; // Skip "=cut"
                                 // Skip rest of the =cut line
-                                while i < bytes.len() && bytes[i] != b'\n' {
+                                while i < bytes.len() && bytes[i] != b'\n' && bytes[i] != b'\r' {
                                     i += 1;
                                 }
-                                // Consume the trailing newline if present
-                                if i < bytes.len() && bytes[i] == b'\n' {
+                                // Consume one line ending sequence if present
+                                if i < bytes.len() && bytes[i] == b'\r' {
+                                    i += 1;
+                                    if i < bytes.len() && bytes[i] == b'\n' {
+                                        i += 1;
+                                    }
+                                } else if i < bytes.len() && bytes[i] == b'\n' {
                                     i += 1;
                                 }
                                 self.position = i;
@@ -1271,10 +1282,12 @@ impl<'a> PerlLexer<'a> {
                 // Hexadecimal: 0x[0-9a-fA-F_]+
                 pos += 2; // consume '0x'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len() && (bytes[pos].is_ascii_hexdigit() || bytes[pos] == b'_') {
+                    saw_digit |= bytes[pos].is_ascii_hexdigit();
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
@@ -1290,12 +1303,14 @@ impl<'a> PerlLexer<'a> {
                 // Binary: 0b[01_]+
                 pos += 2; // consume '0b'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len()
                     && (bytes[pos] == b'0' || bytes[pos] == b'1' || bytes[pos] == b'_')
                 {
+                    saw_digit |= bytes[pos] == b'0' || bytes[pos] == b'1';
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
@@ -1311,12 +1326,14 @@ impl<'a> PerlLexer<'a> {
                 // Octal (explicit): 0o[0-7_]+
                 pos += 2; // consume '0o'
                 let digit_start = pos;
+                let mut saw_digit = false;
                 while pos < bytes.len()
                     && ((bytes[pos] >= b'0' && bytes[pos] <= b'7') || bytes[pos] == b'_')
                 {
+                    saw_digit |= (b'0'..=b'7').contains(&bytes[pos]);
                     pos += 1;
                 }
-                if pos > digit_start {
+                if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
                     self.mode = LexerMode::ExpectOperator;
@@ -1917,13 +1934,22 @@ impl<'a> PerlLexer<'a> {
             // Special case: substitution/transliteration with single-quote delimiter
             // The single quote is considered an identifier continuation, so we need to
             // detect these operators before consuming it as part of an identifier.
-            if !self.after_arrow && ch == 's' && self.peek_char(1) == Some('\'') {
+            if !self.after_arrow
+                && self.hash_brace_depth == 0
+                && ch == 's'
+                && self.peek_char(1) == Some('\'')
+            {
                 self.advance(); // consume 's'
                 return self.parse_substitution(start);
-            } else if !self.after_arrow && ch == 'y' && self.peek_char(1) == Some('\'') {
+            } else if !self.after_arrow
+                && self.hash_brace_depth == 0
+                && ch == 'y'
+                && self.peek_char(1) == Some('\'')
+            {
                 self.advance(); // consume 'y'
                 return self.parse_transliteration(start);
             } else if !self.after_arrow
+                && self.hash_brace_depth == 0
                 && ch == 't'
                 && self.peek_char(1) == Some('r')
                 && self.peek_char(2) == Some('\'')
@@ -2029,39 +2055,41 @@ impl<'a> PerlLexer<'a> {
             // Check for substitution/transliteration operators
             // Skip if after '->'  -- these are method names, not operators.
             #[allow(clippy::collapsible_if)]
-            if !self.after_arrow && matches!(text, "s" | "tr" | "y") {
-                if let Some(next) = self.current_char() {
-                    // Check if followed by a delimiter
-                    if matches!(
-                        next,
-                        '/' | '|'
-                            | '\''
-                            | '{'
-                            | '['
-                            | '('
-                            | '<'
-                            | '!'
-                            | '#'
-                            | '@'
-                            | '$'
-                            | '%'
-                            | '^'
-                            | '&'
-                            | '*'
-                            | '+'
-                            | '='
-                            | '~'
-                            | '`'
-                    ) {
+            if !self.after_arrow && self.hash_brace_depth == 0 && matches!(text, "s" | "tr" | "y")
+            {
+                let immediate = self.current_char();
+                let (candidate, char_after_next, has_whitespace) =
+                    if immediate.is_some_and(|c| c.is_whitespace()) {
+                        let (nc, ca) = self.peek_nonspace_and_following();
+                        (nc, ca, true)
+                    } else {
+                        let following = immediate.and_then(|c| {
+                            let j = self.position + c.len_utf8();
+                            self.input.get(j..).and_then(|s| s.chars().next())
+                        });
+                        (immediate, following, false)
+                    };
+
+                if let Some(next) = candidate {
+                    // `s => 1` should remain a fat-arrow hash key, not quote op.
+                    let is_fat_arrow = next == '=' && char_after_next == Some('>');
+                    let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                    let is_quote_char = matches!(next, '\'' | '"') && text != "s";
+                    let transliteration_allows_whitespace = text == "tr" || text == "y";
+                    let substitution_disallows_whitespace = text == "s" && has_whitespace;
+                    let is_valid_delim = Self::is_quote_delim(next)
+                        && !is_fat_arrow
+                        && !substitution_disallows_whitespace
+                        && (!has_whitespace
+                            || is_paired_delim
+                            || is_quote_char
+                            || transliteration_allows_whitespace);
+
+                    if is_valid_delim {
                         match text {
-                            "s" => {
-                                return self.parse_substitution(start);
-                            }
-                            "tr" | "y" => {
-                                return self.parse_transliteration(start);
-                            }
+                            "s" => return self.parse_substitution(start),
+                            "tr" | "y" => return self.parse_transliteration(start),
                             unexpected => {
-                                // Return diagnostic token instead of panicking
                                 return Some(Token {
                                     token_type: TokenType::Error(Arc::from(format!(
                                         "Unexpected substitution operator '{}': expected 's', 'tr', or 'y' at position {}",
@@ -3243,6 +3271,10 @@ impl<'a> PerlLexer<'a> {
 
     fn parse_transliteration(&mut self, start: usize) -> Option<Token> {
         // We've already consumed 'tr' or 'y'
+        while self.current_char().is_some_and(char::is_whitespace) {
+            self.advance();
+        }
+
         let delimiter = self.current_char()?;
         self.advance(); // Skip delimiter
 
@@ -3886,6 +3918,62 @@ mod tests {
         assert!(matches!(peeked2.token_type, TokenType::Number(_)));
         assert_eq!(lexer.paren_depth, 1, "peek at number must not change paren_depth");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_comment_skipping_with_cr_line_endings() -> TestResult {
+        let mut lexer = PerlLexer::new("my $x = 1;# comment\rmy $y = 2;");
+        let mut saw_second_my = false;
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+
+            if matches!(token.token_type, TokenType::Keyword(ref kw) if kw.as_ref() == "my")
+                && token.start > 0
+            {
+                saw_second_my = true;
+            }
+        }
+
+        assert!(saw_second_my, "lexer should continue after CR-terminated comment line");
+        Ok(())
+    }
+
+    #[test]
+    fn test_pod_skipped_with_cr_only_line_endings() -> TestResult {
+        // CR-only line endings (classic Mac): =pod and =cut must be detected
+        // when preceded by \r instead of \n.
+        let input = "my $before = 1;\r=pod\rThis is documentation.\r=cut\rmy $after = 2;";
+        let mut lexer = PerlLexer::new(input);
+        let mut token_texts: Vec<String> = Vec::new();
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+            if matches!(token.token_type, TokenType::Keyword(_) | TokenType::Identifier(_)) {
+                token_texts.push(token.text.to_string());
+            }
+        }
+
+        assert!(
+            token_texts.iter().any(|t| t == "my" && {
+                // find the second 'my' (after the POD block)
+                token_texts.iter().enumerate().filter(|(_, t)| t.as_str() == "my").nth(1).is_some()
+            }),
+            "lexer should produce tokens after CR-terminated =cut; got: {:?}",
+            token_texts
+        );
+
+        // Ensure POD body text is not present as an identifier token
+        assert!(
+            !token_texts.iter().any(|t| t == "documentation"),
+            "POD body should be consumed, not emitted as a token; got: {:?}",
+            token_texts
+        );
         Ok(())
     }
 }

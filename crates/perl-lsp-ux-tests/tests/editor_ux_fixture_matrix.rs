@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::path::Path;
 
@@ -47,8 +47,28 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         matrix.get("component_metrics").context("component_metrics missing")?,
         "component_metrics",
     )?;
+    let confidence_signals = collect_string_set(
+        matrix.get("confidence_signals").context("confidence_signals missing")?,
+        "confidence_signals",
+    )?;
+    assert_eq!(
+        confidence_signals,
+        BTreeSet::from([
+            "manual_editor_smoke".to_string(),
+            "first_five_minutes_harness".to_string(),
+            "issue_burndown_regression_guard".to_string(),
+        ])
+    );
     let allowed_metrics =
         top_line_metrics.union(&component_metrics).cloned().collect::<BTreeSet<_>>();
+    let mut confidence_signals_exercised = BTreeSet::new();
+    let baseline_metrics = BTreeSet::from([
+        "workflow_pass_rate".to_string(),
+        "workflow_stability_rate".to_string(),
+    ]);
+    let mut metric_usage_counts: HashMap<String, usize> =
+        allowed_metrics.iter().cloned().map(|metric| (metric, 0_usize)).collect();
+    let mut workflows_with_extended_metrics = 0_usize;
 
     let workflows =
         matrix.get("workflows").and_then(Value::as_array).context("workflows missing")?;
@@ -68,14 +88,24 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             !measures.is_empty(),
             "workflow `{scenario_file}` must define at least one measure"
         );
+        let mut has_extended_metric = false;
         for measure in &measures {
             assert!(
                 allowed_metrics.contains(measure),
                 "workflow `{scenario_file}` references unknown metric `{measure}`"
             );
+            if let Some(count) = metric_usage_counts.get_mut(measure) {
+                *count += 1;
+            }
             if component_metrics.contains(measure) {
                 component_metrics_exercised.insert(measure.clone());
             }
+            if !baseline_metrics.contains(measure) {
+                has_extended_metric = true;
+            }
+        }
+        if has_extended_metric {
+            workflows_with_extended_metrics += 1;
         }
 
         let expected_outcomes = workflow
@@ -86,6 +116,21 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
             !expected_outcomes.is_empty(),
             "workflow `{scenario_file}` must define expected outcomes"
         );
+        let workflow_confidence_signals = collect_string_set(
+            workflow.get("confidence_signals").context("workflow missing confidence_signals")?,
+            &format!("{scenario_file}.confidence_signals"),
+        )?;
+        assert!(
+            !workflow_confidence_signals.is_empty(),
+            "workflow `{scenario_file}` must define at least one confidence signal"
+        );
+        for signal in workflow_confidence_signals {
+            assert!(
+                confidence_signals.contains(&signal),
+                "workflow `{scenario_file}` references unknown confidence signal `{signal}`"
+            );
+            confidence_signals_exercised.insert(signal);
+        }
 
         let scenario_path = workspace_root().join(UX_TESTS_DIR).join(scenario_file);
         assert!(
@@ -111,6 +156,25 @@ fn editor_ux_fixture_matrix_covers_all_scenarios() -> Result<()> {
         component_metrics_exercised, component_metrics,
         "every declared component metric must be exercised by at least one workflow"
     );
+    assert_eq!(
+        confidence_signals_exercised, confidence_signals,
+        "every declared confidence signal must be exercised by at least one workflow"
+    );
+
+    let workflow_count = workflows.len();
+    let extended_metric_coverage = workflows_with_extended_metrics as f64 / workflow_count as f64;
+    assert!(
+        extended_metric_coverage >= 0.30,
+        "extended metric coverage too low: {workflows_with_extended_metrics}/{workflow_count} workflows (expected >= 30%)"
+    );
+
+    for component_metric in &component_metrics {
+        let count = *metric_usage_counts.get(component_metric).unwrap_or(&0);
+        assert!(
+            count >= 2,
+            "component metric `{component_metric}` must be exercised by at least two workflows (found {count})"
+        );
+    }
 
     Ok(())
 }

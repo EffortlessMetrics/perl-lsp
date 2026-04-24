@@ -40,6 +40,12 @@ static MOJO_KV_ROUTE_RE_ACTION_FIRST: OnceLock<Result<regex::Regex, regex::Error
     OnceLock::new();
 
 #[cfg(feature = "workspace")]
+static GOTO_LABEL_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
+static LABEL_DECLARATION_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     FQN_RE
         .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
@@ -108,6 +114,42 @@ fn get_super_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
                 "Failed to initialize SUPER method-call regex: {err}"
             ))
         })
+}
+
+#[cfg(feature = "workspace")]
+fn get_goto_label_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    GOTO_LABEL_RE
+        .get_or_init(|| regex::Regex::new(r"\bgoto\s+([A-Za-z_][A-Za-z0-9_]*)"))
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize goto label regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn get_label_declaration_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    LABEL_DECLARATION_RE
+        .get_or_init(|| regex::Regex::new(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:"))
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize label declaration regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn find_label_declaration_span(
+    text: &str,
+    label: &str,
+) -> Result<Option<(usize, usize)>, JsonRpcError> {
+    let label_re = get_label_declaration_regex()?;
+    Ok(label_re.captures_iter(text).find_map(|cap| {
+        let declared_label = cap.get(1)?;
+        (declared_label.as_str() == label).then_some((declared_label.start(), declared_label.end()))
+    }))
 }
 
 #[derive(Debug, Clone)]
@@ -466,7 +508,7 @@ fn get_mojo_kv_route_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     MOJO_KV_ROUTE_RE
         .get_or_init(|| {
             regex::Regex::new(
-                r"->\s*to\s*\(\s*controller\s*=>\s*'(?P<controller>[^']+)'\s*,\s*action\s*=>\s*'(?P<action>[^']+)'\s*\)",
+                r#"->\s*to\s*\(\s*controller\s*=>\s*['"](?P<controller>[^'"]+)['"]\s*,\s*action\s*=>\s*['"](?P<action>[^'"]+)['"]\s*\)"#,
             )
         })
         .as_ref()
@@ -511,15 +553,32 @@ fn normalize_mojolicious_controller_name(raw: &str) -> Option<String> {
     }
 
     let mut segments = Vec::new();
-    for segment in normalized.split("::").flat_map(|part| part.split('/')) {
+    for segment in
+        normalized.split("::").flat_map(|part| part.split('/')).flat_map(|part| part.split('-'))
+    {
         let segment = segment.trim();
         if segment.is_empty() {
             continue;
         }
-        let mut chars = segment.chars();
-        let first = chars.next()?;
-        let mut normalized_segment = first.to_uppercase().collect::<String>();
-        normalized_segment.push_str(chars.as_str());
+        let mut normalized_segment = String::new();
+        let mut capitalize_next = true;
+        for ch in segment.chars() {
+            if ch == '_' {
+                capitalize_next = true;
+                continue;
+            }
+
+            if capitalize_next {
+                normalized_segment.extend(ch.to_uppercase());
+                capitalize_next = false;
+            } else {
+                normalized_segment.push(ch);
+            }
+        }
+
+        if normalized_segment.is_empty() {
+            continue;
+        }
         segments.push(normalized_segment);
     }
 
@@ -1043,6 +1102,32 @@ impl LspServer {
                 let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                 let cursor_in_text = offset - text_start;
 
+                let goto_label_re = get_goto_label_regex()?;
+                for cap in goto_label_re.captures_iter(&text_around) {
+                    if let Some(label_match) = cap.get(1)
+                        && cursor_in_text >= label_match.start()
+                        && cursor_in_text <= label_match.end()
+                        && let Some((target_start, target_end)) =
+                            find_label_declaration_span(&doc.text, label_match.as_str())?
+                    {
+                        let (def_line, def_char) = self.offset_to_pos16(doc, target_start);
+                        let (def_end_line, def_end_char) = self.offset_to_pos16(doc, target_end);
+                        return Ok(Some(json!([{
+                            "uri": uri,
+                            "range": {
+                                "start": {
+                                    "line": def_line,
+                                    "character": def_char,
+                                },
+                                "end": {
+                                    "line": def_end_line,
+                                    "character": def_end_char,
+                                },
+                            },
+                        }])));
+                    }
+                }
+
                 if let Some(mason_location) = self.resolve_mason_definition(uri, &doc.text, offset)
                 {
                     if let Some(lsp_location) =
@@ -1334,7 +1419,12 @@ impl LspServer {
                             let current_package =
                                 crate::declaration::current_package_at(ast, offset);
                             if let Some(symbol_key) =
-                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_package,
+                                    &doc.text,
+                                )
                             {
                                 tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
 
@@ -1351,6 +1441,28 @@ impl LspServer {
                                     {
                                         return Ok(Some(json!([lsp_location])));
                                     }
+                                }
+
+                                if symbol_key.kind == crate::workspace_index::SymKind::Sub
+                                    && symbol_key.sigil.is_none()
+                                    && let Some(import_source) =
+                                        self.find_import_source(ast, &symbol_key.name)
+                                    && let Some(def_location) = find_workspace_definition_location(
+                                        workspace_index,
+                                        &import_source,
+                                        &symbol_key.name,
+                                    )
+                                    && let Some(lsp_location) =
+                                        crate::workspace_index::lsp_adapter::to_lsp_location(
+                                            &def_location,
+                                        )
+                                {
+                                    tracing::debug!(
+                                        symbol = %symbol_key.name,
+                                        source_pkg = %import_source,
+                                        "resolved bare imported symbol through require/import source"
+                                    );
+                                    return Ok(Some(json!([lsp_location])));
                                 }
                             }
                         }

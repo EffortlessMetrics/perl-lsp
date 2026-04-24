@@ -5,11 +5,22 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result};
+use regex::Regex;
+use serde::Deserialize;
 
 use super::{replace_block, run_cmd};
+
+static RUNNING_TEST_BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)")
+        .expect("running-test regex is valid")
+});
+
+static TEST_LIST_LINE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r":\s*test\s*$").expect("test-list-line regex is valid"));
 
 // ---------------------------------------------------------------------------
 // Metric collectors
@@ -45,23 +56,24 @@ pub(super) fn collect_per_crate_test_counts(root: &Path) -> BTreeMap<String, usi
         return BTreeMap::new();
     }
 
-    let running_re = regex::Regex::new(
-        r"Running unittests[^\(]*\(target[^\)]*deps[/\\]([a-zA-Z0-9_-]+)-[0-9a-f]+\)",
-    )
-    .ok();
-    let test_re = regex::Regex::new(r":\s*test\s*$").ok();
+    parse_per_crate_test_counts(&output)
+}
+
+fn parse_per_crate_test_counts(output: &str) -> BTreeMap<String, usize> {
+    if output.is_empty() {
+        return BTreeMap::new();
+    }
 
     let mut by_crate: BTreeMap<String, usize> = BTreeMap::new();
     let mut current_crate: Option<String> = None;
 
     for line in output.lines() {
-        if let Some(caps) = running_re.as_ref().and_then(|r| r.captures(line)) {
+        if let Some(caps) = RUNNING_TEST_BINARY_RE.captures(line) {
             let name = caps[1].replace('_', "-");
             current_crate = Some(name);
             continue;
         }
-        if let Some(re) = test_re.as_ref()
-            && re.is_match(line)
+        if TEST_LIST_LINE_RE.is_match(line)
             && let Some(ref crate_name) = current_crate
         {
             *by_crate.entry(crate_name.clone()).or_default() += 1;
@@ -122,6 +134,47 @@ pub(super) fn count_ux_scenarios(root: &Path) -> usize {
     collect_ux_scenario_files(root).len()
 }
 
+#[derive(Debug, Deserialize)]
+struct EditorUxFixtureMatrix {
+    workflows: Vec<EditorUxWorkflow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EditorUxWorkflow {
+    // ci_tier is present in the JSON but not used for signal counting;
+    // the fixture integrity test enforces that tags, not tier, are the source of truth.
+    #[allow(dead_code)]
+    ci_tier: String,
+    confidence_signals: Vec<String>,
+}
+
+pub(super) fn collect_editor_ux_confidence_counts(root: &Path) -> Result<BTreeMap<String, usize>> {
+    let matrix_path = root.join("crates/perl-lsp-ux-tests/fixtures/editor_ux_fixture_matrix.json");
+    let matrix_raw = fs::read_to_string(&matrix_path)
+        .with_context(|| format!("reading {}", matrix_path.display()))?;
+    let matrix: EditorUxFixtureMatrix = serde_json::from_str(&matrix_raw)
+        .with_context(|| format!("parsing {}", matrix_path.display()))?;
+
+    // Count by reading the explicit confidence_signals tags on each workflow.
+    // This is the authoritative source — the fixture matrix integrity test enforces
+    // that every declared signal is exercised by at least one workflow, so any
+    // workflow added without the right tags will fail the matrix integrity test.
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    for workflow in &matrix.workflows {
+        for signal in &workflow.confidence_signals {
+            *counts.entry(signal.clone()).or_insert(0) += 1;
+        }
+    }
+    // Ensure all three canonical signal keys are always present (even if zero),
+    // so callers can unwrap_or(0) without worrying about missing keys.
+    for signal in
+        &["first_five_minutes_harness", "manual_editor_smoke", "issue_burndown_regression_guard"]
+    {
+        counts.entry((*signal).to_string()).or_insert(0);
+    }
+    Ok(counts)
+}
+
 // ---------------------------------------------------------------------------
 // Generators
 // ---------------------------------------------------------------------------
@@ -142,7 +195,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
         "- **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing\n\
          - **UX workflow harness**: {ux_scenarios} scenario files in `perl-lsp-ux-tests`; \
            `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds \
-           the integration-only 10k-line large-file case; planning scaffold at \
+           the integration-only 10k-line large-file case; confidence signals (manual smoke, \
+           first-5-minutes coverage, issue-burndown regression guards) are tracked in \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
@@ -169,6 +223,7 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
 pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
     let scenario_files = collect_ux_scenario_files(root);
     let scenario_count = scenario_files.len();
+    let confidence_counts = collect_editor_ux_confidence_counts(root)?;
 
     let receipt = serde_json::json!({
         "schema_version": 1,
@@ -194,6 +249,35 @@ pub(super) fn generate_editor_ux_receipt(root: &Path) -> Result<String> {
                 "name": "p95_time_to_first_useful_result_ms",
                 "state": "planned",
                 "owner": "perl-lsp-ux-tests",
+            },
+        ],
+        "confidence_signals": [
+            {
+                "name": "manual_editor_smoke",
+                "state": "tracked",
+                "owner": "perl-lsp-ux-tests",
+                "workflow_count": confidence_counts
+                    .get("manual_editor_smoke")
+                    .copied()
+                    .unwrap_or(0),
+            },
+            {
+                "name": "first_five_minutes_harness",
+                "state": "tracked",
+                "owner": "perl-lsp-ux-tests",
+                "workflow_count": confidence_counts
+                    .get("first_five_minutes_harness")
+                    .copied()
+                    .unwrap_or(0),
+            },
+            {
+                "name": "issue_burndown_regression_guard",
+                "state": "tracked",
+                "owner": "perl-lsp-ux-tests",
+                "workflow_count": confidence_counts
+                    .get("issue_burndown_regression_guard")
+                    .copied()
+                    .unwrap_or(0),
             },
         ],
         "integration_points": {
@@ -253,6 +337,24 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_per_crate_test_counts_parses_unix_and_windows_paths() {
+        let output = r#"
+running 0 tests
+
+Running unittests src/lib.rs (target/debug/deps/perl_parser_core-abc123)
+lexer_edge_case: test
+parser_smoke: test
+
+Running unittests src/lib.rs (target\debug\deps\perl_workspace_index-123def)
+index_builds: test
+"#;
+
+        let counts = parse_per_crate_test_counts(output);
+        assert_eq!(counts.get("perl-parser-core"), Some(&2));
+        assert_eq!(counts.get("perl-workspace-index"), Some(&1));
+    }
+
+    #[test]
     fn test_editor_ux_receipt_shape() -> Result<()> {
         let root = crate::utils::project_root()?;
         let receipt_raw = generate_editor_ux_receipt(&root)?;
@@ -280,6 +382,39 @@ mod tests {
             ])
         );
         assert_eq!(receipt["integration_points"]["ci_lane"], "just ux-tests");
+        let confidence_signals = receipt["confidence_signals"]
+            .as_array()
+            .ok_or_else(|| eyre!("confidence_signals must be an array"))?;
+        let confidence_names: std::collections::BTreeSet<&str> = confidence_signals
+            .iter()
+            .map(|row| row["name"].as_str().ok_or_else(|| eyre!("confidence signal name missing")))
+            .collect::<Result<_>>()?;
+        assert_eq!(
+            confidence_names,
+            std::collections::BTreeSet::from([
+                "manual_editor_smoke",
+                "first_five_minutes_harness",
+                "issue_burndown_regression_guard",
+            ])
+        );
+        // Cross-check: receipt workflow_count values must match what
+        // collect_editor_ux_confidence_counts computes from the fixture tags.
+        // This catches stale hardcoded JSON and verifies the emit path uses
+        // the same source-of-truth function.
+        let live_counts = super::collect_editor_ux_confidence_counts(&root)?;
+        for row in confidence_signals {
+            let name = row["name"].as_str().ok_or_else(|| eyre!("name missing"))?;
+            let receipt_count = row["workflow_count"]
+                .as_u64()
+                .ok_or_else(|| eyre!("workflow_count missing for {name}"))?;
+            let live_count = *live_counts.get(name).unwrap_or(&0) as u64;
+            assert_eq!(
+                receipt_count, live_count,
+                "receipt workflow_count for `{name}` ({receipt_count}) diverges from \
+                 live fixture count ({live_count}) — re-run `cargo xtask update-status` to sync"
+            );
+            assert!(receipt_count > 0, "signal `{name}` has zero workflow coverage");
+        }
         Ok(())
     }
 }

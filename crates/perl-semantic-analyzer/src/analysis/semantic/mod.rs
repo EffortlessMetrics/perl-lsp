@@ -674,6 +674,18 @@ sub add { 1 }
     }
 
     #[test]
+    fn test_extract_documentation_with_out_of_bounds_offset()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = "sub add { 1 }\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        assert_eq!(analyzer.extract_documentation(code.len() + 1), None);
+        Ok(())
+    }
+
+    #[test]
     fn test_cross_package_navigation() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"
 package Foo {
@@ -1002,6 +1014,30 @@ my $documented = 42;
                 byte_offset
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_analyzer_find_definition_goto_label() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "START: while (1) {\n    goto START;\n}\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let ref_pos = code.find("START;\n").ok_or("could not find goto label")?;
+
+        let symbol = analyzer
+            .find_definition(ref_pos)
+            .ok_or("definition not found for goto label reference")?;
+
+        assert_eq!(symbol.name, "START");
+        assert_eq!(symbol.kind, SymbolKind::Label);
+        assert!(
+            symbol.location.start < ref_pos,
+            "Label definition {:?} should precede goto reference at byte {}",
+            symbol.location.start,
+            ref_pos
+        );
         Ok(())
     }
 
@@ -1427,6 +1463,33 @@ push @items, 5;
             hover.signature
         );
         assert!(hover.documentation.is_some(), "Hover for 'push' should have documentation");
+        Ok(())
+    }
+
+    #[test]
+    fn test_core_prefixed_builtin_hover_for_function_call() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let code = r#"
+my $value = "abc";
+CORE::length($value);
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let length_pos = code.find("CORE::length").ok_or("CORE::length not found")?;
+        let hover = analyzer
+            .hover_info
+            .iter()
+            .find(|(loc, _)| loc.start <= length_pos && loc.end > length_pos);
+
+        assert!(hover.is_some(), "Should have hover info for CORE::length builtin");
+        let (_, hover) = hover.ok_or("missing hover for CORE::length")?;
+        assert!(
+            hover.signature.contains("length"),
+            "Hover signature should contain 'length', got: {}",
+            hover.signature
+        );
         Ok(())
     }
 

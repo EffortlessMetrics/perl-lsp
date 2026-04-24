@@ -125,6 +125,63 @@ fn plan_rewrites_use_base_qw() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn plan_rewrites_moose_extends_single_quoted() -> Result<(), Box<dyn std::error::Error>> {
+    let edits = plan_module_rename_edits("extends 'Foo::Bar';", "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends 'New::Mod';");
+    Ok(())
+}
+
+#[test]
+fn plan_rewrites_moo_with_qw() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "with qw(Foo::Bar Other::Role);";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Role");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "with qw(New::Role Other::Role);");
+    Ok(())
+}
+
+// plan_module_rename_edits — Moose/Moo DSL (extends/with) edge cases
+
+#[test]
+fn plan_rewrites_moose_extends_double_quoted() -> Result<(), Box<dyn std::error::Error>> {
+    let edits = plan_module_rename_edits("extends \"Foo::Bar\";", "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends \"New::Mod\";");
+    Ok(())
+}
+
+#[test]
+fn plan_rewrites_extends_multiple_parents() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "extends qw(Foo::Bar Other::Base);";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0].new_text, "extends qw(New::Mod Other::Base);");
+    Ok(())
+}
+
+#[test]
+fn plan_no_false_positive_extends_in_comment() -> Result<(), Box<dyn std::error::Error>> {
+    // A comment line starting with # should not be rewritten.
+    let edits = plan_module_rename_edits("# extends 'Foo::Bar'", "Foo::Bar", "New::Mod");
+    // Comments do not start a line with 'extends', so this should produce no edit.
+    // (The line trim_start would yield "# extends ...", which does not start_with "extends ")
+    assert!(edits.is_empty(), "comment line should not be rewritten: {edits:?}");
+    Ok(())
+}
+
+#[test]
+fn plan_no_false_positive_with_in_non_moose_context() -> Result<(), Box<dyn std::error::Error>> {
+    // "with" appears as a statement modifier in non-Moose code.
+    // Because line_references_moose_moo_dsl checks trim_start starts_with("with "),
+    // a line like `open($fh, "<", $f) or die "err"` does not trigger.
+    let source = "open($fh, '<', $f) or die 'err';";
+    let edits = plan_module_rename_edits(source, "Foo::Bar", "New::Mod");
+    assert!(edits.is_empty());
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────
 // plan_module_rename_edits — legacy separator (single-quote)
 // ──────────────────────────────────────────────────────────────

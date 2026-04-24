@@ -9,7 +9,7 @@ use perl_semantic_analyzer::{
     declaration::{current_package_at, symbol_at_cursor},
     symbol::{SymbolExtractor, SymbolKind, SymbolTable},
 };
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 fn extract_symbols(code: &str) -> SymbolTable {
     let mut parser = Parser::new(code);
@@ -340,10 +340,9 @@ builder {
     let mut parser = Parser::new(code);
     let ast = must(parser.parse());
 
-    let static_offset = code.find("Static").expect("could not find Static");
+    let static_offset = must_some(code.find("Static"));
     let current_pkg = current_package_at(&ast, static_offset);
-    let symbol = symbol_at_cursor(&ast, static_offset, current_pkg)
-        .expect("expected symbol_at_cursor to resolve Plack middleware");
+    let symbol = must_some(symbol_at_cursor(&ast, static_offset, current_pkg));
 
     assert_eq!(
         symbol.pkg.as_ref(),

@@ -204,6 +204,10 @@ impl CheckpointCache {
 
     /// Add a checkpoint to the cache
     pub fn add(&mut self, checkpoint: LexerCheckpoint) {
+        if self.max_checkpoints == 0 {
+            return;
+        }
+
         let position = checkpoint.position;
 
         // Remove any existing checkpoint at this position
@@ -422,5 +426,19 @@ mod tests {
             50,
             "eviction must keep exactly max_checkpoints entries"
         );
+    }
+
+    #[test]
+    fn test_checkpoint_cache_zero_capacity_is_noop() {
+        let mut cache = CheckpointCache::new(0);
+        cache.add(LexerCheckpoint::at_position(10));
+        cache.add(LexerCheckpoint::at_position(20));
+
+        assert!(
+            cache.checkpoints.is_empty(),
+            "zero-capacity cache should ignore inserted checkpoints"
+        );
+        assert!(cache.find_before(100).is_none());
+        assert!(cache.find_after(0).is_none());
     }
 }

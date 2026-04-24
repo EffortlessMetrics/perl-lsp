@@ -19,7 +19,8 @@ Scenarios currently include:
 - large-file handling,
 - shebang/encoding behavior,
 - multi-file workspace interactions,
-- hover, goto-definition, strict diagnostics, and document symbols flows, and
+- hover, goto-definition, goto-declaration, rename, strict diagnostics, and document symbols flows, and
+- diagnostics republish after in-editor full-document edits, and
 - multi-root `workspace/symbol` disambiguation via `workspaceFolderUri`, and
 - workspace-folder removal evicting stale symbols from search results, and
 - deleted-file churn evicting stale search results and definition targets.
