@@ -5,7 +5,10 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    CompileTimePragmaEnvironment, PerlVersion, PragmaState, PragmaTracker,
+    features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -967,6 +970,57 @@ fn state_for_offset_between_two_pragmas() -> Result<(), Box<dyn std::error::Erro
     let state = PragmaTracker::state_for_offset(&map, 50);
     assert!(state.strict_vars);
     assert!(!state.warnings);
+    Ok(())
+}
+
+#[test]
+fn query_api_no_strict_in_inner_block_does_not_leak() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &[], 14, 25)], 13, 30),
+        use_node("warnings", &[], 31, 45),
+    ]);
+
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let inner = environment.query_at(20);
+    assert!(!inner.snapshot().strict_enabled(), "inner no strict must disable strictness");
+
+    let outer = environment.query_at(40);
+    assert!(outer.snapshot().strict_enabled(), "inner no strict must not leak");
+    assert!(outer.snapshot().warnings_enabled(), "outer warning state should still be queryable");
+    Ok(())
+}
+
+#[test]
+fn query_api_eval_block_restores_outer_state() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        eval_node(block(vec![use_node("warnings", &[], 20, 35)], 18, 40), 16, 42),
+        dummy_node(43, 48),
+    ]);
+
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let in_eval = environment.query_at(30);
+    assert!(in_eval.snapshot().warnings_enabled(), "warnings should be enabled inside eval block");
+
+    let after_eval = environment.query_at(45);
+    assert!(
+        !after_eval.snapshot().warnings_enabled(),
+        "eval block state must restore outer warning state"
+    );
+    Ok(())
+}
+
+#[test]
+fn query_api_string_eval_does_not_change_static_state() -> Result<(), Box<dyn std::error::Error>> {
+    let eval_string_call =
+        function_call("eval", vec![string_node("use warnings; no strict;", false, 15, 40)], 10, 42);
+    let ast = program(vec![use_node("strict", &[], 0, 9), eval_string_call, dummy_node(43, 50)]);
+
+    let environment = CompileTimePragmaEnvironment::build(&ast);
+    let after_eval = environment.query_at(48);
+    assert!(after_eval.snapshot().strict_enabled(), "string eval must not disable outer strict");
+    assert!(!after_eval.snapshot().warnings_enabled(), "string eval must not enable warnings");
     Ok(())
 }
 
