@@ -574,8 +574,7 @@ fn dot_slash_include_path_resolves_same_as_bare() -> Result<(), Box<dyn std::err
 /// can appear in both tiers.  When it does, the `include_paths` entry wins
 /// (lower precedence value) because it is inserted first.
 #[test]
-fn same_path_in_include_and_system_inc_include_wins()
--> Result<(), Box<dyn std::error::Error>> {
+fn same_path_in_include_and_system_inc_include_wins() -> Result<(), Box<dyn std::error::Error>> {
     let temp = tempfile::tempdir()?;
 
     // "shared" has ModuleA; "other" has the same file but will never be reached.
@@ -610,8 +609,7 @@ fn same_path_in_include_and_system_inc_include_wins()
 /// trailing slash variants), only a single `IncRoot` must be produced and the
 /// module still resolves.
 #[test]
-fn all_include_path_variants_collapse_to_one_root()
--> Result<(), Box<dyn std::error::Error>> {
+fn all_include_path_variants_collapse_to_one_root() -> Result<(), Box<dyn std::error::Error>> {
     let (_temp, workspace_uri) = setup_workspace_with_module("lib/Collapse.pm")?;
 
     let result = resolve_module_uri(
