@@ -136,13 +136,23 @@ impl IncrementalDocument {
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
         let mut new_source = self.source.clone();
+        let mut affected_ranges = Vec::with_capacity(sorted_edits.len());
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if let Some((start, end)) = self.apply_edit_in_place(&mut new_source, edit) {
+                affected_ranges.push((start, end));
+            } else {
+                debug!(
+                    "Falling back to full parse for edit batch due to invalid edit: start={}, end={}",
+                    edit.start_byte, edit.old_end_byte
+                );
+                let mut parser = Parser::new(&self.source);
+                let new_root = parser.parse()?;
+                self.root = Arc::new(new_root);
+                self.cache_subtrees();
+                self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+                return Ok(());
+            }
         }
-
-        // Find all affected ranges
-        let affected_ranges: Vec<_> =
-            sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
 
         // Collect reusable subtrees outside affected ranges
         let reusable = self.find_reusable_for_ranges(&affected_ranges);
@@ -191,20 +201,39 @@ impl IncrementalDocument {
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
-
-        if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
+    fn apply_edit_in_place(
+        &self,
+        source: &mut String,
+        edit: &IncrementalEdit,
+    ) -> Option<(usize, usize)> {
+        let source_len = source.len();
+        if edit.start_byte > source_len || edit.old_end_byte > source_len {
+            debug!(
+                "Skipping out-of-bounds edit range: start={}, end={}, len={}",
+                edit.start_byte, edit.old_end_byte, source_len
+            );
+            return None;
         }
 
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            source.replace_range(start..end, &edit.new_text);
-        } else {
-            debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+        if edit.start_byte > edit.old_end_byte {
+            debug!(
+                "Skipping inverted edit range: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return None;
         }
+
+        if !source.is_char_boundary(edit.start_byte) || !source.is_char_boundary(edit.old_end_byte)
+        {
+            debug!(
+                "Invalid UTF-8 boundaries in edit: start={}, end={}",
+                edit.start_byte, edit.old_end_byte
+            );
+            return None;
+        }
+
+        source.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+        Some((edit.start_byte, edit.old_end_byte))
     }
 
     /// Find subtrees that can be reused (outside the edited range)
@@ -308,7 +337,11 @@ impl IncrementalDocument {
         let mut new_root = (*self.root).clone();
 
         // Find and update the affected token
-        if self.update_token_in_tree(&mut new_root, source, edit) { Some(new_root) } else { None }
+        if self.update_token_in_tree(&mut new_root, source, edit) {
+            Some(new_root)
+        } else {
+            None
+        }
     }
 
     /// Update a single token in the tree
@@ -1405,6 +1438,109 @@ mod tests {
             })
             .count();
         assert!(critical_nodes >= 2, "Should preserve package and key subroutines for code lens");
+
+        Ok(())
+    }
+
+    fn test_parse_error(message: &str) -> perl_parser_core::error::ParseError {
+        perl_parser_core::error::ParseError::SyntaxError {
+            message: message.to_string(),
+            location: 0,
+        }
+    }
+
+    #[test]
+    fn test_batch_edit_out_of_bounds_falls_back_safely() -> ParseResult<()> {
+        let source = "my $x = 42;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(0, source.len() + 5, "our".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        let mut parser = Parser::new(source);
+        let fresh_root = parser.parse()?;
+        assert_eq!(doc.text(), source);
+        assert_eq!(doc.tree(), &fresh_root);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_edit_inverted_range_falls_back_safely() -> ParseResult<()> {
+        let source = "my $x = 42;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(8, 3, "123".to_string()));
+
+        doc.apply_edits(&edits)?;
+        assert_eq!(doc.text(), source);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_edit_mid_codepoint_insert_delete_falls_back_safely() -> ParseResult<()> {
+        let source = "my $x = \"é\";";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let e_start =
+            source.find("é").ok_or_else(|| test_parse_error("missing multibyte character"))?;
+        let mid = e_start + 1;
+
+        let mut insert_edits = IncrementalEditSet::new();
+        insert_edits.add(IncrementalEdit::new(mid, mid, "z".to_string()));
+        doc.apply_edits(&insert_edits)?;
+        assert_eq!(doc.text(), source);
+
+        let mut delete_edits = IncrementalEditSet::new();
+        delete_edits.add(IncrementalEdit::new(mid, mid + 1, "".to_string()));
+        doc.apply_edits(&delete_edits)?;
+        assert_eq!(doc.text(), source);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_with_one_unmappable_edit_uses_safe_fallback() -> ParseResult<()> {
+        let source = "my $x = 42; my $y = 100;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let pos_42 = source.find("42").ok_or_else(|| test_parse_error("missing 42"))?;
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(pos_42, pos_42 + 2, "43".to_string()));
+        edits.add(IncrementalEdit::new(source.len() + 1, source.len() + 1, "!".to_string()));
+
+        doc.apply_edits(&edits)?;
+
+        let mut parser = Parser::new(source);
+        let fresh_root = parser.parse()?;
+        assert_eq!(doc.text(), source);
+        assert_eq!(doc.tree(), &fresh_root);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_supported_edits_match_fresh_parse() -> ParseResult<()> {
+        let source = "my $x = 42; my $y = 100; print $x + $y;";
+        let mut doc = IncrementalDocument::new(source.to_string())?;
+
+        let pos_42 = source.find("42").ok_or_else(|| test_parse_error("missing 42"))?;
+        let pos_100 = source.find("100").ok_or_else(|| test_parse_error("missing 100"))?;
+
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(pos_42, pos_42 + 2, "43".to_string()));
+        edits.add(IncrementalEdit::new(pos_100, pos_100 + 3, "101".to_string()));
+        doc.apply_edits(&edits)?;
+
+        let expected_source = "my $x = 43; my $y = 101; print $x + $y;";
+        let mut parser = Parser::new(expected_source);
+        let fresh_root = parser.parse()?;
+        assert_eq!(doc.text(), expected_source);
+        assert_eq!(doc.tree(), &fresh_root);
 
         Ok(())
     }
