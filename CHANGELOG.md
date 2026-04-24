@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CPAN corpus support in Nix devShell** — `perl` and `curl` are now available in
+  the Nix development shell, enabling CPAN corpus tasks (`cpan-corpus-fetch`,
+  `cpan-corpus-install`, `cpan-corpus-sweep`, `cpan-corpus-ratchet`) to run
+  locally without additional setup. This enables v0.12.5 and v0.12.6 roadmap
+  milestones that depend on CPAN-scale benchmarks. (#4359)
+
 ## [0.12.4] - 2026-04-12
 
 Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
