@@ -1332,6 +1332,10 @@ impl WorkspaceIndex {
     /// ```
     fn determine_folder_uri(&self, file_uri: &str) -> Option<String> {
         let folders = self.workspace_folders.read();
+        // Use longest-match semantics: in a multi-root workspace with overlapping
+        // prefixes (e.g. file:///project and file:///project/lib), a file in the
+        // deeper subtree should map to the more-specific folder URI, not the first
+        // one encountered.
         let mut best_match: Option<&String> = None;
         for folder_uri in folders.iter() {
             // Check if the file URI starts with the folder URI
@@ -2186,6 +2190,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.global_name_index.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
