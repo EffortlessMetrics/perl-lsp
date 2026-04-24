@@ -73,6 +73,32 @@ Located in: `crates/perl-dap/tests/fixtures/`
 - **AC Coverage**: AC14 - POD documentation
 - **Usage**: `cargo test -p perl-dap --test dap_breakpoint_matrix_tests -- test_breakpoints_in_pod_documentation`
 
+### 1b. Variables/Evaluate Deep Session Fixture (1 file)
+
+Located in: `crates/perl-dap/tests/fixtures/`
+
+#### `variables_evaluate_deep_session.pl` (57 lines)
+- **Purpose**: Real debugger-session fixture for deep variable inspection and evaluate coverage gaps
+- **Test Scenarios**:
+  - 550-element lexical array for pagination/truncation
+  - 6-level nested hash for deep expansion
+  - lexical vs package/global scope visibility checks
+  - coderef + blessed object previews
+  - Unicode hash keys/values in variables and evaluate requests
+  - timeout-oriented evaluate expressions validated against a live debugger session
+- **Usage**:
+  - `cargo test -p perl-dap --test variables_deep_truncation -- --nocapture`
+  - `cargo test -p perl-dap --test dap_evaluate_comprehensive_tests -- --nocapture`
+
+#### `evaluate_real_session.pl` (17 lines)
+- **Purpose**: Real-session evaluate fixture with globals, Unicode data, coderef/object previews, and timeout target
+- **Test Scenarios**:
+  - safe evaluate reads on global scalar/array/coderef
+  - blocked safe-mode mutations and system-call expressions
+  - Unicode hash key lookup in evaluate
+  - blessed object class inspection via `ref(...)`
+  - `while (1) {}` timeout path fails cleanly
+
 ### 2. Golden Transcript JSON Fixtures (6 files)
 
 Located in: `crates/perl-dap/tests/fixtures/golden_transcripts/`

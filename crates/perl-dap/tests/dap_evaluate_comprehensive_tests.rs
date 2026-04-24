@@ -14,6 +14,12 @@
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
+use std::path::PathBuf;
+use std::{fs, path::Path};
+use tempfile::TempDir;
+
+mod common;
+use common::{DapWorkflowSession, perl_available, workflow_timeout};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -23,6 +29,52 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn new_adapter() -> DebugAdapter {
     DebugAdapter::new()
+}
+
+const EVAL_FIXTURE_BREAKPOINT_LINE: u64 = 20;
+
+fn eval_fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/evaluate_real_session.pl")
+}
+
+fn materialize_fixture(source: &Path) -> Result<(String, TempDir), Box<dyn std::error::Error>> {
+    let fixture_contents = fs::read_to_string(source)?;
+    let temp_workspace = tempfile::tempdir()?;
+    let temp_script = temp_workspace.path().join("evaluate_real_session.pl");
+    fs::write(&temp_script, fixture_contents)?;
+    let path = temp_script.to_str().ok_or("temp fixture path is not valid UTF-8")?.to_string();
+    Ok((path, temp_workspace))
+}
+
+fn session_with_eval_fixture() -> Result<(DapWorkflowSession, i64, i64, TempDir), Box<dyn std::error::Error>> {
+    let timeout = workflow_timeout();
+    let (fixture_path, temp_workspace) = materialize_fixture(&eval_fixture_path())?;
+    let mut session = DapWorkflowSession::new(timeout)?;
+    session.launch(&fixture_path)?;
+    let bp_body = session.set_breakpoints(&fixture_path, &[EVAL_FIXTURE_BREAKPOINT_LINE])?;
+    let Some(bp_body) = bp_body else {
+        return Err("setBreakpoints returned no body".into());
+    };
+    let breakpoints = bp_body
+        .get("breakpoints")
+        .and_then(|v| v.as_array())
+        .ok_or("setBreakpoints response missing breakpoints array")?;
+    let verified = breakpoints
+        .iter()
+        .any(|bp| bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(false));
+    if !verified {
+        return Err(format!("fixture breakpoint was not verified: {breakpoints:?}").into());
+    }
+    session.configuration_done()?;
+    for _ in 0..3 {
+        let stopped = session.wait_stopped()?;
+        let (frame_id, _, frame_line) = session.stack_trace(stopped.thread_id)?;
+        if frame_line == EVAL_FIXTURE_BREAKPOINT_LINE as i64 {
+            return Ok((session, stopped.thread_id, frame_id, temp_workspace));
+        }
+        session.continue_exec(stopped.thread_id)?;
+    }
+    Err(format!("did not stop at fixture breakpoint line {}", EVAL_FIXTURE_BREAKPOINT_LINE).into())
 }
 
 /// Assert that the response is a failed evaluate with a message containing `needle`.
@@ -569,6 +621,117 @@ fn test_evaluate_with_frame_id_passes_validation() -> TestResult {
     );
     // frameId is advisory — safe expressions with a frameId should pass safety validation.
     assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")
+}
+
+#[test]
+fn test_evaluate_fixture_real_session_matrix() -> TestResult {
+    if !perl_available() {
+        return Ok(());
+    }
+
+    let (mut session, _thread_id, frame_id, _temp_workspace) = match session_with_eval_fixture() {
+        Ok(state) => state,
+        Err(_) => return Ok(()),
+    };
+
+    for expr in ["$GLOBAL_SCALAR", "scalar(@GLOBAL_ARRAY)", "ref($GLOBAL_CODEREF)"] {
+        let response = session.request(
+            "evaluate",
+            Some(json!({
+                "expression": expr,
+                "frameId": frame_id,
+                "allowSideEffects": false
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, body, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(success, "evaluate should succeed for {expr}, got {message:?}");
+                let eval_body = body.ok_or("missing evaluate body")?;
+                assert!(eval_body.get("result").is_some());
+            }
+            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+        }
+    }
+
+    for expr in ["$GLOBAL_SCALAR = 'mutated'", "system('echo blocked')"] {
+        let response = session.request(
+            "evaluate",
+            Some(json!({
+                "expression": expr,
+                "frameId": frame_id,
+                "allowSideEffects": false
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(!success);
+                let msg = message.ok_or("missing blocked evaluate message")?;
+                assert!(msg.contains("Safe evaluation mode"));
+            }
+            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+        }
+    }
+
+    let unicode_response = session.request(
+        "evaluate",
+        Some(json!({
+            "expression": "$GLOBAL_UNICODE{'ключ'}",
+            "frameId": frame_id,
+            "allowSideEffects": false
+        })),
+    );
+    match unicode_response {
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(success, "unicode lookup should pass, got {message:?}");
+            let eval_body = body.ok_or("missing unicode evaluate body")?;
+            let result = eval_body.get("result").and_then(|v| v.as_str()).ok_or("missing result text")?;
+            assert!(result.contains("значение"));
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    }
+
+    let object_response = session.request(
+        "evaluate",
+        Some(json!({
+            "expression": "ref($GLOBAL_OBJECT)",
+            "frameId": frame_id,
+            "allowSideEffects": false
+        })),
+    );
+    match object_response {
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(success, "ref(\u{0024}object) should pass, got {message:?}");
+            let eval_body = body.ok_or("missing object evaluate body")?;
+            let result = eval_body.get("result").and_then(|v| v.as_str()).ok_or("missing result text")?;
+            assert!(result.contains("Fixture::Thing"));
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    }
+
+    let response = session.request(
+        "evaluate",
+        Some(json!({
+            "expression": "while (1) { }",
+            "frameId": frame_id,
+            "allowSideEffects": true
+        })),
+    );
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(!success, "infinite loop evaluate should fail by timeout");
+            let msg = message.ok_or("missing timeout message")?;
+            assert!(msg.contains("timed out"));
+        }
+        other => return Err(format!("expected evaluate timeout response, got {other:?}").into()),
+    }
+
+    session.disconnect()?;
+    Ok(())
 }
 
 #[test]
