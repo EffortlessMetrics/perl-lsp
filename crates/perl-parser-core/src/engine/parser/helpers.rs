@@ -733,7 +733,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Check if current token is a strong follower at which a missing closer can
-    /// be inferred.  The set covers hard statement boundaries and EOF.
+    /// be inferred.  The set covers two categories:
+    ///
+    /// - **Statement boundaries**: `;`, `}`, `{`, keywords (`my`, `if`, `while`,
+    ///   etc.), and EOF — tokens that cannot appear inside a well-formed
+    ///   delimiter pair.
+    /// - **Sibling closers**: `)` and `]` — a closer owned by an *outer* nesting
+    ///   level that proves the *current* closer is missing.  When
+    ///   `expect_closing_delimiter` fires recovery here it does **not** consume
+    ///   the sibling token so the outer frame can consume it normally.
     ///
     /// `peek_kind()` returns `Some(TokenKind::Eof)` at end-of-input (the EOF
     /// token is sticky) so we match it explicitly alongside `None` (which covers
