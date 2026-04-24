@@ -792,9 +792,14 @@ impl FormatResult {
 ///
 /// Resolution order:
 /// 1. `PERL_LSP_BIN` env var (explicit override).
-/// 2. `CARGO_BIN_EXE_perl-lsp` compile-time constant (set by Cargo during tests).
-/// 3. `perl-lsp` in PATH.
-/// 4. `cargo run -p perl-lsp-rs` fallback (slow but always works).
+/// 2. Runtime walk from `current_exe()` — finds `target/debug/perl-lsp[.exe]` by
+///    traversing parent directories. Avoids the `option_env!` compile-time approach
+///    which strips backslashes on Windows CI (OS error 3 / path not found).
+/// 3. `CARGO_TARGET_DIR` env var — if set, probe its `debug/` and `release/` subdirs.
+/// 4. `CARGO_MANIFEST_DIR`-relative workspace root walk — same approach used by
+///    `perl-lsp-rs` integration tests.
+/// 5. `perl-lsp` / `perllsp` in PATH.
+/// 6. Error with actionable message.
 pub fn resolve_binary() -> Result<String> {
     // 1. Explicit override
     if let Ok(p) = std::env::var("PERL_LSP_BIN") {
@@ -803,12 +808,44 @@ pub fn resolve_binary() -> Result<String> {
         }
     }
 
-    // 2. Compile-time constant (only available when tests run via `cargo test`)
-    if let Some(p) = option_env!("CARGO_BIN_EXE_perl-lsp") {
-        return Ok(p.to_string());
+    // 2. Runtime walk from current_exe() — robust on all platforms including
+    //    Windows where option_env! bakes paths with backslashes stripped.
+    //
+    //    Test binaries live at:
+    //      <workspace>/target/debug/deps/<test-binary-name>[.exe]
+    //    The LSP server lives at:
+    //      <workspace>/target/debug/perl-lsp[.exe]
+    //      <workspace>/target/release/perl-lsp[.exe]
+    //
+    //    We walk up from current_exe() until we find a `target` directory
+    //    whose parent contains `Cargo.lock` (the workspace root).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(binary) = find_binary_near_exe(&exe) {
+            return Ok(binary);
+        }
     }
 
-    // 3. PATH lookup
+    // 3. CARGO_TARGET_DIR — if set, look directly in its debug/release subdirs.
+    //    This covers custom target directories (e.g. agent worktrees using
+    //    CARGO_TARGET_DIR=/tmp/agent-...).
+    if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
+        if let Some(binary) = find_binary_in_target(std::path::Path::new(&target_dir)) {
+            return Ok(binary);
+        }
+    }
+
+    // 4. CARGO_MANIFEST_DIR walk — find workspace root via Cargo.lock, then
+    //    check target/{debug,release}/perl-lsp[.exe].
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = std::path::Path::new(&manifest_dir);
+        let workspace_root =
+            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+        if let Some(binary) = find_binary_in_target(workspace_root) {
+            return Ok(binary);
+        }
+    }
+
+    // 5. PATH lookup
     if let Ok(p) = which::which("perl-lsp") {
         return Ok(p.to_string_lossy().to_string());
     }
@@ -816,12 +853,51 @@ pub fn resolve_binary() -> Result<String> {
         return Ok(p.to_string_lossy().to_string());
     }
 
-    // 4. cargo run fallback — we return the cargo invocation as a string
-    // handled specially by UxClient::spawn.
+    // 6. No binary found — actionable error message.
     Err(anyhow!(
         "perl-lsp binary not found. \
         Set PERL_LSP_BIN=/path/to/perl-lsp or run: cargo build -p perl-lsp-rs"
     ))
+}
+
+/// Walk up from the test binary's path to locate `perl-lsp[.exe]` in the
+/// nearest `target/debug` or `target/release` directory.
+///
+/// Test binaries are placed in `<workspace>/target/<profile>/deps/`, so we
+/// ascend until we find a directory named `target` whose parent has a
+/// `Cargo.lock` file, then probe `<profile>/perl-lsp[.exe]`.
+fn find_binary_near_exe(exe: &std::path::Path) -> Option<String> {
+    // Walk up the ancestor chain looking for a `target` directory.
+    for ancestor in exe.ancestors() {
+        if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
+            let workspace_root = ancestor.parent()?;
+            if workspace_root.join("Cargo.lock").exists() {
+                return find_binary_in_target(workspace_root);
+            }
+        }
+    }
+    None
+}
+
+/// Given a workspace root, probe `target/debug` and `target/release` for
+/// the `perl-lsp` binary (with `.exe` extension on Windows).
+fn find_binary_in_target(workspace_root: &std::path::Path) -> Option<String> {
+    let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
+    let alt_bin_name = if cfg!(windows) { "perllsp.exe" } else { "perllsp" };
+
+    // Prefer debug (matches `cargo test` default profile) over release.
+    let profiles = ["debug", "release"];
+    for profile in profiles {
+        let candidate = workspace_root.join("target").join(profile).join(bin_name);
+        if candidate.exists() {
+            return Some(candidate.to_string_lossy().into_owned());
+        }
+        let alt_candidate = workspace_root.join("target").join(profile).join(alt_bin_name);
+        if alt_candidate.exists() {
+            return Some(alt_candidate.to_string_lossy().into_owned());
+        }
+    }
+    None
 }
 
 /// Utility: find `perl` on PATH, returning its path or `None`.
