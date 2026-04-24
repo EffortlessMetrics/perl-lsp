@@ -407,8 +407,8 @@ impl EnhancedCodeActionsProvider {
             });
         }
 
-        // Add utf8 support if missing
-        if !self.source.contains("use utf8") && helpers.has_non_ascii_content() {
+        // Add utf8 support if no source encoding declaration exists.
+        if !has_source_encoding_declaration(&self.source) && helpers.has_non_ascii_content() {
             let insert_pos = helpers.find_pragma_insert_position();
 
             actions.push(CodeAction {
@@ -427,6 +427,17 @@ impl EnhancedCodeActionsProvider {
 
         actions
     }
+}
+
+fn has_source_encoding_declaration(source: &str) -> bool {
+    if source.contains("use utf8") {
+        return true;
+    }
+
+    source.lines().any(|line| {
+        let trimmed = line.trim_start();
+        trimmed.starts_with("use encoding '") || trimmed.starts_with("use encoding \"")
+    })
 }
 
 #[cfg(test)]
@@ -479,6 +490,26 @@ mod tests {
         let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
 
         assert!(actions.iter().any(|a| a.title.contains("postfix")));
+    }
+
+    #[test]
+    fn test_source_encoding_declaration_utf7_is_recognized() {
+        assert!(has_source_encoding_declaration("use encoding 'UTF-7';\nmy $x = 1;\n"));
+    }
+
+    #[test]
+    fn test_utf8_code_action_skipped_when_encoding_pragma_exists() {
+        let source = "use strict;\nuse warnings;\nuse encoding 'UTF-7';\nmy $x = \"café\";\n";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
+
+        assert!(
+            !actions.iter().any(|a| a.title == "Add UTF-8 support"),
+            "UTF-8 support action should not be emitted when an encoding pragma exists"
+        );
     }
 }
 
