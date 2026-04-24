@@ -459,6 +459,24 @@ fn use_encoding_tracks_active_source_encoding() -> Result<(), Box<dyn std::error
 }
 
 #[test]
+fn use_encoding_utf7_is_normalized() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("encoding", &["'UTF-7'"], 0, 19)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    assert_eq!(map[0].1.encoding.as_deref(), Some("utf-7"));
+    Ok(())
+}
+
+#[test]
+fn use_if_encoding_utf7_is_normalized() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("if", &["$cond", "encoding", "'UTF-7'"], 0, 34)]);
+    let map = PragmaTracker::build(&ast);
+    assert_eq!(map.len(), 1);
+    assert_eq!(map[0].1.encoding.as_deref(), Some("utf-7"));
+    Ok(())
+}
+
+#[test]
 fn use_locale_tracks_scope_and_clears_on_no_locale() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![
         use_node("locale", &["':not_characters'"], 0, 28),

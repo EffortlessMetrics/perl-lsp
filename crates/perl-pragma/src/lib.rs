@@ -370,6 +370,10 @@ fn normalized_pragma_token(arg: &str) -> &str {
     arg.trim().trim_matches('\'').trim_matches('"')
 }
 
+fn normalized_encoding_name(arg: &str) -> String {
+    normalized_pragma_token(arg).to_ascii_lowercase()
+}
+
 fn is_tracked_pragma_module(module: &str) -> bool {
     matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
 }
@@ -521,9 +525,8 @@ impl PragmaTracker {
                             return;
                         }
                         "encoding" => {
-                            current_state.encoding = conditional_args
-                                .first()
-                                .map(|arg| normalized_pragma_token(arg).to_string());
+                            current_state.encoding =
+                                conditional_args.first().map(|arg| normalized_encoding_name(arg));
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -615,9 +618,8 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "encoding" => {
-                        current_state.encoding = args
-                            .first()
-                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        current_state.encoding =
+                            args.first().map(|arg| normalized_encoding_name(arg));
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
