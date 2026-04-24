@@ -12,7 +12,7 @@
 use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 #[cfg(feature = "workspace")]
-use crate::runtime::routing::{IndexAccessMode, route_index_access};
+use crate::runtime::routing::{route_index_access, IndexAccessMode};
 
 impl LspServer {
     fn token_span_at(content: &str, offset: usize) -> Option<(usize, usize)> {
@@ -229,28 +229,9 @@ impl LspServer {
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
-                            if let (Some(coordinator), Some(key)) =
-                                (self.coordinator(), symbol_key.as_ref())
-                            {
-                                let edits = crate::workspace_rename::build_rename_edit(
-                                    coordinator.index(),
-                                    key,
-                                    new_name,
-                                );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
-                                }
-                            }
                             tracing::debug!(
                                 reason,
-                                "Rename: workspace rename unavailable, using same-file only"
+                                "Rename: workspace rename unavailable in partial mode, using same-file only"
                             );
                             // Fall through to same-file rename
                         }
@@ -259,15 +240,25 @@ impl LspServer {
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            if let Some(key) = symbol_key.as_ref() {
-                                // Use coordinator.index() directly instead of workspace_index()
-                                // to ensure we go through routing policy
-                                let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
-                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
-                                return Ok(Some(ws_edit));
-                            }
+                            let key = symbol_key.as_ref().ok_or_else(|| JsonRpcError {
+                                code: -32602,
+                                message: "Rename requires a resolvable symbol identity at cursor"
+                                    .to_string(),
+                                data: None,
+                            })?;
+
+                            // Use coordinator.index() directly instead of workspace_index()
+                            // to ensure we go through routing policy.
+                            let idx = coordinator.index();
+                            let edits =
+                                crate::workspace_rename::build_rename_edit_strict(
+                                    idx, key, new_name,
+                                )
+                                .map_err(|message| {
+                                    JsonRpcError { code: -32602, message, data: None }
+                                })?;
+                            let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                            return Ok(Some(ws_edit));
                         }
                     }
                 }

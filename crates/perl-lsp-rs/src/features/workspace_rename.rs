@@ -3,7 +3,7 @@
 //! Provides cross-file renaming functionality using the workspace index.
 
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
 /// Represents a text edit for a single document
@@ -103,6 +103,36 @@ pub fn build_rename_edit(
     grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
 }
 
+/// Build a workspace rename edit only when symbol identity is strong enough.
+///
+/// This stricter planner refuses to generate edits when the symbol definition
+/// is not resolvable from the workspace index, which avoids speculative rename
+/// sets that can become partial or unstable.
+pub fn build_rename_edit_strict(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+    new_name_bare: &str,
+) -> Result<Vec<RenameEdit>, String> {
+    validate_rename(key, new_name_bare)?;
+
+    if idx.find_def(key).is_none() {
+        return Err(format!(
+            "Cannot safely rename {}::{}: symbol definition is not uniquely resolvable",
+            key.pkg, key.name
+        ));
+    }
+
+    let edits = build_rename_edit(idx, key, new_name_bare);
+    if edits.is_empty() {
+        return Err(format!(
+            "Cannot safely rename {}::{}: no stable workspace references were found",
+            key.pkg, key.name
+        ));
+    }
+
+    Ok(edits)
+}
+
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
     let mut current_pkg = "main";
 
@@ -161,10 +191,8 @@ fn is_non_target_package_declaration(
     // Try to read the original source span to detect a qualified name like "Bar::process_data".
     // When the index returns an inverted range (end < start, a known indexer edge case), we fall
     // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
+    let maybe_original =
+        doc.line_index.position_to_offset(start_line, start_char).and_then(|start_off| {
             doc.line_index
                 .position_to_offset(end_line, end_char)
                 .and_then(|end_off| doc.text.get(start_off..end_off))
@@ -434,6 +462,28 @@ $var;
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn strict_rename_refuses_without_definition() -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+        index_text(&idx, "file:///main.pl", "process_data();\n")?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("main"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let err = build_rename_edit_strict(&idx, &key, "process_records")
+            .err()
+            .ok_or("expected strict planner to refuse unresolved definition")?;
+        assert!(
+            err.contains("not uniquely resolvable"),
+            "unexpected strict-rename error message: {err}"
+        );
         Ok(())
     }
 }
