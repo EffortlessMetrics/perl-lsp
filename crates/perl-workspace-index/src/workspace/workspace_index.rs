@@ -2695,6 +2695,7 @@ struct IndexVisitor {
     document: Document,
     uri: String,
     current_package: Option<String>,
+    module_runtime_imports: HashSet<String>,
     workspace_folder_uri: Option<String>,
 }
 
@@ -2741,6 +2742,7 @@ impl IndexVisitor {
             document: document.clone(),
             uri,
             current_package: Some("main".to_string()),
+            module_runtime_imports: HashSet::new(),
             workspace_folder_uri,
         }
     }
@@ -2987,6 +2989,13 @@ impl IndexVisitor {
                             .insert(normalize_dependency_module_name(&module_name));
                     }
                 }
+                if let Some(module_name) = extract_module_runtime_literal_dependency(
+                    name,
+                    args,
+                    &self.module_runtime_imports,
+                ) {
+                    file_index.dependencies.insert(normalize_dependency_module_name(&module_name));
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -2997,6 +3006,9 @@ impl IndexVisitor {
             NodeKind::Use { module, args, .. } => {
                 let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
+                if module == "Module::Runtime" {
+                    self.module_runtime_imports.extend(extract_module_runtime_import_names(args));
+                }
 
                 // Also track actual parent/base class names for dependency discovery.
                 // `use parent 'Foo::Bar'` stores module="parent" and args=["'Foo::Bar'"],
@@ -3436,6 +3448,55 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn extract_module_runtime_import_names(args: &[String]) -> HashSet<String> {
+    let mut imported = HashSet::new();
+    let joined = args.join(" ");
+    let (qw_words, remainder) = extract_qw_words(&joined);
+
+    for word in qw_words {
+        let token = word.trim_matches(|c: char| matches!(c, '\'' | '"' | ',' | ';')).trim();
+        if token == "use_module" || token == "require_module" {
+            imported.insert(token.to_string());
+        }
+    }
+
+    for token in remainder.split_whitespace() {
+        let token = token.trim_matches(|c: char| matches!(c, '\'' | '"' | ',' | ';')).trim();
+        if token == "use_module" || token == "require_module" {
+            imported.insert(token.to_string());
+        }
+    }
+
+    imported
+}
+
+fn extract_module_runtime_literal_dependency(
+    name: &str,
+    args: &[Node],
+    imported_runtime_calls: &HashSet<String>,
+) -> Option<String> {
+    let accepts_bare = matches!(name, "use_module" | "require_module")
+        && imported_runtime_calls.contains(name);
+    let accepts_fully_qualified =
+        matches!(name, "Module::Runtime::use_module" | "Module::Runtime::require_module");
+
+    if !accepts_bare && !accepts_fully_qualified {
+        return None;
+    }
+
+    let first = args.first()?;
+    let NodeKind::String { value, .. } = &first.kind else {
+        return None;
+    };
+
+    let module_name = value.trim_matches('\'').trim_matches('"').trim();
+    if module_name.is_empty() {
+        return None;
+    }
+
+    Some(module_name.to_string())
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {

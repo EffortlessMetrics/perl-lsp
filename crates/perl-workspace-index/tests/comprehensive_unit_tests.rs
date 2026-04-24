@@ -2148,3 +2148,40 @@ fn test_find_dependents_via_use_parent_qw() -> Result<(), Box<dyn std::error::Er
     assert!(!other_deps.is_empty(), "Other::Base should be a registered dependency");
     Ok(())
 }
+
+#[test]
+fn test_find_dependents_via_module_runtime_literal_use_module() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/runtime_use_module.pl")?;
+    index.index_file(
+        uri,
+        "use Module::Runtime qw(use_module);\nmy $m = use_module('My::Runtime::Target');\n1;\n"
+            .to_string(),
+    )?;
+
+    let dependents = index.find_dependents("My::Runtime::Target");
+    assert!(
+        !dependents.is_empty(),
+        "literal use_module('My::Runtime::Target') should register a dependency"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_module_runtime_dynamic_name_stays_conservative() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/runtime_dynamic.pl")?;
+    index.index_file(
+        uri,
+        "use Module::Runtime qw(use_module);\nmy $name = 'My::Runtime::Dynamic';\nmy $m = use_module($name);\n1;\n"
+            .to_string(),
+    )?;
+
+    let dependents = index.find_dependents("My::Runtime::Dynamic");
+    assert!(
+        dependents.is_empty(),
+        "dynamic module names passed to use_module should not be indexed as static dependencies"
+    );
+    Ok(())
+}
