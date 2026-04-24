@@ -142,6 +142,28 @@ mod dap_performance {
                 "child variable expansion too slow: {:?}",
                 child_elapsed
             );
+
+            let repeated_child_start = Instant::now();
+            let repeated_child = adapter.handle_request(
+                3,
+                "variables",
+                Some(json!({
+                    "variablesReference": child_ref,
+                    "start": 0,
+                    "count": 100
+                })),
+            );
+            let repeated_child_elapsed = repeated_child_start.elapsed();
+            match repeated_child {
+                DapMessage::Response { success, .. } => assert!(success),
+                _ => anyhow::bail!("expected repeated child variables response"),
+            }
+            assert!(
+                repeated_child_elapsed <= child_elapsed + Duration::from_millis(5),
+                "repeated child expansion should be served from cache: first {:?}, repeated {:?}",
+                child_elapsed,
+                repeated_child_elapsed
+            );
         }
 
         Ok(())

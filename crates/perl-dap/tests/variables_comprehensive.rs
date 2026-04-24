@@ -18,6 +18,21 @@ fn perl_value_default_is_undef() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn renderer_children_pagination_repeatable_boundaries() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = PerlVariableRenderer::new();
+    let val = PerlValue::Array((0..40).map(PerlValue::Integer).collect());
+
+    let first = renderer.render_children(&val, 30, 20);
+    let second = renderer.render_children(&val, 30, 20);
+
+    assert_eq!(first, second);
+    assert_eq!(first.len(), 10, "pagination should clamp to remaining elements");
+    assert_eq!(first[0].name, "[30]");
+    assert_eq!(first[9].name, "[39]");
+    Ok(())
+}
+
+#[test]
 fn perl_value_scalar_constructor() -> Result<(), Box<dyn std::error::Error>> {
     let val = PerlValue::scalar("hello");
     assert_eq!(val, PerlValue::Scalar("hello".to_string()));

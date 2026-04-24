@@ -116,8 +116,6 @@ impl DebugAdapter {
     pub(super) fn parse_scope_variables_from_lines(
         lines: &[String],
         variables_ref: i32,
-        start: usize,
-        count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
         let parser = VariableParser::new();
         let renderer = PerlVariableRenderer::new();
@@ -149,8 +147,8 @@ impl DebugAdapter {
 
         let mut top_level = Vec::new();
         let mut child_cache = HashMap::new();
-        for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
-            let absolute_index = start.saturating_add(idx).saturating_add(1);
+        for (idx, (name, value)) in parsed.into_iter().enumerate() {
+            let absolute_index = idx.saturating_add(1);
             let child_ref =
                 variables_ref.saturating_mul(1000).saturating_add(Self::i64_to_i32_saturating(
                     i64::try_from(absolute_index).unwrap_or(i64::from(i32::MAX)),
@@ -181,11 +179,9 @@ impl DebugAdapter {
     pub(super) fn parse_scope_variables_from_output(
         &self,
         variables_ref: i32,
-        start: usize,
-        count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
         let lines = self.snapshot_recent_output_lines();
-        Self::parse_scope_variables_from_lines(&lines, variables_ref, start, count)
+        Self::parse_scope_variables_from_lines(&lines, variables_ref)
     }
 
     /// Parse evaluate output from debugger lines into a DAP result payload.
@@ -360,7 +356,7 @@ mod tests {
             output.push_back("%hash = {a => 1}".to_string());
         }
 
-        let (vars, child_cache) = adapter.parse_scope_variables_from_output(11, 0, 20);
+        let (vars, child_cache) = adapter.parse_scope_variables_from_output(11);
         let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
         assert!(names.contains(&"$foo"));
         assert!(names.contains(&"@arr"));
@@ -374,8 +370,7 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let lines = vec!["$zeta = 1".to_string(), "$alpha = 2".to_string(), "$mid = 3".to_string()];
 
-        let (vars, _child_cache) =
-            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
+        let (vars, _child_cache) = DebugAdapter::parse_scope_variables_from_lines(&lines, 11);
         let names = vars.iter().map(|v| v.name.as_str()).collect::<Vec<_>>();
         assert_eq!(names, vec!["$alpha", "$mid", "$zeta"]);
         Ok(())
@@ -390,10 +385,9 @@ mod tests {
             "@gamma = (5, 6)".to_string(),
         ];
 
-        let (page_one, page_one_children) =
-            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 1);
-        let (page_two, page_two_children) =
-            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 1, 1);
+        let (vars, child_cache) = DebugAdapter::parse_scope_variables_from_lines(&lines, 11);
+        let page_one = vars.first().cloned().into_iter().collect::<Vec<_>>();
+        let page_two = vars.iter().skip(1).take(1).cloned().collect::<Vec<_>>();
 
         let first_ref = page_one
             .first()
@@ -406,11 +400,11 @@ mod tests {
 
         assert_ne!(first_ref, second_ref, "paged variables must not reuse child references");
         assert!(
-            page_one_children.contains_key(&first_ref),
+            child_cache.contains_key(&first_ref),
             "expected first page child cache for first reference"
         );
         assert!(
-            page_two_children.contains_key(&second_ref),
+            child_cache.contains_key(&second_ref),
             "expected second page child cache for second reference"
         );
         Ok(())

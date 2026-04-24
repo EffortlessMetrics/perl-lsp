@@ -72,6 +72,20 @@ fn hash_preview_with_nested_array() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn large_hash_preview_includes_explicit_truncation_summary()
+-> Result<(), Box<dyn std::error::Error>> {
+    let renderer = PerlVariableRenderer::new().with_max_hash_preview(3);
+    let val =
+        PerlValue::Hash((0..8).map(|idx| (format!("k{idx}"), PerlValue::Integer(idx))).collect());
+
+    let rendered = renderer.render("%large", &val);
+    assert!(rendered.value.contains("8 keys"), "hash previews should report total count");
+    assert!(rendered.value.contains("..."), "hash previews should mark truncation");
+    assert_eq!(rendered.named_variables, Some(8));
+    Ok(())
+}
+
+#[test]
 fn hash_children_show_nested_values() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let inner_hash = PerlValue::Hash(vec![

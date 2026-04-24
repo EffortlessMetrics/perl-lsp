@@ -451,12 +451,44 @@ struct DebugSession {
     state: DebugState,
     /// Stack frames
     stack_frames: Vec<StackFrame>,
-    /// Variables in current scope
-    variables: HashMap<i32, Vec<Variable>>,
+    /// Variables cache in current stopped state.
+    variable_cache: VariableCache,
     /// Thread ID
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+}
+
+/// Variable cache grouped by root scope and child expansion.
+#[derive(Default)]
+struct VariableCache {
+    /// Root scope variable lists keyed by scope `variablesReference`.
+    roots: HashMap<i32, Vec<Variable>>,
+    /// Child expansion lists keyed by child `variablesReference`.
+    children: HashMap<i32, Vec<Variable>>,
+}
+
+impl VariableCache {
+    fn clear(&mut self) {
+        self.roots.clear();
+        self.children.clear();
+    }
+
+    fn get(&self, variables_ref: i32) -> Option<&Vec<Variable>> {
+        self.roots.get(&variables_ref).or_else(|| self.children.get(&variables_ref))
+    }
+
+    fn insert_root(&mut self, variables_ref: i32, variables: Vec<Variable>) {
+        self.roots.insert(variables_ref, variables);
+    }
+
+    fn insert_children(&mut self, children: HashMap<i32, Vec<Variable>>) {
+        self.children.extend(children);
+    }
+
+    fn values(&self) -> impl Iterator<Item = &Vec<Variable>> {
+        self.roots.values().chain(self.children.values())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

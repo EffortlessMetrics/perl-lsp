@@ -408,7 +408,7 @@ impl DebugAdapter {
                 let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
                 if let Some(ref session) = *session_guard {
                     let mut seen = std::collections::HashSet::new();
-                    for vars in session.variables.values() {
+                    for vars in session.variable_cache.values() {
                         for var in vars {
                             if (stem.is_empty() || var.name.starts_with(stem))
                                 && seen.insert(var.name.clone())

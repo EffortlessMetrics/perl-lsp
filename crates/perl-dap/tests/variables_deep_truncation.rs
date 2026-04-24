@@ -71,6 +71,20 @@ mod deep_truncation_tests {
     }
 
     #[test]
+    fn test_500element_array_pagination_is_stable_across_repeated_pages() {
+        let renderer = PerlVariableRenderer::new();
+        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let page_a = renderer.render_children(&value, 120, 25);
+        let page_b = renderer.render_children(&value, 120, 25);
+        assert_eq!(page_a, page_b, "repeated page queries should be deterministic");
+        assert_eq!(page_a.len(), 25);
+        assert_eq!(page_a[0].name, "[120]");
+        assert_eq!(page_a[24].name, "[144]");
+    }
+
+    #[test]
     fn test_cyclic_reference_rendering() {
         let renderer = PerlVariableRenderer::new();
 
