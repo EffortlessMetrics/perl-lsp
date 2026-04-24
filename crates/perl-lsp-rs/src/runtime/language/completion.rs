@@ -22,6 +22,7 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -56,6 +57,18 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
+    fn completion_paths_for_doc(&self, doc_uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let include_paths = self.include_paths_for_doc(doc_uri);
+        let mut doc_config = self.config_for_doc(doc_uri).unwrap_or_default();
+        let system_inc_paths = if doc_config.use_system_inc {
+            doc_config.get_system_inc().to_vec()
+        } else {
+            Vec::new()
+        };
+
+        (include_paths, system_inc_paths)
+    }
+
     fn split_sigil(name: &str) -> (Option<char>, &str) {
         let mut chars = name.chars();
         match chars.next() {
@@ -319,6 +332,7 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let (include_paths, system_inc_paths) = self.completion_paths_for_doc(uri);
 
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
@@ -331,16 +345,23 @@ impl LspServer {
                         _ => None,
                     };
 
+                    #[cfg(not(feature = "workspace"))]
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
+
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
-
-                    #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -548,6 +569,7 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let (include_paths, system_inc_paths) = self.completion_paths_for_doc(uri);
 
                 // Create optimized cancellation callback with reduced frequency
                 // Performance optimization: reduced overhead from 16.66% to <10%
@@ -574,14 +596,21 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
