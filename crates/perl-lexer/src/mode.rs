@@ -24,6 +24,8 @@
 //! | keyword                | ExpectTerm     | `if /pattern/`    |
 //! | operator               | ExpectTerm     | `=~ /test/`       |
 //! | opening paren/bracket  | ExpectTerm     | `( /regex/`       |
+//! | term-leading keyword   | ExpectTerm     | `return /re/`     |
+//! | bare-term builtin      | ExpectTerm     | `print /re/`      |
 //!
 //! ## Timeout Protection
 //!

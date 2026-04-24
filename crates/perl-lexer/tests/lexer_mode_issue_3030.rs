@@ -258,3 +258,33 @@ fn mode_transitions_after_keyword_to_expect_term() -> R {
     assert!(has_regex, "after 'if' keyword the slash must start a regex");
     Ok(())
 }
+
+#[test]
+fn mode_transitions_after_return_keyword_to_expect_term() -> R {
+    let mut lexer = PerlLexer::new("return /pattern/");
+    let tokens: Vec<_> = lexer
+        .collect_tokens()
+        .into_iter()
+        .filter(|t| {
+            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+        })
+        .collect();
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "after 'return' keyword the slash must start a regex");
+    Ok(())
+}
+
+#[test]
+fn mode_transitions_after_builtin_identifier_to_expect_term() -> R {
+    let mut lexer = PerlLexer::new("print /pattern/");
+    let tokens: Vec<_> = lexer
+        .collect_tokens()
+        .into_iter()
+        .filter(|t| {
+            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+        })
+        .collect();
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "after bare builtin 'print' the slash must start a regex");
+    Ok(())
+}

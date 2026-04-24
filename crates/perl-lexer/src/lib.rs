@@ -2107,8 +2107,7 @@ impl<'a> PerlLexer<'a> {
             let token_type = if is_keyword_fast(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
-                    "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
-                    | "sort" | "split" => {
+                    kw if keyword_keeps_expect_term(kw) => {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
@@ -3633,9 +3632,19 @@ fn is_keyword_fast(word: &str) -> bool {
 }
 
 #[inline]
+fn keyword_keeps_expect_term(word: &str) -> bool {
+    EXPECT_TERM_KEYWORDS.binary_search(&word).is_ok()
+}
+
+#[inline]
 fn is_builtin_function(word: &str) -> bool {
     BARE_TERM_BUILTINS.binary_search(&word).is_ok()
 }
+
+const EXPECT_TERM_KEYWORDS: &[&str] = &[
+    "do", "else", "elsif", "eval", "for", "foreach", "given", "grep", "if", "map", "return",
+    "sort", "split", "unless", "until", "when", "while",
+];
 
 const BARE_TERM_BUILTINS: &[&str] = &[
     "abs", "chomp", "chop", "chr", "close", "defined", "delete", "each", "exists", "hex", "int",

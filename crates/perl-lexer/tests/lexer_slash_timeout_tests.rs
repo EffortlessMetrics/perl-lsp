@@ -284,3 +284,24 @@ fn test_budget_guard_prevents_infinite_loop() {
     // Should successfully parse or gracefully fail, not hang
     assert!(token.is_some());
 }
+
+#[test]
+fn test_defined_or_after_comment_boundary() -> TestResult {
+    let mut lexer = PerlLexer::new("$a # comment\n // $b");
+    lexer.next_token(); // $a
+    let token = lexer.next_token().ok_or("Expected // token")?;
+    assert!(
+        matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "//"),
+        "Expected defined-or operator after comment boundary, got {:?}",
+        token.token_type
+    );
+    Ok(())
+}
+
+#[test]
+fn test_empty_regex_at_expression_start_with_leading_whitespace() -> TestResult {
+    let mut lexer = PerlLexer::new("   //");
+    let token = lexer.next_token().ok_or("Expected regex token")?;
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+    Ok(())
+}

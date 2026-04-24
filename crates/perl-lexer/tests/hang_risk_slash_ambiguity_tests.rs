@@ -946,3 +946,33 @@ fn lexer_slash_division_after_number_literal() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn lexer_slash_regex_after_return_keyword() -> TestResult {
+    let mut lexer = PerlLexer::new("return /pattern/");
+    let kw = lexer.next_token().ok_or("Expected return keyword")?;
+    assert!(matches!(kw.token_type, TokenType::Keyword(ref k) if k.as_ref() == "return"));
+
+    let slash = lexer.next_token().ok_or("Expected regex after return")?;
+    assert!(
+        matches!(slash.token_type, TokenType::RegexMatch),
+        "Expected regex after return keyword, got {:?}",
+        slash.token_type
+    );
+    Ok(())
+}
+
+#[test]
+fn lexer_slash_division_after_subscript_with_comment_gap() -> TestResult {
+    let mut lexer = PerlLexer::new("$hash{key} # keep operator mode\n / 2");
+    loop {
+        let tok = lexer.next_token().ok_or("Expected slash token")?;
+        if matches!(tok.token_type, TokenType::Division) {
+            return Ok(());
+        }
+        if matches!(tok.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+    Err("Expected division token after subscript/comment boundary".into())
+}
