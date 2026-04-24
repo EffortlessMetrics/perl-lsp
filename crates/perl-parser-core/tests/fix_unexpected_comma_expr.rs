@@ -243,6 +243,27 @@ fn test_splice_with_commas() {
 }
 
 #[test]
+fn test_shift_then_return_list_expression() {
+    // From File::Spec::Win32 in system corpus baselines
+    let source = r#"sub catdir { shift, return _canon_cat("/", @_); }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_hash_slice_with_map_split_values() {
+    // From overload.pm in system corpus baselines
+    let source = r#"@ops_seen{ map split(/ /), values %ops } = ();"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_keys_then_grep_expr_form() {
+    // From App::Cpan in system corpus baselines
+    let source = r#"my @opts = grep { $_ ne $d } sort keys %methods;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_complex_data_structure() {
     let source = r#"my $data = {
         users => [
