@@ -170,6 +170,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<String>,
+    system_inc_paths: Vec<String>,
 }
 
 impl CompletionProvider {
@@ -200,7 +202,7 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_source_and_inc_paths(ast, "", workspace_index, Vec::new(), Vec::new())
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +251,26 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_source_and_inc_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a new completion provider with module-resolution include roots.
+    ///
+    /// `include_paths` and `system_inc_paths` are threaded through module
+    /// completion plumbing only; filesystem scanning is handled elsewhere.
+    pub fn new_with_index_source_and_inc_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<String>,
+        system_inc_paths: Vec<String>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +280,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +804,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2149,6 +2181,24 @@ mod tests {
     use perl_workspace::workspace_index::WorkspaceIndex;
     use std::sync::Arc;
     use url::Url;
+
+    #[test]
+    fn test_provider_accepts_include_and_system_inc_paths() {
+        let code = "use strict;\n";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_source_and_inc_paths(
+            &ast,
+            code,
+            None,
+            vec!["lib".to_string(), "local/lib/perl5".to_string()],
+            vec!["/usr/lib/perl5".to_string()],
+        );
+
+        assert_eq!(provider.include_paths, vec!["lib".to_string(), "local/lib/perl5".to_string()]);
+        assert_eq!(provider.system_inc_paths, vec!["/usr/lib/perl5".to_string()]);
+    }
 
     #[test]
     fn test_variable_completion() {
