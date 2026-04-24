@@ -897,6 +897,87 @@ impl<'a> PerlLexer<'a> {
         None
     }
 
+    /// Consume a balanced segment used by interpolation tails inside a double-quoted
+    /// string. Unlike `consume_balanced_segment`, this local recovery helper stops
+    /// before an unescaped `"` that appears before the closing delimiter so the
+    /// outer string parser can still terminate the string token cleanly.
+    fn consume_interpolation_segment_in_dq(&mut self, open: char, close: char) -> Option<usize> {
+        if self.current_char() != Some(open) {
+            return None;
+        }
+
+        let mut depth = 1usize;
+        self.advance();
+
+        while let Some(ch) = self.current_char() {
+            match ch {
+                '\\' => {
+                    self.advance();
+                    if self.current_char().is_some() {
+                        self.advance();
+                    }
+                }
+                '\'' => {
+                    let quote = ch;
+                    self.advance();
+                    while let Some(inner) = self.current_char() {
+                        match inner {
+                            '\\' => {
+                                self.advance();
+                                if self.current_char().is_some() {
+                                    self.advance();
+                                }
+                            }
+                            q if q == quote => {
+                                self.advance();
+                                break;
+                            }
+                            _ => self.advance(),
+                        }
+                    }
+                }
+                '"' => {
+                    if depth > 0 {
+                        // Recover locally: interpolation tail is incomplete, but the
+                        // surrounding string can still be completed by this quote.
+                        return None;
+                    }
+                    let quote = ch;
+                    self.advance();
+                    while let Some(inner) = self.current_char() {
+                        match inner {
+                            '\\' => {
+                                self.advance();
+                                if self.current_char().is_some() {
+                                    self.advance();
+                                }
+                            }
+                            q if q == quote => {
+                                self.advance();
+                                break;
+                            }
+                            _ => self.advance(),
+                        }
+                    }
+                }
+                c if c == open => {
+                    depth += 1;
+                    self.advance();
+                }
+                c if c == close => {
+                    self.advance();
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(self.position);
+                    }
+                }
+                _ => self.advance(),
+            }
+        }
+
+        None
+    }
+
     /// Fast byte-level check for ASCII characters
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
@@ -2847,13 +2928,15 @@ impl<'a> PerlLexer<'a> {
 
                                     match self.current_char() {
                                         Some('[') => {
-                                            let _ = self.consume_balanced_segment('[', ']');
+                                            let _ =
+                                                self.consume_interpolation_segment_in_dq('[', ']');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
                                         }
                                         Some('{') => {
-                                            let _ = self.consume_balanced_segment('{', '}');
+                                            let _ =
+                                                self.consume_interpolation_segment_in_dq('{', '}');
                                             parts.push(StringPart::MethodCall(Arc::from(
                                                 &self.input[tail_start..self.position],
                                             )));
@@ -2898,13 +2981,13 @@ impl<'a> PerlLexer<'a> {
                                     }
                                 } else if self.current_char() == Some('[') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('[', ']');
+                                    let _ = self.consume_interpolation_segment_in_dq('[', ']');
                                     parts.push(StringPart::ArraySlice(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));
                                 } else if self.current_char() == Some('{') {
                                     let tail_start = self.position;
-                                    let _ = self.consume_balanced_segment('{', '}');
+                                    let _ = self.consume_interpolation_segment_in_dq('{', '}');
                                     parts.push(StringPart::Expression(Arc::from(
                                         &self.input[tail_start..self.position],
                                     )));

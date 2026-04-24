@@ -1740,6 +1740,34 @@ my $msg = "value: ${Foo::name}";
 }
 
 #[test]
+fn incomplete_hash_index_interpolation_still_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $msg = "Key: $hash{incomplete";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("hash"),
+        "$hash in incomplete interpolation should still register a reference",
+    );
+    Ok(())
+}
+
+#[test]
+fn incomplete_array_index_interpolation_still_registers_reference()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+my $msg = "Element: $array[0";
+"#;
+    let table = parse_and_extract(code);
+    assert!(
+        table.references.contains_key("array"),
+        "$array in incomplete interpolation should still register a reference",
+    );
+    Ok(())
+}
+
+#[test]
 fn escaped_interpolated_variable_is_still_unused() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 my $name = "World";
