@@ -147,6 +147,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -159,24 +160,51 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn auto_initialize_for_compat_only_promotes_when_initialize_was_requested(
+            method in "[a-zA-Z][a-zA-Z0-9_/]{0,63}",
+            initialize_requested in any::<bool>(),
+            initialized in any::<bool>(),
+        ) {
+            let server = LspServer::new();
+
+            server
+                .initialize_requested
+                .store(initialize_requested, Ordering::Release);
+            server.initialized.store(initialized, Ordering::Release);
+
+            server.auto_initialize_for_compat(&method);
+
+            let expected_initialized = initialized || initialize_requested;
+            prop_assert_eq!(
+                server.initialized.load(Ordering::Acquire),
+                expected_initialized,
+                "initialized should only flip from false to true when initialize was requested",
+            );
+        }
     }
 }
