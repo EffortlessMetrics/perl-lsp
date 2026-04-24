@@ -932,8 +932,29 @@ mod tests {
 
     #[test]
     fn test_cpanm_batch_settings_constants() {
+        // Regression guard: these values were chosen to give ~12s per-module
+        // budget (300s / 25) while keeping batch-wedge retries manageable.
+        // If you change them, update the comment in the install() function too.
         assert_eq!(CPANM_BATCH_TIMEOUT.as_secs(), 300);
         assert_eq!(CPANM_BATCH_SIZE, 25);
+    }
+
+    #[test]
+    fn test_cpanm_batch_size_chunking() {
+        // Verify CPANM_BATCH_SIZE produces correct batch counts when used as
+        // the chunk size — matches how install() uses it via .chunks(batch_size).
+        // This test would fail if CPANM_BATCH_SIZE were accidentally set to 0
+        // (panic) or to a value that doesn't divide the list as expected.
+        let dists: Vec<String> = (0..60).map(|i| format!("Dist-{i}")).collect();
+        let chunks: Vec<_> = dists.chunks(CPANM_BATCH_SIZE).collect();
+        // 60 items / 25 per batch = 3 batches (25, 25, 10)
+        assert_eq!(chunks.len(), 3, "expected 3 batches for 60 items at size {CPANM_BATCH_SIZE}");
+        assert_eq!(chunks[0].len(), CPANM_BATCH_SIZE, "first batch should be full");
+        assert_eq!(chunks[1].len(), CPANM_BATCH_SIZE, "second batch should be full");
+        assert_eq!(chunks[2].len(), 10, "last batch should contain the remainder");
+
+        // div_ceil matches install()'s total_batches formula
+        assert_eq!(60usize.div_ceil(CPANM_BATCH_SIZE), 3);
     }
 
     #[test]
