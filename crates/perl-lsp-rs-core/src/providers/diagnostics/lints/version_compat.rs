@@ -16,7 +16,7 @@
 
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaTracker, parse_perl_version};
+use perl_pragma::{parse_perl_version, PerlVersion, PragmaQueryCursor, PragmaTracker};
 
 use super::super::internal_types::Diagnostic;
 use super::super::walker::walk_node;
@@ -143,10 +143,15 @@ pub fn check_version_compat(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     };
 
     let pragma_map = PragmaTracker::build(node);
+    let mut pragma_cursor = PragmaQueryCursor::default();
 
     // Second pass: walk AST for version-gated constructs.
     walk_node(node, &mut |n| {
-        let pragma_state = PragmaTracker::state_for_offset(&pragma_map, n.location.start);
+        let pragma_state = PragmaTracker::state_for_offset_monotonic(
+            &pragma_map,
+            &mut pragma_cursor,
+            n.location.start,
+        );
 
         match &n.kind {
             // `class Foo { }` — requires v5.38

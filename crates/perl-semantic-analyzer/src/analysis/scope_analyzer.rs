@@ -50,7 +50,7 @@
 //! ```
 
 use crate::ast::{Node, NodeKind};
-use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use crate::pragma_tracker::{PragmaQueryCursor, PragmaState, PragmaTracker};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
@@ -359,6 +359,7 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
+    pragma_cursor: RefCell<PragmaQueryCursor>,
     imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
@@ -370,6 +371,7 @@ impl<'a> AnalysisContext<'a> {
         Self {
             code,
             pragma_map,
+            pragma_cursor: RefCell::new(PragmaQueryCursor::default()),
             imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
@@ -585,7 +587,14 @@ impl ScopeAnalyzer {
         context: &AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
+        let pragma_state = {
+            let mut cursor = context.pragma_cursor.borrow_mut();
+            PragmaTracker::state_for_offset_monotonic(
+                context.pragma_map,
+                &mut cursor,
+                node.location.start,
+            )
+        };
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {

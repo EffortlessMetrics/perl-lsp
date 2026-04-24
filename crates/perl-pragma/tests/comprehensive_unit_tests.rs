@@ -5,7 +5,9 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaQueryCursor, PragmaState, PragmaTracker, features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1634,5 +1636,43 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    Ok(())
+}
+
+#[test]
+fn final_state_matches_far_future_offset_lookup() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        Node {
+            kind: NodeKind::Block {
+                statements: vec![no_node("strict", &["refs"], 16, 34)],
+            },
+            location: loc(14, 36),
+        },
+        use_node("warnings", &[], 40, 55),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    let legacy_state = PragmaTracker::state_for_offset(&map, usize::MAX);
+    assert_eq!(final_state, legacy_state);
+    Ok(())
+}
+
+#[test]
+fn monotonic_cursor_matches_state_for_offset() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 20, 35),
+        no_node("strict", &["subs"], 40, 58),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let mut cursor = PragmaQueryCursor::default();
+
+    for offset in [0usize, 10, 25, 45, 80] {
+        let expected = PragmaTracker::state_for_offset(&map, offset);
+        let actual = PragmaTracker::state_for_offset_monotonic(&map, &mut cursor, offset);
+        assert_eq!(actual, expected, "offset {offset} should match monotonic query");
+    }
     Ok(())
 }

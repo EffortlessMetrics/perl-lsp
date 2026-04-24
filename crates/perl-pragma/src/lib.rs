@@ -416,6 +416,15 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
+/// Incremental cursor for monotonic pragma-map queries.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PragmaQueryCursor {
+    index: usize,
+    last_offset: usize,
+    initialized: bool,
+}
+
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
@@ -442,16 +451,65 @@ impl PragmaTracker {
         // then take the element before it.
         let idx = pragma_map.partition_point(|(range, _)| range.start <= offset);
 
-        let mut state =
-            if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
+        if idx > 0 { Self::effective_state(&pragma_map[idx - 1].1) } else { PragmaState::default() }
+    }
 
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
+    /// Get the final pragma state after all lexical scopes have unwound.
+    #[must_use]
+    pub fn final_state(pragma_map: &[(Range<usize>, PragmaState)]) -> PragmaState {
+        pragma_map
+            .last()
+            .map_or_else(PragmaState::default, |(_, state)| Self::effective_state(state))
+    }
+
+    /// Get pragma state using a cursor optimized for monotonic offset queries.
+    ///
+    /// Callers that query offsets in nondecreasing order can reuse `cursor` to
+    /// avoid repeatedly searching from the beginning of the pragma map.
+    #[must_use]
+    pub fn state_for_offset_monotonic(
+        pragma_map: &[(Range<usize>, PragmaState)],
+        cursor: &mut PragmaQueryCursor,
+        offset: usize,
+    ) -> PragmaState {
+        if pragma_map.is_empty() {
+            cursor.initialized = true;
+            cursor.last_offset = offset;
+            cursor.index = 0;
+            return PragmaState::default();
         }
 
-        state
+        if !cursor.initialized || offset < cursor.last_offset {
+            cursor.index = pragma_map.partition_point(|(range, _)| range.start <= offset);
+            cursor.last_offset = offset;
+            cursor.initialized = true;
+            return if cursor.index > 0 {
+                Self::effective_state(&pragma_map[cursor.index - 1].1)
+            } else {
+                PragmaState::default()
+            };
+        }
+
+        while cursor.index < pragma_map.len() && pragma_map[cursor.index].0.start <= offset {
+            cursor.index += 1;
+        }
+
+        cursor.last_offset = offset;
+        if cursor.index > 0 {
+            Self::effective_state(&pragma_map[cursor.index - 1].1)
+        } else {
+            PragmaState::default()
+        }
+    }
+
+    fn effective_state(state: &PragmaState) -> PragmaState {
+        let mut effective = state.clone();
+        if effective.signatures_strict {
+            effective.strict_vars = true;
+            effective.strict_subs = true;
+            effective.strict_refs = true;
+        }
+        effective
     }
 
     /// Process a lexically scoped body and then restore the caller state.
