@@ -205,10 +205,21 @@ impl LspServer {
                 );
             }
 
-            // Initialize workspace folders
-            if let Some(workspace_folders) =
-                params.get("workspaceFolders").and_then(|f| f.as_array())
-            {
+            // Initialize workspace folders.
+            //
+            // Prefer top-level `workspaceFolders` per LSP initialize params.
+            // Some clients nest the same payload under `initializationOptions`.
+            // Keep both paths wired through the same folder/root initialization flow.
+            let workspace_folders = params
+                .get("workspaceFolders")
+                .and_then(|f| f.as_array())
+                .or_else(|| {
+                    params
+                        .get("initializationOptions")
+                        .and_then(|opts| opts.get("workspaceFolders"))
+                        .and_then(|f| f.as_array())
+                });
+            if let Some(workspace_folders) = workspace_folders {
                 let uris = extract_workspace_folder_uris(workspace_folders);
                 if let Some(first_uri) = uris.first() {
                     self.set_root_uri(first_uri);
@@ -510,6 +521,56 @@ mod tests {
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
             "root path should come from first workspace folder"
         );
+    }
+
+    #[test]
+    fn initialize_with_workspace_folders_in_initialization_options_sets_root_path_and_config()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({
+            "initializationOptions": {
+                "workspaceFolders": [
+                    { "uri": "file:///primary", "name": "primary" },
+                    { "uri": "file:///secondary", "name": "secondary" }
+                ]
+            },
+            "capabilities": {}
+        });
+
+        let result = server.handle_initialize(Some(params));
+        assert!(result.is_ok(), "initialize should succeed");
+
+        let root_path = server.root_path.lock();
+        assert!(
+            root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
+            "root path should come from first initializationOptions workspace folder"
+        );
+        drop(root_path);
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 2, "both folders should be tracked");
+        assert_eq!(folders[0].uri, "file:///primary");
+        assert_eq!(folders[1].uri, "file:///secondary");
+        drop(folders);
+
+        let config = server
+            .handle_configuration(Some(json!({
+                "items": [
+                    { "section": "perl.workspace.includePaths" }
+                ]
+            })))?
+            .ok_or("configuration payload should be present")?;
+        let items = config
+            .as_array()
+            .ok_or("workspace/configuration result should be an array")?;
+        let include_paths = items[0]
+            .as_array()
+            .ok_or("perl.workspace.includePaths should be an array")?;
+        assert!(
+            include_paths.contains(&json!("lib")),
+            "workspace include-path lookup should still work after initialization"
+        );
+        Ok(())
     }
 
     #[test]
