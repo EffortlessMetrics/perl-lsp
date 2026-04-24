@@ -7,6 +7,9 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
+use std::sync::OnceLock;
+
+mod scorecard_artifact;
 
 const SIMPLE_SCRIPT: &str = r#"
 my $x = 42;
@@ -72,6 +75,7 @@ sub fibonacci {
 "#;
 
 fn benchmark_simple_parsing(c: &mut Criterion) {
+    emit_parser_scorecard_metrics();
     c.bench_function("parse_simple_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(SIMPLE_SCRIPT));
@@ -81,6 +85,7 @@ fn benchmark_simple_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_complex_parsing(c: &mut Criterion) {
+    emit_parser_scorecard_metrics();
     c.bench_function("parse_complex_script", |b| {
         b.iter(|| {
             let mut parser = Parser::new(black_box(COMPLEX_SCRIPT));
@@ -90,6 +95,7 @@ fn benchmark_complex_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_ast_generation(c: &mut Criterion) {
+    emit_parser_scorecard_metrics();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
 
@@ -101,6 +107,7 @@ fn benchmark_ast_generation(c: &mut Criterion) {
 }
 
 fn benchmark_isolated_components(c: &mut Criterion) {
+    emit_parser_scorecard_metrics();
     // Benchmark just the lexer phase
     c.bench_function("lexer_only", |b| {
         use perl_lexer::{PerlLexer, TokenType};
@@ -125,6 +132,7 @@ fn benchmark_isolated_components(c: &mut Criterion) {
 }
 
 fn benchmark_scope_analysis(c: &mut Criterion) {
+    emit_parser_scorecard_metrics();
     let mut parser = Parser::new(COMPLEX_SCRIPT);
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
     let analyzer = ScopeAnalyzer::new();
@@ -135,6 +143,42 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
             analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
         });
     });
+}
+
+fn emit_parser_scorecard_metrics() {
+    static EMITTED: OnceLock<()> = OnceLock::new();
+    if EMITTED.get().is_some() {
+        return;
+    }
+
+    let cold_parse = scorecard_artifact::measure(200, || {
+        let mut parser = Parser::new(COMPLEX_SCRIPT);
+        let _ = parser.parse();
+    });
+    scorecard_artifact::upsert_metric("cold_parse", cold_parse);
+
+    let lexer_only = scorecard_artifact::measure(500, || {
+        use perl_lexer::{PerlLexer, TokenType};
+        let mut lexer = PerlLexer::new(COMPLEX_SCRIPT);
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+        }
+    });
+    scorecard_artifact::upsert_metric("lexer_only", lexer_only);
+
+    let mut parser = Parser::new(COMPLEX_SCRIPT);
+    if let Ok(ast) = parser.parse() {
+        let analyzer = ScopeAnalyzer::new();
+        let pragma_map = Vec::new();
+        let scope = scorecard_artifact::measure(200, || {
+            let _ = analyzer.analyze(&ast, COMPLEX_SCRIPT, &pragma_map);
+        });
+        scorecard_artifact::upsert_metric("scope_analysis", scope);
+    }
+
+    let _ = EMITTED.set(());
 }
 
 criterion_group!(

@@ -111,7 +111,6 @@ harness = false
 [[bench]]
 name = "incremental_benchmark"
 harness = false
-required-features = ["incremental"]
 
 [[bench]]
 name = "scope_benchmark"

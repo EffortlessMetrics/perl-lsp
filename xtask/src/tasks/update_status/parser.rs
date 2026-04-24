@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use color_eyre::eyre::Result;
 use regex::Regex;
+use serde::Deserialize;
 
 use super::replace_block;
 
@@ -24,6 +25,21 @@ pub(super) struct ParserMetrics {
     pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
+    /// Parser performance scorecard emitted by parser benches.
+    pub performance_scorecard: Option<ParserPerformanceScorecard>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct ParserPerformanceScorecard {
+    pub measured_at_unix_secs: u64,
+    pub metrics: std::collections::BTreeMap<String, ScorecardMetric>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct ScorecardMetric {
+    pub iterations: usize,
+    pub median_ns: u64,
+    pub p95_ns: u64,
 }
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
@@ -41,6 +57,9 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         .ok(),
         common_corpus_receipt,
         common_corpus_pinned,
+        performance_scorecard: read_performance_scorecard(
+            &root.join("target/metrics/parser-performance-scorecard.json"),
+        ),
     }
 }
 
@@ -56,6 +75,11 @@ pub(super) fn count_common_corpus_pinned(root: &Path) -> usize {
 pub(super) fn read_sweep_report(
     path: &Path,
 ) -> Option<super::super::parser_corpus_sweep::SweepReport> {
+    let raw = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+pub(super) fn read_performance_scorecard(path: &Path) -> Option<ParserPerformanceScorecard> {
     let raw = fs::read_to_string(path).ok()?;
     serde_json::from_str(&raw).ok()
 }
@@ -212,6 +236,18 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     );
 
     let mut text = original.to_string();
+    let performance_table = render_performance_table(metrics.performance_scorecard.as_ref());
+    let performance_note = metrics.performance_scorecard.as_ref().map_or_else(
+        || {
+            "Run `cargo bench -p perl-parser --bench parser_benchmark` and `cargo bench -p perl-parser --features incremental --bench incremental_benchmark` to emit a full `target/metrics/parser-performance-scorecard.json` (without `incremental`, the second bench runs a placeholder).".to_string()
+        },
+        |scorecard| {
+            format!(
+                "Source artifact: `target/metrics/parser-performance-scorecard.json` (measured_at_unix_secs={}).",
+                scorecard.measured_at_unix_secs
+            )
+        },
+    );
     text = replace_block(
         &text,
         "<!-- BEGIN: PARSER_TRACKING_TABLE -->",
@@ -242,7 +278,47 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- END: PARSER_STRICT_CLEAN_ROW -->",
         &strict_clean_row,
     )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_PERFORMANCE_TABLE -->",
+        "<!-- END: PARSER_PERFORMANCE_TABLE -->",
+        &performance_table,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: PARSER_PERFORMANCE_NOTE -->",
+        "<!-- END: PARSER_PERFORMANCE_NOTE -->",
+        &performance_note,
+    )?;
     Ok(text)
+}
+
+fn render_performance_table(scorecard: Option<&ParserPerformanceScorecard>) -> String {
+    let rows = [
+        ("cold_parse", "cold parse"),
+        ("warm_reparse", "warm reparse"),
+        ("incremental_small_edit", "incremental small edit"),
+        ("incremental_multiple_edits", "incremental multiple edits"),
+        ("lexer_only", "lexer-only"),
+        ("scope_analysis", "scope analysis"),
+    ];
+
+    rows.iter()
+        .map(|(key, label)| {
+            let values = scorecard.and_then(|s| s.metrics.get(*key));
+            match values {
+                Some(metric) => format!(
+                    "| {} | {} ns | {} ns | {} | `target/metrics/parser-performance-scorecard.json` |",
+                    label, metric.median_ns, metric.p95_ns, metric.iterations
+                ),
+                None => format!(
+                    "| {} | UNVERIFIED | UNVERIFIED | -- | `target/metrics/parser-performance-scorecard.json` |",
+                    label
+                ),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -302,12 +378,15 @@ mod tests {
             project_corpus: Some(summary),
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_NOTE -->\nold\n<!-- END: PARSER_PERFORMANCE_NOTE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
@@ -329,12 +408,15 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_NOTE -->\nold\n<!-- END: PARSER_PERFORMANCE_NOTE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
             result.contains("10 modules (unverified)"),
@@ -378,12 +460,15 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
+            performance_scorecard: None,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_NOTE -->\nold\n<!-- END: PARSER_PERFORMANCE_NOTE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
         assert!(result.contains("100%"), "strict-clean row missing 100%");
