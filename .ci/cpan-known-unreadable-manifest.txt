@@ -1,0 +1,8 @@
+# CPAN corpus unreadable file placeholders (count-ratcheted).
+# One path per line.
+cpan-unreadable-001
+cpan-unreadable-002
+cpan-unreadable-003
+cpan-unreadable-004
+cpan-unreadable-005
+cpan-unreadable-006

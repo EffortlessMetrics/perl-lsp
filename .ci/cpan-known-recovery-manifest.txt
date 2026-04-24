@@ -1,0 +1,2 @@
+# CPAN corpus files expected to remain recovery-only for now.
+# One path per line.

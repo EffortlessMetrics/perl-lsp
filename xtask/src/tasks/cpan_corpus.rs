@@ -24,6 +24,11 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default path for the full CPAN corpus baseline report
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
+/// CPAN dirty-file classification manifests
+const CPAN_VALID_GAP_MANIFEST_PATH: &str = ".ci/cpan-valid-parser-gap-manifest.txt";
+const CPAN_KNOWN_INVALID_MANIFEST_PATH: &str = ".ci/cpan-known-invalid-manifest.txt";
+const CPAN_KNOWN_UNREADABLE_MANIFEST_PATH: &str = ".ci/cpan-known-unreadable-manifest.txt";
+const CPAN_KNOWN_RECOVERY_MANIFEST_PATH: &str = ".ci/cpan-known-recovery-manifest.txt";
 /// Default install target directory (relative to workspace root)
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
 /// Temp report path used by ratchet (relative to workspace root)
@@ -622,6 +627,23 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     } else {
         None
     };
+
+    if enforce {
+        for manifest in [
+            CPAN_VALID_GAP_MANIFEST_PATH,
+            CPAN_KNOWN_INVALID_MANIFEST_PATH,
+            CPAN_KNOWN_UNREADABLE_MANIFEST_PATH,
+            CPAN_KNOWN_RECOVERY_MANIFEST_PATH,
+        ] {
+            let manifest_path = workspace_path(manifest);
+            if !manifest_path.exists() {
+                return Err(color_eyre::eyre::eyre!(
+                    "Required CPAN classification manifest missing: {}",
+                    manifest_path.display(),
+                ));
+            }
+        }
+    }
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
         corpus_profile: Some("cpan".to_string()),

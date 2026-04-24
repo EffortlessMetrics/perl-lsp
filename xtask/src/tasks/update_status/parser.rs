@@ -20,6 +20,8 @@ pub(super) struct ParserMetrics {
     pub system_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     pub cpan_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     pub project_corpus: Option<super::super::corpus_audit::StatusSummary>,
+    pub system_classification: Option<super::super::parser_corpus_sweep::DirtyClassificationStatus>,
+    pub cpan_classification: Option<super::super::parser_corpus_sweep::DirtyClassificationStatus>,
     /// Receipt from `just common-corpus-check` — the strict-clean pinned-module gate.
     pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
@@ -39,6 +41,16 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
             Duration::from_secs(5),
         )
         .ok(),
+        system_classification: read_sweep_report(&root.join(".ci/parser-corpus-baseline.json"))
+            .and_then(|r| {
+                super::super::parser_corpus_sweep::summarize_dirty_classification(&r).ok()
+            })
+            .flatten(),
+        cpan_classification: read_sweep_report(&root.join(".ci/cpan-corpus-baseline.json"))
+            .and_then(|r| {
+                super::super::parser_corpus_sweep::summarize_dirty_classification(&r).ok()
+            })
+            .flatten(),
         common_corpus_receipt,
         common_corpus_pinned,
     }
@@ -99,12 +111,24 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **Ubuntu system Perl** | UNVERIFIED | baseline receipt unavailable | `.ci/parser-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classification = metrics.system_classification.as_ref().map_or_else(
+                || "classification unavailable".to_string(),
+                |c| {
+                    format!(
+                        "{} valid gaps, {} recovery-only, {} known-invalid, {} unreadable",
+                        c.valid_parser_gap_files,
+                        c.expected_recovery_files,
+                        c.known_invalid_files,
+                        c.unreadable_files
+                    )
+                },
+            );
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` with errors, classification: {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
-                report.files_unreadable,
                 report.files_with_errors,
+                classification,
                 short_day(&report.timestamp),
             )
         },
@@ -115,11 +139,23 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             "| **CPAN top 1000** | UNVERIFIED | baseline receipt unavailable | `.ci/cpan-corpus-baseline.json` |".to_string()
         },
         |report| {
+            let classification = metrics.cpan_classification.as_ref().map_or_else(
+                || "classification unavailable".to_string(),
+                |c| {
+                    format!(
+                        "{} valid gaps, {} recovery-only, {} known-invalid, {} unreadable",
+                        c.valid_parser_gap_files,
+                        c.expected_recovery_files,
+                        c.known_invalid_files,
+                        c.unreadable_files
+                    )
+                },
+            );
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` with errors, classification: {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
-                report.files_unreadable,
                 report.files_with_errors,
+                classification,
                 short_day(&report.timestamp),
             )
         },
@@ -300,6 +336,8 @@ mod tests {
             system_receipt: None,
             cpan_receipt: None,
             project_corpus: Some(summary),
+            system_classification: None,
+            cpan_classification: None,
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
         };
@@ -327,6 +365,8 @@ mod tests {
             system_receipt: None,
             cpan_receipt: None,
             project_corpus: None,
+            system_classification: None,
+            cpan_classification: None,
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
         };
@@ -360,6 +400,7 @@ mod tests {
             perl_version: "5.038".to_string(),
             total_files: 10,
             files_unreadable: 0,
+            unreadable_files: vec![],
             clean_files: 10,
             files_with_errors: 0,
             total_error_nodes: 0,
@@ -376,6 +417,8 @@ mod tests {
             system_receipt: None,
             cpan_receipt: None,
             project_corpus: None,
+            system_classification: None,
+            cpan_classification: None,
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
         };

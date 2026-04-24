@@ -1,0 +1,2 @@
+# System corpus files that are known-invalid Perl (intentionally not parser gaps).
+# One path per line.
