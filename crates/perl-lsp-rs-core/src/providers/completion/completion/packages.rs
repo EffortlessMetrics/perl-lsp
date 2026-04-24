@@ -10,6 +10,7 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 fn known_core_module_members(package_name: &str) -> &'static [(&'static str, &'static str)] {
@@ -209,6 +210,8 @@ pub fn add_package_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    _include_paths: &[PathBuf],
+    _system_inc_paths: &[PathBuf],
 ) {
     // Split the prefix into package name and member prefix
     let (requested_sigil, prefix_body) = split_sigil(&context.prefix);

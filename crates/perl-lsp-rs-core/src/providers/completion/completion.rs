@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -169,6 +170,8 @@ pub struct CompletionProvider {
     class_models: Vec<ClassModel>,
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
+    include_paths: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
     import_map: ImportMap,
 }
 
@@ -200,7 +203,7 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_and_source_and_inc(ast, "", workspace_index, Vec::new(), Vec::new())
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +252,23 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_and_source_and_inc(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a new completion provider with explicit include path context for module completion.
+    pub fn new_with_index_and_source_and_inc(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +278,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            include_paths,
+            system_inc_paths,
+            import_map,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -810,7 +838,13 @@ impl CompletionProvider {
                 &self.workspace_index,
             );
         } else if context.prefix.starts_with('$') && context.prefix.contains("::") {
-            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            packages::add_package_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+            );
             if !completions.is_empty() {
                 return completions;
             }
@@ -837,7 +871,13 @@ impl CompletionProvider {
             }
             variables::add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('@') && context.prefix.contains("::") {
-            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            packages::add_package_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+            );
             if !completions.is_empty() {
                 return completions;
             }
@@ -864,7 +904,13 @@ impl CompletionProvider {
             }
             variables::add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('%') && context.prefix.contains("::") {
-            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            packages::add_package_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+            );
             if !completions.is_empty() {
                 return completions;
             }
@@ -895,7 +941,13 @@ impl CompletionProvider {
             functions::add_function_completions(&mut completions, &context, &self.symbol_table);
         } else if context.trigger_character == Some(':') && context.prefix.ends_with("::") {
             // Package member completion
-            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            packages::add_package_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
+            );
         } else if context.in_string {
             // String interpolation or file path
             let line_prefix = &source[..context.position];
@@ -2147,8 +2199,60 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::path::PathBuf;
     use std::sync::Arc;
     use url::Url;
+
+    #[test]
+    fn test_provider_stores_explicit_include_path_context() {
+        let code = "use Foo::Bar;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let include_paths = vec![PathBuf::from("lib"), PathBuf::from("vendor/lib")];
+        let system_inc_paths = vec![PathBuf::from("/usr/lib/perl5")];
+
+        let provider = CompletionProvider::new_with_index_and_source_and_inc(
+            &ast,
+            code,
+            None,
+            include_paths.clone(),
+            system_inc_paths.clone(),
+        );
+
+        assert_eq!(provider.include_paths, include_paths);
+        assert_eq!(provider.system_inc_paths, system_inc_paths);
+    }
+
+    #[test]
+    fn test_explicit_empty_inc_context_keeps_completion_behavior() {
+        let code = "use ";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let position = code.len();
+
+        let baseline_provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let explicit_empty_provider = CompletionProvider::new_with_index_and_source_and_inc(
+            &ast,
+            code,
+            None,
+            Vec::new(),
+            Vec::new(),
+        );
+
+        let baseline_labels: Vec<String> = baseline_provider
+            .get_completions(code, position)
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        let explicit_labels: Vec<String> = explicit_empty_provider
+            .get_completions(code, position)
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+
+        assert_eq!(baseline_labels, explicit_labels);
+    }
 
     #[test]
     fn test_variable_completion() {
