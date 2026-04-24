@@ -1842,6 +1842,24 @@ impl ScopeAnalyzer {
 }
 
 fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
+    fn require_module_name(expr: &Node) -> Option<String> {
+        let NodeKind::FunctionCall { name, args } = &expr.kind else {
+            return None;
+        };
+        if name != "require" {
+            return None;
+        }
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+            }
+            _ => None,
+        }
+    }
+
     fn push_symbol(imported: &mut std::collections::HashSet<String>, module: &str, token: &str) {
         let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
         if symbol.is_empty() || symbol == "," {
@@ -1865,6 +1883,31 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
+    fn push_import_node_symbols(
+        imported: &mut std::collections::HashSet<String>,
+        module: &str,
+        arg: &Node,
+    ) {
+        match &arg.kind {
+            NodeKind::String { value, .. } => push_symbol(imported, module, value),
+            NodeKind::Identifier { name } => push_symbol(imported, module, name),
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    push_import_node_symbols(imported, module, element);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn inner_expr(node: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &node.kind {
+            expression.as_ref()
+        } else {
+            node
+        }
+    }
+
     fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
@@ -1878,6 +1921,32 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
                     }
                 } else {
                     push_symbol(imported, module, arg);
+                }
+            }
+        }
+
+        if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+            let required_modules: std::collections::HashSet<String> =
+                statements.iter().filter_map(|stmt| require_module_name(inner_expr(stmt))).collect();
+
+            if !required_modules.is_empty() {
+                for stmt in statements {
+                    let expr = inner_expr(stmt);
+                    let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+                        continue;
+                    };
+                    if method != "import" || args.is_empty() {
+                        continue;
+                    }
+                    let NodeKind::Identifier { name: module_name } = &object.kind else {
+                        continue;
+                    };
+                    if !required_modules.contains(module_name) {
+                        continue;
+                    }
+                    for arg in args {
+                        push_import_node_symbols(imported, module_name, arg);
+                    }
                 }
             }
         }

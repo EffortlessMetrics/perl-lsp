@@ -1914,6 +1914,47 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_require_manual_import_barewords() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Utils;
+My::Utils->import(qw(alpha beta));
+print alpha;
+print beta;
+"#;
+    let issues = scope_issues_strict(code);
+
+    for name in ["alpha", "beta"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == name
+            }),
+            "strict 'subs' should not flag require+manual import bareword '{name}'"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn strict_subs_dynamic_require_stays_unresolved() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $module = 'My::Utils';
+require $module;
+My::Utils->import('alpha');
+print alpha;
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "alpha"
+        }),
+        "dynamic require module names should not mark alpha as imported"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;

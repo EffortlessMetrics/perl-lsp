@@ -1470,7 +1470,6 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             method_node: &Node,
             expected_module: &str,
             symbol: &str,
-            aliases: &std::collections::HashMap<String, String>,
         ) -> bool {
             let (object, method, args) = match &method_node.kind {
                 NodeKind::MethodCall { object, method, args } => (object, method, args),
@@ -1482,7 +1481,6 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             // The object must be the same module name.
             let obj_name = match &object.kind {
                 NodeKind::Identifier { name } => Some(name.as_str()),
-                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
                 _ => return false,
             };
             let Some(obj_name) = obj_name else {
@@ -1544,46 +1542,6 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             }
         }
 
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
-            let (alias_name, call_node) = match &expr.kind {
-                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
-                    let NodeKind::Variable { name, .. } = &lhs.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
-                    let NodeKind::Variable { name, .. } = &variable.kind else {
-                        return None;
-                    };
-                    (name.as_str(), rhs.as_ref())
-                }
-                _ => return None,
-            };
-
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
-        }
-
         /// Unwrap an ExpressionStatement to its inner expression, or return
         /// the node unchanged (handles the case where we're already at the
         /// expression level).
@@ -1601,18 +1559,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// statement list after (or even before) the require.
         fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
             // Collect all `require Module` names present in this block.
-            let mut required_modules: Vec<String> =
+            let required_modules: Vec<String> =
                 stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
-            let mut aliases: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
-            for stmt in stmts {
-                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
-                    aliases.insert(alias, module.clone());
-                    if !required_modules.contains(&module) {
-                        required_modules.push(module);
-                    }
-                }
-            }
 
             if required_modules.is_empty() {
                 return None;
@@ -1623,7 +1571,7 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             for stmt in stmts {
                 let expr = inner_expr(stmt);
                 for module in &required_modules {
-                    if import_call_exports(expr, module, symbol, &aliases) {
+                    if import_call_exports(expr, module, symbol) {
                         return Some(module.clone());
                     }
                 }
