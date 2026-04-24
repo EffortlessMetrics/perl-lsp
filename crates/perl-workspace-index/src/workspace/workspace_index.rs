@@ -1074,6 +1074,28 @@ pub struct LspWorkspaceSymbol {
     pub workspace_folder_uri: Option<String>,
 }
 
+/// Text edit for module-move rewrite planning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleMoveTextEdit {
+    /// Byte offset (inclusive) where replacement starts.
+    pub start: usize,
+    /// Byte offset (exclusive) where replacement ends.
+    pub end: usize,
+    /// Replacement text.
+    pub new_text: String,
+}
+
+/// File-level edits for module-move rewrite planning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ModuleMoveFileEdit {
+    /// Document URI to update.
+    pub uri: String,
+    /// Text edits to apply (sorted by start offset).
+    pub edits: Vec<ModuleMoveTextEdit>,
+}
+
 impl From<&WorkspaceSymbol> for LspWorkspaceSymbol {
     fn from(sym: &WorkspaceSymbol) -> Self {
         let range = WireRange {
@@ -2470,6 +2492,56 @@ impl WorkspaceIndex {
         dependents
     }
 
+    /// Compute conservative workspace edits for a module move (`Old::Name` -> `New::Name`).
+    ///
+    /// First-slice behavior:
+    /// - rewrites direct `use Old::Name ...` imports
+    /// - rewrites obvious package-qualified references (`Old::Name::symbol`)
+    /// - skips comments and quoted strings
+    pub fn compute_module_move_edits(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Result<Vec<ModuleMoveFileEdit>, String> {
+        if old_module.trim().is_empty() || new_module.trim().is_empty() {
+            return Err("module names cannot be empty".to_string());
+        }
+
+        let old_canonical = canonicalize_perl_module_name(old_module);
+        let new_canonical = canonicalize_perl_module_name(new_module);
+        if old_canonical == new_canonical {
+            return Err("old and new module names are identical".to_string());
+        }
+
+        let mut candidate_uris: HashSet<String> =
+            self.find_dependents(&old_canonical).into_iter().collect();
+        {
+            let files = self.files.read();
+            candidate_uris.extend(files.keys().cloned());
+        }
+
+        let mut file_edits = Vec::new();
+        let mut sorted_uris: Vec<String> = candidate_uris.into_iter().collect();
+        sorted_uris.sort();
+
+        for uri in sorted_uris {
+            let Some(text) = self.document_store.get_text(&uri) else {
+                continue;
+            };
+
+            let mut edits = collect_module_move_edits(&text, &old_canonical, &new_canonical);
+            if edits.is_empty() {
+                continue;
+            }
+
+            edits.sort_by_key(|edit| edit.start);
+            edits.dedup_by(|left, right| left.start == right.start && left.end == right.end);
+            file_edits.push(ModuleMoveFileEdit { uri, edits });
+        }
+
+        Ok(file_edits)
+    }
+
     /// Get the document store
     ///
     /// # Returns
@@ -3452,6 +3524,135 @@ fn legacy_perl_module_name(name: &str) -> String {
 /// Converts legacy `'` separators to `::` so stored keys are canonical.
 fn normalize_dependency_module_name(module_name: &str) -> String {
     canonicalize_perl_module_name(module_name)
+}
+
+fn collect_module_move_edits(
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+) -> Vec<ModuleMoveTextEdit> {
+    let mut edits = collect_use_statement_module_edits(text, old_module, new_module);
+    edits.extend(collect_qualified_reference_module_edits(text, old_module, new_module));
+    edits
+}
+
+fn collect_use_statement_module_edits(
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+) -> Vec<ModuleMoveTextEdit> {
+    let mut edits = Vec::new();
+    let mut offset = 0usize;
+
+    for line in text.split_inclusive('\n') {
+        let line_start = offset;
+        let line_content = line.trim_end_matches('\n');
+        let trimmed = line_content.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("use ") {
+            let module_start_in_trimmed = 4usize;
+            let module_start_in_line = line_content.len() - trimmed.len() + module_start_in_trimmed;
+            if rest.starts_with(old_module) {
+                let boundary_idx = old_module.len();
+                let boundary_ok = match rest.chars().nth(boundary_idx) {
+                    None => true,
+                    Some(ch) => ch.is_whitespace() || ch == ';' || ch == '(',
+                };
+                if boundary_ok {
+                    edits.push(ModuleMoveTextEdit {
+                        start: line_start + module_start_in_line,
+                        end: line_start + module_start_in_line + old_module.len(),
+                        new_text: new_module.to_string(),
+                    });
+                }
+            }
+        }
+        offset += line.len();
+    }
+
+    edits
+}
+
+fn collect_qualified_reference_module_edits(
+    text: &str,
+    old_module: &str,
+    new_module: &str,
+) -> Vec<ModuleMoveTextEdit> {
+    let needle = format!("{}::", old_module);
+    let mut edits = Vec::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut in_comment = false;
+    let bytes = text.as_bytes();
+    let needle_bytes = needle.as_bytes();
+    let old_bytes = old_module.as_bytes();
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b == b'\n' {
+            in_comment = false;
+            i += 1;
+            continue;
+        }
+        if in_comment {
+            i += 1;
+            continue;
+        }
+
+        if !in_double && b == b'\'' {
+            in_single = !in_single;
+            i += 1;
+            continue;
+        }
+        if !in_single && b == b'"' {
+            in_double = !in_double;
+            i += 1;
+            continue;
+        }
+        if !in_single && !in_double && b == b'#' {
+            in_comment = true;
+            i += 1;
+            continue;
+        }
+
+        if !in_single
+            && !in_double
+            && i + needle_bytes.len() <= bytes.len()
+            && &bytes[i..i + needle_bytes.len()] == needle_bytes
+        {
+            let in_use_statement = is_part_of_use_module_reference(bytes, i, old_bytes);
+            if !in_use_statement {
+                edits.push(ModuleMoveTextEdit {
+                    start: i,
+                    end: i + old_module.len(),
+                    new_text: new_module.to_string(),
+                });
+            }
+            i += needle_bytes.len();
+            continue;
+        }
+        i += 1;
+    }
+
+    edits
+}
+
+fn is_part_of_use_module_reference(bytes: &[u8], module_start: usize, old_module: &[u8]) -> bool {
+    let mut line_start = module_start;
+    while line_start > 0 && bytes[line_start - 1] != b'\n' {
+        line_start -= 1;
+    }
+    let line = &bytes[line_start..module_start + old_module.len()];
+    let trimmed = trim_ascii_start(line);
+    trimmed.starts_with(b"use ")
+}
+
+fn trim_ascii_start(bytes: &[u8]) -> &[u8] {
+    let mut idx = 0usize;
+    while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
+        idx += 1;
+    }
+    &bytes[idx..]
 }
 
 fn extract_qw_words(input: &str) -> (Vec<String>, String) {
@@ -5472,6 +5673,105 @@ sub other_sub {
             index.document_store().count(),
             0,
             "Document store should stay in sync for symbol-free files"
+        );
+    }
+
+    fn apply_module_move_edits(mut text: String, edits: &[ModuleMoveTextEdit]) -> String {
+        let mut sorted = edits.to_vec();
+        sorted.sort_by_key(|edit| edit.start);
+        for edit in sorted.into_iter().rev() {
+            text.replace_range(edit.start..edit.end, &edit.new_text);
+        }
+        text
+    }
+
+    #[test]
+    fn test_compute_module_move_edits_updates_imports_and_qualified_refs() {
+        let index = WorkspaceIndex::new();
+
+        let consumer_a_uri = "file:///workspace/lib/ConsumerA.pm";
+        let consumer_a_src = r#"package ConsumerA;
+use Old::Name;
+
+sub run {
+    return Old::Name::work();
+}
+"#;
+        must(index.index_file(must(url::Url::parse(consumer_a_uri)), consumer_a_src.to_string()));
+
+        let consumer_b_uri = "file:///workspace/lib/ConsumerB.pm";
+        let consumer_b_src = r#"package ConsumerB;
+use strict;
+use Old::Name qw(imported_symbol);
+
+sub run {
+    return Old::Name::CONST_VALUE;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(consumer_b_uri)), consumer_b_src.to_string()));
+
+        let file_edits = must(index.compute_module_move_edits("Old::Name", "New::Name"));
+        assert_eq!(file_edits.len(), 2, "Expected edits for both consumer files");
+
+        let updated_a = file_edits.iter().find(|edit| edit.uri == consumer_a_uri);
+        let updated_b = file_edits.iter().find(|edit| edit.uri == consumer_b_uri);
+        assert!(updated_a.is_some(), "ConsumerA should receive edits");
+        assert!(updated_b.is_some(), "ConsumerB should receive edits");
+
+        let updated_a_text =
+            apply_module_move_edits(consumer_a_src.to_string(), &must_some(updated_a).edits);
+        let updated_b_text =
+            apply_module_move_edits(consumer_b_src.to_string(), &must_some(updated_b).edits);
+
+        assert!(
+            updated_a_text.contains("use New::Name;"),
+            "ConsumerA import should be rewritten"
+        );
+        assert!(
+            updated_a_text.contains("New::Name::work()"),
+            "ConsumerA qualified reference should be rewritten"
+        );
+        assert!(
+            updated_b_text.contains("use New::Name qw(imported_symbol);"),
+            "ConsumerB import should be rewritten"
+        );
+        assert!(
+            updated_b_text.contains("New::Name::CONST_VALUE"),
+            "ConsumerB qualified reference should be rewritten"
+        );
+    }
+
+    #[test]
+    fn test_compute_module_move_edits_leaves_unsafe_sites_untouched() {
+        let index = WorkspaceIndex::new();
+
+        let consumer_uri = "file:///workspace/lib/UnsafeConsumer.pm";
+        let consumer_src = r#"package UnsafeConsumer;
+use Old::Name;
+
+sub run {
+    my $literal = "Old::Name::work";
+    # Old::Name::work should not change inside comments
+    return Old::Name::work();
+}
+"#;
+        must(index.index_file(must(url::Url::parse(consumer_uri)), consumer_src.to_string()));
+
+        let file_edits = must(index.compute_module_move_edits("Old::Name", "New::Name"));
+        assert_eq!(file_edits.len(), 1, "Only one file should be rewritten");
+
+        let updated = must_some(file_edits.first());
+        let updated_text = apply_module_move_edits(consumer_src.to_string(), &updated.edits);
+
+        assert!(updated_text.contains("use New::Name;"), "Import should change");
+        assert!(updated_text.contains("return New::Name::work();"), "Code reference should change");
+        assert!(
+            updated_text.contains("my $literal = \"Old::Name::work\";"),
+            "String literal must stay unchanged"
+        );
+        assert!(
+            updated_text.contains("# Old::Name::work should not change inside comments"),
+            "Comment must stay unchanged"
         );
     }
 }
