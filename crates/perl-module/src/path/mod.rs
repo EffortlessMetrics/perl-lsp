@@ -4,6 +4,57 @@
 //! names (e.g., `Foo::Bar`) and module file paths (e.g., `Foo/Bar.pm`).
 
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
+
+/// Normalize module paths to long-form filesystem paths on Windows.
+///
+/// On non-Windows platforms this is a no-op and returns `path` as-is.
+#[must_use]
+pub fn canonicalize_path_long_form(path: &Path) -> PathBuf {
+    canonicalize_path_long_form_impl(path)
+}
+
+#[cfg(not(windows))]
+fn canonicalize_path_long_form_impl(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
+
+#[cfg(windows)]
+fn canonicalize_path_long_form_impl(path: &Path) -> PathBuf {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+
+    if path.as_os_str().is_empty() {
+        return path.to_path_buf();
+    }
+
+    let input_wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut capacity: usize = 260;
+
+    loop {
+        let mut output_wide = vec![0_u16; capacity];
+
+        let written = unsafe {
+            GetLongPathNameW(
+                input_wide.as_ptr(),
+                output_wide.as_mut_ptr(),
+                output_wide.len() as u32,
+            )
+        };
+
+        if written == 0 {
+            return path.to_path_buf();
+        }
+
+        let written_len = written as usize;
+        if written_len < output_wide.len() {
+            return OsString::from_wide(&output_wide[..written_len]).into();
+        }
+
+        capacity = written_len.saturating_add(1);
+    }
+}
 
 /// Normalize legacy package separator `'` to canonical `::`.
 #[must_use]

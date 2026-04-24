@@ -7,8 +7,10 @@
 //! - `file_path_to_module_name`
 
 use perl_module::path::{
-    file_path_to_module_name, module_name_to_path, module_path_to_name, normalize_package_separator,
+    canonicalize_path_long_form, file_path_to_module_name, module_name_to_path,
+    module_path_to_name, normalize_package_separator,
 };
+use std::path::PathBuf;
 
 // ── normalize_package_separator ─────────────────────────────────────
 
@@ -258,6 +260,15 @@ fn file_path_deeply_nested_lib() -> Result<(), Box<dyn std::error::Error>> {
         file_path_to_module_name("/opt/perl/local/lib/App/Service/Worker/Queue.pm"),
         "App::Service::Worker::Queue"
     );
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[test]
+fn canonicalize_long_form_is_noop_on_non_windows() -> Result<(), Box<dyn std::error::Error>> {
+    let input = PathBuf::from("/workspace/lib/Foo/Bar.pm");
+    let canonicalized = canonicalize_path_long_form(&input);
+    assert_eq!(canonicalized, input);
     Ok(())
 }
 

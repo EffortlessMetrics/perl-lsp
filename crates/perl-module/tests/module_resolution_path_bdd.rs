@@ -1,3 +1,4 @@
+use perl_module::path::canonicalize_path_long_form;
 use perl_module::resolution::path::resolve_module_path;
 use std::path::PathBuf;
 use tempfile::tempdir;
@@ -12,7 +13,7 @@ fn given_current_directory_include_path_when_resolving_then_result_is_root_relat
 
     let resolved = resolve_module_path(&root, "Foo::Bar", &[".".to_string()]);
 
-    assert_eq!(resolved, Some(root.join("Foo/Bar.pm")));
+    assert_eq!(resolved, Some(canonicalize_path_long_form(&root.join("Foo/Bar.pm"))));
     Ok(())
 }
 
@@ -25,5 +26,5 @@ fn given_traversal_include_path_when_resolving_then_fallback_remains_inside_work
     let resolved = resolved.unwrap_or_default();
 
     assert!(resolved.starts_with(&root));
-    assert_eq!(resolved, root.join("lib").join("Foo/Bar.pm"));
+    assert_eq!(resolved, canonicalize_path_long_form(&root.join("lib").join("Foo/Bar.pm")));
 }
