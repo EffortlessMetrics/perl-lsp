@@ -13,8 +13,8 @@ use std::{
 
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 use tree_sitter_perl_c::{
-    create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file,
-    try_create_parser,
+    ParsePerlError, create_parser, get_scanner_config, language, parse_perl_code, parse_perl_file,
+    try_create_parser, try_parse_perl_file,
 };
 
 struct Scenario {
@@ -136,6 +136,19 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
     assert!(!tree.root_node().has_error());
     fs::remove_file(&file)?;
     Ok(())
+}
+
+#[test]
+fn bdd_typed_file_parse_error_reports_io_failure_variant() {
+    let scenario = Scenario::new("typed parse reports io failure");
+    let missing = unique_temp_file("missing");
+
+    scenario.given("a missing Perl source file path");
+    scenario.when("try_parse_perl_file is invoked");
+    let error = try_parse_perl_file(&missing);
+
+    scenario.then("callers should receive the IO-specific error variant");
+    assert!(matches!(error, Err(ParsePerlError::Io(_))));
 }
 
 #[test]

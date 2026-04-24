@@ -70,6 +70,20 @@ for snippet in &["my $x = 1;", "print $x;"] {
 }
 ```
 
+Typed parse helpers expose a small error surface:
+
+```rust
+use tree_sitter_perl_c::{try_parse_perl_file, ParsePerlError};
+
+match try_parse_perl_file("script.pl") {
+    Ok(tree) => println!("{}", tree.root_node().kind()),
+    Err(ParsePerlError::Io(err)) => eprintln!("read failure: {err}"),
+    Err(ParsePerlError::LanguageSetup(_)) => eprintln!("parser setup failed"),
+    Err(ParsePerlError::ParseReturnedNone) => eprintln!("parse cancelled or timed out"),
+    Err(_) => eprintln!("unknown parse failure"),
+}
+```
+
 ## Public API
 
 | Function | Description |
@@ -80,6 +94,10 @@ for snippet in &["my $x = 1;", "print $x;"] {
 | `parse_perl_bytes(code)` | Parses raw bytes (including non-UTF-8 Perl source) |
 | `parse_perl_code(code)` | Parses a `&str` into a `tree_sitter::Tree` |
 | `parse_perl_file(path)` | Reads and parses a file (non-UTF-8 safe) |
+| `try_parse_perl_bytes(code)` | Typed parse API (`ParsePerlError`) for byte slices |
+| `try_parse_perl_code(code)` | Typed parse API (`ParsePerlError`) for `&str` |
+| `try_parse_perl_file(path)` | Typed parse API (`ParsePerlError`) for file paths |
+| `ParsePerlError` | Distinguishes setup, parse-none, and IO failures |
 | `get_scanner_config()` | Returns `"c-scanner"` |
 
 ## Binaries
