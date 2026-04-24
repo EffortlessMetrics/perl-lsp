@@ -52,7 +52,7 @@
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
-    SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
+    fs_path_to_uri, normalize_var, uri_to_fs_path, SymKind, SymbolKey, WorkspaceIndex,
 };
 use perl_module::path::module_name_to_path;
 use regex::Regex;
@@ -119,6 +119,18 @@ static IMPORT_BLOCK_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 /// Get the import block regex, returning None if compilation failed
 fn get_import_block_regex() -> Option<&'static Regex> {
     IMPORT_BLOCK_RE.get_or_init(|| Regex::new(r"(?m)^(?:use\s+[\w:]+[^\n]*\n)+")).as_ref().ok()
+}
+
+fn is_module_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b':' || byte == b'\''
+}
+
+fn has_left_module_boundary(text: &[u8], start: usize) -> bool {
+    if start == 0 {
+        true
+    } else {
+        !is_module_char(text[start - 1])
+    }
 }
 
 /// A file edit as part of a refactoring operation
@@ -650,6 +662,161 @@ impl WorkspaceRefactor {
         })
     }
 
+    /// Compute a conservative workspace edit set for a module move.
+    ///
+    /// This first implementation slice updates:
+    /// - direct `use Old::Module ...` imports
+    /// - obvious fully-qualified references (`Old::Module::foo`, `Old::Module->new`)
+    ///
+    /// It intentionally avoids rewriting comments, strings, and ambiguous/dynamic forms.
+    pub fn rewrite_module_move_imports(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Result<RefactorResult, RefactorError> {
+        if old_module.is_empty() {
+            return Err(RefactorError::InvalidInput("Old module cannot be empty".to_string()));
+        }
+        if new_module.is_empty() {
+            return Err(RefactorError::InvalidInput("New module cannot be empty".to_string()));
+        }
+        if old_module == new_module {
+            return Err(RefactorError::InvalidInput(
+                "Old and new module names are identical".to_string(),
+            ));
+        }
+
+        let mut file_edits = Vec::new();
+
+        for doc in self._index.document_store().all_documents() {
+            if !doc.text.contains(old_module) {
+                continue;
+            }
+            let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
+            let mut edits = Vec::new();
+
+            // Pass 1: direct `use Old::Module` imports only.
+            let mut line_start = 0usize;
+            for line in doc.text.split_inclusive('\n') {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("use ") {
+                    let leading_ws = line.len() - trimmed.len();
+                    let token_start_in_trimmed = "use ".len();
+                    let token_start = line_start + leading_ws + token_start_in_trimmed;
+                    let after_use = &trimmed[token_start_in_trimmed..];
+                    let token_len = after_use
+                        .bytes()
+                        .take_while(|b| {
+                            b.is_ascii_alphanumeric() || *b == b'_' || *b == b':' || *b == b'\''
+                        })
+                        .count();
+                    if token_len > 0 {
+                        let token_end = token_start + token_len;
+                        if &doc.text[token_start..token_end] == old_module {
+                            edits.push(TextEdit {
+                                start: token_start,
+                                end: token_end,
+                                new_text: new_module.to_string(),
+                            });
+                        }
+                    }
+                }
+                line_start += line.len();
+            }
+
+            // Pass 2: obvious fully-qualified references outside comments/strings.
+            let bytes = doc.text.as_bytes();
+            let old_bytes = old_module.as_bytes();
+            let mut i = 0usize;
+            let mut in_single = false;
+            let mut in_double = false;
+            let mut in_comment = false;
+
+            while i < bytes.len() {
+                let byte = bytes[i];
+                if in_comment {
+                    if byte == b'\n' {
+                        in_comment = false;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if in_single {
+                    if byte == b'\\' {
+                        i += 2;
+                        continue;
+                    }
+                    if byte == b'\'' {
+                        in_single = false;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if in_double {
+                    if byte == b'\\' {
+                        i += 2;
+                        continue;
+                    }
+                    if byte == b'"' {
+                        in_double = false;
+                    }
+                    i += 1;
+                    continue;
+                }
+
+                match byte {
+                    b'#' => {
+                        in_comment = true;
+                        i += 1;
+                        continue;
+                    }
+                    b'\'' => {
+                        in_single = true;
+                        i += 1;
+                        continue;
+                    }
+                    b'"' => {
+                        in_double = true;
+                        i += 1;
+                        continue;
+                    }
+                    _ => {}
+                }
+
+                let end = i + old_bytes.len();
+                if end <= bytes.len()
+                    && &bytes[i..end] == old_bytes
+                    && has_left_module_boundary(bytes, i)
+                    && end + 1 < bytes.len()
+                    && ((bytes[end] == b':' && bytes[end + 1] == b':')
+                        || (bytes[end] == b'-' && bytes[end + 1] == b'>'))
+                {
+                    edits.push(TextEdit { start: i, end, new_text: new_module.to_string() });
+                    i = end;
+                    continue;
+                }
+
+                i += 1;
+            }
+
+            if edits.is_empty() {
+                continue;
+            }
+            edits.sort_by_key(|edit| (edit.start, edit.end));
+            edits.dedup_by(|a, b| a.start == b.start && a.end == b.end);
+            file_edits.push(FileEdit { file_path: path, edits });
+        }
+
+        Ok(RefactorResult {
+            description: format!(
+                "Rewrite module move references from '{}' to '{}' across workspace",
+                old_module, new_module
+            ),
+            file_edits,
+            warnings: vec![],
+        })
+    }
+
     /// Inline a variable across its scope
     ///
     /// Replaces all occurrences of a variable with its initializer expression
@@ -976,7 +1143,7 @@ impl WorkspaceRefactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{TempDir, tempdir};
+    use tempfile::{tempdir, TempDir};
 
     fn setup_index(
         files: Vec<(&str, &str)>,
@@ -994,6 +1161,16 @@ mod tests {
             paths.push(path);
         }
         Ok((dir, index, paths))
+    }
+
+    fn apply_text_edits(content: &str, edits: &[TextEdit]) -> String {
+        let mut applied = content.to_string();
+        let mut sorted = edits.to_vec();
+        sorted.sort_by(|a, b| b.start.cmp(&a.start).then_with(|| b.end.cmp(&a.end)));
+        for edit in sorted {
+            applied.replace_range(edit.start..edit.end, &edit.new_text);
+        }
+        applied
     }
 
     #[test]
@@ -1016,8 +1193,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_module_qualified_name_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_extract_module_qualified_name_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
@@ -1048,13 +1225,51 @@ mod tests {
     }
 
     #[test]
-    fn test_move_subroutine_qualified_target_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_move_subroutine_qualified_target_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
         assert_eq!(res.file_edits.len(), 2);
         assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("Target/Module.pm"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_module_move_imports_updates_consumers_conservatively(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let files = vec![
+            ("consumer_a.pl", "use Old::Name;\nmy $value = Old::Name::build();\n"),
+            ("consumer_b.pl", "use Old::Name qw(run);\nOld::Name->new();\n"),
+            ("consumer_c.pl", "my $literal = \"Old::Name::build\";\n# Old::Name::ignored\n"),
+        ];
+        let (_dir, index, paths) = setup_index(files)?;
+        let refactor = WorkspaceRefactor::new(index);
+        let result = refactor.rewrite_module_move_imports("Old::Name", "New::Name")?;
+
+        assert_eq!(result.file_edits.len(), 2, "only direct consumers should be edited");
+
+        let mut by_path: BTreeMap<PathBuf, Vec<TextEdit>> = BTreeMap::new();
+        for edit in result.file_edits {
+            by_path.insert(edit.file_path, edit.edits);
+        }
+
+        let original_a = std::fs::read_to_string(&paths[0])?;
+        let updated_a =
+            apply_text_edits(&original_a, by_path.get(&paths[0]).unwrap_or(&Vec::new()));
+        assert!(updated_a.contains("use New::Name;"));
+        assert!(updated_a.contains("New::Name::build();"));
+
+        let original_b = std::fs::read_to_string(&paths[1])?;
+        let updated_b =
+            apply_text_edits(&original_b, by_path.get(&paths[1]).unwrap_or(&Vec::new()));
+        assert!(updated_b.contains("use New::Name qw(run);"));
+        assert!(updated_b.contains("New::Name->new();"));
+
+        assert!(
+            !by_path.contains_key(&paths[2]),
+            "string/comment-only references should remain untouched"
+        );
         Ok(())
     }
 
