@@ -212,11 +212,11 @@ pub const LSP_COMPLETION_KEYWORDS: &[&str] = &[
 pub const DAP_COMPLETION_KEYWORDS: &[&str] = &[
     "abs", "bless", "chomp", "chop", "chr", "close", "defined", "delete", "die", "do", "each",
     "else", "elsif", "eval", "exists", "for", "foreach", "grep", "hex", "if", "index", "int",
-    "isa", "join", "keys", "last", "lc", "lcfirst", "length", "local", "map", "my", "next",
-    "oct", "open", "ord", "our", "pack", "package", "pop", "print", "printf", "push", "qw",
-    "redo", "ref", "require", "return", "reverse", "rindex", "say", "scalar", "shift", "sort",
-    "splice", "split", "sprintf", "sqrt", "sub", "substr", "tie", "uc", "ucfirst", "unless",
-    "unpack", "unshift", "untie", "until", "use", "values", "warn", "while",
+    "isa", "join", "keys", "last", "lc", "lcfirst", "length", "local", "map", "my", "next", "oct",
+    "open", "ord", "our", "pack", "package", "pop", "print", "printf", "push", "qw", "redo", "ref",
+    "require", "return", "reverse", "rindex", "say", "scalar", "shift", "sort", "splice", "split",
+    "sprintf", "sqrt", "sub", "substr", "tie", "uc", "ucfirst", "unless", "unpack", "unshift",
+    "untie", "until", "use", "values", "warn", "while",
 ];
 
 /// Keywords used by runtime fallback completion in `perl-lsp`.
