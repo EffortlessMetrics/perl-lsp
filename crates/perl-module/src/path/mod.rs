@@ -4,6 +4,7 @@
 //! names (e.g., `Foo::Bar`) and module file paths (e.g., `Foo/Bar.pm`).
 
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 /// Normalize legacy package separator `'` to canonical `::`.
 #[must_use]
@@ -49,6 +50,52 @@ pub fn file_path_to_module_name(file_path: &str) -> String {
         .filter(|segment| !segment.is_empty())
         .unwrap_or(without_ext)
         .to_string()
+}
+
+/// Normalize filesystem paths to long-form on Windows.
+///
+/// On non-Windows platforms this is a no-op.
+#[must_use]
+pub fn canonicalize_path_long_form(path: &Path) -> PathBuf {
+    canonicalize_path_long_form_impl(path)
+}
+
+#[cfg(windows)]
+fn canonicalize_path_long_form_impl(path: &Path) -> PathBuf {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+    use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+
+    let mut input_utf16: Vec<u16> = path.as_os_str().encode_wide().collect();
+    input_utf16.push(0);
+
+    let required_len = unsafe {
+        // SAFETY: `input_utf16` is NUL-terminated and lives for the duration of the call.
+        // Passing a null output pointer with size 0 requests the required buffer length.
+        GetLongPathNameW(input_utf16.as_ptr(), std::ptr::null_mut(), 0)
+    };
+    if required_len == 0 {
+        return path.to_path_buf();
+    }
+
+    let mut output_utf16 = vec![0; required_len as usize + 1];
+    let written_len = unsafe {
+        // SAFETY: `input_utf16` is a valid NUL-terminated wide string and `output_utf16`
+        // points to writable memory sized according to the previously requested length.
+        GetLongPathNameW(input_utf16.as_ptr(), output_utf16.as_mut_ptr(), output_utf16.len() as u32)
+    };
+    if written_len == 0 {
+        return path.to_path_buf();
+    }
+
+    output_utf16.truncate(written_len as usize);
+    PathBuf::from(OsString::from_wide(&output_utf16))
+}
+
+#[cfg(not(windows))]
+fn canonicalize_path_long_form_impl(path: &Path) -> PathBuf {
+    path.to_path_buf()
 }
 
 fn strip_to_lib_relative_path(path: &str) -> Option<&str> {

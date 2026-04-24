@@ -7,8 +7,10 @@
 //! - `file_path_to_module_name`
 
 use perl_module::path::{
-    file_path_to_module_name, module_name_to_path, module_path_to_name, normalize_package_separator,
+    canonicalize_path_long_form, file_path_to_module_name, module_name_to_path,
+    module_path_to_name, normalize_package_separator,
 };
+use std::path::PathBuf;
 
 // ── normalize_package_separator ─────────────────────────────────────
 
@@ -366,5 +368,13 @@ fn file_path_lib_segment_in_filename_not_directory() -> Result<(), Box<dyn std::
 fn file_path_empty_string() -> Result<(), Box<dyn std::error::Error>> {
     let result = file_path_to_module_name("");
     assert_eq!(result, "");
+    Ok(())
+}
+
+#[test]
+fn canonicalize_long_form_leaves_nonexistent_path_unchanged(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let path = PathBuf::from("definitely_nonexistent_perl_module_path_test.pm");
+    assert_eq!(canonicalize_path_long_form(&path), path);
     Ok(())
 }

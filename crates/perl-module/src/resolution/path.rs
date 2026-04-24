@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::path::module_name_to_path;
+use crate::path::{canonicalize_path_long_form, module_name_to_path};
 use perl_parser_core::path_security::validate_workspace_path;
 
 /// Resolve a Perl module name to a workspace-relative filesystem path candidate.
@@ -43,9 +43,9 @@ pub fn resolve_module_path(
         };
 
         if safe_candidate.exists() {
-            return Some(safe_candidate);
+            return Some(canonicalize_path_long_form(&safe_candidate));
         }
     }
 
-    Some(root.join("lib").join(relative_path))
+    Some(canonicalize_path_long_form(&root.join("lib").join(relative_path)))
 }
