@@ -55,6 +55,8 @@ pub enum SubstitutionError {
 pub enum TransliterationError {
     /// Invalid modifier character found
     InvalidModifier(char),
+    /// Invalid delimiter character found
+    InvalidDelimiter(char),
     /// Missing delimiter after `tr`/`y`
     MissingDelimiter,
     /// Search list section is missing
@@ -301,75 +303,54 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
-    // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    // Skip `tr` or `y` prefix and allow optional whitespace before delimiter.
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if !is_valid_transliteration_delimiter(delimiter) {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
     // Parse first body (search pattern)
-    let (search, rest1) = extract_delimited_content(content, delimiter, closing);
-
-    // For paired delimiters, skip whitespace and allow any paired opening delimiter for the
-    // replacement list. Perl accepts forms like tr[abc]{xyz} in addition to tr[abc][xyz].
-    let rest2_owned;
-    let rest2 = if is_paired {
-        rest1.trim_start()
-    } else {
-        rest2_owned = format!("{}{}", delimiter, rest1);
-        &rest2_owned
-    };
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
+    if !search_closed {
+        return (search, String::new(), String::new());
+    }
 
     // Parse second body (replacement pattern)
-    let (replacement, modifiers_str) = if !is_paired && !rest1.is_empty() {
-        // Manually parse the replacement for non-paired delimiters
-        let chars = rest1.char_indices();
-        let mut body = String::new();
-        let mut escaped = false;
-        let mut end_pos = rest1.len();
-
-        for (i, ch) in chars {
-            if escaped {
-                body.push(ch);
-                escaped = false;
-                continue;
-            }
-
-            match ch {
-                '\\' => {
-                    body.push(ch);
-                    escaped = true;
-                }
-                c if c == closing => {
-                    end_pos = i + ch.len_utf8();
-                    break;
-                }
-                _ => body.push(ch),
-            }
+    let (replacement, modifiers_str, replacement_closed) = if !is_paired {
+        if rest1.is_empty() {
+            return (search, String::new(), String::new());
         }
-
-        (body, &rest1[end_pos..])
+        extract_unpaired_body_skip_strings(rest1, closing)
     } else if is_paired {
-        if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
+        let trimmed = rest1.trim_start();
+        if let Some(repl_delimiter) = starts_with_paired_delimiter(trimmed) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
-            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+            extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing)
         } else {
-            (String::new(), rest2)
+            return (search, String::new(), String::new());
         }
     } else {
-        (String::new(), rest1)
+        (String::new(), rest1, false)
     };
+    if !replacement_closed {
+        return (search, replacement, String::new());
+    }
 
     // Extract and validate only valid transliteration modifiers
     // Security fix: Apply consistent validation for all delimiter types
@@ -409,6 +390,9 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if !is_valid_transliteration_delimiter(delimiter) {
+        return Err(TransliterationError::InvalidDelimiter(delimiter));
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -480,6 +464,10 @@ fn starts_with_paired_delimiter(text: &str) -> Option<char> {
         Some(ch) if is_paired_open(ch) => Some(ch),
         _ => None,
     }
+}
+
+fn is_valid_transliteration_delimiter(ch: char) -> bool {
+    !(ch.is_ascii_alphanumeric() || ch.is_whitespace() || ch == '\\')
 }
 
 /// Extract content between delimiters and return (content, rest)
