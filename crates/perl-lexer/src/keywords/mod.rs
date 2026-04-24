@@ -371,6 +371,19 @@ mod tests {
         }
     }
 
+    fn assert_proper_subset(name: &str, subset: &[&str], superset_name: &str, superset: &[&str]) {
+        assert!(
+            subset.len() < superset.len(),
+            "{name} must be a proper subset of {superset_name}"
+        );
+        for &item in subset {
+            assert!(
+                superset.binary_search(&item).is_ok(),
+                "{name} entry {item:?} missing from {superset_name}"
+            );
+        }
+    }
+
     #[test]
     fn keyword_lists_are_sorted_and_unique() {
         assert_sorted_unique("KEYWORDS", KEYWORDS);
@@ -380,6 +393,44 @@ mod tests {
         assert_sorted_unique("RENAME_KEYWORDS", RENAME_KEYWORDS);
         assert_sorted_unique("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS);
         assert_sorted_unique("LEXER_KEYWORDS", LEXER_KEYWORDS);
+    }
+
+    #[test]
+    fn keyword_list_counts_are_stable() {
+        assert_eq!(127, KEYWORDS.len(), "KEYWORDS count changed; review inventory drift");
+        assert_eq!(68, LSP_COMPLETION_KEYWORDS.len(), "LSP completion inventory drifted");
+        assert_eq!(72, DAP_COMPLETION_KEYWORDS.len(), "DAP completion inventory drifted");
+        assert_eq!(
+            40,
+            LSP_RUNTIME_COMPLETION_KEYWORDS.len(),
+            "runtime completion inventory drifted"
+        );
+        assert_eq!(25, RENAME_KEYWORDS.len(), "rename inventory drifted");
+        assert_eq!(32, PARSER_LSP_KEYWORDS.len(), "parser LSP inventory drifted");
+        assert_eq!(67, LEXER_KEYWORDS.len(), "lexer inventory drifted");
+    }
+
+    #[test]
+    fn keyword_subset_relationships_are_explicit() {
+        assert_proper_subset("LSP_COMPLETION_KEYWORDS", LSP_COMPLETION_KEYWORDS, "KEYWORDS", KEYWORDS);
+        assert_proper_subset("DAP_COMPLETION_KEYWORDS", DAP_COMPLETION_KEYWORDS, "KEYWORDS", KEYWORDS);
+        assert_proper_subset(
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+            "KEYWORDS",
+            KEYWORDS,
+        );
+        assert_proper_subset("RENAME_KEYWORDS", RENAME_KEYWORDS, "KEYWORDS", KEYWORDS);
+        assert_proper_subset("PARSER_LSP_KEYWORDS", PARSER_LSP_KEYWORDS, "KEYWORDS", KEYWORDS);
+        assert_proper_subset("LEXER_KEYWORDS", LEXER_KEYWORDS, "KEYWORDS", KEYWORDS);
+
+        // Rename validation vocabulary is intentionally sourced from completion-safe keywords.
+        assert_proper_subset(
+            "RENAME_KEYWORDS",
+            RENAME_KEYWORDS,
+            "LSP_COMPLETION_KEYWORDS",
+            LSP_COMPLETION_KEYWORDS,
+        );
     }
 
     #[test]
