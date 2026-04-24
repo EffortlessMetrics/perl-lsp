@@ -101,16 +101,6 @@ impl TokenSegment {
     fn overlaps(&self, start: usize, end: usize) -> bool {
         self.start < end && self.end > start
     }
-
-    /// Check if this segment is completely before the given position.
-    fn is_before(&self, position: usize) -> bool {
-        self.end <= position
-    }
-
-    /// Check if this segment is completely after the given position.
-    fn is_after(&self, position: usize) -> bool {
-        self.start >= position
-    }
 }
 
 /// Cache for parser tokens to avoid re-lexing.
@@ -134,38 +124,6 @@ impl TokenCache {
     /// Create a new empty token cache.
     fn new() -> Self {
         TokenCache { segments: Vec::new() }
-    }
-
-    /// Return all segments that end at or before the given position.
-    ///
-    /// This is used to retrieve cached tokens from the unchanged portion of
-    /// source code before an edit.
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - The byte position to search up to.
-    ///
-    /// # Returns
-    ///
-    /// A vector of segments ending at or before `position`, in source order.
-    fn get_segments_before(&self, position: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.is_before(position)).cloned().collect()
-    }
-
-    /// Return all segments that start at or after the given position.
-    ///
-    /// This is used to retrieve cached tokens from the unchanged portion of
-    /// source code after an edit.
-    ///
-    /// # Arguments
-    ///
-    /// * `position` - The byte position to search from.
-    ///
-    /// # Returns
-    ///
-    /// A vector of segments starting at or after `position`, in source order.
-    fn get_segments_after(&self, position: usize) -> Vec<TokenSegment> {
-        self.segments.iter().filter(|seg| seg.is_after(position)).cloned().collect()
     }
 
     /// Return all segments that overlap with the given range.
@@ -215,7 +173,29 @@ impl TokenCache {
     /// * `start` - Start byte position of the range to invalidate.
     /// * `end` - End byte position of the range to invalidate.
     fn invalidate_range(&mut self, start: usize, end: usize) {
-        self.segments.retain(|seg| !seg.overlaps(start, end));
+        let mut rebuilt_segments = Vec::new();
+
+        for segment in &self.segments {
+            if !segment.overlaps(start, end) {
+                rebuilt_segments.push(segment.clone());
+                continue;
+            }
+
+            let before_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.end <= start).cloned().collect();
+            if let (Some(first), Some(last)) = (before_tokens.first(), before_tokens.last()) {
+                rebuilt_segments.push(TokenSegment::new(first.start, last.end, before_tokens));
+            }
+
+            let after_tokens: Vec<Token> =
+                segment.tokens.iter().filter(|token| token.start >= end).cloned().collect();
+            if let (Some(first), Some(last)) = (after_tokens.first(), after_tokens.last()) {
+                rebuilt_segments.push(TokenSegment::new(first.start, last.end, after_tokens));
+            }
+        }
+
+        rebuilt_segments.sort_by_key(|segment| segment.start);
+        self.segments = rebuilt_segments;
     }
 
     /// Adjust segment positions after an edit.
@@ -258,15 +238,8 @@ impl TokenCache {
     /// A slice of tokens starting at or after `position`, or `None` if no
     /// cached tokens exist in that range.
     fn get_tokens_from(&self, position: usize) -> Option<Vec<Token>> {
-        let segments = self.get_segments_after(position);
-        if segments.is_empty() {
-            return None;
-        }
-
-        // Collect all tokens from segments after position
         let mut all_tokens = Vec::new();
-        for segment in segments {
-            // Filter tokens within the segment that start at or after position
+        for segment in &self.segments {
             for token in &segment.tokens {
                 if token.start >= position {
                     all_tokens.push(token.clone());
@@ -274,7 +247,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -291,15 +268,8 @@ impl TokenCache {
     /// A slice of tokens ending at or before `position`, or `None` if no
     /// cached tokens exist in that range.
     fn get_tokens_before(&self, position: usize) -> Option<Vec<Token>> {
-        let segments = self.get_segments_before(position);
-        if segments.is_empty() {
-            return None;
-        }
-
-        // Collect all tokens from segments before position
         let mut all_tokens = Vec::new();
-        for segment in segments {
-            // Filter tokens within the segment that end at or before position
+        for segment in &self.segments {
             for token in &segment.tokens {
                 if token.end <= position {
                     all_tokens.push(token.clone());
@@ -307,7 +277,25 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
+    }
+
+    fn count_segments_with_tokens_before(&self, position: usize) -> usize {
+        self.segments
+            .iter()
+            .filter(|segment| segment.tokens.iter().any(|token| token.end <= position))
+            .count()
+    }
+
+    fn count_segments_with_tokens_after(&self, position: usize) -> usize {
+        self.segments
+            .iter()
+            .filter(|segment| segment.tokens.iter().any(|token| token.start >= position))
+            .count()
     }
 
     /// Add a new segment to the cache.
@@ -355,6 +343,8 @@ pub struct IncrementalStats {
     pub segments_invalidated: usize,
     /// Count of times we had to relex the entire tail (cache coverage gaps)
     pub full_tail_fallbacks: usize,
+    /// Total bytes re-lexed while handling full tail fallbacks.
+    pub tail_fallback_bytes: usize,
 }
 
 impl std::fmt::Display for IncrementalStats {
@@ -374,6 +364,7 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
         writeln!(f, "  Full tail fallbacks: {}", self.full_tail_fallbacks)?;
+        writeln!(f, "  Tail fallback bytes: {}", self.tail_fallback_bytes)?;
         Ok(())
     }
 }
@@ -599,18 +590,15 @@ impl CheckpointedIncrementalParser {
         }
 
         let mut parser_tokens: Vec<Token> = Vec::new();
+        let mut newly_lexed_parser_tokens: Vec<Token> = Vec::new();
 
         // --- Phase 1: reuse cached tokens before the left checkpoint ---
-        let segments_before = self.token_cache.get_segments_before(relex_start);
-        self.stats.segments_reused_before += segments_before.len();
+        let segments_before = self.token_cache.count_segments_with_tokens_before(relex_start);
+        self.stats.segments_reused_before += segments_before;
         let cached_before = self.token_cache.get_tokens_before(relex_start);
 
-        // The cache is still populated as a single whole-file segment. After an
-        // interior edit, invalidation can remove that entire segment and leave us
-        // with no prefix tokens for a nonzero checkpoint window. In that state,
-        // feeding a suffix-only token stream into `Parser::from_tokens` would
-        // drop the unchanged prefix, so preserve correctness by falling back to a
-        // full reparse until the cache becomes genuinely segment-granular.
+        // If we cannot prove unchanged prefix reuse for a nonzero relex window,
+        // preserve correctness by rebuilding from a full parse.
         if relex_start > 0 && cached_before.is_none() {
             self.stats.cache_misses += 1;
             return self.parse_with_checkpoints();
@@ -639,6 +627,9 @@ impl CheckpointedIncrementalParser {
                 Some(token) => {
                     let token_end = token.end;
                     let token_start = token.start;
+                    if token_start >= relex_end {
+                        break;
+                    }
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
                     bytes_relexed_this_phase += token_end - token_start;
@@ -652,50 +643,58 @@ impl CheckpointedIncrementalParser {
         self.stats.bytes_relexed += bytes_relexed_this_phase;
 
         let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
+        newly_lexed_parser_tokens.extend(converted.iter().cloned());
         parser_tokens.extend(converted);
 
         // --- Phase 3: reuse cached tokens after the right checkpoint ---
         let byte_shift: isize = edit.new_text.len() as isize - (edit.end - edit.start) as isize;
 
-        let segments_after = self.token_cache.get_segments_after(relex_end);
-        self.stats.segments_reused_after += segments_after.len();
+        if right_checkpoint.is_some() {
+            let segments_after = self.token_cache.count_segments_with_tokens_after(relex_end);
+            self.stats.segments_reused_after += segments_after;
 
-        if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
-            self.stats.cache_hits += 1;
-            for token in cached {
-                // Adjust byte positions to account for the inserted/removed bytes.
-                let adjusted = Token {
-                    kind: token.kind,
-                    text: token.text.clone(),
-                    start: (token.start as isize + byte_shift) as usize,
-                    end: (token.end as isize + byte_shift) as usize,
-                };
-                parser_tokens.push(adjusted);
-                self.stats.tokens_reused += 1;
-            }
-        } else {
-            self.stats.cache_misses += 1;
-            // Track full tail fallback when no segments are found after relex_end
-            if segments_after.is_empty() {
-                self.stats.full_tail_fallbacks += 1;
-            }
-            // No cache hit — lex the remainder of the source.
-            let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
-            while let Some(token) = lexer.next_token() {
-                if matches!(token.token_type, perl_lexer::TokenType::EOF) {
-                    break;
+            if let Some(cached) = self.token_cache.get_tokens_from(relex_end) {
+                self.stats.cache_hits += 1;
+                for token in cached {
+                    // Adjust byte positions to account for the inserted/removed bytes.
+                    let adjusted = Token {
+                        kind: token.kind,
+                        text: token.text.clone(),
+                        start: (token.start as isize + byte_shift) as usize,
+                        end: (token.end as isize + byte_shift) as usize,
+                    };
+                    parser_tokens.push(adjusted);
+                    self.stats.tokens_reused += 1;
                 }
-                raw_tail.push(token);
-                self.stats.tokens_relexed += 1;
+            } else {
+                self.stats.cache_misses += 1;
+                self.stats.full_tail_fallbacks += 1;
+                // No cache hit — lex the remainder of the source.
+                let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
+                let mut tail_bytes = 0usize;
+                while let Some(token) = lexer.next_token() {
+                    if matches!(token.token_type, perl_lexer::TokenType::EOF) {
+                        break;
+                    }
+                    tail_bytes += token.end - token.start;
+                    raw_tail.push(token);
+                    self.stats.tokens_relexed += 1;
+                }
+                self.stats.tail_fallback_bytes += tail_bytes;
+                let tail_converted = TokenStream::lexer_tokens_to_parser_tokens(raw_tail);
+                newly_lexed_parser_tokens.extend(tail_converted.iter().cloned());
+                parser_tokens.extend(tail_converted);
             }
-            parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
-        // Update token cache with the final merged token list.
-        if let (Some(first), Some(last)) = (parser_tokens.first(), parser_tokens.last()) {
+        // Update token cache only for the freshly re-lexed region so preserved
+        // prefix/suffix segments remain available for future edits.
+        if let (Some(first), Some(last)) =
+            (newly_lexed_parser_tokens.first(), newly_lexed_parser_tokens.last())
+        {
             let start = first.start;
             let end = last.end;
-            self.token_cache.cache_tokens(start, end, parser_tokens.clone());
+            self.token_cache.cache_tokens(start, end, newly_lexed_parser_tokens);
         }
 
         // Drive the parse from the pre-assembled token stream — no re-lexing.
@@ -721,6 +720,7 @@ impl CheckpointedIncrementalParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_parser_core::token_stream::TokenKind;
     use perl_parser_core::NodeKind;
     use perl_tdd_support::must;
 
@@ -862,5 +862,57 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_invalidate_range_splits_segment_and_preserves_non_overlapping_tokens() {
+        let mut cache = TokenCache::new();
+        let tokens = vec![
+            Token::new(TokenKind::Identifier, "a", 0, 10),
+            Token::new(TokenKind::Identifier, "b", 10, 20),
+            Token::new(TokenKind::Identifier, "c", 20, 30),
+            Token::new(TokenKind::Identifier, "d", 30, 40),
+        ];
+        cache.cache_tokens(0, 40, tokens);
+
+        cache.invalidate_range(15, 25);
+
+        assert_eq!(cache.segments.len(), 2, "overlap invalidation should split one segment");
+        assert_eq!(cache.segments[0].start, 0);
+        assert_eq!(cache.segments[0].end, 10);
+        assert_eq!(cache.segments[1].start, 30);
+        assert_eq!(cache.segments[1].end, 40);
+    }
+
+    #[test]
+    fn test_checkpoint_window_reuses_suffix_without_tail_fallback() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $x = 1;\n".repeat(140);
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 545, end: 546, new_text: "777".to_string() };
+        let incremental_tree = must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(stats.segments_reused_before > 0, "expected prefix segment reuse, got {stats:?}");
+        assert_eq!(
+            stats.full_tail_fallbacks, 0,
+            "missing-right-checkpoint path should not be counted as tail fallback, got {stats:?}"
+        );
+        assert!(stats.bytes_relexed > 0, "expected bounded relex bytes, got {stats:?}");
+        assert!(
+            stats.bytes_relexed <= source.len(),
+            "relexed bytes should be bounded by source length, got {stats:?}"
+        );
+
+        let mut expected_source = source;
+        expected_source.replace_range(edit.start..edit.end, &edit.new_text);
+        let mut full = CheckpointedIncrementalParser::new();
+        let full_tree = must(full.parse(expected_source));
+        assert_eq!(
+            format!("{incremental_tree:?}"),
+            format!("{full_tree:?}"),
+            "incremental tree diverged from fresh full parse"
+        );
     }
 }
