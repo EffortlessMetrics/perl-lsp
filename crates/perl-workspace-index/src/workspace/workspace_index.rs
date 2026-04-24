@@ -1102,10 +1102,18 @@ pub struct FileIndex {
     references: HashMap<String, Vec<SymbolReference>>,
     /// Dependencies (modules this file imports)
     dependencies: HashSet<String>,
+    /// Export metadata discovered in this file (`@EXPORT`, `@EXPORT_OK`).
+    exports: Vec<FileExport>,
     /// Content hash for early-exit optimization
     content_hash: u64,
     /// Workspace folder URI this file belongs to (for multi-root workspace support)
     folder_uri: Option<String>,
+}
+
+#[derive(Clone)]
+struct FileExport {
+    module_name: String,
+    symbol_name: String,
 }
 
 /// Thread-safe workspace index
@@ -1119,6 +1127,8 @@ pub struct WorkspaceIndex {
     /// Aggregated from per-file `FileIndex::references` during `index_file()`.
     /// Provides O(1) lookup for `find_references()` instead of iterating all files.
     global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
+    /// Export symbol table: (module, symbol) -> definition location.
+    export_symbols: Arc<RwLock<HashMap<(String, String), Location>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
     /// Workspace folder URIs for multi-root workspace support
@@ -1141,6 +1151,36 @@ impl WorkspaceIndex {
                     symbols.insert(qname.clone(), symbol.uri.clone());
                 }
                 symbols.insert(symbol.name.clone(), symbol.uri.clone());
+            }
+        }
+    }
+
+    fn rebuild_export_symbol_cache(
+        files: &HashMap<String, FileIndex>,
+        export_symbols: &mut HashMap<(String, String), Location>,
+    ) {
+        export_symbols.clear();
+
+        let mut keys: Vec<&String> = files.keys().collect();
+        keys.sort_unstable();
+
+        for key in keys {
+            if let Some(file_index) = files.get(key) {
+                for file_export in &file_index.exports {
+                    let qualified_name =
+                        format!("{}::{}", file_export.module_name, file_export.symbol_name);
+                    if let Some(location) =
+                        Self::find_definition_in_files(files, &qualified_name, None)
+                            .map(|(location, _)| location)
+                    {
+                        export_symbols
+                            .entry((
+                                file_export.module_name.clone(),
+                                file_export.symbol_name.clone(),
+                            ))
+                            .or_insert(location);
+                    }
+                }
             }
         }
     }
@@ -1286,6 +1326,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
             global_references: Arc::new(RwLock::new(HashMap::new())),
+            export_symbols: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1324,6 +1365,7 @@ impl WorkspaceIndex {
             files: Arc::new(RwLock::new(HashMap::with_capacity(estimated_files))),
             symbols: Arc::new(RwLock::new(HashMap::with_capacity(sym_cap))),
             global_references: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
+            export_symbols: Arc::new(RwLock::new(HashMap::with_capacity(ref_cap))),
             document_store: DocumentStore::new(),
             workspace_folders: Arc::new(RwLock::new(Vec::new())),
         }
@@ -1500,6 +1542,9 @@ impl WorkspaceIndex {
                     }
                 }
             }
+
+            let mut export_symbols = self.export_symbols.write();
+            Self::rebuild_export_symbol_cache(&files, &mut export_symbols);
         }
 
         Ok(())
@@ -1552,6 +1597,9 @@ impl WorkspaceIndex {
             // Remove from global reference index
             let mut global_refs = self.global_references.write();
             Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
+
+            let mut export_symbols = self.export_symbols.write();
+            Self::rebuild_export_symbol_cache(&files, &mut export_symbols);
         }
     }
 
@@ -1793,6 +1841,7 @@ impl WorkspaceIndex {
             let mut files = self.files.write();
             let mut symbols = self.symbols.write();
             let mut global_refs = self.global_references.write();
+            let mut export_symbols = self.export_symbols.write();
 
             // Pre-allocate capacity for the incoming batch to avoid rehashing.
             // Each symbol is indexed under both its qualified name and bare name.
@@ -1823,6 +1872,7 @@ impl WorkspaceIndex {
 
             // Single rebuild at the end
             Self::rebuild_symbol_cache(&files, &mut symbols);
+            Self::rebuild_export_symbol_cache(&files, &mut export_symbols);
         }
 
         errors
@@ -2024,6 +2074,16 @@ impl WorkspaceIndex {
         None
     }
 
+    /// Find the definition for a symbol exported by `module_name`.
+    pub fn find_exported_symbol_definition(
+        &self,
+        module_name: &str,
+        symbol_name: &str,
+    ) -> Option<Location> {
+        let key = (canonicalize_perl_module_name(module_name), symbol_name.to_string());
+        self.export_symbols.read().get(&key).cloned()
+    }
+
     /// Get all symbols in the workspace
     ///
     /// # Returns
@@ -2054,6 +2114,7 @@ impl WorkspaceIndex {
         self.files.write().clear();
         self.symbols.write().clear();
         self.global_references.write().clear();
+        self.export_symbols.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
@@ -2809,6 +2870,22 @@ impl IndexVisitor {
         }
     }
 
+    fn record_export_symbols(&self, export_node: &Node, file_index: &mut FileIndex) {
+        let Some(module_name) = self.current_package.clone() else {
+            return;
+        };
+
+        let mut seen: HashSet<String> =
+            file_index.exports.iter().map(|entry| entry.symbol_name.clone()).collect();
+        for symbol_name in collect_symbol_names_from_export_node(export_node) {
+            if seen.insert(symbol_name.clone()) {
+                file_index
+                    .exports
+                    .push(FileExport { module_name: module_name.clone(), symbol_name });
+            }
+        }
+    }
+
     fn visit_node(&mut self, node: &Node, file_index: &mut FileIndex) {
         match &node.kind {
             NodeKind::Package { name, .. } => {
@@ -2899,6 +2976,13 @@ impl IndexVisitor {
                             kind: ReferenceKind::Definition,
                         },
                     );
+
+                    if sigil == "@"
+                        && (name == "EXPORT" || name == "EXPORT_OK")
+                        && let Some(init) = initializer
+                    {
+                        self.record_export_symbols(init, file_index);
+                    }
                 }
 
                 // Visit initializer
@@ -3069,6 +3153,13 @@ impl IndexVisitor {
                         range: self.node_to_range(lhs),
                         kind: ReferenceKind::Write,
                     });
+                }
+
+                if let NodeKind::Variable { sigil, name } = &lhs.kind
+                    && sigil == "@"
+                    && (name == "EXPORT" || name == "EXPORT_OK")
+                {
+                    self.record_export_symbols(rhs, file_index);
                 }
 
                 // Right side could have reads
@@ -3531,6 +3622,41 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
     }
 
     (words, remainder)
+}
+
+fn collect_symbol_names_from_export_node(node: &Node) -> Vec<String> {
+    match &node.kind {
+        NodeKind::String { value, .. } => expand_symbol_list(value),
+        NodeKind::Identifier { name } => expand_symbol_list(name),
+        NodeKind::ArrayLiteral { elements } => {
+            elements.iter().flat_map(collect_symbol_names_from_export_node).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn expand_symbol_list(raw: &str) -> Vec<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Vec::new();
+    }
+
+    let (qw_words, remainder) = extract_qw_words(raw);
+    if !qw_words.is_empty() && remainder.trim().is_empty() {
+        return qw_words;
+    }
+
+    normalize_export_symbol_name(raw).into_iter().collect()
+}
+
+fn normalize_export_symbol_name(raw: &str) -> Option<String> {
+    let normalized = raw
+        .trim()
+        .trim_matches(|c: char| matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}'))
+        .trim_end_matches(';')
+        .trim()
+        .to_string();
+    if normalized.is_empty() { None } else { Some(normalized) }
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -5473,5 +5599,75 @@ sub other_sub {
             0,
             "Document store should stay in sync for symbol-free files"
         );
+    }
+
+    #[test]
+    fn test_exporting_module_contributes_exported_symbol_entries() {
+        let index = WorkspaceIndex::new();
+        let exporter_uri = "file:///workspace/lib/My/Exporter.pm";
+        let exporter_code = r#"
+package My::Exporter;
+our @EXPORT = qw(exported_func);
+sub exported_func { return 1; }
+sub private_func { return 2; }
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(exporter_uri)), exporter_code.to_string()));
+
+        let exported = index.find_exported_symbol_definition("My::Exporter", "exported_func");
+        let location = must_some(exported);
+        assert_eq!(location.uri, exporter_uri);
+    }
+
+    #[test]
+    fn test_workspace_index_lookup_by_module_and_symbol() {
+        let index = WorkspaceIndex::new();
+
+        let exporter_uri = "file:///workspace/lib/My/Exporter.pm";
+        let consumer_uri = "file:///workspace/lib/My/Consumer.pm";
+        let exporter_code = r#"
+package My::Exporter;
+our @EXPORT = qw(run_task);
+sub run_task { return 'ok'; }
+1;
+"#;
+        let consumer_code = r#"
+package My::Consumer;
+use My::Exporter qw(run_task);
+sub invoke { return run_task(); }
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(exporter_uri)), exporter_code.to_string()));
+        must(index.index_file(must(url::Url::parse(consumer_uri)), consumer_code.to_string()));
+
+        let location = must_some(index.find_exported_symbol_definition("My::Exporter", "run_task"));
+        assert_eq!(location.uri, exporter_uri);
+    }
+
+    #[test]
+    fn test_export_lookup_missing_symbol_returns_none_without_false_positive() {
+        let index = WorkspaceIndex::new();
+
+        let exporter_uri = "file:///workspace/lib/My/Exporter.pm";
+        let other_uri = "file:///workspace/lib/Other/Module.pm";
+        let exporter_code = r#"
+package My::Exporter;
+our @EXPORT = qw(real_export);
+sub real_export { return 1; }
+1;
+"#;
+        let other_code = r#"
+package Other::Module;
+sub fake_export { return 2; }
+1;
+"#;
+
+        must(index.index_file(must(url::Url::parse(exporter_uri)), exporter_code.to_string()));
+        must(index.index_file(must(url::Url::parse(other_uri)), other_code.to_string()));
+
+        assert!(index.find_exported_symbol_definition("My::Exporter", "fake_export").is_none());
+        assert!(index.find_exported_symbol_definition("My::Exporter", "missing").is_none());
     }
 }
