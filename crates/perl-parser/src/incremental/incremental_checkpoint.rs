@@ -347,6 +347,8 @@ pub struct IncrementalStats {
     pub right_checkpoint_distance: usize,
     /// Total bytes relexed during incremental parsing
     pub bytes_relexed: usize,
+    /// Total byte width of requested checkpoint windows (`relex_end - relex_start`)
+    pub relex_window_bytes: usize,
     /// Count of segments reused before the edit (cache efficiency metric)
     pub segments_reused_before: usize,
     /// Count of segments reused after the edit (cache efficiency metric)
@@ -370,6 +372,7 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
         writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
         writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
+        writeln!(f, "  Relex window bytes: {}", self.relex_window_bytes)?;
         writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
@@ -584,19 +587,22 @@ impl CheckpointedIncrementalParser {
         right_checkpoint: Option<LexerCheckpoint>,
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
-        // Calculate relex bounds using checkpoint positions
-        let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
-            right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
+        // Calculate and normalize relex bounds using checkpoint positions.
+        let source_len = self.source.len();
+        let mut relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
+        let mut relex_end = right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(source_len);
 
         // Track checkpoint distances for statistics
         let edit_end = edit.start + edit.new_text.len();
-        if edit.start >= relex_start {
-            self.stats.left_checkpoint_distance = edit.start - relex_start;
+        relex_start = relex_start.min(source_len);
+        relex_end = relex_end.min(source_len).max(edit_end);
+        if relex_end < relex_start {
+            relex_end = relex_start;
         }
-        if relex_end >= edit_end {
-            self.stats.right_checkpoint_distance = relex_end - edit_end;
-        }
+
+        self.stats.left_checkpoint_distance = edit.start.saturating_sub(relex_start);
+        self.stats.right_checkpoint_distance = relex_end.saturating_sub(edit_end);
+        self.stats.relex_window_bytes += relex_end.saturating_sub(relex_start);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -641,7 +647,8 @@ impl CheckpointedIncrementalParser {
                     let token_start = token.start;
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
-                    bytes_relexed_this_phase += token_end - token_start;
+                    let bytes_in_window = token_end.min(relex_end).saturating_sub(token_start);
+                    bytes_relexed_this_phase += bytes_in_window;
                     if token_end >= relex_end {
                         break;
                     }
@@ -675,20 +682,23 @@ impl CheckpointedIncrementalParser {
             }
         } else {
             self.stats.cache_misses += 1;
-            // Track full tail fallback when no segments are found after relex_end
-            if segments_after.is_empty() {
-                self.stats.full_tail_fallbacks += 1;
-            }
-            // No cache hit — lex the remainder of the source.
-            let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
-            while let Some(token) = lexer.next_token() {
-                if matches!(token.token_type, perl_lexer::TokenType::EOF) {
-                    break;
+            if relex_end < source_len {
+                // Track full tail fallback when no segments are found after relex_end.
+                if segments_after.is_empty() {
+                    self.stats.full_tail_fallbacks += 1;
                 }
-                raw_tail.push(token);
-                self.stats.tokens_relexed += 1;
+                // No cache hit — lex the remainder of the source.
+                let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
+                while let Some(token) = lexer.next_token() {
+                    if matches!(token.token_type, perl_lexer::TokenType::EOF) {
+                        break;
+                    }
+                    self.stats.bytes_relexed += token.end.saturating_sub(token.start);
+                    raw_tail.push(token);
+                    self.stats.tokens_relexed += 1;
+                }
+                parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
             }
-            parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
         // Update token cache with the final merged token list.
@@ -862,5 +872,26 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_relex_window_metrics_for_eof_edit_do_not_report_tail_fallback() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $v = 1;\n".repeat(8);
+        must(parser.parse(source.clone()));
+
+        // Edit near EOF with no right checkpoint; we should not record a tail fallback
+        // when there is no tail region beyond `relex_end`.
+        let edit = SimpleEdit {
+            start: source.len() - 2,
+            end: source.len() - 1,
+            new_text: "99".to_string(),
+        };
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        assert!(stats.relex_window_bytes > 0);
+        assert!(stats.bytes_relexed > 0);
+        assert_eq!(stats.full_tail_fallbacks, 0, "unexpected empty-tail fallback: {stats:?}");
     }
 }
