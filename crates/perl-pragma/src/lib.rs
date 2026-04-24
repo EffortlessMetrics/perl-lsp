@@ -122,15 +122,15 @@ impl PragmaState {
 /// - developer releases like `5.012_001`
 pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
     let s = module.strip_prefix('v').unwrap_or(module);
+    let mut parts = s.splitn(3, '.');
 
-    let parts: Vec<&str> = s.splitn(3, '.').collect();
-    let major: u32 = parse_version_component(parts.first()?)?;
-    let minor: u32 = match parts.get(1) {
+    let major = parse_version_component(parts.next()?)?;
+    let minor = match parts.next() {
         Some(part) => parse_version_component(part)?,
         None => 0,
     };
 
-    Some(PerlVersion { major, minor })
+    Some(PerlVersion::new(major, minor))
 }
 
 fn parse_version_component(component: &str) -> Option<u32> {
@@ -654,6 +654,94 @@ impl PragmaTracker {
                 }
             }
             NodeKind::No { module, args, .. } => {
+                if (module == "if" || module == "unless")
+                    && let Some((conditional_module, conditional_args)) =
+                        conditional_pragma_target(args)
+                {
+                    match conditional_module {
+                        "strict" => {
+                            if conditional_args.is_empty() {
+                                current_state.strict_vars = false;
+                                current_state.strict_subs = false;
+                                current_state.strict_refs = false;
+                            } else {
+                                for arg in conditional_args {
+                                    match normalized_pragma_token(arg) {
+                                        "vars" => current_state.strict_vars = false,
+                                        "subs" => current_state.strict_subs = false,
+                                        "refs" => current_state.strict_refs = false,
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "warnings" => {
+                            if conditional_args.is_empty() {
+                                current_state.warnings = false;
+                                current_state.disabled_warning_categories.clear();
+                            } else {
+                                for arg in conditional_args {
+                                    let category = normalized_pragma_token(arg);
+                                    if !current_state
+                                        .disabled_warning_categories
+                                        .iter()
+                                        .any(|c| c == category)
+                                    {
+                                        current_state
+                                            .disabled_warning_categories
+                                            .push(category.to_string());
+                                    }
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "utf8" => {
+                            current_state.utf8 = false;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "encoding" => {
+                            current_state.encoding = None;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "locale" => {
+                            current_state.locale = false;
+                            current_state.locale_scope = None;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "feature" => {
+                            if apply_feature_state(current_state, conditional_args, false) {
+                                ranges.push((
+                                    node.location.start..node.location.end,
+                                    current_state.clone(),
+                                ));
+                            }
+                            return;
+                        }
+                        _ => return,
+                    }
+                }
+
                 // Handle no statements
                 match module.as_str() {
                     "strict" => {
@@ -784,7 +872,12 @@ impl PragmaTracker {
                     Self::build_scoped_body(continue_block, current_state, ranges);
                 }
             }
-            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+            NodeKind::Eval { block } => {
+                if matches!(block.kind, NodeKind::Block { .. }) {
+                    Self::build_scoped_body(block, current_state, ranges);
+                }
+            }
+            NodeKind::Do { block } | NodeKind::Defer { block } => {
                 Self::build_scoped_body(block, current_state, ranges);
             }
             NodeKind::PhaseBlock { block, .. } => {
