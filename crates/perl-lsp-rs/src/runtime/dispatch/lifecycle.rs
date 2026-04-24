@@ -148,6 +148,35 @@ impl LspServer {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), JsonRpcError>;
+
+    #[derive(Debug, Clone)]
+    struct XorShift64 {
+        state: u64,
+    }
+
+    impl XorShift64 {
+        fn new(seed: u64) -> Self {
+            Self { state: seed }
+        }
+
+        fn next_u64(&mut self) -> u64 {
+            let mut value = self.state;
+            value ^= value << 13;
+            value ^= value >> 7;
+            value ^= value << 17;
+            self.state = value;
+            value
+        }
+
+        fn next_usize(&mut self, upper_bound: usize) -> usize {
+            if upper_bound == 0 {
+                return 0;
+            }
+            (self.next_u64() as usize) % upper_bound
+        }
+    }
+
     #[test]
     fn initialized_requires_initialize_request_first() {
         let server = LspServer::new();
@@ -159,24 +188,71 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> TestResult {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state() -> TestResult {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[test]
+    fn fuzz_lifecycle_dispatch_randomized_sequences_preserve_invariants() -> TestResult {
+        let mut rng = XorShift64::new(0x1AFE_C1C1_E000_0001);
+
+        for _case_idx in 0..256 {
+            let server = LspServer::new();
+
+            for _step in 0..64 {
+                match rng.next_usize(5) {
+                    0 => {
+                        let _ = server.handle_initialize_dispatch(None);
+                    }
+                    1 => {
+                        let _ = server.handle_initialized_dispatch();
+                    }
+                    2 => {
+                        let _ = server.handle_shutdown_dispatch();
+                    }
+                    3 => {
+                        let trace = match rng.next_usize(5) {
+                            0 => "off",
+                            1 => "messages",
+                            2 => "verbose",
+                            3 => "garbage",
+                            _ => "",
+                        };
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": trace })));
+                    }
+                    _ => {
+                        server.auto_initialize_for_compat("textDocument/didOpen");
+                    }
+                }
+
+                if server.initialized.load(Ordering::Acquire) {
+                    assert!(server.initialize_requested.load(Ordering::Acquire));
+                }
+
+                let current_trace = server.trace_level.lock().clone();
+                assert!(matches!(current_trace.as_str(), "off" | "messages" | "verbose"));
+            }
+        }
+
+        Ok(())
     }
 }
