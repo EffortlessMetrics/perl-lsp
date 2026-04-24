@@ -303,3 +303,41 @@ fn unterminated_use_lib_does_not_panic() {
         let _ = extract_use_lib_operations(source);
     }
 }
+
+#[test]
+fn comment_with_semicolon_does_not_drop_subsequent_use_lib() {
+    // Regression: split_perl_statements must skip Perl line comments (#...\n)
+    // so that a semicolon inside a comment does not split the statement and
+    // cause the next `use lib` to be dropped.
+    let source = "\
+use lib '/foo';  # primary lib; see INSTALL for details
+use lib '/bar';
+";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "/foo".to_string(), from_findbin: false },
+            UseLibPath { path: "/bar".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn leading_comment_with_semicolon_does_not_drop_use_lib() {
+    // A comment before the first use lib that contains a semicolon must not
+    // create a spurious leading fragment that mangles the statement that follows.
+    let source = "\
+# This script uses lib; see also INSTALL
+use lib 'mylib';
+";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![UseLibPath { path: "mylib".to_string(), from_findbin: false }]
+    );
+}
