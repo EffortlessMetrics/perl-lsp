@@ -18,10 +18,25 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds that are intentionally excluded from strict coverage.
+    #[serde(default)]
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
+    /// Never-seen NodeKinds that still need fixture/generator coverage.
+    #[serde(default)]
+    pub actionable_never_seen: Vec<String>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// A never-seen NodeKind that is intentionally allowlisted with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this NodeKind is intentionally allowlisted.
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -78,6 +93,19 @@ pub fn analyze_nodekind_coverage(
     // Find never-seen NodeKinds
     let never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let allowlist = recovery_kind_allowlist();
+    let mut allowlisted_never_seen = Vec::new();
+    let mut actionable_never_seen = Vec::new();
+    for name in &never_seen {
+        if let Some(rationale) = allowlist.get(name.as_str()) {
+            allowlisted_never_seen.push(AllowlistedNodeKind {
+                name: name.clone(),
+                rationale: (*rationale).to_string(),
+            });
+        } else {
+            actionable_never_seen.push(name.clone());
+        }
+    }
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +130,8 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen,
+        actionable_never_seen,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -146,6 +176,17 @@ fn get_all_nodekinds() -> HashSet<String> {
     perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
+fn recovery_kind_allowlist() -> HashMap<&'static str, &'static str> {
+    let mut allowlist = HashMap::new();
+    for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
+        allowlist.insert(
+            kind,
+            "Synthetic recovery node emitted by parse_with_recovery() on malformed input, not expected in strict clean-corpus parses.",
+        );
+    }
+    allowlist
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +215,14 @@ mod tests {
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn test_recovery_allowlist_contains_known_kinds() {
+        let allowlist = recovery_kind_allowlist();
+        assert!(allowlist.contains_key("MissingStatement"));
+        assert!(allowlist.contains_key("MissingIdentifier"));
+        assert!(allowlist.contains_key("MissingBlock"));
+        assert!(allowlist.contains_key("UnknownRest"));
     }
 }
