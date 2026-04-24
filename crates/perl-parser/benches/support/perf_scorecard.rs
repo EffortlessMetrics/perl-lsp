@@ -140,10 +140,7 @@ mod tests {
             metric.median_ns,
             metric.p95_ns,
         );
-        assert!(
-            metric.mean_ns > 0,
-            "mean must be nonzero for a non-trivial workload"
-        );
+        assert!(metric.mean_ns > 0, "mean must be nonzero for a non-trivial workload");
 
         // p95 must NOT be the absolute maximum for N=20: the ceiling-rank
         // formula puts p95 at index 18 (out of 20), leaving two samples

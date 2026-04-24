@@ -506,10 +506,7 @@ mod tests {
         );
 
         // Receipt note in bullets should use the epoch, not "UNVERIFIED"
-        assert!(
-            result.contains("1777010864"),
-            "perf receipt note should show epoch 1777010864"
-        );
+        assert!(result.contains("1777010864"), "perf receipt note should show epoch 1777010864");
 
         Ok(())
     }
