@@ -50,10 +50,12 @@
 //! ```
 
 use crate::ast::{Node, NodeKind};
+use crate::analysis::class_model::ClassModelBuilder;
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -358,7 +360,8 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
-    imported_barewords: std::collections::HashSet<String>,
+    imported_barewords: HashSet<String>,
+    inherited_barewords_by_package: HashMap<String, HashSet<String>>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
@@ -370,6 +373,7 @@ impl<'a> AnalysisContext<'a> {
             code,
             pragma_map,
             imported_barewords: collect_imported_barewords(ast),
+            inherited_barewords_by_package: collect_inherited_barewords_by_package(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
@@ -377,6 +381,13 @@ impl<'a> AnalysisContext<'a> {
 
     fn has_imported_bareword(&self, name: &str) -> bool {
         self.imported_barewords.contains(name)
+    }
+
+    fn has_inherited_bareword(&self, name: &str) -> bool {
+        let current_package = self.current_package.borrow();
+        self.inherited_barewords_by_package
+            .get(current_package.as_str())
+            .is_some_and(|symbols| symbols.contains(name))
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -986,6 +997,7 @@ impl ScopeAnalyzer {
                     && !is_known_function(name)
                     && !pragma_state.has_builtin_import(name)
                     && !context.has_imported_bareword(name)
+                    && !context.has_inherited_bareword(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1890,6 +1902,82 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
     let mut imported = std::collections::HashSet::new();
     visit(ast, &mut imported);
     imported
+}
+
+fn collect_inherited_barewords_by_package(ast: &Node) -> HashMap<String, HashSet<String>> {
+    let models = ClassModelBuilder::new().build(ast);
+    let mut models_by_name: HashMap<String, _> = HashMap::new();
+    let mut methods_by_name: HashMap<String, HashSet<String>> = HashMap::new();
+
+    for model in &models {
+        models_by_name.insert(model.name.clone(), model);
+        methods_by_name.insert(
+            model.name.clone(),
+            model.methods.iter().map(|method| method.name.clone()).collect(),
+        );
+    }
+
+    fn visit_parent_methods(
+        package_name: &str,
+        models_by_name: &HashMap<String, &crate::analysis::class_model::ClassModel>,
+        methods_by_name: &HashMap<String, HashSet<String>>,
+        seen_packages: &mut HashSet<String>,
+        inherited_methods: &mut HashMap<String, String>,
+    ) {
+        let Some(model) = models_by_name.get(package_name) else {
+            return;
+        };
+
+        for parent_name in &model.parents {
+            if !seen_packages.insert(parent_name.clone()) {
+                continue;
+            }
+
+            if let Some(parent_methods) = methods_by_name.get(parent_name) {
+                for method_name in parent_methods {
+                    inherited_methods
+                        .entry(method_name.clone())
+                        .or_insert_with(|| parent_name.clone());
+                }
+            }
+
+            visit_parent_methods(
+                parent_name,
+                models_by_name,
+                methods_by_name,
+                seen_packages,
+                inherited_methods,
+            );
+        }
+    }
+
+    let mut inherited_by_package: HashMap<String, HashSet<String>> = HashMap::new();
+
+    for model in &models {
+        let local_methods = methods_by_name.get(&model.name).cloned().unwrap_or_default();
+        let mut inherited_methods_with_origin: HashMap<String, String> = HashMap::new();
+        let mut seen_packages: HashSet<String> = HashSet::new();
+        seen_packages.insert(model.name.clone());
+
+        visit_parent_methods(
+            &model.name,
+            &models_by_name,
+            &methods_by_name,
+            &mut seen_packages,
+            &mut inherited_methods_with_origin,
+        );
+
+        let inherited_methods = inherited_methods_with_origin
+            .into_iter()
+            .filter_map(|(method_name, _origin)| {
+                if local_methods.contains(&method_name) { None } else { Some(method_name) }
+            })
+            .collect::<HashSet<_>>();
+
+        inherited_by_package.insert(model.name.clone(), inherited_methods);
+    }
+
+    inherited_by_package
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.
