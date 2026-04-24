@@ -40,7 +40,12 @@
 //! [`tree-sitter-perl-rs`]: https://docs.rs/tree-sitter-perl-rs
 
 use std::path::Path;
+use std::{cell::RefCell, thread_local};
 use tree_sitter::{Language, Parser};
+
+thread_local! {
+    static PARSER_CACHE: RefCell<Option<Parser>> = const { RefCell::new(None) };
+}
 
 /// Returns the tree-sitter [`Language`] for Perl (C grammar).
 ///
@@ -127,11 +132,21 @@ pub fn create_parser() -> Parser {
 /// Returns an error if the parser cannot be initialised (version mismatch) or
 /// if tree-sitter returns `None` from `parse` (cancelled or timed out).
 pub fn parse_perl_bytes(code: &[u8]) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = try_create_parser()?;
-    match parser.parse(code, None) {
-        Some(tree) => Ok(tree),
-        None => Err("Failed to parse code".into()),
-    }
+    PARSER_CACHE.with(|cache| {
+        let mut parser_slot = cache.borrow_mut();
+        if parser_slot.is_none() {
+            *parser_slot = Some(try_create_parser()?);
+        }
+
+        let Some(parser) = parser_slot.as_mut() else {
+            return Err("Failed to initialize parser".into());
+        };
+
+        match parser.parse(code, None) {
+            Some(tree) => Ok(tree),
+            None => Err("Failed to parse code".into()),
+        }
+    })
 }
 
 /// Parses a Perl source string and returns the resulting [`tree_sitter::Tree`].
