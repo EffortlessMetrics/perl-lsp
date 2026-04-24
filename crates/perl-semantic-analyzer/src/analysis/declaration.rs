@@ -1564,13 +1564,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             let NodeKind::FunctionCall { name, args } = &call_node.kind else {
                 return None;
             };
-            if !matches!(
+            let is_qualified = matches!(
                 name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
+                "Module::Runtime::use_module" | "Module::Runtime::require_module"
+            );
+            let is_bare = matches!(name.as_str(), "use_module" | "require_module");
+            if !is_qualified && !is_bare {
                 return None;
             }
             let first = args.first()?;
@@ -1582,6 +1581,31 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 return None;
             }
             Some((alias_name.to_string(), module.to_string()))
+        }
+
+        fn module_runtime_module_name(
+            expr: &Node,
+        ) -> Option<String> {
+            let NodeKind::FunctionCall { name, args } = &expr.kind else {
+                return None;
+            };
+            let is_qualified = matches!(
+                name.as_str(),
+                "Module::Runtime::use_module" | "Module::Runtime::require_module"
+            );
+            let is_bare = matches!(name.as_str(), "use_module" | "require_module");
+            if !is_qualified && !is_bare {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some(module.to_string())
         }
 
         /// Unwrap an ExpressionStatement to its inner expression, or return
@@ -1608,6 +1632,11 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             for stmt in stmts {
                 if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
                     aliases.insert(alias, module.clone());
+                    if !required_modules.contains(&module) {
+                        required_modules.push(module);
+                    }
+                }
+                if let Some(module) = module_runtime_module_name(inner_expr(stmt)) {
                     if !required_modules.contains(&module) {
                         required_modules.push(module);
                     }

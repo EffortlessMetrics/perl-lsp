@@ -2696,6 +2696,7 @@ struct IndexVisitor {
     uri: String,
     current_package: Option<String>,
     workspace_folder_uri: Option<String>,
+    imported_module_runtime_funcs: std::collections::HashSet<String>,
 }
 
 fn is_interpolated_var_start(byte: u8) -> bool {
@@ -2742,7 +2743,30 @@ impl IndexVisitor {
             uri,
             current_package: Some("main".to_string()),
             workspace_folder_uri,
+            imported_module_runtime_funcs: std::collections::HashSet::new(),
         }
+    }
+
+    fn module_runtime_call_target(&self, name: &str, args: &[Node]) -> Option<String> {
+        let is_qualified = matches!(
+            name,
+            "Module::Runtime::use_module" | "Module::Runtime::require_module"
+        );
+        let is_imported_bare = matches!(name, "use_module" | "require_module")
+            && self.imported_module_runtime_funcs.contains(name);
+        if !is_qualified && !is_imported_bare {
+            return None;
+        }
+
+        let first = args.first()?;
+        let NodeKind::String { value, .. } = &first.kind else {
+            return None;
+        };
+        let module = value.trim().trim_matches('\'').trim_matches('"');
+        if module.is_empty() {
+            return None;
+        }
+        Some(normalize_dependency_module_name(module))
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
@@ -2987,6 +3011,9 @@ impl IndexVisitor {
                             .insert(normalize_dependency_module_name(&module_name));
                     }
                 }
+                if let Some(module_name) = self.module_runtime_call_target(name, args) {
+                    file_index.dependencies.insert(module_name);
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -2997,6 +3024,14 @@ impl IndexVisitor {
             NodeKind::Use { module, args, .. } => {
                 let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
+
+                if module == "Module::Runtime" {
+                    for import in extract_module_names_from_use_args(args) {
+                        if matches!(import.as_str(), "use_module" | "require_module") {
+                            self.imported_module_runtime_funcs.insert(import);
+                        }
+                    }
+                }
 
                 // Also track actual parent/base class names for dependency discovery.
                 // `use parent 'Foo::Bar'` stores module="parent" and args=["'Foo::Bar'"],
@@ -3991,6 +4026,39 @@ use Data::Dumper;
         assert!(deps.contains("strict"));
         assert!(deps.contains("warnings"));
         assert!(deps.contains("Data::Dumper"));
+    }
+
+    #[test]
+    fn test_dependencies_include_literal_module_runtime_targets() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///module_runtime_deps.pl";
+        let code = r#"
+use Module::Runtime qw(use_module require_module);
+my $m = use_module('Some::Module');
+require_module('Other::Module');
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+        let deps = index.file_dependencies(uri);
+        assert!(deps.contains("Module::Runtime"));
+        assert!(deps.contains("Some::Module"));
+        assert!(deps.contains("Other::Module"));
+    }
+
+    #[test]
+    fn test_dependencies_skip_dynamic_module_runtime_targets() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///module_runtime_dynamic.pl";
+        let code = r#"
+use Module::Runtime qw(use_module);
+my $name = 'Some::Module';
+my $m = use_module($name);
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+        let deps = index.file_dependencies(uri);
+        assert!(deps.contains("Module::Runtime"));
+        assert!(!deps.contains("Some::Module"));
     }
 
     #[test]

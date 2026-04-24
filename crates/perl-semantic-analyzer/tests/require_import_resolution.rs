@@ -149,3 +149,49 @@ load_data();
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
     );
 }
+
+#[test]
+fn module_runtime_imported_bare_calls_resolve_pkg() {
+    let code = r#"use Module::Runtime qw(use_module require_module);
+my $loader = use_module('My::Loader');
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "literal use_module() should resolve when imported from Module::Runtime, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_require_module_literal_enables_manual_import_resolution() {
+    let code = r#"use Module::Runtime qw(require_module);
+require_module('My::Loader');
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "literal require_module() should register require-like dependency, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_dynamic_name_stays_conservative() {
+    let code = r#"use Module::Runtime qw(use_module);
+my $name = 'My::Loader';
+my $loader = use_module($name);
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "dynamic module names should remain unresolved for Module::Runtime"
+    );
+}
