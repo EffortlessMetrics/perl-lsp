@@ -10,7 +10,7 @@
 <!-- BEGIN: PARSER_TRACKING_TABLE -->
 | **Ubuntu system Perl** | 97.1% clean (`6890/7095`) | Compatibility baseline; Perl `5.038002`, `48` unreadable, `157` with errors, baseline `2026-04-09` | `.ci/parser-corpus-baseline.json` |
 | **CPAN top 1000** | 95.3% clean (`8931/9372`) | Ecosystem breadth baseline; `6` unreadable, `435` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `2026-04-09` | `.ci/cpan-corpus-baseline.json` |
-| **Project corpus** | 100.0% clean (`91/91`) | Deterministic regression baseline; `69` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
+| **Project corpus** | 100.0% clean (`93/93`) | Deterministic regression baseline; `71` `test_corpus/` + `22` `perl-corpus` files, `0` errors, `0` timeouts, `0` panics, `65/69` NodeKinds, `12/12` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |
 <!-- END: PARSER_TRACKING_TABLE -->
 
 ## Parser Scorecard
@@ -24,7 +24,7 @@
 | **Reliability** | Ubuntu: 48 unread / CPAN: 6 unread / Project: 0 timeout, 0 panic, 0 unread | -- | `.ci/*-baseline.json` |
 <!-- END: PARSER_RELIABILITY_ROW -->
 <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->
-| **Strict-clean subset** | 10/10 (100%) | 10 pinned modules, zero-error gate | `.ci/common-corpus-manifest.txt` |
+| **Strict-clean subset** | 10 modules (unverified) | run `just common-corpus-check` to generate receipt | `.ci/common-corpus-manifest.txt` |
 <!-- END: PARSER_STRICT_CLEAN_ROW -->
 
 <!-- BEGIN: PARSER_METRICS_BULLETS -->
@@ -32,4 +32,14 @@
 - **Strict promise lists**: `just common-corpus-check` and the CPAN known-clean manifest inside `just cpan-corpus-check` pin subsets that must remain clean on top of the broader baseline receipts.
 - **Fixture bank**: `tree-sitter-perl/test/corpus` contributes ~611 focused syntax sections for targeted parser cases.
 - **CPAN install hygiene**: `cargo xtask cpan-corpus install` reuses `target/cpan-corpus/.cpanm`; pass `--reset` only for a cold rebuild.
+- **Parser failure clusters** (first-error buckets across Ubuntu + CPAN baselines):
+  | Category | File count | Top buckets | Representative files |
+  | --- | ---: | --- | --- |
+  | transliteration / quote parsing | 8 | invalid_substitution_modifier (6), Missing replacement in substitution (2) | `/usr/share/perl/5.38.2/ExtUtils/MM_VMS.pm`, `/usr/share/perl/5.38/ExtUtils/MM_VMS.pm` |
+  | declaration / package parsing | 4 | CHECK must be followed by a block (2), signature_param (2) | `target/cpan-corpus/lib/perl5/Mojo/Exception.pm`, `target/cpan-corpus/lib/perl5/Test/LectroTest/Property.pm` |
+  | heredoc / delimiter handling | 216 | unclosed_paren_identifier (63), unclosed_brace (51) | `/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/Guess.pm`, `/usr/lib/x86_64-linux-gnu/perl/5.38.2/Unicode/Collate.pm` |
+  | recovery-only failures | 364 | unexpected_token_in_expr (67), unexpected_comma_expr (66) | `/usr/lib/x86_64-linux-gnu/perl/5.38.2/Data/Dumper.pm`, `/usr/lib/x86_64-linux-gnu/perl/5.38.2/File/Spec/Win32.pm` |
+  | encoding / multibyte failures | 0 | none | — |
+  | other | 0 | none | — |
+- **Never-seen node kinds** (4): `MissingBlock`, `MissingIdentifier`, `MissingStatement`, `UnknownRest`.
 <!-- END: PARSER_METRICS_BULLETS -->

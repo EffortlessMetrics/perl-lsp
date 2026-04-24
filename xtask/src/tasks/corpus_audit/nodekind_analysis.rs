@@ -76,11 +76,12 @@ pub fn analyze_nodekind_coverage(
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
+    let mut never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    never_seen.sort();
 
     // Find at-risk NodeKinds (low coverage)
-    let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
+    let mut at_risk: Vec<AtRiskNodeKind> = nodekind_counts
         .iter()
         .filter(|(_, count)| **count < 5)
         .map(|(name, count)| {
@@ -96,6 +97,7 @@ pub fn analyze_nodekind_coverage(
             AtRiskNodeKind { name: name.clone(), count, risk_level }
         })
         .collect();
+    at_risk.sort_by(|a, b| a.name.cmp(&b.name));
 
     NodeKindStats {
         total_count,
