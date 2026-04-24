@@ -5,7 +5,9 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PerlVersion, PragmaState, PragmaTracker, features_enabled_by_version};
+use perl_pragma::{
+    PerlVersion, PragmaMap, PragmaState, PragmaTracker, features_enabled_by_version,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1634,5 +1636,63 @@ fn package_block_pragma_inside_is_visible_at_inner_offset() -> Result<(), Box<dy
 
     let inside = PragmaTracker::state_for_offset(&map, 30);
     assert!(inside.strict_vars, "strict_vars declared inside package block must be visible");
+    Ok(())
+}
+
+#[test]
+fn pragma_map_supports_final_state_without_sentinel_offsets()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let map = PragmaMap::build(&ast);
+
+    let final_state = map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
+    Ok(())
+}
+
+#[test]
+fn pragma_map_state_at_matches_compatibility_state_for_offset()
+-> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["refs"], 13, 29),
+        use_node("warnings", &[], 30, 45),
+    ]);
+    let compatibility_map = PragmaTracker::build(&ast);
+    let map = PragmaMap::from_ranges(compatibility_map.clone());
+
+    for offset in [0, 8, 20, 40, 100] {
+        let expected = PragmaTracker::state_for_offset(&compatibility_map, offset);
+        let actual = map.state_at(offset);
+        assert_eq!(actual, expected, "mismatch at offset {offset}");
+    }
+    Ok(())
+}
+
+#[test]
+fn pragma_cursor_handles_forward_and_backward_queries() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        use_node("warnings", &[], 13, 28),
+        no_node("strict", &["subs"], 29, 45),
+    ]);
+    let map = PragmaMap::build(&ast);
+    let mut cursor = map.cursor();
+
+    let at_10 = cursor.state_at(10);
+    assert!(at_10.strict_subs);
+    assert!(!at_10.warnings);
+
+    let at_20 = cursor.state_at(20);
+    assert!(at_20.warnings);
+
+    let at_40 = cursor.state_at(40);
+    assert!(!at_40.strict_subs);
+
+    let at_5 = cursor.state_at(5);
+    assert!(at_5.strict_subs, "cursor must recover for backward lookup");
     Ok(())
 }

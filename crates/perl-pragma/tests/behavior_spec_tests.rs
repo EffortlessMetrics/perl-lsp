@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_pragma::{PragmaMap, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -264,6 +264,18 @@ fn given_end_block_with_use_warnings_when_querying_after_block_then_warnings_is_
 
     let after_end = PragmaTracker::state_for_offset(&map, 24);
     assert!(!after_end.warnings);
+}
+
+#[test]
+fn given_new_query_map_when_asking_for_final_state_then_no_sentinel_offset_is_needed() {
+    let ast = program(vec![use_node("strict", &[], 0, 12), use_node("warnings", &[], 13, 28)]);
+    let map = PragmaMap::build(&ast);
+
+    let final_state = map.final_state();
+    assert!(final_state.strict_vars);
+    assert!(final_state.strict_subs);
+    assert!(final_state.strict_refs);
+    assert!(final_state.warnings);
 }
 
 #[test]

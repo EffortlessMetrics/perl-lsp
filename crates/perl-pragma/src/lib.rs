@@ -413,22 +413,126 @@ fn conditional_pragma_target(args: &[String]) -> Option<(&str, &[String])> {
     })
 }
 
+fn apply_effective_state_overrides(state: &mut PragmaState) {
+    if state.signatures_strict {
+        state.strict_vars = true;
+        state.strict_subs = true;
+        state.strict_refs = true;
+    }
+}
+
+/// Owned pragma query map for repeated state lookups.
+#[derive(Debug, Clone, Default)]
+pub struct PragmaMap {
+    ranges: Vec<(Range<usize>, PragmaState)>,
+    starts: Vec<usize>,
+    default_state: PragmaState,
+    final_state: PragmaState,
+}
+
+impl PragmaMap {
+    /// Build a query map from an AST.
+    #[must_use]
+    pub fn build(ast: &Node) -> Self {
+        let mut ranges = Vec::new();
+        let mut current_state = PragmaState::default();
+        PragmaTracker::build_ranges(ast, &mut current_state, &mut ranges);
+        Self::from_ranges(ranges)
+    }
+
+    /// Build a query map from tracker-compatible ranges.
+    #[must_use]
+    pub fn from_ranges(mut ranges: Vec<(Range<usize>, PragmaState)>) -> Self {
+        ranges.sort_by_key(|(range, _)| range.start);
+        for (_, state) in &mut ranges {
+            apply_effective_state_overrides(state);
+        }
+
+        let default_state = PragmaState::default();
+        let final_state =
+            ranges.last().map_or_else(|| default_state.clone(), |(_, state)| state.clone());
+        let starts = ranges.iter().map(|(range, _)| range.start).collect();
+
+        Self { ranges, starts, default_state, final_state }
+    }
+
+    /// Returns the effective top-level final state.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaState {
+        self.final_state.clone()
+    }
+
+    /// Returns the effective state for a byte offset.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> PragmaState {
+        let idx = self.starts.partition_point(|start| *start <= offset);
+        if idx > 0 { self.ranges[idx - 1].1.clone() } else { self.default_state.clone() }
+    }
+
+    /// Creates a cursor for cheaper repeated lookups.
+    #[must_use]
+    pub fn cursor(&self) -> PragmaCursor<'_> {
+        PragmaCursor::new(self)
+    }
+
+    /// Returns a shared view of the backing ranges.
+    #[must_use]
+    pub fn as_ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.ranges
+    }
+
+    /// Consumes this query map and returns tracker-compatible ranges.
+    #[must_use]
+    pub fn into_ranges(self) -> Vec<(Range<usize>, PragmaState)> {
+        self.ranges
+    }
+}
+
+/// Stateful query cursor for incremental pragma lookups.
+pub struct PragmaCursor<'a> {
+    map: &'a PragmaMap,
+    upper_bound: usize,
+}
+
+impl<'a> PragmaCursor<'a> {
+    fn new(map: &'a PragmaMap) -> Self {
+        Self { map, upper_bound: 0 }
+    }
+
+    /// Returns the effective state for a byte offset.
+    #[must_use]
+    pub fn state_at(&mut self, offset: usize) -> PragmaState {
+        if self.upper_bound < self.map.starts.len() && self.map.starts[self.upper_bound] <= offset {
+            while self.upper_bound < self.map.starts.len()
+                && self.map.starts[self.upper_bound] <= offset
+            {
+                self.upper_bound += 1;
+            }
+        } else {
+            self.upper_bound = self.map.starts.partition_point(|start| *start <= offset);
+        }
+
+        if self.upper_bound > 0 {
+            self.map.ranges[self.upper_bound - 1].1.clone()
+        } else {
+            self.map.default_state.clone()
+        }
+    }
+
+    /// Returns the effective top-level final state.
+    #[must_use]
+    pub fn final_state(&self) -> PragmaState {
+        self.map.final_state()
+    }
+}
+
 /// Tracks pragma state throughout a Perl file
 pub struct PragmaTracker;
 
 impl PragmaTracker {
     /// Build a range-indexed pragma map from an AST
     pub fn build(ast: &Node) -> Vec<(Range<usize>, PragmaState)> {
-        let mut ranges = Vec::new();
-        let mut current_state = PragmaState::default();
-
-        // Build the pragma map by walking the AST
-        Self::build_ranges(ast, &mut current_state, &mut ranges);
-
-        // Sort by start offset
-        ranges.sort_by_key(|(range, _)| range.start);
-
-        ranges
+        PragmaMap::build(ast).into_ranges()
     }
 
     /// Get the pragma state at a specific byte offset
@@ -445,11 +549,7 @@ impl PragmaTracker {
         let mut state =
             if idx > 0 { pragma_map[idx - 1].1.clone() } else { PragmaState::default() };
 
-        if state.signatures_strict {
-            state.strict_vars = true;
-            state.strict_subs = true;
-            state.strict_refs = true;
-        }
+        apply_effective_state_overrides(&mut state);
 
         state
     }
