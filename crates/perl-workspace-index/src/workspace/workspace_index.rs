@@ -989,6 +989,33 @@ pub struct Location {
     pub range: Range,
 }
 
+/// Stable identity details for a symbol reference query.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct SymbolIdentity {
+    /// Stable symbol key for downstream operations (rename/safe-delete planning).
+    ///
+    /// Prefers fully-qualified names when available, falling back to a deterministic
+    /// URI/range/name tuple key when qualification is unavailable.
+    pub stable_key: String,
+    /// Bare symbol name.
+    pub name: String,
+    /// Fully qualified symbol name (if known).
+    pub qualified_name: Option<String>,
+}
+
+/// Deterministic result of querying one symbol's definition + references.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct SymbolReferenceQueryResult {
+    /// Identity metadata for the resolved symbol.
+    pub identity: SymbolIdentity,
+    /// Definition location for the symbol.
+    pub definition: Location,
+    /// Reference locations excluding `definition`.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1156,65 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_sort_key(loc: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            loc.uri.as_str(),
+            loc.range.start.line,
+            loc.range.start.column,
+            loc.range.end.line,
+            loc.range.end.column,
+        )
+    }
+
+    fn stable_fallback_symbol_key(symbol: &WorkspaceSymbol) -> String {
+        format!(
+            "{}#{}:{}-{}:{}:{}",
+            symbol.uri,
+            symbol.range.start.line,
+            symbol.range.start.column,
+            symbol.range.end.line,
+            symbol.range.end.column,
+            symbol.name
+        )
+    }
+
+    fn matching_definitions(
+        files: &HashMap<String, FileIndex>,
+        symbol_name: &str,
+    ) -> Vec<WorkspaceSymbol> {
+        let mut defs = Vec::new();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
+                {
+                    defs.push(symbol.clone());
+                }
+            }
+        }
+
+        defs.sort_by(|left, right| {
+            let left_qualified = left.qualified_name.as_deref().unwrap_or("");
+            let right_qualified = right.qualified_name.as_deref().unwrap_or("");
+            left_qualified
+                .cmp(right_qualified)
+                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| left.uri.cmp(&right.uri))
+                .then_with(|| {
+                    left.range
+                        .start
+                        .line
+                        .cmp(&right.range.start.line)
+                        .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                        .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                        .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+                })
+        });
+
+        defs
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1238,33 +1324,6 @@ impl WorkspaceIndex {
             }
         }
         best_match.cloned()
-    }
-
-    fn find_definition_in_files(
-        files: &HashMap<String, FileIndex>,
-        symbol_name: &str,
-        uri_filter: Option<&str>,
-    ) -> Option<(Location, String)> {
-        for file_index in files.values() {
-            if let Some(filter) = uri_filter
-                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
-            {
-                continue;
-            }
-
-            for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    return Some((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
-                        symbol.uri.clone(),
-                    ));
-                }
-            }
-        }
-
-        None
     }
 
     /// Create a new empty index
@@ -1919,6 +1978,45 @@ impl WorkspaceIndex {
         locations
     }
 
+    /// Query one symbol's stable identity, definition, and references.
+    ///
+    /// This powers deterministic cross-file workflows (workspace rename and safe
+    /// delete planning) without coupling to LSP wiring.
+    #[must_use]
+    pub fn query_symbol_references(&self, symbol_name: &str) -> Option<SymbolReferenceQueryResult> {
+        let definition_symbol = {
+            let files = self.files.read();
+            Self::matching_definitions(&files, symbol_name).into_iter().next()
+        }?;
+
+        let definition = Location { uri: definition_symbol.uri.clone(), range: definition_symbol.range };
+
+        let mut references = self.find_references(symbol_name);
+        references.retain(|loc| {
+            !(loc.uri == definition.uri
+                && loc.range.start.line == definition.range.start.line
+                && loc.range.start.column == definition.range.start.column
+                && loc.range.end.line == definition.range.end.line
+                && loc.range.end.column == definition.range.end.column)
+        });
+        references.sort_by(|left, right| Self::location_sort_key(left).cmp(&Self::location_sort_key(right)));
+
+        let stable_key = definition_symbol
+            .qualified_name
+            .clone()
+            .unwrap_or_else(|| Self::stable_fallback_symbol_key(&definition_symbol));
+
+        Some(SymbolReferenceQueryResult {
+            identity: SymbolIdentity {
+                stable_key,
+                name: definition_symbol.name,
+                qualified_name: definition_symbol.qualified_name,
+            },
+            definition,
+            references,
+        })
+    }
+
     /// Count non-definition references (usages) of a symbol.
     ///
     /// Like `find_references` but excludes `ReferenceKind::Definition` entries,
@@ -1999,29 +2097,11 @@ impl WorkspaceIndex {
     /// let _def = index.find_definition("MyPackage::example");
     /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let cached_uri = {
-            let symbols = self.symbols.read();
-            symbols.get(symbol_name).cloned()
-        };
-
         let files = self.files.read();
-        if let Some(ref uri_str) = cached_uri
-            && let Some((location, _uri)) =
-                Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
-        {
-            return Some(location);
-        }
-
-        let resolved = Self::find_definition_in_files(&files, symbol_name, None);
-        drop(files);
-
-        if let Some((location, uri)) = resolved {
-            let mut symbols = self.symbols.write();
-            symbols.insert(symbol_name.to_string(), uri);
-            return Some(location);
-        }
-
-        None
+        Self::matching_definitions(&files, symbol_name)
+            .into_iter()
+            .next()
+            .map(|symbol| Location { uri: symbol.uri, range: symbol.range })
     }
 
     /// Get all symbols in the workspace
