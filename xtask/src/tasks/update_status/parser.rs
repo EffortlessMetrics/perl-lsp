@@ -85,6 +85,10 @@ fn format_clean_rate(clean_files: usize, total_files: usize) -> String {
     format!("{clean_pct:.1}% clean (`{clean_files}/{total_files}`)")
 }
 
+fn format_salvage_rate(rate: Option<f64>) -> String {
+    rate.map_or_else(|| "n/a".to_string(), |value| format!("{:.1}%", value * 100.0))
+}
+
 fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
@@ -131,11 +135,15 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |summary| {
             format!(
-                "| **Project corpus** | {} | Deterministic regression baseline; `{}` `test_corpus/` + `{}` `perl-corpus` files, `{}` errors, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
+                "| **Project corpus** | {} | Deterministic regression baseline; `{}` dirty (`{}` structured-recovery-only, `{}` with ERROR nodes, `{}` catastrophic), salvage `{}`, recovered nodes `{}`, first unrecovered ERROR node `{}`, `{}` timeouts, `{}` panics, `{}/{}` NodeKinds, `{}/{}` GA features | `test_corpus/` + `crates/perl-corpus/src/gen` |",
                 format_clean_rate(summary.ok_files, summary.total_files),
-                summary.test_corpus_files,
-                summary.perl_corpus_files,
-                summary.error_files,
+                summary.dirty_files,
+                summary.structured_recovery_only_files,
+                summary.files_with_error_nodes,
+                summary.catastrophic_parse_failure_files,
+                format_salvage_rate(summary.recovery_salvage_rate),
+                summary.recovered_node_count,
+                summary.first_unrecovered_error_node.as_deref().unwrap_or("none"),
                 summary.timeout_files,
                 summary.panic_files,
                 summary.nodekind_covered,
@@ -288,6 +296,13 @@ mod tests {
             error_files: 0,
             timeout_files: 0,
             panic_files: 0,
+            dirty_files: 3,
+            structured_recovery_only_files: 2,
+            files_with_error_nodes: 1,
+            catastrophic_parse_failure_files: 0,
+            recovered_node_count: 7,
+            first_unrecovered_error_node: Some("expected expression".to_string()),
+            recovery_salvage_rate: Some(2.0 / 3.0),
             test_corpus_files: 69,
             perl_corpus_files: 22,
             nodekind_covered: 65,

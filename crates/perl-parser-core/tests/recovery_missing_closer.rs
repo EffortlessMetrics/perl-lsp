@@ -10,7 +10,7 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
-use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{ParseError, RecoveryClassification, RecoveryKind, RecoverySite};
 use perl_parser_core::{NodeKind, Parser};
 use perl_tdd_support::must;
 
@@ -259,6 +259,17 @@ fn nested_missing_both_parens_at_eof_emits_two_recovered() {
         "Parser must return a Program node for nested missing closers in '{}'",
         src
     );
+}
+
+#[test]
+fn missing_closer_snapshot_is_structured_recovery_only() {
+    let mut parser = Parser::new("my $x = $arr[$i;");
+    let output = parser.parse_with_recovery();
+    let snapshot = output.recovery_salvage_snapshot();
+
+    assert_eq!(snapshot.classification, RecoveryClassification::StructuredRecoveryOnly);
+    assert!(snapshot.recovered_node_count > 0);
+    assert_eq!(snapshot.error_node_count, 0);
 }
 
 /// Paren missing before EOF inside a list assignment — tests truncated file recovery.

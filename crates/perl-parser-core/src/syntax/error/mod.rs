@@ -489,7 +489,7 @@ pub mod classifier;
 /// Error recovery strategies and traits for the Perl parser.
 pub mod recovery;
 
-use perl_ast::Node;
+use perl_ast::{Node, NodeKind};
 
 /// Structured output from parsing, combining AST with all diagnostics.
 ///
@@ -540,6 +540,30 @@ pub struct ParseOutput {
     /// LSP providers use this as a confidence signal: `0` means a clean parse,
     /// `> 0` means at least one synthetic repair was made.
     pub recovered_count: usize,
+}
+
+/// High-level classification for parser closeout metrics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryClassification {
+    /// No recoveries and no AST `ERROR` nodes.
+    Clean,
+    /// Recoveries occurred but AST contains no `ERROR` nodes.
+    StructuredRecoveryOnly,
+    /// AST contains one or more unrecovered `ERROR` nodes.
+    ErrorNodesPresent,
+}
+
+/// Recovery-salvage snapshot derived from a single parse output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoverySalvageSnapshot {
+    /// Coarse classification for closeout reporting.
+    pub classification: RecoveryClassification,
+    /// Number of `ParseError::Recovered` diagnostics.
+    pub recovered_node_count: usize,
+    /// Number of AST `NodeKind::Error` nodes.
+    pub error_node_count: usize,
+    /// First unrecovered AST `ERROR` message, if one exists.
+    pub first_unrecovered_error_node: Option<String>,
 }
 
 impl ParseOutput {
@@ -595,6 +619,44 @@ impl ParseOutput {
     pub fn error_count(&self) -> usize {
         self.diagnostics.len()
     }
+
+    /// Derive recovery-salvage classification from diagnostics and AST content.
+    pub fn recovery_salvage_snapshot(&self) -> RecoverySalvageSnapshot {
+        let (error_node_count, first_unrecovered_error_node) =
+            count_error_nodes_and_first_message(&self.ast);
+        let classification = if error_node_count > 0 {
+            RecoveryClassification::ErrorNodesPresent
+        } else if self.recovered_count > 0 {
+            RecoveryClassification::StructuredRecoveryOnly
+        } else {
+            RecoveryClassification::Clean
+        };
+
+        RecoverySalvageSnapshot {
+            classification,
+            recovered_node_count: self.recovered_count,
+            error_node_count,
+            first_unrecovered_error_node,
+        }
+    }
+}
+
+fn count_error_nodes_and_first_message(ast: &Node) -> (usize, Option<String>) {
+    let mut count = 0usize;
+    let mut first_message = None;
+    let mut stack = vec![ast];
+
+    while let Some(node) = stack.pop() {
+        if let NodeKind::Error { message, .. } = &node.kind {
+            count += 1;
+            if first_message.is_none() {
+                first_message = Some(message.clone());
+            }
+        }
+        node.for_each_child(|child| stack.push(child));
+    }
+
+    (count, first_message)
 }
 
 impl ParseError {
@@ -1039,5 +1101,28 @@ mod tests {
 
         assert_eq!(output.recovered_count, 1);
         assert!(!output.terminated_early);
+    }
+
+    #[test]
+    fn test_recovery_salvage_snapshot_structured_recovery_only() {
+        let mut parser = crate::Parser::new("my $x = $a +;");
+        let output = parser.parse_with_recovery();
+        let snapshot = output.recovery_salvage_snapshot();
+
+        assert_eq!(snapshot.classification, RecoveryClassification::StructuredRecoveryOnly);
+        assert!(snapshot.recovered_node_count > 0);
+        assert_eq!(snapshot.error_node_count, 0);
+        assert!(snapshot.first_unrecovered_error_node.is_none());
+    }
+
+    #[test]
+    fn test_recovery_salvage_snapshot_with_error_nodes() {
+        let mut parser = crate::Parser::new("my @arr = (1, 2,\n");
+        let output = parser.parse_with_recovery();
+        let snapshot = output.recovery_salvage_snapshot();
+
+        assert_eq!(snapshot.classification, RecoveryClassification::ErrorNodesPresent);
+        assert!(snapshot.error_node_count > 0);
+        assert!(snapshot.first_unrecovered_error_node.is_some());
     }
 }
