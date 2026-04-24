@@ -109,6 +109,14 @@ fn extended_selects_correct_module_from_qw_list() {
 }
 
 #[test]
+fn extended_supports_legacy_ascii_separator_in_parent_qw_list() {
+    let line = "use parent qw(First'Base Second'Base);";
+    let cursor = line.find("Second'Base").unwrap_or(0);
+
+    assert_eq!(extract_module_reference_extended(line, cursor), Some("Second::Base".to_string()));
+}
+
+#[test]
 fn extended_falls_back_to_direct_use_when_not_parent() {
     let line = "use File::Basename;";
     let cursor = line.find("File::Basename").unwrap_or(0);

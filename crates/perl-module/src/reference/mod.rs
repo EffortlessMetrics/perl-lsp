@@ -188,9 +188,19 @@ fn scan_canonical_module_token(bytes: &[u8], start: usize) -> usize {
             && is_module_start_byte(bytes[i + 2])
         {
             i += 2;
-        } else {
-            break;
+            continue;
         }
+
+        if i < bytes.len()
+            && bytes[i] == b'\''
+            && i + 1 < bytes.len()
+            && is_module_start_byte(bytes[i + 1])
+        {
+            i += 1;
+            continue;
+        }
+
+        break;
     }
 
     i
