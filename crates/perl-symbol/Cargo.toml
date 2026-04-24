@@ -15,6 +15,7 @@ categories = ["development-tools", "data-structures", "text-editors"]
 publish = true
 include = [
     "src/**",
+    "benches/**",
     "Cargo.toml",
     "LICENSE*",
     "README.md",
@@ -29,6 +30,7 @@ perl-ast = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+criterion.workspace = true
 perl-ast = { workspace = true }
 perl-tdd-support = { workspace = true }
 serde_json = { workspace = true }
@@ -38,3 +40,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "symbol_benchmarks"
+harness = false
