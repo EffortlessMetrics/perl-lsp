@@ -232,26 +232,36 @@ impl LspServer {
                             if let (Some(coordinator), Some(key)) =
                                 (self.coordinator(), symbol_key.as_ref())
                             {
-                                let edits = crate::workspace_rename::build_rename_edit(
+                                match crate::workspace_rename::build_rename_edit(
                                     coordinator.index(),
                                     key,
                                     new_name,
-                                );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
+                                ) {
+                                    Ok(edits) if !edits.is_empty() => {
+                                        tracing::debug!(
+                                            count = edits.len(),
+                                            reason,
+                                            "Rename: served partial-index workspace edits"
+                                        );
+                                        return Ok(Some(
+                                            crate::workspace_rename::to_workspace_edit(edits),
+                                        ));
+                                    }
+                                    Ok(_) => {
+                                        tracing::debug!(
+                                            reason,
+                                            "Rename: workspace rename unavailable, using same-file only"
+                                        );
+                                    }
+                                    Err(refusal) => {
+                                        return Err(JsonRpcError {
+                                            code: -32602,
+                                            message: refusal.to_string(),
+                                            data: None,
+                                        });
+                                    }
                                 }
                             }
-                            tracing::debug!(
-                                reason,
-                                "Rename: workspace rename unavailable, using same-file only"
-                            );
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::None => {
@@ -264,7 +274,12 @@ impl LspServer {
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
                                 let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                    crate::workspace_rename::build_rename_edit(idx, key, new_name)
+                                        .map_err(|refusal| JsonRpcError {
+                                            code: -32602,
+                                            message: refusal.to_string(),
+                                            data: None,
+                                        })?;
                                 let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
                                 return Ok(Some(ws_edit));
                             }

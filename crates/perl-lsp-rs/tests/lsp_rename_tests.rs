@@ -302,3 +302,62 @@ fn test_rename_out_of_bounds() -> TestResult {
 
     Ok(())
 }
+
+/// Workspace rename should refuse ambiguous cross-package bare references.
+#[test]
+fn test_workspace_rename_refuses_ambiguous_symbol_identity() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let foo_uri = "file:///Foo.pm";
+    let bar_uri = "file:///Bar.pm";
+
+    harness.open(foo_uri, "package Foo;\nsub process_data { return 1; }\n1;\n")?;
+    harness.open(bar_uri, "package Bar;\nsub run { return process_data(); }\n1;\n")?;
+
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": foo_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "process_records"
+        }),
+    );
+
+    let error = result.expect_err("rename should refuse ambiguous workspace identity");
+    assert!(
+        error.contains("ambiguous symbol identity"),
+        "expected clean ambiguous-identity refusal, got: {error}"
+    );
+
+    Ok(())
+}
+
+/// Workspace rename should include edits in definition and usage files.
+#[test]
+fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let lib_uri = "file:///A.pm";
+    let app_uri = "file:///B.pm";
+
+    harness.open(lib_uri, "package A;\nsub target_name { return 1; }\n1;\n")?;
+    harness.open(app_uri, "package B;\nuse A;\nsub run { return A::target_name(); }\n1;\n")?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "renamed_target"
+        }),
+    )?;
+
+    let changes =
+        response["changes"].as_object().ok_or("workspace rename should return changes map")?;
+    assert!(changes.contains_key(lib_uri), "workspace rename must include definition file edits");
+    assert!(changes.contains_key(app_uri), "workspace rename must include usage file edits");
+
+    Ok(())
+}

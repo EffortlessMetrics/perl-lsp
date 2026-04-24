@@ -5,6 +5,7 @@
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
@@ -26,6 +27,38 @@ pub struct RenameEdit {
     pub edits: Vec<TextEdit>,
 }
 
+/// Reasons why workspace rename is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameRefusal {
+    /// Symbol kind is not in the supported static workspace-rename slice.
+    UnsupportedSymbolKind,
+    /// Workspace index could not produce a stable symbol identity.
+    WeakIdentity(String),
+    /// Workspace index produced references that cannot be safely attributed.
+    AmbiguousIdentity(String),
+}
+
+impl fmt::Display for RenameRefusal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedSymbolKind => {
+                write!(
+                    f,
+                    "Workspace rename currently supports statically resolved subroutines only"
+                )
+            }
+            Self::WeakIdentity(reason) => {
+                write!(f, "Workspace rename refused: weak symbol identity ({reason})")
+            }
+            Self::AmbiguousIdentity(reason) => {
+                write!(f, "Workspace rename refused: ambiguous symbol identity ({reason})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RenameRefusal {}
+
 /// Build a rename edit across the workspace.
 ///
 /// Finds all references to the given symbol and builds text edits to rename them.
@@ -33,14 +66,25 @@ pub fn build_rename_edit(
     idx: &WorkspaceIndex,
     key: &SymbolKey,
     new_name_bare: &str,
-) -> Vec<RenameEdit> {
+) -> Result<Vec<RenameEdit>, RenameRefusal> {
+    if key.kind != SymKind::Sub {
+        return Err(RenameRefusal::UnsupportedSymbolKind);
+    }
+    if key.pkg.as_ref() == "main" {
+        return Err(RenameRefusal::AmbiguousIdentity(
+            "main-package symbols can resolve to multiple declarations".to_string(),
+        ));
+    }
+
+    let def = idx.find_def(key).ok_or_else(|| {
+        RenameRefusal::WeakIdentity("no resolved definition found in workspace index".to_string())
+    })?;
+
     // 1) Get all references across the workspace
     let mut locs = idx.find_refs(key);
 
     // 2) Also include the definition itself
-    if let Some(def) = idx.find_def(key) {
-        locs.push(def);
-    }
+    locs.push(def);
 
     // 3) Group edits by URI and compute replacement text
     let mut grouped: BTreeMap<String, Vec<TextEdit>> = BTreeMap::new();
@@ -51,13 +95,18 @@ pub fn build_rename_edit(
         let end_line = loc.range.end.line;
         let end_char = loc.range.end.column;
 
-        if key.kind == SymKind::Sub
-            && key.pkg.as_ref() != "main"
-            && is_non_target_package_declaration(
-                idx, key, &loc.uri, start_line, start_char, end_line, end_char,
-            )
-        {
+        if is_non_target_package_declaration(
+            idx, key, &loc.uri, start_line, start_char, end_line, end_char,
+        ) {
             continue;
+        }
+        if is_ambiguous_sub_reference(
+            idx, key, &loc.uri, start_line, start_char, end_line, end_char,
+        ) {
+            return Err(RenameRefusal::AmbiguousIdentity(format!(
+                "unqualified `{}` reference outside package `{}`",
+                key.name, key.pkg
+            )));
         }
 
         // Compute replacement text based on symbol kind
@@ -86,10 +135,7 @@ pub fn build_rename_edit(
 
                 replacement
             }
-            SymKind::Pack => {
-                // Package names are replaced as-is
-                new_name_bare.to_string()
-            }
+            SymKind::Pack => new_name_bare.to_string(),
         };
 
         grouped.entry(loc.uri.clone()).or_default().push(TextEdit {
@@ -100,7 +146,7 @@ pub fn build_rename_edit(
     }
 
     // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    Ok(grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect())
 }
 
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
@@ -161,10 +207,8 @@ fn is_non_target_package_declaration(
     // Try to read the original source span to detect a qualified name like "Bar::process_data".
     // When the index returns an inverted range (end < start, a known indexer edge case), we fall
     // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
+    let maybe_original =
+        doc.line_index.position_to_offset(start_line, start_char).and_then(|start_off| {
             doc.line_index
                 .position_to_offset(end_line, end_char)
                 .and_then(|end_off| doc.text.get(start_off..end_off))
@@ -184,6 +228,40 @@ fn is_non_target_package_declaration(
 
     let line_text = doc.text.lines().nth(start_line as usize).unwrap_or_default();
     is_sub_declaration_line(line_text, key.name.as_ref())
+}
+
+fn is_ambiguous_sub_reference(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+    uri: &str,
+    start_line: u32,
+    start_char: u32,
+    end_line: u32,
+    end_char: u32,
+) -> bool {
+    let Some(doc) = idx.document_store().get(uri) else {
+        return false;
+    };
+
+    let Some(start_off) = doc.line_index.position_to_offset(start_line, start_char) else {
+        return false;
+    };
+    let Some(end_off) = doc.line_index.position_to_offset(end_line, end_char) else {
+        return false;
+    };
+    let Some(original) = doc.text.get(start_off..end_off) else {
+        return false;
+    };
+
+    if original.contains("::") {
+        return false;
+    }
+    if original.starts_with('&') {
+        return false;
+    }
+
+    let package_at_line = package_name_for_line(&doc.text, start_line);
+    package_at_line != key.pkg.as_ref()
 }
 
 /// Convert RenameEdit to LSP WorkspaceEdit JSON.
@@ -275,7 +353,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "new_name");
+        let edits = build_rename_edit(&idx, &key, "new_name")?;
         assert_eq!(edits.len(), 1);
 
         let texts: Vec<String> = edits[0].edits.iter().map(|e| e.new_text.clone()).collect();
@@ -336,7 +414,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "renamed_target");
+        let edits = build_rename_edit(&idx, &key, "renamed_target")?;
 
         // The rename must produce at least one edit (for the definition in A.pm)
         assert!(
@@ -424,7 +502,7 @@ $var;
             kind: SymKind::Sub,
         };
 
-        let edits = build_rename_edit(&idx, &key, "process_records");
+        let edits = build_rename_edit(&idx, &key, "process_records")?;
 
         // Bar.pm must not appear in the edit list
         let bar_edit = edits.iter().find(|e| e.uri.contains("Bar.pm"));
@@ -432,6 +510,34 @@ $var;
             bar_edit.is_none(),
             "renaming Foo::process_data must not touch Bar.pm; got edits: {:?}",
             edits.iter().map(|e| (&e.uri, &e.edits)).collect::<Vec<_>>()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn rename_refuses_ambiguous_unqualified_cross_package_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let idx = WorkspaceIndex::new();
+
+        let foo_text = "package Foo;\nsub process_data { return 1; }\n1;\n";
+        let bar_text = "package Bar;\nsub run { return process_data(); }\n1;\n";
+
+        index_text(&idx, "file:///Foo.pm", foo_text)?;
+        index_text(&idx, "file:///Bar.pm", bar_text)?;
+
+        let key = SymbolKey {
+            pkg: Arc::from("Foo"),
+            name: Arc::from("process_data"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let refusal = build_rename_edit(&idx, &key, "process_records")
+            .expect_err("workspace rename should refuse ambiguous unqualified cross-package refs");
+        assert!(
+            matches!(refusal, RenameRefusal::AmbiguousIdentity(_)),
+            "expected AmbiguousIdentity refusal, got: {refusal:?}"
         );
 
         Ok(())
