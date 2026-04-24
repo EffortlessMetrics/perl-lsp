@@ -50,6 +50,21 @@ pub enum SubstitutionError {
     MissingClosingDelimiter,
 }
 
+/// Error type for transliteration operator parsing failures
+#[derive(Debug, Clone, PartialEq)]
+pub enum TransliterationError {
+    /// Invalid modifier character found
+    InvalidModifier(char),
+    /// Missing delimiter after `tr`/`y`
+    MissingDelimiter,
+    /// Search list section is missing
+    MissingSearch,
+    /// Replacement list section is missing
+    MissingReplacement,
+    /// Closing delimiter is missing
+    MissingClosingDelimiter,
+}
+
 /// Extract pattern, replacement, and modifiers from a substitution token with strict validation
 ///
 /// This function parses substitution operators like s/pattern/replacement/flags
@@ -365,6 +380,85 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         .collect();
 
     (search, replacement, modifiers)
+}
+
+/// Extract search, replace, and modifiers from a transliteration token with strict validation.
+///
+/// Supports both `tr///` and `y///` syntax, including optional whitespace between
+/// the operator and delimiter (e.g. `tr /a/b/`).
+///
+/// # Errors
+///
+/// Returns `Err(TransliterationError::InvalidModifier(c))` if an invalid modifier
+/// character is encountered. Valid modifiers are: `c`, `d`, `s`, `r`.
+pub fn extract_transliteration_parts_strict(
+    text: &str,
+) -> Result<(String, String, String), TransliterationError> {
+    // Skip `tr` or `y` prefix, then allow optional whitespace before delimiter.
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
+        stripped
+    } else if let Some(stripped) = text.strip_prefix('y') {
+        stripped
+    } else {
+        text
+    };
+    let content = after_op.trim_start();
+
+    // Get delimiter.
+    let delimiter = match content.chars().next() {
+        Some(d) => d,
+        None => return Err(TransliterationError::MissingDelimiter),
+    };
+    let closing = get_closing_delimiter(delimiter);
+    let is_paired = delimiter != closing;
+
+    // Parse first body (search).
+    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
+    if !search_closed {
+        return Err(TransliterationError::MissingClosingDelimiter);
+    }
+
+    // Parse second body (replacement).
+    let (replacement, modifiers_str, replacement_closed) = if !is_paired {
+        if rest1.is_empty() {
+            return Err(TransliterationError::MissingReplacement);
+        }
+        let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
+        (body, rest, found_closing)
+    } else {
+        let trimmed = rest1.trim_start();
+        if let Some(repl_delimiter) = starts_with_paired_delimiter(trimmed) {
+            let repl_closing = get_closing_delimiter(repl_delimiter);
+            let (body, rest, found_closing) =
+                extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
+            (body, rest, found_closing)
+        } else {
+            return Err(TransliterationError::MissingReplacement);
+        }
+    };
+
+    if !replacement_closed {
+        return Err(TransliterationError::MissingClosingDelimiter);
+    }
+
+    if search.is_empty() {
+        return Err(TransliterationError::MissingSearch);
+    }
+
+    // Validate transliteration modifiers strictly.
+    let mut modifiers = String::new();
+    for modifier in modifiers_str
+        .chars()
+        .take_while(|c: &char| c.is_ascii_alphanumeric())
+    {
+        if matches!(modifier, 'c' | 'd' | 's' | 'r') {
+            modifiers.push(modifier);
+        } else {
+            return Err(TransliterationError::InvalidModifier(modifier));
+        }
+    }
+
+    Ok((search, replacement, modifiers))
 }
 
 /// Get the closing delimiter for a given opening delimiter
