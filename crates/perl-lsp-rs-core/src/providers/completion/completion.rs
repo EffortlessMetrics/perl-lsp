@@ -261,7 +261,13 @@ impl CompletionProvider {
         )
     }
 
-    /// Create a new completion provider and include-path context for module completions.
+    /// Create a new completion provider with include-path context for module completions.
+    ///
+    /// Constructs a provider that carries `include_paths` (workspace + PERL5LIB paths,
+    /// respecting `perl5lib_precedence`) and `system_inc_paths` (system `@INC` when
+    /// `use_system_inc` is true) for use in phase 2 filesystem module scanning.
+    /// In phase 1 both vectors are plumbed through but intentionally unused to avoid
+    /// filesystem scanning on every keystroke.
     pub fn new_with_index_and_source_and_inc_paths(
         ast: &Node,
         source: &str,
@@ -2233,6 +2239,78 @@ mod tests {
             with_empty_inc_results.into_iter().map(|item| item.label).collect();
 
         assert_eq!(baseline_labels, with_empty_labels);
+        Ok(())
+    }
+
+    /// Phase 1 contract: non-empty inc_paths are stored but do NOT alter completions
+    /// (no filesystem scanning until phase 2).  If this test breaks it means someone
+    /// started using the paths without adding scan logic — a regression, not a feature.
+    #[test]
+    fn test_non_empty_inc_paths_do_not_change_phase1_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let baseline =
+            CompletionProvider::new_with_index_and_source(&ast, code, Some(Arc::clone(&index)))
+                .get_completions_with_path(code, code.len(), None);
+
+        // Non-empty inc paths: completions must still be identical to workspace-only baseline.
+        let with_inc = CompletionProvider::new_with_index_and_source_and_inc_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![PathBuf::from("/usr/local/lib/perl5"), PathBuf::from("t/lib")],
+            vec![PathBuf::from("/usr/lib/perl5/5.38")],
+        )
+        .get_completions_with_path(code, code.len(), None);
+
+        let baseline_labels: std::collections::HashSet<String> =
+            baseline.into_iter().map(|item| item.label).collect();
+        let with_inc_labels: std::collections::HashSet<String> =
+            with_inc.into_iter().map(|item| item.label).collect();
+
+        assert_eq!(
+            baseline_labels, with_inc_labels,
+            "phase 1: non-empty inc_paths must not introduce extra completions from filesystem"
+        );
+        Ok(())
+    }
+
+    /// Verify that duplicate inc paths do not cause duplicate workspace completions.
+    #[test]
+    fn test_duplicate_inc_paths_do_not_produce_duplicate_completions()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyApp.pm")?;
+        index.index_file(module_uri, "package MyApp;\n1;\n".to_string())?;
+
+        let code = "use MyA";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let dup_path = PathBuf::from("/usr/local/lib/perl5");
+        let provider = CompletionProvider::new_with_index_and_source_and_inc_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![dup_path.clone(), dup_path.clone(), dup_path],
+            Vec::new(),
+        );
+        let completions = provider.get_completions_with_path(code, code.len(), None);
+
+        let labels: Vec<String> = completions.into_iter().map(|c| c.label).collect();
+        let unique_labels: std::collections::HashSet<&String> = labels.iter().collect();
+        assert_eq!(
+            labels.len(),
+            unique_labels.len(),
+            "duplicate inc paths must not produce duplicate completion items"
+        );
         Ok(())
     }
 
