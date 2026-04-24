@@ -1714,15 +1714,28 @@ impl RefactoringEngine {
                                 })
                                 .collect();
                             if scoped_edits.is_empty() {
-                                warnings.push(format!(
-                                    "Symbol '{}' not found across workspace",
-                                    symbol_name
-                                ));
+                                if skipped_out_of_scope > 0 {
+                                    // All found edits were outside the definition file's
+                                    // directory tree — report skips rather than "not found".
+                                    warnings.push(format!(
+                                        "Skipped {} out-of-scope file(s) during inline \
+                                         all_occurrences; no in-scope edits remain",
+                                        skipped_out_of_scope
+                                    ));
+                                } else {
+                                    warnings.push(format!(
+                                        "Symbol '{}' not found across workspace",
+                                        symbol_name
+                                    ));
+                                }
+                                // Merge upstream warnings so callers see the full picture.
+                                let mut merged_warnings = refactor_result.warnings;
+                                merged_warnings.extend(warnings);
                                 return Ok(RefactoringResult {
                                     success: false,
                                     files_modified: 0,
                                     changes_made: 0,
-                                    warnings,
+                                    warnings: merged_warnings,
                                     errors: vec![],
                                     operation_id: None,
                                 });
@@ -3449,5 +3462,54 @@ sub complex {
 
         let updated_b = must(std::fs::read_to_string(&path_b));
         assert_eq!(updated_b, content_b);
+    }
+
+    /// When some edits are in-scope and some are out-of-scope, success is true
+    /// and the result counts only the in-scope files modified.  The out-of-scope
+    /// files must remain untouched and a scope-skip warning must be emitted.
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_all_occurrences_counts_only_in_scope_files_modified() {
+        let temp_dir = must(tempfile::tempdir());
+        let other_dir = must(tempfile::tempdir());
+
+        // Definition + in-scope usage in temp_dir.
+        let path_def = temp_dir.path().join("def.pl");
+        let path_in = temp_dir.path().join("in_scope.pl");
+        // Out-of-scope usage in other_dir.
+        let path_out = other_dir.path().join("out_scope.pl");
+
+        let content_def = "my $val = 99;\nprint $val;\n";
+        let content_in = "print $val;\n";
+        let content_out = "print $val;\n";
+
+        must(std::fs::write(&path_def, content_def));
+        must(std::fs::write(&path_in, content_in));
+        must(std::fs::write(&path_out, content_out));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        must(engine.index_file(&path_def, content_def));
+        must(engine.index_file(&path_in, content_in));
+        must(engine.index_file(&path_out, content_out));
+
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$val".to_string(), all_occurrences: true },
+            vec![path_def.clone()],
+        ));
+
+        assert!(result.success, "expected success; warnings: {:?}", result.warnings);
+
+        // Out-of-scope file must be untouched.
+        let updated_out = must(std::fs::read_to_string(&path_out));
+        assert_eq!(updated_out, content_out, "out-of-scope file must not be modified");
+
+        // A scope-skip warning must appear so callers are informed.
+        assert!(
+            result.warnings.iter().any(|w| w.contains("out-of-scope")),
+            "expected out-of-scope warning, got {:?}",
+            result.warnings
+        );
     }
 }
