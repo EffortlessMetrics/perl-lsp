@@ -370,6 +370,13 @@ fn normalized_pragma_token(arg: &str) -> &str {
     arg.trim().trim_matches('\'').trim_matches('"')
 }
 
+fn first_pragma_arg_item(arg: &str) -> Option<String> {
+    pragma_arg_items(arg)
+        .into_iter()
+        .map(|item| normalized_pragma_token(&item).to_string())
+        .find(|item| !item.is_empty())
+}
+
 fn is_tracked_pragma_module(module: &str) -> bool {
     matches!(module, "strict" | "warnings" | "utf8" | "encoding" | "locale" | "feature" | "builtin")
 }
@@ -389,9 +396,9 @@ fn conditional_target_tail_is_valid(module: &str, tail: &[String]) -> bool {
         "strict" => tail.is_empty() || valid_strict_args(tail),
         "warnings" => true,
         "utf8" => tail.is_empty(),
-        "encoding" => tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty(),
+        "encoding" => tail.len() == 1 && first_pragma_arg_item(&tail[0]).is_some(),
         "locale" => {
-            tail.is_empty() || (tail.len() == 1 && !normalized_pragma_token(&tail[0]).is_empty())
+            tail.is_empty() || (tail.len() == 1 && first_pragma_arg_item(&tail[0]).is_some())
         }
         "feature" => !tail.is_empty(),
         "builtin" => tail.iter().any(|arg| !builtin_import_names(arg).is_empty()),
@@ -521,9 +528,8 @@ impl PragmaTracker {
                             return;
                         }
                         "encoding" => {
-                            current_state.encoding = conditional_args
-                                .first()
-                                .map(|arg| normalized_pragma_token(arg).to_string());
+                            current_state.encoding =
+                                conditional_args.first().and_then(|arg| first_pragma_arg_item(arg));
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -532,9 +538,8 @@ impl PragmaTracker {
                         }
                         "locale" => {
                             current_state.locale = true;
-                            current_state.locale_scope = conditional_args
-                                .first()
-                                .map(|arg| normalized_pragma_token(arg).to_string());
+                            current_state.locale_scope =
+                                conditional_args.first().and_then(|arg| first_pragma_arg_item(arg));
                             ranges.push((
                                 node.location.start..node.location.end,
                                 current_state.clone(),
@@ -615,17 +620,15 @@ impl PragmaTracker {
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "encoding" => {
-                        current_state.encoding = args
-                            .first()
-                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        current_state.encoding =
+                            args.first().and_then(|arg| first_pragma_arg_item(arg));
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     "locale" => {
                         current_state.locale = true;
-                        current_state.locale_scope = args
-                            .first()
-                            .map(|arg| arg.trim().trim_matches('\'').trim_matches('"').to_string());
+                        current_state.locale_scope =
+                            args.first().and_then(|arg| first_pragma_arg_item(arg));
                         ranges
                             .push((node.location.start..node.location.end, current_state.clone()));
                     }
