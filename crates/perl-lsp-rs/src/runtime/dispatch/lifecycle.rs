@@ -158,6 +158,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -253,5 +254,96 @@ mod tests {
         assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
 
         Ok(())
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum LifecycleAction {
+        Initialize,
+        InitializedNotification,
+        AutoInitializeCompat,
+    }
+
+    #[derive(Debug, Default)]
+    struct LifecycleModel {
+        initialize_requested: bool,
+        initialized: bool,
+    }
+
+    impl LifecycleModel {
+        fn initialize(&mut self) -> Result<(), i32> {
+            if self.initialize_requested {
+                return Err(-32600);
+            }
+            self.initialize_requested = true;
+            Ok(())
+        }
+
+        fn initialized_notification(&mut self) -> Result<(), i32> {
+            if !self.initialize_requested {
+                return Err(-32002);
+            }
+            if self.initialized {
+                return Err(-32600);
+            }
+            self.initialized = true;
+            Ok(())
+        }
+
+        fn auto_initialize_compat(&mut self) {
+            if self.initialize_requested {
+                self.initialized = true;
+            }
+        }
+    }
+
+    fn action_strategy() -> impl Strategy<Value = LifecycleAction> {
+        prop_oneof![
+            Just(LifecycleAction::Initialize),
+            Just(LifecycleAction::InitializedNotification),
+            Just(LifecycleAction::AutoInitializeCompat),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn proptest_lifecycle_state_machine(actions in prop::collection::vec(action_strategy(), 0..32)) {
+            let server = LspServer::new();
+            let mut model = LifecycleModel::default();
+
+            for action in actions {
+                match action {
+                    LifecycleAction::Initialize => {
+                        let actual = server.handle_initialize(None).map(|_| ());
+                        let expected = model.initialize();
+                        assert_eq!(
+                            actual.is_ok(),
+                            expected.is_ok(),
+                            "initialize result should match model"
+                        );
+                        if let (Err(actual_error), Err(expected_code)) = (&actual, &expected) {
+                            prop_assert_eq!(actual_error.code, *expected_code);
+                        }
+                    }
+                    LifecycleAction::InitializedNotification => {
+                        let actual = server.handle_initialized_dispatch().map(|_| ());
+                        let expected = model.initialized_notification();
+                        assert_eq!(
+                            actual.is_ok(),
+                            expected.is_ok(),
+                            "initialized notification result should match model"
+                        );
+                        if let (Err(actual_error), Err(expected_code)) = (&actual, &expected) {
+                            prop_assert_eq!(actual_error.code, *expected_code);
+                        }
+                    }
+                    LifecycleAction::AutoInitializeCompat => {
+                        server.auto_initialize_for_compat("textDocument/completion");
+                        model.auto_initialize_compat();
+                    }
+                }
+
+                prop_assert_eq!(server.is_initialized(), model.initialized);
+            }
+        }
     }
 }
