@@ -220,6 +220,23 @@ impl DocumentParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
+
+    fn incremental_config() -> IncrementalConfig {
+        IncrementalConfig { enabled: true, ..Default::default() }
+    }
+
+    fn parse_debug(source: &str) -> ParseResult<String> {
+        let mut parser = Parser::new(source);
+        Ok(format!("{:?}", parser.parse()?))
+    }
+
+    fn parser_ast_debug(parser: &DocumentParser) -> String {
+        parser
+            .ast()
+            .map(|node| format!("{node:?}"))
+            .unwrap_or_else(|| "<none>".to_string())
+    }
 
     #[test]
     fn test_lsp_pos_to_byte() {
@@ -271,5 +288,157 @@ mod tests {
         let (line, char) = byte_to_lsp_pos(&rope, byte_after_emoji);
         assert_eq!(line, 0);
         assert_eq!(char, 8); // "Hello " = 6 + emoji = 2 = 8 UTF-16 units
+    }
+
+    #[test]
+    fn test_incremental_large_deletion_matches_full_parse() -> ParseResult<()> {
+        let source = "my $a = 1;\nmy $b = 2;\nmy $c = 3;\nmy $d = 4;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+
+        let change = json!({
+            "range": {
+                "start": {"line": 1, "character": 0},
+                "end": {"line": 3, "character": 0}
+            },
+            "text": ""
+        });
+
+        parser.apply_changes(&[change], &config)?;
+
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_incremental_insertion_invalidation_matches_full_parse() -> ParseResult<()> {
+        let source = "my $value = 1;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+
+        let change = json!({
+            "range": {
+                "start": {"line": 0, "character": 13},
+                "end": {"line": 0, "character": 13}
+            },
+            "text": " + (2 * 3)"
+        });
+
+        parser.apply_changes(&[change], &config)?;
+
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_incremental_whitespace_only_edit_matches_full_parse() -> ParseResult<()> {
+        let source = "my $total=1+2;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+
+        let change = json!({
+            "range": {
+                "start": {"line": 0, "character": 9},
+                "end": {"line": 0, "character": 9}
+            },
+            "text": " "
+        });
+
+        parser.apply_changes(&[change], &config)?;
+
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_incremental_multibyte_boundary_edit_matches_full_parse() -> ParseResult<()> {
+        let source = "my $emoji = \"😀x\";\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+        let rope = Rope::from_str(source);
+        let insertion_byte = source.find('x').unwrap_or(0);
+        let (line, character) = byte_to_lsp_pos(&rope, insertion_byte);
+
+        let change = json!({
+            "range": {
+                "start": {"line": line, "character": character},
+                "end": {"line": line, "character": character}
+            },
+            "text": "y"
+        });
+
+        parser.apply_changes(&[change], &config)?;
+
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_incremental_batch_edits_with_independent_shifts_match_full_parse() -> ParseResult<()> {
+        let source = "my $a = 1;\nmy $b = 2;\nmy $c = 3;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+
+        let changes = vec![
+            json!({
+                "range": {
+                    "start": {"line": 0, "character": 9},
+                    "end": {"line": 0, "character": 10}
+                },
+                "text": "11"
+            }),
+            json!({
+                "range": {
+                    "start": {"line": 2, "character": 9},
+                    "end": {"line": 2, "character": 10}
+                },
+                "text": "33"
+            }),
+        ];
+
+        parser.apply_changes(&changes, &config)?;
+
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_unmappable_edit_falls_back_to_full_document_replace() -> ParseResult<()> {
+        let source = "my $x = 1;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+        let replacement = "my $x = ;\n";
+        let change = json!({"text": replacement});
+
+        parser.apply_changes(&[change], &config)?;
+
+        assert_eq!(parser.content(), replacement);
+        let expected = parse_debug(parser.content())?;
+        assert_eq!(parser_ast_debug(&parser), expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_malformed_incremental_change_does_not_panic() -> ParseResult<()> {
+        let source = "my $x = 1;\n";
+        let config = incremental_config();
+        let mut parser = DocumentParser::new(source.to_string(), &config)?;
+
+        let malformed_change = json!({
+            "range": {
+                "start": {"line": "zero", "character": 0},
+                "end": {"line": 0, "character": 0}
+            },
+            "text": "broken"
+        });
+
+        parser.apply_changes(&[malformed_change], &config)?;
+        assert_eq!(parser.content(), source);
+        Ok(())
     }
 }
