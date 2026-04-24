@@ -43,6 +43,25 @@ pub fn paired_close(open: char) -> Option<char> {
     }
 }
 
+/// Whether optional whitespace before the delimiter is accepted for this
+/// quote-like operator in lexer disambiguation.
+///
+/// Perl allows optional whitespace in many quote-like forms. We still keep a
+/// few conservative guardrails here to avoid over-eager misclassification in
+/// ambiguous bareword contexts.
+pub fn allows_spaced_delimiter(operator: &str, delimiter: char) -> bool {
+    let is_paired = paired_close(delimiter).is_some();
+    match operator {
+        // Keep `s` conservative in spaced form to avoid false positives in
+        // bareword contexts; paired delimiters are unambiguous.
+        "s" => is_paired,
+        // Other quote-like operators support optional whitespace before
+        // arbitrary delimiters.
+        "q" | "qq" | "qw" | "qx" | "m" | "qr" | "tr" | "y" => true,
+        _ => false,
+    }
+}
+
 /// Canonicalize modifier flags to a consistent order for stable comparisons
 ///
 /// Note: Currently unused as modifier validation moved to parser layer (MUT_005 fix).

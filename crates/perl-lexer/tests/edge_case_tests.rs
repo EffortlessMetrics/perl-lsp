@@ -318,6 +318,20 @@ fn substitution_with_modifiers_ge() -> R {
 }
 
 #[test]
+fn substitution_with_spaced_paired_delimiter() -> R {
+    let input = "s {old} {new}g";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for spaced paired delimiters, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s {old} {new}g");
+    Ok(())
+}
+
+#[test]
 fn transliteration_pipe_delimiter() -> R {
     let input = "tr|a-z|A-Z|";
     let sig = significant(input);
@@ -356,6 +370,20 @@ fn transliteration_with_modifiers_cds() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), "tr/a-z/A-Z/cds");
+    Ok(())
+}
+
+#[test]
+fn transliteration_with_mixed_paired_delimiters() -> R {
+    let input = "tr{a-z}[A-Z]cdr";
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Transliteration),
+        "Expected Transliteration for tr{{...}}[...], got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "tr{a-z}[A-Z]cdr");
     Ok(())
 }
 
@@ -654,6 +682,16 @@ fn q_with_escaped_delimiter() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), r"q|hello \| world|");
+    Ok(())
+}
+
+#[test]
+fn quote_like_malformed_construct_does_not_panic() -> R {
+    let input = "my $x = qr{foo; my $y = s{a}{b";
+    assert_terminates(input);
+    let sig = significant(input);
+    let has_qr = sig.iter().any(|t| matches!(t.token_type, TokenType::QuoteRegex));
+    assert!(has_qr, "expected lexer to produce a QuoteRegex token without panicking");
     Ok(())
 }
 

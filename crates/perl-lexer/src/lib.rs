@@ -2072,17 +2072,10 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
-                    let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
-                    let is_quote_char = matches!(next, '\'' | '"') && text != "s";
-                    let transliteration_allows_whitespace = text == "tr" || text == "y";
-                    let substitution_disallows_whitespace = text == "s" && has_whitespace;
-                    let is_valid_delim = Self::is_quote_delim(next)
-                        && !is_fat_arrow
-                        && !substitution_disallows_whitespace
-                        && (!has_whitespace
-                            || is_paired_delim
-                            || is_quote_char
-                            || transliteration_allows_whitespace);
+                    let allows_spaced =
+                        !has_whitespace || quote_handler::allows_spaced_delimiter(text, next);
+                    let is_valid_delim =
+                        Self::is_quote_delim(next) && !is_fat_arrow && allows_spaced;
 
                     if is_valid_delim {
                         match text {
@@ -2155,19 +2148,11 @@ impl<'a> PerlLexer<'a> {
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
 
-                            // When whitespace precedes the delimiter, only unambiguous
-                            // delimiters are accepted:
-                            //   - Paired delimiters ({, [, (, <) are always safe.
-                            //   - ' and " are safe for all operators EXCEPT `s` — `-s 'filename'`
-                            //     is a valid file-size filetest and must not be treated as a
-                            //     substitution start. All other operators (qw, q, qq, qr, qx, m,
-                            //     tr, y) have no corresponding file-test operator.
-                            //   - Non-paired, non-quote chars ($, @, ,, etc.) remain rejected.
-                            let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
-                            let is_quote_char = matches!(next, '\'' | '"') && op != "s";
+                            // Optional whitespace before delimiter is allowed per operator.
                             let is_valid_delim = Self::is_quote_delim(next)
                                 && !is_fat_arrow
-                                && (!has_whitespace || is_paired_delim || is_quote_char);
+                                && (!has_whitespace
+                                    || quote_handler::allows_spaced_delimiter(op, next));
 
                             if is_valid_delim {
                                 self.mode = LexerMode::ExpectDelimiter;
@@ -3314,8 +3299,9 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Parse replacement list - same delimiter handling
-        if is_paired {
+        // Parse replacement list. Like substitution, paired search delimiters can
+        // be followed by a different replacement delimiter (e.g. tr{a-z}[A-Z]).
+        let (repl_delimiter, repl_closing, repl_is_paired) = if is_paired {
             // Skip whitespace between search and replace for paired delimiters
             while let Some(ch) = self.current_char() {
                 if ch.is_whitespace() {
@@ -3325,13 +3311,23 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            // Expect opening delimiter for replacement
-            if self.current_char() == Some(delimiter) {
-                self.advance();
-                depth = 1;
+            if let Some(repl_delim) = self.current_char() {
+                if matches!(repl_delim, '{' | '[' | '(' | '<') {
+                    let repl_close = Self::paired_closing(repl_delim);
+                    self.advance();
+                    (repl_delim, repl_close, true)
+                } else {
+                    self.advance();
+                    (repl_delim, repl_delim, false)
+                }
+            } else {
+                (delimiter, closing, is_paired)
             }
-        }
+        } else {
+            (delimiter, closing, false)
+        };
 
+        depth = 1;
         while let Some(ch) = self.current_char() {
             match ch {
                 '\\' => {
@@ -3340,13 +3336,13 @@ impl<'a> PerlLexer<'a> {
                         self.advance();
                     }
                 }
-                _ if ch == delimiter && is_paired => {
+                _ if ch == repl_delimiter && repl_is_paired => {
                     depth += 1;
                     self.advance();
                 }
-                _ if ch == closing => {
+                _ if ch == repl_closing => {
                     self.advance();
-                    if is_paired {
+                    if repl_is_paired {
                         depth = depth.saturating_sub(1);
                         if depth == 0 {
                             break;

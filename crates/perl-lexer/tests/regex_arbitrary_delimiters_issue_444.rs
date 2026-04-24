@@ -256,3 +256,40 @@ fn test_m_vs_bareword_disambiguation() {
         tokens2[0].token_type
     );
 }
+
+#[test]
+fn test_spaced_nonpaired_delimiters_for_quote_like_ops() {
+    let cases = [
+        ("m /pattern/", TokenType::RegexMatch),
+        ("qr !pattern!ms", TokenType::QuoteRegex),
+        ("q |literal|", TokenType::QuoteSingle),
+        ("qq /double/", TokenType::QuoteDouble),
+        ("qw /foo bar/", TokenType::QuoteWords),
+        ("qx !echo hi!", TokenType::QuoteCommand),
+    ];
+
+    for (code, expected) in cases {
+        let mut lexer = PerlLexer::new(code);
+        let tokens = lexer.collect_tokens();
+        assert_eq!(tokens.len(), 2, "Expected 2 tokens for {code}");
+        assert_eq!(tokens[0].token_type, expected, "Wrong token type for {code}");
+        assert_eq!(tokens[0].text.as_ref(), code, "Text mismatch for {code}");
+    }
+}
+
+#[test]
+fn test_spaced_substitution_and_transliteration_paired_delimiters() {
+    let cases = [
+        ("s {foo} {bar}ge", TokenType::Substitution),
+        ("tr {a-z} [A-Z]cds", TokenType::Transliteration),
+        ("y {a-z} (A-Z)r", TokenType::Transliteration),
+    ];
+
+    for (code, expected) in cases {
+        let mut lexer = PerlLexer::new(code);
+        let tokens = lexer.collect_tokens();
+        assert_eq!(tokens.len(), 2, "Expected 2 tokens for {code}");
+        assert_eq!(tokens[0].token_type, expected, "Wrong token type for {code}");
+        assert_eq!(tokens[0].text.as_ref(), code, "Text mismatch for {code}");
+    }
+}
