@@ -283,6 +283,15 @@ fn extract_quoted_list(s: &str, out: &mut Vec<UseLibPath>) {
             break;
         }
 
+        // Skip Perl line comments: # ... <newline>
+        if remaining.starts_with('#') {
+            remaining = match remaining.find('\n') {
+                Some(nl) => &remaining[nl + 1..],
+                None => "",
+            };
+            continue;
+        }
+
         if let Some((path, from_findbin, rest)) = extract_one_quoted(remaining) {
             out.push(UseLibPath { path, from_findbin });
             remaining = rest.trim_start_matches(|c: char| c == ',' || c.is_whitespace());

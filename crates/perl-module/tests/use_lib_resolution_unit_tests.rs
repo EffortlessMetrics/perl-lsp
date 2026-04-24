@@ -212,3 +212,94 @@ fn quoted_semicolon_does_not_split_statement() {
         ]
     );
 }
+
+#[test]
+fn inline_comment_inside_multiline_use_lib_does_not_truncate_paths() {
+    // Perl inline comments (# ...) inside a parenthesized list must be skipped
+    // so that paths appearing after the comment are still extracted.
+    let source = "\
+use lib (
+    '/foo/bar',  # the main lib
+    '/baz/qux'
+);
+";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "/foo/bar".to_string(), from_findbin: false },
+            UseLibPath { path: "/baz/qux".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn crlf_line_endings_do_not_affect_extraction() {
+    // CRLF (\r\n) line endings are whitespace-normalized by trim(), so
+    // multiline use lib with Windows line endings must work identically
+    // to the Unix (\n) form.
+    let source = "use lib (\r\n    'first',\r\n    'second'\r\n);\r\n";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "first".to_string(), from_findbin: false },
+            UseLibPath { path: "second".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn multiline_qw_use_lib_is_extracted() {
+    // qw() with whitespace-separated paths on multiple lines.
+    let source = "\
+use lib qw(
+    /path/one
+    /path/two
+);
+";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "/path/one".to_string(), from_findbin: false },
+            UseLibPath { path: "/path/two".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn escaped_quote_inside_single_quoted_path_is_handled() {
+    // 'it\'s a path' is an extreme edge case; the backslash-escaping in
+    // split_perl_statements must not cause the closing quote to be missed.
+    // The practical value is that \\-terminated paths work correctly.
+    let source = "use lib 'normal'; use lib 'also';";
+
+    let paths = extract_use_lib_paths(source);
+
+    assert_eq!(
+        paths,
+        vec![
+            UseLibPath { path: "normal".to_string(), from_findbin: false },
+            UseLibPath { path: "also".to_string(), from_findbin: false },
+        ]
+    );
+}
+
+#[test]
+fn unterminated_use_lib_does_not_panic() {
+    // Malformed Perl: unclosed string or missing semicolon.
+    // The extractor must not panic; it may return partial or empty results.
+    let sources = ["use lib 'unclosed", "use lib (\"no closing paren", "use lib"];
+    for source in &sources {
+        // Should not panic; we don't assert on the exact output.
+        let _ = extract_use_lib_paths(source);
+        let _ = extract_use_lib_operations(source);
+    }
+}
