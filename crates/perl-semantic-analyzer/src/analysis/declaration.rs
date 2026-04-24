@@ -1441,9 +1441,60 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// Matches both `require Foo::Bar` (Identifier arg) and
         /// `require "Foo/Bar.pm"` forms, returning the module name as a
         /// `::` -separated string suitable for workspace lookup.
-        fn require_module_name(node: &Node) -> Option<String> {
+        fn module_runtime_helper_imports(stmts: &[Node]) -> std::collections::HashSet<String> {
+            fn imported_symbols(args: &[String]) -> std::collections::HashSet<String> {
+                let mut imported = std::collections::HashSet::new();
+                for arg in args {
+                    let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+                    if matches!(bare, "use_module" | "require_module") {
+                        imported.insert(bare.to_string());
+                    }
+                    if arg.starts_with("qw") {
+                        let content = arg
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        for token in content.split_whitespace() {
+                            if matches!(token, "use_module" | "require_module") {
+                                imported.insert(token.to_string());
+                            }
+                        }
+                    }
+                }
+                imported
+            }
+
+            stmts
+                .iter()
+                .filter_map(|stmt| {
+                    let expr = inner_expr(stmt);
+                    let NodeKind::Use { module, args, .. } = &expr.kind else {
+                        return None;
+                    };
+                    if module != "Module::Runtime" {
+                        return None;
+                    }
+                    Some(imported_symbols(args))
+                })
+                .flatten()
+                .collect()
+        }
+
+        fn require_module_name(
+            node: &Node,
+            module_runtime_helpers: &std::collections::HashSet<String>,
+        ) -> Option<String> {
             let args = match &node.kind {
                 NodeKind::FunctionCall { name, args } if name == "require" => args,
+                NodeKind::FunctionCall { name, args }
+                    if matches!(name.as_str(), "Module::Runtime::require_module")
+                        || (name == "require_module"
+                            && module_runtime_helpers.contains("require_module"))
+                        || (name == "use_module"
+                            && module_runtime_helpers.contains("use_module")) =>
+                {
+                    args
+                }
                 _ => return None,
             };
             let arg = args.first()?;
@@ -1544,7 +1595,10 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             }
         }
 
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+        fn module_runtime_alias(
+            expr: &Node,
+            module_runtime_helpers: &std::collections::HashSet<String>,
+        ) -> Option<(String, String)> {
             let (alias_name, call_node) = match &expr.kind {
                 NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
                     let NodeKind::Variable { name, .. } = &lhs.kind else {
@@ -1566,11 +1620,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             };
             if !matches!(
                 name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
+                "Module::Runtime::use_module"
                     | "Module::Runtime::require_module"
-            ) {
+            ) && !(name == "use_module" && module_runtime_helpers.contains("use_module"))
+                && !(name == "require_module"
+                    && module_runtime_helpers.contains("require_module"))
+            {
                 return None;
             }
             let first = args.first()?;
@@ -1600,13 +1655,18 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         /// be adjacent — the import just needs to appear anywhere in the same
         /// statement list after (or even before) the require.
         fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
+            let module_runtime_helpers = module_runtime_helper_imports(stmts);
             // Collect all `require Module` names present in this block.
-            let mut required_modules: Vec<String> =
-                stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+            let mut required_modules: Vec<String> = stmts
+                .iter()
+                .filter_map(|s| require_module_name(inner_expr(s), &module_runtime_helpers))
+                .collect();
             let mut aliases: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
             for stmt in stmts {
-                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                if let Some((alias, module)) =
+                    module_runtime_alias(inner_expr(stmt), &module_runtime_helpers)
+                {
                     aliases.insert(alias, module.clone());
                     if !required_modules.contains(&module) {
                         required_modules.push(module);

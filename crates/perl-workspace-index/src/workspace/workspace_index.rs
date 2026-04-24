@@ -2695,6 +2695,7 @@ struct IndexVisitor {
     document: Document,
     uri: String,
     current_package: Option<String>,
+    module_runtime_helpers: std::collections::HashSet<String>,
     workspace_folder_uri: Option<String>,
 }
 
@@ -2741,8 +2742,37 @@ impl IndexVisitor {
             document: document.clone(),
             uri,
             current_package: Some("main".to_string()),
+            module_runtime_helpers: std::collections::HashSet::new(),
             workspace_folder_uri,
         }
+    }
+
+    fn record_module_runtime_use_imports(&mut self, module: &str, args: &[String]) {
+        if module != "Module::Runtime" {
+            return;
+        }
+        for symbol in extract_module_runtime_helper_names(args) {
+            self.module_runtime_helpers.insert(symbol);
+        }
+    }
+
+    fn module_runtime_call_target(&self, name: &str, args: &[Node]) -> Option<String> {
+        let is_runtime_helper = matches!(
+            name,
+            "Module::Runtime::use_module" | "Module::Runtime::require_module"
+        ) || (name == "use_module" && self.module_runtime_helpers.contains("use_module"))
+            || (name == "require_module" && self.module_runtime_helpers.contains("require_module"));
+        if !is_runtime_helper {
+            return None;
+        }
+        let NodeKind::String { value, .. } = &args.first()?.kind else {
+            return None;
+        };
+        let module = value.trim_matches('\'').trim_matches('"').trim();
+        if module.is_empty() {
+            return None;
+        }
+        Some(normalize_dependency_module_name(module))
     }
 
     fn visit(&mut self, node: &Node, file_index: &mut FileIndex) {
@@ -2980,6 +3010,10 @@ impl IndexVisitor {
                     kind: ReferenceKind::Usage,
                 });
 
+                if let Some(module_name) = self.module_runtime_call_target(name, args) {
+                    file_index.dependencies.insert(module_name);
+                }
+
                 if name == "extends" || name == "with" {
                     for module_name in extract_module_names_from_call_args(args) {
                         file_index
@@ -2995,6 +3029,7 @@ impl IndexVisitor {
             }
 
             NodeKind::Use { module, args, .. } => {
+                self.record_module_runtime_use_imports(module, args);
                 let module_name = normalize_dependency_module_name(module);
                 file_index.dependencies.insert(module_name.clone());
 
@@ -3436,6 +3471,28 @@ fn extract_module_names_from_call_args(args: &[Node]) -> Vec<String> {
         collect_from_node(arg, &mut modules);
     }
     modules
+}
+
+fn extract_module_runtime_helper_names(args: &[String]) -> Vec<String> {
+    let mut helpers = std::collections::HashSet::new();
+    for arg in args {
+        let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+        if matches!(bare, "use_module" | "require_module") {
+            helpers.insert(bare.to_string());
+        }
+        if arg.starts_with("qw") {
+            let content = arg
+                .trim_start_matches("qw")
+                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+            for token in content.split_whitespace() {
+                if matches!(token, "use_module" | "require_module") {
+                    helpers.insert(token.to_string());
+                }
+            }
+        }
+    }
+    helpers.into_iter().collect()
 }
 
 fn canonicalize_perl_module_name(name: &str) -> String {

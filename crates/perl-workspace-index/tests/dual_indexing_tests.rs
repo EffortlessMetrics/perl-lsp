@@ -340,6 +340,53 @@ exported();
     Ok(())
 }
 
+#[test]
+fn module_runtime_literal_calls_track_dependencies() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/scripts/runtime_loader.pl")?;
+    let code = "\
+use Module::Runtime qw(use_module require_module);
+my $m = use_module('My::Loader');
+require_module('My::Other');
+";
+    let uri_str = uri.to_string();
+    index.index_file(uri, code.to_string())?;
+
+    let deps = index.file_dependencies(&uri_str);
+    assert!(
+        deps.contains("My::Loader"),
+        "literal use_module should add dependency, deps: {:?}",
+        deps
+    );
+    assert!(
+        deps.contains("My::Other"),
+        "literal require_module should add dependency, deps: {:?}",
+        deps
+    );
+    Ok(())
+}
+
+#[test]
+fn module_runtime_dynamic_calls_stay_conservative() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/scripts/runtime_loader_dynamic.pl")?;
+    let code = "\
+use Module::Runtime qw(require_module);
+my $name = 'My::Loader';
+require_module($name);
+";
+    let uri_str = uri.to_string();
+    index.index_file(uri, code.to_string())?;
+
+    let deps = index.file_dependencies(&uri_str);
+    assert!(
+        !deps.contains("My::Loader"),
+        "dynamic require_module argument should remain unresolved, deps: {:?}",
+        deps
+    );
+    Ok(())
+}
+
 // =========================================================================
 // 5. Real-world pattern: Moose method modifiers
 // =========================================================================
