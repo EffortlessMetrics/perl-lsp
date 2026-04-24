@@ -46,3 +46,22 @@ You can verify availability with:
 ```bash
 perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
 ```
+
+
+## Benchmarks
+
+```bash
+# Run all perl-dap benchmarks (phase-1 + live-session)
+cargo bench -p perl-dap --bench dap_benchmarks
+
+# Run only live-session hot-path benchmarks
+cargo bench -p perl-dap --bench dap_benchmarks -- live_session
+
+# Run a single stable benchmark name
+cargo bench -p perl-dap --bench dap_benchmarks -- evaluate_live_simple
+```
+
+Live-session benchmark names are intentionally stable for diffing over time:
+`launch_cold`, `launch_warm`, `attach_loopback`, `set_breakpoints_100`,
+`step_continue_p95`, `stack_trace_live`, `variables_root`,
+`variables_child_page`, `evaluate_safe_blocked`, and `evaluate_live_simple`.

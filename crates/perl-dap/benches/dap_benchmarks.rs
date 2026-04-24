@@ -1,34 +1,29 @@
-//! DAP Performance Benchmarks (AC14, AC15) - Phase 1
+//! DAP Performance Benchmarks (AC14, AC15)
 //!
-//! Performance benchmarks for Phase 1 DAP adapter operations:
+//! Performance benchmarks for DAP adapter operations:
 //! - Configuration creation and validation
 //! - Path resolution and normalization
 //! - Perl binary resolution
 //! - Environment setup
 //! - Argument formatting
-//!
-//! Specification: docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#performance-specifications
-//!
-//! # Performance Targets (Phase 1)
-//!
-//! - Configuration creation: <50ms
-//! - Configuration validation: <50ms
-//! - Path normalization: <10ms per path
-//! - Environment setup: <20ms
-//! - Perl path resolution: <100ms
+//! - Request dispatch
+//! - Live-session launch/attach/stack/variables/evaluate paths
 //!
 //! # Running Benchmarks
 //!
 //! ```bash
-//! # Run all benchmarks
-//! cargo bench -p perl-dap
+//! # Run all benchmarks in this file
+//! cargo bench -p perl-dap --bench dap_benchmarks
 //!
-//! # Run specific benchmark group
+//! # Run specific phase-1 groups
 //! cargo bench -p perl-dap --bench dap_benchmarks -- configuration
 //! cargo bench -p perl-dap --bench dap_benchmarks -- platform
 //!
+//! # Run only live-session groups
+//! cargo bench -p perl-dap --bench dap_benchmarks -- live_session
+//!
 //! # Run with shorter measurement time (for CI)
-//! cargo bench -p perl-dap -- --measurement-time 5
+//! cargo bench -p perl-dap --bench dap_benchmarks -- --measurement-time 5
 //! ```
 
 use criterion::{Criterion, criterion_group, criterion_main};
@@ -37,28 +32,63 @@ use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::fs;
 use std::hint::black_box;
-use std::path::PathBuf;
-use std::time::Duration;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+fn benchmark_fixture_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/performance/small_file.pl")
+}
+
+fn live_launch_args(script_path: &Path) -> Value {
+    json!({
+        "program": script_path,
+        "args": [],
+        "stopOnEntry": true,
+        "env": {
+            "PERL_PERTURB_KEYS": "0",
+            "PERL_HASH_SEED": "0",
+            "LC_ALL": "C",
+            "TZ": "UTC"
+        }
+    })
+}
+
+fn setup_live_session(adapter: &mut DebugAdapter, script_path: &Path) {
+    let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+    let _ = adapter.handle_request(2, "launch", Some(live_launch_args(script_path)));
+    let _ = adapter.handle_request(3, "configurationDone", None);
+}
+
+fn teardown_live_session(adapter: &mut DebugAdapter) {
+    let _ = adapter.handle_request(99, "disconnect", None);
+}
+
+fn response_is_success(response: &perl_dap::debug_adapter::DapMessage) -> bool {
+    matches!(response, perl_dap::debug_adapter::DapMessage::Response { success: true, .. })
+}
+
+fn p95_duration(mut samples: Vec<Duration>) -> Duration {
+    if samples.is_empty() {
+        return Duration::from_nanos(0);
+    }
+    samples.sort_unstable();
+    let idx = ((samples.len() as f64) * 0.95).ceil() as usize;
+    samples[idx.saturating_sub(1).min(samples.len().saturating_sub(1))]
+}
 
 // ========== Configuration Benchmarks (AC14) ==========
 
-/// Benchmark LaunchConfiguration validation
-/// Target: <50ms
 fn benchmark_launch_config_validation(c: &mut Criterion) {
-    use std::fs;
-
     let mut group = c.benchmark_group("configuration_validation");
     group.measurement_time(Duration::from_secs(10));
 
-    // Create temp file for validation
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join("benchmark_test.pl");
-    if let Err(e) = fs::write(&temp_file, "#!/usr/bin/env perl\nprint 'test';\n") {
-        eprintln!("Warning: Failed to create temp file for benchmark: {}", e);
-        // Skip benchmarks that require the temp file
+    if fs::write(&temp_file, "#!/usr/bin/env perl\nprint 'test';\n").is_err() {
         group.finish();
         return;
     }
@@ -74,7 +104,6 @@ fn benchmark_launch_config_validation(c: &mut Criterion) {
         };
 
         b.iter(|| {
-            // Validation may fail in some environments; benchmark the call anyway
             let _ = black_box(config.validate());
         })
     });
@@ -96,12 +125,10 @@ fn benchmark_launch_config_validation(c: &mut Criterion) {
         let workspace_root = black_box(PathBuf::from("/workspace"));
 
         b.iter(|| {
-            // Path resolution may fail; benchmark the call anyway
             let _ = config.resolve_paths(&workspace_root);
         })
     });
 
-    // Clean up temp file
     let _ = fs::remove_file(&temp_file);
 
     group.finish();
@@ -109,15 +136,12 @@ fn benchmark_launch_config_validation(c: &mut Criterion) {
 
 // ========== Platform Utilities Benchmarks (AC14) ==========
 
-/// Benchmark Perl path resolution
-/// Target: <100ms
 fn benchmark_perl_path_resolution(c: &mut Criterion) {
     let mut group = c.benchmark_group("platform_perl");
     group.measurement_time(Duration::from_secs(10));
 
     group.bench_function("perl_path_resolution", |b| {
         b.iter(|| {
-            // This will fail if perl not found, which is OK for benchmarking
             let _ = black_box(resolve_perl_path());
         })
     });
@@ -125,8 +149,6 @@ fn benchmark_perl_path_resolution(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark path normalization (cross-platform)
-/// Target: <10ms per path
 fn benchmark_path_normalization(c: &mut Criterion) {
     let mut group = c.benchmark_group("platform_path");
     group.measurement_time(Duration::from_secs(10));
@@ -180,8 +202,6 @@ fn benchmark_path_normalization(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark environment setup (PERL5LIB construction)
-/// Target: <20ms
 fn benchmark_environment_setup(c: &mut Criterion) {
     let mut group = c.benchmark_group("platform_environment");
     group.measurement_time(Duration::from_secs(10));
@@ -231,8 +251,6 @@ fn benchmark_environment_setup(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark command argument formatting
-/// Target: <20ms (part of environment setup)
 fn benchmark_arg_formatting(c: &mut Criterion) {
     let mut group = c.benchmark_group("platform_args");
     group.measurement_time(Duration::from_secs(10));
@@ -285,22 +303,8 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
     group.finish();
 }
 
-// ========== Benchmark Groups ==========
+// ========== Session Management Benchmarks (AC5.2) ==========
 
-criterion_group!(configuration_benches, benchmark_launch_config_validation);
-
-criterion_group!(
-    platform_benches,
-    benchmark_perl_path_resolution,
-    benchmark_path_normalization,
-    benchmark_environment_setup,
-    benchmark_arg_formatting
-);
-
-// ========== Phase 2: Session Management Benchmarks (AC5.2) ==========
-
-/// Benchmark DAP initialization
-/// Target: <50ms
 fn benchmark_dap_initialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("dap_session");
     group.measurement_time(Duration::from_secs(10));
@@ -324,8 +328,6 @@ fn benchmark_dap_initialization(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark DAP request dispatching (without process spawning)
-/// Target: <100ms
 fn benchmark_dap_dispatch(c: &mut Criterion) {
     let mut group = c.benchmark_group("dap_dispatch");
     group.measurement_time(Duration::from_secs(10));
@@ -348,6 +350,206 @@ fn benchmark_dap_dispatch(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+// ========== Live Session Hot Path Benchmarks (AC15 Layer 2) ==========
 
-criterion_main!(configuration_benches, platform_benches, session_benches);
+fn benchmark_live_session_paths(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_session");
+    group.measurement_time(Duration::from_secs(10));
+
+    let script_path = benchmark_fixture_path();
+    let script = script_path.to_string_lossy().to_string();
+
+    // Stable, diff-friendly benchmark names for long-term tracking.
+    group.bench_function("launch_cold", |b| {
+        b.iter(|| {
+            let mut adapter = DebugAdapter::new();
+            let _ = black_box(adapter.handle_request(
+                1,
+                "initialize",
+                Some(json!({ "adapterId": "perl-rs" })),
+            ));
+            let _ = black_box(adapter.handle_request(
+                2,
+                "launch",
+                Some(live_launch_args(&script_path)),
+            ));
+            let _ = black_box(adapter.handle_request(3, "configurationDone", None));
+            teardown_live_session(&mut adapter);
+        })
+    });
+
+    group.bench_function("launch_warm", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+
+        b.iter(|| {
+            let _ = black_box(adapter.handle_request(
+                2,
+                "launch",
+                Some(live_launch_args(&script_path)),
+            ));
+            let _ = black_box(adapter.handle_request(3, "configurationDone", None));
+            let _ = black_box(adapter.handle_request(4, "disconnect", None));
+        })
+    });
+
+    group.bench_function("attach_loopback", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+        let pid = std::process::id();
+
+        b.iter(|| {
+            let response = adapter.handle_request(
+                2,
+                "attach",
+                Some(json!({ "processId": pid, "stopOnEntry": true })),
+            );
+            black_box(response_is_success(&response));
+            let _ = black_box(adapter.handle_request(3, "disconnect", None));
+        })
+    });
+
+    group.bench_function("set_breakpoints_100", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+        let breakpoints: Vec<Value> = (1..=100).map(|line| json!({ "line": line })).collect();
+
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                2,
+                "setBreakpoints",
+                Some(json!({
+                    "source": { "path": script },
+                    "breakpoints": breakpoints
+                })),
+            ));
+        })
+    });
+
+    group.bench_function("step_continue_p95", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+        let iterations = 50;
+
+        b.iter(|| {
+            let mut samples = Vec::with_capacity(iterations);
+            for i in 0..iterations {
+                let start = Instant::now();
+                let response = if i % 2 == 0 {
+                    adapter.handle_request(
+                        10 + i as i64,
+                        "continue",
+                        Some(json!({ "threadId": 1 })),
+                    )
+                } else {
+                    adapter.handle_request(10 + i as i64, "next", Some(json!({ "threadId": 1 })))
+                };
+                black_box(response);
+                samples.push(start.elapsed());
+            }
+            black_box(p95_duration(samples));
+        })
+    });
+
+    group.bench_function("stack_trace_live", |b| {
+        b.iter_batched(
+            || {
+                let mut adapter = DebugAdapter::new();
+                setup_live_session(&mut adapter, &script_path);
+                adapter
+            },
+            |mut adapter| {
+                black_box(adapter.handle_request(
+                    4,
+                    "stackTrace",
+                    Some(json!({ "threadId": 1, "startFrame": 0, "levels": 20 })),
+                ));
+                teardown_live_session(&mut adapter);
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    group.bench_function("variables_root", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                2,
+                "variables",
+                Some(json!({ "variablesReference": 11 })),
+            ));
+        })
+    });
+
+    group.bench_function("variables_child_page", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                2,
+                "variables",
+                Some(json!({
+                    "variablesReference": 1101,
+                    "start": 10,
+                    "count": 25
+                })),
+            ));
+        })
+    });
+
+    group.bench_function("evaluate_safe_blocked", |b| {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", Some(json!({ "adapterId": "perl-rs" })));
+
+        b.iter(|| {
+            black_box(adapter.handle_request(
+                2,
+                "evaluate",
+                Some(json!({
+                    "expression": "system('rm -rf /tmp/nope')",
+                    "context": "repl"
+                })),
+            ));
+        })
+    });
+
+    group.bench_function("evaluate_live_simple", |b| {
+        b.iter_batched(
+            || {
+                let mut adapter = DebugAdapter::new();
+                setup_live_session(&mut adapter, &script_path);
+                adapter
+            },
+            |mut adapter| {
+                black_box(adapter.handle_request(
+                    5,
+                    "evaluate",
+                    Some(json!({
+                        "expression": "$ARGV[0]",
+                        "context": "watch"
+                    })),
+                ));
+                teardown_live_session(&mut adapter);
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    group.finish();
+}
+
+criterion_group!(configuration_benches, benchmark_launch_config_validation);
+criterion_group!(
+    platform_benches,
+    benchmark_perl_path_resolution,
+    benchmark_path_normalization,
+    benchmark_environment_setup,
+    benchmark_arg_formatting
+);
+criterion_group!(session_benches, benchmark_dap_initialization, benchmark_dap_dispatch);
+criterion_group!(live_session_benches, benchmark_live_session_paths);
+
+criterion_main!(configuration_benches, platform_benches, session_benches, live_session_benches);
