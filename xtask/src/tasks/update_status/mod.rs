@@ -29,6 +29,7 @@ mod lsp;
 mod parser;
 mod quality;
 mod tests;
+mod token;
 mod workspace;
 
 // ---------------------------------------------------------------------------
@@ -42,6 +43,7 @@ pub enum StatusSubsystem {
     Tests,
     Parser,
     Quality,
+    Token,
     /// DAP debugger scorecard (launch success, latency, test counts).
     Dap,
     Workspace,
@@ -55,6 +57,7 @@ impl StatusSubsystem {
             StatusSubsystem::Tests => "tests",
             StatusSubsystem::Parser => "parser",
             StatusSubsystem::Quality => "quality",
+            StatusSubsystem::Token => "token",
             StatusSubsystem::Dap => "dap",
             StatusSubsystem::Workspace => "workspace",
         }
@@ -139,6 +142,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
             StatusSubsystem::Tests,
             StatusSubsystem::Parser,
             StatusSubsystem::Quality,
+            StatusSubsystem::Token,
             StatusSubsystem::Dap,
             StatusSubsystem::Workspace,
         ],
@@ -150,6 +154,7 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
     let need_tests = subsystems.contains(&StatusSubsystem::Tests);
     let need_parser = subsystems.contains(&StatusSubsystem::Parser);
     let need_quality = subsystems.contains(&StatusSubsystem::Quality);
+    let need_token = subsystems.contains(&StatusSubsystem::Token);
     let need_dap = subsystems.contains(&StatusSubsystem::Dap);
     let need_workspace = subsystems.contains(&StatusSubsystem::Workspace);
 
@@ -223,6 +228,18 @@ pub fn run(write: bool, check: bool, only: Option<StatusSubsystem>) -> Result<()
         let updated_ux = quality::generate_editor_ux_receipt(&root)?;
         if updated_ux != original_ux {
             files_to_update.push(("docs/project/status/editor_ux.json", ux_path, updated_ux));
+        }
+    }
+
+    // --- DAP subsystem ---
+    if need_token {
+        let token_metrics = token::collect_token_metrics(&root);
+        let token_path = root.join("docs/project/status/token.md");
+        let original_token =
+            fs::read_to_string(&token_path).context("reading docs/project/status/token.md")?;
+        let updated_token = token::generate_token_status(&token_metrics, &original_token)?;
+        if updated_token != original_token {
+            files_to_update.push(("docs/project/status/token.md", token_path, updated_token));
         }
     }
 
@@ -313,6 +330,7 @@ mod mod_tests {
             "tests.md",
             "parser.md",
             "quality.md",
+            "token.md",
             "editor_ux.json",
             "editor_ux.schema.json",
             "dap.md",

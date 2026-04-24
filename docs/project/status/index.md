@@ -21,6 +21,7 @@
 | LSP coverage & compliance | [lsp.md](lsp.md) | Generator | Every LSP-touching merge |
 | Test counts & debt | [tests.md](tests.md) | Generator | Every merge |
 | Parser corpus & coverage | [parser.md](parser.md) | Generator | Every parser-touching merge |
+| Token metadata & conformance | [token.md](token.md) | Generator | Every token/lexer/parser-touching merge |
 | Quality metrics | [quality.md](quality.md) | Generator | Every merge |
 | DAP debugger scorecard | [dap.md](dap.md) | Generator | Every DAP-touching merge |
 | Release readiness | [release.md](release.md) | Human | Ship readiness changes |
