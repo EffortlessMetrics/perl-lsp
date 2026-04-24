@@ -51,16 +51,33 @@ pub struct AntiPatternDetector {
 }
 
 trait PatternDetector: Send + Sync {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)>;
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)>;
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic>;
 }
 
-fn location_from_start(code: &str, offset: usize, start: usize) -> Location {
-    let line = code[..start].lines().count();
-    let column = match code[..start].rfind('\n') {
-        Some(last_newline) => start.saturating_sub(last_newline + 1),
-        None => start,
-    };
+fn build_line_starts(code: &str) -> Vec<usize> {
+    let mut line_starts = Vec::new();
+    line_starts.push(0);
+
+    for (idx, byte) in code.bytes().enumerate() {
+        if byte == b'\n' {
+            line_starts.push(idx + 1);
+        }
+    }
+
+    line_starts
+}
+
+fn location_from_start(line_starts: &[usize], offset: usize, start: usize) -> Location {
+    let insertion = line_starts.partition_point(|&line_start| line_start <= start);
+    let line = insertion.saturating_sub(1);
+    let line_start = line_starts.get(line).copied().unwrap_or(0);
+    let column = start.saturating_sub(line_start);
 
     Location { line, column, offset: offset + start }
 }
@@ -138,14 +155,19 @@ static FORMAT_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for FormatHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in FORMAT_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
                 let format_name = name_match.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 // Look for heredoc marker inside format body (simplified)
                 let body_start = match_pos.end();
@@ -248,7 +270,12 @@ fn find_matching_brace(code: &str, opening_brace_idx: usize) -> Option<usize> {
 }
 
 impl PatternDetector for BeginTimeHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
@@ -266,7 +293,7 @@ impl PatternDetector for BeginTimeHeredocDetector {
                 continue;
             }
 
-            let location = location_from_start(code, offset, begin_match.start());
+            let location = location_from_start(line_starts, offset, begin_match.start());
 
             results.push((
                 AntiPattern::BeginTimeHeredoc {
@@ -308,14 +335,19 @@ static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for DynamicDelimiterDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
                 let expression = match_pos.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
@@ -355,14 +387,19 @@ static SOURCE_FILTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 impl PatternDetector for SourceFilterDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in SOURCE_FILTER_PATTERN.captures_iter(&scan_code) {
             if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
                 let filter_module = module_match.as_str().to_string();
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::SourceFilterHeredoc {
@@ -404,13 +441,18 @@ static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for RegexHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
         for cap in REGEX_HEREDOC_PATTERN.captures_iter(&scan_code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
@@ -449,12 +491,17 @@ static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
     });
 
 impl PatternDetector for EvalHeredocDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
         for cap in EVAL_HEREDOC_PATTERN.captures_iter(code) {
             if let Some(match_pos) = cap.get(0) {
-                let location = location_from_start(code, offset, match_pos.start());
+                let location = location_from_start(line_starts, offset, match_pos.start());
 
                 results.push((
                     AntiPattern::EvalStringHeredoc { location: location.clone() },
@@ -492,7 +539,12 @@ static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+
 });
 
 impl PatternDetector for TiedHandleDetector {
-    fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
+    fn detect(
+        &self,
+        code: &str,
+        offset: usize,
+        line_starts: &[usize],
+    ) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
@@ -513,7 +565,7 @@ impl PatternDetector for TiedHandleDetector {
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
             if let Ok(re) = Regex::new(&usage_pattern) {
                 for usage_match in re.find_iter(&scan_code) {
-                    let location = location_from_start(code, offset, usage_match.start());
+                    let location = location_from_start(line_starts, offset, usage_match.start());
 
                     results.push((
                         AntiPattern::TiedHandleHeredoc {
@@ -568,9 +620,10 @@ impl AntiPatternDetector {
 
     pub fn detect_all(&self, code: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
+        let line_starts = build_line_starts(code);
 
         for detector in &self.patterns {
-            let patterns = detector.detect(code, 0);
+            let patterns = detector.detect(code, 0, &line_starts);
             for (pattern, _) in patterns {
                 if let Some(diagnostic) = detector.diagnose(&pattern) {
                     diagnostics.push(diagnostic);
