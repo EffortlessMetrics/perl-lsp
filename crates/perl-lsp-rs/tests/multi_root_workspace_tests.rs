@@ -1315,19 +1315,7 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
         request_timeout(),
     );
 
-    // If rename is not supported at this position, skip gracefully
-    let response = match rename_result {
-        Ok(r) => r,
-        Err(_) => {
-            // Rename request failed or timed out — treat as no-op for now
-            return Ok(());
-        }
-    };
-
-    if response.is_null() {
-        // Server returned null — rename not available at this position; skip
-        return Ok(());
-    }
+    let response = rename_result.map_err(|e| format!("rename request failed: {e}"))?;
 
     // Verify structure: response must be a WorkspaceEdit
     assert!(
@@ -1336,28 +1324,18 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
         response
     );
 
-    let changes = match response.get("changes") {
-        Some(c) => c,
-        None => {
-            // documentChanges is also valid; accept either form
-            if response.get("documentChanges").is_some() {
-                return Ok(());
-            }
-            // Empty edit is acceptable if rename produced no results yet
-            return Ok(());
-        }
-    };
+    let changes = response
+        .get("changes")
+        .ok_or("WorkspaceEdit must use `changes` for textDocument/rename")?;
 
-    // If the server returned non-empty changes, assert cross-file coverage
-    let change_map = match changes.as_object() {
-        Some(m) => m,
-        None => return Ok(()),
-    };
+    let change_map = changes
+        .as_object()
+        .ok_or("WorkspaceEdit `changes` must be a URI -> TextEdit[] map")?;
 
-    if change_map.is_empty() {
-        // Index not ready or symbol not found — no hard failure
-        return Ok(());
-    }
+    assert!(
+        !change_map.is_empty(),
+        "WorkspaceEdit must not be empty for cross-folder rename"
+    );
 
     // At minimum, the definition file (A.pm) must appear in the edit
     let a_pm_key = change_map.keys().find(|k| k.contains("A.pm") || *k == &a_pm_uri);
@@ -1368,18 +1346,31 @@ fn test_cross_folder_rename_spans_both_roots() -> TestResult {
         change_map.keys().collect::<Vec<_>>()
     );
 
-    // If B.pm is also present in the edit, verify the new name appears there
+    // B.pm call sites must also be included in this workspace-wide rename slice.
     let b_pm_key = change_map.keys().find(|k| k.contains("B.pm") || *k == &b_pm_uri);
-    if let Some(b_key) = b_pm_key {
-        if let Some(edits) = change_map[b_key].as_array() {
-            for edit in edits {
-                let new_text = edit["newText"].as_str().unwrap_or("");
-                assert!(
-                    new_text.contains("renamed_target"),
-                    "B.pm edit must use the new name 'renamed_target', got: {:?}",
-                    edit
-                );
-            }
+    assert!(
+        b_pm_key.is_some(),
+        "WorkspaceEdit must include an edit for B.pm (call sites). \
+         Got changes for: {:?}",
+        change_map.keys().collect::<Vec<_>>()
+    );
+
+    // Every edit in both A.pm and B.pm must apply the target replacement.
+    let a_key = a_pm_key.ok_or("A.pm key missing after assertion")?;
+    let b_key = b_pm_key.ok_or("B.pm key missing after assertion")?;
+    for key in [a_key, b_key] {
+        let edits = change_map[key]
+            .as_array()
+            .ok_or("WorkspaceEdit entry must be an array of TextEdit objects")?;
+        assert!(!edits.is_empty(), "WorkspaceEdit entry for {key} must not be empty");
+        for edit in edits {
+            let new_text = edit["newText"].as_str().unwrap_or_default();
+            assert_eq!(
+                new_text, "renamed_target",
+                "Cross-file rename edits must be stable and use exactly the requested new name. \
+                 got edit: {:?}",
+                edit
+            );
         }
     }
 

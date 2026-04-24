@@ -4,7 +4,7 @@
 
 use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Represents a text edit for a single document
 #[derive(Debug, Clone)]
@@ -42,8 +42,10 @@ pub fn build_rename_edit(
         locs.push(def);
     }
 
-    // 3) Group edits by URI and compute replacement text
+    // 3) Group edits by URI and compute replacement text.
+    //    Deduplicate ranges for stable, atomic WorkspaceEdit generation.
     let mut grouped: BTreeMap<String, Vec<TextEdit>> = BTreeMap::new();
+    let mut seen: BTreeSet<(String, u32, u32, u32, u32, String)> = BTreeSet::new();
 
     for loc in locs {
         let start_line = loc.range.start.line;
@@ -91,6 +93,17 @@ pub fn build_rename_edit(
                 new_name_bare.to_string()
             }
         };
+
+        if !seen.insert((
+            loc.uri.clone(),
+            start_line,
+            start_char,
+            end_line,
+            end_char,
+            replacement.clone(),
+        )) {
+            continue;
+        }
 
         grouped.entry(loc.uri.clone()).or_default().push(TextEdit {
             start: (start_line, start_char),

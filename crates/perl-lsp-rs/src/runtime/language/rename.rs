@@ -229,45 +229,50 @@ impl LspServer {
 
                     match access_mode {
                         IndexAccessMode::Partial(reason) => {
-                            if let (Some(coordinator), Some(key)) =
-                                (self.coordinator(), symbol_key.as_ref())
-                            {
-                                let edits = crate::workspace_rename::build_rename_edit(
-                                    coordinator.index(),
-                                    key,
-                                    new_name,
-                                );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
-                                }
-                            }
                             tracing::debug!(
                                 reason,
-                                "Rename: workspace rename unavailable, using same-file only"
+                                "Rename refused: workspace index is partial; atomic workspace \
+                                 edit unavailable"
                             );
-                            // Fall through to same-file rename
+                            return Err(JsonRpcError {
+                                code: -32803,
+                                message: "Rename requires a fully built workspace index".to_string(),
+                                data: None,
+                            });
                         }
                         IndexAccessMode::None => {
                             tracing::debug!("Rename: no workspace feature, using same-file only");
                             // Fall through to same-file rename
                         }
                         IndexAccessMode::Full(coordinator) => {
-                            if let Some(key) = symbol_key.as_ref() {
-                                // Use coordinator.index() directly instead of workspace_index()
-                                // to ensure we go through routing policy
-                                let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
-                                let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
-                                return Ok(Some(ws_edit));
+                            let key = match symbol_key.as_ref() {
+                                Some(key) => key,
+                                None => {
+                                    return Err(JsonRpcError {
+                                        code: -32803,
+                                        message:
+                                            "Rename requires an unambiguous symbol at cursor"
+                                                .to_string(),
+                                        data: None,
+                                    });
+                                }
+                            };
+
+                            // Use coordinator.index() directly instead of workspace_index()
+                            // to ensure we go through routing policy.
+                            let idx = coordinator.index();
+                            let edits = crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                            if edits.is_empty() {
+                                return Err(JsonRpcError {
+                                    code: -32803,
+                                    message:
+                                        "Rename could not find stable workspace references for symbol"
+                                            .to_string(),
+                                    data: None,
+                                });
                             }
+                            let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
+                            return Ok(Some(ws_edit));
                         }
                     }
                 }
