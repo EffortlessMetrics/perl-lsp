@@ -989,6 +989,29 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone)]
+/// Stable identity for a symbol reference query.
+pub struct SymbolQueryIdentity {
+    /// Stable key used for cross-file reference lookups.
+    ///
+    /// Uses the qualified symbol name when available, and otherwise falls back
+    /// to the best available symbol name.
+    pub stable_key: String,
+    /// Original symbol lookup term supplied by the caller.
+    pub query: String,
+}
+
+#[derive(Debug, Clone)]
+/// Cross-file query result containing definition + reference locations.
+pub struct SymbolReferenceQueryResult {
+    /// Stable symbol identity resolved for this query.
+    pub identity: SymbolQueryIdentity,
+    /// Definition location for the symbol, when found.
+    pub definition: Option<Location>,
+    /// Non-definition reference locations in stable order.
+    pub references: Vec<Location>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -1129,6 +1152,20 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_sort_key(location: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            location.uri.as_str(),
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line,
+            location.range.end.column,
+        )
+    }
+
+    fn sort_locations_stably(locations: &mut [Location]) {
+        locations.sort_by(|left, right| Self::location_sort_key(left).cmp(&Self::location_sort_key(right)));
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1245,6 +1282,8 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
+        let mut matches: Vec<(Location, String)> = Vec::new();
+
         for file_index in files.values() {
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
@@ -1256,15 +1295,36 @@ impl WorkspaceIndex {
                 if symbol.name == symbol_name
                     || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
-                    return Some((
-                        Location { uri: symbol.uri.clone(), range: symbol.range },
-                        symbol.uri.clone(),
-                    ));
+                    let location = Location { uri: symbol.uri.clone(), range: symbol.range };
+                    matches.push((location, symbol.uri.clone()));
                 }
             }
         }
 
-        None
+        matches.sort_by(|left, right| Self::location_sort_key(&left.0).cmp(&Self::location_sort_key(&right.0)));
+        matches.into_iter().next()
+    }
+
+    fn find_symbol_metadata(&self, symbol_name: &str) -> Option<WorkspaceSymbol> {
+        let files = self.files.read();
+        let mut matches: Vec<WorkspaceSymbol> = Vec::new();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
+                {
+                    matches.push(symbol.clone());
+                }
+            }
+        }
+
+        matches.sort_by(|left, right| {
+            let left_loc = Location { uri: left.uri.clone(), range: left.range };
+            let right_loc = Location { uri: right.uri.clone(), range: right.range };
+            Self::location_sort_key(&left_loc).cmp(&Self::location_sort_key(&right_loc))
+        });
+        matches.into_iter().next()
     }
 
     /// Create a new empty index
@@ -1858,7 +1918,7 @@ impl WorkspaceIndex {
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
-        let mut locations = Vec::new();
+        let mut locations: Vec<Location> = Vec::new();
 
         // O(1) lookup for exact symbol name
         if let Some(refs) = global_refs.get(symbol_name) {
@@ -1916,7 +1976,37 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations_stably(&mut locations);
         locations
+    }
+
+    /// Query a symbol's stable identity plus definition and references.
+    ///
+    /// Returns references without the definition site so rename/safe-delete
+    /// planners can handle the two concerns independently.
+    pub fn query_symbol_references(&self, symbol_name: &str) -> Option<SymbolReferenceQueryResult> {
+        let definition_symbol = self.find_symbol_metadata(symbol_name);
+        let stable_key = definition_symbol
+            .as_ref()
+            .and_then(|symbol| symbol.qualified_name.clone())
+            .unwrap_or_else(|| symbol_name.to_string());
+        let definition =
+            definition_symbol.as_ref().map(|symbol| Location { uri: symbol.uri.clone(), range: symbol.range });
+
+        let mut references = self.find_references(&stable_key);
+        if let Some(definition_location) = definition.as_ref() {
+            references.retain(|reference| reference.uri != definition_location.uri || reference.range != definition_location.range);
+        }
+
+        if definition.is_none() && references.is_empty() {
+            return None;
+        }
+
+        Some(SymbolReferenceQueryResult {
+            identity: SymbolQueryIdentity { stable_key, query: symbol_name.to_string() },
+            definition,
+            references,
+        })
     }
 
     /// Count non-definition references (usages) of a symbol.
@@ -3972,6 +4062,61 @@ UsageDemo::helper();
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
         );
+    }
+
+    #[test]
+    fn test_query_symbol_references_returns_definition_and_cross_file_references() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///workspace/lib/Shared.pm";
+        let ref_uri = "file:///workspace/lib/Consumer.pm";
+
+        must(index.index_file(
+            must(url::Url::parse(def_uri)),
+            "package Shared;\nsub process_data { return 1; }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse(ref_uri)),
+            "package Consumer;\nuse Shared;\nShared::process_data();\nprocess_data();\n1;\n"
+                .to_string(),
+        ));
+
+        let result = must_some(index.query_symbol_references("Shared::process_data"));
+        assert_eq!(result.identity.stable_key, "Shared::process_data");
+
+        let definition = must_some(result.definition);
+        assert_eq!(definition.uri, def_uri);
+        assert!(
+            result.references.iter().all(|location| {
+                location.uri != definition.uri || location.range != definition.range
+            }),
+            "references list should not include the definition location"
+        );
+        assert!(
+            result.references.iter().any(|location| location.uri == ref_uri),
+            "cross-file references should include calls from other files"
+        );
+    }
+
+    #[test]
+    fn test_query_symbol_references_is_stably_sorted() {
+        let index = WorkspaceIndex::new();
+
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/Ordered.pm")),
+            "package Ordered;\nsub ping { return 1; }\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/B.pm")),
+            "package B;\nOrdered::ping();\n1;\n".to_string(),
+        ));
+        must(index.index_file(
+            must(url::Url::parse("file:///workspace/lib/A.pm")),
+            "package A;\nOrdered::ping();\n1;\n".to_string(),
+        ));
+
+        let result = must_some(index.query_symbol_references("Ordered::ping"));
+        let uris: Vec<&str> = result.references.iter().map(|reference| reference.uri.as_str()).collect();
+        assert_eq!(uris, vec!["file:///workspace/lib/A.pm", "file:///workspace/lib/B.pm"]);
     }
 
     #[test]
