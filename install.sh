@@ -64,11 +64,19 @@ detect_system() {
     esac
     
     case $ARCH in
-        x86_64)
+        x86_64|amd64|x64)
             ARCH="x86_64"
             ;;
         aarch64|arm64)
             ARCH="aarch64"
+            ;;
+        armv7l|armv7|armv6l|armhf)
+            write_error "Detected 32-bit ARM architecture ($ARCH). Prebuilt releases are currently available for ARM64 only.
+
+Try one of:
+  1) Install from source on this device:
+     cargo install perllsp --locked --target armv7-unknown-linux-gnueabihf
+  2) Use an ARM64 (aarch64) OS/device to install prebuilt binaries."
             ;;
         *)
             write_error "Unsupported architecture: $ARCH"

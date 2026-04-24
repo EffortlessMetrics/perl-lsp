@@ -87,9 +87,16 @@ detect_platform() {
     esac
 
     case "$_arch" in
-        x86_64|amd64)   _arch="x86_64" ;;
-        aarch64|arm64)  _arch="aarch64" ;;
-        *)              err "unsupported architecture: $_arch" ;;
+        x86_64|amd64|x64) _arch="x86_64" ;;
+        aarch64|arm64)    _arch="aarch64" ;;
+        armv7l|armv7|armv6l|armhf)
+            err "detected 32-bit ARM architecture (${_arch}); prebuilt releases currently support ARM64 only.
+
+Try one of:
+  cargo install perllsp --locked --target armv7-unknown-linux-gnueabihf
+or run this installer from an ARM64 (aarch64) OS/device."
+            ;;
+        *) err "unsupported architecture: $_arch" ;;
     esac
 
     if [ "$_os" = "linux" ]; then
