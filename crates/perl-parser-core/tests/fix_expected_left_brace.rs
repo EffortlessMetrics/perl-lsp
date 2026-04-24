@@ -41,6 +41,20 @@ fn assert_no_diagnostics(source: &str) {
     }
 }
 
+fn assert_has_diagnostic(source: &str, needle: &str) {
+    let mut parser = Parser::new(source);
+    let output = parser.parse_with_recovery();
+    let diagnostics =
+        output.diagnostics.iter().map(|d| d.to_string()).collect::<Vec<_>>().join("\n");
+    assert!(
+        diagnostics.contains(needle),
+        "Expected diagnostic containing {:?} for source:\n{}\n\nDiagnostics:\n{}",
+        needle,
+        source,
+        diagnostics,
+    );
+}
+
 // ---- Tests for expected_left_brace bucket fix ----
 //
 // The core issue: the parser doesn't allow many Perl keywords as subroutine
@@ -215,4 +229,25 @@ fn test_ampersand_call_redo() {
 #[test]
 fn test_ampersand_call_begin() {
     assert_no_diagnostics(r#"&BEGIN();"#);
+}
+
+#[test]
+fn test_try_catch_typed_with_block_is_valid() {
+    assert_no_diagnostics(
+        r#"
+try { risky() }
+catch Git::Error::Command with { my $e = shift; warn $e; };
+"#,
+    );
+}
+
+#[test]
+fn test_try_catch_typed_without_with_still_errors() {
+    assert_has_diagnostic(
+        r#"
+try { risky() }
+catch Git::Error::Command { my $e = shift; warn $e; };
+"#,
+        "Expected 'with' before catch block",
+    );
 }
