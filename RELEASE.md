@@ -1,6 +1,9 @@
 # Release Guide
 
-This document covers the end-to-end process for releasing a new version of `perl-lsp`.
+This is the operational release runbook for `perl-lsp`.
+Use it with [docs/project/RELEASE_CHECKLIST.md](docs/project/RELEASE_CHECKLIST.md)
+for the preflight gate and [docs/project/PUBLISHING_ROADMAP.md](docs/project/PUBLISHING_ROADMAP.md)
+for the release-day sequence and post-release verification.
 
 ## Table of Contents
 
@@ -14,6 +17,8 @@ This document covers the end-to-end process for releasing a new version of `perl
 ---
 
 ## Prerequisites Checklist
+
+Use this section to confirm the release inputs are ready before dispatching the workflow.
 
 ### Required Secrets
 
@@ -52,7 +57,7 @@ grep '## \[' CHANGELOG.md | head -5
 
 ### CI Green on master
 
-The release workflow validates this automatically, but verify locally first:
+Verify the latest `master` run is green before dispatching the release workflow:
 
 ```bash
 # Check current CI state for the HEAD commit on master
@@ -77,14 +82,14 @@ cargo nextest run --workspace --lib
 cargo nextest run --workspace
 
 # Snapshot tests (these must all pass — stale snapshots block release)
-cargo test -p perl-lsp --test lsp_capability_snapshot_test
+cargo test -p perl-lsp --test lsp_cap_snap
 ```
 
 If any snapshot test fails and `.snap.new` files exist as untracked, accept them before releasing:
 
 ```bash
 cargo insta accept
-git add crates/perl-lsp/tests/snapshots/
+git add crates/perl-lsp-rs/tests/snapshots/
 git commit -m "test: accept updated insta snapshots"
 ```
 
@@ -122,7 +127,7 @@ git tag | grep 'v0\.12\.0'
 
 ```bash
 grep '^version' Cargo.toml | head -1
-# Expected output: version = "0.12.0"
+# Expected output: version = "0.12.1"
 ```
 
 ### 7. All publishable crate versions match
@@ -134,7 +139,7 @@ meta = json.load(sys.stdin)
 ws = set(meta["workspace_members"])
 for pkg in meta["packages"]:
     if pkg["id"] in ws:
-        if pkg["version"] != "0.12.0":
+        if pkg["version"] != "0.12.1":
             print(f"MISMATCH: {pkg[\"name\"]}@{pkg[\"version\"]}")
 '
 # Should print nothing
@@ -150,7 +155,7 @@ The release is triggered via a single manual workflow dispatch. The orchestratio
 
 ```bash
 gh workflow run release-orchestration.yml \
-  --field version=0.12.0 \
+  --field version=0.12.1 \
   --field prerelease=false \
   --field skip_crates=false \
   --field skip_extension=false \
@@ -163,7 +168,7 @@ gh workflow run release-orchestration.yml \
 2. Select **Release Orchestration** from the left sidebar.
 3. Click **Run workflow**.
 4. Fill in the fields:
-   - **Release version**: `0.12.0` (no `v` prefix)
+   - **Release version**: `0.12.1` (no `v` prefix)
    - **Mark as prerelease**: unchecked for stable releases
    - **Skip crates.io publishing**: leave unchecked
    - **Skip VSCode extension publishing**: leave unchecked
@@ -174,7 +179,7 @@ gh workflow run release-orchestration.yml \
 
 | Input | Description | Default |
 |-------|-------------|---------|
-| `version` | Release version without `v` prefix, e.g. `0.12.0` | required |
+| `version` | Release version without `v` prefix, e.g. `0.12.1` | required |
 | `prerelease` | Mark the GitHub release as a prerelease | `false` |
 | `skip_crates` | Skip crates.io publish (for re-runs after partial failure) | `false` |
 | `skip_extension` | Skip VS Code Marketplace publish | `false` |
@@ -187,7 +192,7 @@ If the release orchestration fails mid-way (e.g., crates.io succeeds but Docker 
 ```bash
 # Re-run only Docker (crates and extension already published)
 gh workflow run release-orchestration.yml \
-  --field version=0.12.0 \
+  --field version=0.12.1 \
   --field skip_crates=true \
   --field skip_extension=true \
   --field skip_docker=false
@@ -207,6 +212,7 @@ gh workflow run release-orchestration.yml \
 | `brew-bump.yml` | GitHub release published event | ~5–10 min | Updates Homebrew formula with new version and checksums |
 | `scoop-bump.yml` | GitHub release published event | ~3–5 min | Updates Scoop manifest |
 | `chocolatey-bump.yml` | GitHub release published event | ~3–5 min | Updates Chocolatey package |
+| `winget-bump.yml` | GitHub release published event | ~3–5 min | Refreshes the repo-local winget manifest |
 
 **Total expected wall time for a full release: ~50–90 minutes.**
 
@@ -221,32 +227,35 @@ After all workflows complete, verify that each distribution channel received the
 ### 1. GitHub Release
 
 ```bash
-gh release view v0.12.0
+gh release view v0.12.1
 # Should show assets including:
-# - perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz
-# - perl-lsp-0.12.0-aarch64-unknown-linux-gnu.tar.gz
-# - perl-lsp-0.12.0-x86_64-unknown-linux-musl.tar.gz
-# - perl-lsp-0.12.0-aarch64-unknown-linux-musl.tar.gz
-# - perl-lsp-0.12.0-x86_64-apple-darwin.tar.gz
-# - perl-lsp-0.12.0-aarch64-apple-darwin.tar.gz
-# - perl-lsp-0.12.0-x86_64-pc-windows-msvc.zip
+# - perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz
+# - perllsp-0.12.1-aarch64-unknown-linux-gnu.tar.gz
+# - perllsp-0.12.1-x86_64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.1-aarch64-unknown-linux-musl.tar.gz
+# - perllsp-0.12.1-x86_64-apple-darwin.tar.gz
+# - perllsp-0.12.1-aarch64-apple-darwin.tar.gz
+# - perllsp-0.12.1-x86_64-pc-windows-msvc.zip
 # - SHA256SUMS
 # - sbom-spdx.json
-# - perl-lsp-rs-0.12.0.vsix
+# - perl-lsp-rs-0.12.1.vsix
 ```
 
 ### 2. crates.io
 
 ```bash
-cargo search perl-lsp --limit 1
-# Expected: perl-lsp = "0.12.0"
+cargo search perllsp --limit 1
+# Expected: perllsp = "0.12.1"
+
+cargo search perl-lsp-rs --limit 1
+# Expected: perl-lsp-rs = "0.12.1"
 ```
 
 ### 3. VS Code Marketplace
 
 Visit: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs
 
-Check that the version shown is `0.12.0`.
+Check that the version shown is `0.12.1`.
 
 ### 4. Open VSX Registry
 
@@ -255,24 +264,51 @@ Visit: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
 ### 5. Docker images
 
 ```bash
-docker pull effortlessmetrics/perl-lsp:0.12.0
-docker run --rm effortlessmetrics/perl-lsp:0.12.0 perl-lsp --version
-# Expected: perl-lsp 0.12.0
+docker pull effortlessmetrics/perl-lsp:0.12.1
+docker run --rm effortlessmetrics/perl-lsp:0.12.1 perllsp --version
+# Expected: perllsp 0.12.1
 ```
 
 ```bash
-docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.0
+docker pull ghcr.io/effortlessmetrics/perl-lsp:0.12.1
 ```
 
-### 6. Verify binary checksum
+### 6. Homebrew auto-bump
+
+The `brew-bump.yml` workflow triggers automatically on `release.published`. It downloads all four platform archives (`perllsp-${VERSION}-{x86_64,aarch64}-{apple-darwin,unknown-linux-gnu}.tar.gz`), computes SHA256 checksums, updates `Formula/perl-lsp.rb`, and creates a bump PR.
+
+To verify the workflow ran:
+
+```bash
+# Check that the workflow completed successfully
+gh run list --workflow brew-bump.yml --limit 5
+
+# Check the bump PR was created
+gh pr list --search "perl-lsp" --state open
+```
+
+If the workflow did not trigger automatically, run it manually:
+
+```bash
+gh workflow run brew-bump.yml --field tag=v0.12.1
+```
+
+To test that the formula works locally (requires macOS or Linuxbrew):
+
+```bash
+brew install --build-from-source Formula/perl-lsp.rb
+perllsp --health
+```
+
+### 7. Verify binary checksum
 
 ```bash
 # Download the Linux binary and verify its SHA256 matches the release
-gh release download v0.12.0 --pattern 'perl-lsp-0.12.0-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
+gh release download v0.12.1 --pattern 'perllsp-0.12.1-x86_64-unknown-linux-gnu.tar.gz' --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 
-### 7. Post-merge metrics update
+### 8. Post-merge metrics update
 
 After the release merges, the corpus metrics auto-regenerate. No manual step is required.
 
@@ -284,11 +320,11 @@ After the release merges, the corpus metrics auto-regenerate. No manual step is 
 
 ```bash
 # Delete the release (keeps the tag)
-gh release delete v0.12.0 --yes
+gh release delete v0.12.1 --yes
 
 # Delete the tag if needed
-git push origin :refs/tags/v0.12.0
-git tag -d v0.12.0
+git push origin :refs/tags/v0.12.1
+git tag -d v0.12.1
 ```
 
 ### crates.io (irreversible — yank, do not delete)
@@ -297,10 +333,13 @@ Once published to crates.io, a crate version cannot be deleted. Use `cargo yank`
 
 ```bash
 # Yank a specific crate version
-cargo yank --version 0.12.0 <crate-name>
+cargo yank --version 0.12.1 <crate-name>
 
-# Example: yank perl-lsp
-cargo yank --version 0.12.0 perl-lsp
+# Example: yank the public facade crate
+cargo yank --version 0.12.1 perllsp
+
+# Example: yank the implementation crate
+cargo yank --version 0.12.1 perl-lsp-rs
 ```
 
 The crates are published in topological order. If the workflow fails mid-way, earlier crates in the publish order are already live. Yank each published crate individually. The publish order is computed by `publish-crates.yml` from `cargo metadata`; run this to see the order:
@@ -317,8 +356,8 @@ print("\n".join(allow))
 To yank all at once after a botched release:
 
 ```bash
-# Replace 0.12.0 with the bad version
-VERSION=0.12.0
+# Replace 0.12.1 with the bad version
+VERSION=0.12.1
 cargo metadata --format-version=1 --no-deps | python3 -c '
 import json, sys
 meta = json.load(sys.stdin)
@@ -342,7 +381,7 @@ Same as VS Code Marketplace — publish a patch release to supersede.
 ```bash
 # Delete a specific tag via Docker Hub API (requires login)
 curl -X DELETE \
-  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/0.12.0/" \
+  "https://hub.docker.com/v2/repositories/effortlessmetrics/perl-lsp/tags/0.12.1/" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -361,7 +400,7 @@ If `release-orchestration.yml` fails after the tag is created but before all dow
 3. If the tag was pushed but the GitHub release was not created, run `release.yml` directly:
    ```bash
    gh workflow run release.yml \
-     --field tag=v0.12.0 \
+     --field tag=v0.12.1 \
      --field prerelease=false
    ```
 
@@ -372,13 +411,85 @@ If `release-orchestration.yml` fails after the tag is created but before all dow
 After a release ships, trigger the version bump workflow to prepare the next development cycle:
 
 ```bash
-# Bump to next minor version (e.g., 0.12.0 -> 0.13.0)
+# Bump to the next minor version.
 gh workflow run version-bump.yml \
   --field bump_type=minor
 
 # Or specify an exact version
 gh workflow run version-bump.yml \
-  --field version=0.13.0
+  --field version=NEW_VERSION
 ```
 
-This creates a `release/v0.13.0` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
+This creates a `release/vNEW_VERSION` branch with updated `Cargo.toml` and `CHANGELOG.md`, then opens a PR for review.
+
+---
+
+## Release History Updates
+
+Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RELEASE_HISTORY.md) for the canonical ledger.
+
+### Before publishing
+
+- [ ] Create `docs/releases/vX.Y.Z.md` (use an existing file as template).
+  **Required** — `release-orchestration.yml` refuses to tag without this file,
+  and `release.yml` uses its body (minus YAML frontmatter) as the GitHub
+  Release body.
+- [ ] Add a new row to `RELEASE_HISTORY.md` for vX.Y.Z (fill what you know; mark unknowns with `—`)
+- [ ] Ensure `CHANGELOG.md` has a `[X.Y.Z]` section with links to:
+  - `docs/releases/vX.Y.Z.md`
+  - GitHub Release URL
+  - Compare range `vPrev...vX.Y.Z`
+- [ ] Preview the extracted release body locally before dispatching the workflow:
+  ```bash
+  cargo xtask release-notes --tag vX.Y.Z
+  ```
+  What the command prints is exactly what will become the GitHub Release
+  body. GitHub then appends its auto-generated "What's Changed" PR list
+  below that body (via `generate_release_notes: true` in `release.yml`).
+
+### After publishing
+
+- [ ] Capture GitHub Release metadata:
+  ```bash
+  gh release view vX.Y.Z --json tagName,publishedAt,url,body,assets,targetCommitish
+  ```
+- [ ] Update `docs/releases/vX.Y.Z.md` front-matter with:
+  - `release_date_utc` (from `publishedAt`)
+  - `tag_commit` (resolve tag to commit SHA)
+  - Actual asset list
+- [ ] Update `RELEASE_HISTORY.md` row with:
+  - Asset count and summary
+  - Channel outcomes (crates.io, VS Code Marketplace, Open VSX, Docker)
+
+### Release PR template
+
+Use [`.github/pull_request_template_release.md`](.github/pull_request_template_release.md) for release-only PRs so the release-history surface checks are visible during review.
+
+### Verification
+
+```bash
+# Release-history surface consistency check
+# 1. Notes file exists
+test -f docs/releases/vX.Y.Z.md
+
+# 2. Ledger row exists
+grep 'X.Y.Z' RELEASE_HISTORY.md
+
+# 3. CHANGELOG section exists
+grep '\[X.Y.Z\]' CHANGELOG.md
+
+# 4. Curated body parses cleanly (frontmatter strips, body non-empty)
+cargo xtask release-notes --tag vX.Y.Z > /tmp/body.md && test -s /tmp/body.md
+
+# 5. GitHub Release matches
+gh release view vX.Y.Z --json tagName,assets --jq '{tag: .tagName, assets: [.assets[].name]}'
+
+# 6. GitHub Release body starts with the curated content (not a PR dump)
+gh release view vX.Y.Z --json body --jq '.body' | head -1   # should be "# vX.Y.Z"
+```
+
+### Release PR template
+
+Use [`.github/pull_request_template_release.md`](.github/pull_request_template_release.md)
+when opening release-prep PRs so release-history surfaces are consistently
+updated and reviewed.

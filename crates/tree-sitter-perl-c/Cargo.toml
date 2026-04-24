@@ -1,24 +1,38 @@
 [package]
 name = "tree-sitter-perl-c"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Tree-sitter Perl grammar with C scanner (legacy implementation)"
-publish = false
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Tree-sitter Perl grammar binding (C FFI). Conventional C/tree-sitter reference implementation, kept alongside the native v3 parser for compatibility and comparison."
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 documentation = "https://docs.rs/tree-sitter-perl-c"
-keywords = ["tree-sitter", "perl", "parser", "grammar", "ffi"]
-categories = ["parsing", "text-processing"]
+keywords = ["perl", "parser", "tree-sitter", "grammar", "ffi"]
+categories = ["development-tools", "parser-implementations", "parsing"]
+include = [
+    "src/**",
+    "c-src/**",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 
 [dependencies]
 tree-sitter = "0.26.6"
+tree-sitter-language = "0.1.7"
+
+[package.metadata.docs.rs]
+# docs.rs runs on Linux with a C toolchain available, so the build succeeds.
+all-features = true
+default-target = "x86_64-unknown-linux-gnu"
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
-criterion = "0.8.1"
-test-case = "3.3.1"
 
 [features]
 default = ["c-scanner"]
@@ -39,5 +53,7 @@ name = "parse_c"
 path = "src/bin/parse_c.rs"
 
 [build-dependencies]
-cc = "1.2.51"
-bindgen = "0.72.1" 
+cc = "1.2.60"
+
+[lints]
+workspace = true

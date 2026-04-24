@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"eval { risky_call() }; if ($@) { warn $@; }\",)"
+---
+(source_file (eval (block (expression_statement (function_call_expression (function))))) (if (variable $ @) (block (expression_statement (call warn ((variable $ @)))))))

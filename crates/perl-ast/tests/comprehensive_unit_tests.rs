@@ -896,7 +896,11 @@ fn sexp_data_section() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn sexp_class() -> Result<(), Box<dyn std::error::Error>> {
     let c = Node::new(
-        NodeKind::Class { name: "MyClass".to_string(), body: Box::new(block_node(vec![])) },
+        NodeKind::Class {
+            name: "MyClass".to_string(),
+            parents: vec![],
+            body: Box::new(block_node(vec![])),
+        },
         loc(0, 20),
     );
     assert_eq!(c.to_sexp(), "(class MyClass (block ))");

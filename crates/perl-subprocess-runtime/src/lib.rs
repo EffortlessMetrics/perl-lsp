@@ -90,9 +90,8 @@ impl OsSubprocessRuntime {
     /// Create a new OS subprocess runtime with the given wall-clock timeout.
     ///
     /// If the subprocess does not complete within `timeout_secs` seconds the
-    /// call returns a `SubprocessError` with a "timed out" message.  The
-    /// spawned process is left for the OS to reap — it is not explicitly
-    /// killed.
+    /// call returns a `SubprocessError` with a "timed out" message and attempts
+    /// to terminate the spawned process before returning.
     ///
     /// # Stdin size caveat
     ///
@@ -165,27 +164,20 @@ impl SubprocessRuntime for OsSubprocessRuntime {
                 })
             }
             Some(secs) => {
-                use std::thread;
                 use std::time::{Duration, Instant};
 
                 let deadline = Instant::now() + Duration::from_secs(secs);
-                let program_name = program.to_string();
-                let handle = thread::spawn(move || child.wait_with_output());
-
                 loop {
-                    // Check completion before the deadline so a process that
-                    // finishes exactly at the deadline boundary is never
-                    // reported as timed out.
-                    if handle.is_finished() {
-                        let output = handle
-                            .join()
-                            .map_err(|_| SubprocessError::new("subprocess thread panicked"))?
-                            .map_err(|e| {
-                                SubprocessError::new(format!(
-                                    "Failed to wait for {}: {}",
-                                    program_name, e
-                                ))
-                            })?;
+                    if child
+                        .try_wait()
+                        .map_err(|e| {
+                            SubprocessError::new(format!("Failed to poll {}: {}", program, e))
+                        })?
+                        .is_some()
+                    {
+                        let output = child.wait_with_output().map_err(|e| {
+                            SubprocessError::new(format!("Failed to wait for {}: {}", program, e))
+                        })?;
                         return Ok(SubprocessOutput {
                             stdout: output.stdout,
                             stderr: output.stderr,
@@ -194,15 +186,33 @@ impl SubprocessRuntime for OsSubprocessRuntime {
                     }
 
                     if Instant::now() >= deadline {
-                        // Background thread may still be running; deliberately do not
-                        // join — the spawned process will be reaped by the OS.
+                        if let Err(kill_err) = child.kill() {
+                            // Best effort: process may have already exited between `try_wait`
+                            // and `kill`.
+                            let already_exited = child
+                                .try_wait()
+                                .map_err(|e| {
+                                    SubprocessError::new(format!(
+                                        "Failed to poll {}: {}",
+                                        program, e
+                                    ))
+                                })?
+                                .is_some();
+                            if !already_exited {
+                                return Err(SubprocessError::new(format!(
+                                    "subprocess timed out after {} seconds and failed to terminate {}: {}",
+                                    secs, program, kill_err
+                                )));
+                            }
+                        }
+                        let _ = child.wait();
                         return Err(SubprocessError::new(format!(
                             "subprocess timed out after {} seconds",
                             secs
                         )));
                     }
 
-                    thread::sleep(Duration::from_millis(50));
+                    std::thread::sleep(Duration::from_millis(50));
                 }
             }
         }

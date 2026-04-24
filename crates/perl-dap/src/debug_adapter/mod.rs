@@ -16,6 +16,8 @@ mod parsing;
 pub(crate) mod safe_eval;
 mod transport;
 
+use crate::breakpoint::{AstBreakpointValidator, BreakpointValidator};
+use crate::eval::SafeEvaluator;
 use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::{collect_inline_values_with_runtime, extract_variable_names};
 use crate::protocol::{
@@ -33,17 +35,13 @@ use crate::protocol::{
     StackTraceArguments, StepInArguments, StepInTarget, StepInTargetsArguments,
     StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
 };
+use crate::stack::{PerlStackParser, is_internal_frame_name_and_path};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
-use perl_content_length_framing::{ContentLengthFramer, frame};
-use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
-use perl_dap_eval::SafeEvaluator;
-use perl_dap_stack::{PerlStackParser, is_internal_frame_name_and_path};
-use perl_dap_types::{Source, StackFrame, Variable};
-use perl_dap_variables::{
-    PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
-};
-use perl_keywords::DAP_COMPLETION_KEYWORDS;
-use perl_module_path::module_path_to_name;
+use crate::types::{Source, StackFrame, Variable};
+use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
+use perl_lexer::DAP_COMPLETION_KEYWORDS;
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
+use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -71,7 +69,7 @@ fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<
     match mutex.lock() {
         Ok(guard) => guard,
         Err(poisoned) => {
-            eprintln!("Warning: poisoned mutex recovered: {ctx}");
+            tracing::warn!(ctx, "Poisoned mutex recovered");
             poisoned.into_inner()
         }
     }
@@ -117,7 +115,16 @@ const DEBUGGER_FRAME_POLL_MS: u64 = 10;
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
         .get_or_init(|| {
-            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)")
+            // Match Perl debugger context lines of the form:
+            //   Func::Name(/path/to/file.pl:42):
+            //   main::(/path/to/file.pl:42):
+            //   main::(C:\Windows\path\file.pl:42):
+            //
+            // File paths may contain `:` on Windows (drive letter prefix such as `C:\`).
+            // The path-capturing groups allow a `:` only when it is immediately followed
+            // by a non-digit, non-space character — matching `C:\path` but not the `:42`
+            // line-number separator.
+            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)\s]+(?::[^:)\d\s][^:)\s]*)*):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+(?::[^:)\d\s][^:)\s]*)*)(?:\))?:(?P<line2>\d+):?)")
         })
         .as_ref()
         .ok()
@@ -130,7 +137,7 @@ fn prompt_re() -> Option<&'static Regex> {
 fn stack_frame_re() -> Option<&'static Regex> {
     STACK_FRAME_RE
         .get_or_init(|| {
-            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)")
+            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>.+?)\s+line\s+(?P<line>\d+)")
         })
         .as_ref()
         .ok()
@@ -463,6 +470,11 @@ enum DebugState {
 #[derive(Debug, Clone, PartialEq)]
 enum ResumeMode {
     Continue,
+    /// Like `Continue` but auto-continues past any non-breakpoint stop.
+    /// Used when `configurationDone` runs with `stopOnEntry: false` to
+    /// silently skip the debugger's implicit first-line stop and run to
+    /// the first user-set breakpoint.
+    RunToBreakpoint,
     Goto,
     Next,
     StepIn,
@@ -674,9 +686,12 @@ impl DebugAdapter {
     }
 
     /// Wait briefly for debugger command responses to arrive in the output buffer.
+    fn debugger_output_window_ms(timeout_ms: u32) -> u64 {
+        u64::from(timeout_ms).max(DEBUGGER_QUERY_WAIT_MS)
+    }
+
     fn wait_for_debugger_output_window(timeout_ms: u32) {
-        let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
-        thread::sleep(Duration::from_millis(wait_ms));
+        thread::sleep(Duration::from_millis(Self::debugger_output_window_ms(timeout_ms)));
     }
 
     /// Expand debugger query budgets in heavily instrumented environments.
@@ -726,6 +741,16 @@ mod tests {
         assert_eq!(adapter.next_seq(), 1);
         assert_eq!(adapter.next_seq(), 2);
         assert_eq!(adapter.next_seq(), 3);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_enforces_minimum_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(1), DEBUGGER_QUERY_WAIT_MS);
+    }
+
+    #[test]
+    fn test_debugger_output_window_ms_honors_extended_budget() {
+        assert_eq!(DebugAdapter::debugger_output_window_ms(600), 600);
     }
 
     #[test]
@@ -1267,6 +1292,51 @@ mod tests {
     }
 
     #[test]
+    fn test_attach_trims_host_for_tcp_target() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": " 192.168.1.100 ",
+            "port": 9000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("192.168.1.100:9000"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_accepts_timeout_ms_alias() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeoutMs": 0
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("Timeout must be greater than 0"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_tcp_session_threads_non_empty() -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
         // Inject a TcpAttachSession so handle_threads sees it
@@ -1631,5 +1701,117 @@ mod tests {
             _ => return Err("Expected response".into()),
         }
         Ok(())
+    }
+
+    // --- Signal handling tests (#3028) ---
+
+    #[test]
+    fn test_send_continue_signal_does_not_panic_on_pid_1() {
+        // PID 1 on Unix is init (EPERM), on Windows GenerateConsoleCtrlEvent returns 0.
+        // Must not panic on any platform.
+        let adapter = DebugAdapter::new();
+        let _ = adapter.send_continue_signal(1);
+    }
+
+    #[test]
+    fn test_send_interrupt_signal_does_not_panic_on_pid_1() {
+        let adapter = DebugAdapter::new();
+        let _ = adapter.send_interrupt_signal(1);
+    }
+
+    #[test]
+    fn test_send_continue_signal_pid_zero_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_continue_signal(0));
+    }
+
+    #[test]
+    fn test_send_interrupt_signal_pid_zero_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_interrupt_signal(0));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_send_continue_signal_nonexistent_pid_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_continue_signal(999_999));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_send_interrupt_signal_nonexistent_pid_returns_false() {
+        let adapter = DebugAdapter::new();
+        assert!(!adapter.send_interrupt_signal(999_999));
+    }
+
+    // ── context_re unit tests ─────────────────────────────────────────────────
+
+    /// Helper: apply context_re to `line` and return (file, line_num) if matched.
+    fn apply_context_re(line: &str) -> Option<(String, String)> {
+        let re = context_re()?;
+        let caps = re.captures(line)?;
+        let file =
+            caps.name("file").or_else(|| caps.name("file2")).map(|m| m.as_str().to_string())?;
+        let line_num =
+            caps.name("line").or_else(|| caps.name("line2")).map(|m| m.as_str().to_string())?;
+        Some((file, line_num))
+    }
+
+    #[test]
+    fn test_context_re_unix_path() {
+        let result = apply_context_re("main::(/path/to/file.pl:42):");
+        assert_eq!(result, Some(("/path/to/file.pl".to_string(), "42".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_drive_letter_backslash() {
+        // Windows drive-letter path: colon followed by backslash must be captured
+        // as part of the file path, not treated as a line-number separator.
+        let result = apply_context_re(r"main::(C:\Users\name\file.pl:42):");
+        assert_eq!(result, Some((r"C:\Users\name\file.pl".to_string(), "42".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_drive_letter_forward_slash() {
+        // Forward-slash Windows path from Git Bash / cross-platform tools.
+        let result = apply_context_re("main::(C:/Users/file.pl:7):");
+        assert_eq!(result, Some(("C:/Users/file.pl".to_string(), "7".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_unc_path() {
+        // UNC path (Windows network share).
+        let result = apply_context_re(r"main::(\\server\share\file.pl:5):");
+        assert_eq!(result, Some((r"\\server\share\file.pl".to_string(), "5".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_named_function() {
+        // Func::Name context line.
+        let result = apply_context_re("Foo::Bar::(/path/script.pl:10):");
+        assert_eq!(result, Some(("/path/script.pl".to_string(), "10".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_windows_path_named_function() {
+        // Func::Name context line with Windows path.
+        let result = apply_context_re(r"Foo::Bar::(C:\path\script.pl:10):");
+        assert_eq!(result, Some((r"C:\path\script.pl".to_string(), "10".to_string())));
+    }
+
+    #[test]
+    fn test_context_re_no_match_path_with_spaces() {
+        // Paths with spaces do not match — the character class excludes \s.
+        let result = apply_context_re("main::(/path with spaces/file.pl:5):");
+        assert!(result.is_none(), "paths with spaces should not match");
+    }
+
+    #[test]
+    fn test_context_re_colon_digit_is_line_separator() {
+        // Colon followed by digit is the line-number separator, not a path component.
+        // "/path/file.pl:42" should yield file="/path/file.pl", line="42".
+        let result = apply_context_re("main::(/path/file.pl:42):");
+        assert_eq!(result, Some(("/path/file.pl".to_string(), "42".to_string())));
     }
 }

@@ -523,7 +523,7 @@ perl-lsp was built with a **swarm of agents** (25-100 parallel workers) coordina
 ## Section 8: Distribution & Packaging
 
 ### Current State
-- Single binary (cargo install perl-lsp)
+- Single binary (cargo install perllsp)
 - VS Code extension (auto-downloads binary)
 - Manual setup for Neovim, Emacs, etc.
 

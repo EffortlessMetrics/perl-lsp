@@ -31,16 +31,16 @@ tree-sitter-perl/Makefile linguist-generated
 tree-sitter-perl/Package.swift linguist-generated
 
 # -----------------------------------------------------------------------------
-# crates/tree-sitter-perl-rs/ - Rust bindings with vendored C
+# archive/crates/tree-sitter-perl-rs/ - archived Rust harness (vendored C)
 # -----------------------------------------------------------------------------
-crates/tree-sitter-perl-rs/src/parser.c linguist-generated linguist-vendored
-crates/tree-sitter-perl-rs/src/scanner.c linguist-vendored
-crates/tree-sitter-perl-rs/src/*.h linguist-vendored
-crates/tree-sitter-perl-rs/src/tree_sitter/** linguist-vendored
-crates/tree-sitter-perl-rs/src/*.json linguist-generated
-crates/tree-sitter-perl-rs/src/grammar.js linguist-vendored
-crates/tree-sitter-perl-rs/src/*.pest linguist-vendored
-crates/tree-sitter-perl-rs/src/lib/*.js linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/parser.c linguist-generated linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/scanner.c linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.h linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/tree_sitter/** linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.json linguist-generated
+archive/crates/tree-sitter-perl-rs/src/grammar.js linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/*.pest linguist-vendored
+archive/crates/tree-sitter-perl-rs/src/lib/*.js linguist-vendored
 
 # -----------------------------------------------------------------------------
 # crates/tree-sitter-perl*/ - other tree-sitter crates (if present)

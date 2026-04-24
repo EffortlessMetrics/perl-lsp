@@ -19,5 +19,8 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [lints]
 workspace = true

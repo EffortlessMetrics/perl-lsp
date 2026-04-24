@@ -6,7 +6,7 @@ if (-not $packageVersion) {
   Write-Error "ChocolateyPackageVersion is not available"
   exit 1
 }
-$archivePath = "perl-lsp-${packageVersion}-x86_64-pc-windows-msvc.zip"
+$archivePath = "perllsp-${packageVersion}-x86_64-pc-windows-msvc.zip"
 
 $packageArgs = @{
   packageName   = 'perl-lsp'
@@ -21,11 +21,11 @@ Install-ChocolateyZipPackage @packageArgs
 
 # Locate extracted binary in either legacy versioned folder or current root layout.
 $installPaths = @(
-  Join-Path $env:ChocolateyPackageFolder "perl-lsp-${packageVersion}-x86_64-pc-windows-msvc",
+  Join-Path $env:ChocolateyPackageFolder "perllsp-${packageVersion}-x86_64-pc-windows-msvc",
   $env:ChocolateyPackageFolder
 )
 $binaryPath = $installPaths |
-  ForEach-Object { Join-Path $_ "perl-lsp.exe" } |
+  ForEach-Object { Join-Path $_ "perllsp.exe" } |
   Where-Object { Test-Path $_ } |
   Select-Object -First 1
 
@@ -35,7 +35,7 @@ if (-not (Test-Path $binaryPath)) {
 }
 
 # Create shims
-Install-BinFile -Name "perl-lsp" -Path $binaryPath
+Install-BinFile -Name "perllsp" -Path $binaryPath
 
 $dapPath = $installPaths |
   ForEach-Object { Join-Path $_ "perl-dap.exe" } |
@@ -47,4 +47,4 @@ if ($dapPath -and (Test-Path $dapPath)) {
 }
 
 Write-Host "perl-lsp has been installed successfully."
-Write-Host "To use with your editor, configure it to use 'perl-lsp --stdio'"
+Write-Host "To use with your editor, configure it to use 'perllsp --stdio'"

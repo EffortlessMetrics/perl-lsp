@@ -14,7 +14,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Respect CARGO_TARGET_DIR if set (used by agents to avoid build collisions).
 _TARGET_DIR="${CARGO_TARGET_DIR:-${REPO_ROOT}/target}"
-BIN="${_TARGET_DIR}/release/perl-lsp"
+BIN="${_TARGET_DIR}/release/perllsp"
 SKIP_BUILD=false
 TIMEOUT_SECONDS=30
 
@@ -48,8 +48,8 @@ if [[ "$SKIP_BUILD" == true ]]; then
   step "skipping build (--no-build)"
   [[ -x "$BIN" ]] || fail "binary not found at $BIN — run without --no-build first"
 else
-  step "building perl-lsp --release"
-  cargo build -p perl-lsp --release --quiet \
+  step "building perllsp --release"
+  cargo build -p perllsp --release --quiet \
     || fail "cargo build failed"
   pass "build"
 fi
@@ -100,7 +100,7 @@ lsp_frame() {
 # ---------------------------------------------------------------------------
 # Step 3: Launch LSP and run the protocol sequence
 # ---------------------------------------------------------------------------
-step "launching perl-lsp --stdio"
+step "launching perllsp --stdio"
 
 # Use a pair of FIFOs for bidirectional communication with the server.
 FIFO_IN="${TMPDIR_SMOKE}/lsp_in"

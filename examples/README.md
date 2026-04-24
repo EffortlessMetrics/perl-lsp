@@ -23,7 +23,7 @@ Demonstrates programmatic interaction with the Perl Language Server over stdio
 
 ```bash
 # Build the LSP server binary first
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 
 # Then run the example (requires perl-lsp in PATH)
 cargo run --example lsp_client

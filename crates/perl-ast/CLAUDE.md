@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Typed representation of Perl syntax constructs used by the parser, semantic analyzer, and LSP server.
 
-**Version**: 0.10.0
+**Version**: workspace (currently 0.12.3)
 
 ## Commands
 

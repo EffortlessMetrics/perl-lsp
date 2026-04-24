@@ -180,7 +180,7 @@ correct behavior.
 
 The CLAUDE.md policy notes a single exemption:
 
-> Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp/src/util/uri.rs`
+> Exception: `#[allow(clippy::expect_used)]` in `crates/perl-lsp-rs/src/util/uri.rs`
 
 This file originally contained URI parsing logic where an `expect()` was
 deemed justified -- a case where the invariant was guaranteed by the type
@@ -368,7 +368,7 @@ just mutation-regression
 # Runs:
 #   cargo test -p perl-parser --test mutation_hardening_tests
 #   cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
-#   cargo test -p perl-lsp --test mutation_survivors_elimination
+#   cargo test -p perl-lsp-rs --test mutation_survivors_elimination
 ```
 
 These harnesses are tests specifically written to kill mutants that

@@ -59,7 +59,7 @@ When LSP Server terminates unexpectedly:
 The LSP test infrastructure uses stdio for JSON-RPC communication:
 
 ```rust
-// From crates/perl-lsp/tests/common/mod.rs
+// From crates/perl-lsp-rs/tests/common/mod.rs
 pub struct LspServer {
     pub process: Child,
     writer: BufWriter<ChildStdin>,  // Writes to server's stdin
@@ -139,7 +139,7 @@ T=5000ms  Test times out waiting for response
 The test infrastructure implements adaptive timeouts based on thread constraints:
 
 ```rust
-// From crates/perl-lsp/tests/lsp_encoding_edge_cases.rs
+// From crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs
 fn compute_adaptive_timeout() -> std::time::Duration {
     let rust_test_threads = std::env::var("RUST_TEST_THREADS")
         .ok()
@@ -237,7 +237,7 @@ fn validate_thread_requirements() {
 
 ### 1. lsp_document_symbols_test
 
-**File**: `crates/perl-lsp/tests/lsp_document_symbols_test.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_document_symbols_test.rs`
 
 **Test Count**: 10+ tests
 
@@ -272,7 +272,7 @@ When multiple tests run in parallel:
 
 **Reliable Local Execution**:
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -- --test-threads=2
 ```
 
 **Proposed Long-term Fix**:
@@ -309,7 +309,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- -
 
 ### 2. lsp_document_links_test
 
-**File**: `crates/perl-lsp/tests/lsp_document_links_test.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_document_links_test.rs`
 
 **Test Count**: 2 tests
 
@@ -345,7 +345,7 @@ The flakiness is inherited from running alongside other LSP tests that do spawn 
 
 **Reliable Local Execution**:
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- --test-threads=2
 ```
 
 **Proposed Long-term Fix**:
@@ -402,7 +402,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --t
 
 ### 3. lsp_encoding_edge_cases
 
-**File**: `crates/perl-lsp/tests/lsp_encoding_edge_cases.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs`
 
 **Test Count**: 15+ tests
 
@@ -474,13 +474,13 @@ fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 **Reliable Local Execution**:
 ```bash
 # Standard execution with thread constraints
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --test-threads=2
 
 # For specific problematic tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- test_emoji_and_special_unicode --nocapture
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- test_emoji_and_special_unicode --nocapture
 
 # Debug Unicode processing
-LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --nocapture
+LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --nocapture
 ```
 
 **Proposed Long-term Fix**:
@@ -543,7 +543,7 @@ LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_enc
 
 ### 4. lsp_cancellation_infrastructure_tests (4 tests)
 
-**File**: `crates/perl-lsp/tests/lsp_cancellation_infrastructure_tests.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_infrastructure_tests.rs`
 
 **Affected Tests**:
 - `test_infrastructure_cleanup_and_resource_management_ac9`
@@ -622,13 +622,13 @@ struct ResourceMonitor {
 **Reliable Local Execution**:
 ```bash
 # Required: Single-threaded execution
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --test-threads=1
 
 # Individual test execution
 RUST_TEST_THREADS=1 cargo test test_infrastructure_cleanup_and_resource_management_ac9 -- --nocapture
 
 # With debug output
-LSP_TEST_DEBUG_READER=1 LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --nocapture
+LSP_TEST_DEBUG_READER=1 LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --nocapture
 ```
 
 **Proposed Long-term Fix**:
@@ -688,7 +688,7 @@ LSP_TEST_DEBUG_READER=1 LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p
 
 ### 5. lsp_cancellation_parser_integration_tests (5 tests)
 
-**File**: `crates/perl-lsp/tests/lsp_cancellation_parser_integration_tests.rs`
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_parser_integration_tests.rs`
 
 **Affected Tests**:
 - `test_incremental_parsing_checkpoint_cancellation_ac6`
@@ -764,10 +764,10 @@ fn create_parser_integration_test_files() -> HashMap<String, String> {
 **Reliable Local Execution**:
 ```bash
 # Required: Single-threaded execution
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_parser_integration_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_parser_integration_tests -- --test-threads=1
 
 # Run stress tests (normally ignored)
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_parser_integration_tests --features stress-tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_parser_integration_tests --features stress-tests -- --test-threads=1
 
 # Individual test
 RUST_TEST_THREADS=1 cargo test test_incremental_parsing_checkpoint_cancellation_ac6 -- --nocapture
@@ -869,13 +869,13 @@ With RUST_TEST_THREADS=2:
 
 **Temporary (single command):**
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 ```
 
 **Shell session:**
 ```bash
 export RUST_TEST_THREADS=2
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 ```
 
 **Permanent (shell config):**
@@ -906,32 +906,32 @@ RUST_TEST_THREADS = "2"
 #### Standard Test Run
 ```bash
 # Run all LSP tests with stable configuration
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Specific Test File
 ```bash
 # Run single test file
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -- --test-threads=2
 ```
 
 #### Specific Test Function
 ```bash
 # Run single test with pattern match
-RUST_TEST_THREADS=1 cargo test -p perl-lsp test_deadlock_detection -- --nocapture
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs test_deadlock_detection -- --nocapture
 ```
 
 #### Debug Mode
 ```bash
 # Enable verbose output
 LSP_TEST_ECHO_STDERR=1 LSP_TEST_DEBUG_READER=1 RUST_TEST_THREADS=1 \
-    cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --nocapture
+    cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --nocapture
 ```
 
 #### Extended Timeout
 ```bash
 # For slow machines or debugging
-LSP_TEST_TIMEOUT_MS=30000 RUST_TEST_THREADS=1 cargo test -p perl-lsp -- --test-threads=1
+LSP_TEST_TIMEOUT_MS=30000 RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs -- --test-threads=1
 ```
 
 ### CI Configuration
@@ -956,17 +956,17 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       
       - name: Run standard LSP tests
-        run: cargo test -p perl-lsp -- --test-threads=2
+        run: cargo test -p perl-lsp-rs -- --test-threads=2
       
       - name: Run cancellation tests (single-threaded)
         env:
           RUST_TEST_THREADS: "1"
         run: |
-          cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --test-threads=1
-          cargo test -p perl-lsp --test lsp_cancellation_parser_integration_tests -- --test-threads=1
+          cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --test-threads=1
+          cargo test -p perl-lsp-rs --test lsp_cancellation_parser_integration_tests -- --test-threads=1
       
       - name: Run encoding tests
-        run: cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --test-threads=2
+        run: cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --test-threads=2
 ```
 
 #### Justfile Integration
@@ -974,11 +974,11 @@ jobs:
 ```just
 # Run LSP tests with proper threading
 test-lsp:
-    RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+    RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Run cancellation tests (requires single thread)
 test-lsp-cancellation:
-    RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_* -- --test-threads=1
+    RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_* -- --test-threads=1
 
 # Run all tests with CI configuration
 ci-test: test-lsp test-lsp-cancellation

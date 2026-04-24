@@ -205,12 +205,14 @@ pub struct InlineValuesResponseBody {
 #[serde(rename_all = "camelCase")]
 pub struct InitializeRequestArguments {
     /// Client ID (e.g., "vscode")
+    #[serde(rename = "clientID", alias = "clientId")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
     /// Client name (e.g., "Visual Studio Code")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_name: Option<String>,
     /// Adapter ID (e.g., "perl-rs")
+    #[serde(rename = "adapterID", alias = "adapterId")]
     pub adapter_id: String,
     /// Locale (e.g., "en-US")
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -327,6 +329,9 @@ pub struct AttachRequestArguments {
     /// Connection timeout in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u32>,
+    /// If true, pause at the first available program location after attaching.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_on_entry: Option<bool>,
 }
 
 // ============================================================================

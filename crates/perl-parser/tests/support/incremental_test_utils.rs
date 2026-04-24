@@ -5,6 +5,7 @@
 
 use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
 use perl_parser::{edit::Edit, position::Position};
+use perl_tdd_support::{must, must_some};
 use std::time::{Duration, Instant};
 
 /// Comprehensive performance measurement utilities for incremental parsing
@@ -17,7 +18,6 @@ impl IncrementalTestUtils {
     /// Create a performance edit that changes a value in the source
     #[allow(dead_code)]
     pub fn create_value_edit(source: &str, old_value: &str, new_value: &str) -> (String, Edit) {
-        use perl_tdd_support::must_some;
         let pos = must_some(source.find(old_value));
         let end_pos = pos + old_value.len();
         let new_end = pos + new_value.len();

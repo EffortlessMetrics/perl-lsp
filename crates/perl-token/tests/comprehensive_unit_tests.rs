@@ -54,6 +54,21 @@ fn token_new_empty_text() {
 fn token_new_zero_length_span() {
     let t = Token::new(TokenKind::Semicolon, ";", 42, 42);
     assert_eq!(t.start, t.end);
+    assert!(t.is_empty());
+}
+
+#[test]
+fn token_len_reports_span_width() {
+    let t = Token::new(TokenKind::Identifier, "hello", 7, 12);
+    assert_eq!(t.len(), 5);
+    assert!(!t.is_empty());
+}
+
+#[test]
+fn token_len_saturates_for_malformed_span() {
+    let t = Token::new(TokenKind::Unknown, "?", 12, 7);
+    assert_eq!(t.len(), 0);
+    assert!(t.is_empty());
 }
 
 #[test]
@@ -188,6 +203,7 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
         // Operators
         TokenKind::Assign,
         TokenKind::Plus,
@@ -334,6 +350,7 @@ fn all_variants_are_listed() {
             | TokenKind::Field
             | TokenKind::Format
             | TokenKind::Undef
+            | TokenKind::Defer
             | TokenKind::Assign
             | TokenKind::Plus
             | TokenKind::Minus
@@ -534,6 +551,7 @@ fn keyword_token_round_trip() {
         (TokenKind::Field, "field"),
         (TokenKind::Format, "format"),
         (TokenKind::Undef, "undef"),
+        (TokenKind::Defer, "defer"),
     ];
 
     let mut offset = 0;

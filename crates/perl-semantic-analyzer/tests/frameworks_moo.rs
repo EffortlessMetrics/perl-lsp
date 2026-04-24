@@ -327,6 +327,74 @@ after 'cleanup' => sub { };
 }
 
 #[test]
+fn moo_around_modifier_emits_symbols_for_multiple_method_names() {
+    let code = r#"
+package MyApp::User;
+use Moo;
+around 'name', 'email' => sub { };
+"#;
+
+    let table = extract_symbols(code);
+
+    let name_modifier =
+        find_symbol_with_declaration(&table, "name", SymbolKind::Subroutine, "around");
+    assert!(name_modifier.is_some(), "expected around modifier symbol for `name`");
+    let email_modifier =
+        find_symbol_with_declaration(&table, "email", SymbolKind::Subroutine, "around");
+    assert!(email_modifier.is_some(), "expected around modifier symbol for `email`");
+}
+
+/// `around qw(name email) => sub {}` — qw list as the method target.
+/// The qw form is parsed as ArrayLiteral whose elements are String nodes,
+/// so collect_symbol_names on each arg will recurse into ArrayLiteral elements
+/// and collect both names.
+#[test]
+fn moo_around_modifier_qw_form_emits_symbols_for_each_method() {
+    let code = r#"
+package MyApp::Widget;
+use Moo;
+around qw(name email) => sub { };
+"#;
+
+    let table = extract_symbols(code);
+
+    let name_modifier =
+        find_symbol_with_declaration(&table, "name", SymbolKind::Subroutine, "around");
+    assert!(name_modifier.is_some(), "expected around modifier symbol for `name` (qw form)");
+    let email_modifier =
+        find_symbol_with_declaration(&table, "email", SymbolKind::Subroutine, "around");
+    assert!(email_modifier.is_some(), "expected around modifier symbol for `email` (qw form)");
+}
+
+#[test]
+fn moose_override_modifier_emits_subroutine_symbol() {
+    let code = r#"
+package MyApp::User;
+use Moose;
+override 'render' => sub { };
+"#;
+
+    let table = extract_symbols(code);
+
+    let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "override");
+    assert!(sym.is_some(), "expected Subroutine symbol with declaration='override' for `render`");
+}
+
+#[test]
+fn moose_augment_modifier_emits_subroutine_symbol() {
+    let code = r#"
+package MyApp::User;
+use Moose;
+augment 'render' => sub { };
+"#;
+
+    let table = extract_symbols(code);
+
+    let sym = find_symbol_with_declaration(&table, "render", SymbolKind::Subroutine, "augment");
+    assert!(sym.is_some(), "expected Subroutine symbol with declaration='augment' for `render`");
+}
+
+#[test]
 fn moo_modifier_not_emitted_without_framework() {
     let code = r#"
 package Plain;

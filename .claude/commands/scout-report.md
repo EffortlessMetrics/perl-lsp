@@ -25,72 +25,11 @@ and complete the scout checklist step that produces it:
 
 ## Template
 
-```bash
-gh issue create \
-  --title "$ARGUMENTS" \
-  --label "swarm-discovered" \
-  --body "$(cat <<'ISSUE_EOF'
-## Problem
+Use the **Full Scout Report** variant from `/scout-issue`. Do NOT hand-roll the issue body.
 
-_Exact evidence with file:line references._
-
-<your evidence here — include file paths, line numbers, error messages>
-
-## Root Cause
-
-_One sentence: what's wrong in the code and where._
-
-<e.g., "parse_phase_block in declarations.rs:845 checks for CHECK keyword
-before checking if next token is Colon, so CHECK: labels are misidentified
-as phase blocks.">
-
-## Options
-
-1. **Option A** — <what to change, which file:line>. Tradeoff: <pro/con>. Effort: <EASY/MEDIUM/HARD>.
-2. **Option B** — <what to change, which file:line>. Tradeoff: <pro/con>. Effort: <EASY/MEDIUM/HARD>.
-
-## Recommendation
-
-<which option, one sentence why>
-
-## Builder Spec
-
-_Everything a builder needs to implement this without research._
-
-**File(s) to change:**
-- `crates/<crate>/src/<file>.rs:<line>` — <what to change>
-
-**Test to add:**
-```rust
-#[test]
-fn test_<name>() {
-    // <exact test code or description>
-}
 ```
-
-**Verify:**
-```bash
-cargo test -p <crate> -- <test_name> --exact
-cargo fmt --all && cargo clippy -p <crate> --tests
-```
-
-## Acceptance Criteria
-
-- [ ] <concrete criterion — test passes, metric improves, behavior changes>
-- [ ] <second criterion>
-- [ ] All existing tests still pass
-
-## Scope
-
-- **Crate(s):** <affected crates>
-- **Files:** <file paths>
-- **Effort:** EASY (<2h) / MEDIUM (2-8h) / HARD (>8h)
-- **Corpus impact:** <N files become clean> (parser issues only)
-
----
-_Filed by scout agent. Builder-ready: no research needed._
-ISSUE_EOF
-)"
+Invoke /scout-issue for the canonical issue template.
+Fill all sections: Problem, Root Cause, Options, Recommendation, Builder Spec, Acceptance Criteria, Scope.
 ```
 
 ## Rules
@@ -103,7 +42,13 @@ ISSUE_EOF
 - If you can't fill in the Builder Spec completely, **fill in what you can and note your uncertainty.** A plan-reviewer will verify and improve. A roughly-right spec that a plan-reviewer can correct is more valuable than no spec at all.
 - Label `swarm-discovered` for bugs/improvements, `swarm-architectural`
   for design decisions that need human input.
-- After creating the issue, print the URL.
+- After creating the issue, **add the pipeline label:**
+  ```bash
+  gh issue edit <number> --add-label "needs-plan-review"
+  ```
+  This is the entry point for the verification pipeline. Without it, the
+  issue is invisible to accuracy-scouts, research-verifiers, and plan-reviewers.
+- Print the URL.
 - **Recommend next steps.** Typical recommendations:
   - "Ready for plan-review — spec is complete but I'm uncertain about the root cause in X"
   - "Recommend a follow-up scout on the Y subsystem — I found related issues there"

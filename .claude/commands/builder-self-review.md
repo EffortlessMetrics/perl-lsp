@@ -38,6 +38,24 @@ This catches dumb mistakes before a reviewer has to.
    - Are test names clear and descriptive?
    - Are there edge cases worth one more test?
 
+## Research Verification
+
+Before publishing, check whether your diff makes any external claims. A PR is **claim-heavy** if it asserts ANY of the following:
+
+- Perl language semantics (`our`, `my`, `local`, pragma behavior, signature semantics, regex flags)
+- LSP 3.17/3.18 protocol behavior
+- DAP protocol behavior
+- External crate API behavior (tower-lsp, lsp-types, tree-sitter, etc.)
+- “PR #NNNN closed this” or “this is fixed by commit SHA”
+- Standard library function behavior that the fix depends on
+
+**If ANY claim-heavy criterion is met:**
+1. Dispatch the `research-verifier` agent on the issue (not the PR) before creating the PR.
+2. Wait for the `research-reviewed` label or a verification comment.
+3. **Fallback — if network is unavailable:** add the `needs-research-verification` label to the PR and note it in the PR description. Do not merge blind.
+
+**If no external claims are made:** skip this step — no dispatch needed.
+
 ## Output
 
 Record in your task:
@@ -45,9 +63,32 @@ Record in your task:
 Self-review: CLEAN / FIXED <what>
 Diff size: <lines added/removed>
 Files changed: <count>
+Research verification: SKIPPED (no external claims) / DISPATCHED / FALLBACK LABEL SET
 Recommend: <next step, e.g.:
   - "Ready for review — clean implementation"
   - "Needs a follow-up builder for edge case X I discovered but is out of scope"
   - "Recommend accuracy scout — the spec's root cause was wrong, I adapted but want verification"
 >
+Attribution check: SKIPPED (no attribution claims) / VERIFIED / FLAGGED (needs-git-history-check added)
 ```
+
+## Attribution Check
+
+If your PR description or issue body contains ANY of the following phrases:
+- "fixed by PR #NNNN"
+- "already shipped in commit SHA"
+- "this issue is stale / superseded by #NNNN"
+- "closed by #NNNN"
+
+Run the git-history check before proceeding:
+
+```bash
+# Verify the PR actually merged and closed the right issue
+gh pr view <NNNN> --json state,mergedAt,closingIssuesReferences
+# Verify the fix is present in master
+git log --oneline master | grep -i <keyword>
+```
+
+**If claim checks out:** note `Attribution: VERIFIED` in your output.
+**If claim is wrong:** remove or correct the attribution. Add `needs-git-history-check` label to the original issue for ops sweep.
+**If uncertain:** add `needs-git-history-check` label, note it in the PR description, and continue. Do not block on uncertainty — just flag it.

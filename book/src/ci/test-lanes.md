@@ -59,14 +59,14 @@ Fast, essential tests that must always pass. This is the minimum bar for any mer
 ### LSP Lane (Default)
 
 **Runs on**: Every PR with code changes
-**Command**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked`
+**Command**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --locked`
 
 LSP integration tests with adaptive threading. Uses thread constraints to prevent resource exhaustion on CI runners.
 
 ### Stress Lane (Label-Gated)
 
 **Runs on**: PRs with `ci:stress` label
-**Command**: `cargo test -p perl-lsp --features stress-tests --locked`
+**Command**: `cargo test -p perl-lsp-rs --features stress-tests --locked`
 
 Long-running stability tests, memory pressure tests, and performance benchmarks. Gated because they can take 10+ minutes and burn CI minutes.
 
@@ -78,7 +78,7 @@ Tests in this lane:
 ### Extras Lane (Label-Gated)
 
 **Runs on**: PRs with `ci:extras` label
-**Command**: `cargo test -p perl-lsp --features lsp-extras --locked`
+**Command**: `cargo test -p perl-lsp-rs --features lsp-extras --locked`
 
 Optional LSP features that aren't part of the core protocol. These tests are informational.
 

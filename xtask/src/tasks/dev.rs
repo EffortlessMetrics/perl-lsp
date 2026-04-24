@@ -76,7 +76,7 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
     ));
 
     println!("Connect your editor to this TCP port to use the dev server.");
-    println!("The server will rebuild and spawn 'perl-lsp --stdio' for each connection.");
+    println!("The server will rebuild and spawn 'perllsp --stdio' for each connection.");
 
     // Accept connections
     for stream in listener.incoming() {
@@ -85,11 +85,11 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                 println!("New connection received.");
 
                 // Spawn the lsp process
-                println!("Spawning perl-lsp...");
+                println!("Spawning perllsp...");
 
                 // We use cargo run to ensure it builds if needed
                 let mut cmd = Command::new("cargo");
-                cmd.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"])
+                cmd.args(["run", "-q", "-p", "perllsp", "--", "--stdio"])
                     .stdin(Stdio::piped())
                     .stdout(Stdio::piped())
                     .stderr(Stdio::inherit()); // Let stderr go to console for logs
@@ -97,7 +97,7 @@ pub fn run(watch: bool, port: u16) -> Result<()> {
                 let mut child = match cmd.spawn() {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("Failed to spawn perl-lsp: {}", e);
+                        eprintln!("Failed to spawn perllsp: {}", e);
                         continue;
                     }
                 };

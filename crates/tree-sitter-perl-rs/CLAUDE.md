@@ -1,82 +1,82 @@
-# CLAUDE.md
+# CLAUDE.md — tree-sitter-perl-rs
 
-Guidance for Claude Code when working in `crates/tree-sitter-perl-rs/`.
+## Tier
 
-## Crate Overview
+Tier 2+ (depends on `perl-parser-core` Tier 2 + `perl-ast` Tier 1b).
 
-- **Package name**: `tree-sitter-perl` (lib: `tree_sitter_perl`)
-- **Tier**: 7 (legacy/testing)
-- **Version**: 0.10.0 (workspace)
-- **Publish**: false (internal only)
-- **Purpose**: Pure-Rust Pest-based Perl 5 parser that emits tree-sitter-compatible S-expressions. Also serves as a comparison/benchmark harness against the native v3 parser and the legacy C tree-sitter parser.
+## Purpose
+
+`tree-sitter-perl-rs` is the **Rust-native Perl parser with tree-sitter-style ergonomics
+and tree-sitter-compatible output**. It is a facade over the v3 recursive-descent native
+parser (`perl-parser-core`). It is NOT bindings to the C tree-sitter grammar.
+
+This crate is part of the **Perl tooling platform** positioning:
+- The native Rust parser/lexer/analysis stack is the center of gravity.
+- This crate provides the tree-sitter interoperability surface — a first-class product,
+  not a compatibility shim.
+- Users coming from tree-sitter get a familiar API while benefiting from the full v3
+  parser capabilities (error recovery, incremental support, semantic analysis).
+
+## Public API surface
+
+```rust
+pub struct Parser { /* wraps perl-parser-core */ }
+impl Parser {
+    pub fn new() -> Self;
+    pub fn parse(&mut self, source: &str) -> Option<Tree>;
+}
+
+pub struct Tree { /* owns the v3 AST */ }
+impl Tree {
+    pub fn root_node(&self) -> Node;
+    pub fn source(&self) -> &str;
+}
+
+pub struct Node<'tree> { /* borrows from Tree */ }
+impl<'tree> Node<'tree> {
+    pub fn kind(&self) -> &'static str;        // delegates to NodeKind::kind_name()
+    pub fn to_sexp(&self) -> String;           // delegates to perl_ast::Node::to_sexp()
+    pub fn child_count(&self) -> usize;
+    pub fn child(&self, i: usize) -> Option<Node<'tree>>;
+    pub fn children(&self) -> impl Iterator<Item = Node<'tree>>;
+    pub fn start_byte(&self) -> usize;
+    pub fn end_byte(&self) -> usize;
+    pub fn utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>;
+    pub fn is_leaf(&self) -> bool;
+    pub fn inner(&self) -> &'tree perl_ast::Node;  // escape hatch
+}
+
+pub use perl_ast::NodeKind as PerlNodeKind;  // for pattern matching without perl-ast dep
+```
+
+## How it differs from `tree-sitter-perl-c`
+
+| | `tree-sitter-perl-rs` | `tree-sitter-perl-c` |
+|---|---|---|
+| Backing engine | v3 native Rust parser | C tree-sitter grammar |
+| Binding type | **NOT bindings** — facade | Conventional C bindings |
+| Error recovery | Full v3 tolerance | Grammar-level |
+| Use when | Rust-first Perl tooling | tree-sitter C ecosystem compat |
+
+## Workspace inheritance
+
+Version, edition, rust-version, license, authors, repository, and homepage are all
+inherited from `[workspace.package]` in the root `Cargo.toml`.
 
 ## Commands
 
 ```bash
-cargo build -p tree-sitter-perl                    # Build
-cargo test  -p tree-sitter-perl                    # Test
-cargo clippy -p tree-sitter-perl                   # Lint
-cargo doc   -p tree-sitter-perl --open             # Docs
-
-# Parser comparison and benchmarking binaries
-cargo run -p tree-sitter-perl --bin ts_test_parsers      --features pure-rust
-cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
-cargo run -p tree-sitter-perl --bin bench_parser         --features test-utils
-cargo run -p tree-sitter-perl --bin compare_parsers      --features test-utils
+cargo build -p tree-sitter-perl-rs          # Build
+cargo test -p tree-sitter-perl-rs           # Run all tests
+INSTA_UPDATE=always cargo test -p tree-sitter-perl-rs --test snapshots  # Accept snapshots
+cargo clippy -p tree-sitter-perl-rs         # Lint
+cargo doc -p tree-sitter-perl-rs --open     # View documentation
 ```
 
-## Architecture
+## Backlog follow-ups
 
-### Dependencies
-
-- **perl-lexer**, **perl-parser** -- used for native parser comparison (excluded under `pure-rust-standalone`)
-- **perl-parser-pest** (optional, default via `v2-pest-microcrate`) -- supplies `PureRustPerlParser`, `PerlParser`, `Rule` through bridge modules
-- **perl-ts-heredoc-analysis**, **perl-ts-logos-lexer**, **perl-ts-heredoc-parser**, **perl-ts-partial-ast**, **perl-ts-advanced-parsers** -- optional `pure-rust` sub-crates re-exported from `lib.rs`
-- **tree-sitter** 0.26 -- used only under the `c-parser` feature for FFI benchmarking
-
-### Key Types and Modules
-
-| Item | Path / Feature | Role |
-|------|----------------|------|
-| `PureRustPerlParser` | `pure_rust_parser` (`pure-rust`) | Main Pest parser; `parse()` returns AST, `to_sexp()` emits S-expressions |
-| `PerlParser`, `AstNode` | `pure_rust_parser` (`pure-rust`) | Pest `Rule`-level parser and AST node type |
-| `EnhancedPerlParser` | re-export from `perl-ts-advanced-parsers` | Context-aware parser variant |
-| `FullPerlParser`, `EnhancedFullParser` | re-export from `perl-ts-advanced-parsers` | Full-coverage parser variants |
-| `ComparisonHarness` | `comparison_harness` (`pure-rust` or `test-utils`) | Runs both C and Rust parsers, collects timing |
-| `language()`, `parse()`, `create_ts_parser()` | lib.rs (`c-parser`) | Tree-sitter C FFI entry points |
-| `PerlScanner` trait | `scanner` module | Scanning interface (legacy, used by C/Rust scanner benchmarks) |
-| `error::ParseError` | `error` module | Central error enum (thiserror-based) |
-| `unicode` | `unicode` module | Unicode normalization and validation |
-
-### Feature Flags
-
-| Flag | Default | Effect |
-|------|---------|--------|
-| `pure-rust` | yes | Enables Pest parser and all five `perl-ts-*` sub-crate re-exports |
-| `v2-pest-microcrate` | yes | Routes `pure_rust_parser`, `pratt_parser`, `sexp_formatter` through `perl-parser-pest` bridges |
-| `c-parser` | no | Compiles C tree-sitter parser via `cc`; enables `language()` / `parse()` |
-| `test-utils` | no | Enables `test_utils` module and `bench_parser`/`compare_parsers` binaries |
-| `token-parser` | no | Enables logos-based token parser modules |
-| `pure-rust-standalone` | no | Pest-only parser without `perl-lexer` dependency (for isolated benchmarks) |
-
-### Bridge Pattern (v2 bundle sync)
-
-When `v2-pest-microcrate` is enabled (default), `pure_rust_parser.rs`, `pratt_parser.rs`, and `sexp_formatter.rs` are replaced by thin `*_bridge.rs` files that re-export from `perl-parser-pest`. Editing any shared source requires syncing both copies; verify with `just ci-v2-bundle-sync`.
-
-## Usage
-
-```rust
-use tree_sitter_perl::PureRustPerlParser;
-
-let mut parser = PureRustPerlParser::new();
-let ast = parser.parse("my $x = 42;")?;
-let sexp = parser.to_sexp(&ast);
-println!("{sexp}");
-```
-
-## Important Notes
-
-- The cargo package name is `tree-sitter-perl`, **not** `tree-sitter-perl-rs` (the directory name).
-- `publish = false` -- this crate is workspace-internal.
-- The v2 bundle sync rule applies: changes to `grammar.pest`, `pure_rust_parser.rs`, `pratt_parser.rs`, `sexp_formatter.rs`, or `error.rs` must be mirrored in `perl-parser-pest`. Run `just ci-v2-bundle-sync` to verify.
-- The `c-parser` and `bindings` features require a C toolchain / `libclang`.
+- Tree cursor / walk API
+- Edit/incremental parsing API
+- Field-name accessors (named children by field name)
+- A `Language` constant compatible with the `tree_sitter::Language` shape
+- Predicate / query API

@@ -95,7 +95,7 @@ fn test_dap_launch_with_invalid_program() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(must_some(message).contains("Failed to launch debugger"));
+            assert!(must_some(message).contains("Cannot start Perl debugger"));
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -114,7 +114,7 @@ fn test_dap_launch_missing_arguments() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert_eq!(must_some(message), "Missing launch arguments");
+            assert!(must_some(message).contains("no launch configuration was provided"));
         }
         _ => must(Err::<(), _>("Expected response message")),
     }

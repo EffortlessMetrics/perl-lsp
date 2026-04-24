@@ -6,6 +6,10 @@ This document describes the code coverage infrastructure for perl-lsp.
 
 The perl-lsp project uses **cargo-llvm-cov** for code coverage generation and **Codecov** for coverage aggregation, trending, and PR reporting.
 
+Branch coverage is enabled in the coverage lane with `cargo-llvm-cov --branch`. That requires a nightly Rust toolchain because LLVM branch coverage uses unstable `-Z coverage-options=branch` support.
+
+The initial PR slice keeps the branch gate on library/unit tests (`--lib`) so it stays stable on current master. Integration snapshot suites can still be run separately outside the coverage lane.
+
 ## Quick Start
 
 ### Local Coverage Reports
@@ -18,9 +22,10 @@ just coverage
 
 This will:
 1. Install `cargo-llvm-cov` if not present
-2. Run tests with coverage instrumentation
-3. Generate an HTML report at `target/coverage/index.html`
-4. Attempt to open the report in your browser
+2. Use a nightly Rust toolchain for branch coverage support
+3. Run tests with coverage instrumentation
+4. Generate an HTML report at `target/coverage/index.html`
+5. Attempt to open the report in your browser
 
 ### Terminal Summary
 
@@ -44,23 +49,25 @@ This creates `lcov.info` in the project root.
 
 ### Automatic Coverage Reports
 
-Coverage is automatically generated and uploaded to Codecov:
+Coverage is automatically generated and uploaded to Codecov from the nightly `test-coverage` job in `.github/workflows/ci-nightly.yml`:
 
-- **On every push to `main`/`master`**: Full workspace coverage
-- **On PRs with `ci:coverage` label**: Full workspace coverage
-- **On manual workflow dispatch**: Full workspace coverage
+- **On every push to `main`/`master`**: No coverage job by default
+- **On PRs with `ci:coverage` label**: Parser coverage with branch data
+- **On manual workflow dispatch**: Parser coverage with branch data
 
 ### Viewing Coverage in PRs
 
 When the `ci:coverage` label is applied to a PR:
 
-1. The coverage workflow runs automatically
+1. The nightly coverage job runs automatically
 2. Coverage data is uploaded to Codecov
 3. Codecov posts a comment to the PR showing:
    - Overall coverage percentage
    - Coverage diff (lines added/removed)
    - Per-file coverage changes
    - Flags for each crate (parser, lsp, lexer, dap, corpus)
+
+The nightly coverage lane also generates branch coverage in `lcov.info` and checks it against `.ci/coverage-baseline.txt`. The first slice is a ratchet: branch coverage can stay flat or improve, and it fails if the total drops by more than the allowed percentage point budget.
 
 ### Coverage Badge
 
@@ -88,6 +95,14 @@ Coverage thresholds are defined in `codecov.yml`:
 - **75% for patches**: Encourages well-tested new code
 - **Per-crate targets**: Higher for core, testable components (parser, lexer)
 
+Branch coverage uses the checked-in policy file instead of Codecov status thresholds for the initial PR slice:
+
+- `.ci/coverage-baseline.txt` stores the current branch-coverage baseline and regression budget
+- `scripts/check-coverage-baseline.sh` compares the generated `lcov.info` against that baseline
+- `scripts/update-coverage-baseline.sh` refreshes the checked-in baseline after an intentional improvement
+- `target_branch_coverage` documents the intended longer-term 80% floor
+- `.ci/README-coverage.md` is the terse operator note for the gate and baseline workflow
+
 ## Exclusions
 
 The following paths are excluded from coverage analysis (configured in `codecov.yml`):
@@ -105,16 +120,17 @@ The following paths are excluded from coverage analysis (configured in `codecov.
 
 ## Coverage Workflow
 
-The coverage workflow (`.github/workflows/coverage.yml`) performs these steps:
+The nightly coverage job (`.github/workflows/ci-nightly.yml`, `test-coverage`) performs these steps:
 
 1. **Install toolchain**: Rust stable with `llvm-tools-preview` component
 2. **Install cargo-llvm-cov**: Using `taiki-e/install-action@v2` for speed
 3. **Cache dependencies**: Uses `Swatinem/rust-cache@v2` for faster builds
 4. **Create fixtures**: Legacy LSP test fixtures (if needed)
-5. **Generate coverage**: Run tests with LLVM instrumentation
+5. **Generate coverage**: Run tests with LLVM instrumentation and branch coverage
 6. **Display summary**: Show coverage summary in logs
-7. **Upload to Codecov**: Upload `lcov.info` to Codecov service
-8. **Archive report**: Save `lcov.info` as workflow artifact (30-day retention)
+7. **Check baseline**: Compare branch coverage to `.ci/coverage-baseline.txt`
+8. **Upload to Codecov**: Upload `lcov.info` to Codecov service
+9. **Archive report**: Save `lcov.info` as workflow artifact (30-day retention)
 
 ### Environment Variables
 
@@ -136,7 +152,7 @@ The `codecov.yml` file at the project root configures:
 - Per-crate flags for detailed tracking
 - PR comment layout
 
-### .github/workflows/coverage.yml
+### .github/workflows/ci-nightly.yml
 
 The coverage workflow file defines:
 
@@ -161,6 +177,9 @@ Some tests may be flaky under coverage instrumentation due to timing or memory c
 
 - Lower optimization (`-Copt-level=1`) for faster builds
 - Limited parallelism (`CARGO_BUILD_JOBS=2`, `RUST_TEST_THREADS=2`)
+
+If branch coverage is involved, make sure you are using `cargo +nightly llvm-cov` or a nightly-installed Rust toolchain. Stable rustc cannot compile the `--branch` instrumentation path.
+If your shell does not proxy `cargo +nightly` correctly on Windows, use `rustup run nightly cargo ...` instead.
 
 ### Codecov upload fails
 
@@ -199,6 +218,8 @@ When reviewing PRs with coverage:
 3. Ask: "Are the uncovered lines error paths that should be tested?"
 4. Don't aim for 100% - focus on meaningful test coverage
 
+For branch coverage, pay attention to error paths and recovery branches. A file can have acceptable line coverage while still leaving branches untested.
+
 ### Coverage-Driven Development
 
 Use coverage to find gaps:
@@ -220,6 +241,8 @@ Coverage is **not** part of the fast merge gate (`just ci-gate`) to avoid slowin
 - On `main`/`master` for baseline tracking
 - On PRs with explicit `ci:coverage` label
 - On manual workflow dispatch
+
+Branch coverage in the parser coverage lane is enforced separately through the baseline ratchet in `.ci/coverage-baseline.txt`.
 
 This keeps the merge gate fast (<5 min) while providing coverage visibility when needed.
 

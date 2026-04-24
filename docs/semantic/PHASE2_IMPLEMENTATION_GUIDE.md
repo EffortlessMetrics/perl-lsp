@@ -331,14 +331,14 @@ cargo test -p perl-parser semantic::tests -- --nocapture
 
 ### Phase 2: LSP Integration Tests (Slower, Real Protocol)
 
-**Location**: `/crates/perl-lsp/tests/semantic_*.rs`
+**Location**: `/crates/perl-lsp-rs/tests/semantic_*.rs`
 
 **Goal**: Validate `textDocument/definition` works end-to-end over JSON-RPC.
 
 #### Template LSP Test Structure
 
 ```rust
-// File: /crates/perl-lsp/tests/semantic_use_statement_lsp_tests.rs
+// File: /crates/perl-lsp-rs/tests/semantic_use_statement_lsp_tests.rs
 
 use lsp_types::{Position, GotoDefinitionResponse};
 use perl_lsp_test_harness::{LspTestHarness, TestResult};
@@ -399,10 +399,10 @@ my $x = baz(); # 'baz' not imported
 ```bash
 # Run individual tests sequentially
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_use_statement_lsp_tests -- --nocapture definition_resolves_imported_symbol
+  cargo test -p perl-lsp-rs --test semantic_use_statement_lsp_tests -- --nocapture definition_resolves_imported_symbol
 
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_use_statement_lsp_tests -- --nocapture definition_handles_non_imported_symbol
+  cargo test -p perl-lsp-rs --test semantic_use_statement_lsp_tests -- --nocapture definition_handles_non_imported_symbol
 
 # Full suite (requires adequate memory)
 just ci-lsp-def  # Runs all LSP semantic tests with proper constraints
@@ -469,7 +469,7 @@ just ci-gate
 # - Formatting: cargo fmt --check
 # - Linting: cargo clippy --workspace -- -D warnings
 # - Parser tests: cargo test -p perl-parser
-# - LSP tests: RUST_TEST_THREADS=2 cargo test -p perl-lsp
+# - LSP tests: RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 # - Documentation: cargo doc --no-deps --package perl-parser
 ```
 
@@ -490,16 +490,16 @@ just ci-gate
 ```bash
 # Run each LSP test individually to avoid OOM
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture definition_finds_scalar_variable_declaration
 
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture definition_finds_subroutine_declaration
 
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_resolves_scoped_variables
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture definition_resolves_scoped_variables
 
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture definition_handles_package_qualified_calls
 ```
 
 **CI-Ready Batch Execution** (requires adequate compute):
@@ -545,7 +545,7 @@ building '/nix/store/xxx-perl-lsp-check.drv'...
 cargo test -p perl-parser --test semantic_YOUR_NODE_tests
 
 # 2. LSP integration tests (required)
-cargo test -p perl-lsp --test semantic_YOUR_NODE_lsp_tests
+cargo test -p perl-lsp-rs --test semantic_YOUR_NODE_lsp_tests
 
 # 3. E2E workspace tests (recommended)
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- YOUR_NODE_e2e
@@ -955,7 +955,7 @@ cargo test -p perl-parser --test semantic_use_statement_tests -- --nocapture
 #### Step 4: Write LSP Integration Test
 
 ```rust
-// File: /crates/perl-lsp/tests/semantic_use_statement_lsp_tests.rs
+// File: /crates/perl-lsp-rs/tests/semantic_use_statement_lsp_tests.rs
 
 #[test]
 fn definition_resolves_imported_symbol() -> TestResult {
@@ -978,7 +978,7 @@ my $x = bar();
 **Run LSP test**:
 ```bash
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_use_statement_lsp_tests -- --nocapture
+  cargo test -p perl-lsp-rs --test semantic_use_statement_lsp_tests -- --nocapture
 ```
 
 #### Step 5: Validate Locally
@@ -1026,7 +1026,7 @@ Once all validations pass:
 
 - **Phase 1 Implementation**: `/crates/perl-parser/src/semantic.rs` (12 handlers)
 - **Phase 1 Tests**: `/crates/perl-parser/tests/semantic_*_tests.rs`
-- **LSP Integration**: `/crates/perl-lsp/tests/semantic_definition.rs`
+- **LSP Integration**: `/crates/perl-lsp-rs/tests/semantic_definition.rs`
 - **Issue Tracking**: GitHub Issue #188 (Semantic Analyzer Phases)
 - **Architecture**: `/docs/semantic/SEMANTIC_ANALYZER_ARCHITECTURE.md`
 - **Position Tracking**: `/docs/reference/POSITION_TRACKING_GUIDE.md`

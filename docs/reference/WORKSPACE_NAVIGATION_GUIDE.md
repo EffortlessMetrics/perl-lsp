@@ -218,10 +218,10 @@ my $result = calculate_complex_value($a, $b, $c, $d, $e);  # Complex parameter l
 ### Enable Enhanced Workspace Features
 ```bash
 # LSP server automatically uses enhanced workspace indexing
-perl-lsp --stdio
+perllsp --stdio
 
 # For development and debugging:
-PERL_LSP_DEBUG=1 perl-lsp --stdio --log
+PERL_LSP_DEBUG=1 perllsp --stdio --log
 ```
 
 ### Testing Enhanced Features
@@ -259,7 +259,7 @@ cargo test -p perl-parser test_dual_indexing_comprehensive_coverage
 cargo test -p perl-parser workspace_dual_pattern_reference_search
 
 # Test Unicode processing enhancements
-cargo test -p perl-lsp --test lsp_encoding_edge_cases -- unicode_performance_validation
+cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- unicode_performance_validation
 ```
 
 ## Performance and Quality Metrics

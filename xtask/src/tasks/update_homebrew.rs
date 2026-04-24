@@ -184,13 +184,13 @@ fn build_brew_formula(
   end
 
   def install
-    # Find the extracted directory (should be perl-lsp-v*).
-    extracted_dir = Dir.glob("perl-lsp-v*").first
+    # Find the extracted directory (should be perllsp-v*).
+    extracted_dir = Dir.glob("perllsp-v*").first
     if extracted_dir && File.directory?(extracted_dir)
-      bin.install "#{{extracted_dir}}/perl-lsp"
+      bin.install "#{{extracted_dir}}/perllsp"
     else
       # Fallback: binary might be in the root
-      bin.install "perl-lsp"
+      bin.install "perllsp"
     end
   end
 
@@ -203,12 +203,12 @@ fn build_brew_formula(
 
       Neovim (with lspconfig):
         require('lspconfig').perl_lsp.setup{{
-          cmd = {{'#{{opt_bin}}/perl-lsp', '--stdio'}}
+          cmd = {{'#{{opt_bin}}/perllsp', '--stdio'}}
         }}
 
       Emacs (with lsp-mode):
         (lsp-register-client
-         (make-lsp-client :new-connection (lsp-stdio-connection '#{{opt_bin}}/perl-lsp' "--stdio")
+         (make-lsp-client :new-connection (lsp-stdio-connection '#{{opt_bin}}/perllsp' "--stdio")
                           :activation-fn (lsp-activate-on "perl")
                           :server-id 'perl-lsp))
     EOS
@@ -216,11 +216,11 @@ fn build_brew_formula(
 
   test do
     # Test that the binary runs and responds to version request
-    assert_match(/perl-lsp|Perl LSP/, shell_output("#{{bin}}/perl-lsp --version"))
+    assert_match(/perllsp|Perl LSP/, shell_output("#{{bin}}/perllsp --version"))
 
     # Test LSP initialization
     input = '{{"jsonrpc":"2.0","id":1,"method":"initialize","params":{{}}}}'
-    output = pipe_output("#{{bin}}/perl-lsp --stdio", input, 0)
+    output = pipe_output("#{{bin}}/perllsp --stdio", input, 0)
     assert_match(/Content-Length/, output)
   end
 end
@@ -245,11 +245,9 @@ fn artifact_filename(prefix: &str, version: &str, artifact: &str) -> String {
 }
 
 fn write_formula(path: &std::path::Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create directory for {}", path.display()))?;
-        }
+    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create directory for {}", path.display()))?;
     }
 
     fs::write(path, format!("{content}\n"))

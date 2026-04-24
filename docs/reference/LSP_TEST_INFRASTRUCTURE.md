@@ -290,30 +290,30 @@ Detects Windows Subsystem for Linux via:
 
 ```bash
 # Standard test run
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # With adaptive threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
 # With verbose output
-LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp -- --nocapture
+LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp-rs -- --nocapture
 ```
 
 ### CI Environment
 
 ```bash
 # CI-optimized test run
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --lib
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --lib
 
 # With extended timeout
-LSP_TEST_TIMEOUT_MS=15000 RUST_TEST_THREADS=2 cargo test -p perl-lsp
+LSP_TEST_TIMEOUT_MS=15000 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 ```
 
 ### Resource-Constrained Systems
 
 ```bash
 # Minimal resource usage
-RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 cargo test -p perl-lsp
+RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 cargo test -p perl-lsp-rs
 ```
 
 ## Best Practices

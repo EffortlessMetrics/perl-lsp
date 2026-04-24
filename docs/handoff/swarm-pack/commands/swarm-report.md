@@ -1,6 +1,6 @@
 ---
 description: Generate daily swarm summary for user check-in
-argument-hint: "[--since '24 hours ago']"
+argument-hint: "[--since 7d]"
 ---
 
 # Swarm Report
@@ -10,12 +10,10 @@ Generate a summary for the user's check-in. Context: **$ARGUMENTS**
 ## Gather Data
 
 ```bash
-SINCE="${1:-24 hours ago}"
+SINCE="${1:-7d}"
 
 echo "=== PRs Merged ==="
-gh pr list --state merged --json number,title,mergedAt --limit 50 | \
-  jq --arg since "$(date -d "$SINCE" -Iseconds 2>/dev/null || date -v-1d -Iseconds)" \
-  '[.[] | select(.mergedAt > $since)]'
+gh pr list --state merged --json number,title,mergedAt --limit 50
 
 echo "=== PRs Open ==="
 gh pr list --state open --json number,title,labels
@@ -27,9 +25,9 @@ gh issue list --label "swarm-architectural" --state open
 echo "=== Agent Patches Pending ==="
 ls -la .ops/agent-patches/*.md 2>/dev/null
 
-echo "=== Metrics Summary ==="
-tail -100 .ops/swarm-metrics.jsonl 2>/dev/null | \
-  jq -s 'group_by(.outcome) | map({outcome: .[0].outcome, count: length})'
+echo "=== Metrics Dashboard ==="
+cargo xtask swarm-summary .ops-perl-lsp --since "${SINCE}" --limit 20
+cargo xtask swarm-summary .ops-perl-lsp --since "${SINCE}" --limit 20 --format json
 ```
 
 ## Report Format
@@ -50,9 +48,11 @@ Summarize as:
 - N items in discovery log
 
 ### Health
-- Green rate: N% (from metrics)
+- Entries in window: N
+- Top agent types: <from metrics>
+- Top session / worktree hotspots: <from metrics>
+- If you need a machine-readable handoff, capture the JSON mode output too.
 - Agent patches pending review: N
-- Known pitfalls: N active
 
 ### Blockers
 - <any blocked PRs or slices>

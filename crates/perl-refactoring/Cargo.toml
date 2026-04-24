@@ -1,6 +1,7 @@
 [package]
 name = "perl-refactoring"
-version = "0.12.0"
+publish = false
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -24,12 +25,11 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
-perl-workspace-index = { workspace = true }
-perl-module-path = { workspace = true }
-perl-qualified-name = { workspace = true }
-regex = "1.12.2"
-serde = { version = "1.0.228", features = ["derive"] }
-url = "2.5.4"
+perl-workspace = { workspace = true }
+perl-module = { workspace = true }
+regex.workspace = true
+serde = { workspace = true }
+url.workspace = true
 
 [features]
 default = ["workspace_refactor"]
@@ -40,7 +40,11 @@ workspace-rename-tests = []  # Workspace rename integration tests (requires Work
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
 serial_test = "3.4.0"
-tempfile = "3.24.0"
+tempfile.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

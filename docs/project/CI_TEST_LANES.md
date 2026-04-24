@@ -1,207 +1,49 @@
 # CI Test Lanes
 
-This document describes the test lane architecture for the Perl LSP project. Understanding these lanes is critical for maintaining CI budget discipline.
+This document maps the current GitHub workflows to the local commands
+contributors should run first.
 
-## Quick Reference
-
-| Lane | Feature Flag | Default | Purpose |
-|------|-------------|---------|---------|
-| Core | (none) | ✅ PR | Fast, essential tests |
-| LSP | (none) | ✅ PR | LSP integration tests |
-| Stress | `stress-tests` | ❌ Label | Long-running stability tests |
-| Extras | `lsp-extras` | ❌ Label | Optional LSP features |
-| Security | `stress-tests` | ❌ Label | Security edge cases (can hang) |
-
-## Local-First Workflow
-
-**IMPORTANT**: CI should be a confirmation step, not your iteration loop.
-
-### Before Any Push
+## Canonical Order
 
 ```bash
-# Fast merge gate (~2-5 min) - REQUIRED
-just ci-gate
-
-# Full CI pipeline (~10-20 min) - RECOMMENDED for large changes
-just ci-full
-
-# Nix users (deterministic, reproducible) - CANONICAL LOCAL GATE
+just devex
+just pr-fast
 nix develop -c just ci-gate
+just ci-full
+just status-update
+just status-check
+just release-check
 ```
 
-> **Note**: `nix flake check` doesn't work due to Nix sandbox blocking network
-> access for Cargo dependencies. Use `nix develop -c just ci-gate` instead.
+## Lane Map
 
-### What `just ci-gate` Runs
+| Lane | Workflow | When it runs | Local equivalent |
+|------|----------|--------------|------------------|
+| PR smoke | `ci.yml` | Every PR | `just pr-fast` |
+| Merge gate | `ci.yml` | `merge-ready`, push to `main` or `master`, manual run | `nix develop -c just ci-gate` |
+| Nightly / expensive jobs | `ci-nightly.yml` | Scheduled runs and label-gated PRs | `just ci-full` plus targeted helpers |
+| Security | `ci-security.yml` | Path-sensitive pushes and scheduled runs | `just security-audit` |
 
-1. `cargo fmt --check --all` - Format check
-2. `cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs` - Lint
-3. `cargo test --workspace --lib --locked` - Library tests
-4. `cargo xtask check-from-raw` - Policy checks
-5. LSP semantic definition tests
+## Active Labels
 
-### What `just ci-full` Adds
+The nightly workflow currently uses these labels:
 
-1. Full clippy (all targets)
-2. Core tests (lib + bins)
-3. LSP integration tests (thread-constrained)
-4. Documentation build
+- `ci:coverage`
+- `ci:bench`
+- `ci:strict`
+- `ci:mutation`
 
-## Test Lane Details
+Nightly benchmark runs also execute a real-repo LSP latency assertion:
+`real_project_first_diagnostics_catalyst_5000_lines_under_5s` in
+`crates/perl-lsp-rs/tests/real_project_latency.rs` (`cargo test -p perl-lsp-rs --test real_project_latency ... --include-ignored`).
 
-### Core Lane (Default)
+The broader label catalog lives in [`.github/ci-config.yml`](../../.github/ci-config.yml).
+Use that file as the source of truth when you add or rename labels.
 
-**Runs on**: Every PR
-**Command**: `cargo test --workspace --lib --locked`
+## Local Helpers
 
-Fast, essential tests that must always pass. This is the minimum bar for any merge.
-
-### LSP Lane (Default)
-
-**Runs on**: Every PR with code changes
-**Command**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked`
-
-LSP integration tests with adaptive threading. Uses thread constraints to prevent resource exhaustion on CI runners.
-
-### Stress Lane (Label-Gated)
-
-**Runs on**: PRs with `ci:stress` label
-**Command**: `cargo test -p perl-lsp --features stress-tests --locked`
-
-Long-running stability tests, memory pressure tests, and performance benchmarks. Gated because they can take 10+ minutes and burn CI minutes.
-
-Tests in this lane:
-- `lsp_stress_tests.rs`
-- `lsp_memory_pressure.rs`
-- `lsp_performance_benchmarks.rs`
-
-### Extras Lane (Label-Gated)
-
-**Runs on**: PRs with `ci:extras` label
-**Command**: `cargo test -p perl-lsp --features lsp-extras --locked`
-
-Optional LSP features that aren't part of the core protocol. These tests are informational.
-
-Tests in this lane:
-- `lsp_new_features_tests.rs`
-- `lsp_advanced_features_test.rs`
-
-### Security Lane (Label-Gated)
-
-**Runs on**: PRs with `ci:stress` label
-**Reason**: Some security tests can hang on malformed input
-
-Tests in this lane:
-- `lsp_security_edge_cases.rs`
-- `lsp_protocol_violations.rs`
-
-**Known Issue**: The test harness `read_response()` can block forever on malformed requests. Until we add `read_response_timeout()` handling, these tests are gated.
-
-## CI Budget Controls
-
-### Concurrency Cancellation
-
-All workflows now include:
-
-```yaml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-```
-
-This means pushing 5 times only pays for the last run, not all 5.
-
-### Path Filters
-
-Most workflows exclude docs-only changes:
-
-```yaml
-paths-ignore:
-  - 'docs/**'
-  - '**/*.md'
-  - '.claude/**'
-```
-
-### Label-Gating
-
-Heavy workflows require explicit labels to prevent CI spend on every push:
-
-| Label | Workflow | Purpose |
-|-------|----------|---------|
-| `ci:tests` | `test.yml` | Cross-platform test matrix (Ubuntu + Windows) |
-| `ci:lsp` | `lsp-tests.yml` | LSP integration tests |
-| `ci:property` | `property-tests.yml` | Property-based/fuzz tests |
-| `ci:strict` | `rust-strict.yml` | Quality gates, doc hygiene |
-| `ci:semver` | `rust-strict.yml` | API compatibility checks |
-| `ci:bench` | `lsp-tests.yml` | Performance benchmarks |
-| `ci:coverage` | `lsp-tests.yml` | Code coverage analysis |
-| `ci:mutation` | `ci-expensive.yml` | Mutation testing |
-| `ci:stress` | `ci-expensive.yml` | Stress/security tests |
-| `ci:extras` | - | Extra LSP features |
-
-> **Note**: The cheap default lane (`ci.yml`) runs on all PRs without labels.
-> Unlabeled PR syncs trigger zero billable minutes on gated workflows.
-
-## Adding New Tests
-
-### Default Lane (Always Runs)
-
-Place test in the appropriate crate's `tests/` directory. No feature flag needed.
-
-```rust
-#[test]
-fn test_my_feature() {
-    // This runs on every PR
-}
-```
-
-### Gated Lane (Opt-In)
-
-Add feature flag to `Cargo.toml`:
-
-```toml
-[features]
-stress-tests = []
-```
-
-Guard your test:
-
-```rust
-#[test]
-#[cfg(feature = "stress-tests")]
-fn test_stress_scenario() {
-    // Only runs with ci:stress label
-}
-```
-
-## Troubleshooting
-
-### CI Hangs
-
-1. Check if test is in security/protocol lane
-2. Add explicit timeout: `read_response_timeout(server, Duration::from_secs(5))`
-3. Consider gating under `stress-tests` feature
-
-### CI Minutes Burning
-
-1. Check for missing `concurrency` block
-2. Check for missing `paths-ignore`
-3. Consider if test needs to be in default lane
-
-### Flaky Tests
-
-1. Use `RUST_TEST_THREADS=2` for LSP tests
-2. Use adaptive timeouts from `common/mod.rs`
-3. Consider moving to stress lane if inherently unstable
-
-## Workflow Reference
-
-| Workflow | Trigger | Lane |
-|----------|---------|------|
-| `ci.yml` | PR to master | Core + LSP |
-| `lsp-tests.yml` | Code changes | LSP (matrix) |
-| `test.yml` | Code changes | Core (matrix) |
-| `property-tests.yml` | Code changes | Property tests |
-| `ci-expensive.yml` | Labels | Bench, Mutation |
-| `quality-checks.yml` | Code changes | Quality gates |
-| `nightly.yml` | Schedule | Deep tests |
+- `just ci-gate-msrv` and `just ci-full-msrv` validate the same gates on the
+  MSRV toolchain.
+- `just ci-gate-low-mem` is useful on constrained machines or WSL.
+- `just security-audit` runs the local security scan helper.
+- `just ci-workflow-audit` checks the repository workflows themselves for drift.

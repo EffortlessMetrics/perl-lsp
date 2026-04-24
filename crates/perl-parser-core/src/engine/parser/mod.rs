@@ -61,7 +61,7 @@ use crate::{
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -93,10 +93,16 @@ pub struct Parser<'a> {
     last_end_position: usize,
     /// Context flag for disambiguating for-loop initialization syntax
     in_for_loop_init: bool,
+    /// Depth of nested class bodies for context-sensitive class-body constructs
+    in_class_body: usize,
     /// Statement boundary tracking for indirect object syntax detection
     at_stmt_start: bool,
     /// FIFO queue of pending heredoc declarations awaiting content collection
     pending_heredocs: VecDeque<PendingHeredoc>,
+    /// Custom attributes registered by Attribute::Handlers declarations in this file.
+    custom_attribute_handlers: HashSet<String>,
+    /// Whether `use Attribute::Handlers;` has been seen in this file.
+    attribute_handlers_enabled: bool,
     /// Source bytes for heredoc content collection (shared with token stream)
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
@@ -144,8 +150,11 @@ impl<'a> Parser<'a> {
             recursion_depth: 0,
             last_end_position: 0,
             in_for_loop_init: false,
+            in_class_body: 0,
             at_stmt_start: true,
             pending_heredocs: VecDeque::new(),
+            custom_attribute_handlers: HashSet::new(),
+            attribute_handlers_enabled: false,
             src_bytes: input.as_bytes(),
             byte_cursor: 0,
             heredoc_start_time: None,
@@ -159,10 +168,134 @@ impl<'a> Parser<'a> {
     ///
     /// When the flag is set to `true`, the parser will return `Err(ParseError::Cancelled)`
     /// at the next cancellation check point (every 64 statements).
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - Perl source code to parse.
+    /// * `cancellation_flag` - Shared flag used to request cancellation.
+    ///
+    /// # Returns
+    ///
+    /// A parser configured with cooperative cancellation checks.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser_core::Parser;
+    /// use std::sync::{
+    ///     atomic::AtomicBool,
+    ///     Arc,
+    /// };
+    ///
+    /// let cancellation_flag = Arc::new(AtomicBool::new(false));
+    /// let mut parser = Parser::new_with_cancellation("my $x = 1;", cancellation_flag);
+    /// let _ = parser.parse();
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// `input` and `cancellation_flag` configure source + cancellation.
+    ///
+    /// # Returns
+    ///
+    /// A parser configured with cooperative cancellation checks.
+    ///
+    /// # Examples
+    ///
+    /// See the cancellation usage example above.
     pub fn new_with_cancellation(input: &'a str, cancellation_flag: Arc<AtomicBool>) -> Self {
         let mut p = Parser::new(input);
         p.cancellation_flag = Some(cancellation_flag);
         p
+    }
+
+    /// Create a parser from pre-lexed tokens, skipping the lexer pass.
+    ///
+    /// This constructor is the integration point for the incremental parsing
+    /// pipeline: when cached tokens are available for an unchanged region of
+    /// source, they can be fed directly into the parser without re-lexing.
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` — Pre-lexed `Token` values produced by a prior [`TokenStream`]
+    ///   pass. Trivia tokens (whitespace, comments) should already be filtered
+    ///   out, as [`TokenStream::from_vec`] does not apply trivia skipping.
+    ///   An `Eof` token does **not** need to be included; the stream synthesises
+    ///   one when the buffer is exhausted.
+    /// * `source` — The original Perl source text. This is still required for
+    ///   heredoc content collection which operates directly on byte offsets in
+    ///   the source rather than on the token stream.
+    ///
+    /// # Returns
+    ///
+    /// A configured parser that will consume `tokens` in order without invoking
+    /// the lexer. The resulting AST is structurally identical to one produced by
+    /// [`Parser::new`] with the same source, provided the token list is complete
+    /// and accurate.
+    ///
+    /// # Context-sensitive token disambiguation
+    ///
+    /// The standard parser uses `relex_as_term` to re-lex ambiguous tokens (e.g.
+    /// `/` as division vs. regex) in context-sensitive positions. When using
+    /// pre-lexed tokens the kind is fixed from the original lex pass, so the
+    /// original parse context must have been correct. In practice this means
+    /// `from_tokens` is safe to use when the token stream comes from a previous
+    /// successful parse of the same source.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use perl_parser_core::{Parser, Token, TokenKind, TokenStream};
+    ///
+    /// let source = "my $x = 42;";
+    ///
+    /// // Collect pre-lexed tokens (normally cached from a prior parse)
+    /// let mut stream = TokenStream::new(source);
+    /// let mut tokens = Vec::new();
+    /// loop {
+    ///     match stream.next() {
+    ///         Ok(t) if t.kind == TokenKind::Eof => break,
+    ///         Ok(t) => tokens.push(t),
+    ///         Err(_) => break,
+    ///     }
+    /// }
+    ///
+    /// let mut parser = Parser::from_tokens(tokens, source);
+    /// let ast = parser.parse()?;
+    /// assert!(matches!(ast.kind, perl_parser_core::NodeKind::Program { .. }));
+    /// # Ok::<(), perl_parser_core::ParseError>(())
+    /// ```
+    ///
+    /// # Arguments
+    ///
+    /// * `tokens` - Pre-lexed non-trivia tokens.
+    /// * `source` - Original source text used by heredoc processing.
+    ///
+    /// # Returns
+    ///
+    /// A parser that consumes the provided token vector.
+    ///
+    /// # Examples
+    ///
+    /// See the pre-lexed token example above.
+    pub fn from_tokens(tokens: Vec<Token>, source: &'a str) -> Self {
+        Parser {
+            tokens: TokenStream::from_vec(tokens),
+            recursion_depth: 0,
+            last_end_position: 0,
+            in_for_loop_init: false,
+            in_class_body: 0,
+            at_stmt_start: true,
+            pending_heredocs: VecDeque::new(),
+            custom_attribute_handlers: HashSet::new(),
+            attribute_handlers_enabled: false,
+            src_bytes: source.as_bytes(),
+            byte_cursor: 0,
+            heredoc_start_time: None,
+            errors: Vec::new(),
+            cancellation_flag: None,
+            cancellation_check_counter: 0,
+        }
     }
 
     /// Check for cooperative cancellation, amortised over every 64 calls.
@@ -344,6 +477,8 @@ mod format_tests;
 #[cfg(test)]
 mod forward_declaration_tests;
 #[cfg(test)]
+mod from_tokens_tests;
+#[cfg(test)]
 mod glob_assignment_tests;
 #[cfg(test)]
 mod glob_tests;
@@ -369,6 +504,10 @@ mod statement_modifier_tests;
 mod tests;
 #[cfg(test)]
 mod tie_tests;
+#[cfg(test)]
+mod typed_variable_declaration_tests;
+#[cfg(test)]
+mod unclosed_block_recovery_tests;
 #[cfg(test)]
 mod use_overload_tests;
 #[cfg(test)]

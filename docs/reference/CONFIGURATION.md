@@ -41,7 +41,7 @@ include_paths = ["lib", "local/lib/perl5"]
 [diagnostics]
 # Uncomment to enable perlcritic (requires perlcritic installed)
 # perlcritic = true
-# perlcritic_severity = 3  # 1 = most severe, 5 = everything
+# perlcritic_severity = 3  # 1 = least severe (reports more), 5 = most severe (reports less)
 
 [features]
 # Inlay hints show parameter names and types inline while you code
@@ -82,7 +82,7 @@ Priority 3 (highest): didChangeConfiguration — live editor settings
 | `[perl]` | `version` | string | none | Perl version hint, e.g. `"5.38"`. Reserved; not yet used. |
 | `[perl]` | `include_paths` | string[] | `[]` | Extra module paths. Empty = keep built-in defaults. |
 | `[diagnostics]` | `perlcritic` | bool | false | Enable perlcritic linting (opt-in). |
-| `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = strictest, 5 = everything. |
+| `[diagnostics]` | `perlcritic_severity` | int 1-5 | 3 | Minimum severity to report. 1 = least severe (reports everything), 5 = most severe (reports only strictest). |
 | `[features]` | `inlay_hints` | bool | true | Enable/disable all inlay hints globally. |
 
 ### LSP workspace settings (all editors, under `perl.*`)
@@ -274,7 +274,7 @@ which perlcritic   # verify
 ```toml
 [diagnostics]
 perlcritic = true
-perlcritic_severity = 3   # 1 = most severe, 5 = everything
+perlcritic_severity = 3   # 1 = least severe (reports more), 5 = most severe (reports less)
 ```
 
 **Enable via editor settings** (personal preference):
@@ -392,17 +392,17 @@ Running on a VM, container, or remote SSH session with limited RAM or slow I/O:
 
 ### CI / headless environment
 
-Running `perl-lsp --check` in CI pipelines or pre-commit hooks:
+Running `perllsp --check` in CI pipelines or pre-commit hooks:
 
 ```bash
 # Check a single file
-perl-lsp --check lib/MyModule.pm
+perllsp --check lib/MyModule.pm
 
 # Check all Perl files in a directory
-perl-lsp --check-project lib/
+perllsp --check-project lib/
 
 # Check with exit code (non-zero on parse errors)
-perl-lsp --check-project . && echo "All files parse clean"
+perllsp --check-project . && echo "All files parse clean"
 ```
 
 For a project that also uses perlcritic in CI, use the `perl.perlcritic` settings together with the test runner:
@@ -502,9 +502,9 @@ Every `.perl-lsp.toml` setting has a VSCode `settings.json` counterpart. The tab
 Feature profiles control which LSP capabilities the server advertises. Select them at startup:
 
 ```bash
-perl-lsp --stdio --feature-profile production  # default: full GA feature set
-perl-lsp --stdio --feature-profile ga-lock     # conservative: GA-locked features only
-perl-lsp --stdio --feature-profile all         # all features including experimental
+perllsp --stdio --feature-profile production  # default: full GA feature set
+perllsp --stdio --feature-profile ga-lock     # conservative: GA-locked features only
+perllsp --stdio --feature-profile all         # all features including experimental
 ```
 
 In VSCode, set the profile in `settings.json`:
@@ -524,7 +524,7 @@ In VSCode, set the profile in `settings.json`:
 To see which features are active in the current profile:
 
 ```bash
-perl-lsp --features-json --feature-profile production | python3 -m json.tool
+perllsp --features-json --feature-profile production | python3 -m json.tool
 ```
 
 ---
@@ -538,7 +538,7 @@ perl-lsp --features-json --feature-profile production | python3 -m json.tool
 3. Verify the TOML is valid:
 
    ```bash
-   perl-lsp --check-project .  # will warn about bad .perl-lsp.toml
+   perllsp --check-project .  # will warn about bad .perl-lsp.toml
    ```
 
 ### Module resolution not finding your modules
@@ -551,7 +551,7 @@ perl-lsp --features-json --feature-profile production | python3 -m json.tool
 
 1. Confirm `perlcritic` is installed: `which perlcritic && perlcritic --version`
 2. Confirm `perlcritic = true` is set (it is opt-in and defaults to false).
-3. Check the severity — at severity 1, only the most severe violations appear. Try severity 5 to confirm it is working.
+3. Check the severity — at severity 1, perlcritic reports the broadest set. Try severity 5 to restrict to only the most severe violations.
 
 ### Inlay hints are missing
 

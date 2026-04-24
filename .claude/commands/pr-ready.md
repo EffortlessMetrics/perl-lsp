@@ -25,19 +25,20 @@ gh pr view $NUMBER --json isDraft,title,state
 If the PR is not a draft, report: "PR #N is already marked ready" and stop.
 If the PR is not open, report the current state and stop.
 
-### 3. Verify deep review completed
-
-**Before marking ready, confirm the `reviewed-deep` label is present.** This is a hard gate — no PR can be marked merge-ready without passing deep review.
+### 3. Verify review coverage
 
 ```bash
-gh pr view $NUMBER --json labels --jq '[.labels[].name] | if (. | contains(["reviewed-deep"])) then "PASS" else "FAIL" end'
+gh pr view $NUMBER --json labels,files
 ```
 
-If the result is `FAIL`: **STOP.** Report: "PR #$NUMBER cannot be marked ready — missing `reviewed-deep` label. Route to reviewer-deep first."
+Policy:
+- If the PR has the `deep-reviewed` label, proceed.
+- If it does not have `deep-reviewed`, it may proceed **only** when every changed file is docs-only (`docs/**` or doc-text files such as `.md`, `.mdx`, `.txt`, `.rst`, `.adoc`).
+- Otherwise: **STOP.** Report: "PR #$NUMBER cannot be marked ready — missing `deep-reviewed` on a non-docs PR. Route to reviewer-deep first."
 
-Optionally validate receipt freshness to ensure the deep review covers the current HEAD:
+Optionally validate receipt freshness when `deep-reviewed` is present to ensure the deep review covers the current HEAD:
 ```
-/label-receipt-validate pr $NUMBER reviewed-deep
+/label-receipt-validate pr $NUMBER deep-reviewed
 ```
 
 ### 4. Mark ready and signal merge-readiness

@@ -19,14 +19,15 @@ interface ReleaseAsset {
 
 interface Release {
     tag_name: string;
+    prerelease?: boolean;
     assets: ReleaseAsset[];
 }
 
 /**
- * Parse the local version string from `perl-lsp --version` stdout.
+ * Parse the local version string from `perllsp --version` stdout.
  *
  * The binary prints three lines; only the first is needed:
- *   perl-lsp 0.12.0
+ *   perllsp 0.12.0
  *   Git tag: v0.12.0
  *   Perl Language Server using perl-parser v3
  *
@@ -34,7 +35,7 @@ interface Release {
  */
 export function parseLocalVersion(versionOutput: string): string | null {
     const firstLine = versionOutput.split('\n')[0].trim();
-    const match = /^perl-lsp\s+(\S+)/.exec(firstLine);
+    const match = /^(?:perllsp|perl-lsp)\s+(\S+)/.exec(firstLine);
     return match ? match[1] : null;
 }
 
@@ -56,7 +57,7 @@ export function compareVersions(a: string, b: string): -1 | 0 | 1 {
 export class BinaryDownloader {
     private static readonly REPO_OWNER = 'EffortlessMetrics';
     private static readonly REPO_NAME = 'perl-lsp';
-    private static readonly BINARY_NAME = 'perl-lsp';
+    private static readonly BINARY_NAME = 'perllsp';
     
     constructor(
         private readonly context: vscode.ExtensionContext,
@@ -94,41 +95,87 @@ export class BinaryDownloader {
         // Download binary
         try {
             return await this.downloadWithProgress();
-        } catch (error: any) {
-            const errorMsg = error?.message || String(error);
+        } catch (error: unknown) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
             this.outputChannel.appendLine(`Failed to download binary: ${errorMsg}`);
-            
-            // Provide helpful error messages
+
+            const manualInstallUrl = 'https://github.com/EffortlessMetrics/perl-lsp#quick-start';
+            const manualInstallNote = 'To use a manually installed binary, set the "perl-lsp.serverPath" setting to its path.';
+
+            let message: string;
+            let buttons: string[];
+
             if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('ETIMEDOUT') || errorMsg.includes('timeout')) {
-                vscode.window.showErrorMessage(
-                    'Failed to download perl-lsp: Network connection error. ' +
-                    'Please check your internet connection and proxy settings.',
-                    'Open Settings'
-                ).then(choice => {
-                    if (choice === 'Open Settings') {
-                        vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
-                    }
-                });
-            } else if (errorMsg.includes('tar') || errorMsg.includes('unzip')) {
-                vscode.window.showErrorMessage(
-                    'Failed to extract perl-lsp: Archive extraction failed. ' +
-                    'Please ensure tar (Linux/macOS) or unzip (Windows) is installed.',
-                    'Install Manually'
-                ).then(choice => {
-                    if (choice === 'Install Manually') {
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#quick-install'));
-                    }
-                });
+                // Network connectivity failure — proxy, VPN, or firewall
+                message =
+                    'perl-lsp: Binary download failed — network error ' +
+                    `(${errorMsg.split('\n')[0]}). ` +
+                    'Check your proxy/VPN settings (http.proxy in VS Code settings). ' +
+                    manualInstallNote;
+                buttons = ['Open Proxy Settings', 'Install Manually'];
+            } else if (errorMsg.includes('No binary found for platform')) {
+                // Architecture or OS not supported by the release
+                const platformMatch = /platform:\s*([^\s.]+)/.exec(errorMsg);
+                const platformStr = platformMatch ? platformMatch[1] : 'your platform';
+                if (this.isAndroidEnvironment()) {
+                    message =
+                        `perl-lsp: Android environment detected (${platformStr}). ` +
+                        'Pre-built Android binaries are not published yet. ' +
+                        'Use Termux package tooling or build from source, then point perl-lsp.serverPath to the binary. ' +
+                        manualInstallNote;
+                } else {
+                    message =
+                        `perl-lsp: No pre-built binary for ${platformStr}. ` +
+                        'Build from source or download a compatible binary manually. ' +
+                        manualInstallNote;
+                }
+                buttons = ['Install Manually'];
+            } else if (errorMsg.includes('HTTP 403')) {
+                // GitHub rate limit or auth failure
+                message =
+                    'perl-lsp: Download blocked (HTTP 403 — GitHub rate limit). ' +
+                    'Wait a few minutes, or set the GITHUB_TOKEN environment variable to increase your rate limit. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.includes('HTTP 404')) {
+                // Release or asset not found
+                message =
+                    'perl-lsp: Binary not found (HTTP 404). ' +
+                    'The release asset may not exist yet for this platform. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.toLowerCase().includes('checksum') || errorMsg.includes('SHA256SUMS')) {
+                // Corrupted or tampered download, or missing checksum file
+                message =
+                    'perl-lsp: Checksum verification failed — download may be corrupted. ' +
+                    'Please retry. If this persists, install manually. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
+            } else if (errorMsg.includes('tar') || errorMsg.includes('unzip') || errorMsg.includes('extract')) {
+                // Archive extraction failure
+                message =
+                    'perl-lsp: Archive extraction failed. ' +
+                    'Ensure tar (Linux/macOS) or the built-in zip support (Windows) is working. ' +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
             } else {
-                vscode.window.showErrorMessage(
-                    `Failed to download perl-lsp: ${errorMsg}`,
-                    'View Logs'
-                ).then(choice => {
-                    if (choice === 'View Logs') {
-                        this.outputChannel.show();
-                    }
-                });
+                // Generic fallback — always surface the manual install path
+                message =
+                    `perl-lsp: Binary download failed — ${errorMsg.split('\n')[0]}. ` +
+                    manualInstallNote;
+                buttons = ['Install Manually', 'View Logs'];
             }
+
+            vscode.window.showErrorMessage(message, ...buttons).then((choice: string | undefined) => {
+                if (choice === 'Install Manually') {
+                    vscode.env.openExternal(vscode.Uri.parse(manualInstallUrl));
+                } else if (choice === 'Open Proxy Settings') {
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'http.proxy');
+                } else if (choice === 'View Logs') {
+                    this.outputChannel.show();
+                }
+            });
+
             return null;
         } finally {
             statusBar.dispose();
@@ -155,6 +202,9 @@ export class BinaryDownloader {
             // Try multiple naming patterns for our release format
             const ext = process.platform === 'win32' ? '.zip' : '.tar.gz';
             const possibleNames = [
+                `perllsp-${release.tag_name}-${target}${ext}`,
+                `perllsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
+                `perllsp-${target}${ext}`,
                 `perl-lsp-${release.tag_name}-${target}${ext}`,
                 `perl-lsp-v${release.tag_name.replace('v', '')}-${target}${ext}`,
                 `perl-lsp-${target}${ext}`
@@ -258,8 +308,11 @@ export class BinaryDownloader {
                 }
                 
                 // Find the binary
-                const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
-                const extractedBinary = this.findBinary(extractDir, binaryName);
+                const binaryNames = process.platform === 'win32'
+                    ? ['perllsp.exe', 'perl-lsp.exe']
+                    : ['perllsp', 'perl-lsp'];
+                const extractedBinary =
+                    binaryNames.map(name => this.findBinary(extractDir, name)).find(Boolean) ?? null;
                 
                 if (!extractedBinary) {
                     throw new Error('Binary not found in archive');
@@ -345,19 +398,25 @@ export class BinaryDownloader {
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.message && parsed.message.includes('Not Found')) {
-                            reject(new Error('No releases found'));
-                        } else if (Array.isArray(parsed)) {
+                        const parsed: unknown = JSON.parse(data);
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'message' in parsed) {
+                            const msg = parsed as { message: string };
+                            if (msg.message.includes('Not Found')) {
+                                reject(new Error('No releases found'));
+                                return;
+                            }
+                        }
+                        if (Array.isArray(parsed)) {
                             // For stable channel, find first non-prerelease
-                            const stableRelease = parsed.find((r: any) => !r.prerelease);
+                            const releases = parsed as Release[];
+                            const stableRelease = releases.find(r => !r.prerelease);
                             if (stableRelease) {
                                 resolve(stableRelease);
                             } else {
-                                resolve(parsed[0]); // Fall back to latest
+                                resolve(releases[0]); // Fall back to latest
                             }
                         } else {
-                            resolve(parsed);
+                            resolve(parsed as Release);
                         }
                     } catch (e) {
                         reject(e);
@@ -376,10 +435,14 @@ export class BinaryDownloader {
         
         // Try multiple naming patterns that might be used internally
         const possibleFilenames = [
+            `perllsp-${version}-${target}${ext}`,
+            `perllsp-v${version.replace('v', '')}-${target}${ext}`,
+            `perllsp-${target}${ext}`,
+            `perllsp${ext}`,
             `perl-lsp-${version}-${target}${ext}`,
             `perl-lsp-v${version.replace('v', '')}-${target}${ext}`,
             `perl-lsp-${target}${ext}`,
-            `perl-lsp${ext}` // Simplest case for internal hosting
+            `perl-lsp${ext}`
         ];
         
         // Create synthetic release with all possible asset URLs
@@ -524,6 +587,15 @@ export class BinaryDownloader {
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
+            if (this.isAndroidEnvironment()) {
+                const androidArchMap: Record<string, string> = {
+                    arm64: 'aarch64-linux-android',
+                    x64: 'x86_64-linux-android',
+                    ia32: 'i686-linux-android',
+                    arm: 'armv7-linux-androideabi'
+                };
+                return androidArchMap[arch] ?? `${arch}-linux-android`;
+            }
             const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
@@ -548,6 +620,19 @@ export class BinaryDownloader {
         
         return `${rustArch}-${rustPlatform}`;
     }
+
+    private isAndroidEnvironment(): boolean {
+        if (process.platform !== 'linux') {
+            return false;
+        }
+
+        return (
+            typeof process.env.ANDROID_ROOT === 'string' ||
+            typeof process.env.ANDROID_DATA === 'string' ||
+            typeof process.env.TERMUX_VERSION === 'string' ||
+            os.release().toLowerCase().includes('android')
+        );
+    }
     
     private detectMusl(): boolean {
         // Check for Alpine or musl
@@ -569,7 +654,7 @@ export class BinaryDownloader {
     private getLocalBinaryPath(): string {
         const platform = process.platform;
         const arch = process.arch;
-        const binaryName = platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
+        const binaryName = platform === 'win32' ? 'perllsp.exe' : 'perllsp';
         
         return path.join(
             this.context.globalStorageUri.fsPath,
@@ -661,7 +746,7 @@ export class BinaryDownloader {
             }
 
             const choice = await vscode.window.showInformationMessage(
-                `perl-lsp ${remoteVersion} is available (installed: ${localVersion})`,
+                `perllsp ${remoteVersion} is available (installed: ${localVersion})`,
                 'Update',
                 'Dismiss',
                 "Don't ask again"

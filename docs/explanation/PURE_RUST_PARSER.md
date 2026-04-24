@@ -1,6 +1,14 @@
-# Pure Rust Perl Parser
+# Pure Rust Perl Parser (v2 — Historical Context)
 
-This project now includes a **pure Rust implementation** of a Perl parser alongside the traditional C/tree-sitter parser. This allows for comprehensive testing and benchmarking between native implementations.
+> **Status: Historical — replaced by v3 native parser.**
+> This document describes the **v2 Pest-based parser**, which is now legacy (kept out of the
+> default gate). The current default parser is **v3**, a hand-written recursive-descent parser
+> in `crates/perl-parser/` that does not depend on Pest or tree-sitter. See
+> [KNOWN_LIMITATIONS.md](../reference/KNOWN_LIMITATIONS.md) for the current parser comparison.
+
+This document describes the v2 pure Rust implementation of the Perl parser using the Pest PEG
+library. It was introduced alongside the traditional C/tree-sitter parser (v1) for comprehensive
+testing and benchmarking before the v3 native parser superseded both as the production default.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
-use crate::utils::project_root;
+use crate::utils::{project_root, run_cargo_metadata};
 use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -94,16 +94,8 @@ struct PublishTarget {
 }
 
 fn load_publish_targets() -> Result<Vec<PublishTarget>> {
-    let output =
-        Command::new("cargo").args(["metadata", "--format-version", "1", "--no-deps"]).output()?;
-    if !output.status.success() {
-        bail!(
-            "Failed to load workspace metadata for publish allowlist: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)?;
+    let bytes = run_cargo_metadata(true)?;
+    let metadata: CargoMetadata = serde_json::from_slice(&bytes)?;
 
     let allowlist = metadata
         .metadata
@@ -232,9 +224,12 @@ pub fn publish_release(version: String, dry_run: bool, git_ref: Option<String>) 
 
 pub fn smoke_test_release(version: String) -> Result<()> {
     let root = project_root()?;
-    let script = root.join("scripts").join("smoke-test-release.sh");
+    // Use a relative path with forward slashes so bash (Git Bash / MSYS2 on
+    // Windows) does not interpret backslashes in an absolute Windows path as
+    // escape sequences. `current_dir(&root)` below anchors the relative path.
+    let script = std::path::PathBuf::from("scripts/smoke-test-release.sh");
     let status = Command::new("bash")
-        .arg(script)
+        .arg(&script)
         .arg(version)
         .current_dir(&root)
         .env("XTASK_SMOKE_TEST_RELEASE", "1")

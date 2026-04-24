@@ -1,0 +1,37 @@
+[package]
+name = "perl-ts-heredoc-parser"
+version = "0.12.2"
+edition = "2024"
+rust-version = "1.92"
+description = "Heredoc parsing pipeline for Perl"
+publish = false
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+documentation = "https://github.com/EffortlessMetrics/perl-lsp"
+keywords = ["perl", "heredoc", "parser", "lexer", "lsp"]
+categories = ["parsing", "development-tools", "text-processing"]
+
+[dependencies]
+regex.workspace = true
+perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
+perl-ts-statement-tracker = { path = "../perl-ts-statement-tracker" }
+perl-parser-pest = { path = "../perl-parser-pest" }
+
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
+[lints.rust]
+unused_imports = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+collapsible_if = "warn"
+manual_strip = "warn"
+unnecessary_map_or = "warn"
+redundant_closure = "warn"
+while_let_on_iterator = "warn"
+len_zero = "warn"
+only_used_in_recursion = "warn"
+ptr_arg = "warn"

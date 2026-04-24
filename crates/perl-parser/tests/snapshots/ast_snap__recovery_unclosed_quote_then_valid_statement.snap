@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my $x = \\\"oops;\\nmy $y = 1;\")"
+---
+(source_file (ERROR "expected expression, found unknown token at position 8"))

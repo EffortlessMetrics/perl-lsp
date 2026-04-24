@@ -208,7 +208,7 @@ After migrating a file:
 
 ```bash
 # Run the specific test file
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- --test-threads=2
 
 # If tests pass, commit and move to next file
 # If tests fail, check for:

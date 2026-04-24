@@ -66,5 +66,5 @@ SKIP (already sourced or opinion):
 If there are no verifiable claims, output:
 ```
 No external factual claims found in issue #NNN. Nothing to verify.
-Label research-verified anyway to unblock pipeline.
+Label research-reviewed anyway to unblock pipeline.
 ```

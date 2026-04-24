@@ -1,33 +1,41 @@
 # perl-refactoring
 
-Refactoring and modernization utilities for Perl code, part of the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+Refactoring and code-modernization utilities for Perl source.
 
-## Features
+Use this crate when you have parsed source plus analysis context and need to
+rewrite code, not just inspect it.
 
-- **Import Optimization** -- detect unused/duplicate imports, generate optimized `use` statements (`ImportOptimizer`)
-- **Code Modernization** -- suggest modern Perl idioms (lexical filehandles, three-argument `open`, `say`, `strict`/`warnings`) via `PerlModernizer`
-- **Unified Refactoring Engine** -- `RefactoringEngine` coordinates rename, modernize, and import-optimize operations with backup/rollback support
-- **Workspace Refactoring** -- cross-file rename, extract module, move subroutine, inline variable (`WorkspaceRefactor`)
-- **Workspace Rename** -- scope-aware, atomic symbol rename across an entire workspace with progress reporting (`WorkspaceRename`)
+## Where it fits
 
-## Cargo Features
+`perl-refactoring` sits above the parser and workspace index. It consumes AST
+and symbol information, then performs import cleanup, modernization, rename,
+and workspace-wide transformations.
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `workspace_refactor` | yes | Workspace-wide refactoring via `WorkspaceIndex` |
-| `modernize` | no | Code modernization transforms in `RefactoringEngine` |
+## Key entry points
 
-## Usage
+- `import_optimizer::ImportOptimizer`
+- `modernize::PerlModernizer`
+- `refactoring::RefactoringEngine`
+- `workspace_refactor::WorkspaceRefactor`
+- `workspace_rename::WorkspaceRename`
+
+## Cargo features
+
+- `workspace_refactor` enables workspace-wide refactoring via `WorkspaceIndex`
+- `modernize` enables modernization transforms in `RefactoringEngine`
+
+## Example
 
 ```rust
 use perl_refactoring::import_optimizer::ImportOptimizer;
 
 let optimizer = ImportOptimizer::new();
 let analysis = optimizer.analyze_content("use Carp qw(croak); print 1;")?;
-let optimized = optimizer.generate_optimized_imports(&analysis);
+let _optimized = optimizer.generate_optimized_imports(&analysis);
 ```
 
-## License
+## Typical use
 
-Licensed under either of MIT or Apache-2.0 at your option.
+Use `perl-refactoring` when you need to migrate code, remove unused imports, or
+perform cross-file symbol edits. If you only need symbol analysis or workspace
+lookup, use the lower-level crates directly.

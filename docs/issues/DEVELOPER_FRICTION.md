@@ -113,7 +113,7 @@ rustup override set 1.92.0
 
 # Or let repo tooling validate it for you
 just pr-fast
-just doctor
+just doctor-env
 ```
 
 #### Proposed Solutions
@@ -218,7 +218,7 @@ LSP tests require thread-constrained execution to avoid flakiness:
 
 ```bash
 # Required for LSP tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Impact
@@ -234,7 +234,7 @@ Use the justfile targets which handle threading:
 just ci-lsp-def
 
 # Or use nextest with proper config
-cargo nextest run -p perl-lsp
+cargo nextest run -p perl-lsp-rs
 ```
 
 #### Proposed Solutions
@@ -774,7 +774,7 @@ just ci-gate                          # Full gate (~3-5 min)
 just ci-lsp-def                       # LSP semantic tests
 
 # Testing
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 cargo nextest run                     # Fast test runner
 
 # Quality
@@ -783,7 +783,8 @@ cargo clippy --workspace --lib        # Lint
 cargo doc -p perl-parser              # Check docs
 
 # Debugging
-just doctor                           # Environment diagnostics
+just doctor                           # Workspace health check (state corruption)
+just doctor-env                       # Environment diagnostics (tools, components)
 perl-lsp --health                     # Server health
 RUST_LOG=perl_lsp=debug perl-lsp --stdio  # Debug logging
 ```

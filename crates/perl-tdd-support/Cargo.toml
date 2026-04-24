@@ -1,6 +1,6 @@
 [package]
 name = "perl-tdd-support"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -25,15 +25,18 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-test-must = { workspace = true }
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-anyhow = "1.0.102"
-lsp-types = { version = "0.97.0", optional = true }
-url = { version = "2.5.8", optional = true }
+serde = { workspace = true }
+serde_json.workspace = true
+lsp-types = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [features]
 default = []
 lsp-compat = ["lsp-types", "url"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

@@ -1,0 +1,203 @@
+[package]
+name = "tree-sitter-perl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Pure-Rust Pest-based Perl parser with tree-sitter-compatible S-expression output (internal harness)"
+readme = "README.md"
+publish = false
+documentation = "https://github.com/EffortlessMetrics/perl-lsp/tree/master/crates/tree-sitter-perl-rs"
+keywords = ["tree-sitter", "perl", "parser", "pest", "s-expression"]
+categories = ["parsing", "development-tools"]
+
+[package.metadata.cargo-machete]
+ignored = ["perl-lexer", "regex"]  # perl-lexer re-exported via perl-ts-heredoc-parser; regex used by logos proc-macro
+
+[dependencies]
+perl-lexer = { path = "../perl-lexer" }
+perl-parser = { path = "../perl-parser" }
+perl-parser-pest = { path = "../perl-parser-pest", optional = true }
+tree-sitter = { version = "0.26.8", optional = true }
+serde = { workspace = true }
+postcard = { version = "1.1.3", features = ["alloc"] }
+walkdir.workspace = true
+thiserror.workspace = true
+unicode-ident = "1.0.22"
+unicode-normalization = "0.1.25"
+pest = "2.8.4"
+pest_derive = "2.8.4"
+logos = "0.16.0"
+regex.workspace = true
+anyhow.workspace = true
+stacker = "0.1.22"
+serde_json.workspace = true
+lazy_static = "1.5.0"
+clap = { workspace = true }
+chrono = { version = "0.4.42", features = ["serde"] }
+perl-tdd-support = { path = "../perl-tdd-support" }
+perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis", optional = true }
+perl-ts-statement-tracker = { path = "../perl-ts-statement-tracker", optional = true }
+perl-ts-logos-lexer = { path = "../perl-ts-logos-lexer", optional = true }
+perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser", optional = true }
+perl-ts-partial-ast = { path = "../perl-ts-partial-ast", optional = true }
+perl-ts-advanced-parsers = { path = "../perl-ts-advanced-parsers", optional = true }
+
+[dev-dependencies]
+criterion.workspace = true
+test-case = "3.3.1"
+proptest.workspace = true
+
+[lints.rust]
+unused_imports = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+collapsible_if = "warn"
+manual_strip = "warn"
+unnecessary_map_or = "warn"
+redundant_closure = "warn"
+while_let_on_iterator = "warn"
+len_zero = "warn"
+only_used_in_recursion = "warn"
+ptr_arg = "warn"
+
+[features]
+default = ["pure-rust", "v2-pest-microcrate"]
+pure-rust = [
+  "dep:perl-ts-heredoc-analysis",
+  "dep:perl-ts-statement-tracker",
+  "dep:perl-ts-logos-lexer",
+  "dep:perl-ts-heredoc-parser",
+  "dep:perl-ts-partial-ast",
+  "dep:perl-ts-advanced-parsers",
+]
+# Source v2 Pest modules from perl-parser-pest microcrate (enabled by default).
+v2-pest-microcrate = ["dep:perl-parser-pest"]
+bindings = ["dep:bindgen"]
+c-parser = ["dep:cc", "dep:tree-sitter"]
+pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
+token-parser = [
+  "dep:perl-ts-logos-lexer",
+]
+test-utils = []
+# Legacy features (for benchmarking only)
+c-scanner = []
+rust-scanner = []
+# Aspirational test features - enable when implementing these capabilities
+modern-perl-syntax = []  # Subroutine signatures, postfix deref, state variables
+heredoc-advanced = []    # Complex heredoc features (delimiters, interpolation, recovery)
+stress-tests = []        # Stack overflow and stress tests
+
+[lib]
+name = "tree_sitter_perl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bench_parser"
+path = "src/bin/bench_parser.rs"
+required-features = ["test-utils"]
+
+[[bin]]
+name = "compare_parsers"
+path = "src/bin/compare_parsers.rs"
+required-features = ["test-utils"]
+
+[[bin]]
+name = "test_stacker"
+path = "src/bin/test_stacker.rs"
+required-features = ["pure-rust"]
+
+[[bin]]
+name = "ts_benchmark_parsers"
+path = "src/bin/benchmark_parsers.rs"
+required-features = ["pure-rust"]
+
+[[bin]]
+name = "ts_test_parsers"
+path = "src/bin/test_parsers.rs"
+required-features = ["pure-rust"]
+
+[[bin]]
+name = "ts-parse-rust"
+path = "src/bin/parse_rust.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "showcase_features"
+path = "examples/showcase_features.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "final_demo"
+path = "examples/final_demo.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "advanced_features"
+path = "examples/advanced_features.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "comprehensive_demo"
+path = "examples/comprehensive_demo.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "edge_case_tests"
+path = "examples/edge_case_tests.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "supported_edge_cases"
+path = "examples/supported_edge_cases.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "heredoc_edge_cases"
+path = "examples/heredoc_edge_cases.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "debug_heredoc"
+path = "examples/debug_heredoc.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_code_ref"
+path = "examples/test_code_ref.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_for_loop"
+path = "examples/test_for_loop.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_qq_operators"
+path = "examples/test_qq_operators.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_qq_edge_case"
+path = "examples/test_qq_edge_case.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_regex_delimiters"
+path = "examples/test_regex_delimiters.rs"
+required-features = ["pure-rust"]
+
+[[example]]
+name = "test_indirect_object"
+path = "examples/test_indirect_object.rs"
+required-features = ["pure-rust"]
+
+
+
+[build-dependencies]
+cc = { version = "1.2.59", optional = true }
+bindgen = { version = "0.72.1", optional = true } 

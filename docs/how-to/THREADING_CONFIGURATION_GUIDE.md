@@ -175,7 +175,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
     - name: Run LSP tests with adaptive threading
-      run: RUST_TEST_THREADS=2 cargo test -p perl-lsp
+      run: RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
       timeout-minutes: 10
     - name: Run comprehensive E2E tests
       run: RUST_TEST_THREADS=2 cargo test --test lsp_comprehensive_e2e_test
@@ -189,13 +189,13 @@ jobs:
 cargo test  # Uses all available threads, 5-second timeouts
 
 # Limited development environment
-RUST_TEST_THREADS=4 cargo test -p perl-lsp  # 10-second timeouts, 2x sleep multiplier
+RUST_TEST_THREADS=4 cargo test -p perl-lsp-rs  # 10-second timeouts, 2x sleep multiplier
 
 # Single-threaded debugging
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test -- --nocapture
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test specific_test -- --nocapture
 
 # Custom timeout override
-LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp  # Force 30-second timeouts
+LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp-rs  # Force 30-second timeouts
 ```
 
 ### Docker Container Configuration (*Diataxis: How-to Guide* - Containerized testing)
@@ -210,7 +210,7 @@ COPY . .
 ENV RUST_TEST_THREADS=2
 ENV LSP_TEST_TIMEOUT_MS=20000
 
-RUN cargo test -p perl-lsp
+RUN cargo test -p perl-lsp-rs
 ```
 
 ## Threading Configuration Reference (*Diataxis: Reference* - Complete configuration matrix)
@@ -327,10 +327,10 @@ Workspace integration tests   | 60s+      | 0.26s
 **Solution**: 
 ```bash
 # Set explicit thread limit for CI
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
 # Or increase timeout threshold
-LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp
+LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp-rs
 ```
 
 #### Resource Contention on Development Machine
@@ -342,7 +342,7 @@ LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp
 RUST_TEST_THREADS=4 cargo test
 
 # Enable debug logging to analyze bottlenecks  
-RUST_LOG=debug cargo test -p perl-lsp --test specific_test -- --nocapture
+RUST_LOG=debug cargo test -p perl-lsp-rs --test specific_test -- --nocapture
 ```
 
 #### Debugging Adaptive Configuration
@@ -351,12 +351,12 @@ RUST_LOG=debug cargo test -p perl-lsp --test specific_test -- --nocapture
 **Solution**:
 ```bash
 # Debug thread detection
-RUST_LOG=debug RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture 2>&1 | grep -i thread
+RUST_LOG=debug RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --nocapture 2>&1 | grep -i thread
 
 # Test different thread configurations
 for threads in 1 2 4 8; do
     echo "Testing with $threads threads:"
-    time RUST_TEST_THREADS=$threads cargo test -p perl-lsp
+    time RUST_TEST_THREADS=$threads cargo test -p perl-lsp-rs
 done
 ```
 

@@ -71,6 +71,9 @@ impl DocumentStore {
             return false;
         };
         if let Some(doc) = docs.get_mut(&key) {
+            if version < doc.version {
+                return false;
+            }
             doc.update(version, text);
             true
         } else {
@@ -96,7 +99,9 @@ impl DocumentStore {
 
     /// Get the text content of a document
     pub fn get_text(&self, uri: &str) -> Option<String> {
-        self.get(uri).map(|doc| doc.text)
+        let key = Self::uri_key(uri);
+        let docs = self.documents.read().ok()?;
+        docs.get(&key).map(|doc| doc.text.clone())
     }
 
     /// Get all open documents
@@ -122,6 +127,19 @@ impl DocumentStore {
             return 0;
         };
         docs.len()
+    }
+
+    /// Estimate total bytes used by all stored document texts.
+    ///
+    /// Only available when the `memory-profiling` feature is enabled.
+    /// Returns the sum of `text.len()` for every open document; does not
+    /// account for `Document` struct overhead or other metadata overhead.
+    #[cfg(feature = "memory-profiling")]
+    pub fn total_text_bytes(&self) -> usize {
+        let Ok(docs) = self.documents.read() else {
+            return 0;
+        };
+        docs.values().map(|d| d.text.len()).sum()
     }
 }
 
@@ -211,5 +229,30 @@ mod tests {
 
         let doc = must_some(store.get(&uri));
         assert_eq!(doc.text, "# test");
+    }
+
+    #[test]
+    fn test_update_rejects_stale_version() {
+        let store = DocumentStore::new();
+        let uri = "file:///versioned.pl".to_string();
+
+        store.open(uri.clone(), 3, "current".to_string());
+        assert!(!store.update(&uri, 2, "stale".to_string()));
+
+        let doc = must_some(store.get(&uri));
+        assert_eq!(doc.version, 3);
+        assert_eq!(doc.text, "current");
+    }
+
+    #[test]
+    fn test_update_rebuilds_line_index() {
+        let store = DocumentStore::new();
+        let uri = "file:///lines.pl".to_string();
+
+        store.open(uri.clone(), 1, "line1\nline2".to_string());
+        assert!(store.update(&uri, 2, "line1\nline2\nline3".to_string()));
+
+        let doc = must_some(store.get(&uri));
+        assert_eq!(doc.line_index.offset_to_position(12), (2, 0));
     }
 }

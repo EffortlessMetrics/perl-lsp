@@ -18,7 +18,7 @@
 //! - Cross-platform support (Windows, macOS, Linux)
 
 use anyhow::{Context, Result};
-use perl_content_length_framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
 use serde_json::Value;
 use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
@@ -124,7 +124,7 @@ impl TcpAttachSession {
         config.validate()?;
 
         let address = format!("{}:{}", config.host, config.port);
-        eprintln!("Connecting to Perl debugger at {}...", address);
+        tracing::info!(address, "Connecting to Perl debugger");
 
         // Connect with timeout
         let stream = TcpStream::connect_timeout(&address.parse()?, config.timeout_duration())
@@ -138,7 +138,7 @@ impl TcpAttachSession {
         self.stream = Some(stream);
         *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = true;
 
-        eprintln!("Successfully connected to Perl debugger at {}", address);
+        tracing::info!(address, "Successfully connected to Perl debugger");
         Ok(())
     }
 
@@ -152,7 +152,7 @@ impl TcpAttachSession {
         if let Some(stream) = self.stream.take() {
             stream.shutdown(std::net::Shutdown::Both)?;
             *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
-            eprintln!("Disconnected from Perl debugger");
+            tracing::info!("Disconnected from Perl debugger");
         }
         Ok(())
     }
@@ -182,7 +182,7 @@ impl TcpAttachSession {
             loop {
                 let bytes_read = match reader.read(&mut read_buf) {
                     Ok(0) => {
-                        eprintln!("TCP connection closed by debugger");
+                        tracing::debug!("TCP connection closed by debugger");
                         *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
                         if let Some(ref sender) = event_sender {
                             let _ = sender.send(DapEvent::Terminated {
@@ -193,7 +193,7 @@ impl TcpAttachSession {
                     }
                     Ok(n) => n,
                     Err(e) => {
-                        eprintln!("Error reading from TCP: {}", e);
+                        tracing::error!(error = %e, "Error reading from TCP");
                         *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
                         if let Some(ref sender) = event_sender {
                             let _ = sender.send(DapEvent::Error {
@@ -211,17 +211,17 @@ impl TcpAttachSession {
                         Ok(Some(buffer)) => buffer,
                         Ok(None) => break,
                         Err(error) => {
-                            eprintln!("Failed to parse TCP DAP frame: {error}");
+                            tracing::warn!(%error, "Failed to parse TCP DAP frame");
                             continue;
                         }
                     };
 
                     if let Ok(text) = std::str::from_utf8(&buffer) {
-                        eprintln!("Received from debugger: {}", text);
+                        tracing::trace!(output = %text, "Received from debugger");
                     } else {
-                        eprintln!(
-                            "Received non-UTF8 message from debugger ({} bytes)",
-                            buffer.len()
+                        tracing::warn!(
+                            bytes = buffer.len(),
+                            "Received non-UTF8 message from debugger"
                         );
                     }
 
@@ -284,7 +284,7 @@ impl TcpAttachSession {
                                 let _ = sender.send(DapEvent::Terminated { reason });
                             }
                             _ => {
-                                eprintln!("Unhandled DAP event: {}", event_name);
+                                tracing::debug!(event = %event_name, "Unhandled DAP event");
                             }
                         }
                     }

@@ -1,0 +1,26 @@
+[package]
+name = "perl-parser-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-parser-bench"
+description = "Benchmark binary for the perl-parser v3 native Perl parser"
+readme = "README.md"
+keywords = ["perl", "parser", "benchmark"]
+categories = ["development-tools::profiling", "command-line-utilities"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+perl-parser = { workspace = true }
+walkdir.workspace = true
+
+[[bin]]
+name = "perl-parser-bench"
+path = "src/bin/perl-parser-bench.rs"
+
+[lints]
+workspace = true

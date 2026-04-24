@@ -1,0 +1,38 @@
+[[asset]]
+name = "install-health"
+priority = "P0"
+kind = "gif"
+target = "vscode-extension/media/walkthrough/install-health.gif"
+storyboard = "vscode-extension/media/walkthrough/install-health.svg"
+recording = "docs/assets/recordings/install-health.mp4"
+source_files = [
+  "demo_workspace/main.pl",
+  "demo_workspace/lib/Utils.pm",
+  "demo_workspace/lib/Database.pm",
+]
+notes = "Fresh install -> auto-download -> health check"
+
+[[asset]]
+name = "find-references"
+priority = "P0"
+kind = "gif"
+target = "vscode-extension/media/walkthrough/find-references.gif"
+storyboard = "vscode-extension/media/walkthrough/find-references.svg"
+recording = "docs/assets/recordings/find-references.mp4"
+source_files = [
+  "demo_workspace/main.pl",
+  "demo_workspace/lib/Utils.pm",
+]
+notes = "Go to definition + find references over the demo workspace"
+
+[[asset]]
+name = "extract-variable"
+priority = "P0"
+kind = "gif"
+target = "vscode-extension/media/walkthrough/extract-variable.gif"
+storyboard = "vscode-extension/media/walkthrough/extract-variable.svg"
+recording = "docs/assets/recordings/extract-variable.mp4"
+source_files = [
+  "demo_workspace/main.pl",
+]
+notes = "Select an expression and extract it into a named variable"

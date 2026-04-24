@@ -8,13 +8,13 @@ Dead code detection for Perl source code. Part of the [tree-sitter-perl-rs](http
 
 ## Dependencies
 
-Builds on `perl-workspace-index` (cross-file references).
+Builds on `perl-workspace` (cross-file references).
 
 ## Usage
 
 ```rust
 use perl_dead_code::DeadCodeDetector;
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::path::PathBuf;
 
 let mut index = WorkspaceIndex::new();

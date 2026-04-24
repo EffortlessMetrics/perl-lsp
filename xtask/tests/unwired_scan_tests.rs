@@ -1,7 +1,7 @@
 //! Tests for the unwired infrastructure scanner (issue #2667)
 //!
 //! Validates the core logic of the `cargo xtask unwired-scan` command:
-//! - Detecting crates that have tests but are not depended on by perl-lsp
+//! - Detecting crates that have tests but are not depended on by perl-lsp-rs
 //! - Counting `#[test]` annotations in source files
 //! - Parsing Cargo.toml dependency lists
 //! - Detecting TODO/FIXME wiring comments
@@ -39,12 +39,12 @@ resolver = "2"
 "#,
     );
 
-    // perl-lsp: the root LSP crate
+    // perl-lsp-rs: the root LSP crate
     write_file(
         root,
-        "crates/perl-lsp/Cargo.toml",
+        "crates/perl-lsp-rs/Cargo.toml",
         r#"[package]
-name = "perl-lsp"
+name = "perl-lsp-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -54,12 +54,12 @@ perl-wired = { path = "../perl-wired" }
     );
     write_file(
         root,
-        "crates/perl-lsp/src/lib.rs",
+        "crates/perl-lsp-rs/src/lib.rs",
         r#"// main lsp crate
 "#,
     );
 
-    // perl-wired: depended on by perl-lsp, has tests
+    // perl-wired: depended on by perl-lsp-rs, has tests
     write_file(
         root,
         "crates/perl-wired/Cargo.toml",
@@ -83,7 +83,7 @@ mod tests {
 "#,
     );
 
-    // perl-unwired: NOT depended on by perl-lsp, has tests — should be flagged
+    // perl-unwired: NOT depended on by perl-lsp-rs, has tests — should be flagged
     write_file(
         root,
         "crates/perl-unwired/Cargo.toml",
@@ -109,7 +109,7 @@ mod tests {
 "#,
     );
 
-    // perl-no-tests: NOT depended on by perl-lsp, no tests — should NOT be flagged
+    // perl-no-tests: NOT depended on by perl-lsp-rs, no tests — should NOT be flagged
     write_file(
         root,
         "crates/perl-no-tests/Cargo.toml",
@@ -235,8 +235,14 @@ fn parse_crate_deps(cargo_toml: &std::path::Path) -> Vec<String> {
     let mut deps = Vec::new();
     for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
         if let Some(toml::Value::Table(table)) = parsed.get(section) {
-            for key in table.keys() {
-                deps.push(key.clone());
+            for (key, value) in table {
+                let package_name = value
+                    .as_table()
+                    .and_then(|dep| dep.get("package"))
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or(key)
+                    .to_string();
+                deps.push(package_name);
             }
         }
     }
@@ -375,28 +381,49 @@ fn find_unwired_crates(
 ) -> anyhow::Result<Vec<CrateReport>> {
     let crates_dir = workspace_root.join("crates");
 
-    // Find the LSP crate Cargo.toml and get its deps
-    let lsp_cargo_toml = crates_dir.join(lsp_crate_name).join("Cargo.toml");
-    let lsp_deps: std::collections::HashSet<String> =
-        parse_crate_deps(&lsp_cargo_toml).into_iter().collect();
-
     let mut reports = Vec::new();
     let Ok(entries) = fs::read_dir(&crates_dir) else {
         return Ok(reports);
     };
 
+    let mut workspace_crates = Vec::new();
     for entry in entries.filter_map(|e| e.ok()) {
         let crate_dir = entry.path();
         if !crate_dir.is_dir() {
             continue;
         }
-        let crate_name = crate_dir.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        if crate_name == lsp_crate_name {
-            continue; // skip the lsp crate itself
-        }
-
         let cargo_toml = crate_dir.join("Cargo.toml");
         if !cargo_toml.exists() {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&cargo_toml) else {
+            continue;
+        };
+        let Ok(parsed) = content.parse::<toml::Table>() else {
+            continue;
+        };
+        let Some(crate_name) = parsed
+            .get("package")
+            .and_then(toml::Value::as_table)
+            .and_then(|package| package.get("name"))
+            .and_then(toml::Value::as_str)
+            .map(ToString::to_string)
+        else {
+            continue;
+        };
+        workspace_crates.push((crate_name, crate_dir, cargo_toml));
+    }
+
+    let lsp_manifest = workspace_crates
+        .iter()
+        .find(|(crate_name, _, _)| crate_name == lsp_crate_name)
+        .map(|(_, _, manifest)| manifest.clone())
+        .ok_or_else(|| anyhow::anyhow!("missing LSP crate package: {lsp_crate_name}"))?;
+    let lsp_deps: std::collections::HashSet<String> =
+        parse_crate_deps(&lsp_manifest).into_iter().collect();
+
+    for (crate_name, crate_dir, _) in workspace_crates {
+        if crate_name == lsp_crate_name {
             continue;
         }
 
@@ -420,7 +447,7 @@ fn find_unwired_crates(
 #[test]
 fn test_find_unwired_crates_identifies_unwired() -> anyhow::Result<()> {
     let workspace = make_fake_workspace();
-    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     // perl-unwired has 2 tests and is not in perl-lsp deps
     let unwired = reports.iter().find(|r| r.name == "perl-unwired");
@@ -435,7 +462,7 @@ fn test_find_unwired_crates_identifies_unwired() -> anyhow::Result<()> {
 #[test]
 fn test_find_unwired_crates_wired_crate_marked_as_wired() -> anyhow::Result<()> {
     let workspace = make_fake_workspace();
-    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     let wired = reports.iter().find(|r| r.name == "perl-wired");
     assert!(wired.is_some(), "perl-wired should appear in report");
@@ -448,7 +475,7 @@ fn test_find_unwired_crates_wired_crate_marked_as_wired() -> anyhow::Result<()> 
 #[test]
 fn test_find_unwired_crates_no_tests_not_flagged() -> anyhow::Result<()> {
     let workspace = make_fake_workspace();
-    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     let no_tests = reports.iter().find(|r| r.name == "perl-no-tests");
     assert!(no_tests.is_some(), "perl-no-tests should appear in report");
@@ -462,7 +489,7 @@ fn test_find_unwired_crates_no_tests_not_flagged() -> anyhow::Result<()> {
 #[test]
 fn test_find_unwired_crates_todo_comments_captured() -> anyhow::Result<()> {
     let workspace = make_fake_workspace();
-    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     let todo = reports.iter().find(|r| r.name == "perl-todo-wire");
     assert!(todo.is_some(), "perl-todo-wire should appear in report");
@@ -476,7 +503,7 @@ fn test_find_unwired_crates_todo_comments_captured() -> anyhow::Result<()> {
 #[test]
 fn test_find_unwired_crates_only_with_tests_are_candidates() -> anyhow::Result<()> {
     let workspace = make_fake_workspace();
-    let reports = find_unwired_crates(workspace.path(), "perl-lsp")?;
+    let reports = find_unwired_crates(workspace.path(), "perl-lsp-rs")?;
 
     // The unwired candidates are: crates that have tests AND are NOT depended on
     let candidates: Vec<&CrateReport> =
@@ -557,8 +584,8 @@ fn test_json_mode_emits_valid_json_with_expected_fields() {
     // lsp_crate must be the default value.
     assert_eq!(
         parsed["lsp_crate"].as_str(),
-        Some("perl-lsp"),
-        "lsp_crate field must be 'perl-lsp'"
+        Some("perl-lsp-rs"),
+        "lsp_crate field must be 'perl-lsp-rs'"
     );
 
     // The real workspace has crates, so total_crates > 0.

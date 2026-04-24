@@ -20,11 +20,13 @@
 # =============================================================================
 
 schema_version: 1
-last_verified: "2026-03-21"
+last_verified: "2026-04-02"
 
 budgets:
   max_active_blockers: 50  # advisory only — no gate enforcement today
   note: "Archive entries with status: fixed — do not delete, move to archived section"
+  clean_rate_target: 0.90  # 90% CPAN/system corpus clean rate is the 0.12.x release criterion
+  clean_rate_note: "Baseline stale (2026-03-20 = 85.4%). Post-baseline fixes (#2674, #2723, #2613, #2767, #2897, #2769, #2892, #2787, #2840) estimated +386 CPAN files clean → ~94.3%. CI ratchet via PR #3110 will confirm."
 
 # =============================================================================
 # Parser Error Buckets
@@ -37,66 +39,66 @@ parser_blockers:
   - id: "unexpected_token_in_expr"
     category: "expression"
     affected_files: 206
-    root_cause: "Broad catch-all expression token error — multiple sub-causes undiagnosed"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: largest bucket (206 files). No issue filed. Highest-priority scout target."
+    root_cause: "4 sub-patterns: prototypes, complex expressions, chained method calls, ternary in list context"
+    status: "fixed"
+    issue: "#2731"
+    note: "Fixed via PRs #2767, #2897. 57 tests in fix_unexpected_token_in_expr_2731.rs. Counts stale — run corpus ratchet."
 
   - id: "unexpected_rbrace_expr"
     category: "expression"
     affected_files: 105
-    root_cause: "Unexpected right brace inside expression context"
-    status: "filed"
+    root_cause: "Word operators as hash subscript keys (e.g., $h->{not})"
+    status: "fixed"
     issue: "#2189"
-    note: "Tier 1: investigation issue only, fix spec not yet written."
+    note: "Fixed via PR #2723. System corpus 105→10. Counts stale — run corpus ratchet."
 
   - id: "unclosed_paren"
     category: "expression"
     affected_files: 99
-    root_cause: "Unmatched open parenthesis — multiple sub-causes"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: 99 files. No issue filed."
+    root_cause: "5 sub-patterns: complex call args, nested ternary, chained method calls, qw in parens, heredoc in parens"
+    status: "fixed"
+    issue: "#2750"
+    note: "Fixed via PRs #2769, #2892. 17 tests in fix_unclosed_paren_*.rs. Counts stale — run corpus ratchet."
 
   - id: "unexpected_comma_expr"
     category: "expression"
     affected_files: 98
-    root_cause: "Unexpected comma in grep/map/sort block arguments"
-    status: "filed"
+    root_cause: "Unknown functions with nullary builtins + grep/map file tests"
+    status: "fixed"
     issue: "#2140"
-    note: "Tier 1: issue count was 70 at filing time; baseline now shows 98."
+    note: "Fixed via PR #2674. System corpus 98→56. Counts stale — run corpus ratchet."
 
   - id: "unexpected_rparen_expr"
     category: "expression"
     affected_files: 84
-    root_cause: "Unexpected right paren in expression context"
-    status: "needs_investigation"
-    issue: null
-    note: "Tier 1: 84 files. No issue filed."
+    root_cause: "4 sub-patterns: complex list context, nested function calls, regex in call args, ternary expressions"
+    status: "fixed"
+    issue: "#2751"
+    note: "Fixed via PR #2787. 55 tests in fix_unexpected_rparen_expr.rs. Counts stale — run corpus ratchet."
 
   - id: "unclosed_paren_identifier"
     category: "identifier"
     affected_files: 70
-    root_cause: "Bareword in sub call treated as unclosed paren"
-    status: "filed"
+    root_cause: "Qualified function calls lose paren context (e.g., Module::Name::func())"
+    status: "fixed"
     issue: "#2391"
-    note: "Tier 1: 15 files in issue at filing time; baseline now shows 70."
+    note: "Fixed via commit 4b16e2f3. Counts stale — run corpus ratchet."
 
   - id: "expected_module_name"
     category: "module"
     affected_files: 69
-    root_cause: "Module name parser fails on unusual package name forms"
-    status: "needs_investigation"
+    root_cause: "VString forms in use statements (e.g., use v5.10)"
+    status: "partial"
     issue: null
-    note: "Tier 1: 69 files. No issue filed."
+    note: "Partial fix via commit 5cbda340 (VString support in parse_use). 16 tests pass. CPAN corpus may need ratchet or have remaining edge cases."
 
   - id: "unclosed_brace_semicolon"
     category: "block"
     affected_files: 21
-    root_cause: "Brace not closed before semicolon — block/hash ambiguity"
-    status: "needs_investigation"
+    root_cause: "Brace not closed before semicolon — block/hash ambiguity (bare function call with block: capture{}, where{}, scope_guard{})"
+    status: "partial"
     issue: null
-    note: "Tier 2: 21 files. No issue filed."
+    note: "Partial fix via PR #2261 (2026-03-19). System corpus 21 files remain; CPAN had 58 at 2026-03-20 baseline. Remaining cases need deeper investigation."
 
   - id: "expected_left_brace"
     category: "block"
@@ -166,9 +168,9 @@ parser_blockers:
     category: "expression"
     affected_files: 2
     root_cause: "Hash in list context fat-arrow ambiguity"
-    status: "filed"
+    status: "fixed"
     issue: "#2402"
-    note: "Tier 3: 2 files in system corpus."
+    note: "Fixed via PR #2613 (2026-03-21). Issue #2402 closed. System corpus had 2 files; CPAN had 53 at 2026-03-20 baseline. Counts stale — run corpus ratchet."
 
   - id: "unclosed_bracket"
     category: "expression"

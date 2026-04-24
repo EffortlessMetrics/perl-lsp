@@ -12,7 +12,7 @@ This document provides a comprehensive reference for all perl-lsp configuration 
   - [Inlay Hints](#inlay-hints)
   - [Test Runner](#test-runner)
   - [Resource Limits](#resource-limits)
-  - [DAP Settings](#dap-settings)
+  - [DAP Configuration](#dap-settings)
   - [Environment Variables](#environment-variables)
 - [Example Configurations](#example-configurations)
 - [Validation](#validation)
@@ -95,11 +95,14 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
         "testRunner": {
           "$ref": "#/definitions/testRunner"
         },
+        "perlcritic": {
+          "$ref": "#/definitions/perlcritic"
+        },
+        "telemetry": {
+          "$ref": "#/definitions/telemetry"
+        },
         "limits": {
           "$ref": "#/definitions/limits"
-        },
-        "debugAdapter": {
-          "$ref": "#/definitions/debugAdapter"
         }
       }
     }
@@ -198,6 +201,41 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
       },
       "additionalProperties": false
     },
+    "perlcritic": {
+      "type": "object",
+      "description": "Perl::Critic static analysis integration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable perlcritic diagnostics (opt-in; requires perlcritic installed)",
+          "default": false
+        },
+        "severity": {
+          "type": "integer",
+          "description": "Minimum severity to report: 1 (least severe, reports everything) to 5 (most severe, reports less)",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 3
+        },
+        "profile": {
+          "type": "string",
+          "description": "Path to a .perlcriticrc profile file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "description": "Telemetry configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable telemetry/event notifications to the client",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
     "limits": {
       "type": "object",
       "description": "Resource limits and performance tuning",
@@ -223,12 +261,54 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
           "maximum": 500,
           "default": 100
         },
-        "astCacheMaxEntries": {
+        "documentSymbolCap": {
           "type": "integer",
-          "description": "Maximum number of AST cache entries",
+          "description": "Maximum number of results from textDocument/documentSymbol requests",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 500
+        },
+        "codeLensCap": {
+          "type": "integer",
+          "description": "Maximum code lens items per file",
           "minimum": 10,
           "maximum": 500,
           "default": 100
+        },
+        "diagnosticsPerFileCap": {
+          "type": "integer",
+          "description": "Maximum diagnostics per file",
+          "minimum": 10,
+          "maximum": 1000,
+          "default": 200
+        },
+        "inlayHintsCap": {
+          "type": "integer",
+          "description": "Maximum inlay hints per file",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 500
+        },
+        "astCacheMaxEntries": {
+          "type": "integer",
+          "description": "Maximum number of AST cache entries (LRU eviction)",
+          "minimum": 10,
+          "maximum": 500,
+          "default": 100
+        },
+        "astCacheTtlSecs": {
+          "type": "integer",
+          "description": "AST cache TTL in seconds",
+          "minimum": 10,
+          "maximum": 3600,
+          "default": 300
+        },
+        "symbolCacheMaxEntries": {
+          "type": "integer",
+          "description": "Maximum symbol cache entries",
+          "minimum": 10,
+          "maximum": 10000,
+          "default": 1000
         },
         "maxIndexedFiles": {
           "type": "integer",
@@ -237,6 +317,13 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
           "maximum": 100000,
           "default": 10000
         },
+        "maxSymbolsPerFile": {
+          "type": "integer",
+          "description": "Maximum symbols indexed per file",
+          "minimum": 100,
+          "maximum": 50000,
+          "default": 5000
+        },
         "maxTotalSymbols": {
           "type": "integer",
           "description": "Maximum total symbols across all indexed files",
@@ -244,12 +331,32 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
           "maximum": 1000000,
           "default": 500000
         },
+        "parseStormThreshold": {
+          "type": "integer",
+          "description": "Pending parse count before degradation mode activates",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10
+        },
+        "maxFileSizeBytes": {
+          "type": "integer",
+          "description": "Skip files larger than this in bytes (default: 1 MB)",
+          "minimum": 1024,
+          "default": 1048576
+        },
         "workspaceScanDeadlineMs": {
           "type": "integer",
-          "description": "Deadline (ms) for workspace folder scan",
+          "description": "Deadline (ms) for initial workspace folder scan",
           "minimum": 5000,
           "maximum": 120000,
           "default": 30000
+        },
+        "fileIndexDeadlineMs": {
+          "type": "integer",
+          "description": "Deadline (ms) for single file indexing",
+          "minimum": 100,
+          "maximum": 30000,
+          "default": 5000
         },
         "referenceSearchDeadlineMs": {
           "type": "integer",
@@ -257,30 +364,20 @@ The perl-lsp server configuration is hierarchical, with all settings nested unde
           "minimum": 500,
           "maximum": 10000,
           "default": 2000
-        }
-      },
-      "additionalProperties": false
-    },
-    "debugAdapter": {
-      "type": "object",
-      "description": "Debug Adapter Protocol configuration",
-      "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Enable DAP support",
-          "default": true
         },
-        "port": {
+        "regexScanDeadlineMs": {
           "type": "integer",
-          "description": "Port for DAP communication",
-          "minimum": 1024,
-          "maximum": 65535,
-          "default": 9257
+          "description": "Deadline (ms) for regex scan",
+          "minimum": 100,
+          "maximum": 5000,
+          "default": 1000
         },
-        "host": {
-          "type": "string",
-          "description": "Host for DAP communication",
-          "default": "127.0.0.1"
+        "fsOperationDeadlineMs": {
+          "type": "integer",
+          "description": "Deadline (ms) for filesystem operations",
+          "minimum": 50,
+          "maximum": 5000,
+          "default": 500
         }
       },
       "additionalProperties": false
@@ -305,7 +402,7 @@ Configuration for module resolution and workspace behavior.
 | Default | `["lib", ".", "local/lib/perl5"]` |
 | Minimum | 1 item |
 | Maximum | 50 items |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Directories to search for Perl modules, relative to the workspace root.
 
@@ -332,7 +429,7 @@ Directories to search for Perl modules, relative to the workspace root.
 |----------|-------|
 | Type | `boolean` |
 | Default | `false` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Whether to include system `@INC` paths in module resolution. Disabled by default to avoid blocking on network filesystems.
 
@@ -362,7 +459,7 @@ Whether to include system `@INC` paths in module resolution. Disabled by default
 | Default | `50` |
 | Minimum | `10` |
 | Maximum | `5000` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Maximum time to spend resolving a module path. Prevents blocking on slow/network filesystems.
 
@@ -395,7 +492,7 @@ Configuration for inlay hints displayed in the editor.
 |----------|-------|
 | Type | `boolean` |
 | Default | `true` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Enable or disable all inlay hints.
 
@@ -417,7 +514,7 @@ Enable or disable all inlay hints.
 |----------|-------|
 | Type | `boolean` |
 | Default | `true` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Show parameter name hints in function calls.
 
@@ -446,7 +543,7 @@ some_function(/* name: */ "value", /* count: */ 42);
 |----------|-------|
 | Type | `boolean` |
 | Default | `true` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Show inferred type hints for variables.
 
@@ -476,7 +573,7 @@ my $name = "Hello";  # : Str
 |----------|-------|
 | Type | `boolean` |
 | Default | `false` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Show hints for chained method calls.
 
@@ -508,7 +605,7 @@ $obj->method1()->method2()->method3();
 | Default | `30` |
 | Minimum | `10` |
 | Maximum | `100` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Maximum length of inlay hint text before truncation.
 
@@ -541,7 +638,7 @@ Configuration for integrated test execution.
 |----------|-------|
 | Type | `boolean` |
 | Default | `true` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Enable the integrated test runner.
 
@@ -563,7 +660,7 @@ Enable the integrated test runner.
 |----------|-------|
 | Type | `string` |
 | Default | `"perl"` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Command to run tests.
 
@@ -590,7 +687,7 @@ Command to run tests.
 | Type | `string[]` |
 | Default | `[]` |
 | Maximum | 20 items |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Additional arguments to pass to the test command.
 
@@ -619,7 +716,7 @@ Additional arguments to pass to the test command.
 | Default | `60000` |
 | Minimum | `1000` |
 | Maximum | `300000` |
-| Source | `crates/perl-parser/src/lsp/state/config.rs` |
+| Source | `crates/perl-lsp-config/src/lib.rs` |
 
 Maximum time to wait for test execution.
 
@@ -656,7 +753,7 @@ Configuration for bounded behavior and performance tuning.
 | Default | `200` |
 | Minimum | `10` |
 | Maximum | `1000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum number of results from `workspace/symbol` requests.
 
@@ -680,7 +777,7 @@ Maximum number of results from `workspace/symbol` requests.
 | Default | `500` |
 | Minimum | `10` |
 | Maximum | `5000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum number of results from `textDocument/references` requests.
 
@@ -704,7 +801,7 @@ Maximum number of results from `textDocument/references` requests.
 | Default | `100` |
 | Minimum | `10` |
 | Maximum | `500` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum number of completion items to return.
 
@@ -730,7 +827,7 @@ Maximum number of completion items to return.
 | Default | `100` |
 | Minimum | `10` |
 | Maximum | `500` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum number of AST cache entries. Uses LRU eviction when exceeded.
 
@@ -754,7 +851,7 @@ Maximum number of AST cache entries. Uses LRU eviction when exceeded.
 | Default | `10000` |
 | Minimum | `100` |
 | Maximum | `100000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum number of files to index in workspace. Skips older/less-used files when exceeded.
 
@@ -778,7 +875,7 @@ Maximum number of files to index in workspace. Skips older/less-used files when 
 | Default | `500000` |
 | Minimum | `10000` |
 | Maximum | `1000000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Maximum total symbols across all indexed files. Uses LRU eviction when exceeded.
 
@@ -804,7 +901,7 @@ Maximum total symbols across all indexed files. Uses LRU eviction when exceeded.
 | Default | `30000` |
 | Minimum | `5000` |
 | Maximum | `120000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Deadline (ms) for workspace folder scan. Returns partial index when exceeded.
 
@@ -828,7 +925,7 @@ Deadline (ms) for workspace folder scan. Returns partial index when exceeded.
 | Default | `2000` |
 | Minimum | `500` |
 | Maximum | `10000` |
-| Source | `crates/perl-parser/src/lsp/state/limits.rs` |
+| Source | `crates/perl-lsp-limits/src/lib.rs` |
 
 Deadline (ms) for reference search. Returns partial results when exceeded.
 
@@ -848,117 +945,112 @@ Deadline (ms) for reference search. Returns partial results when exceeded.
 
 ### DAP Settings
 
-Debug Adapter Protocol configuration.
+Debug Adapter Protocol configuration is not exposed as an LSP workspace setting under
+`perl.debugAdapter`. DAP sessions are configured via `launch.json` in your editor using
+DAP launch and attach configurations. Source: `crates/perl-dap-config/src/lib.rs`.
 
-#### `perl.debugAdapter.enabled`
+#### Launch Configuration
 
-| Property | Value |
-|----------|-------|
-| Type | `boolean` |
-| Default | `true` |
-| Source | `crates/perl-dap/src/config.rs` |
+Start a new Perl process under the debugger.
 
-Enable DAP support for debugging.
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `program` | `string` | — | Path to the Perl script to debug |
+| `args` | `string[]` | `[]` | Command-line arguments for the script |
+| `perlPath` | `string` | `"perl"` | Path to the Perl executable |
+| `includePaths` | `string[]` | `[]` | Paths added to `@INC` as `-I` flags |
+| `cwd` | `string` | workspace root | Working directory for the debugged process |
+| `env` | `object` | `{}` | Environment variables for the debugged process |
+
+**Example `launch.json`:**
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "perl",
+      "request": "launch",
+      "name": "Launch Perl Script",
+      "program": "${workspaceFolder}/script.pl",
+      "args": ["--verbose"],
+      "perlPath": "perl",
+      "includePaths": ["${workspaceFolder}/lib"],
+      "cwd": "${workspaceFolder}",
+      "env": { "PERL5LIB": "${workspaceFolder}/lib" }
+    }
+  ]
+}
+```
+
+#### Attach Configuration
+
+Attach to a running Perl debugger process over TCP.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `host` | `string` | `"localhost"` | Hostname or IP of the running debugger |
+| `port` | `number` | `13603` | TCP port the debugger is listening on |
+| `timeout` | `number` (ms) | `5000` | Connection timeout in milliseconds |
 
 **Example:**
 
 ```json
 {
-  "perl": {
-    "debugAdapter": {
-      "enabled": true
-    }
-  }
+  "type": "perl",
+  "request": "attach",
+  "name": "Attach to Perl Debugger",
+  "host": "localhost",
+  "port": 13603,
+  "timeout": 5000
 }
 ```
 
-#### `perl.debugAdapter.port`
-
-| Property | Value |
-|----------|-------|
-| Type | `number` |
-| Default | `9257` |
-| Minimum | `1024` |
-| Maximum | `65535` |
-| Source | `crates/perl-dap/src/config.rs` |
-
-Port for DAP communication.
-
-**Example:**
-
-```json
-{
-  "perl": {
-    "debugAdapter": {
-      "port": 9258
-    }
-  }
-}
-```
-
-#### `perl.debugAdapter.host`
-
-| Property | Value |
-|----------|-------|
-| Type | `string` |
-| Default | `"127.0.0.1"` |
-| Source | `crates/perl-dap/src/config.rs` |
-
-Host for DAP communication.
-
-**Example:**
-
-```json
-{
-  "perl": {
-    "debugAdapter": {
-      "host": "0.0.0.0"
-    }
-  }
-}
-```
+See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for a full walkthrough.
 
 ---
 
 ### Environment Variables
 
-Configuration can also be provided via environment variables.
+Environment variables read at startup by the server. Source: `crates/perl-lsp-launcher/src/lib.rs`.
 
-#### `PERL_LSP_INCLUDE_PATHS`
+Workspace settings (includePaths, useSystemInc, etc.) are not configurable via environment
+variables — use LSP `initializationOptions` or `workspace/didChangeConfiguration` instead.
 
-Comma-separated list of include paths.
+#### `PERL_LSP_LOG`
+
+Set to any non-empty value to enable logging to stderr. Equivalent to the `--log` CLI flag.
 
 ```bash
-export PERL_LSP_INCLUDE_PATHS="lib,local/lib/perl5,vendor/lib"
+export PERL_LSP_LOG=1
 ```
 
-#### `PERL_LSP_USE_SYSTEM_INC`
+#### `RUST_LOG`
 
-Enable system @INC inclusion.
+Standard `tracing`/`env_logger` filter directive. Controls log level and per-module filtering.
+Takes precedence over the `--log` flag default filter.
 
 ```bash
-export PERL_LSP_USE_SYSTEM_INC=1
+export RUST_LOG=perl_lsp=debug
+export RUST_LOG=warn
 ```
 
-#### `PERL_LSP_RESOLUTION_TIMEOUT`
+Common log levels: `error`, `warn`, `info`, `debug`, `trace`.
 
-Module resolution timeout in milliseconds.
+#### `NO_COLOR`
 
-```bash
-export PERL_LSP_RESOLUTION_TIMEOUT=100
-```
-
-#### `PERL_LSP_LOG_LEVEL`
-
-Logging level: `error`, `warn`, `info`, `debug`, `trace`.
+When set, disables ANSI colour in log output. Follows the [no-color.org](https://no-color.org)
+convention.
 
 ```bash
-export PERL_LSP_LOG_LEVEL=debug
+export NO_COLOR=1
 ```
 
 #### `PERL5LIB`
 
-Perl library path (standard Perl environment variable).
+Standard Perl library path environment variable. Appended to `@INC` by the Perl runtime.
+Not read by `perl-lsp` directly, but affects Perl processes spawned for module resolution
+when `useSystemInc` is enabled.
 
 ```bash
 export PERL5LIB="/path/to/lib:/another/path"
@@ -1143,14 +1235,16 @@ inlayHints.enabled = true
 
 ### JSON Schema Validation
 
-Use a JSON Schema validator to validate your configuration:
+Use a JSON Schema validator to validate your configuration. Copy the JSON Schema block
+from the [JSON Schema](#json-schema) section above into a file (e.g., `perl-lsp-schema.json`),
+then validate:
 
 ```bash
 # Using ajv-cli
-npx ajv validate -s docs/CONFIGURATION_SCHEMA.json -d .vscode/settings.json
+npx ajv validate -s perl-lsp-schema.json -d .vscode/settings.json
 
 # Using python-jsonschema
-python -m jsonschema -i .vscode/settings.json docs/CONFIGURATION_SCHEMA.json
+python -m jsonschema -i .vscode/settings.json perl-lsp-schema.json
 ```
 
 ### Online Validation

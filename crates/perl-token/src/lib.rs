@@ -68,6 +68,37 @@ impl Token {
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
     }
+
+    /// Return the token span length in bytes.
+    ///
+    /// This uses saturating subtraction so malformed spans (where `end < start`)
+    /// are treated as zero-length instead of underflowing.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::{Token, TokenKind};
+    ///
+    /// let tok = Token::new(TokenKind::Identifier, "foo", 10, 13);
+    /// assert_eq!(tok.len(), 3);
+    /// ```
+    pub fn len(&self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether the token span is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::{Token, TokenKind};
+    ///
+    /// let tok = Token::new(TokenKind::Eof, "", 8, 8);
+    /// assert!(tok.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// Token classification for Perl parsing.
@@ -171,6 +202,8 @@ pub enum TokenKind {
     Format,
     /// Undefined value: `undef`
     Undef,
+    /// Defer block: `defer { ... }` (Perl 5.36+ experimental, stable in 5.40)
+    Defer,
 
     // ===== Operators =====
     /// Assignment: `=`
@@ -424,6 +457,7 @@ impl TokenKind {
             TokenKind::Field => "'field'",
             TokenKind::Format => "'format'",
             TokenKind::Undef => "'undef'",
+            TokenKind::Defer => "'defer'",
 
             // Operators
             TokenKind::Assign => "'='",

@@ -1,6 +1,6 @@
 [package]
 name = "perl-pragma"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -16,8 +16,8 @@ categories = ["development-tools", "parser-implementations"]
 [dependencies]
 perl-ast = { workspace = true }
 
-[dev-dependencies]
-perl-tdd-support = { workspace = true }
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

@@ -24,7 +24,7 @@ pub struct ComplexDataStructureCase {
     pub source: &'static str,
 }
 
-static EDGE_CASES: [EdgeCase; 101] = [
+static EDGE_CASES: [EdgeCase; 103] = [
     EdgeCase {
         id: "heredoc.basic",
         description: "Basic quoted heredoc with multiple lines.",
@@ -911,6 +911,17 @@ my $text = "\N{LATIN SMALL LETTER E WITH ACUTE}";
 "#,
     },
     EdgeCase {
+        id: "state.lexical.counter",
+        description: "State variable persists lexical value across subroutine calls.",
+        tags: &["state", "declaration", "edge-case"],
+        source: r#"use feature "state";
+sub next_id {
+    state $id = 0;
+    return ++$id;
+}
+"#,
+    },
+    EdgeCase {
         id: "end.section",
         description: "END section with trailing content ignored by the parser.",
         tags: &["end-section", "file", "edge-case"],
@@ -942,6 +953,24 @@ int add(int x, int y) {
 END_C
 
 my $sum = add(1, 2);
+"#,
+    },
+    EdgeCase {
+        id: "inline.cpp",
+        description: "Inline::CPP heredoc embedding C++ source.",
+        tags: &["inline", "xs", "ffi", "edge-case"],
+        source: r#"use Inline CPP => <<'END_CPP';
+#include <string>
+
+class Greet {
+public:
+    std::string hello(const char* name) {
+        return std::string("Hello, ") + name;
+    }
+};
+END_CPP
+
+my $g = Greet->new();
 "#,
     },
     EdgeCase {
@@ -1487,6 +1516,12 @@ mod tests {
     fn edge_case_sample_by_tag_matches() {
         let case = must_some(EdgeCaseGenerator::sample_by_tag("regex", 3));
         assert!(case.tags.contains(&"regex"));
+    }
+
+    #[test]
+    fn edge_case_lookup_by_id() {
+        let case = must_some(EdgeCaseGenerator::find("state.lexical.counter"));
+        assert!(case.tags.contains(&"state"));
     }
 
     #[test]

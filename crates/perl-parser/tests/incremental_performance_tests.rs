@@ -7,6 +7,7 @@
 mod incremental_performance_tests {
     use perl_parser::incremental_v2::{IncrementalMetrics, IncrementalParserV2};
     use perl_parser::{edit::Edit, position::Position};
+    use perl_tdd_support::{must, must_some};
     use std::time::{Duration, Instant};
 
     /// Performance test utilities for incremental parsing
@@ -287,10 +288,7 @@ if ($condition) {
             TestSourceGenerator::simple_variable(),
             |source| {
                 let new_source = source.replace("42", "9999");
-                let pos = match source.find("42") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
-                };
+                let pos = must_some(source.find("42"));
                 let edit = Edit::new(
                     pos,
                     pos + 2,
@@ -384,10 +382,7 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("42", "9999");
-                let pos = match source.find("42") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
-                };
+                let pos = must_some(source.find("42"));
                 let edit = Edit::new(
                     pos,
                     pos + 2,

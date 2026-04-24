@@ -77,6 +77,7 @@
 //!     host: "localhost".to_string(),
 //!     port: 13603,
 //!     timeout_ms: Some(5000),
+//!     stop_on_entry: None,
 //! };
 //!
 //! config.validate()?;
@@ -356,6 +357,10 @@
 //! This crate follows TDD principles with acceptance criteria from Issue #207.
 //! All tests are tagged with `// AC:ID` comments for traceability to specifications.
 
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
+
 // Phase 1 modules (AC1-AC4) - IMPLEMENTED
 /// Bridge adapter for communicating with Perl::LanguageServer's DAP implementation.
 pub mod bridge_adapter;
@@ -365,8 +370,32 @@ pub mod configuration;
 pub mod debug_adapter;
 /// DAP feature catalog and capability gating helpers.
 pub mod feature_catalog;
-/// Cross-platform utilities for Perl path resolution and environment setup.
+
+// Wave H collapsed modules (in DAG order — command_args before platform, platform before shell, value before variables)
+/// Explicit public API re-exports from all collapsed satellite modules.
+pub mod api;
+/// AST-based breakpoint validation (from perl-dap-breakpoint).
+pub mod breakpoint;
+/// Platform-aware shell argument formatting (from perl-dap-command-args).
+pub mod command_args;
+/// DAP launch and attach configuration types (from perl-dap-config).
+pub mod config;
+/// Safe expression evaluation validation (from perl-dap-eval).
+pub mod eval;
+/// Cross-platform utilities for Perl path resolution and environment setup (from perl-dap-platform).
 pub mod platform;
+/// Security validation and hardening (from perl-dap-security).
+pub mod security;
+/// Shell-specific helpers for Perl DAP process launch (from perl-dap-shell).
+pub mod shell;
+/// Stack trace parsing and frame classification (from perl-dap-stack).
+pub mod stack;
+/// Shared DAP session model types (from perl-dap-types).
+pub mod types;
+/// Shared Perl value model for DAP parser and renderer (from perl-dap-value).
+pub mod value;
+/// Variable parsing and rendering for Perl DAP (from perl-dap-variables).
+pub mod variables;
 
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
 /// Breakpoint storage and management for the DAP adapter.
@@ -387,10 +416,6 @@ pub mod tcp_attach;
 // See #453: Implement stack trace provider (AC8)
 // See #454: Implement control flow handlers (AC9)
 // See #455: Implement safe evaluation (AC10)
-
-// Phase 3 modules (AC13-AC19) - Tracked in GitHub issues
-/// Security validation and hardening for DAP sessions.
-pub mod security;
 
 // Re-export Phase 1 public types
 pub use bridge_adapter::BridgeAdapter;

@@ -6,14 +6,14 @@
 ## LSP Coverage
 
 <!-- BEGIN: LSP_COVERAGE -->
-| **LSP Coverage** | 100% (54/54 advertised features, `features.toml`) | 100% | PASS |
+| **LSP Coverage** | 100% (60/60 advertised features, `features.toml`) | 100% | PASS |
 <!-- END: LSP_COVERAGE -->
 
 ## Computed Metrics
 
 <!-- BEGIN: LSP_METRICS_BULLETS -->
-- **LSP Coverage**: 100% user-visible feature coverage (54/54 advertised features from `features.toml`)
-- **Protocol Compliance**: 100% overall LSP protocol support (98/98 including plumbing)
+- **LSP Coverage**: 100% user-visible feature coverage (60/60 advertised features from `features.toml`)
+- **Protocol Compliance**: 100% overall LSP protocol support (119/119 including plumbing)
 
 **Target**: maintain 100% LSP coverage (no regressions)
 <!-- END: LSP_METRICS_BULLETS -->
@@ -23,11 +23,11 @@
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
-| debug | 10 | 10 | 100% |
+| debug | 24 | 24 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
-| text_document | 42 | 42 | 100% |
+| text_document | 49 | 49 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **98** | **98** | **100%** |
+| **Overall** | **119** | **119** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->

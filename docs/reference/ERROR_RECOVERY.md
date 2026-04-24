@@ -19,7 +19,7 @@ After every parse attempt the LSP server assigns the open document a `Degradatio
 In code:
 
 ```rust
-// crates/perl-lsp/src/state/document.rs
+// crates/perl-lsp-rs/src/state/document.rs
 pub enum DegradationTier {
     Minimal, // No AST
     Partial, // AST present, parse errors exist

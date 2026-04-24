@@ -73,7 +73,13 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
     // Enable strict subs to force is_known_function checks
     let pragma_map = vec![(
         0..script.len(),
-        PragmaState { strict_subs: true, strict_vars: true, strict_refs: true, warnings: true },
+        PragmaState {
+            strict_subs: true,
+            strict_vars: true,
+            strict_refs: true,
+            warnings: true,
+            ..PragmaState::default()
+        },
     )];
 
     c.bench_function("scope_analysis_strict_barewords", |b| {

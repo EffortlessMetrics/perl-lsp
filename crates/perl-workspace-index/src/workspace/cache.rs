@@ -20,7 +20,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use perl_workspace_index::workspace::cache::{BoundedLruCache, CacheConfig};
+//! use perl_workspace::workspace::cache::{BoundedLruCache, CacheConfig};
 //!
 //! let config = CacheConfig::default();
 //! let cache = BoundedLruCache::new(config);
@@ -30,7 +30,7 @@
 //! ```
 
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -136,7 +136,7 @@ where
     /// Cache entries (key -> entry)
     entries: Arc<Mutex<HashMap<K, CacheEntry<V>>>>,
     /// Access order for LRU tracking (oldest keys at front)
-    access_order: Arc<Mutex<Vec<K>>>,
+    access_order: Arc<Mutex<VecDeque<K>>>,
     /// Cache configuration
     config: CacheConfig,
     /// Cache statistics
@@ -160,7 +160,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::{BoundedLruCache, CacheConfig};
+    /// use perl_workspace::workspace::cache::{BoundedLruCache, CacheConfig};
     ///
     /// let config = CacheConfig {
     ///     max_items: 1000,
@@ -172,7 +172,7 @@ where
     pub fn new(config: CacheConfig) -> Self {
         Self {
             entries: Arc::new(Mutex::new(HashMap::new())),
-            access_order: Arc::new(Mutex::new(Vec::new())),
+            access_order: Arc::new(Mutex::new(VecDeque::new())),
             config,
             stats: Arc::new(Mutex::new(CacheStats::default())),
         }
@@ -187,7 +187,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let cache: BoundedLruCache<String, String> = BoundedLruCache::default();
     /// ```
@@ -212,7 +212,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert_with_size("key", "value", 5);
@@ -234,7 +234,7 @@ where
             if let Some(pos) = access_order.iter().position(|k| k == &key) {
                 access_order.remove(pos);
             }
-            access_order.push(key.clone());
+            access_order.push_back(key.clone());
 
             // Update stats incrementally
             stats.current_bytes = stats.current_bytes - old_size + size_bytes;
@@ -248,12 +248,11 @@ where
                 || stats.current_bytes + size_bytes > self.config.max_bytes)
         {
             // Evict least recently used (first in access_order)
-            if let Some(lru_key) = access_order.first() {
-                if let Some(entry) = entries.remove(lru_key) {
+            if let Some(lru_key) = access_order.pop_front() {
+                if let Some(entry) = entries.remove(&lru_key) {
                     stats.current_bytes -= entry.size_bytes;
                     stats.evictions += 1;
                 }
-                access_order.remove(0);
             } else {
                 break;
             }
@@ -269,7 +268,7 @@ where
 
         // Insert new entry
         entries.insert(key.clone(), CacheEntry::new(value, size_bytes));
-        access_order.push(key);
+        access_order.push_back(key);
 
         // Update stats incrementally
         stats.current_bytes += size_bytes;
@@ -294,7 +293,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -322,7 +321,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -359,7 +358,9 @@ where
             // Update access order (move to end = most recent)
             if let Some(pos) = access_order.iter().position(|k| k == key) {
                 let key_clone = access_order.remove(pos);
-                access_order.push(key_clone);
+                if let Some(key_clone) = key_clone {
+                    access_order.push_back(key_clone);
+                }
             }
 
             stats.hits += 1;
@@ -370,6 +371,33 @@ where
             stats.hit_rate = CacheStats::calculate_hit_rate(stats.hits, stats.misses);
             None
         }
+    }
+
+    /// Peek a value from the cache without changing hit/miss counters.
+    ///
+    /// Expired entries are still removed so stale data does not linger.
+    pub fn peek(&self, key: &K) -> Option<V>
+    where
+        V: Clone,
+    {
+        let mut entries = self.entries.lock();
+        let mut access_order = self.access_order.lock();
+        let mut stats = self.stats.lock();
+
+        if let Some(ttl) = self.config.ttl {
+            if entries.get(key).is_some_and(|entry| entry.is_expired(ttl)) {
+                if let Some(entry) = entries.remove(key) {
+                    stats.current_bytes -= entry.size_bytes;
+                    stats.current_items = entries.len();
+                }
+                if let Some(pos) = access_order.iter().position(|k| k == key) {
+                    access_order.remove(pos);
+                }
+                return None;
+            }
+        }
+
+        entries.get(key).map(|entry| entry.value.clone())
     }
 
     /// Remove a value from the cache.
@@ -385,7 +413,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -418,7 +446,7 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
     /// cache.insert("key", "value");
@@ -465,7 +493,7 @@ where
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use perl_workspace_index::workspace::cache::BoundedLruCache;
+    /// use perl_workspace::workspace::cache::BoundedLruCache;
     ///
     /// let cache = BoundedLruCache::default();
     /// let stats = cache.stats();
@@ -699,6 +727,18 @@ mod tests {
         cache.insert("key1".to_string(), "value1".to_string());
         assert_eq!(cache.remove(&"key1".to_string()), Some("value1".to_string()));
         assert_eq!(cache.get(&"key1".to_string()), None);
+    }
+
+    #[test]
+    fn test_cache_peek_does_not_change_stats() {
+        let cache = BoundedLruCache::<String, String>::default();
+        cache.insert("key1".to_string(), "value1".to_string());
+
+        assert_eq!(cache.peek(&"key1".to_string()), Some("value1".to_string()));
+
+        let stats = cache.stats();
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.misses, 0);
     }
 
     #[test]

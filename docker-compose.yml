@@ -1,0 +1,27 @@
+# docker-compose.yml — local testing for the perl-lsp Docker image
+#
+# Usage:
+#   docker compose build                         # build the image
+#   docker compose run --rm perl-lsp             # run LSP server (stdio)
+#   docker compose run --rm perl-lsp --version   # print version
+#
+# The container mounts the current directory as /workspace so perllsp
+# can index your Perl project's files.
+
+services:
+  perl-lsp:
+    build:
+      context: .
+      dockerfile: .docker/perl-lsp/Dockerfile
+    image: perl-lsp:local
+    # stdin_open + tty false = bare stdio transport (standard LSP mode)
+    stdin_open: true
+    tty: false
+    volumes:
+      - type: bind
+        source: .
+        target: /workspace
+        read_only: true
+    # Override the entrypoint for quick smoke tests, e.g.:
+    #   docker compose run --rm perl-lsp --version
+    # command: ["--version"]

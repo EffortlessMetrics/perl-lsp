@@ -1,6 +1,6 @@
 # Perl Language Server Protocol (LSP) Features
 
-This document provides comprehensive documentation of all LSP features implemented in the perl-lsp server.
+This document provides comprehensive documentation of all LSP features implemented in the `perllsp` server from the perl-lsp project.
 
 ## Latest Updates
 
@@ -489,14 +489,14 @@ Resolution precedence order:
 
 ### Visual Studio Code
 
-Install the Perl LSP extension or configure manually:
+Install the Perl LSP extension or configure the `perllsp` binary manually:
 
 ```json
 // .vscode/settings.json
 {
   "perl.languageServer": {
     "enabled": true,
-    "path": "perl-lsp",
+    "path": "perllsp",
     "args": ["--stdio"]
   }
 }
@@ -508,7 +508,7 @@ Using nvim-lspconfig:
 
 ```lua
 require('lspconfig').perl_lsp.setup{
-  cmd = {'perl-lsp', '--stdio'},
+  cmd = {'perllsp', '--stdio'},
   settings = {
     perl = {
       lsp = {
@@ -527,14 +527,14 @@ With lsp-mode or eglot:
 ```elisp
 ;; lsp-mode
 (lsp-register-client
- (make-lsp-client :new-connection (lsp-stdio-connection "perl-lsp")
+ (make-lsp-client :new-connection (lsp-stdio-connection "perllsp")
                   :major-modes '(perl-mode cperl-mode)
                   :priority 10
                   :server-id 'perl-lsp))
 
 ;; eglot
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perl-lsp" "--stdio")))
+             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
 ```
 
 ### Sublime Text
@@ -545,7 +545,7 @@ With lsp-mode or eglot:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl"
     }
   }
@@ -588,11 +588,11 @@ With lsp-mode or eglot:
 
 **LSP not starting:**
 ```bash
-# Check if perl-lsp is in PATH
-which perl-lsp
+# Check if perllsp is in PATH
+which perllsp
 
 # Test standalone
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
 ```
 
 **Slow performance:**
@@ -602,7 +602,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --s
 - Check for recursive includes
 
 **Missing features:**
-- Ensure latest version: `perl-lsp --version`
+- Ensure latest version: `perllsp --version`
 - Check editor LSP client capabilities
 - Verify configuration is loaded
 
@@ -612,10 +612,10 @@ Enable debug logging for troubleshooting:
 
 ```bash
 # Command line
-perl-lsp --stdio --log-level=debug --log-file=perl-lsp.log
+perllsp --stdio --log-level=debug --log-file=perl-lsp.log
 
 # Environment variable
-RUST_LOG=debug perl-lsp --stdio
+RUST_LOG=debug perllsp --stdio
 ```
 
 ## Contributing

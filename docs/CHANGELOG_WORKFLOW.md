@@ -309,7 +309,7 @@ Always document breaking changes in the commit message:
 feat(lsp)!: change configuration format
 
 BREAKING CHANGE: Configuration now uses TOML instead of JSON.
-See docs/MIGRATION.md for upgrade instructions.
+See [docs/how-to/UPGRADING.md](how-to/UPGRADING.md) for upgrade instructions.
 ```
 
 ### 5. Review Before Release

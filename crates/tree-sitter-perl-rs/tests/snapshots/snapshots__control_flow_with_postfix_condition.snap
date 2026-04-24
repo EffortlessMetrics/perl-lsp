@@ -1,0 +1,5 @@
+---
+source: crates/tree-sitter-perl-rs/tests/snapshots.rs
+expression: sexp
+---
+(source_file (my_declaration (variable $ x)(number 3)) (statement_modifier_if (expression_statement (call print ((string_interpolated "\"odd\\n\"")))) (binary_% (variable $ x) (number 2))))

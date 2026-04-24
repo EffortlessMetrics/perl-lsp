@@ -158,5 +158,5 @@ cargo test -p perl-parser incremental_integration_test
 cargo test -p perl-parser multibyte_edit_test
 
 # Test LSP document changes with Rope
-cargo test -p perl-lsp lsp_comprehensive_e2e_test
+cargo test -p perl-lsp-rs lsp_comprehensive_e2e_test
 ```

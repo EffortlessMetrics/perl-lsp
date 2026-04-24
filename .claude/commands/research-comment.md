@@ -6,7 +6,7 @@ user-invocable: false
 # Research: Comment
 
 Post the verification findings to the GitHub issue as a structured comment,
-then apply the `research-verified` label to signal the issue is ready for
+then apply the `research-reviewed` label to signal the issue is ready for
 plan-review.
 
 ## Steps
@@ -63,17 +63,17 @@ plan-review.
    )"
    ```
 
-3. **Ensure the `research-verified` label exists, then apply it:**
+3. **Ensure the `research-reviewed` label exists, then apply it:**
 
    ```bash
    # Create the label if it doesn\'t exist (idempotent)
-   gh label create "research-verified" \
+   gh label create "research-reviewed" \
      --color "0075ca" \
      --description "Facts verified by research-verifier agent" \
      2>/dev/null || true
 
    # Apply the label to the issue
-   gh issue edit <number> --add-label "research-verified"
+   gh issue edit <number> --add-label "research-reviewed"
    ```
 
 4. **Remove `needs-research-verification` label if present:**
@@ -101,6 +101,6 @@ plan-review.
 
 ```
 Comment posted on issue #NNN: <URL>
-Label added: research-verified
+Label added: research-reviewed
 FALSE claims requiring plan-reviewer attention: <N>
 ```

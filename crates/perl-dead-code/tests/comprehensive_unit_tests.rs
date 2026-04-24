@@ -6,7 +6,7 @@
 use perl_dead_code::{
     DeadCode, DeadCodeAnalysis, DeadCodeDetector, DeadCodeStats, DeadCodeType, generate_report,
 };
-use perl_workspace_index::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace_index::WorkspaceIndex;
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
@@ -760,8 +760,8 @@ fn dead_branch_has_suggestion() -> Result<(), String> {
 
     let results = detector.analyze_file(&PathBuf::from("/test_dead_suggestion.pl"))?;
     let branch = results.iter().find(|d| d.code_type == DeadCodeType::DeadBranch);
-    assert!(branch.is_some());
-    assert!(branch.unwrap().suggestion.is_some(), "DeadBranch should have a suggestion");
+    let branch = branch.ok_or("expected DeadBranch entry")?;
+    assert!(branch.suggestion.is_some(), "DeadBranch should have a suggestion");
     Ok(())
 }
 

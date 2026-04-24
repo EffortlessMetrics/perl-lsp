@@ -60,6 +60,8 @@ All LSP workspace settings live under the `perl` namespace:
 
 `.perl-lsp.toml` is an optional, editor-agnostic project configuration file that you commit to your repository. It lets you share settings with your whole team without requiring each developer to configure their own editor. The file lives at the **workspace root** (the directory containing your `.git` folder or `Makefile.PL` / `cpanfile`).
 
+For v0.13, this per-folder `.perl-lsp.toml` model is the supported multi-root mechanism. Fully dynamic per-folder scoping through the `workspace/configuration` reverse-request flow is deferred (see [#3515](https://github.com/EffortlessMetrics/perl-lsp/issues/3515)).
+
 The server silently skips the file if it does not exist. If the file exists but contains invalid TOML, the server emits a `window/showMessage` warning and continues with defaults.
 
 Unknown keys and sections are silently ignored for forward compatibility.
@@ -88,7 +90,7 @@ your-project/
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `perlcritic` | `boolean` | (unset) | Enable perlcritic diagnostics. When unset, the server default (`false`) applies. Requires `perlcritic` installed on the system. |
-| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. 1 = most severe (gentle), 5 = everything (brutal). Must be in the range 1–5; values outside this range are a parse error. |
+| `perlcritic_severity` | `integer` (1–5) | (unset) | Minimum severity to report. Perl::Critic uses `1 = least severe` and `5 = most severe`, so `1` reports everything while `5` reports only the most severe violations. Must be in the range 1–5; values outside this range are a parse error. |
 
 #### `[features]` — LSP Feature Toggles
 
@@ -120,7 +122,7 @@ include_paths = ["lib", "local/lib/perl5"]
 # Enable perlcritic linting (opt-in; requires perlcritic installed)
 perlcritic = false
 
-# Minimum severity to report: 1 (most severe) to 5 (everything)
+# Minimum severity to report: 1 (everything) to 5 (most severe only)
 perlcritic_severity = 3
 
 [features]
@@ -177,8 +179,35 @@ Controls module resolution and workspace scanning behaviour.
 | Default | `["lib", ".", "local/lib/perl5"]` |
 | Key | `includePaths` |
 
-Directories to search for Perl modules, relative to the workspace root. Appended
-to the internal `@INC` used for go-to-definition and hover documentation.
+Directories to search for Perl modules. Relative entries are resolved against
+the workspace root. Absolute entries are honored as provided only when they
+still stay inside the workspace boundary. These paths are searched by
+`perl-lsp` and are not appended to Perl's runtime `@INC`.
+
+When `perlPath` is unset, the server will try perlbrew/plenv-managed
+interpreters before falling back to `perl` on `PATH` for the system `@INC`
+probe. Use `useSystemInc` to opt in to that system `@INC` lookup.
+
+#### `perl.workspace.perlPath`
+
+| Property | Value |
+|---|---|
+| Type | `string` |
+| Default | auto-detected |
+| Key | `perlPath` |
+
+Path to the Perl interpreter used for system `@INC` probing. When set, this
+value overrides auto-detection and `PATH` lookup.
+
+#### `perl.workspace.perlArgs`
+
+| Property | Value |
+|---|---|
+| Type | `string[]` |
+| Default | `[]` |
+| Key | `perlArgs` |
+
+Extra arguments passed to the Perl interpreter when probing startup `@INC`.
 
 ```json
 {
@@ -365,8 +394,9 @@ Controls optional Perl::Critic static analysis integration.
 | Default | `false` |
 
 **Opt-in.** When `true`, the server runs `perlcritic` on open documents and
-merges violations into the diagnostic stream. Silently skipped if `perlcritic`
-is not installed on the system.
+merges violations into the diagnostic stream. If `perlcritic` is missing,
+profile resolution fails, or the command execution fails, the server emits a
+workspace warning instead of silently skipping.
 
 #### `perl.perlcritic.severity`
 
@@ -375,9 +405,9 @@ is not installed on the system.
 | Type | `integer` (1–5) |
 | Default | `3` |
 
-Minimum severity level to report. `1` = most severe (Brutal), `5` = everything
-(Gentle). Values are clamped to the valid range. Equivalent to
-`perlcritic --severity N`.
+Minimum severity level to report. Perl::Critic uses `1` for least severe
+violations and `5` for most severe violations. Values are clamped to the
+valid range. Equivalent to `perlcritic --severity N`.
 
 #### `perl.perlcritic.profile`
 
@@ -515,14 +545,14 @@ Flags passed when launching the `perl-lsp` binary. Source:
 Examples:
 
 ```bash
-perl-lsp --stdio                         # stdio mode (default)
-perl-lsp --stdio --log                   # with logging to stderr
-perl-lsp --socket --port 9257            # TCP socket mode
-perl-lsp --stdio --feature-profile prod  # production feature profile
-perl-lsp --check lib/MyModule.pm         # batch syntax check
-perl-lsp --check-project lib/            # project-wide parsability scan
-perl-lsp --info                          # print server information
-perl-lsp --completion bash >> ~/.bashrc  # install bash completions
+perllsp --stdio                         # stdio mode (default)
+perllsp --stdio --log                   # with logging to stderr
+perllsp --socket --port 9257            # TCP socket mode
+perllsp --stdio --feature-profile prod  # production feature profile
+perllsp --check lib/MyModule.pm         # batch syntax check
+perllsp --check-project lib/            # project-wide parsability scan
+perllsp --info                          # print server information
+perllsp --completion bash >> ~/.bashrc  # install bash completions
 ```
 
 ---
@@ -539,7 +569,7 @@ Set to any non-empty value to enable logging to stderr. Equivalent to the
 either enables logging.
 
 ```bash
-PERL_LSP_LOG=1 perl-lsp --stdio
+PERL_LSP_LOG=1 perllsp --stdio
 ```
 
 ### `RUST_LOG`
@@ -548,9 +578,9 @@ Standard `tracing`/`env_logger` filter directive. Controls log level and
 per-module filtering. Takes precedence over the `--log` flag default filter.
 
 ```bash
-RUST_LOG=perl_lsp=debug perl-lsp --stdio
-RUST_LOG=perl_parser=trace perl-lsp --stdio
-RUST_LOG=warn perl-lsp --stdio
+RUST_LOG=perl_lsp=debug perllsp --stdio
+RUST_LOG=perl_parser=trace perllsp --stdio
+RUST_LOG=warn perllsp --stdio
 ```
 
 Common filter tokens:
@@ -570,7 +600,7 @@ When set, disables ANSI colour in log output. Follows the
 [no-color.org](https://no-color.org) convention.
 
 ```bash
-NO_COLOR=1 perl-lsp --stdio
+NO_COLOR=1 perllsp --stdio
 ```
 
 ---
@@ -702,9 +732,9 @@ CLI flag or the `perl-lsp.featureProfile` VS Code setting.
 | `auto` | — | Resolves to the compile-time default (usually `production`). |
 
 ```bash
-perl-lsp --stdio --feature-profile ga-lock
-perl-lsp --stdio --feature-profile all
-perl-lsp --features-json --feature-profile production
+perllsp --stdio --feature-profile ga-lock
+perllsp --stdio --feature-profile all
+perllsp --features-json --feature-profile production
 ```
 
 ---

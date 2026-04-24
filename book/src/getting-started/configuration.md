@@ -656,7 +656,7 @@ RUST_LOG=perl_parser=trace perl-lsp --stdio
 Control threading for test execution (useful in CI environments).
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 ```
 
 ---

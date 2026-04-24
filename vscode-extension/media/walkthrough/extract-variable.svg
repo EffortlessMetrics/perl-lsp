@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <text x="60" y="58" font-family="sans-serif" font-size="28" fill="#e2e8f0">Storyboard preview: code action extract variable</text>
+  <text x="60" y="92" font-family="sans-serif" font-size="16" fill="#94a3b8">Manual recording still required. This file documents the intended shot order for the final GIF.</text>
+
+  <rect x="55" y="130" width="345" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+  <rect x="425" y="130" width="345" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+  <rect x="795" y="130" width="350" height="400" rx="18" fill="#1e293b" stroke="#334155"/>
+
+  <circle cx="100" cy="170" r="18" fill="#2563eb"/>
+  <text x="95" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">1</text>
+  <text x="130" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Select the expression</text>
+  <rect x="80" y="215" width="295" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <text x="100" y="250" font-family="monospace" font-size="18" fill="#94a3b8">demo_workspace/main.pl</text>
+  <text x="100" y="292" font-family="monospace" font-size="20" fill="#cbd5e1">my $total = $price *</text>
+  <rect x="96" y="300" width="215" height="28" rx="6" fill="#1d4ed8" opacity="0.55"/>
+  <text x="100" y="326" font-family="monospace" font-size="20" fill="#cbd5e1">$qty + $tax;</text>
+  <text x="100" y="362" font-family="sans-serif" font-size="15" fill="#94a3b8">Record the selection highlight before invoking the light bulb.</text>
+
+  <polygon points="405,320 420,305 420,335" fill="#38bdf8"/>
+  <line x1="405" y1="320" x2="420" y2="320" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+
+  <circle cx="470" cy="170" r="18" fill="#2563eb"/>
+  <text x="465" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">2</text>
+  <text x="500" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Invoke the code action</text>
+  <rect x="445" y="215" width="295" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <circle cx="510" cy="270" r="18" fill="#fbbf24"/>
+  <text x="504" y="277" font-family="sans-serif" font-size="18" fill="#111827">💡</text>
+  <text x="545" y="274" font-family="sans-serif" font-size="18" fill="#e2e8f0">Code actions</text>
+  <rect x="470" y="298" width="250" height="38" rx="8" fill="#1d4ed8"/>
+  <text x="490" y="323" font-family="sans-serif" font-size="16" fill="#eff6ff">Extract variable</text>
+  <rect x="470" y="348" width="250" height="38" rx="8" fill="#0f172a" stroke="#334155"/>
+  <text x="490" y="373" font-family="sans-serif" font-size="16" fill="#cbd5e1">Extract subroutine</text>
+  <text x="470" y="410" font-family="sans-serif" font-size="15" fill="#94a3b8">Highlight the light bulb and the chosen action.</text>
+
+  <polygon points="775,320 790,305 790,335" fill="#38bdf8"/>
+  <line x1="775" y1="320" x2="790" y2="320" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+
+  <circle cx="850" cy="170" r="18" fill="#2563eb"/>
+  <text x="845" y="177" font-family="sans-serif" font-size="18" fill="#ffffff">3</text>
+  <text x="885" y="177" font-family="sans-serif" font-size="22" fill="#f8fafc">Result after refactor</text>
+  <rect x="820" y="215" width="290" height="225" rx="14" fill="#0f172a" stroke="#334155"/>
+  <text x="840" y="252" font-family="monospace" font-size="18" fill="#94a3b8">demo_workspace/main.pl</text>
+  <text x="840" y="292" font-family="monospace" font-size="20" fill="#cbd5e1">my $subtotal = $price * $qty;</text>
+  <text x="840" y="324" font-family="monospace" font-size="20" fill="#cbd5e1">my $total = $subtotal + $tax;</text>
+  <rect x="835" y="340" width="250" height="28" rx="6" fill="#16a34a" opacity="0.55"/>
+  <text x="840" y="380" font-family="sans-serif" font-size="15" fill="#94a3b8">The refactor should land on a clean, readable result.</text>
+
+  <text x="60" y="590" font-family="sans-serif" font-size="16" fill="#94a3b8">Planned output: `extract-variable.gif`. Keep the before/after sequence tight so the change is obvious.</text>
+  <text x="60" y="624" font-family="sans-serif" font-size="16" fill="#94a3b8">Source references: `demo_workspace/main.pl` and the refactoring UI in VS Code.</text>
+</svg>

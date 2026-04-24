@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Tier**: 3 (two-level internal dependencies)
-- **Version**: 0.10.0
+- **Version**: workspace (currently 0.12.3)
 - **Purpose**: Refactoring and modernization utilities for Perl -- provides automated code transformations including import optimization, symbol rename, module extraction, inline variable, and legacy code modernization.
 
 ## Commands

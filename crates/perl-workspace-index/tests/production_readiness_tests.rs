@@ -7,15 +7,15 @@
 //! - Performance optimization for large workspaces
 //! - Production coordinator integration
 use perl_tdd_support::{must, must_some};
-use perl_workspace_index::workspace::cache::{
+use perl_workspace::workspace::cache::{
     AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, SymbolCacheConfig,
     WorkspaceCacheConfig,
 };
-use perl_workspace_index::workspace::production_coordinator::{
+use perl_workspace::workspace::production_coordinator::{
     ProductionCoordinatorConfig, ProductionIndexCoordinator,
 };
-use perl_workspace_index::workspace::slo::{OperationResult, OperationType, SloConfig, SloTracker};
-use perl_workspace_index::workspace::state_machine::{
+use perl_workspace::workspace::slo::{OperationResult, OperationType, SloConfig, SloTracker};
+use perl_workspace::workspace::state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateMachine, InvalidationReason,
     TransitionResult,
 };

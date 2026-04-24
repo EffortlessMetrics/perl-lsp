@@ -1,6 +1,6 @@
 # Perl Language Server Protocol (LSP) Documentation
 
-The Perl LSP server (`perl-lsp`) provides professional IDE features for Perl development in any LSP-compatible editor.
+The Perl LSP server (`perllsp`) provides professional IDE features for Perl development in any LSP-compatible editor.
 
 ## Table of Contents
 
@@ -126,13 +126,13 @@ brew install perl-lsp
 ### Build from Source
 ```bash
 # Install the perl-lsp binary from crates.io
-cargo install perl-lsp
+cargo install perllsp
 
 # Or, build from this repository
 git clone https://github.com/EffortlessMetrics/perl-lsp
 cd perl-lsp
-cargo build --release -p perl-lsp
-# The binary will be in target/release/perl-lsp
+cargo build --release -p perllsp
+# The binary will be in target/release/perllsp
 ```
 
 ### System Requirements
@@ -151,7 +151,7 @@ cargo build --release -p perl-lsp
 {
   "genericLSP.servers": {
     "perl": {
-      "command": "perl-lsp",
+      "command": "perllsp",
       "args": ["--stdio"],
       "rootIndicators": ["Makefile.PL", "Build.PL", "cpanfile", ".git"],
       "fileEvents": ["**/*.{pl,pm,pod,t}"],
@@ -174,7 +174,7 @@ local configs = require('lspconfig.configs')
 if not configs.perl_lsp then
   configs.perl_lsp = {
     default_config = {
-      cmd = {'perl-lsp', '--stdio'},
+      cmd = {'perllsp', '--stdio'},
       filetypes = {'perl'},
       root_dir = lspconfig.util.root_pattern('Makefile.PL', 'Build.PL', 'cpanfile', '.git'),
       settings = {},
@@ -197,7 +197,7 @@ Using `lsp-mode`:
 
 (lsp-register-client
  (make-lsp-client
-  :new-connection (lsp-stdio-connection "perl-lsp --stdio")
+  :new-connection (lsp-stdio-connection "perllsp --stdio")
   :major-modes '(perl-mode cperl-mode)
   :server-id 'perl-lsp))
 
@@ -214,7 +214,7 @@ Using `lsp-mode`:
   "clients": {
     "perl-lsp": {
       "enabled": true,
-      "command": ["perl-lsp", "--stdio"],
+      "command": ["perllsp", "--stdio"],
       "selector": "source.perl",
       "initializationOptions": {}
     }
@@ -269,7 +269,7 @@ The server adapts its behavior based on client capabilities:
 ### Components
 
 The LSP is composed of two main crates:
-- **`perl-lsp`**: The binary that runs the server.
+- **`perllsp`**: The public binary that runs the server.
 - **`perl-parser`**: The library that contains all the logic.
 
 ```
@@ -317,10 +317,10 @@ perl-parser crate
 
 ```bash
 # Debug build with logging
-RUST_LOG=debug cargo build -p perl-parser --bin perl-lsp
+RUST_LOG=debug cargo build -p perllsp --bin perllsp
 
 # Run with logging
-RUST_LOG=perl_parser=debug perl-lsp --stdio --log
+RUST_LOG=perl_parser=debug perllsp --stdio --log
 ```
 
 ### Running Tests
@@ -363,7 +363,7 @@ cargo test -p perl-parser --test lsp_integration_test
 
 Enable debug logging:
 ```bash
-RUST_LOG=debug perl-lsp --stdio --log 2>lsp.log
+RUST_LOG=debug perllsp --stdio --log 2>lsp.log
 ```
 
 Use LSP inspector tools:
@@ -375,9 +375,9 @@ Use LSP inspector tools:
 ### Common Issues
 
 #### Server doesn't start
-- Check if `perl-lsp` is in PATH
-- Verify with: `perl-lsp --version`
-- Check permissions: `chmod +x perl-lsp`
+- Check if `perllsp` is in PATH
+- Verify with: `perllsp --version`
+- Check permissions: `chmod +x perllsp`
 
 #### No diagnostics appearing
 - Ensure file has `.pl` or `.pm` extension
@@ -426,7 +426,7 @@ Example debug output:
 
 3. **Enhanced Diagnostics**
    - Type checking (where possible)
-   - Security warnings (taint checking)
+   - Security anti-pattern warnings (for example string eval, backtick execution, and unsafe open patterns)
    - Best practice suggestions
 
 4. **Multi-file Support**

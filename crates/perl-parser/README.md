@@ -1,40 +1,38 @@
 # perl-parser
-[![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
-[![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 
-Central hub crate for the Perl parser ecosystem. Provides a native recursive-descent
-parser (v3) with Tree-sitter-compatible AST output, semantic analysis, workspace
-indexing, refactoring, and LSP provider re-exports.
+Use this crate when you want one dependency for parsing Perl plus the higher
+layers that usually come next: semantic analysis, workspace indexing,
+refactoring, and the LSP-oriented provider re-exports.
 
-## Usage
+If you only need the parser engine itself, use `perl-parser-core` directly.
+
+## Where it fits
+
+`perl-parser` is the top of the parsing stack. It lets downstream tools depend
+on one crate instead of wiring the parser, analysis, workspace, and refactoring
+families together by hand.
+
+## Main entry points
+
+- `Parser` plus `ast`, `position`, `error`, and `ParseResult`
+- `analysis::*` from `perl-semantic-analyzer`
+- `workspace::*` from `perl-workspace-index`
+- `refactor::*` from `perl-refactoring`
+- `completion`, `diagnostics`, `rename`, and other LSP provider re-exports
+- `perl-parse` when the `cli` feature is enabled
+
+## Example
 
 ```rust
 use perl_parser::Parser;
 
 let mut parser = Parser::new("my $x = 42;");
 let ast = parser.parse()?;
-println!("{}", ast.to_sexp());
+assert!(!ast.to_sexp().is_empty());
 ```
 
-## Included binary
+## Typical use
 
-`perl-parse` (requires the `cli` feature) parses Perl files and prints the AST
-in S-expression, JSON, or debug format.
-
-## Key re-exports
-
-| Module | Source crate | Purpose |
-|--------|-------------|---------|
-| `engine` | `perl-parser-core` | Recursive-descent parser, AST, error recovery |
-| `analysis` | `perl-semantic-analyzer` | Scope analysis, type inference, symbol tables |
-| `workspace` | `perl-workspace-index` | Cross-file symbol indexing and document store |
-| `refactor` | `perl-refactoring` | Import optimizer, modernization, refactoring engine |
-| `tdd` | `perl-tdd-support` | Test generation and TDD workflow |
-| `completion`, `diagnostics`, `rename`, ... | `perl-lsp-*` | LSP feature providers |
-
-Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
-
-## License
-
-Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
-or [MIT license](http://opensource.org/licenses/MIT) at your option.
+Use `perl-parser` when you are building editor tooling, code transforms, or
+tests that need both parsing and the layers above parsing. If you only need a
+small slice of the stack, depend on the narrower crate directly.

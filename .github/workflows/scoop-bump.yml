@@ -12,10 +12,9 @@ on:
         description: 'Release tag to bump (e.g., v0.10.0)'
         required: false
 
-# Cancel in-flight runs
 concurrency:
   group: scoop-bump-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel scoop bumps
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -33,77 +32,76 @@ jobs:
 
       - name: Get release tag
         id: tag
+        shell: pwsh
+        env:
+          RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-          fi
-          VERSION="${TAG#v}"
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -and $env:RELEASE_TAG_INPUT) {
+            $tag = $env:RELEASE_TAG_INPUT
+          } else {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/', ''
+          }
+
+          $version = $tag.TrimStart('v')
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Wait for release assets
+        shell: pwsh
         run: |
-          # Wait up to 10 minutes for release assets to be available
-          for i in {1..20}; do
-            echo "Checking for release assets (attempt $i/20)..."
-            if gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
-              echo "Assets found!"
+          for ($i = 1; $i -le 20; $i++) {
+            Write-Host "Checking for release assets (attempt $i/20)..."
+            $assetCount = gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length'
+            if ($assetCount -match '^[1-9]') {
+              Write-Host "Assets found!"
               break
-            fi
-            sleep 30
-          done
+            }
+            Start-Sleep -Seconds 30
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Windows binary
+        shell: pwsh
         run: |
-          TAG="${{ steps.tag.outputs.tag }}"
-          VERSION="${{ steps.tag.outputs.version }}"
+          $tag = "${{ steps.tag.outputs.tag }}"
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'scoop-assets'
 
-          # Download Windows binary
-          mkdir -p /tmp/scoop-assets
-          cd /tmp/scoop-assets
-
-          echo "Downloading perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip..."
-          gh release download "${TAG}" \
-            --pattern "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" \
-            --dir /tmp/scoop-assets
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          Write-Host "Downloading perllsp-$version-x86_64-pc-windows-msvc.zip..."
+          gh release download $tag `
+            --pattern "perllsp-$version-x86_64-pc-windows-msvc.zip" `
+            --dir $assetDir
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute SHA256
         id: sha
+        shell: pwsh
         run: |
-          VERSION="${{ steps.tag.outputs.version }}"
-          cd /tmp/scoop-assets
+          $version = "${{ steps.tag.outputs.version }}"
+          $assetDir = Join-Path $env:RUNNER_TEMP 'scoop-assets'
+          $assetPath = Join-Path $assetDir "perllsp-$version-x86_64-pc-windows-msvc.zip"
 
-          # Compute SHA256
-          SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
-          echo "sha256=${SHA}" >> $GITHUB_OUTPUT
-          echo "SHA256: ${SHA}"
+          $sha = (Get-FileHash -Algorithm SHA256 -LiteralPath $assetPath).Hash.ToLowerInvariant()
+          "sha256=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "SHA256: $sha"
 
       - name: Update Scoop manifest
+        shell: pwsh
         run: |
-          VERSION="${{ steps.tag.outputs.version }}"
-          SHA="${{ steps.sha.outputs.sha256 }}"
+          ./distribution/windows/update-manifests.ps1 `
+            -Version "${{ steps.tag.outputs.version }}" `
+            -ReleaseSha256 "${{ steps.sha.outputs.sha256 }}" `
+            -ScoopManifestPath 'distribution/scoop/perl-lsp.json'
 
-          # Update version and hash
-          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" distribution/scoop/perl-lsp.json
-          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
-          sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"${SHA}\"/" distribution/scoop/perl-lsp.json
-
-          if grep -q "__RELEASE_VERSION__\|__RELEASE_HASH__" distribution/scoop/perl-lsp.json; then
-            echo "::error::Scoop manifest still contains unreplaced placeholders after update."
-            exit 1
-          fi
-
-          # Show updated manifest
-          cat distribution/scoop/perl-lsp.json
+          if (Select-String -Path 'distribution/scoop/perl-lsp.json' -Pattern '__RELEASE_VERSION__|__RELEASE_HASH__' -Quiet) {
+            throw 'Scoop manifest still contains unreplaced placeholders after update.'
+          }
 
       - name: Create PR to Scoop bucket
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: distribution/scoop
@@ -123,9 +121,10 @@ jobs:
           signoff: false
 
       - name: Summary
+        shell: pwsh
         run: |
-          echo "## Scoop Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **SHA256**: ${{ steps.sha.outputs.sha256 }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **PR**: Created to ScoopInstaller/Main" >> $GITHUB_STEP_SUMMARY
+          Add-Content $env:GITHUB_STEP_SUMMARY "## Scoop Bump Complete :rocket:"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **Version**: ${{ steps.tag.outputs.version }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **SHA256**: ${{ steps.sha.outputs.sha256 }}"
+          Add-Content $env:GITHUB_STEP_SUMMARY "- **PR**: Created to ScoopInstaller/Main"

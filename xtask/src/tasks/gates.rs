@@ -23,12 +23,13 @@ use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use crate::tasks::ci_scope::{self, ScopeOutput};
 use crate::utils::project_root;
 
 // =============================================================================
@@ -208,8 +209,40 @@ pub struct Receipt {
     pub metadata: ReceiptMetadata,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
+    pub agent_receipt: AgentReceipt,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentReceipt {
+    pub scope: AgentScope,
+    pub selected_lanes: Vec<AgentLane>,
+    pub reasons: BTreeMap<String, String>,
+    pub failures: AgentFailures,
+    pub baselines: Vec<String>,
+    pub next_actions: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct AgentScope {
+    pub base: String,
+    pub diff_class: String,
+    pub changed_files: Vec<String>,
+    pub direct_crates: Vec<String>,
+    pub reverse_dep_closure: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentLane {
+    pub lane: String,
+    pub scope: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct AgentFailures {
+    pub blocking: Vec<String>,
+    pub repro: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -702,14 +735,156 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
+    let agent_receipt = build_agent_receipt(&root, &results);
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
         metadata,
         gates: results,
         summary,
+        agent_receipt,
         diff_config: None,
     })
+}
+
+fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
+    let scope_output = compute_scope_output(root).ok();
+    let selected_lanes = scope_output
+        .as_ref()
+        .map(|scope| {
+            scope
+                .selected_lanes
+                .iter()
+                .map(|lane| AgentLane { lane: lane.lane.clone(), scope: lane.scope.clone() })
+                .collect()
+        })
+        .unwrap_or_default();
+    let reasons = scope_output
+        .as_ref()
+        .map(|scope| {
+            scope
+                .selected_lanes
+                .iter()
+                .map(|lane| {
+                    let explanation =
+                        scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                    let reason = if explanation.is_empty() {
+                        lane.reason.clone()
+                    } else {
+                        format!("{} — {}", lane.reason, explanation)
+                    };
+                    (lane.lane.clone(), reason)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let (blocking, repro, next_actions) = failure_guidance(results);
+    let baselines = discover_baselines(root);
+
+    let scope = if let Some(scope) = scope_output {
+        AgentScope {
+            base: scope.base,
+            diff_class: scope.diff_class,
+            changed_files: scope.changed_files,
+            direct_crates: scope.direct_crates.into_iter().map(|entry| entry.name).collect(),
+            reverse_dep_closure: scope
+                .reverse_dep_closure
+                .into_iter()
+                .map(|entry| entry.name)
+                .collect(),
+        }
+    } else {
+        AgentScope::default()
+    };
+
+    AgentReceipt {
+        scope,
+        selected_lanes,
+        reasons,
+        failures: AgentFailures { blocking, repro },
+        baselines,
+        next_actions,
+    }
+}
+
+fn failure_guidance(results: &[GateResult]) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let blocking = blocking_failure_gate_names(results);
+    let repro: Vec<String> = results
+        .iter()
+        .filter(|result| blocking.iter().any(|name| name == &result.gate_name))
+        .map(|result| format!("{} # gate={}", result.command, result.gate_name))
+        .collect();
+    let next_actions = if blocking.is_empty() {
+        vec!["No blocking failures detected. Proceed with review or merge flow.".to_string()]
+    } else {
+        blocking
+            .iter()
+            .map(|gate| {
+                format!(
+                    "Reproduce and fix gate '{gate}' locally, then rerun: cargo xtask gates --gate {gate}"
+                )
+            })
+            .collect()
+    };
+    (blocking, repro, next_actions)
+}
+
+fn discover_baselines(root: &Path) -> Vec<String> {
+    let candidates = [
+        ".ci/public-api-baselines",
+        ".ci/metrics/baselines",
+        "benchmarks/baselines",
+        ".ci/parser-corpus-baseline.json",
+        ".ci/cpan-corpus-baseline.json",
+    ];
+    candidates
+        .iter()
+        .filter(|path| root.join(path).exists())
+        .map(|path| (*path).to_string())
+        .collect()
+}
+
+fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
+    let base = select_scope_base(root);
+    let changed_files = cmd("git", ["diff", "--name-only", &format!("{base}...HEAD")])
+        .dir(root)
+        .read()
+        .with_context(|| format!("Failed to read changed files for base '{base}'"))?
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>();
+
+    let metadata_raw = cmd("cargo", ["metadata", "--format-version=1", "--no-deps"])
+        .dir(root)
+        .read()
+        .context("Failed to load cargo metadata for agent receipt scope")?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&metadata_raw).context("Failed to parse cargo metadata JSON")?;
+
+    let workspace_root = root.to_string_lossy().replace('\\', "/");
+    let mut scope = ci_scope::classify_files(&changed_files, &metadata, &workspace_root)?;
+    scope.base = base;
+    scope.head_sha = cmd("git", ["rev-parse", "HEAD"]).dir(root).read()?.trim().to_string();
+    scope.changed_files = changed_files;
+    Ok(scope)
+}
+
+fn select_scope_base(root: &Path) -> String {
+    let env_candidates = [
+        std::env::var("CI_SCOPE_BASE").ok(),
+        std::env::var("GITHUB_BASE_REF").ok().map(|name| format!("origin/{name}")),
+        std::env::var("GITHUB_BASE_REF").ok(),
+    ];
+    let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
+    candidates.extend(["origin/master", "master", "HEAD~1"].into_iter().map(str::to_string));
+    for candidate in candidates {
+        let exists = cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).run().is_ok();
+        if exists {
+            return candidate;
+        }
+    }
+    "HEAD".to_string()
 }
 
 /// Run a single gate and capture its result
@@ -756,11 +931,15 @@ fn run_single_gate(
     }
 
     if command == "cargo xtask fmt --check" {
-        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(true));
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::fmt::run(true, None)
+        });
     }
 
     if command == "cargo xtask fmt" {
-        return run_internal_xtask_gate(gate, &log_path, command, start, || super::fmt::run(false));
+        return run_internal_xtask_gate(gate, &log_path, command, start, || {
+            super::fmt::run(false, None)
+        });
     }
 
     // Run the command
@@ -1215,7 +1394,7 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         }
     }
 
-    // Find metric changes
+    // Find metric changes across all tracked gate metrics.
     let mut metric_changes = Vec::new();
     for (name, current_gate) in &current_gates {
         if let (Some(_baseline_gate), Some(current_metrics), Some(baseline_metrics)) = (
@@ -1223,21 +1402,76 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
             &current_gate.metrics,
             baseline_gates.get(name).and_then(|g| g.metrics.as_ref()),
         ) {
-            // Compare tests_total
-            if let (Some(old), Some(new)) =
-                (baseline_metrics.tests_total, current_metrics.tests_total)
-                && old != new
-            {
-                let delta = ((new as f64 - old as f64) / old as f64) * 100.0;
-                metric_changes.push(MetricChange {
-                    gate_name: name.to_string(),
-                    metric_name: "tests_total".to_string(),
-                    old_value: old as f64,
-                    new_value: new as f64,
-                    delta_percent: delta,
-                    exceeds_threshold: delta.abs() > 10.0,
-                });
-            }
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_total",
+                baseline_metrics.tests_total.map(f64::from),
+                current_metrics.tests_total.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_passed",
+                baseline_metrics.tests_passed.map(f64::from),
+                current_metrics.tests_passed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_failed",
+                baseline_metrics.tests_failed.map(f64::from),
+                current_metrics.tests_failed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_skipped",
+                baseline_metrics.tests_skipped.map(f64::from),
+                current_metrics.tests_skipped.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_ignored",
+                baseline_metrics.tests_ignored.map(f64::from),
+                current_metrics.tests_ignored.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "warnings_count",
+                baseline_metrics.warnings_count.map(f64::from),
+                current_metrics.warnings_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "errors_count",
+                baseline_metrics.errors_count.map(f64::from),
+                current_metrics.errors_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "coverage_percent",
+                baseline_metrics.coverage_percent,
+                current_metrics.coverage_percent,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "memory_peak_mb",
+                baseline_metrics.memory_peak_mb,
+                current_metrics.memory_peak_mb,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "files_checked",
+                baseline_metrics.files_checked.map(f64::from),
+                current_metrics.files_checked.map(f64::from),
+            );
         }
     }
 
@@ -1252,6 +1486,36 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         metric_changes,
         overall_regression,
     })
+}
+
+fn push_metric_change(
+    metric_changes: &mut Vec<MetricChange>,
+    gate_name: &str,
+    metric_name: &str,
+    old: Option<f64>,
+    new: Option<f64>,
+) {
+    let (Some(old_value), Some(new_value)) = (old, new) else {
+        return;
+    };
+    if (old_value - new_value).abs() < f64::EPSILON {
+        return;
+    }
+
+    let delta_percent = if old_value.abs() < f64::EPSILON {
+        if new_value.abs() < f64::EPSILON { 0.0 } else { 100.0 }
+    } else {
+        ((new_value - old_value) / old_value) * 100.0
+    };
+
+    metric_changes.push(MetricChange {
+        gate_name: gate_name.to_string(),
+        metric_name: metric_name.to_string(),
+        old_value,
+        new_value,
+        delta_percent,
+        exceeds_threshold: delta_percent.abs() > 10.0,
+    });
 }
 
 /// Output diff results
@@ -1361,7 +1625,8 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, is_blocking_gate_status,
+        DiffResult, GateMetrics, GateResult, MetricChange, Receipt, blocking_failure_gate_names,
+        compare_receipts, determine_overall_status, failure_guidance, is_blocking_gate_status,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1408,5 +1673,149 @@ mod tests {
     fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
         let blocking_failures = vec!["req-timeout".to_string()];
         assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
+
+    #[test]
+    fn failure_guidance_includes_repro_and_next_actions_for_blocking_gates() {
+        let results = vec![
+            gate_result("clippy", "fail", true),
+            gate_result("doc", "pass", true),
+            gate_result("lint", "fail", false),
+        ];
+        let (blocking, repro, next_actions) = failure_guidance(&results);
+        assert_eq!(blocking, vec!["clippy"]);
+        assert_eq!(repro, vec!["true # gate=clippy"]);
+        assert_eq!(
+            next_actions,
+            vec![
+                "Reproduce and fix gate 'clippy' locally, then rerun: cargo xtask gates --gate clippy"
+            ]
+        );
+    }
+
+    fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
+        // Deserialize from a minimal JSON skeleton so we don't have to
+        // construct every required nested struct (ToolchainInfo, PlatformInfo,
+        // EnvironmentInfo, AgentReceipt, …) by hand.  compare_receipts only
+        // reads receipt.gates and receipt.metadata.timestamp, so the rest can
+        // be placeholder values.
+        let mut receipt: Receipt = serde_json::from_str(
+            r#"{
+            "schema_version": "1",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 1,
+                "passed": 1,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            },
+            "agent_receipt": {
+                "scope": {
+                    "base": "",
+                    "diff_class": "",
+                    "changed_files": [],
+                    "direct_crates": [],
+                    "reverse_dep_closure": []
+                },
+                "selected_lanes": [],
+                "reasons": {},
+                "failures": {"blocking": [], "repro": []},
+                "baselines": [],
+                "next_actions": []
+            }
+        }"#,
+        )
+        .expect("minimal receipt JSON is valid");
+        receipt.gates.push(GateResult {
+            gate_name: "tests".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "pass".to_string(),
+            required: Some(true),
+            duration_ms: 10,
+            command: "cargo test".to_string(),
+            exit_code: Some(0),
+            output_summary: None,
+            log_path: None,
+            metrics: Some(metrics),
+            artifacts: None,
+        });
+        receipt
+    }
+
+    fn metric_change_for<'a>(diff: &'a DiffResult, name: &str) -> Option<&'a MetricChange> {
+        diff.metric_changes.iter().find(|change| change.metric_name == name)
+    }
+
+    #[test]
+    fn compare_receipts_reports_multiple_metric_dimensions() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(100),
+            tests_passed: Some(95),
+            tests_failed: Some(5),
+            warnings_count: Some(2),
+            coverage_percent: Some(80.0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(110),
+            tests_passed: Some(108),
+            tests_failed: Some(2),
+            warnings_count: Some(1),
+            coverage_percent: Some(82.5),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        assert!(
+            metric_change_for(&diff, "tests_total").is_some(),
+            "tests_total change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_passed").is_some(),
+            "tests_passed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_failed").is_some(),
+            "tests_failed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "warnings_count").is_some(),
+            "warnings_count change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "coverage_percent").is_some(),
+            "coverage_percent change should be recorded"
+        );
+    }
+
+    #[test]
+    fn compare_receipts_handles_zero_baseline_delta_without_nan() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(3),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        let warning_change =
+            metric_change_for(&diff, "warnings_count").expect("warnings_count metric should exist");
+        assert_eq!(warning_change.delta_percent, 100.0);
+        assert!(!warning_change.delta_percent.is_nan());
+        assert!(!warning_change.delta_percent.is_infinite());
     }
 }

@@ -604,7 +604,7 @@ mod missing_docs_tests {
                 path: root.join("crates/perl-semantic-analyzer/src"),
             },
             SourceRoot {
-                name: "perl-workspace-index",
+                name: "perl-workspace",
                 path: root.join("crates/perl-workspace-index/src"),
             },
             SourceRoot { name: "perl-refactoring", path: root.join("crates/perl-refactoring/src") },
@@ -688,7 +688,7 @@ mod missing_docs_tests {
         // including workflow role description
         let roots = source_roots();
         // Focus AC2 on parser-facing modules. Workspace internals are validated
-        // in crate-local tests under `perl-workspace-index`.
+        // in crate-local tests under `perl-workspace`.
         let critical_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -760,7 +760,7 @@ mod missing_docs_tests {
         // with summary, parameters, return values, and error conditions
         let roots = source_roots();
         // Focus AC3 on parser-facing APIs. Workspace internals are validated in
-        // crate-local tests under `perl-workspace-index`.
+        // crate-local tests under `perl-workspace`.
         let function_critical_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",

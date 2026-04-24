@@ -1,0 +1,316 @@
+name: UX Regression Gate
+
+# Fails PRs that break the first-5-minutes user experience.
+# Runs only on PRs touching UX-relevant paths (LSP, DAP, extension, features).
+# Does NOT run on: docs/, test_corpus/, archive/, xtask-only paths.
+#
+# Cost: ~$0.02-0.05 per PR on UX-relevant paths
+# Target: <5 minutes for V1 scenarios
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'crates/perl-lsp*/**'
+      - 'crates/perl-dap*/**'
+      - 'crates/perl-lsp-ux-tests/**'
+      - 'vscode-extension/**'
+      - 'features.toml'
+      - '.github/workflows/ux-regression-gate.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: ux-regression-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  ux-regression-gate:
+    name: UX Regression Gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Install just
+        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        with:
+          tool: just
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ux-gate-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install system dependencies (perl, perltidy, perlcritic)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            perl \
+            perltidy \
+            libperl-critic-perl
+          perl --version
+          perltidy --version 2>&1 | head -1 || true
+          perlcritic --version 2>&1 | head -1 || true
+
+      - name: Check UX test harness availability
+        id: harness_check
+        run: |
+          # Detect whether the perl-lsp-ux-tests crate is in the workspace.
+          # If the sibling harness PR hasn't landed yet, we skip gracefully (not fail).
+          # The crate must be present AND the just recipe must exist for the gate to be active.
+          has_crate=false
+          has_recipe=false
+
+          if cargo metadata --no-deps --quiet 2>/dev/null | \
+              python3 -c "import json,sys; pkgs=json.load(sys.stdin)['packages']; \
+                          names=[p['name'] for p in pkgs]; \
+                          sys.exit(0 if 'perl-lsp-ux-tests' in names else 1)" 2>/dev/null; then
+            has_crate=true
+          fi
+
+          if just --list 2>/dev/null | grep -q 'ux-tests'; then
+            has_recipe=true
+          fi
+
+          if [ "$has_crate" = "true" ] && [ "$has_recipe" = "true" ]; then
+            echo "harness_available=true" >> "$GITHUB_OUTPUT"
+            echo "UX test harness detected (crate + recipe found). Gate is ACTIVE."
+          else
+            echo "harness_available=false" >> "$GITHUB_OUTPUT"
+            if [ "$has_crate" = "false" ]; then
+              echo "::warning::UX test harness not yet scaffolded — crates/perl-lsp-ux-tests/ not in workspace"
+            fi
+            if [ "$has_recipe" = "false" ]; then
+              echo "::warning::UX test harness not yet scaffolded — 'just ux-tests' recipe not found"
+            fi
+            echo "::warning::This PR cannot verify UX regressions until the harness lands."
+            echo "::warning::Once crates/perl-lsp-ux-tests/ is merged, this gate activates automatically."
+          fi
+
+      - name: Run UX regression tests
+        id: ux_tests
+        if: steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          echo "Running UX regression tests..."
+          just ux-tests 2>&1 | tee /tmp/ux-test-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Parse and summarize UX test results
+        if: always() && steps.harness_check.outputs.harness_available == 'true'
+        run: |
+          python3 - <<'PY'
+          import os, re, pathlib, sys
+
+          output_file = pathlib.Path("/tmp/ux-test-output.txt")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          if not summary_path:
+              sys.exit(0)
+
+          lines = output_file.read_text(encoding="utf-8").splitlines() if output_file.exists() else []
+
+          # Categories defined in the spec
+          categories = {
+              "startup":          [],
+              "first-open":       [],
+              "missing-dep":      [],
+              "bad-config":       [],
+              "protocol-handling":[],
+              "error-messages":   [],
+              "uncategorized":    [],
+          }
+
+          # Simple line-based parser: detect PASS/FAIL/SKIP lines
+          pass_count = 0
+          fail_count = 0
+          skip_count = 0
+          failed_scenarios = []
+          current_category = "uncategorized"
+
+          for line in lines:
+              # Detect category headers
+              for cat in categories:
+                  if cat.lower() in line.lower():
+                      current_category = cat
+                      break
+              # Detect test result lines
+              if re.search(r'\bPASS\b|\bpassed\b|test \S+ \.\.\. ok', line, re.IGNORECASE):
+                  pass_count += 1
+                  categories[current_category].append(("PASS", line.strip()))
+              elif re.search(r'\bFAIL\b|\bfailed\b|test \S+ \.\.\. FAILED', line, re.IGNORECASE):
+                  fail_count += 1
+                  categories[current_category].append(("FAIL", line.strip()))
+                  failed_scenarios.append(line.strip())
+              elif re.search(r'\bSKIP\b|\bskipped\b|test \S+ \.\.\. ignored', line, re.IGNORECASE):
+                  skip_count += 1
+
+          total = pass_count + fail_count + skip_count
+          covered_categories = sum(1 for cat, items in categories.items() if items and cat != "uncategorized")
+
+          summary_lines = [
+              "## UX Regression Gate Results",
+              "",
+              f"| Metric | Count |",
+              f"| --- | --- |",
+              f"| Scenarios run | {total} |",
+              f"| Passed | {pass_count} |",
+              f"| Failed | {fail_count} |",
+              f"| Skipped | {skip_count} |",
+              f"| UX categories covered | {covered_categories} / {len(categories) - 1} |",
+              "",
+          ]
+
+          if fail_count > 0:
+              summary_lines += [
+                  "### Failed Scenarios",
+                  "",
+                  "The following UX scenarios regressed on this PR:",
+                  "",
+              ]
+              for scenario in failed_scenarios:
+                  summary_lines.append(f"- `{scenario}`")
+              summary_lines += [
+                  "",
+                  "**To reproduce locally:**",
+                  "```bash",
+                  "just ux-tests",
+                  "```",
+                  "",
+                  "See [UX_TESTING.md](docs/reference/UX_TESTING.md) for guidance on fixing failures.",
+              ]
+          else:
+              summary_lines.append("All UX scenarios passed.")
+
+          summary_lines += [
+              "",
+              "### Coverage by Category",
+              "",
+              "| Category | Scenarios |",
+              "| --- | --- |",
+          ]
+          for cat, items in categories.items():
+              if cat == "uncategorized":
+                  continue
+              count = len(items)
+              summary_lines.append(f"| {cat} | {count} |")
+
+          summary_lines += [
+              "",
+              f"**Coverage metric**: {total} scenarios cover {covered_categories} categories of UX.",
+          ]
+
+          pathlib.Path(summary_path).write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+
+          # Also print to stdout for CI logs
+          print(f"\nUX Coverage: {total} scenarios across {covered_categories} categories")
+          for cat, items in categories.items():
+              if items:
+                  print(f"  {cat}: {len(items)} scenario(s)")
+          PY
+
+      - name: Job summary — harness not yet available
+        if: steps.harness_check.outputs.harness_available == 'false'
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if not summary_path:
+              raise SystemExit(0)
+
+          lines = [
+              "## UX Regression Gate",
+              "",
+              "> **SKIPPED** — UX test harness not yet scaffolded.",
+              "",
+              "The `crates/perl-lsp-ux-tests/` crate and `just ux-tests` recipe have not yet",
+              "landed. This gate will become active automatically once they are merged.",
+              "",
+              "**This PR cannot be verified for UX regressions until the harness lands.**",
+              "",
+              "Expected coverage when active:",
+              "",
+              "| Category | Purpose |",
+              "| --- | --- |",
+              "| startup | LSP server starts cleanly |",
+              "| first-open | First file open produces diagnostics |",
+              "| missing-dep | Graceful degradation without perltidy/perlcritic |",
+              "| bad-config | Clear error on malformed config |",
+              "| protocol-handling | LSP/DAP protocol correctness |",
+              "| error-messages | User-visible error quality |",
+              "",
+              "See [UX_TESTING.md](docs/reference/UX_TESTING.md) for details.",
+          ]
+
+          pathlib.Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload UX test results on failure
+        if: failure() && steps.harness_check.outputs.harness_available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ux-test-results-${{ github.sha }}
+          path: |
+            /tmp/ux-test-output.txt
+            target/ux-test-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Set commit status
+        if: always()
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const harnessAvailable = '${{ steps.harness_check.outputs.harness_available }}' === 'true';
+            const uxTestsOutcome = '${{ steps.ux_tests.outcome }}';
+
+            let state, description;
+
+            if (!harnessAvailable) {
+              // Harness not yet scaffolded — report as pending/neutral, not failure
+              state = 'success';
+              description = 'UX harness not yet scaffolded — gate inactive (skipped)';
+            } else if (uxTestsOutcome === 'success') {
+              state = 'success';
+              description = 'All UX regression scenarios passed';
+            } else if (uxTestsOutcome === 'failure') {
+              state = 'failure';
+              description = 'UX regression detected — run "just ux-tests" locally to reproduce';
+            } else {
+              state = 'failure';
+              description = 'UX regression gate did not complete';
+            }
+
+            console.log(`Setting commit status: ${state} — ${description}`);
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: 'ci/ux-regression-gate',
+              description,
+              target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });

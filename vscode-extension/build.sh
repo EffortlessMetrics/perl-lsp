@@ -17,7 +17,7 @@ echo "Compiling TypeScript..."
 npm run compile
 
 # Bundle LSP binary
-echo "Bundling perl-lsp binary..."
+echo "Bundling perllsp binary..."
 npm run bundle-lsp
 
 # Package extension

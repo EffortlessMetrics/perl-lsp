@@ -1,0 +1,10 @@
+# Branch coverage baseline policy for the parser coverage lane.
+#
+# Refresh with: just coverage-baseline-refresh
+# Generated from: lcov.info
+schema_version=1
+coverage_scope=perl-parser-lib
+baseline_branch_coverage=50.00
+baseline_line_coverage=92.11
+allowed_drop_percentage=1.00
+target_branch_coverage=80.00

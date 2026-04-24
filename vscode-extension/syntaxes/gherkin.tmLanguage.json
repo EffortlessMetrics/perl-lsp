@@ -1,0 +1,88 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Gherkin",
+  "scopeName": "source.gherkin",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#tags"
+    },
+    {
+      "include": "#headers"
+    },
+    {
+      "include": "#steps"
+    },
+    {
+      "include": "#tables"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.gherkin",
+          "match": "^\\s*#.*$"
+        }
+      ]
+    },
+    "tags": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.gherkin",
+          "match": "@[A-Za-z0-9_.:-]+"
+        }
+      ]
+    },
+    "headers": {
+      "patterns": [
+        {
+          "name": "keyword.other.gherkin.feature",
+          "match": "^\\s*Feature\\b"
+        },
+        {
+          "name": "keyword.other.gherkin.rule",
+          "match": "^\\s*Rule\\b"
+        },
+        {
+          "name": "keyword.other.gherkin.background",
+          "match": "^\\s*Background\\b"
+        },
+        {
+          "name": "keyword.other.gherkin.scenario",
+          "match": "^\\s*Scenario(?: Outline| Template)?\\b"
+        },
+        {
+          "name": "keyword.other.gherkin.examples",
+          "match": "^\\s*Examples\\b"
+        },
+        {
+          "name": "punctuation.separator.key-value.gherkin",
+          "match": ":"
+        }
+      ]
+    },
+    "steps": {
+      "patterns": [
+        {
+          "name": "keyword.control.gherkin.step",
+          "match": "^\\s*(?:Given|When|Then|And|But|\\*)\\b"
+        }
+      ]
+    },
+    "tables": {
+      "patterns": [
+        {
+          "name": "markup.table.gherkin",
+          "match": "^\\s*\\|.*\\|\\s*$"
+        },
+        {
+          "name": "punctuation.separator.table-cell.gherkin",
+          "match": "\\|"
+        }
+      ]
+    }
+  }
+}

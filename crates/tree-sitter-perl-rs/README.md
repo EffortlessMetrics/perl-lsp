@@ -1,34 +1,90 @@
-# tree-sitter-perl
+# tree-sitter-perl-rs
 
-Internal pure-Rust Perl parser and validation harness for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
-workspace. **Not published to crates.io.**
+[![Crates.io](https://img.shields.io/crates/v/tree-sitter-perl-rs.svg)](https://crates.io/crates/tree-sitter-perl-rs)
+[![Documentation](https://docs.rs/tree-sitter-perl-rs/badge.svg)](https://docs.rs/tree-sitter-perl-rs)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/EffortlessMetrics/perl-lsp)
 
-## Purpose
+Rust-native Perl parser with tree-sitter-style ergonomics and tree-sitter-compatible output.
 
-Provides a Pest-based Perl 5 parser that emits tree-sitter-compatible
-S-expressions, plus a comparison harness for benchmarking against the
-native v3 recursive-descent parser (`perl-parser`).
+## What it is
 
-## Public API (feature-gated)
+A facade over the v3 native recursive-descent Perl parser (`perl-parser-core`) that provides an
+API surface matching the conventions of the `tree-sitter` crate. Users familiar with tree-sitter
+can work with Perl ASTs immediately, while the underlying engine is the full-featured native v3
+stack — not the C tree-sitter grammar.
 
-| Export | Feature | Description |
-|--------|---------|-------------|
-| `PureRustPerlParser` | `pure-rust` | Main Pest-based parser |
-| `PerlParser`, `AstNode` | `pure-rust` | Grammar rule parser and AST nodes |
-| `EnhancedPerlParser`, `FullPerlParser` | `pure-rust` | Advanced parser variants |
-| `ComparisonHarness` | `pure-rust` / `test-utils` | C-vs-Rust parser comparison runner |
-| `language()`, `parse()` | `c-parser` | Tree-sitter C FFI (benchmarking only) |
+This is NOT a set of C bindings. For the conventional C/FFI binding to the Perl tree-sitter
+grammar, see [`tree-sitter-perl-c`](https://crates.io/crates/tree-sitter-perl-c).
 
-## Commands
+## Quick start
 
-```bash
-cargo build -p tree-sitter-perl                           # build
-cargo test  -p tree-sitter-perl                           # test
-cargo run   -p tree-sitter-perl --bin ts_test_parsers --features pure-rust  # parser comparison
-cargo run   -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust  # benchmarks
+```rust
+use tree_sitter_perl_rs::Parser;
+
+let mut parser = Parser::new();
+if let Some(tree) = parser.parse("my $x = 42;") {
+    let root = tree.root_node();
+    println!("{}", root.to_sexp());
+    // Output: (source_file (my_declaration (variable $ x)(number 42)))
+}
 ```
+
+## Key differences from `tree-sitter-perl-c`
+
+| Aspect | `tree-sitter-perl-rs` | `tree-sitter-perl-c` |
+|--------|-----------------------|----------------------|
+| **Backing engine** | v3 native Rust parser | C tree-sitter grammar |
+| **Binding type** | Facade (NOT bindings) | Conventional C/FFI bindings |
+| **Error recovery** | Full v3 tolerance — partial tree on malformed input | Grammar-level only |
+| **Output** | tree-sitter-compatible S-expressions | tree-sitter-compatible S-expressions |
+| **Use when** | Rust-first Perl tooling, LSP/DAP integration | tree-sitter C ecosystem compatibility |
+
+## API overview
+
+| Type / Method | Description |
+|---|---|
+| `Parser::new()` | Create a parser instance |
+| `Parser::parse(&mut self, source: &str) -> Option<Tree>` | Parse Perl source; `None` only on complete failure |
+| `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
+| `Tree::source() -> &str` | Source text this tree was built from |
+| `Node::kind() -> &'static str` | Node type name (e.g. `"Program"`, `"Subroutine"`) |
+| `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
+| `Node::child_count() -> usize` | Number of direct children |
+| `Node::child(i: usize) -> Option<Node>` | `i`-th direct child |
+| `Node::children() -> impl Iterator<Item = Node>` | Iterator over direct children |
+| `Node::start_byte() -> usize` | Start byte offset in source (inclusive) |
+| `Node::end_byte() -> usize` | End byte offset in source (exclusive) |
+| `Node::utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>` | Source slice for this node |
+| `Node::is_leaf() -> bool` | `true` if the node has no children |
+| `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
+| `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
+
+## Error tolerance
+
+The v3 parser is highly error-tolerant. `Parser::parse()` returns `Option<Tree>`:
+- `Some(tree)` — Almost always, even for malformed or incomplete input (partial tree produced).
+- `None` — Only on extreme edge cases where no AST can be built at all.
+
+This means you can pipe any Perl source through this parser and rely on getting a tree back.
+
+## Known limitations (Phase 1)
+
+- `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
+- `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
+- `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
+
+## Backlog roadmap
+
+The following APIs are not yet implemented and remain on the backlog:
+
+- Tree cursor / walk API (streaming traversal without per-call allocation)
+- Edit / incremental parsing API
+- Field-name accessors (named children by field name, as in `node.child_by_field_name("body")`)
+- A `Language` constant compatible with the `tree_sitter::Language` shape
+- Predicate / query API (pattern matching over the AST)
+- `kind()` name remapping to canonical tree-sitter grammar names
 
 ## License
 
-MIT OR Apache-2.0
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option.

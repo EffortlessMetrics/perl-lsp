@@ -1,31 +1,38 @@
 # perl-parser-core
 
-Core parsing engine for the [perl-parser](https://github.com/EffortlessMetrics/perl-lsp) workspace. Provides a recursive descent parser with IDE-friendly error recovery, AST construction, token stream utilities, and position mapping for LSP integration.
+Core parsing engine for Perl source.
 
-## Public API
+Use this crate when you need the parser, AST, position mapping, or trivia
+preservation layers without the higher-level workspace or LSP facades.
 
-- **`Parser`** -- recursive descent parser with `parse()` and `parse_with_recovery()` methods
-- **`RecoveryParser`** / **`ParserContext`** -- error-tolerant parsing with budget-controlled recovery
-- **`Node`**, **`NodeKind`**, **`SourceLocation`** -- AST types re-exported from `perl-ast`
-- **`TokenStream`**, **`Token`**, **`TokenKind`** -- buffered token stream with lookahead
-- **`ParseError`**, **`ParseOutput`**, **`ParseResult`** -- error types and result wrappers
-- **`PositionMapper`**, **`LineIndex`** -- UTF-8/UTF-16 position conversion for LSP
-- **`Trivia`**, **`TriviaPreservingParser`** -- whitespace/comment preservation for formatters
+## Where it fits
 
-## Usage
+`perl-parser-core` is the low-level parsing layer used by `perl-parser`,
+`perl-semantic-analyzer`, `perl-workspace-index`, and `perl-refactoring`. It
+turns source text into AST nodes and exposes the building blocks that higher
+layers compose.
+
+## Key entry points
+
+- `Parser` - recursive-descent parser
+- `ParseError`, `ParseResult`, `ParseOutput`
+- `Node`, `NodeKind`, `SourceLocation`
+- `TokenStream`, `Token`, `TokenKind`
+- `PositionMapper` and `LineEnding`
+- `Trivia`, `TriviaPreservingParser`, `format_with_trivia`
+
+## Example
 
 ```rust
 use perl_parser_core::Parser;
 
 let mut parser = Parser::new("my $x = 42; sub hello { print $x; }");
 let ast = parser.parse()?;
-// Recovered errors available via parser.errors()
+assert!(!ast.to_sexp().is_empty());
 ```
 
-## Role in Workspace
+## Typical use
 
-Tier 2 crate that aggregates Tier 1 leaf crates (`perl-lexer`, `perl-token`, `perl-ast`, `perl-error`, etc.) into the parsing engine consumed by `perl-parser` and higher-level analysis crates.
-
-## License
-
-MIT OR Apache-2.0
+Use `perl-parser-core` when you are building parser-adjacent tooling or adding
+new syntax behavior. If you want the higher-level analysis and refactoring
+re-exports in one crate, use `perl-parser`.

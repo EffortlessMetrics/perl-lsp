@@ -10,10 +10,20 @@ pub struct BuiltinDoc {
     pub description: &'static str,
 }
 
+/// Normalize a built-in name for lookup.
+///
+/// Perl allows calling built-ins with a `CORE::` prefix (for example
+/// `CORE::length`). The semantic analyzer stores the function call text as-is,
+/// so normalize here to keep builtin classification and hover docs consistent.
+fn normalized_builtin_name(name: &str) -> &str {
+    name.strip_prefix("CORE::").unwrap_or(name)
+}
+
 /// Check if a function name is a Perl control-flow keyword.
 ///
 /// Returns `true` if the name is a control-flow keyword like `next`, `last`, etc.
 pub(super) fn is_control_keyword(name: &str) -> bool {
+    let name = normalized_builtin_name(name);
     matches!(name, "next" | "last" | "redo" | "goto" | "return" | "exit" | "die")
 }
 
@@ -21,6 +31,7 @@ pub(super) fn is_control_keyword(name: &str) -> bool {
 ///
 /// Returns `true` if the name matches a known Perl built-in function.
 pub(super) fn is_builtin_function(name: &str) -> bool {
+    let name = normalized_builtin_name(name);
     matches!(
         name,
         "print"
@@ -102,6 +113,122 @@ pub(super) fn is_file_test_operator(op: &str) -> bool {
     )
 }
 
+/// Get documentation for a Perl file test operator.
+///
+/// Returns signature and description for known file test operators,
+/// or `None` if documentation is not available.
+pub fn get_operator_documentation(op: &str) -> Option<BuiltinDoc> {
+    macro_rules! doc {
+        ($signature:expr, $description:expr) => {
+            Some(BuiltinDoc { signature: $signature, description: $description })
+        };
+    }
+
+    match op {
+        "-e" => doc!("-e FILE\n-e", "Returns true if FILE exists. If FILE is omitted, tests `$_`."),
+        "-f" => doc!(
+            "-f FILE\n-f",
+            "Returns true if FILE is a plain file. If FILE is omitted, tests `$_`."
+        ),
+        "-d" => doc!(
+            "-d FILE\n-d",
+            "Returns true if FILE is a directory. If FILE is omitted, tests `$_`."
+        ),
+        "-r" => doc!(
+            "-r FILE\n-r",
+            "Returns true if FILE is readable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-w" => doc!(
+            "-w FILE\n-w",
+            "Returns true if FILE is writable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-x" => doc!(
+            "-x FILE\n-x",
+            "Returns true if FILE is executable by the effective user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-o" => doc!(
+            "-o FILE\n-o",
+            "Returns true if FILE is owned by the effective user ID. If FILE is omitted, tests `$_`."
+        ),
+        "-R" => doc!(
+            "-R FILE\n-R",
+            "Returns true if FILE is readable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-W" => doc!(
+            "-W FILE\n-W",
+            "Returns true if FILE is writable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-X" => doc!(
+            "-X FILE\n-X",
+            "Returns true if FILE is executable by the real user or group ID. If FILE is omitted, tests `$_`."
+        ),
+        "-O" => doc!(
+            "-O FILE\n-O",
+            "Returns true if FILE is owned by the real user ID. If FILE is omitted, tests `$_`."
+        ),
+        "-z" => doc!(
+            "-z FILE\n-z",
+            "Returns true if FILE exists and has zero size. If FILE is omitted, tests `$_`."
+        ),
+        "-s" => doc!(
+            "-s FILE\n-s",
+            "Returns the file size in bytes in scalar context, or true if FILE has nonzero size. If FILE is omitted, tests `$_`."
+        ),
+        "-l" => doc!(
+            "-l FILE\n-l",
+            "Returns true if FILE is a symbolic link. If FILE is omitted, tests `$_`."
+        ),
+        "-p" => doc!(
+            "-p FILE\n-p",
+            "Returns true if FILE is a named pipe (FIFO). If FILE is omitted, tests `$_`."
+        ),
+        "-S" => {
+            doc!("-S FILE\n-S", "Returns true if FILE is a socket. If FILE is omitted, tests `$_`.")
+        }
+        "-u" => doc!(
+            "-u FILE\n-u",
+            "Returns true if FILE has the setuid bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-g" => doc!(
+            "-g FILE\n-g",
+            "Returns true if FILE has the setgid bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-k" => doc!(
+            "-k FILE\n-k",
+            "Returns true if FILE has the sticky bit set. If FILE is omitted, tests `$_`."
+        ),
+        "-t" => doc!(
+            "-t FILEHANDLE\n-t",
+            "Returns true if FILEHANDLE is connected to a tty. If FILEHANDLE is omitted, tests `STDIN`."
+        ),
+        "-T" => doc!(
+            "-T FILE\n-T",
+            "Returns true if FILE looks like a text file. If FILE is omitted, tests `$_`."
+        ),
+        "-B" => doc!(
+            "-B FILE\n-B",
+            "Returns true if FILE looks like a binary file. If FILE is omitted, tests `$_`."
+        ),
+        "-M" => doc!(
+            "-M FILE\n-M",
+            "Returns the file age in days at program start, based on the file's modification time."
+        ),
+        "-A" => doc!("-A FILE\n-A", "Returns the file age in days based on the last access time."),
+        "-C" => {
+            doc!("-C FILE\n-C", "Returns the file age in days based on the last inode change time.")
+        }
+        "-b" => doc!(
+            "-b FILE\n-b",
+            "Returns true if FILE is a block special file. If FILE is omitted, tests `$_`."
+        ),
+        "-c" => doc!(
+            "-c FILE\n-c",
+            "Returns true if FILE is a character special file. If FILE is omitted, tests `$_`."
+        ),
+        _ => None,
+    }
+}
+
 /// Get documentation for a Perl built-in function.
 ///
 /// Returns signature and description for known built-in functions,
@@ -111,6 +238,7 @@ pub(super) fn is_file_test_operator(op: &str) -> bool {
 /// semantic analyzer has no symbol-level hit (e.g. bare-word builtins in
 /// fallback path).
 pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
+    let name = normalized_builtin_name(name);
     match name {
         // I/O
         "print" => Some(BuiltinDoc {
@@ -844,6 +972,10 @@ pub fn get_attribute_documentation(attr: &str) -> Option<BuiltinDoc> {
             signature: ":weak_ref",
             description: "Marks a Moose/Moo attribute as a weak reference. The stored reference will not prevent the referent from being garbage-collected.",
         }),
+        "locked" => Some(BuiltinDoc {
+            signature: ":locked",
+            description: "Marks a subroutine so concurrent callers are serialized. Useful for thread-safe methods that must not run at the same time.",
+        }),
         "overload" => Some(BuiltinDoc {
             signature: ":overload(OP)",
             description: "Declares that a subroutine implements an operator overload for OP.",
@@ -926,9 +1058,171 @@ pub fn get_exception_context(name: &str) -> Option<ExceptionContext> {
     }
 }
 
+/// Documentation entry for a Perl pragma.
+///
+/// Provides a brief summary and description for display in hover tooltips
+/// when a user hovers over a `use strict;`, `use warnings;`, etc. statement.
+pub struct PragmaDoc {
+    /// One-line purpose summary
+    pub summary: &'static str,
+    /// Detailed description of what the pragma enables or does
+    pub description: &'static str,
+    /// Minimum Perl version required, if any (e.g. `"v5.10"`)
+    pub version_required: Option<&'static str>,
+}
+
+/// Get hover documentation for a Perl pragma.
+///
+/// Returns a [`PragmaDoc`] for known pragmas used in `use <pragma>` or `no <pragma>`
+/// statements, or `None` if the name is not a recognized pragma.
+///
+/// Pragmas covered: `strict`, `warnings`, `utf8`, `feature`, `constant`, `vars`,
+/// `autodie`, `encoding`, `locale`, `parent`, `base`, `lib`, `Exporter`.
+///
+/// Version pragmas (`v5.36`, `5.036`, etc.) are detected by
+/// [`crate::analysis::pragma::parse_perl_version`] separately.
+pub fn get_pragma_documentation(name: &str) -> Option<PragmaDoc> {
+    match name {
+        "strict" => Some(PragmaDoc {
+            summary: "Enable strict variable/subroutine/reference checking",
+            description: "Restricts unsafe Perl constructs. Enables compile-time errors for \
+                undeclared variables (`vars`), bareword subroutine names (`subs`), and symbolic \
+                references (`refs`). Use `use strict;` to enable all three categories at once, \
+                or `use strict 'vars'` for individual categories.\n\n\
+                **Common usage**: Always include `use strict;` at the top of every Perl file.",
+            version_required: None,
+        }),
+        "warnings" => Some(PragmaDoc {
+            summary: "Enable runtime and compile-time warnings",
+            description: "Enables a wide range of optional warnings about potentially dangerous \
+                or deprecated code patterns. Categories include: `numeric`, `uninitialized`, \
+                `deprecated`, `syntax`, `misc`, and many more.\n\n\
+                Use `use warnings;` to enable all warnings, or `use warnings 'uninitialized'` \
+                for specific categories. Use `no warnings 'once'` to suppress individual categories.\n\n\
+                **Common usage**: Always pair with `use strict;`.",
+            version_required: None,
+        }),
+        "utf8" => Some(PragmaDoc {
+            summary: "Treat the source file as UTF-8 encoded",
+            description: "Tells the Perl parser that the source code is encoded in UTF-8. \
+                Allows Unicode identifiers, string literals, and comments in the source file. \
+                Does **not** affect how STDIN/STDOUT/STDERR handle encoding — use \
+                `binmode(STDOUT, ':utf8')` or `open` with `:utf8` layer for that.\n\n\
+                **Common usage**: `use utf8;` at the top of files with non-ASCII identifiers \
+                or string constants.",
+            version_required: Some("v5.6"),
+        }),
+        "feature" => Some(PragmaDoc {
+            summary: "Enable experimental or version-specific Perl features",
+            description: "Enables named language features that are off by default. Key features:\n\
+                - `say` — like `print` but appends a newline (v5.10+)\n\
+                - `state` — persistent lexical variables (v5.10+)\n\
+                - `signatures` — formal subroutine signatures (stable v5.36+)\n\
+                - `try` — `try`/`catch` exception handling (experimental v5.34+)\n\
+                - `class` — native OO with `class`/`method`/`field` (v5.38+)\n\
+                - `defer` — `defer` blocks run at scope exit (v5.36+)\n\n\
+                Features are also enabled implicitly by `use v5.XX;` version declarations.\n\n\
+                **Example**: `use feature 'say', 'state';`",
+            version_required: Some("v5.10"),
+        }),
+        "constant" => Some(PragmaDoc {
+            summary: "Declare compile-time constants",
+            description: "Creates named constants that are inlined at compile time, making them \
+                more efficient than regular variables and preventing accidental reassignment.\n\n\
+                **Single constant**: `use constant PI => 3.14159;`\n\
+                **Multiple constants**: `use constant { MAX => 100, MIN => 0 };`\n\n\
+                Constants are accessed without a sigil: `print PI;` or `print MAX;`.\n\
+                They cannot be interpolated directly in strings — use `@{[PI]}` as a workaround.",
+            version_required: None,
+        }),
+        "vars" => Some(PragmaDoc {
+            summary: "Pre-declare package (global) variables",
+            description: "Pre-declares package global variables so they can be used under \
+                `use strict 'vars'` without a full package-qualified name. This is a legacy \
+                pragma — prefer `our $var;` in modern code.\n\n\
+                **Example**: `use vars qw($VERSION @EXPORT);`\n\n\
+                **Modern alternative**: `our $VERSION; our @EXPORT;`",
+            version_required: None,
+        }),
+        "autodie" => Some(PragmaDoc {
+            summary: "Automatic exception throwing on system call failures",
+            description: "Replaces built-in functions (`open`, `close`, `read`, `write`, \
+                `system`, `exec`, etc.) with versions that automatically `die` on failure, \
+                eliminating boilerplate `or die` checks.\n\n\
+                **Example**: `use autodie;` — all builtins now throw on error.\n\
+                **Selective**: `use autodie qw(open close);` — only specified functions.\n\n\
+                Exceptions are `autodie::exception` objects with detailed failure information.",
+            version_required: Some("v5.10.1"),
+        }),
+        "encoding" => Some(PragmaDoc {
+            summary: "Set source encoding (legacy — prefer utf8 pragma)",
+            description: "Specifies the character encoding of the Perl source file and optionally \
+                sets default I/O encoding. This pragma is **deprecated** — prefer `use utf8;` \
+                for source encoding.\n\n\
+                **Example**: `use encoding 'utf8';`\n\n\
+                **Preferred alternative**: `use utf8;` for source + explicit `binmode` calls \
+                for I/O encoding.",
+            version_required: Some("v5.6"),
+        }),
+        "locale" => Some(PragmaDoc {
+            summary: "Enable locale-aware string operations",
+            description: "Makes string comparisons, case conversion, and character classification \
+                functions use the current system locale settings (LC_CTYPE, LC_COLLATE, etc.).\n\n\
+                **Note**: Locale handling can cause subtle encoding issues. Prefer Unicode \
+                semantics with `use utf8;` and `use feature 'unicode_strings';` where possible.\n\n\
+                **Example**: `use locale;`",
+            version_required: None,
+        }),
+        "parent" => Some(PragmaDoc {
+            summary: "Establish ISA relationship with parent classes",
+            description: "Sets up inheritance by loading the listed modules and pushing them \
+                into `@ISA`. The modern replacement for `use base`.\n\n\
+                **Example**: `use parent 'Animal';` or `use parent qw(Animal Printable);`\n\n\
+                Unlike `use base`, `parent` always `require`s the parent modules and does not \
+                set `$VERSION` or `@EXPORT` by default.",
+            version_required: Some("v5.10.1"),
+        }),
+        "base" => Some(PragmaDoc {
+            summary: "Establish ISA relationship (legacy — prefer parent pragma)",
+            description: "Sets up inheritance by loading parent modules and updating `@ISA`. \
+                Legacy alternative to `use parent`.\n\n\
+                **Example**: `use base 'Animal';` or `use base qw(Animal Printable);`\n\n\
+                **Preferred alternative**: `use parent qw(...);` — cleaner semantics \
+                without the `$VERSION`/`@EXPORT` side-effects of `use base`.",
+            version_required: None,
+        }),
+        "lib" => Some(PragmaDoc {
+            summary: "Add directories to @INC at compile time",
+            description: "Prepends directories to `@INC` so that subsequent `use` and `require` \
+                statements can find modules there.\n\n\
+                **Example**: `use lib '/path/to/modules';`\n\
+                **Relative path**: `use lib 'lib';` — adds `./lib` to `@INC`.\n\n\
+                Often used in test files: `use lib 't/lib';`",
+            version_required: None,
+        }),
+        "Exporter" => Some(PragmaDoc {
+            summary: "Default symbol exporter for Perl modules",
+            description: "Provides the standard mechanism for modules to export symbols into \
+                the caller's namespace. Configure `@EXPORT` and `@EXPORT_OK` to control \
+                what gets exported.\n\n\
+                **Typical usage**:\n\
+                ```perl\n\
+                use Exporter 'import';\n\
+                our @EXPORT_OK = qw(helper_fn);\n\
+                ```\n\n\
+                Or via inheritance: `use parent 'Exporter';`",
+            version_required: None,
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::get_builtin_documentation;
+    use super::{
+        get_builtin_documentation, get_pragma_documentation, is_builtin_function,
+        is_control_keyword,
+    };
 
     #[test]
     fn test_get_builtin_documentation_begin() -> Result<(), Box<dyn std::error::Error>> {
@@ -983,5 +1277,123 @@ mod tests {
             doc.description
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_core_prefixed_builtin_lookups() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(is_builtin_function("CORE::length"), "CORE::length should be recognized");
+        assert!(is_control_keyword("CORE::die"), "CORE::die should be recognized as control");
+
+        let doc =
+            get_builtin_documentation("CORE::length").ok_or("CORE::length should have docs")?;
+        assert!(
+            doc.signature.contains("length"),
+            "CORE::length should resolve to length docs, got: {}",
+            doc.signature
+        );
+        Ok(())
+    }
+
+    // ── pragma documentation tests ──────────────────────────────────────────
+
+    #[test]
+    fn test_get_pragma_documentation_strict() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("strict").ok_or("strict should have docs")?;
+        assert!(
+            doc.description.contains("strict") || doc.description.contains("variable"),
+            "strict doc should describe variable checking, got: {}",
+            doc.description
+        );
+        assert!(
+            doc.summary.contains("strict"),
+            "strict summary should mention strict, got: {}",
+            doc.summary
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_warnings() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("warnings").ok_or("warnings should have docs")?;
+        assert!(
+            doc.description.contains("warning"),
+            "warnings doc should describe warnings, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_utf8() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("utf8").ok_or("utf8 should have docs")?;
+        assert!(
+            doc.description.contains("UTF-8") || doc.description.contains("Unicode"),
+            "utf8 doc should mention UTF-8 or Unicode, got: {}",
+            doc.description
+        );
+        assert_eq!(
+            doc.version_required,
+            Some("v5.6"),
+            "utf8 requires v5.6, got: {:?}",
+            doc.version_required
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_feature() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("feature").ok_or("feature should have docs")?;
+        assert!(
+            doc.description.contains("say") || doc.description.contains("feature"),
+            "feature doc should mention specific features, got: {}",
+            doc.description
+        );
+        assert!(doc.version_required.is_some(), "feature pragma should have a version requirement");
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_constant() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("constant").ok_or("constant should have docs")?;
+        assert!(
+            doc.description.contains("constant") || doc.description.contains("compile"),
+            "constant doc should mention constants, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_autodie() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("autodie").ok_or("autodie should have docs")?;
+        assert!(
+            doc.description.contains("die") || doc.description.contains("exception"),
+            "autodie doc should mention die or exceptions, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_parent() -> Result<(), Box<dyn std::error::Error>> {
+        let doc = get_pragma_documentation("parent").ok_or("parent should have docs")?;
+        assert!(
+            doc.description.contains("ISA") || doc.description.contains("inherit"),
+            "parent doc should mention ISA or inheritance, got: {}",
+            doc.description
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_pragma_documentation_unknown_returns_none() {
+        assert!(
+            get_pragma_documentation("SomeArbitraryModule").is_none(),
+            "Non-pragma module should return None"
+        );
+        assert!(
+            get_pragma_documentation("Moose").is_none(),
+            "Moose is not a pragma and should return None"
+        );
     }
 }

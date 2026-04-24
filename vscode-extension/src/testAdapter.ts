@@ -48,7 +48,7 @@ export class PerlTestAdapter implements vscode.Disposable {
         // Re-parse on document save (picks up new subtests)
         const saveListener = vscode.workspace.onDidSaveTextDocument(doc => {
             if (doc.uri.fsPath.endsWith('.t')) {
-                this.discoverFileTests(doc.uri);
+                void this.discoverFileTests(doc.uri);
             }
         });
         this.disposables.push(saveListener);

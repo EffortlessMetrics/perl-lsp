@@ -2,7 +2,7 @@ name: Triage Issues
 
 on:
   schedule:
-    - cron: '0 * * * *'  # hourly
+    - cron: '0 */6 * * *'  # every 6 hours (staleness measured in days, hourly is wasteful)
   workflow_dispatch:
 
 permissions:
@@ -12,7 +12,7 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run triage
         env:
@@ -21,15 +21,20 @@ jobs:
           set -euo pipefail
           REPO="${{ github.repository }}"
 
+          # Make a `gh api` call, retrying on 429/5xx. The `|| rc=$?` idiom is
+          # required so `set -e` does not abort the script when gh api exits
+          # non-zero — without it the failing command substitution kills the
+          # whole job before we can decide whether to retry or surface the
+          # error to the caller.
           api_call() {
             local url="$1"; shift
             local attempt=0
             local backoff=5
             while [ $attempt -lt 5 ]; do
-              local response
-              response=$(gh api "$url" "$@" 2>&1)
-              local rc=$?
-              if [ $rc -eq 0 ]; then
+              local response=""
+              local rc=0
+              response=$(gh api "$url" "$@" 2>&1) || rc=$?
+              if [ "$rc" -eq 0 ]; then
                 echo "$response"
                 return 0
               fi
@@ -40,17 +45,27 @@ jobs:
                 backoff=$((backoff * 2))
               else
                 echo "$response" >&2
-                return $rc
+                return "$rc"
               fi
             done
             echo "API call failed after 5 retries: $url" >&2
             return 1
           }
 
+          # URL-encode a label name (jq -r emits raw output without JSON quotes,
+          # so the result can be interpolated directly into an API path).
           encode_label() {
-            printf '%s' "$1" | jq -sR @uri
+            printf '%s' "$1" | jq -srR @uri
           }
 
+          # Add labels to an issue. Uses `gh api --input -` to pipe the JSON
+          # payload via stdin — passing JSON as a literal arg to --input was the
+          # original bug: gh interprets that arg as a filename and fails with
+          # "open {…}: no such file or directory", which under `set -e` aborted
+          # the entire triage run on the first issue. The `|| rc=$?` idiom is
+          # required so a failing API call doesn't trip `set -e` before we can
+          # log a warning. Returns 0 unconditionally so per-issue failures
+          # never abort the outer loop.
           add_labels() {
             local number="$1"
             shift
@@ -58,7 +73,44 @@ jobs:
 
             local payload
             payload=$(printf '%s\n' "$@" | jq -R . | jq -s '{labels: .}')
-            api_call "repos/$REPO/issues/$number/labels" --input "$payload" --silent
+
+            local response=""
+            local rc=0
+            response=$(printf '%s' "$payload" | gh api \
+              "repos/$REPO/issues/$number/labels" \
+              --input - --silent 2>&1) || rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "  WARNING: add_labels failed for #$number (rc=$rc): $response" >&2
+            fi
+            return 0
+          }
+
+          # Remove a single label from an issue. GitHub returns 404 when the
+          # label is not present on the issue (race with concurrent changes);
+          # treat that as success. Other failures are logged but non-fatal so
+          # triage continues with the next issue. The `|| rc=$?` idiom is
+          # required so `set -e` does not kill the script on a failed DELETE
+          # before we can inspect the response.
+          remove_label() {
+            local number="$1"
+            local lbl="$2"
+            local encoded
+            encoded=$(encode_label "$lbl")
+
+            local response=""
+            local rc=0
+            response=$(gh api -X DELETE \
+              "repos/$REPO/issues/$number/labels/$encoded" \
+              --silent 2>&1) || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              return 0
+            fi
+            if echo "$response" | grep -qE 'HTTP 404|Label does not exist'; then
+              # Label already gone — nothing to do.
+              return 0
+            fi
+            echo "  WARNING: remove_label '$lbl' failed for #$number (rc=$rc): $response" >&2
+            return 0
           }
 
           parse_date() {
@@ -75,6 +127,146 @@ jobs:
             esac
           }
 
+          # Process one issue. Wrapped so any unhandled failure here is contained
+          # to that issue — the outer loop continues with the next one.
+          process_issue() {
+            local number="$1"
+            echo "--- Issue #$number ---"
+
+            local ISSUE=""
+            local fetch_rc=0
+            ISSUE=$(api_call "repos/$REPO/issues/$number") || fetch_rc=$?
+            if [ "$fetch_rc" -ne 0 ] || [ -z "$ISSUE" ]; then
+              echo "  WARNING: failed to fetch #$number, skipping" >&2
+              return 0
+            fi
+
+            local LABELS CREATED UPDATED ASSIGNEES BODY COMMENTS_COUNT
+            LABELS=$(echo "$ISSUE" | jq -r '.labels[].name' | tr '\n' ' ')
+            CREATED=$(echo "$ISSUE" | jq -r '.created_at')
+            UPDATED=$(echo "$ISSUE" | jq -r '.updated_at')
+            ASSIGNEES=$(echo "$ISSUE" | jq -r '.assignees | length')
+            BODY=$(echo "$ISSUE" | jq -r '.body // ""')
+            COMMENTS_COUNT=$(echo "$ISSUE" | jq -r '.comments')
+
+            local -a TO_ADD=()
+            local -a TO_REMOVE=()
+
+            # --- Age labels ---
+            local NOW UPDATED_TS DAYS_SINCE
+            NOW=$(date +%s)
+            UPDATED_TS=$(parse_date "$UPDATED")
+
+            if [ -n "$UPDATED_TS" ]; then
+              DAYS_SINCE=$(( (NOW - UPDATED_TS) / 86400 ))
+
+              if [ "$DAYS_SINCE" -ge 30 ]; then
+                TO_ADD+=("stale-30d" "stale-14d" "stale-7d")
+              elif [ "$DAYS_SINCE" -ge 14 ]; then
+                TO_ADD+=("stale-14d" "stale-7d")
+              elif [ "$DAYS_SINCE" -ge 7 ]; then
+                TO_ADD+=("stale-7d")
+              fi
+
+              # Remove stale labels that no longer apply
+              if [ "$DAYS_SINCE" -lt 7 ]; then
+                TO_REMOVE+=("stale-7d" "stale-14d" "stale-30d")
+              elif [ "$DAYS_SINCE" -lt 14 ]; then
+                TO_REMOVE+=("stale-14d" "stale-30d")
+              elif [ "$DAYS_SINCE" -lt 30 ]; then
+                TO_REMOVE+=("stale-30d")
+              fi
+            else
+              echo "  WARNING: could not parse updated_at for #$number, skipping age labels"
+            fi
+
+            # --- needs-assignee: unassigned > 3 days ---
+            local CREATED_TS CREATED_DAYS
+            CREATED_TS=$(parse_date "$CREATED")
+
+            if [ -n "$CREATED_TS" ]; then
+              CREATED_DAYS=$(( (NOW - CREATED_TS) / 86400 ))
+
+              if [ "$ASSIGNEES" -eq 0 ] && [ "$CREATED_DAYS" -ge 3 ]; then
+                TO_ADD+=("needs-assignee")
+              elif [ "$ASSIGNEES" -gt 0 ]; then
+                TO_REMOVE+=("needs-assignee")
+              fi
+            else
+              echo "  WARNING: could not parse created_at for #$number, skipping needs-assignee"
+            fi
+
+            # --- needs-spec: no implementation plan detected ---
+            local HAS_SPEC=0
+            if echo "$BODY" | grep -qiE '(## plan|## spec|implementation plan|acceptance criteria|## approach|## steps|## design|## implementation|## how|## proposal|## roadmap|### plan|### spec|### steps|### approach|## task|## todo|## sub-tasks)'; then
+              HAS_SPEC=1
+            fi
+
+            if [ "$HAS_SPEC" -eq 0 ] && [ -n "$BODY" ] && [ "$COMMENTS_COUNT" -eq 0 ]; then
+              TO_ADD+=("needs-spec")
+            else
+              TO_REMOVE+=("needs-spec")
+            fi
+
+            # --- Size labels: body length + comment count heuristic ---
+            local BODY_LEN COMMENT_SCORE BODY_SCORE SCORE
+            BODY_LEN=${#BODY}
+            COMMENT_SCORE=$(( COMMENTS_COUNT * 5 ))
+            [ "$COMMENT_SCORE" -gt 20 ] && COMMENT_SCORE=20
+
+            if [ "$BODY_LEN" -gt 0 ]; then
+              BODY_SCORE=$(( BODY_LEN / 100 ))
+            else
+              BODY_SCORE=0
+            fi
+
+            SCORE=$(( BODY_SCORE + COMMENT_SCORE ))
+
+            if [ "$SCORE" -le 8 ]; then
+              TO_ADD+=("size/S")
+              TO_REMOVE+=("size/M" "size/L")
+            elif [ "$SCORE" -le 25 ]; then
+              TO_ADD+=("size/M")
+              TO_REMOVE+=("size/S" "size/L")
+            else
+              TO_ADD+=("size/L")
+              TO_REMOVE+=("size/S" "size/M")
+            fi
+
+            # Build label arrays (filter out already-present / already-absent)
+            local -a ADD_ARGS=()
+            local -a REMOVE_ARGS=()
+            local lbl
+
+            for lbl in "${TO_ADD[@]}"; do
+              if ! echo "$LABELS" | grep -qw "$lbl"; then
+                ADD_ARGS+=("$lbl")
+              fi
+            done
+
+            for lbl in "${TO_REMOVE[@]}"; do
+              if echo "$LABELS" | grep -qw "$lbl"; then
+                REMOVE_ARGS+=("$lbl")
+              fi
+            done
+
+            # Apply labels — add_labels and remove_label both swallow per-call
+            # errors so a single bad label can't bail the whole triage run.
+            if [ ${#ADD_ARGS[@]} -gt 0 ]; then
+              printf "  + adding: %s\n" "${ADD_ARGS[*]}"
+              add_labels "$number" "${ADD_ARGS[@]}"
+            fi
+
+            if [ ${#REMOVE_ARGS[@]} -gt 0 ]; then
+              printf "  - removing: %s\n" "${REMOVE_ARGS[*]}"
+              for lbl in "${REMOVE_ARGS[@]}"; do
+                remove_label "$number" "$lbl"
+              done
+            fi
+
+            return 0
+          }
+
           echo "=== Fetching open issues ==="
           PAGE=1
           while true; do
@@ -82,126 +274,9 @@ jobs:
             [ -z "$PAGE_ISSUES" ] && break
 
             for number in $PAGE_ISSUES; do
-              echo "--- Issue #$number ---"
-
-              ISSUE=$(api_call "repos/$REPO/issues/$number")
-              LABELS=$(echo "$ISSUE" | jq -r '.labels[].name' | tr '\n' ' ')
-              CREATED=$(echo "$ISSUE" | jq -r '.created_at')
-              UPDATED=$(echo "$ISSUE" | jq -r '.updated_at')
-              ASSIGNEES=$(echo "$ISSUE" | jq -r '.assignees | length')
-              BODY=$(echo "$ISSUE" | jq -r '.body // ""')
-              COMMENTS_COUNT=$(echo "$ISSUE" | jq -r '.comments')
-
-              TO_ADD=()
-              TO_REMOVE=()
-
-              # --- Age labels ---
-              NOW=$(date +%s)
-              UPDATED_TS=$(parse_date "$UPDATED")
-
-              if [ -n "$UPDATED_TS" ]; then
-                DAYS_SINCE=$(( (NOW - UPDATED_TS) / 86400 ))
-
-                if [ "$DAYS_SINCE" -ge 30 ]; then
-                  TO_ADD+=("stale-30d" "stale-14d" "stale-7d")
-                elif [ "$DAYS_SINCE" -ge 14 ]; then
-                  TO_ADD+=("stale-14d" "stale-7d")
-                elif [ "$DAYS_SINCE" -ge 7 ]; then
-                  TO_ADD+=("stale-7d")
-                fi
-
-                # Remove stale labels that no longer apply
-                if [ "$DAYS_SINCE" -lt 7 ]; then
-                  TO_REMOVE+=("stale-7d" "stale-14d" "stale-30d")
-                elif [ "$DAYS_SINCE" -lt 14 ]; then
-                  TO_REMOVE+=("stale-14d" "stale-30d")
-                elif [ "$DAYS_SINCE" -lt 30 ]; then
-                  TO_REMOVE+=("stale-30d")
-                fi
-              else
-                echo "  WARNING: could not parse updated_at for #$number, skipping age labels"
-              fi
-
-              # --- needs-assignee: unassigned > 3 days ---
-              CREATED_TS=$(parse_date "$CREATED")
-
-              if [ -n "$CREATED_TS" ]; then
-                CREATED_DAYS=$(( (NOW - CREATED_TS) / 86400 ))
-
-                if [ "$ASSIGNEES" -eq 0 ] && [ "$CREATED_DAYS" -ge 3 ]; then
-                  TO_ADD+=("needs-assignee")
-                elif [ "$ASSIGNEES" -gt 0 ]; then
-                  TO_REMOVE+=("needs-assignee")
-                fi
-              else
-                echo "  WARNING: could not parse created_at for #$number, skipping needs-assignee"
-              fi
-
-              # --- needs-spec: no implementation plan detected ---
-              HAS_SPEC=0
-              if echo "$BODY" | grep -qiE '(## plan|## spec|implementation plan|acceptance criteria|## approach|## steps|## design|## implementation|## how|## proposal|## roadmap|### plan|### spec|### steps|### approach|## task|## todo|## sub-tasks)'; then
-                HAS_SPEC=1
-              fi
-
-              if [ "$HAS_SPEC" -eq 0 ] && [ -n "$BODY" ] && [ "$COMMENTS_COUNT" -eq 0 ]; then
-                TO_ADD+=("needs-spec")
-              else
-                TO_REMOVE+=("needs-spec")
-              fi
-
-              # --- Size labels: body length + comment count heuristic ---
-              BODY_LEN=${#BODY}
-              COMMENT_SCORE=$(( COMMENTS_COUNT * 5 ))
-              [ "$COMMENT_SCORE" -gt 20 ] && COMMENT_SCORE=20
-
-              if [ "$BODY_LEN" -gt 0 ]; then
-                BODY_SCORE=$(( BODY_LEN / 100 ))
-              else
-                BODY_SCORE=0
-              fi
-
-              SCORE=$(( BODY_SCORE + COMMENT_SCORE ))
-
-              if [ "$SCORE" -le 8 ]; then
-                TO_ADD+=("size/S")
-                TO_REMOVE+=("size/M" "size/L")
-              elif [ "$SCORE" -le 25 ]; then
-                TO_ADD+=("size/M")
-                TO_REMOVE+=("size/S" "size/L")
-              else
-                TO_ADD+=("size/L")
-                TO_REMOVE+=("size/S" "size/M")
-              fi
-
-              # Build label arrays (filter out already-present / already-absent)
-              ADD_ARGS=()
-              REMOVE_ARGS=()
-
-              for lbl in "${TO_ADD[@]}"; do
-                if ! echo "$LABELS" | grep -qw "$lbl"; then
-                  ADD_ARGS+=("$lbl")
-                fi
-              done
-
-              for lbl in "${TO_REMOVE[@]}"; do
-                if echo "$LABELS" | grep -qw "$lbl"; then
-                  REMOVE_ARGS+=("$lbl")
-                fi
-              done
-
-              # Apply labels
-              if [ ${#ADD_ARGS[@]} -gt 0 ]; then
-                printf "  + adding: %s\n" "${ADD_ARGS[*]}"
-                add_labels "$number" "${ADD_ARGS[@]}"
-              fi
-
-              if [ ${#REMOVE_ARGS[@]} -gt 0 ]; then
-                printf "  - removing: %s\n" "${REMOVE_ARGS[*]}"
-                for lbl in "${REMOVE_ARGS[@]}"; do
-                  api_call "repos/$REPO/issues/$number/labels/$(encode_label "$lbl")" \
-                    -X DELETE --silent
-                done
-              fi
+              # Per-issue isolation: any unhandled error inside process_issue
+              # is contained so the loop continues with the next issue.
+              process_issue "$number" || echo "  WARNING: process_issue #$number returned non-zero, continuing" >&2
             done
 
             PAGE=$((PAGE + 1))

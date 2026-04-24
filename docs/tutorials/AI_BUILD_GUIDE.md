@@ -59,7 +59,7 @@ The v2 Pest-based parser (`tree-sitter-perl-rs`) has these features:
 
 3. **LSP Server**:
    ```bash
-   cargo build -p perl-parser --bin perl-lsp --release
+   cargo build -p perllsp --bin perllsp --release
    ```
 
 ## Common AI Tool Scenarios

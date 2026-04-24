@@ -21,7 +21,6 @@ coverage:
 # Files/patterns to exclude from coverage analysis
 ignore:
   - "archive/**"
-  - "crates/tree-sitter-perl-rs/**"
   - "crates/tree-sitter-perl-c/**"
   - "crates/*/tests/**"
   - "crates/*/benches/**"
@@ -39,7 +38,7 @@ flags:
     target: 75%
   lsp:
     paths:
-      - crates/perl-lsp/src/
+      - crates/perl-lsp-rs/src/
     target: 70%
   lexer:
     paths:

@@ -133,11 +133,11 @@ fn build_brew_formula(config: &InjectShaAssetsConfig, assets: &AssetShaMap<'_>) 
   end
 
   def install
-    bin.install "perl-lsp"
+    bin.install "perllsp"
   end
 
   test do
-    assert_match "perl-lsp", shell_output("#{{bin}}/perl-lsp --version")
+    assert_match "perllsp", shell_output("#{{bin}}/perllsp --version")
   end
 end
 "##,
@@ -204,18 +204,15 @@ fn artifact_filename(prefix: &str, version: &str, artifact_suffix: &str) -> Stri
 fn write_output(path: Option<&Path>, content: &str, name: &str) -> Result<()> {
     let content = content.trim_end_matches('\n');
     if let Some(path) = path {
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("failed to create directory for {}", path.display())
-                })?;
-            }
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create directory for {}", path.display()))?;
         }
         fs::write(path, format!("{content}\n"))
             .with_context(|| format!("failed to write {name} {}", path.display()))?;
         println!("[inject] wrote {}", path.display());
     } else {
-        print!("{content}\n");
+        println!("{content}");
     }
     Ok(())
 }

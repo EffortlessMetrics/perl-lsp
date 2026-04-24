@@ -1,0 +1,57 @@
+version: 2.1
+
+jobs:
+  check:
+    parameters:
+      kind:
+        type: enum
+        enum: [fmt, clippy, test]
+    docker:
+      - image: cimg/rust:1.85
+    working_directory: ~/project
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-cargo-registry-{{ checksum "Cargo.lock" }}
+            - v1-cargo-registry-
+      - restore_cache:
+          keys:
+            - v1-cargo-git-{{ checksum "Cargo.lock" }}
+            - v1-cargo-git-
+      - run:
+          name: Install rustfmt and clippy
+          command: rustup component add rustfmt clippy
+      - run:
+          name: Run << parameters.kind >>
+          command: |
+            case "<< parameters.kind >>" in
+              fmt)
+                cargo fmt --all --check
+                ;;
+              clippy)
+                cargo clippy -p perl-parser -p perl-lexer --locked -- -D warnings -A missing_docs
+                ;;
+              test)
+                cargo test -p perl-parser -p perl-lexer --lib --locked
+                ;;
+            esac
+      - store_artifacts:
+          path: target
+      - save_cache:
+          key: v1-cargo-registry-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/registry
+      - save_cache:
+          key: v1-cargo-git-{{ checksum "Cargo.lock" }}
+          paths:
+            - ~/.cargo/git
+
+workflows:
+  version: 2
+  perl_lsp_fast:
+    jobs:
+      - check:
+          matrix:
+            parameters:
+              kind: [fmt, clippy, test]

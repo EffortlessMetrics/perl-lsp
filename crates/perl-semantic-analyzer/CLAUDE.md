@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Name**: `perl-semantic-analyzer`
-- **Version**: 0.10.0
+- **Version**: workspace (currently 0.12.3)
 - **Tier**: 4 (three-level internal dependencies)
 - **Purpose**: Semantic analysis, symbol extraction, type inference, scope analysis, and dead code detection for Perl source code. Provides the core analysis layer consumed by LSP provider crates.
 
@@ -26,7 +26,7 @@ cargo doc -p perl-semantic-analyzer --open   # View documentation
 |-------|------|
 | `perl-parser-core` | AST nodes (`Node`, `NodeKind`), `Parser`, source locations |
 | `perl-workspace-index` | Cross-file workspace index, `SymKind`, `SymbolKey` |
-| `perl-symbol-types` | Shared `SymbolKind`, `VarKind` enums |
+| `perl-symbol` | Shared `SymbolKind`, `VarKind` enums |
 | `regex` | Pattern matching in semantic classification |
 | `rustc-hash` | `FxHashMap` for fast scope/parent-map lookups |
 | `serde` | Serialization for dead code analysis results |
@@ -95,6 +95,6 @@ let result = engine.infer(&ast);
 
 - Modules `dead_code_detector` and `index` are gated behind `#[cfg(not(target_arch = "wasm32"))]`.
 - Source files are large (40-80KB) reflecting the complexity of Perl semantics; this is intentional.
-- `SymbolKind` and `VarKind` are re-exported from `perl-symbol-types` (shared across the workspace).
+- `SymbolKind` and `VarKind` are re-exported from `perl-symbol` (shared across the workspace).
 - The crate bans `unwrap()`, `expect()`, `panic!()`, `todo!()` in non-test code via workspace lints.
 - Doctests are disabled (`doctest = false` in Cargo.toml).

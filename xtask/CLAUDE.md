@@ -125,6 +125,43 @@ cargo xtask features verify
 cargo xtask features report
 ```
 
+### Bumping the Workspace Version for a Release
+
+The workspace version is referenced in ~190 places: the root `Cargo.toml`,
+every workspace member's `Cargo.toml`, the VSCode extension manifest and
+lockfile, `features.toml`, and the doc surface (`README.md`, `CLAUDE.md`,
+`docs/project/ROADMAP.md`). To keep them in sync there is **one** command
+that updates every site at once:
+
+```bash
+# Bump every workspace-version reference to X.Y.Z (non-interactive,
+# idempotent — running it twice produces no diff).
+cargo xtask bump-version 0.13.0
+
+# Verify nothing has drifted out of sync. This is run automatically
+# from `just ci-gate` via `just version-check`.
+cargo xtask check-version-sync
+```
+
+The two commands share their site list (defined in
+`crates/perl-ci-hygiene/src/version_sync.rs`) so the CI gate is guaranteed
+to catch any drift the bump command would have repaired. Adding a new
+version reference to the project? Add a collector for it in
+`version_sync.rs` and both commands pick it up automatically.
+
+Notes for releases:
+
+- The bump command is **non-interactive**: no confirmation prompt, safe to
+  call from scripts.
+- The command does **not** rewrite changelog entries, release notes, blog
+  posts, or PR references — historical mentions of past versions are
+  immutable history, not version-bump targets.
+- Crates listed in `[workspace.exclude]` (`tree-sitter-perl`, `fuzz`,
+  `archive`) are tracked on their own version cadence and are skipped.
+- After bumping, run `cargo build` once so `Cargo.lock` updates, then
+  commit `Cargo.toml`, `Cargo.lock`, and every doc/manifest the bump
+  command touched.
+
 ## Important Notes
 
 - Workspace utility crate, not shipped in releases

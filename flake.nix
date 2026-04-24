@@ -29,6 +29,8 @@
           rustToolchain
           pkg-config
           openssl
+          perl      # CPAN corpus: execute bootstrapped cpanm script
+          curl     # CPAN corpus: download cpanm standalone script
         ] ++ lib.optionals stdenv.isDarwin [
           darwin.apple_sdk.frameworks.Security
           darwin.apple_sdk.frameworks.SystemConfiguration
@@ -39,6 +41,11 @@
           just              # Command runner (justfile)
           cargo-nextest     # Fast test runner (used in CI)
           cargo-audit       # Security vulnerability scanner
+          cargo-llvm-cov    # Coverage reports (llvm-cov)
+          cargo-machete     # Unused dependency detection
+          cargo-semver-checks  # SemVer compliance checks
+          git-cliff         # Changelog generation
+          bacon             # Background cargo watcher
           gh                # GitHub CLI for PR operations
           jq                # JSON processing for scripts
           (python3.withPackages (ps: [ ps.pyyaml ]))  # Used by CI scripts
@@ -197,14 +204,14 @@
 
           perl-lsp = pkgs.rustPlatform.buildRustPackage {
             pname = "perl-lsp";
-            version = "0.9.1";  # Keep in sync with CLAUDE.md
+            version = "0.12.4";  # Synced manually — see issue #4357 for structural fix
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 
             inherit buildInputs;
             nativeBuildInputs = with pkgs; [ pkg-config ];
 
-            buildAndTestSubdir = "crates/perl-lsp";
+            buildAndTestSubdir = "crates/perl-lsp-rs";
 
             # Skip tests during package build (run via checks)
             doCheck = false;

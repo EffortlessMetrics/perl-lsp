@@ -27,7 +27,7 @@ jobs:
   regenerate-status:
     name: Regenerate status subsystem files
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -37,12 +37,12 @@ jobs:
           fetch-depth: 0
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
           toolchain: 1.92.0
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           cache-on-failure: true
           shared-key: post-merge-status-${{ hashFiles('Cargo.lock') }}

@@ -20,6 +20,23 @@ sub new { bless {}, shift }
 }
 
 #[test]
+fn code_before_pod_still_allows_extraction() {
+    let source = r#"
+package Inventory;
+
+sub add_item { }
+
+=head1 NAME
+
+Inventory - Tracks stock
+
+=cut
+"#;
+    let doc = extract_pod(source);
+    assert_eq!(doc.name.as_deref(), Some("Inventory - Tracks stock"));
+}
+
+#[test]
 fn extracts_name_section() {
     let source = r#"
 =head1 NAME
@@ -107,20 +124,29 @@ fn strips_code_formatting() {
 
 #[test]
 fn strips_link_simple() {
+    // L<Module::Name> now renders as a markdown link (Option B)
     let doc = extract_pod("=head1 NAME\n\nL<Module::Name>\n\n=cut\n");
-    assert_eq!(doc.name.as_deref(), Some("Module::Name"));
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[Module::Name]"), "got: {name}");
+    assert!(name.contains("perl-module://Module::Name"), "got: {name}");
 }
 
 #[test]
 fn strips_link_with_display_text() {
+    // L<click here|Module::Name> displays the explicit text as a markdown link
     let doc = extract_pod("=head1 NAME\n\nL<click here|Module::Name>\n\n=cut\n");
-    assert_eq!(doc.name.as_deref(), Some("click here"));
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[click here]"), "got: {name}");
+    assert!(name.contains("perl-module://Module::Name"), "got: {name}");
 }
 
 #[test]
 fn strips_link_with_section() {
+    // L<Module::Name/method> displays module as link, target includes section
     let doc = extract_pod("=head1 NAME\n\nL<Module::Name/method>\n\n=cut\n");
-    assert_eq!(doc.name.as_deref(), Some("Module::Name"));
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[Module::Name]"), "got: {name}");
+    assert!(name.contains("perl-module://Module::Name/method"), "got: {name}");
 }
 
 #[test]
@@ -337,10 +363,132 @@ fn f_format_code_for_filenames() {
 }
 
 #[test]
-fn e_format_code_passthrough() {
-    // E<lt> E<gt> etc. — we just strip the code, leaving the entity name
-    let doc = extract_pod("=head1 NAME\n\nE<lt>\n\n=cut\n");
-    assert_eq!(doc.name.as_deref(), Some("lt"));
+fn e_format_code_decodes_common_entities() {
+    let doc = extract_pod("=head1 NAME\n\nE<lt> E<gt> E<amp> E<quot> E<apos>\n\n=cut\n");
+    assert_eq!(doc.name.as_deref(), Some("< > & \" '"));
+}
+
+// ── POD L<> link → markdown link tests (Option B) ───────────────────────
+
+/// `L<Module::Name>` should produce a markdown link with target `perl-module://Module::Name`.
+#[test]
+fn link_simple_module_renders_markdown() {
+    let doc = extract_pod("=head1 NAME\n\nL<File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("[File::Path]"),
+        "expected markdown display '[File::Path]' but got: {name}"
+    );
+    assert!(
+        name.contains("perl-module://File::Path"),
+        "expected markdown target 'perl-module://File::Path' but got: {name}"
+    );
+}
+
+/// `L<text|Module::Name>` should use the display text and link to the module.
+#[test]
+fn link_with_display_text_renders_markdown() {
+    let doc = extract_pod("=head1 NAME\n\nL<detailed guide|File::Path>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("[detailed guide]"),
+        "expected markdown display '[detailed guide]' but got: {name}"
+    );
+    assert!(
+        name.contains("perl-module://File::Path"),
+        "expected markdown target 'perl-module://File::Path' but got: {name}"
+    );
+}
+
+/// `L<Module::Name/section>` should link to module and include section in URI.
+#[test]
+fn link_with_section_renders_markdown() {
+    let doc = extract_pod("=head1 NAME\n\nL<File::Path/DESCRIPTION>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("[File::Path]"),
+        "expected markdown display '[File::Path]' but got: {name}"
+    );
+    assert!(
+        name.contains("perl-module://File::Path/DESCRIPTION"),
+        "expected markdown target 'perl-module://File::Path/DESCRIPTION' but got: {name}"
+    );
+}
+
+/// `B<L<Module::Name>>` — nested: bold outer, link inner. Both should be preserved.
+#[test]
+fn nested_bold_around_link_preserves_markdown() {
+    let doc = extract_pod("=head1 NAME\n\nB<L<File::Path>>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(
+        name.contains("[File::Path]"),
+        "expected markdown display '[File::Path]' in nested B<L<>> but got: {name}"
+    );
+    assert!(
+        name.contains("perl-module://"),
+        "expected 'perl-module://' in nested B<L<>> but got: {name}"
+    );
+}
+
+/// Inline link inside a sentence: "See L<File::Path> for details."
+#[test]
+fn inline_link_in_description_renders_markdown() {
+    let source = "=head1 DESCRIPTION\n\nSee L<File::Path> for details.\n\n=cut\n";
+    let doc = extract_pod(source);
+    let desc = doc.description.as_deref().unwrap_or("");
+    assert!(
+        desc.contains("[File::Path]"),
+        "expected '[File::Path]' in description but got: {desc}"
+    );
+    assert!(
+        desc.contains("perl-module://File::Path"),
+        "expected 'perl-module://File::Path' in description but got: {desc}"
+    );
+    // The surrounding text should also be preserved
+    assert!(
+        desc.contains("See") && desc.contains("for details"),
+        "surrounding text lost; got: {desc}"
+    );
+}
+
+/// `L<text|Module::Name/section>` — display text with section target.
+#[test]
+fn link_display_text_with_section_target_renders_markdown() {
+    let doc = extract_pod("=head1 NAME\n\nL<the docs|File::Path/DESCRIPTION>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[the docs]"), "expected '[the docs]' but got: {name}");
+    assert!(
+        name.contains("perl-module://File::Path/DESCRIPTION"),
+        "expected 'perl-module://File::Path/DESCRIPTION' but got: {name}"
+    );
+}
+
+/// `L<Module::Name/Section With Spaces>` — section names with spaces must be
+/// percent-encoded in the URL so the markdown link is well-formed.
+/// This is common in CPAN POD: `L<perlfunc/"use Module LIST">`.
+#[test]
+fn link_section_with_spaces_encodes_url() {
+    let doc = extract_pod("=head1 NAME\n\nL<File::Find/The wanted function>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[File::Find]"), "expected '[File::Find]' but got: {name}");
+    // Spaces must be encoded — a raw space makes the markdown URL malformed
+    assert!(
+        name.contains("perl-module://File::Find/The%20wanted%20function"),
+        "expected percent-encoded URL but got: {name}"
+    );
+    assert!(!name.contains("The wanted function"), "raw space in URL — should be encoded: {name}");
+}
+
+/// `L<click here|Module/Section With Spaces>` — pipe form with spaces in section.
+#[test]
+fn link_pipe_with_spaced_section_encodes_url() {
+    let doc = extract_pod("=head1 NAME\n\nL<click here|File::Find/The wanted function>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    assert!(name.contains("[click here]"), "expected '[click here]' but got: {name}");
+    assert!(
+        name.contains("perl-module://File::Find/The%20wanted%20function"),
+        "expected percent-encoded URL but got: {name}"
+    );
 }
 
 #[test]

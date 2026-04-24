@@ -7,319 +7,1018 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- No unreleased changes have been recorded yet.
+### Internal
 
-## [0.12.0] - 2026-03-24
+- **`cargo xtask published-crate-count`** — new ratchet gate that monitors the
+  count of entries in `[workspace.metadata.publish.allow]` and prevents accidental
+  regression during the microcrate collapse (ADR-0041). Fails if the count exceeds
+  the baseline in `xtask/published-crate-baseline.txt`; auto-tightens the baseline
+  when count decreases. Run via `just ci-published-crate-count` or directly as
+  `cargo xtask published-crate-count`. (#4416)
 
-This section covers 583 commits across ~90 PRs since the 0.12.0 finalization
-(2026-03-20), spanning Era 7 sessions 1-4. Key themes: parser corpus hardening
-against the strict-clean CPAN manifest snapshot that serves as the 0.12.0
-release bar, Moose/Moo class intelligence, diagnostic pipeline wiring, VS Code
-UX polish, performance hardening, and swarm infrastructure maturation.
+## [0.12.4] - 2026-04-12
+
+Release notes: [v0.12.4](docs/releases/v0.12.4.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.4)
+
+<!-- 2026-04-11 session: 46 PRs merged across navigation, pragma scoping, incremental parsing, workspace refactoring, Windows hardening, and CI hygiene -->
+<!-- 2026-04-12 session: ~25 PRs merged — DAP scorecard, rename perf, editor UX, diagnostics polish, hover improvements, workspace/config, completion ranking, Windows compat, CI hygiene -->
+
+### Headlines
+
+- **Inherited and role method navigation now works end-to-end** — `goto-definition`,
+  hover, and workspace completion all BFS through Moo/Moose `with 'Role'` and
+  `extends`/`use parent` chains. Previously only direct-method navigation worked;
+  inherited methods from parent classes or composed roles returned nothing.
+  AUTOLOAD-backed method calls also resolve through the fallback path, and hover
+  surfaces the AUTOLOAD resolution. (#4077, #4091)
+
+- **Pragma tracker correctness sweep** — four independent false-negative paths
+  in `PragmaTracker` / `check_strict_warnings` fixed in one wave:
+  - eval- and sub-scoped `use strict`/`use warnings` no longer suppress
+    file-level PL100/PL101 diagnostics; `state_for_offset` is now the single
+    source of truth for top-level pragma state (#4052)
+  - conditional `use if` / `use unless` pragmas are tracked via suffix
+    matching on the flattened argument list (#4050)
+  - explicit `use feature` / `no feature` state (including `qw(...)` and
+    `:X.Y` version bundles) drives lint decisions about `switch` and other
+    feature-gated constructs (#4038)
+  - phase-block (`BEGIN`/`END`/`INIT`/`UNITCHECK`/`CHECK`) pragmas are kept
+    lexically scoped instead of leaking to the enclosing file; the bad
+    `strict_warnings` phase-block override that suppressed PL100/PL101 is
+    gone (#4108)
+
+- **Incremental parsing: segment-based token cache + two-sided checkpoint
+  window** — replaces the monolithic `TokenCache` with sorted segment storage
+  so edits only invalidate overlapping segments, and `CheckpointCache::find_after()`
+  bounds the re-lex region by the nearest left and right checkpoints instead of
+  a fixed +100-byte heuristic. New `IncrementalStats` counters surface
+  segment reuse, invalidation, and relex distance. 23 new correctness tests
+  plus a 13-group Criterion benchmark suite. A follow-up correctness fix
+  forces a full reparse when a nonzero checkpoint window has no cached prefix
+  tokens, preventing a suffix-only token stream from being fed to the parser.
+  (#4029, #4048, #4076)
+
+- **Workspace-wide file-operations refactoring** — `workspace/willRenameFiles`
+  now plans edits across unopened files by reading from the open-doc cache,
+  the workspace index, and finally the filesystem; `workspace/willDeleteFiles`
+  emits a user-visible `Warning` when deletion would break cross-file
+  references discovered via `index.file_symbols()` + `find_references()`.
+  Multi-file rename batches are merged per-URI via a new `append_workspace_edits`
+  helper. (#4056, #4098)
+
+- **`workspace/configuration` reverse-request flow** — the server now parses
+  the client's `workspace.configuration` capability and, when advertised,
+  issues a `workspace/configuration` reverse request per folder after
+  `.perl-lsp.toml` is loaded, merging returned overlays into each folder's
+  `effective_workspace_config` (TOML stays the base layer). Re-fetched on
+  `workspace/didChangeConfiguration`. JSON-RPC responses without `method`
+  are routed as an internal `$/perl-lsp/clientResponse` pseudo-notification
+  through the existing dispatch system. Non-`file://` workspace folder URIs
+  (`vscode-remote://`, `untitled:`, etc.) are tolerated end-to-end —
+  `to_file_path()` calls are routed through a file-only URI helper and
+  non-filesystem folders are skipped during indexing scans. (#4093, #4059)
+
+- **Windows extended-length path fix for external commands** — `Path::canonicalize`
+  on Windows returns paths with the `\\?\` prefix, which Win32 APIs accept but
+  `perl.exe` / `prove` / `yath` do not. `normalize_path_for_external_command`
+  strips the prefix before every spawn site in `execute_command::provider`.
+  Unblocks Run Tests, Run File, and Run Test Sub on Windows. (#4089)
+
+- **Perl::Critic diagnostics UX overhaul** — Critic policy codes now carry
+  `source: "perlcritic"` in the LSP surface and an explicit `data.fixable`
+  list; three more policy aliases route to existing quick-fixes
+  (`RequireUseStrict`, `RequireUseWarnings`, `ProhibitUnusedVariables`);
+  missing `perlcritic` binary and invalid profiles surface as workspace
+  warnings and health-check output instead of silently skipping. (#4113)
 
 ### Added
 
-#### Parser
-- **Error Recovery Substrate**: New `RecoverySite` and `RecoveryKind` infrastructure for structured recovery from parse failures (#2843, #2868)
-- **Parser Corpus Push**: Addressed top CPAN corpus error buckets — `and`+comma, `+` prototype, unclosed-paren identifier, typeglob punctuation `*<` `*>` `*(` `*)`, s///e replacement, x-operator precedence, C-style for loops, keyword hash keys in `use` imports (#2149, #2189, #2254, #2261, #2395, #2461, #2625, #2684, #2703, #2731, #2732, #2755, #2826, #2829, #2834-#2835, #2856, #2859)
-- **Parser Disambiguation**: Phase-block keywords as statement labels, anonymous sub with attributes, `bless []` as function call, regex-op names as hash subscript keys, leading `::` qualifier in subroutine names (#2601, #2710, #2754)
+- **Workspace `workspace/configuration` reverse-request flow** with client
+  capability gating, per-folder scoping, and JSON-RPC response routing via
+  `$/perl-lsp/clientResponse` (#4093).
 
-#### LSP Features
-- **Per-Feature Disable**: `initializationOptions.disabledFeatures` allows users to opt out of individual LSP features (#2170, #2766)
-- **Editor-Agnostic Project Config**: `.perl-lsp.toml` configuration file for project-level settings, recognized by all editors (#2053, #2805)
-- **Semantic Token Delta Encoding**: LSP 3.16 delta encoding for semantic tokens reduces bandwidth on edits (#2743)
-- **Document Ranges Formatting**: Advertise `documentRangesFormattingProvider` to close LSP 3.18 gap
-- **Workspace Symbol Resolve**: Emit documentation and fix `containerName` in `workspace/symbol/resolve` (#2100, #2798)
-- **Diagnostic Pull Path**: Wire diagnostic enrichment through pull diagnostic runtime path (#2102, #2795)
-- **Diagnostic Data Field**: Populate `Diagnostic.data` field for client-side diagnostic actions (#2592)
-- **Progress Notifications**: `$/progress` notifications during workspace indexing (#2317, #2356)
-- **Parse Error Telemetry**: Opt-in parse error telemetry wired into diagnostic pipeline (#2740)
-- **Startup Diagnostic**: Structured startup message to stderr for editor log integration (#2054, #2807)
-- **On-Type Formatting**: Advertise `\n` as formatting trigger character (#2746, #2779)
-- **POD Symbols in Outline**: `=head` POD sections appear in document symbol outline (#2614)
-- **Signature Help Retrigger**: Added retrigger characters for complex Perl call signatures
-- **InlayHint Resolve**: Wire `inlayHint/resolve` `labelDetails.location` for click-to-definition
-- **Commit Characters**: Add `commit_characters` to `CompletionItem` for both handlers (#2597)
-- **Binary File Guard**: Prevent parser from processing binary files in `didOpen`/`didChange` (#2107, #2764)
-- **CRLF Guard**: Add CRLF line-ending guard in `position_to_offset_rope` (#2108, #2736)
+- **`workspace/willRenameFiles` workspace-wide planning** — reads text from
+  open-doc cache, workspace index, or filesystem, and merges multi-URI edits
+  via a new `append_workspace_edits` helper (#4056).
 
-#### Moose/Moo Intelligence
-- **Class Model Wired**: `ClassModel` detection wired into `SemanticAnalyzer` (#1661, #2741)
-- **Goto-Definition for Methods**: `$self->` and `$class->` method calls resolve via workspace index (#2536, #2831, #2858)
-- **Type Hierarchy**: C3 MRO linearization for Moose inheritance chains; `extends`/`with` wired into `TypeHierarchyProvider` (#2720); cross-file supertypes/subtypes via workspace scan (#2738)
-- **Role Composition Hover**: Hover card for `with`-applied roles showing consumed methods (#2325, #2745)
-- **Method Modifier Hover**: Dedicated hover card for `before`/`after`/`around` modifiers (#2744)
-- **Attribute Introspection**: `builder`, `coerce`, `predicate`, `clearer`, `trigger` in attribute hover (#2366)
+- **`workspace/willDeleteFiles` safe-delete warnings** — emits `Warning`
+  severity diagnostic when the delete would break cross-file references
+  discovered via `index.file_symbols()` + `find_references()` (#4056).
 
-#### Hover
-- **Phase Blocks**: BEGIN/END/INIT/CHECK/UNITCHECK get hover documentation and diagnostics (#2623)
-- **Special Variables**: Educational hover tooltips for Perl special variables (`$!`, `$@`, `$/`, etc.) (#2262, #2347)
-- **Tied Variables**: Show tied class and tie magic method docs on hover (#2609)
-- **Context-Sensitive Builtins**: Scalar/list context docs for 11 context-sensitive builtins (#2630)
-- **Perl Built-in Examples**: Phase 1 hover docs with capture vars, autoflush, MetaCPAN links, examples (#2831, #2839)
-- **Subroutine Complexity**: Complexity indicator shown in sub hover card
-- **POD on Use Statements**: Show POD documentation when hovering on `use Module` (#2304)
-- **Type Inference Display**: Wire `TypeInferenceEngine` to hover for inferred variable type (#2726)
-- **Regex Pattern Explainer**: Explain regex patterns in human-readable format (#2048)
-- **die/warn Enrich**: Enrich `die`/`warn` hover with docs and add `croak` modernize action (#2606)
+- **`HoverExtracted::InheritedMethod` variant** with Phase 2 workspace BFS
+  over parents and roles; `collect_all_package_members` BFS for workspace
+  completion; `workspace_document_text` exposed as `pub(super)` so hover can
+  reuse it (#4077).
 
-#### Completion
-- **85 Missing Built-ins**: Add 85 missing Perl built-ins with documentation; fix LSP trigger characters (#2780, #2813)
-- **Relevance Sorting**: Relevance-based completion ranking with docs on builtins/keywords (#2832, #2841)
-- **Import-Aware Sort**: Workspace symbols sorted by import proximity (#2645)
-- **Auto-Import on Selection**: Auto-insert `use Module` when selecting an unimported symbol (#2322)
-- **Regex Operator Snippets**: 13 regex operator snippets and regex flag completions (#2607, #2635)
-- **Named Capture Groups**: Named capture group completions after `(?<name>)` (#2635)
-- **Template Toolkit**: Directive/filter snippet completions for `.tt` files (#2350, #2735)
-- **Test::More Snippets**: `ok`/`is`/`like` function hover documentation in completions
-- **Built-in Snippets**: Built-in Perl snippet completions for common idioms
+- **AUTOLOAD fallback in goto-definition and hover** — explicit method-call
+  navigation resolves through `AUTOLOAD` when the named method is absent;
+  inherited-method hover surfaces the AUTOLOAD resolution (#4091).
 
-#### Diagnostics
-- **PL200/PL201/PL300 Wired**: Emit `use strict`, `use warnings`, `package` diagnostics through the pipeline (#2781, #2803)
-- **PL405 Format Arity**: `printf`/`sprintf` format specifier arity lint (#2636)
-- **PL701 Module Not Found**: `ModuleNotFound` lint using workspace resolver (#2619)
-- **Perl Version Compatibility**: Warnings for syntax requiring specific Perl versions (#2050, #2739)
-- **Security Lints**: Security-focused lints for `eval`, two-arg `open`, backtick patterns; wire into pipeline (#2724)
-- **Unused Import Detection**: Detect and grey-out potentially unused imports
-- **Heredoc Anti-Pattern**: Warning for heredoc anti-patterns (#2438)
-- **Dead Code Detection**: Wire dead code analysis into diagnostic pipeline
-- **Perl::Critic Integration**: Wire perlcritic with severity/profile config and byte-offset mapping (opt-in) (#2362)
-- **Auto-Quote Suggestion**: Suggest quoting bareword warnings (#2365)
-- **Suppress on Empty Files**: Suppress `strict`/`warnings` lint on empty files (#2112, #2792)
-- **Context Hints**: Add `context_hint()` to `DiagnosticCode` with catalog surfacing
+- **`Readonly` and `Const::Fast` wrapper declarations** are now surfaced as
+  constant symbols by `perl-symbol-surface` and `perl-semantic-analyzer`;
+  declaration tokens are marked readonly in semantic-tokens output, including
+  package-qualified `our` constants. Scalar, array, hash, and package
+  regression coverage added. (#4040, #4043)
 
-#### Navigation
-- **Go-to-Test / Go-to-Implementation**: Navigate between test files and implementation (#2532)
-- **use parent/use base**: Workspace rename respects `use parent`/`use base` dependency graph (#2747, #2782)
-- **Module Resolution**: Parse `use lib` and `FindBin` for include path resolution (#1662, #2620)
-- **Inline Rename Scope**: Route `all_occurrences` to workspace-wide lookup (#439, #2765)
+- **LSP semantic token delta support advertised** — `semanticTokens.full`
+  switched from the legacy boolean form to the structured delta form.
+  The delta handler already existed; the advertised capability is now
+  aligned with LSP 3.16+ expectations. Capability-snapshot tests
+  regenerated. (#4026, #4041, #4042)
 
-#### VS Code Extension
-- **Report Issue Command**: One-click issue reporting from the command palette (#2160, #2748)
-- **Extension Auto-Update Check**: Notify users when a new version is available (#2165, #2796)
-- **Special Variables Reference**: Command to open special variable reference panel (#2318, #2763)
-- **Debugger Setup Wizard**: Interactive DAP configuration wizard (#2338, #2762)
-- **Interactive Onboarding Walkthrough**: First-run walkthrough for new users (#2046)
-- **Smart File Creation**: New Perl file command inserts package boilerplate
-- **What's New Panel**: Show release notes webview on extension update
-- **Status Bar Health Widget**: Show file count and error counts in status bar
-- **Version in Status Bar**: Display `perl-lsp` version in status bar (#2340)
-- **Formatting Error Toasts**: Surface formatting errors as toast notifications (#2111, #2793)
-- **Wire 4 Unimplemented Commands**: `extractVariable`, `extractMethod`, `showRefactoringOptions`, `reportIssue` (#2849, #2854)
-- **Refactoring Discoverability**: Keyboard shortcuts and menu entries for refactoring actions
-- **Boilerplate Snippets**: Perl boilerplate snippet library (#2314)
+- **VS Code: Run Test at Cursor** — new `perl-lsp.runTestAtCursor` command
+  palette / context-menu entry that resolves the active cursor position
+  against existing code lenses and runs the nearest test subroutine,
+  subtest, or file-level run lens (#4025).
 
-#### Code Actions
-- **Portable Shebang**: Quick-fix to suggest portable shebang line (#2255)
-- **Modernization Suggestions**: Perl modernization code actions (say, given/when, etc.)
-- **Bareword Filehandle Fix**: Quick-fix for `bareword-filehandle` and two-arg `open` patterns
-- **Find Undefined Functions**: Wire `find_undefined_functions` to semantic analyzer (#2692, #2719)
+- **VS Code: Gherkin step-definition navigation and stubs** — navigation
+  from `.feature` steps to Perl `Given`/`When`/`Then` definitions plus a
+  quick-fix command that generates step-definition stubs. Unit coverage
+  for matching, generation, and registration. (#4024)
 
-#### Code Lens
-- **Test File Lenses**: Detect test functions and provide `Run Test`/`Debug Test` lenses
-- **Subtest Lenses**: Subtest detection with `perl.runSubtest` command (#2617, #2673)
+- **VS Code test runner now prefers `yath` for test files** when present
+  on PATH, with `prove` and `perl` fallbacks intact. Unit tests pin the
+  runner preference order without depending on local tool availability.
+  (#4031)
 
-#### Performance
-- **SemanticAnalyzer LRU Cache**: Cache hover/definition lookups to avoid repeated analysis (#2074, #2806)
-- **Asynchronous Workspace Indexing**: Non-blocking workspace scan (#2352)
-- **Request Prioritization**: Cancel stale requests; prioritize interactive over background work
-- **perltidy/perlcritic Timeout**: Thread-based subprocess timeout prevents editor hangs (#2616)
-- **Parser Cancellation**: Cancellation token checks in parser hot path for responsive LSP (#2615)
-- **Debounced Diagnostics**: Debounce diagnostic publication during rapid typing
-- **SymbolIndex Queries**: Wire `SymbolIndex` into completion and workspace symbols for O(1) lookups (#2728)
-- **Deferred Health Check**: Move VS Code health check from activation to first-error path (#2715)
-- **Workspace-Index CPAN Tuning**: Tune index for CPAN-scale workspaces (#1664)
+- **Segment-based incremental token cache + two-sided checkpoint window**
+  — `TokenSegment` sorted storage, `CheckpointCache::find_after()`, and
+  `reparse_from_checkpoint_two_sided`; new `IncrementalStats` metrics
+  (`segments_reused_before`, `segments_reused_after`, `segments_invalidated`,
+  `full_tail_fallbacks`, `left_checkpoint_distance`,
+  `right_checkpoint_distance`, `bytes_relexed`); 23 correctness tests and
+  a 13-group Criterion benchmark suite (#4029).
 
-#### CLI
-- **--check-project**: Parsability report for a directory tree (#2534)
-- **--check-format json**: Machine-readable JSON output for CI integration (#2734)
+- **Orphaned unclosed-block recovery tests wired into `perl-parser-core`**
+  — the `unclosed_block_recovery_tests` module existed on disk with six
+  well-written tests but was never registered in `mod.rs` and had never
+  compiled. Now wired with six additional edge-case tests covering C-style
+  `for`, `foreach`, `unless`, `BEGIN` phase blocks, doubly-nested unclosed
+  blocks, and nested blocks inside `sub`. (#4079)
 
-#### Infrastructure
-- **Blocker Ledger**: Track known blockers to prevent scout rediscovery (#2586)
-- **Corpus Sweep Schema 1.2.0**: Add `files_by_bucket` to baseline schema (#2585)
-- **17 New Error Buckets**: Decompose `unexpected_token_in_expr` catch-all (#2611, #2814)
-- **Unwired Infrastructure Scanner**: Find built-but-not-wired crates automatically (#2667, #2827)
-- **Snapshot Testing**: Systematize snapshot tests for AST and error messages (#2104, #2823)
-- **nextest**: Enable cargo-nextest for `ci-test-lib` (#1909, #2804)
+- **Symbol visibility regression tests** for Error-partial recursion in
+  `perl-semantic-analyzer`, covering arrow-truncation errors, unclosed-sub
+  recovery, and missing-RHS recovery (#4071).
 
-### Fixed
+- **Per-edit checkpoint and cache delta assertions** for incremental
+  parsing, replacing cumulative-counter assertions with per-edit deltas
+  and tree-equivalence checks against a fresh full parse (#4076).
 
-#### Parser
-- `and` operator collecting comma-separated RHS expressions (#2856, #2859)
-- `+` prototype character handling, fixes `unexpected_rbrace_expr` (#2835, #2838)
-- Unclosed-paren identifier patterns (#2834, #2840)
-- Typeglob punctuation variables `*<`, `*>`, `*(`, `*)` (#2755, #2826)
-- Keyword hash keys and `q{}` in `use` imports (#2189, #2723)
-- Keyword tokens as package names (#2150, #2706)
-- C-style `foreach` loops (#2149, #2703)
-- Leading `::` qualifier in subroutine names (#2710)
-- `s///e` replacement with `/` inside string literals (#2395)
-- x operator RHS precedence with `**` (#2625, #2684)
-- Substitution/transliteration modifier parsing regression (#2732, #2776)
-- Soft recovery for unclosed bracket in postfix expressions (#2148, #2688)
-- `unexpected_token_in_expr` decomposed into 4 sub-patterns (#2731, #2767)
-- Optional-arg unary builtins before binary operators (#2730, #2775)
-- Top corpus error buckets — multiple CPAN patterns fixed (#2461, #2829)
-- Sigil-peek heuristic for imported unary functions (#1943)
-- `$self->` and `$this->` method resolution via workspace index (#2536)
-- Regex-op names as hash subscript keys (#2754, #2789)
-- Phase-block keywords as statement labels
-- Strip `#` comments from `qw()` content before word-splitting (#2618)
-- Fat-arrow pairs as ternary branch expressions (#2402, #2613)
-- Word operators after `return`, loop control, indirect calls, paren lists
-- Missing special variables `$>`, `$<`, `$)` and empty `while` condition
-- Handle `my $var->{key} = ...` lvalue declaration
-- `defined`/`ref` without arg when followed by word operators (#2626)
-- `bless []` as function call, not subscript (#2387)
-- File-test-no-operand and `CORE::` builtins in grep/map context (#2674)
-- `ref ne/eq` and `or` comma-expr in `grep` blocks (#2388)
-- v-strings in expression and comparison contexts
-- Recover inline from missing semicolons in C-style for loops (#2593)
-- Relex slash as regex at statement start after closing brace
-- Replace restrictive import parser in `parse_no` with depth-tracking slurp
-
-#### Lexer
-- `after_var_subscript` flag clearing on `)` — fixes `if($var){m//}` (#2844, #2851)
-- `hash_brace_depth` narrowed to `after_var_subscript` — fixes quote-op suppression in blocks (#2833, #2837)
-- `try_heredoc` guarded against ExpectOperator mode — fixes bitshift-in-paren (#2750, #2769)
-- Whitespace-separated quote delimiters restricted to paired chars (#2732 regression, #2815)
-
-#### LSP Runtime
-- ABBA lock ordering deadlock eliminated; lock contention reduced (#2712)
-- Reentrant deadlock in `publish_diagnostics` fixed (#2646)
-- Concurrent workspace indexing scan prevention (#2641, #2711)
-- `ParentMap` safety improvements Phase 1 (#2810, #2819)
-- Semantic token legend synchronized with capability advertisement (#2103, #2772)
-- Advertise `TextDocumentSyncKind::Full` (not `Incremental`) to match actual behavior
-- Depth underflow panic in linked-editing backward bracket scan (#2603)
-- 5 advertised-but-unhandled commands wired in `execute-command` provider (#2691, #2717)
-
-#### Code Actions
-- 4 defects in extract variable/subroutine refactoring (#349, #2797)
-- Diagnostics lint checks wired into `get_diagnostics()` pipeline (#2544)
-
-#### Security
-- macOS sandbox path injection and profile file-path bug (#2749, #2799)
-- `strict`/`warnings` false positives suppressed on empty files (#2112, #2792)
-
-#### Tests
-- Replace `unwrap`/`expect` with `must`/`must_some` across workspace (#2649, #2721-#2727)
-- Use AST walk instead of string matching in `assert_clean_parse` (#2553, #2559)
-- Fix stale capability snapshots blocking CI (#2855)
+- **`require VERSION` pragma semantics test** guarding that `require 5.x`
+  does not enable strict or warnings in `PragmaTracker` (#4023).
 
 ### Changed
 
-#### Refactoring
-- **17 Built-but-Unwired Crates Wired**: Wire 17 LSP provider microcrates into the runtime (#2756, #2768)
-- **7 Dead Navigation Functions Removed**: Delete prototype navigation functions from `perl-lsp` (#2713)
-- **`semantic.rs` God File Split**: 3,256-line `semantic.rs` split into 6 focused sub-modules
-- **Status Docs Modularized**: Monolithic `CURRENT_STATUS.md` split into `docs/project/status/*.md` subsystem files (#2801, #2830)
-- **`perl-lsp-inline-completion` Wired**: Replace inline duplicate impl with microcrate (#2758, #2786)
-- **Dead Code Cleanup**: Remove dead `perl-symbol-table` crate (#2714), dead `perl-source-editing` crate (#2699, #2716), dead `IndexAccessMode` lint suppressors (#2702, #2790)
-- **`perl-test-must` Extracted**: New micro-crate extracted from `perl-tdd-support` (#2842, #2864)
-- **Test Modules Extracted**: Inline test modules moved to `tests/` directories (#2462-#2466)
-- **`logos` Lexer Archived**: Broken logos experiment archived; `chumsky` dependency removed (#2612)
-- **ADR Renumbering**: Duplicate ADR-0035/0036 renumbered to ADR-0039/0040 (#2808, #2816)
+- **Pre-push hook switched from `ci-gate` to `pr-fast`** (Tier A). The
+  generated `hooks/pre-push` file is regenerated from `perl-ci-hygiene` and
+  a regression test keeps the generated text and checked-in hook file in
+  sync. `ci-gate` remains documented as the explicit full merge gate.
+  (#4088, #4110)
 
-#### CI
-- Consolidate clippy passes; enable nextest for library tests (#1909, #2804)
-- Pre-push hook updated to track test counts (#2128)
+- **Doc-only pre-push fast path skips code gates entirely** instead of
+  running workspace-wide `cargo fmt --all -- --check`. Avoids a Windows
+  long-path rustfmt crash on prose-only pushes. Regression test asserts
+  the doc-only branch exits before any workspace-wide rustfmt check.
+  (#4061)
 
-#### CPAN Corpus
-- The 0.12.0 release bar is the ratcheted strict-clean CPAN manifest snapshot;
-  broader installed-corpus expansion remains follow-up work
-- Corpus baseline ratcheted from 85.7% toward 90%+ through multiple parser fix waves
+- **Docs-only merge fast-track** added to the review/merge policy so
+  doc-only PRs no longer falsely require `reviewed-deep`. Enforced by
+  `scripts/pre-merge-check.sh` with shell-test coverage; reviewer / ops
+  docs and label automation updated to match. (#4103)
 
-### Performance
+- **`PragmaTracker::state_for_offset(&map, usize::MAX)`** is now the
+  single authoritative source of truth for top-level pragma state in
+  `check_strict_warnings`; the scope-unaware `walk_node` closure arms
+  that scanned eval/sub interiors are removed (#4052).
 
-- **SemanticAnalyzer LRU Cache**: Avoid repeated analysis on hover/definition (#2074, #2806)
-- **Async Workspace Indexing**: Non-blocking index scan for large workspaces (#2352)
-- **Parser Cancellation Token**: Check cancellation in parser hot path (#2615)
-- **Debounced Diagnostics**: Debounce publication during rapid typing
-- **SymbolIndex O(1) Queries**: Wire `SymbolIndex` for completion and workspace symbols (#2728)
-- **perltidy/perlcritic Timeout**: Subprocess timeout prevents editor hangs (#2616)
-- **CPAN-Scale Index Tuning**: Workspace index tuned for large CPAN workspaces (#1664)
+- **`SymbolExtractor::visit_node()` Error arm** now recurses into
+  `partial: Option<Box<Node>>` instead of treating Error as an opaque
+  leaf, bringing symbol extraction into parity with every other
+  traversal in the codebase (`semantic_tokens`, `class_model`,
+  `scope_analyzer`, `for_each_child`) (#4071).
 
-
-This release is the **public alpha launch** -- the first release intended for broad
-external adoption. It spans 590+ commits and 200+ merged PRs, delivering major parser
-improvements (83% to 85.7% CPAN corpus), new LSP features, distribution tooling, and
-comprehensive documentation for first-time users.
-
-### Added
-- **Graceful Degradation**: Three-tier degradation for partial parse results -- full AST, partial recovery, and graceful fallback (#2219).
-- **Large File Guard**: Skip parsing for oversized files to prevent editor hangs (#2163, #2229).
-- **Hover: Module Path**: Show resolved module path on `use` statement hover (#2211).
-- **DAP Inline Values**: Display variable values inline during debugging sessions (#2212).
-- **Parser: Fix Suggestions**: Helpful fix suggestions in parser error messages (#2200).
-- **Distribution: cargo-binstall**: Pre-built binary installation via `cargo binstall perl-lsp` (#2071, #2209).
-- **Distribution: Man Page**: `man perl-lsp` page generated from CLI definition (#2210).
-- **Distribution: PowerShell Completions**: Shell completion generation for PowerShell (#2075, #2214).
-- **VS Code: Test Explorer**: Test explorer integration for Perl `.t` files (#2033).
-- **VS Code: Extension Polish**: Marketplace metadata, test suite, and documentation for 0.12.0 (#2032, #2034).
-- **First-Run Experience**: Getting-started guide and improved install verification for new users (#1658).
-- **Completion: Import Lists**: `use Module qw(...)` triggers symbol completion from the target module (#1937).
-- **Completion: Regex Literals**: Variable and function completions inside `/…/`, `m/…/`, `qr/…/` patterns (#1925).
-- **Completion: Scope-Ranked Locals**: Local symbols ranked by scope distance for more relevant suggestions (#1983).
-- **Completion: Qualified Variables**: Workspace-qualified variable completion for cross-package symbols (#1731).
-- **Global Reference Index**: O(1) symbol lookups via a new global reference HashMap in workspace-index (#1934).
-- **V-String Tokenization**: Version strings (`v5.36.0`) now tokenized as a dedicated token type (#1914).
-- **DeadBranch Detection**: Dead code analysis detects constant-condition `if`/`unless` branches (#1596).
-- **Class Field Declarations**: Parser supports Perl class field declaration syntax (#1808+).
-- **CLI Flags**: `--check`, `--info`, `--completion` flags for scripting and editor integration (#1682).
-- **Diagnostic Accessibility**: Improved error message quality and accessibility in diagnostics (#1672).
-- **Async Runtime with Concurrent Dispatch**: Two-lane scheduler -- exclusive worker for mutations + 4-worker read pool for concurrent requests. `$/cancelRequest` processed inline (#1555).
-- **Goto AST Node**: Dedicated `Goto` node with full `TokenKind::display_name` support (#1521).
-- **Smarter Selection Range**: Expand/shrink selection chains with semantic awareness (#1545).
-- **Cross-file Go-to-Definition**: Improved navigation for method calls and `use parent`/`base` statements (#1542, #1544).
-- **Enhanced Diagnostics**: Added `suggestion` field to diagnostic messages (#1543).
-- **Inlay Hints for Builtins**: Parameter names derived from builtin function signatures (#1541).
-- **Semantic Tokens**: Comprehensive AST walker with new token types for broader coverage (#1540).
-- **Cross-sigil Variable Highlighting**: Highlight `@foo`/`%foo` references when cursor is on `$foo` (#1538).
-- **Extract Variable for Methods**: Code actions handle method calls and hash/array access (#1534).
-- **Workspace Symbols Ranking**: Improved ranking algorithm with comprehensive tests (#1529).
-- **Completion for Moo/Moose Accessors**: Show `isa` type in completion for accessor methods (#1525).
-- **Signature Help Builtin Coverage**: Expanded coverage for common Perl builtins (#1532).
-- **DAP Improvements**: POD detection, conditional expression validation in breakpoints (#1536), improved variable inspection rendering (#1535), hardened smoke tests and timeout handling (#1883).
-- **Hover Enhancements**: Improved documentation quality in hover responses (#1537).
-- **VS Code Extension**: Trace support, config change detection (#1876), `--health` binary validation before starting LSP client (#1598), Open VSX keywords and metadata (#1879), client refresh behavior fix.
+- **Metric framing scoped down** across README, VSCode marketplace
+  listing, and v0.13.0 announcement draft — capabilities are now framed
+  as advertised surface, not claimed conformance; entry-points table
+  added to README; known UX gaps listed explicitly (#4045,
+  #4046, #4049, #4051).
 
 ### Fixed
-- **Parser -- Control Flow**: Handle orphaned `else`/`elsif` and `unless`+`else`/`elsif` chains (#1981), allow bare `return` in ternary branches (#1727), handle statement-start nullary builtin precedence (#1724), recover bare list-operator calls in postfix args (#1989), handle `for`/`foreach` without explicit loop variable (#1700, #2040), handle ternary after named-unary operators (#2025).
-- **Parser -- Expressions**: Accept fat arrows in expression contexts (#1985), support last-index deref `->$#*` in bracket expressions (#1988), slurp trailing operators after Number/String in `use` import values (#1980), handle `use constant NAME => expr` fully (#1577), handle complex expressions in parenthesized arguments (#1704, #2206), accept complex expressions in `use`/`no` import lists (#2184, #2221), audit fat arrow expressions (#1651, #2171), allow postfix operators after typeglob expressions (#2188, #2238).
-- **Parser -- Disambiguation**: Disambiguate `field` keyword from bareword identifier (#1978), allow keyword barewords as subroutine names (#1986), allow keyword methods and trailing separators (#1993), recover field bareword calls in recovery parser, validate declaration attributes.
-- **Parser -- Builtins**: `map`/`grep`/`sort` BLOCK LIST without trailing semicolon (#1623), `tie(VARIABLE, CLASS, LIST)` with parenthesized args (#1630), `defined`/`ref` at statement start (#1618), `push`/`pop` with postfix deref lvalue (#1619), nullary builtins in paren expressions (#1629), improve word operator handling for 43 CPAN files (#1922).
-- **Parser -- OO**: Tighten qualified class-name and namespaced class parsing, statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548).
-- **Parser -- Misc**: Tighten deref parsing (#1884), transliteration delimiter parsing, operator strings in `use overload` (#1492), chained method calls after deref constructs (#1474), ternary then-branch assignments (#1516, #1518), guard semicolon break with `at_top_level` in `use` imports (#2237), add `RightBrace` to indirect call argument terminators (#2222, #2236).
-- **Lexer**: Prevent prototype mode leak after `sub` keyword (#1906), disambiguate regex after bare builtins (#1965), recognize special punctuation variables `$~`, `$^`, `$=`, `$%`, `$;`, `$^W` etc. (#1615), disambiguate `$$var` scalar deref from `$$` PID variable (#1572), peek/reset state restoration, make regex parse budget reachable (#1455).
-- **Completion**: Preserve regex interpolation completions (#1925).
-- **Workspace Index**: Rebuild find-definition symbol cache after index updates (#1919).
-- **LSP Runtime**: Preserve scheduler ordering and stabilize tests (#1882), close outbound sender before joining writer thread (#1593), stop advertising unsupported `debugTests` command (#1742).
-- **Incremental Parsing**: Improved efficiency and fixed position underflow (#1539).
-- **On-Type Formatting**: Heredoc suppression, string/comment-aware brace matching, correct trigger semantics (#1530).
-- **Diagnostics**: Suppress strict/warnings false positives for OO frameworks (#1565).
-- **DAP**: Fix socket default port, harden debugger smoke and timeout handling (#1883), prevent subtraction overflow in inline values (#1515).
+
+- **Parser error recovery and symbol extraction under partial `Error` nodes**
+  — unclosed block recovery landed in `perl-parser-core` (PR #4079) and
+  symbol extraction now descends into partial `Error` nodes (PR #4071),
+  closing issue [#3499](https://github.com/EffortlessMetrics/perl-lsp/issues/3499).
+
+- **Navigation: inherited and role methods in goto-def, hover, and
+  completion** — BFS traversal now chains `model.roles` alongside
+  `model.parents` in `inherited_method_definition_location`; hover
+  wires the previously dead-code `resolve_inherited_method_hover` path;
+  workspace completion uses a new `collect_all_package_members` BFS that
+  replaces the direct `get_package_members` call in
+  `add_workspace_method_completions` (#4077).
+
+- **Navigation: AUTOLOAD-backed method calls** resolve through
+  `AUTOLOAD` fallback in both goto-definition and hover when the named
+  method is absent (#4091).
+
+- **Diagnostics: eval- and sub-scoped pragmas no longer suppress
+  file-level PL100/PL101** — `pragma_map.iter().any()` replaced with
+  `PragmaTracker::state_for_offset` at `usize::MAX`; `walk_node` closure
+  arms that descended into `NodeKind::Eval` / `NodeKind::Subroutine`
+  bodies and falsely set `has_strict = true` are removed. 4 new tests
+  cover eval-scoped and sub-scoped false-negative paths. (#4052)
+
+- **Pragma: phase-block pragmas kept lexically scoped** — `BEGIN`, `END`,
+  `INIT`, `UNITCHECK`, and `CHECK` block pragmas no longer leak to file
+  scope; the bad `strict_warnings` phase-block override that suppressed
+  PL100/PL101 is removed. Replaced with behavior-spec and integration
+  coverage for block-local semantics. (#4108)
+
+- **Pragma: conditional `use if` / `use unless`** — `PragmaTracker`
+  recognises `use if CONDITION, MODULE, ...` forms and conservatively
+  applies the tracked pragma semantics from the suffix target. Lint
+  pipeline regressions confirm conditional strict/warnings suppress the
+  missing-pragma hints. (#4050)
+
+- **Pragma: explicit `use feature qw(...)` and `:X.Y` bundles** tracked
+  in `PragmaTracker`; `version_compat` understands feature bundles; 
+  `no feature` lexical disablement is honored. Regressions cover
+  `switch` enablement via bundles and lexical disablement. (#4038)
+
+- **Incremental parsing: prefix correctness at checkpoint boundaries** —
+  when a nonzero checkpoint window has no cached prefix tokens, fall
+  back to a full reparse instead of assembling a suffix-only token
+  stream for `Parser::from_tokens`. Regression compares incremental vs
+  full parse for an edit past the first checkpoint boundary. (#4048)
+
+- **Semantic analyzer: symbol extraction descends into Error partial
+  nodes** (#4071). The arrow-truncation recovery path will start
+  producing new symbols if the parser begins wrapping declarations in
+  `Error { partial: Some(...) }`.
+
+- **Workspace: non-`file://` URIs tolerated as workspace roots** —
+  `vscode-remote://`, `untitled:`, and other virtual schemes are kept
+  in LSP string form; direct `to_file_path()` calls are routed through
+  a file-only URI helper; workspace folder matching normalises trailing
+  slashes; non-filesystem folders are skipped during indexing scans.
+  (#4059)
+
+- **Execute-command: Windows extended-length path prefix stripped** —
+  `normalize_path_for_external_command` removes the `\\?\` prefix on
+  Windows at every spawn site in `execute_command::provider` (yath,
+  prove, perl primary and fallback paths, `run_test_sub`, `run_file`).
+  Non-Windows is a zero-cost identity via `#[cfg(windows)]`. Closes
+  the Windows Run Tests regression. (#4089)
+
+- **DAP types: basename derivation for Windows-style source paths** —
+  `Source::new()` adds a narrow fallback when `Path::file_name()` returns
+  the entire input string (as it does for backslash-separated paths on
+  Unix hosts), so `C:\Users\dev\project\lib\Module.pm` now derives
+  `Module.pm` correctly. Unblocks the previously-failing
+  `source_with_windows_path` regression. (#4028)
+
+- **Xtask `features verify` repaired** — catalog test paths are now
+  resolved from repo root, the advertised-vs-caps snapshot is read from
+  `crates/perl-lsp-rs/tests/snapshots/...`, the two-document Insta snapshot
+  format is parsed correctly, and the verifier compares against the
+  capability-backed advertised LSP subset (#4033).
+
+- **Clippy hygiene: hover/navigation `let_and_return` and
+  `needless_borrow`** warnings cleared, plus a follow-up
+  `needless_borrow` fix in workspace file-ops after #4052 and #4088
+  landed (#4037, #4098).
+
+- **Plan-review hook IO hardened** — `subagent-stop.sh` binds issue
+  context from `ISSUE_NUMBER`, payload `issue_number`, or the canonical
+  `plan-review-NNN` agent name (in that precedence), instead of the
+  broken branch-digit scan that silently labeled random historical
+  issues. Fail-loud exit 3 when no valid issue context exists. Both
+  `subagent-stop.sh` and `task-completed.sh` normalise payload / receipt
+  fields with `tr -d '\r'` so JSONL metrics and CRLF-sensitive receipt
+  parsing no longer reject valid UTC timestamps. Canonical
+  `plan-review-NNN` naming documented in `.claude/commands/swarm.md`.
+  Regression coverage added in both `.ci/scripts/test-hooks.sh` and
+  `cargo xtask hook-tests`. (#4064)
+
+- **CI hygiene: allowlisted production panic paths normalised** before
+  matching so both Unix and Windows-style relative paths are recognised
+  (#4081).
+
+- **CI hygiene: doc-only pre-push fast path skips code gates** entirely
+  instead of running workspace-wide rustfmt (#4061).
+
+- **Semantic-analyzer: stale method attribute assertion** fixed to look
+  up extracted methods via the current symbol contract while keeping the
+  attribute-preservation assertion intact (#4082).
+
+- **Agent definitions: terminal skills made explicit** — `scout-lsp.md`
+  gains the missing step 9 `/agent-wrapup` (every other scout variant
+  already had it); `reviewer-deep.md` restructures step 4 and adds a
+  new step 5 making `/pr-ready` an explicit required follow-up when
+  the deep-review decision is "approve". Root cause for the earlier
+  incidents where deep reviewers set `reviewed-deep` but forgot to
+  call `/pr-ready`, leaving PRs stuck in draft. (#4087)
+
+### Docs
+
+- **Metric framing scoped down** — README, VSCode marketplace listing,
+  and v0.13.0 announcement draft now frame capabilities as advertised
+  surface, not claimed conformance. README gains an entry-points table
+  and an explicit list of known UX gaps. (#4045, #4046, #4049, #4051)
+
+### Tests / Quality
+
+- **Test-side P0 idiom + dependency findings burned down** — three
+  `.or_insert_with(Vec::new)` occurrences migrated to `.or_default()`
+  in `lsp_cancellation_performance_tests.rs`,
+  `test_infrastructure_mocks.rs`, and
+  `documentation_validation_mutation_hardening.rs`; explicit
+  `HashMap<String, Vec<Duration>>` / `HashMap<String, Vec<usize>>` type
+  annotations added where inference became ambiguous;
+  `perl-tdd-support` added to `[dev-dependencies]` in `perl-dap-types`,
+  `perl-symbol-surface`, and `perl-ast-utils`. (#4002)
+
+- **Match-arm panic asserts burned down** in test code across
+  `perl-dap-variables`, `perl-lexer` interpolation tests, and several
+  other test suites, continuing the long-running #3258 burn-down
+  (#4030, #4032, #4035).
+
+<!-- 2026-04-11 session addendum: PRs merged after the initial changelog entry was written -->
+
+### Added (addendum)
+
+- **Phase-scoped pragma diagnostics** (`PL502`, `PL503`) — new diagnostics flag
+  `use strict` / `use warnings` placed inside phase blocks (`BEGIN`, `END`, `INIT`,
+  `CHECK`, `UNITCHECK`) where they have lexical block scope rather than file scope;
+  quick fixes move the pragmas to file scope preserving shebangs. (#4131)
+
+- **`cargo xtask check-test-wiring` CLI command wired** — PR #4119 added the
+  `check_test_wiring` module but omitted the `use` import in `main.rs`; the
+  subcommand was returning "unrecognized subcommand". Now fully wired; also fixes
+  one genuine orphan discovered by the guard: `crates/perl-lsp-rs/tests/fixtures/integration_example.rs`.
+  (#4151)
+
+- **Cross-file `use constant` and parenthesized import lists** — `find_import_source()`
+  strips quotes from string args before comparison so `use Foo ('bar', 'baz')` resolves
+  via goto-def; `use constant` re-exports are followed across file boundaries. (#4133)
+
+### Changed (addendum)
+
+- **Multi-root workspace integration tests activated in nightly gate** — the 8
+  integration tests in `multi_root_workspace_tests.rs` (added in #3984, never run in CI)
+  are now wired via a new `ci-workspace-multiroot` justfile recipe, placed in the
+  nightly gate only until proven stable. (#4137)
+
+### Fixed (addendum)
+
+- **Hotfix: red master from `check_test_wiring` regex and clippy** — two runtime
+  `Regex::new(...).expect(...)` calls in `check_test_wiring.rs` migrated to
+  `LazyLock<Regex>` statics; `let_and_return` clippy warning in `parser_corpus_sweep`
+  removed; `RUSTSEC-2026-0097` suppressed in audit paths with follow-up in #4149.
+  (#4150)
+
+- **Status: feature maturity metadata restored** — valid `maturity` value reinstated
+  for the phase-scoped pragma diagnostic capability after #4131 introduced an
+  invalid value; `xtask update-status --check` green again. (#4148)
+
+- **DevEx: detect stale installed pre-push hooks** — `just status-check` now compares
+  the installed `.git/hooks/pre-push` against the canonical checked-in `hooks/pre-push`,
+  normalising CRLF and trailing-blank-line noise. (#4144)
+
+### Tests / Quality (addendum)
+
+- **Perl::Critic missing profile path test** — regression test for an explicitly
+  configured but missing Perl::Critic profile path; asserts subprocess is skipped and
+  no policy diagnostics are returned. (#4139)
+
+### Added (2026-04-12)
+
+- **DAP launch-success scorecard** — new integration harness measures DAP cold-launch
+  pass rate across 5 fixture debuggees (hello, loops, eval, args, begin_end) with
+  P50/P95 latency metrics; a new `docs/project/status/dap.md` page surfaces DAP
+  coverage alongside the existing LSP status pages. (#4237)
+
+- **Editor UX receipt** — machine-readable `docs/project/status/editor_ux.json`
+  receipt generated by `xtask update-status` tracks the editor UX fixture matrix
+  pass rate, wired into `quality.md` and the status index. (#4233, #4234)
+
+### Fixed (2026-04-12)
+
+- **Rename operations no longer lag on large files** — `collect_descendant_scopes`
+  replaced O(n×d) parent-chain walk with a single O(n) map build + iterative BFS,
+  with a cycle guard preventing hangs on pathological self-referential parent links.
+  (#4240)
+
+### Changed (2026-04-12)
+
+- **Research-verifier is now the default for claim-heavy PRs** — agent skill
+  definitions encode the research-verifier dispatch policy so orchestrators no longer
+  need a reminder; claim-heavy criteria defined in three skill files. (#4235)
+
+### Documentation (2026-04-12)
+
+- **`perl-lsp-semantic-tokens` crate docs corrected** — CLAUDE.md updated from
+  stale 15 types/7 modifiers to the actual 23 types/13 modifiers, with all token
+  types and modifiers listed in index order and Perl-specific extensions called out.
+  (#4239)
+
+### Added (2026-04-12 session 2)
+
+- **Compile-time constants hover** — `__FILE__`, `__LINE__`, `__PACKAGE__`, and
+  `__SUB__` now show rich hover documentation with descriptions and caveats
+  (e.g. `__SUB__` in named subs vs anonymous subs). (#4270, #4294)
+
+- **Fast/slow diagnostic split** — parse errors are now published immediately
+  (~440ms sooner) via `publish_parse_errors_fast()`, then replaced by the full
+  diagnostic set on the 250ms debounce. Users see red squiggles while typing
+  without waiting for scope analysis or perlcritic. (#4279, #4305)
+
+- **Generation-aware staleness guard** — if a `didChange` arrives during slow
+  computation (scope analysis, perlcritic, dead-code), the stale diagnostic
+  result is suppressed and the debouncer re-fires for the latest version. (#4295)
+
+- **`require Module; Module->import('sym')` completion** — the two-statement
+  require+import pattern is now recognised for completion ranking alongside
+  `use Module` imports. (#3476, #4296)
+
+- **Module ranking tiers for completion** — completion candidates are ranked
+  by import tier (direct import > workspace > CPAN) with string-context
+  suppression and open-snippet triggers for module paths. (#4263, #4277)
+
+- **`workspace/configuration` folder propagation** — `didChangeConfiguration`
+  now eagerly propagates settings to each folder's `effective_workspace_config`,
+  closing a stale-settings window between notification and async pull response.
+  (#3515, #4289, #4307)
+
+- **Safe-delete widened dependent detection** — `workspace/willDeleteFiles`
+  now detects dependents via both `use` imports and `require` statements,
+  surfacing warnings for a broader set of cross-file references. (#3513, #4293)
+
+- **Package declaration rewrite during module rename** — `workspace/willRenameFiles`
+  now rewrites `package Foo::Bar` declarations inside the renamed file to match
+  the new module path. (#3522, #4291)
+
+### Fixed (2026-04-12 session 2)
+
+- **Package name hover** — hovering a qualified package name like `File::Path`
+  previously showed broken hover text because the tokenizer stopped at `:`.
+  New `get_package_name_at_position` scans across `::` separators to produce
+  correct rich hover with file path, POD, and MetaCPAN link. (#4282, #4306)
+
+- **Signature/Prototype AST byte-span** — `Signature` and `Prototype` nodes
+  now carry the correct byte span from the parser, fixing off-by-one ranges
+  in hover and semantic tokens. (#4243, #4281)
+
+- **Windows compatibility** — `/proc` reads guarded behind `cfg(target_os = "linux")`;
+  hardcoded `/tmp` paths replaced with `std::env::temp_dir()` for cross-platform
+  correctness. (#4229, #4278)
+
+### Tests / Quality (2026-04-12 session 2)
+
+- **Cross-folder rename verification** — integration tests verify rename operations
+  span both workspace roots correctly. (#3522, #4273, #4292)
+
+- **Import visibility regression tests** — unit tests for `require`+`import`
+  symbol resolution patterns. (#3476, #4286)
+
+- **Heredoc `unreachable!` ratchet coverage** — tests cover all 7 heredoc
+  unreachable patterns on both path separators. (#4245, #4274)
+
+- **Unused dev-dependencies removed** from 5 crates. (#4183, #4255)
+
+
+## [0.12.3] - 2026-04-09
+
+Release notes: [v0.12.3](docs/releases/v0.12.3.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.3)
+
+<!-- Pipeline rehearsal release — validates the full publish + extension + Docker cycle before v0.13.0 public alpha -->
+<!-- Rolls up publish pipeline fixes, UX P0 improvements, and CI hardening from Waves 10/11/12 -->
+
+### Headlines
+
+- **`tree-sitter-perl-c` first published to crates.io** — the conventional C grammar
+  binding (tree-sitter FFI over the C parser) is now a proper published leaf crate,
+  shedding its `libclang`/bindgen dependency in favour of vendored C sources compiled
+  via `cc`. Framed as a compatibility and comparison surface alongside the native v3
+  parser stack. (#3234)
+
+- **Publish pipeline overhauled** — three layered fixes make the pipeline correct
+  and fast: Tarjan SCC topological sort properly handles dev-dependency cycles (#3236);
+  dev-dependencies are stripped from each manifest before publishing so circular
+  workspace dev-deps no longer block `cargo publish` (#3254); and the registry
+  indexing wait is replaced with progressive sparse-index probes that catch silent
+  upload failures instead of proceeding on false success (#3230).
+
+- **Archive: 7 dead tree-sitter harness crates removed from the workspace** — the
+  old Pest-based `tree-sitter-perl-rs` harness and 6 `perl-ts-*` compatibility shims
+  are moved to `archive/`, clearing the `tree-sitter-perl-rs` name for a planned
+  Rust-native tree-sitter-style facade over the v3 parser. (#3244, #3250)
+
+- **DevEx polish** — `just doctor` auto-detects and self-heals recurring worktree
+  state-corruption bugs; the pre-push hook gains a doc-only fast path and
+  self-heals `core.bare=true` corruption; `just bump-version` centralises
+  version sync across 191 sites. (#3249, #3238, #3228)
+
+- **Quality burn-down** — ~210 `eprintln!` calls in library crates migrated to
+  structured `tracing` macros; three waves of `unwrap`/`expect` eliminations across
+  test code; two dead `build.rs` files removed that were causing unnecessary
+  recompiles. (#3245, #3229, #3241)
+
+### Added
+
+- **`just doctor`**: one-stop workspace health-check that auto-detects and
+  (where safe) auto-fixes recurring state-corruption bugs — `core.bare=true`,
+  stale branches, worktree file leaks, orphaned worktree directories, and missing
+  pre-push hook. (#3249)
+
+- **`just bump-version`**: centralised version-sync command covering all 191
+  version sites (workspace Cargo.toml, every crate manifest, VS Code extension
+  manifest and lockfile, `features.toml`, README, CLAUDE.md, ROADMAP). Paired with
+  an updated `check-version-sync` gate that now covers all the same sites, so drift
+  cannot go undetected. (#3228)
+
+- **`perl-heredoc-anti-patterns` microcrate**: SRP extraction of
+  `anti_pattern_detector` from the larger `perl-ts-heredoc-analysis` crate, which
+  is now archived. The only part that production code consumed is now a clean
+  publishable leaf crate. (#3199)
+
+- **`perl-parser-bench` microcrate**: SRP extraction of the `bench_parser` binary
+  that was misplaced inside the tree-sitter-perl-rs harness. Uses `perl-parser`
+  (v3 native) directly. (#3198)
+
+- **`perl-parser-pest` published to crates.io**: the legacy v2 Pest-based Perl
+  parser is now a published crate, available as a learning tool and Pest reference
+  implementation for the broader Perl-in-Rust ecosystem. (#3195)
+
+- **`perl-lsp-ai-provider` published to crates.io**: filled out crates.io metadata
+  and added to the publish allow-list. This was a blocker for `perl-lsp-rs`
+  publication. (#3196)
+
+- **4 orphaned workspace members registered**: `perl-workspace-folder`,
+  `perl-dap-stack`, `perl-lsp-feature-policy`, and `perl-lsp-formatting-types`
+  were referenced throughout the workspace but missing from `[workspace] members`,
+  causing them to be silently skipped by every workspace-wide CI gate. (#3232)
+
+- **AI streaming tests**: mock streaming-backend coverage for progress, cancel,
+  and error paths; final stream sequence field assertion; relaxed error-path
+  assertion for terminal final event. (#3170, #3172, #3174, #3175)
+
+- **CPAN corpus caching in CI**: CPAN corpus is now installed and cached before
+  the ratchet step, preventing spurious corpus-ratchet failures on clean CI runs.
+  (#3173)
 
 ### Changed
-- **Microcrate Extractions**: 10 new microcrates extracted -- perl-dap-config, perl-dap-session-model, perl-ast-v2, perl-ts-statement-tracker, perl-lsp-type-hierarchy, perl-perltidy, perl-lsp-completion-filepath, perl-workspace-index-monitor, perl-lsp-code-lens, perl-lsp-document-highlight.
-- **God File Splits**: `debug_adapter.rs` (6778 lines) split into focused domain modules (#1666, #1639, #2208), `lsp_comprehensive_3_17_test.rs` split into feature-specific test files (#1681), `cpan_pattern_tests.rs` split into 16 standalone test files (#1665), runtime `mod.rs` handler groups extracted (#1676).
-- **Refactored Internals**: Execute command modules, code actions provider, perl critic tooling, centralized server startup logging (#1826).
-- **Feature Gating**: Tightened LSP capability feature gating and feature profile normalization.
-- **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
-- **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
-- **CI**: Auto-fix formatting instead of failing on `cargo fmt` (#1625), pre-push hook to update test counts (#2128).
-- **CPAN Corpus**: Baseline ratcheted from 83% to 85.7% (6081/7095 files) (#1892, #2233, #2244).
-- **Documentation**: Comprehensive README for 0.12.0 (#2012), launch articles covering development story, reference implementation, AI-native operating model, and case studies (#2203, #2235, #2240, #2242, #2243), contributing guide update (#2010).
+
+- **`tree-sitter-perl-c` is now publishable**: vendored C sources compiled via
+  `cc` replace the `libclang`/bindgen build step entirely; the single hand-written
+  FFI symbol was already sufficient. Crate brought into the workspace as a proper
+  member. (#3234)
+
+- **xtask now depends on standalone crates directly**: dev tooling in `xtask` and
+  `scripts/test_recursion.rs` was swapped off the archived tree-sitter-perl harness
+  onto `perl-parser-pest` (Rust parser) and `tree-sitter-perl-c` (C FFI) directly,
+  removing the harness's last consumers before archival. (#3206)
+
+- **`just quick-bench` fixed to actually compare C vs Rust parsers**: previously
+  both columns invoked the same `perl-parser-bench` binary (comparing a warm vs
+  cold run of the native parser). The C column now invokes `bench_parser_c` from
+  `tree-sitter-perl-c`, so the speedup column reflects a real C vs Rust comparison.
+  (#3204, #3253)
+
+- **Pre-push hook smarter**: doc-only fast path (markdown/text/license/docs changes
+  run `cargo fmt --check` only, skip the full ci-gate); self-heals `core.bare=true`
+  corruption before any git operation. (#3238)
+
+- **Publish workflow indexing wait replaced with sparse-index probes**: progressive
+  probe at 5s/15s/45s/90s elapsed replaces a fixed 5-minute wait; each crate is
+  verified via the crates.io sparse index after publish; the final verify job runs
+  unconditionally (`if: always()`) and lists exactly which crates failed. (#3230)
+
+- **`eprintln!` → `tracing` in library code**: ~210 `eprintln!` calls across
+  library crates replaced with structured `tracing` macros at appropriate levels
+  (warn/error for failures, info for lifecycle, debug/trace for routine output).
+  `tracing` added to 6 crates that lacked it. (#3224, #3245)
+
+- **Documentation framing updated**: README Architecture section names the native
+  parser/lexer/analysis stack as the architectural centre, distinguishes
+  `tree-sitter-perl-c` (C FFI reference, maintained for compatibility) from the
+  planned `tree-sitter-perl-rs` facade (Rust-native, in development), and frames
+  tree-sitter compatibility as an interoperability surface. (#3247)
+
+- **Per-crate CLAUDE.md headers refreshed** post-archive of tree-sitter harness
+  crates. Stale references to archived crates removed. (#3240)
+
+### Fixed
+
+- **Publish: dev-dependency cycles no longer block `cargo publish`** — dev-deps
+  are stripped from each crate's `Cargo.toml` before publishing (and restored
+  afterward via a `trap` on EXIT). Fixes the 3-crate dev-dep cycle
+  (`perl-parser-core` / `perl-tdd-support` / `perl-corpus`) that caused publish
+  order failures. (#3254, #3256)
+
+- **Publish: Tarjan SCC topological sort for dev-dep edges** — the previous sort
+  excluded dev-dep edges, causing crates that dev-depend on later-published siblings
+  to be ordered before them. The fix includes dev-dep edges in the graph, uses
+  Tarjan SCC to find strongly-connected components, and retains only inter-SCC
+  dev-dep edges (intra-SCC edges are the only ones that can close a cycle).
+  (#3236, #3242)
+
+- **Publish: `perl-test-must` published before `perl-tdd-support`** — ordering
+  fix for the initial publish sequence that caused `perl-tdd-support` to land
+  before its dependency. (#3176, #3177)
+
+- **Corpus ratchet path mismatch** (#3189 / #3257): xtask's CPAN corpus paths are
+  now anchored at the workspace root (via `env!("CARGO_MANIFEST_DIR")` at build
+  time) rather than resolved against `std::env::current_dir()`. The workflow's
+  `test -d` step is aligned to the same absolute path. Regression-guarded by a
+  unit test that asserts `workspace_root()` contains a top-level `Cargo.toml`.
+
+- **`hook-tests` workspace scribble** (#3203 / #3246): the hook-test scaffold's
+  throwaway git repo inherited `core.hooksPath` from the parent environment,
+  causing the parent pre-commit hook to fire inside the temp repo. In one observed
+  run the temp repo's `README.md` write landed on the real workspace `README.md`.
+  The temp repo is now explicitly isolated with `GIT_CONFIG_NOSYSTEM=1` and
+  `core.hooksPath` cleared; temp dirs are created under `$TMPDIR` not the
+  workspace root.
+
+- **Windows xtask file-lock** (#3202 / #3241): two dead `build.rs` files removed —
+  the root `build.rs` (workspace-only manifest, never run by cargo) and
+  `crates/perl-parser/build.rs` (set environment variables that nothing read, and
+  marked `perl-parser` dirty on every commit via `.git/HEAD` rerun-if-changed
+  directives, propagating unnecessary rebuilds to all 50+ dependents).
+
+- **Windows xtask: recursive subprocess eliminated** (#3221): `cmd_check_parse_errors`
+  was spawning xtask as a subprocess of itself, which caused `Access is denied` (os
+  error 5) on Windows due to the write-lock on the running executable. The inner
+  call is now replaced with a direct function call.
+
+- **Windows xtask: backslash mangling in `smoke-test-release.sh`** (#3214): absolute
+  Windows `PathBuf` paths passed to `bash` as arguments caused backslash-escape
+  collapse. Fixed by using a relative path instead.
+
+- **Triage workflow silently aborting** (#3235): the `triage-issues` workflow was
+  failing on every run that encountered an issue needing labels, silently aborting
+  at the first `add_labels` call.
+
+- **`features.toml` dead test paths repaired**: 43 dead test paths corrected to
+  match the current `crates/perl-lsp-rs/tests/` layout; the
+  `experimental.perlInlineCompletionStream` feature row added (shipped in v0.12.2).
+  (#3222, #3251)
+
+- **`unsafe` block documented**: `GenerateConsoleCtrlEvent` FFI call in
+  `perl-dap` now carries a SAFETY comment explaining why the call is sound.
+  (#3232)
+
+### Removed
+
+- **Archived 7 dead tree-sitter harness crates** to `archive/crates/`:
+  `tree-sitter-perl-rs` (old Pest-based harness), `perl-ts-heredoc-analysis`,
+  `perl-ts-statement-tracker`, `perl-ts-logos-lexer`, `perl-ts-heredoc-parser`,
+  `perl-ts-partial-ast`, `perl-ts-advanced-parsers`. All workspace references,
+  CI exclusion lists, and benchmark function paths updated. (#3244, #3250)
+
+- **Dead stray LICENSE files** in `crates/perl-corpus/`, `crates/perl-lexer/`,
+  `crates/perl-parser/`: byte-identical orphan files not referenced by any
+  `Cargo.toml` `license-file` field. (#3196)
+
+### Dependencies
+
+- `similar` 2.7.0 → 3.0.0 (#3184) — only consumer is xtask; breaking changes do
+  not intersect our usage
+- `actions/cache` v4 → v5 (#3181) — Node 24 runtime bump; existing caches remain
+  readable
+- `eslint` 9.39.4 → 10.2.0 (#3179) — flat config already in use; lint passes clean
+- `tokio` 1.50.0 → 1.51.0 (#3180)
+- `tree-sitter` 0.26.7 → 0.26.8 (#3182)
+- dependencies group with 3 updates (#3183)
+- npm group in vscode-extension (#3178)
+
+### Publish pipeline fixes (post-v0.12.2 publish run lessons)
+
+These fixes landed after the initial v0.12.2 publish run and directly address the
+partial-publish (108/129) and cascading-failure patterns observed in production:
+
+- **HTTP 429 throttle** (#3307): publish workflow detects crates.io rate-limit
+  responses and retries with exponential back-off; the 21 crates that failed in
+  the v0.12.2 publish run were blocked by 429s from rapid-fire publish attempts.
+
+- **Publish allowlist extended** (#3296): `perl-workspace-index-monitoring` and
+  `perl-test-generators` added to the publish allow-list after they were found
+  missing from the v0.12.2 publish set.
+
+- **LICENSE files corrected** (#3304): missing or incorrect `LICENSE` files added
+  to 4 publishable crates (`perl-lsp-ai-provider`, `perl-workspace-index`,
+  `tree-sitter-perl-rs`, `tree-sitter-perl-c`); crates.io rejects publishes with
+  license-file fields pointing to absent files.
+
+- **Duplicate `[package.metadata.docs.rs]` key** (#3315): `tree-sitter-perl-c`
+  had two `[package.metadata.docs.rs]` tables in `Cargo.toml`; the duplicate key
+  caused `cargo publish` to emit a parse warning and was silently dropped, causing
+  docs.rs to build without the intended features. Resolved by merging the two
+  tables.
+
+- **Continue-on-failure** (#3316): publish loop now tracks failures in a
+  `FAILED_CRATES` array instead of `exit 1` immediately; all topologically-ready
+  crates are attempted even when an earlier crate fails. On v0.12.2 run
+  24126423987, 19 crates were blocked by a single cascade; on run 24133403944,
+  22 crates were blocked. Re-runs safely skip already-published crates via the
+  sparse-index check.
+
+- **`tree-sitter-perl-c` polish for first publish** (#3273): vendored sources and
+  FFI bindings verified clean for crates.io submission; duplicate metadata resolved
+  (#3315 above).
+
+- **docs.rs metadata** (#3299): `[package.metadata.docs.rs]` blocks added or
+  corrected for feature-gated crates across the workspace; enables docs.rs to
+  build documentation with the correct feature flags set.
+
+- **Publish dry-run gate** (#3301): new CI check runs `cargo publish --dry-run` on
+  every PR that modifies a `Cargo.toml`, catching publish-time errors (missing
+  files, bad metadata, syntax) before they reach the release pipeline.
+
+### UX fixes (P0 launch blockers)
+
+Five actionability fixes for user-visible error paths that surfaced during the
+v0.12.2 publish run and post-publish testing:
+
+- **Actionable binary download errors** (#3306): extension now shows a specific
+  message with platform, arch, and download URL when the LSP server binary cannot
+  be fetched, instead of a generic network failure.
+
+- **LSP startup error diagnosis** (#3308): `classifyStartupError()` maps stderr
+  signatures (GLIBC version mismatch, missing shared library, Exec format error,
+  permission denied) to actionable hints and remediation steps; reorders error
+  dialog actions so "View Logs" appears before "Reinstall".
+
+- **Workspace root detection warning** (#3309): when the workspace root cannot be
+  determined, the server now emits a `window/showMessage` warning with the detected
+  state instead of failing silently. Previously users had no indication of why
+  features were degraded.
+
+- **Enterprise binary distribution note** (#3310): documentation updated to
+  explain that `perllsp` is distributed as a pre-compiled binary via `cargo
+  install`, with offline-install guidance for air-gapped enterprise environments.
+
+- **Perl interpreter missing error** (#3312): when `perl` is not found on `$PATH`,
+  the extension shows the exact binary name searched and a platform-specific
+  installation suggestion, replacing the previous "Perl not found" dead end.
+
+### CI hardening
+
+- **SHA-pinned third-party Actions** (#3294): all `uses:` references to third-party
+  GitHub Actions pinned to immutable commit SHAs with version comments (e.g.,
+  `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).
+  Prevents supply-chain attacks via tag mutation.
+
+- **GIT_DIR cleared in hook-tests** (#3318): xtask hook-test scaffold now runs
+  with `GIT_DIR` unset, preventing the worktree's inherited `GIT_DIR` value from
+  causing git commands inside the temp repo to resolve against the wrong object
+  store. Observed contamination: test-repo commits were silently landing in the
+  agent worktree.
+
+- **UX regression gate** (#3293): new CI check detects regressions in user-visible
+  LSP, DAP, and extension behaviour on every PR that touches those surfaces.
+  Backed by the UX test harness framework (#3297).
+
+- **UX test harness framework** (#3297): systematic framework for UX regression
+  tests with helpers for LSP, DAP, and extension surface validation.
+
+## [0.12.2] - 2026-04-04
+
+Release notes: [v0.12.2](docs/releases/v0.12.2.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.2)
+
+`v0.12.2` is the confidence-building release for the 0.12.x series. 89 commits
+across 59 PRs spanning new features, performance, testing, distribution, and
+documentation. The entire 0.12.x roadmap from v0.12.2 through v0.12.8 milestones
+is consolidated into this single release.
+
+The v0.12.2 publish run extended the original GitHub Release with a wave of
+quality, distribution, and CI infrastructure work needed to land the full crate
+set on crates.io. 108 of 129 crates published successfully in the first attempt;
+the remaining 21 (including `tree-sitter-perl-c`, `tree-sitter-perl-rs`,
+`perl-parser`, `perl-lsp-rs`, `perllsp`, `perl-dap`) will retry after the HTTP
+429 throttle fix lands.
+
+### New Crates (first publish)
+
+- **`tree-sitter-perl-rs`**: v3 ergonomic facade over the native parser stack,
+  published alongside `tree-sitter-perl-c` for projects that want tree-sitter
+  call ergonomics on top of the Rust-native parser (#3255)
+- **`tree-sitter-perl-c`**: conventional C-binding crate for the tree-sitter
+  grammar, now publishable on crates.io (#3234)
+
+### Added
+
+- **AI inline completion**: opt-in OpenAI-compatible provider with SSE streaming,
+  session management, cancellation, and deterministic fallback when AI is off
+  (#3157–#3168)
+- **heredoc language injection**: SQL keyword and JSON key detection in heredocs
+  with multi-heredoc-per-line support (#3134)
+- **type inference in hover**: `TypeInferenceEngine` wired to show inferred types
+  on hover (#3150)
+- **dead code highlighting**: `DiagnosticTag::Unnecessary` for unreachable code
+  (#3092)
+- **extract variable/subroutine**: AST-aware code action for extracting
+  expressions and blocks (#3090)
+- **subroutine inlining**: code action to inline simple subroutines (#3083)
+- **POD preview panel**: VS Code command `Perl: Preview POD` (#3131)
+- **AST explorer debug panel**: `perl/showAst` custom LSP handler (#3124)
+- **Docker image**: `effortlessmetrics/perl-lsp` with perllsp + Perl runtime
+  (#3113)
+- **DAP cross-platform signals**: continue and interrupt signal handling on
+  Linux/macOS/Windows (#3117)
+- **context-sensitive quote parsing**: `qw`, `s///`, `tr///` disambiguation in
+  complex expressions (#3105)
+- **semantic framework coverage**: inheritance and export analysis for Moo/Moose
+  patterns (#3103)
+- **Linux/macOS installer**: fixed and improved install script (#3122)
+- **streaming inline completion controller**: VS Code gating on AI config flags
+  (#3161, #3164)
 
 ### Performance
-- **find_definition**: Replaced O(n*m) scan with O(1) HashMap lookup in workspace-index (#1919).
-- **LSP Async Scheduling**: Improved read scheduling for lower latency on concurrent requests (#1837).
-- **Completion**: Reduced unnecessary clones in completion hot path (#2073, #2220).
-- **Document Highlight**: Linear dedup for small highlight sets, eliminated clone (#1928).
-- **Workspace Symbols**: Reduced allocations in workspace symbol search (#1908).
-- **Performance Baselines**: Established 0.12.0 performance baselines (#1654, #2166).
+
+- **incremental parsing pipeline**: token caching (#3116), checkpoint recovery
+  (#3114), and `Parser::from_tokens` (#3128) complete the incremental path
+- **CPAN-scale benchmarks**: 10K files indexed in 672ms, 500K symbol lookup in
+  10.6µs (#3121, #3132)
+- **large-workspace HashMap optimization**: faster startup for big projects
+  (#3112)
+- **memory profiling infrastructure**: heap tracking for workspace indexing
+  (#3125)
+- **completion latency benchmarks**: baseline for regression detection (#3104)
+
+### Fixed
+
+- **DAP attach cleanup**: removed stale mock stub and updated tests (#3135)
+- **perlcritic integration**: hardened diagnostic pipeline (#3097)
+- **silent error handling**: 23+ silently swallowed errors now emit trace logs
+  (#3087, #3151)
+- **distribution binary name**: Linux packaging templates and Windows bump
+  workflows aligned with `perllsp` (#3106, #3144)
+- **Homebrew asset names**: brew-bump workflow aligned (#3120)
+- **CI efficiency**: 10 improvements reducing CI minutes (#3156)
+- **VS Code type safety**: replaced `any` types with proper TypeScript types
+  (#3154)
+- **LSP capability snapshots**: regenerated stale snapshots (#3142, #3147)
+- **inline completion**: removed duplicate backend type definitions (#3162)
+- **pipeline-labels race**: fixed race condition on `reviewed-deep` label (#3100)
+
+### Testing
+
+- **147 DAP tests**: serde, edge cases, and error paths across 4 DAP crates
+  (#3152)
+- **AI inline completion tests**: integration tests for streaming and
+  deterministic paths (#3165, #3168)
+- **error builder/lexer mode tests**: missing coverage for error paths (#3091)
+
+### Documentation
+
+- **AI inline completion config reference** (#3167)
+- **end-to-end LSP feature development guide** (#3115)
+- **large-workspace testing and profiling guide** (#3126)
+- **GIF recording guide** for marketing assets (#3130)
+- **problem-first README rewrite** (#3119)
+
+### Dependencies
+
+- unified 16 scattered dependency versions via workspace deps (#3153)
+- removed 8 unused dependencies across 6 crates (#3146)
+- dependabot: insta 1.47.1, proptest, tar, toml 1.1.0, uuid 1.23.0,
+  actions/deploy-pages 5, codecov/codecov-action 6
+
+### Quality (publish-run additions)
+
+- **`eprintln!` → `tracing`**: migrated all `eprintln!` / `println!` calls in
+  library code to structured `tracing` spans/events; `eprintln!` now banned in
+  non-binary crates (#3224, #3245)
+- **unwrap burn-down**: Wave 2 (`perl-dap-security`) and Wave 3 (5 crates, 9
+  eliminations) converted `unwrap()`/`expect()` calls to `?` and pattern
+  matching (#3246 area)
+- **error message actionability**: user-visible LSP/DAP error messages rewritten
+  to be actionable — what failed, why, what to do next — ahead of v0.13.0
+  launch (#3291)
+- **crates.io metadata**: `description`, `keywords`, `categories`, `repository`,
+  `documentation`, `readme` fields polished across all publishable crates (#3234)
+- **docs.rs metadata**: `[package.metadata.docs.rs]` blocks added for
+  feature-gated crates (#3234)
+- **dead build.rs files removed**: stale `build.rs` files that caused publish
+  errors removed from 3 crates (#3217, #3241)
+- **stale harness crates archived**: dead tree-sitter harness crates moved to
+  `archive/` to reduce workspace noise (#3250, #3244)
+
+### CI (publish-run additions)
+
+- **publish topological sort**: dev-dependencies now included in the publish
+  order graph so crates publish in the correct dependency order (#3236, #3242)
+- **dev-dependency stripping**: `cargo publish` now strips `[dev-dependencies]`
+  before publishing to avoid version conflicts (#3254, #3256)
+- **`--allow-dirty` for publish**: added after dev-dep strip leaves the working
+  tree dirty (#3300)
+- **HTTP 429 throttle handling**: publish workflow detects crates.io rate-limit
+  responses and retries with back-off (pending)
+- **sparse index wait replaced**: replaced fixed-duration index wait with
+  sparse-index polling for faster, more reliable publish verification
+- **UX regression gate**: PR check that detects regressions in user-visible LSP,
+  DAP, and extension behavior on every PR touching those surfaces (#3293)
+- **post-publish smoke test**: automated verification that published crates
+  install and the binary starts correctly after each publish run (#3288)
+- **version-bump automation centralized**: `just bump-version` now handles
+  Cargo.toml, extension package.json, and docs in one command (#3289)
+- **`just doctor`**: new workspace health-check recipe that validates the full
+  workspace is in a buildable state before starting a session (#3249)
+- **`vsce publish` idempotency**: marketplace publish step no longer fails on
+  re-run when the version already exists (#3187, #3267)
+
+### UX (publish-run additions)
+
+- **Settings schema polish**: VS Code extension settings schema updated for
+  launch-readiness — correct types, descriptions, and defaults (#3278)
+- **VS Code Marketplace punch list**: README badges, Open VSX registration,
+  extension icon, and feature highlights aligned for marketplace discovery
+  (#3284)
+- **test de-flake**: `empty_timer_reports_total` race condition fixed (#3278)
+
+## [0.12.1] - 2026-03-31
+
+Release notes: [v0.12.1](docs/releases/v0.12.1.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.1)
+
+`v0.12.1` is the fix-forward cut after the initial public alpha release. It does
+not reopen the wider alpha scope; it closes the release-surface regressions that
+slipped into the first `v0.12.0` tag and keeps the install and publish story
+aligned.
+
+### Fixed
+
+- restored the top-level README and release-facing docs so the source snapshot
+  no longer presents hook-test fixture content as the project front page
+- hardened hook-test fixture setup so temporary repos must live outside the real
+  checkout and seed commits no longer write placeholder git identities into repo
+  config
+- fixed local git-hook installation for worktrees and added pre-commit blocking
+  for the known placeholder identities used by release and hook tests
+
+### Changed
+
+- workspace, feature-catalog, VS Code extension, and operator release surfaces
+  now target `0.12.1`
+- status and roadmap docs now treat `v0.12.0` as the latest published GitHub
+  release and `v0.12.1` as the active fix-forward cut
+
+## [0.12.0] - 2026-03-30
+
+Release notes: [v0.12.0](docs/releases/v0.12.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.12.0)
+
+`v0.12.0` is the initial public alpha for the native Rust Perl 5 toolchain. The
+headline change is not one feature in isolation; it is that the parser, language
+server, debugger, install surface, and release process now line up well enough
+for normal editor use.
+
+### Highlights
+
+#### Native editor path
+
+- `perllsp` and `perl-dap` are now treated as first-class native binaries for editor integration and debugging.
+- VS Code, manual binary install, and release surfaces were tightened for first-run setup, health checks, and issue reporting.
+- `.perl-lsp.toml` gives teams a shared, editor-agnostic project configuration layer.
+
+#### Better day-to-day language tooling
+
+- Completion, hover, diagnostics, formatting, semantic tokens, workspace symbols, code lens, and code actions all received broad hardening.
+- Hover and completion coverage expanded for Perl built-ins, special variables, module flows, and workspace-aware suggestions.
+- Diagnostic wiring now consistently surfaces parser, project, and optional Perl::Critic signals through the LSP pipeline.
+
+#### Better real-world Perl coverage
+
+- The native recursive-descent parser was hardened against curated common-corpus and CPAN-facing receipts instead of toy examples alone.
+- Semantic and workspace layers improved cross-file navigation, rename, inheritance-aware lookups, and framework-aware behavior for Moo and Moose patterns.
+- Workspace indexing, cancellation, timeouts, and runtime concurrency all received reliability work aimed at larger real projects.
+
+#### Release and contributor surface
+
+- Release prep, package-manager manifests, docs, validation receipts, and status pages were aligned for the public-alpha launch.
+- The workspace continued its crate-boundary cleanup so parser, runtime, LSP, DAP, and release tooling are easier to reason about independently.
+
+### Notable user-facing additions
+
+- project config via `.perl-lsp.toml`
+- richer hover coverage for special variables, built-ins, and framework-aware symbols
+- broader completion coverage and improved ranking
+- native DAP improvements for stepping, variables, and editor integration
+- stronger workspace symbol, formatting, code action, and code lens support
+
+### Notable fixes
+
+- parser recovery and disambiguation across real Perl edge cases such as quote operators, slash parsing, prototypes, and framework-heavy code
+- deadlock, contention, and stale-state fixes in the LSP runtime and workspace index
+- safer handling for empty files, binary files, Windows and macOS path quirks, and shell-launch edge cases
+- stale capability drift, unwired command paths, and release-surface documentation mismatches
+
+For the detailed receipts behind this release, see [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and [docs/project/status/index.md](docs/project/status/index.md).
 
 ## [0.11.0] - 2026-03-12
+
+Release notes: [v0.11.0](docs/releases/v0.11.0.md) · [GitHub Release](https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.11.0)
 
 This release finalizes the 0.11.0 distribution pipeline across GitHub releases,
 crates.io, and the VS Code extension so the workspace can ship from a single,
@@ -353,6 +1052,8 @@ repeatable release flow.
   crates scheduled for publication.
 
 ## [0.10.0] - 2026-02-28
+
+Release notes: [v0.10.0](docs/releases/v0.10.0.md) (internal milestone — no GitHub Release)
 
 A major release campaign spanning 60+ PRs (#845-#911) focused on build reliability,
 security hardening, crates.io publishing readiness, documentation, and code quality.
@@ -431,6 +1132,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.1] - 2026-02-20
 
+Release notes: [v0.9.1](docs/releases/v0.9.1.md) (tag only — no GitHub Release)
+
 ### Added
 - **Initial Public Alpha Release**: Substantially complete feature set for early testing.
 - **Enhanced LSP Features**: 99% coverage of LSP 3.18 methods (alpha-validated).
@@ -454,6 +1157,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 
 ## [0.9.0] - 2026-01-18
 
+Release notes: [v0.9.0](docs/releases/v0.9.0.md) (internal milestone — no tag or GitHub Release)
+
 ### Added
 - **Semantic Analyzer Phase 1**: 12/12 critical node handlers implemented.
 - **LSP textDocument/definition Integration**: Semantic-aware definition resolution.
@@ -463,6 +1168,8 @@ security hardening, crates.io publishing readiness, documentation, and code qual
 - **LSP Coverage**: Increased to 82% of trackable features.
 
 ## [0.8.8] - 2025-12-01
+
+Release notes: [v0.8.8](docs/releases/v0.8.8.md) (internal milestone — no tag or GitHub Release)
 
 ### Added
 - **Initial Workspace Configuration Support**.
@@ -489,3 +1196,22 @@ During the alpha phase (pre-v0.15.0):
 - **Current Alpha (0.x.y)**: Active development and bug fixes.
 - **Breaking Changes**: Allowed in minor (0.x) releases.
 - **Security**: Critical patches prioritized for the latest alpha version.
+
+---
+
+## Links
+
+For the full cross-channel release history, see [RELEASE_HISTORY.md](RELEASE_HISTORY.md).
+
+<!-- Compare ranges -->
+[0.12.4]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.3...v0.12.4
+[0.12.3]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.2...v0.12.3
+[0.12.2]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.1...v0.12.2
+[0.12.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.0...v0.12.1
+[0.12.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.11.0
+[0.10.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.1
+[0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.9.0
+[0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.5...v0.8.8
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.12.4...HEAD

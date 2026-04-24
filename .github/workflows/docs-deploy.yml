@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
           toolchain: stable
 
@@ -63,7 +63,7 @@ jobs:
           mdbook build book
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./book/book
 
@@ -95,4 +95,4 @@ jobs:
       - name: Deploy to GitHub Pages
         if: steps.pages.outputs.enabled == 'true'
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

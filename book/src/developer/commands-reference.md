@@ -14,7 +14,7 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # Build from source
-cargo build -p perl-lsp --release
+cargo build -p perl-lsp-rs --release
 
 # Install globally
 cargo install --path crates/perl-lsp
@@ -41,7 +41,7 @@ perl-dap --stdio  # Standard DAP transport
 ### Published Crates
 ```bash
 # Install from crates.io
-cargo install perl-lsp                     # LSP server
+cargo install perl-lsp-rs                     # LSP server
 cargo add perl-parser                      # As library dependency
 cargo add perl-corpus --dev                # For testing
 
@@ -112,7 +112,7 @@ cargo test                              # Tests perl-lexer, perl-parser, perl-co
 cargo test -p perl-parser               # Main parser library tests (195 tests)
 cargo test -p perl-lexer                # Lexer tests (40 tests)  
 cargo test -p perl-corpus               # Corpus tests (12 tests)
-cargo test -p perl-lsp                  # LSP integration tests
+cargo test -p perl-lsp-rs                  # LSP integration tests
 
 # Advanced test commands (excluded from workspace, run from xtask directory)
 # cd xtask && cargo run test            # Advanced xtask test suite
@@ -214,23 +214,23 @@ The testing infrastructure includes adaptive threading configuration that scales
 
 ```bash
 # CI testing with adaptive timeouts (PR #140 optimizations)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive threading behavioral tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs              # Adaptive threading behavioral tests
 RUST_TEST_THREADS=2 cargo test -p perl-parser           # Enhanced with intelligent symbol waiting
 
 # Optimized single-threaded testing (maximum reliability)
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test  # Exponential backoff protection
 
 # High-performance development environment
-cargo test -p perl-lsp                                   # 200ms idle detection cycles (was 1000ms)
+cargo test -p perl-lsp-rs                                   # 200ms idle detection cycles (was 1000ms)
 cargo test                                               # <10s total execution (was >60s)
 
 # Enhanced timeout configuration (PR #140 features)
-LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp        # Override adaptive timeouts
-LSP_TEST_SHORT_MS=1000 cargo test -p perl-lsp           # Fine-grained timeout control
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp-rs        # Override adaptive timeouts
+LSP_TEST_SHORT_MS=1000 cargo test -p perl-lsp-rs           # Fine-grained timeout control
 
 # Advanced debugging with performance monitoring
-LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
-RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scaling
+LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --nocapture
+RUST_LOG=debug cargo test -p perl-lsp-rs -- --nocapture    # Monitor timeout scaling
 ```
 
 #### Performance Matrix (*Diataxis: Reference* - PR #140 achievements)
@@ -257,7 +257,7 @@ RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scalin
 ```bash
 # GitHub Actions CI configuration
 - name: Run LSP tests
-  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp
+  run: RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
   timeout-minutes: 10
 
 # Local development on limited hardware
@@ -267,7 +267,7 @@ RUST_TEST_THREADS=4 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 cargo test  # Uses all available threads, standard 5-second timeouts
 
 # Debug timeout issues
-RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test
+RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test specific_test
 ```
 
 ## Parser Commands
@@ -299,25 +299,25 @@ cargo run -p perl-parser --example lsp_capabilities
 cargo test -p perl-parser lsp
 
 # Run LSP integration tests with controlled threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Performance testing with enhanced test harness (PR #140)
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp             # Fast mode with mock responses
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs             # Fast mode with mock responses
 
 # Optimal CI performance with adaptive configuration
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Enhanced test harness features (PR #140)
-cargo test -p perl-lsp --test lsp_behavioral_tests       # Adaptive threading tests
-cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # User story tests
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests       # Adaptive threading tests
+cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # User story tests
 
 # Run specific performance-sensitive tests with threading control
-RUST_TEST_THREADS=2 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
-RUST_TEST_THREADS=2 cargo test -p perl-lsp test_workspace_symbol_search -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs test_completion_detail_formatting -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs test_workspace_symbol_search -- --test-threads=2
 
 # Run formatting capability tests (robust across environments)
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting
-cargo test -p perl-lsp --test lsp_perltidy_test test_formatting_provider_capability
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test test_e2e_document_formatting
+cargo test -p perl-lsp-rs --test lsp_perltidy_test test_formatting_provider_capability
 
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
@@ -340,8 +340,8 @@ perl-lsp --stdio < test_requests.jsonrpc
 export RUST_TEST_THREADS=2                # Recommended for CI
 
 # Performance testing with adaptive timeouts
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_behavioral_tests     # 0.31s (was 1560s+)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 
 # Benefits of PR #140 threading optimization:
 # - Significantly faster behavioral test execution
@@ -351,9 +351,9 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories
 # - Enhanced test harness with mock responses and graceful degradation
 
 # Thread configuration examples:
-cargo test -p perl-lsp -- --test-threads=2              # Optimal CI configuration
-RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Maximum reliability mode
-RUST_TEST_THREADS=4 cargo test -p perl-lsp              # High-performance development
+cargo test -p perl-lsp-rs -- --test-threads=2              # Optimal CI configuration
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs              # Maximum reliability mode
+RUST_TEST_THREADS=4 cargo test -p perl-lsp-rs              # High-performance development
 ```
 
 **LSP_TEST_FALLBACKS** (**NEW in v0.8.8**):
@@ -372,7 +372,7 @@ export PERLCRITIC_PATH="/usr/local/bin/perlcritic" # Custom perlcritic location
 # - Result: 99.5% faster test execution (60s+ → 0.26s for workspace tests)
 
 # Use cases:
-cargo test -p perl-lsp                    # Fast CI/development testing
+cargo test -p perl-lsp-rs                    # Fast CI/development testing
 LSP_TEST_FALLBACKS=1 cargo test --workspace  # Quick workspace validation
 LSP_TEST_FALLBACKS=1 cargo check --workspace # Fast build verification
 ```
@@ -407,13 +407,13 @@ The `perl.runCritic` command implements a sophisticated dual analyzer strategy e
 **Basic Usage** (*Diataxis: Tutorial* - Getting started with code quality analysis):
 ```bash
 # Test perl.runCritic command integration
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_perlcritic
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_perlcritic
 
 # Test executeCommand protocol compliance
-cargo test -p perl-lsp --test lsp_execute_command_tests
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests
 
 # Test with dual analyzer strategy (external + built-in fallback)
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_perlcritic_dual_analyzer
 
 # Test built-in analyzer specifically
 cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_builtin
@@ -492,13 +492,13 @@ cargo test -p perl-parser --test execute_command_tests # Built-in handles syntax
 **Integration with LSP Diagnostics** (*Diataxis: How-to Guide* - Diagnostic workflow):
 ```bash
 # Test diagnostic integration with executeCommand
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_perlcritic
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_perlcritic
 
 # Verify diagnostic publication after executeCommand
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
 
 # Performance validation: <50ms code actions, <2s executeCommand
-cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_latency
+cargo test -p perl-lsp-rs --test lsp_performance_tests -- test_execute_command_latency
 ```
 
 **LSP Protocol Integration** (*Diataxis: Reference* - executeCommand specifications):
@@ -541,12 +541,12 @@ cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_late
 **Core Commands** (Available since v0.8.8+):
 ```bash
 # Test all supported executeCommand operations
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_supported_commands
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_supported_commands
 
 # Individual command testing
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_run_tests     # perl.runTests
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_run_file     # perl.runFile
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_debug_tests  # perl.debugTests
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_run_tests     # perl.runTests
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_run_file     # perl.runFile
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_debug_tests  # perl.debugTests
 ```
 
 **Command Capabilities**:
@@ -561,28 +561,28 @@ cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_debug
 **Refactoring Operations** (*Diataxis: Tutorial* - Using code actions for refactoring):
 ```bash
 # Test comprehensive code action integration
-cargo test -p perl-lsp --test lsp_code_actions_tests
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests
 
 # Test specific refactoring categories
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_extract_variable_action     # RefactorExtract
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_extract_subroutine_action  # Advanced extraction
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_organize_imports_action    # SourceOrganizeImports
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_extract_variable_action     # RefactorExtract
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_extract_subroutine_action  # Advanced extraction
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_organize_imports_action    # SourceOrganizeImports
 
 # Test code quality improvements
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_modernize_code_actions     # RefactorRewrite
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_add_missing_pragmas_action # Code modernization
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_modernize_code_actions     # RefactorRewrite
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_add_missing_pragmas_action # Code modernization
 ```
 
 **Performance Testing** (*Diataxis: How-to Guide* - Code action performance validation):
 ```bash
 # Validate <50ms response time requirement
-cargo test -p perl-lsp --test lsp_performance_tests -- test_code_actions_response_time
+cargo test -p perl-lsp-rs --test lsp_performance_tests -- test_code_actions_response_time
 
 # Test caching efficiency with incremental updates
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_code_action_caching
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_code_action_caching
 
 # Cross-file refactoring with dual indexing integration
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_cross_file_extract_subroutine
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_cross_file_extract_subroutine
 ```
 
 **LSP Protocol Compliance** (*Diataxis: Reference* - Code action specifications):
@@ -627,26 +627,26 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_cross_file_extract_
 **Complete Workflow Testing**:
 ```bash
 # Test executeCommand and code actions together
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test -- test_execute_command_and_code_actions
 
 # Validate with adaptive threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_execute_command_tests -- --test-threads=2
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_code_actions_tests -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- --test-threads=2
 
 # Performance regression prevention
-cargo test -p perl-lsp --test lsp_performance_benchmarks -- test_execute_command_latency
-cargo test -p perl-lsp --test lsp_performance_benchmarks -- test_code_actions_throughput
+cargo test -p perl-lsp-rs --test lsp_performance_benchmarks -- test_execute_command_latency
+cargo test -p perl-lsp-rs --test lsp_performance_benchmarks -- test_code_actions_throughput
 ```
 
 **Quality Assurance Commands**:
 ```bash
 # Acceptance criteria validation (Issue #145)
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac1_execute_command_implementation  # AC1
-cargo test -p perl-lsp --test lsp_execute_command_tests -- test_ac2_perlcritic_integration          # AC2
-cargo test -p perl-lsp --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations   # AC3
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac1_execute_command_implementation  # AC1
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests -- test_ac2_perlcritic_integration          # AC2
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests -- test_ac3_advanced_refactoring_operations   # AC3
 
 # Previously ignored tests now enabled
-cargo test -p perl-lsp --test lsp_behavioral_tests | grep -v "ignored"  # Verify test enablement
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests | grep -v "ignored"  # Verify test enablement
 ```
 
 The enhanced executeCommand and code actions integration delivers LSP functionality with <50ms response times, comprehensive error handling, and robust tool integration patterns.
@@ -717,7 +717,7 @@ cargo clippy --workspace --tests      # Lint tests
 
 # Individual crate checks
 cargo clippy -p perl-parser           # Lint main parser crate
-cargo clippy -p perl-lsp              # Lint LSP server
+cargo clippy -p perl-lsp-rs              # Lint LSP server
 cargo test --doc                      # Documentation tests
 
 # Legacy quality commands (excluded from workspace)

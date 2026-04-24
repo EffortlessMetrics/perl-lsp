@@ -49,10 +49,10 @@ jobs:
           echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.platform }}
+    name: Build builder image (${{ matrix.platform }})
     runs-on: ubuntu-24.04
     needs: init
-    timeout-minutes: 30
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -65,13 +65,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -79,7 +79,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # Keep deterministic semver-like tags for manual dispatch runs.
@@ -91,10 +91,64 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: .
           file: .docker/rust/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: ${{ github.event.inputs.push != 'false' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+  build-perl-runtime:
+    name: Build perl-lsp runtime image (${{ matrix.platform }})
+    runs-on: ubuntu-24.04
+    needs: init
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-perl
+          tags: |
+            type=raw,value=${{ needs.init.outputs.version }}
+            type=raw,value=${{ needs.init.outputs.major_minor }}
+            type=raw,value=${{ needs.init.outputs.major }}
+            type=raw,value=latest
+
+      - name: Build and push perl-lsp runtime image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        with:
+          context: .
+          file: .docker/perl-lsp/Dockerfile
           platforms: ${{ matrix.platform }}
           push: ${{ github.event.inputs.push != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -108,7 +162,7 @@ jobs:
     name: Publish to Docker Hub
     runs-on: ubuntu-24.04
     needs: init
-    timeout-minutes: 30
+    timeout-minutes: 90
     if: github.event.inputs.push != 'false'
 
     steps:
@@ -116,20 +170,20 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4.0.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
         with:
           images: effortlessmetrics/perl-lsp
           tags: |
@@ -138,8 +192,8 @@ jobs:
             type=raw,value=${{ needs.init.outputs.major }}
             type=raw,value=latest
 
-      - name: Build and push multi-arch
-        uses: docker/build-push-action@v7
+      - name: Build and push multi-arch (builder image)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
         with:
           context: .
           file: .docker/rust/Dockerfile
@@ -152,9 +206,56 @@ jobs:
           provenance: true
           sbom: true
 
+  publish-dockerhub-perl:
+    name: Publish perl-lsp runtime to Docker Hub
+    runs-on: ubuntu-24.04
+    needs: init
+    timeout-minutes: 60
+    if: github.event.inputs.push != 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd  # v4.0.0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta-perl
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf  # v6.0.0
+        with:
+          images: effortlessmetrics/perl-lsp
+          tags: |
+            type=raw,value=${{ needs.init.outputs.version }}-perl
+            type=raw,value=${{ needs.init.outputs.major_minor }}-perl
+            type=raw,value=latest-perl
+
+      - name: Build and push multi-arch (perl-lsp runtime image)
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f  # v7.1.0
+        with:
+          context: .
+          file: .docker/perl-lsp/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-perl.outputs.tags }}
+          labels: ${{ steps.meta-perl.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
   summary:
     name: Summary
-    needs: [build, publish-dockerhub]
+    needs: [build, build-perl-runtime, publish-dockerhub, publish-dockerhub-perl]
     runs-on: ubuntu-24.04
     if: always()
 
@@ -167,18 +268,21 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Docker Images Published :whale:" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Images Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images" >> $GITHUB_STEP_SUMMARY
+          echo "### Builder image (Rust CI)" >> $GITHUB_STEP_SUMMARY
           echo "- \`ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ github.repository }}:latest\`" >> $GITHUB_STEP_SUMMARY
           echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`effortlessmetrics/perl-lsp:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Runtime image (perllsp + Perl)" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository }}-perl:${{ steps.version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Usage" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker run --rm -v \${PWD}:/workspace effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "# Run LSP server with your project mounted (stdio transport)" >> $GITHUB_STEP_SUMMARY
+          echo "docker run --rm -i -v \"\${PWD}:/workspace\" effortlessmetrics/perl-lsp:${{ steps.version.outputs.version }}-perl" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

@@ -21,7 +21,7 @@ The Perl LSP requires comprehensive cancellation infrastructure to enable respon
 
 ### Technical Context
 
-- **Existing Infrastructure**: Basic cancellation token exists in `/crates/perl-lsp/src/cancellation.rs`
+- **Existing Infrastructure**: Basic cancellation token exists in `/crates/perl-lsp-rs/src/cancellation.rs`
 - **LSP Providers**: 5 providers require integration (hover, completion, definition, references, workspace/symbol)
 - **Parser Architecture**: Recursive descent parser with incremental parsing (<1ms requirement)
 - **Indexing Strategy**: Dual pattern indexing (qualified + bare names) from PR #122
@@ -463,8 +463,8 @@ impl CancellationRegistry {
 
 ### Code References
 
-- `/crates/perl-lsp/src/cancellation.rs` - Core cancellation infrastructure
-- `/crates/perl-lsp/tests/lsp_cancellation_*.rs` - Comprehensive test suite (~6200 lines)
+- `/crates/perl-lsp-rs/src/cancellation.rs` - Core cancellation infrastructure
+- `/crates/perl-lsp-rs/tests/lsp_cancellation_*.rs` - Comprehensive test suite (~6200 lines)
 
 ---
 

@@ -4,22 +4,26 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`tree-sitter-perl-c` is a **Tier 7 legacy/benchmarking crate** that wraps the
-C-based tree-sitter Perl grammar via FFI.
+`tree-sitter-perl-c` is the **conventional tree-sitter grammar/binding crate**
+for Perl, maintained for compatibility and comparison against the native v3
+parser. It wraps the C-based tree-sitter Perl grammar via a hand-written FFI
+declaration.
 
-**Purpose**: Compile the C parser (`parser.c`) and external scanner (`scanner.c`)
-from `../../tree-sitter-perl/src/`, generate Rust bindings with `bindgen`, and
-expose a tree-sitter `Language` for benchmarking against the native Rust parser.
+**Purpose**: Compile the vendored C parser (`parser.c`) and external
+scanner (`scanner.c`) from `c-src/` via the `cc` crate and expose a
+tree-sitter `Language` for compatibility testing and benchmarking against
+the native Rust parser.
 
-**Version**: 0.10.0
+**Version**: tracks the workspace (currently `0.12.3`).
 
-This crate is **excluded** from the default workspace build because it requires
-`libclang-dev` for `bindgen`.
+This crate is a workspace member and is published to crates.io. It
+requires only a C compiler at build time — no `libclang` / `bindgen`
+toolchain is involved.
 
 ## Commands
 
 ```bash
-cargo build -p tree-sitter-perl-c                          # Build (needs C toolchain + libclang)
+cargo build -p tree-sitter-perl-c                          # Build (needs C toolchain)
 cargo test -p tree-sitter-perl-c                           # Run tests
 cargo clippy -p tree-sitter-perl-c                         # Lint
 cargo doc -p tree-sitter-perl-c --open                     # View documentation
@@ -31,9 +35,25 @@ cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- in
 
 ### Build Pipeline (`build.rs`)
 
-1. `cc` compiles `parser.c` and `scanner.c` from `../../tree-sitter-perl/src/`
-2. `bindgen` generates Rust FFI bindings from `tree_sitter/parser.h`
-3. The compiled static library is linked as `tree-sitter-perl-c`
+1. `cc` compiles `c-src/parser.c` and `c-src/scanner.c`
+2. The compiled static library is linked as `tree-sitter-perl-c`
+3. The single FFI symbol `tree_sitter_perl()` is declared by hand in
+   `src/lib.rs` — no `bindgen` is involved
+
+### Vendored C Sources
+
+The `c-src/` directory contains a snapshot of the upstream tree-sitter
+Perl grammar:
+
+- `parser.c` — the tree-sitter-generated LR parser
+- `scanner.c` — the external scanner
+- `tsp_unicode.h`, `bsearch.h` — scanner helpers
+- `tree_sitter/parser.h`, `tree_sitter/array.h`, `tree_sitter/alloc.h` —
+  tree-sitter runtime headers required by `parser.c` and `scanner.c`
+
+The `c-src/` directory IS the canonical source of truth for these files
+inside this repository. This crate carries its own copy so the published
+package is self-contained.
 
 ### Key Types and Functions (lib.rs)
 
@@ -46,17 +66,15 @@ cargo run -p tree-sitter-perl-c --bin bench_parser_c --features test-utils -- in
 | `parse_perl_file()` | `(P: AsRef<Path>) -> Result<Tree, Box<dyn Error>>` | Reads and parses a file |
 | `get_scanner_config()` | `-> &'static str` | Returns `"c-scanner"` |
 
-The `unsafe extern "C"` block declares `tree_sitter_perl() -> Language` which is
-the entry point into the compiled C grammar.
+The `unsafe extern "C"` block declares `tree_sitter_perl() -> Language`
+which is the entry point into the compiled C grammar.
 
 ### Dependencies
 
 | Dependency | Role |
 |------------|------|
-| `tree-sitter` 0.26 | Runtime (Language, Parser, Tree types) |
-| `cc` (build) | Compiles C sources |
-| `bindgen` (build) | Generates FFI bindings |
-| `serde`, `proptest`, `walkdir`, `thiserror` | Carried forward; not used by lib.rs directly |
+| `tree-sitter` 0.26 | Runtime (`Language`, `Parser`, `Tree` types) |
+| `cc` (build) | Compiles the vendored C sources |
 
 ### Features
 
@@ -67,8 +85,8 @@ the entry point into the compiled C grammar.
 
 ### Binaries
 
-- **`parse_c`** -- takes a Perl file path, parses it with the C grammar, exits 0/1.
-- **`bench_parser_c`** -- takes a Perl file path, prints `status=success/failure error=<bool> duration_us=<N>`.
+- **`parse_c`** — takes a Perl file path, parses it with the C grammar, exits 0/1.
+- **`bench_parser_c`** — takes a Perl file path, prints `status=success/failure error=<bool> duration_us=<N>`.
 
 ## Usage
 
@@ -89,7 +107,11 @@ let lang = language();
 
 ## Important Notes
 
-- Requires a C compiler and `libclang-dev` headers to build
-- Excluded from the default workspace (`workspace.exclude` in root `Cargo.toml`)
-- Legacy crate kept for comparative benchmarking; active development uses the native v3 Rust parser
-- C source files live in `../../tree-sitter-perl/src/` (the `tree-sitter-perl` directory)
+- Requires a C compiler only — no `libclang` / `bindgen` toolchain needed.
+- Participates in the default workspace build and is on the publish allowlist.
+- Conventional C-FFI reference implementation maintained for compatibility
+  and comparison; active development for the native parser uses the v3
+  Rust parser in `crates/perl-parser/`.
+- The C sources under `c-src/` are a vendored snapshot. The old harness crate
+  (`tree-sitter-perl-rs`) has been archived to `archive/crates/tree-sitter-perl-rs/`;
+  `c-src/` is now the sole source of truth for upstream C grammar snapshots.

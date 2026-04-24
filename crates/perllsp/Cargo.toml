@@ -1,0 +1,42 @@
+[package]
+name = "perllsp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Public Cargo facade for the perl-lsp language server"
+readme = "README.md"
+documentation = "https://docs.rs/perllsp"
+keywords = ["perl", "lsp", "language-server", "ide"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[lib]
+name = "perllsp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "perllsp"
+path = "src/main.rs"
+
+[dependencies]
+perl-lsp-rs = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/perllsp-{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"

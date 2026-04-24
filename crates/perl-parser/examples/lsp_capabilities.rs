@@ -5,7 +5,7 @@ use perl_parser::{NodeKind, Parser};
 fn main() {
     println!("=== Perl LSP Server Capabilities Demo ===\n");
 
-    println!("The Perl LSP server (perl-lsp) provides the following features:\n");
+    println!("The Perl LSP server (perllsp) provides the following features:\n");
 
     println!("1. SYNTAX DIAGNOSTICS");
     println!("   - Real-time error detection");
@@ -84,8 +84,8 @@ my $result = process_data(21);"#;
 
     println!("\n{}", "=".repeat(50));
     println!("\nTo use the LSP server:");
-    println!("1. Build: cargo build -p perl-parser --bin perl-lsp --release");
-    println!("2. Configure your editor to use: perl-lsp --stdio");
+    println!("1. Build: cargo build -p perllsp --bin perllsp --release");
+    println!("2. Configure your editor to use: perllsp --stdio");
     println!("3. Enjoy enhanced Perl development!");
 }
 

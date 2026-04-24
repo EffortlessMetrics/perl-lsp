@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_sub_def",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 4,
+      "character": 4,
+      "rationale": "hover on subroutine name at definition must return content"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 4,
+      "character": 4,
+      "needle": "greet",
+      "rationale": "hover must mention the subroutine name"
+    }
+  ]
+}

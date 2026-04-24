@@ -6,13 +6,13 @@ The LSP server advertises `TextDocumentSyncKind::Incremental` (value 2) to clien
 
 ### What "Incremental" Means Here
 
-When a client sends `textDocument/didChange`, it uses LSP's incremental sync format: each change carries a `range` and replacement `text`, rather than the full document content. The server applies these range-based edits to its in-memory Rope buffer via [`apply_changes`](../../crates/perl-lsp/src/textdoc.rs).
+When a client sends `textDocument/didChange`, it uses LSP's incremental sync format: each change carries a `range` and replacement `text`, rather than the full document content. The server applies these range-based edits to its in-memory Rope buffer via [`apply_changes`](../../crates/perl-lsp-rs/src/textdoc.rs).
 
 ### What Happens After Each Edit
 
 After applying the text edits to the Rope, the LSP server does a **full reparse** of the document. There is no AST subtree reuse — `Parser::new(source).parse()` runs on the complete source text every time. This is correct and produces accurate diagnostics and symbol information, but it means every keystroke triggers a full parse regardless of edit size.
 
-See [`crates/perl-lsp/src/runtime/text_sync.rs`](../../crates/perl-lsp/src/runtime/text_sync.rs) for the implementation.
+See [`crates/perl-lsp-rs/src/runtime/text_sync.rs`](../../crates/perl-lsp-rs/src/runtime/text_sync.rs) for the implementation.
 
 ## The `perl-incremental-parsing` Crate
 
@@ -41,8 +41,8 @@ No 65µs or 99.7% node-reuse benchmarks apply to the current LSP path — those 
 
 The server does use a Rope for efficient text management and UTF-16 position conversion. Key modules:
 
-- [`crates/perl-lsp/src/textdoc.rs`](../../crates/perl-lsp/src/textdoc.rs) — `Doc` struct, `apply_changes`, UTF-16 position conversion
-- [`crates/perl-lsp/src/state/document.rs`](../../crates/perl-lsp/src/state/document.rs) — `DocumentState` holding the Rope, AST, and `LineStartsCache`
+- [`crates/perl-lsp-rs/src/textdoc.rs`](../../crates/perl-lsp-rs/src/textdoc.rs) — `Doc` struct, `apply_changes`, UTF-16 position conversion
+- [`crates/perl-lsp-rs/src/state/document.rs`](../../crates/perl-lsp-rs/src/state/document.rs) — `DocumentState` holding the Rope, AST, and `LineStartsCache`
 
 The Rope is used correctly for applying incremental text edits. It is not used to avoid reparsing.
 
@@ -54,7 +54,7 @@ True incremental parsing (reusing AST subtrees across edits) requires wiring `pe
 
 ```bash
 # Run the LSP text-sync tests (exercises full-reparse path)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Run incremental-parsing crate unit tests (not connected to LSP server)
 cargo test -p perl-incremental-parsing

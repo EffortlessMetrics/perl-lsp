@@ -10,7 +10,7 @@ The test suite uses feature gates to separate different types of tests:
 
 ## Feature Flags
 
-### perl-lsp crate (`crates/perl-lsp/Cargo.toml`)
+### perl-lsp crate (`crates/perl-lsp-rs/Cargo.toml`)
 
 | Feature | Description | When to Run |
 |---------|-------------|-------------|
@@ -38,13 +38,13 @@ The test suite uses feature gates to separate different types of tests:
 
 ```bash
 # Run stress tests
-cargo test -p perl-lsp --features stress-tests
+cargo test -p perl-lsp-rs --features stress-tests
 
 # Run protocol compliance tests
-cargo test -p perl-lsp --features strict-jsonrpc
+cargo test -p perl-lsp-rs --features strict-jsonrpc
 
 # Run with multiple features
-cargo test -p perl-lsp --features "stress-tests,strict-jsonrpc"
+cargo test -p perl-lsp-rs --features "stress-tests,strict-jsonrpc"
 ```
 
 ## Ignored Test Categories

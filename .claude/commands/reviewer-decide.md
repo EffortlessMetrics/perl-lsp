@@ -9,6 +9,24 @@ Based on steps 1-3, make a decision.
 
 ## Decision tree
 
+### Docs-only PRs → Fast-track without `deep-reviewed`
+
+If every changed file is documentation-only (`docs/**` or doc-text files such as `.md`, `.mdx`, `.txt`, `.rst`, `.adoc`), do the standards pass, push any doc fixes, and route straight to `/pr-ready`.
+
+```bash
+gh pr checkout <number>
+# ... improve wording / links / receipts as needed ...
+git push
+gh pr comment <number> --body "Standards review complete. Docs-only fast-track used; no reviewer-deep pass required."
+```
+
+Then call:
+```
+/pr-ready <number>
+```
+
+**Do NOT add `deep-reviewed` yourself.** That label is reserved for the deep reviewer only.
+
 ### Default path → Improve and route to deep review
 
 Every PR has room for improvement. Check out the branch, push improvements (edge case tests, naming, simplification), then route to deep review. **Never approve directly** — the standards reviewer does NOT approve PRs.
@@ -19,8 +37,9 @@ gh pr checkout <number>
 git push
 ```
 
-After pushing improvements, ALWAYS route to deep review:
+After pushing improvements, set sign-off and route to deep review:
 ```bash
+gh pr edit <number> --add-label "review-reviewed"
 gh pr edit <number> --add-label "needs-deep-review"
 gh pr comment <number> --body "Standards review complete. Improved: <list of changes>. Deep reviewer: focus on <areas of concern>."
 ```
@@ -46,7 +65,7 @@ If you must send back:
 ## Rules
 
 - **Fix forward is the default.** If you can fix it where you are, fix it.
-- **ALWAYS route to deep review.** Never approve directly. The reviewer does the standards pass; the deep reviewer does the correctness pass and approves.
+- **Route non-docs PRs to deep review.** Docs-only PRs may use the fast-track path above; everything else still requires reviewer-deep.
 - Never request changes for style preferences.
 - "I would have done it differently" is not a blocker — make it how you'd do it and push.
 - **Recommend next steps.** Typical recommendations:

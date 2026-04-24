@@ -10,7 +10,7 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
-use perl_error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
 use perl_parser_core::{NodeKind, Parser};
 use perl_tdd_support::must;
 

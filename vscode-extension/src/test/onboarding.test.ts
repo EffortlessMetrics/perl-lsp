@@ -18,6 +18,9 @@ import {
   HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
+  resolveUnixShellInvocationFallback,
+  toPosixShellCommand,
+  classifyStartupFailure,
 } from '../onboarding';
 
 // ---------------------------------------------------------------------------
@@ -114,7 +117,10 @@ describe('OnboardingManager.checkPerlInstalled', () => {
     );
     const result = await mgr.checkPerlInstalled();
     expect(result.ok).toBe(false);
-    expect(result.detail).toBeTruthy();
+    expect(result.detail).toContain('strawberryperl.com');
+    expect(result.detail).toContain('brew install perl');
+    expect(result.detail).toContain('package manager');
+    expect(result.detail).not.toContain('command not found');
   });
 });
 
@@ -159,6 +165,58 @@ describe('selectWindowsCommandCandidate', () => {
 
   test('returns null for empty where output', () => {
     expect(selectWindowsCommandCandidate(' \r\n \r\n')).toBeNull();
+  });
+});
+
+describe('toPosixShellCommand', () => {
+  test('quotes command and arguments for safe shell execution', () => {
+    const command = toPosixShellCommand(
+      'perl',
+      ['-e', "print q{can't fail}"],
+    );
+
+    expect(command).toBe("'perl' '-e' 'print q{can'\\''t fail}'");
+  });
+});
+
+describe('resolveUnixShellInvocationFallback', () => {
+  const originalPlatform = process.platform;
+  const originalShell = process.env.SHELL;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+    if (originalShell === undefined) {
+      delete process.env.SHELL;
+    } else {
+      process.env.SHELL = originalShell;
+    }
+  });
+
+  test('returns shell fallback invocation on unix ENOENT errors', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    process.env.SHELL = '/bin/zsh';
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toEqual({
+      command: '/bin/zsh',
+      args: ['-lc', "'perl' '-e' 'print $]'"],
+    });
+  });
+
+  test('returns null when no shell is available', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    delete process.env.SHELL;
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toBeNull();
   });
 });
 
@@ -306,11 +364,14 @@ describe('package.json health check command', () => {
     expect(cmd.title.toLowerCase()).toContain('health');
   });
 
-  test('runHealthCheck has an activation event so it works without a Perl file open', () => {
+  test('runHealthCheck is declared as a command so VSCode auto-activates the extension', () => {
     // runHealthCheck is palette-global (no when clause restricting to editorLangId == perl).
-    // Without its own activation event, VSCode will not load the extension when the user
-    // triggers the command from the command palette if no Perl file is active.
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.runHealthCheck');
+    // VSCode >= 1.75 automatically activates an extension when any of its declared commands are
+    // triggered — explicit onCommand:* activationEvents entries are redundant and have been
+    // removed. The guarantee is that the command exists in contributes.commands.
+    const commands = pkg.contributes.commands as Array<{ command: string; title: string }>;
+    const cmd = commands.find((c) => c.command === 'perl-lsp.runHealthCheck');
+    expect(cmd).toBeDefined();
   });
 
   test('runHealthCheck is listed in commandPalette without a language restriction', () => {
@@ -319,5 +380,99 @@ describe('package.json health check command', () => {
     expect(entry).toBeDefined();
     // No editorLangId restriction — the health check must be reachable from any context.
     expect(entry.when ?? '').not.toMatch(/editorLangId/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// classifyStartupFailure
+// ---------------------------------------------------------------------------
+
+describe('classifyStartupFailure', () => {
+  function makeResult(
+    label: string,
+    ok: boolean,
+    status: HealthCheckStatus,
+    detail: string,
+  ): HealthCheckResult {
+    return { label, ok, status, detail };
+  }
+
+  test('returns Perl-missing message when Perl check failed', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', false, HealthCheckStatus.Error, 'perl: command not found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', true, HealthCheckStatus.Ok, 'Binary found: /usr/bin/perllsp'),
+    ];
+    const msg = classifyStartupFailure(results);
+    expect(msg).toContain('Perl');
+    expect(msg).toContain('5.10');
+    expect(msg).toContain('strawberryperl.com');
+    expect(msg).toContain('brew install perl');
+    expect(msg).toContain('package manager');
+    expect(msg).toMatch(/install|Install/);
+    // Should NOT show the generic "restart" message when root cause is known
+    expect(msg).not.toContain('Restart the server');
+  });
+
+  test('returns binary-missing message when binary check failed and Perl is present', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', true, HealthCheckStatus.Ok, 'Perl 5.036000 found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', false, HealthCheckStatus.Error, 'perl-lsp binary not found'),
+    ];
+    const msg = classifyStartupFailure(results);
+    expect(msg).not.toContain('Install Perl');
+    expect(msg).toMatch(/binary|perllsp/i);
+  });
+
+  test('returns generic message when all checks pass (unknown crash)', () => {
+    const results: HealthCheckResult[] = [
+      makeResult('Perl interpreter', true, HealthCheckStatus.Ok, 'Perl 5.036000 found'),
+      makeResult('perltidy', true, HealthCheckStatus.Ok, 'perltidy found'),
+      makeResult('LSP binary', true, HealthCheckStatus.Ok, 'Binary found: /usr/bin/perllsp'),
+    ];
+    const msg = classifyStartupFailure(results);
+    // Should point to Output panel, not blame Perl or binary
+    expect(msg).toMatch(/Output panel|output/i);
+    expect(msg).not.toContain('Install Perl');
+    expect(msg).not.toContain('perl-lsp binary not found');
+  });
+
+  test('returns Perl-missing message when results array is empty (check could not run)', () => {
+    // Edge case: diagnostics could not run at all; safest is to assume Perl missing
+    const msg = classifyStartupFailure([]);
+    // Falls back to PERL_MISSING_MESSAGE — the most actionable default
+    expect(msg).toContain('Perl');
+    expect(msg).toMatch(/install|Install/);
+    expect(msg).toContain('5.10');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// OnboardingManager.runStartupDiagnostics
+// ---------------------------------------------------------------------------
+
+describe('OnboardingManager.runStartupDiagnostics', () => {
+  test('returns Perl-specific error when Perl is missing', async () => {
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn(() =>
+      Promise.reject(new Error('perl: command not found')),
+    );
+    const msg = await mgr.runStartupDiagnostics(null);
+    expect(msg).toContain('Perl');
+    expect(msg).toMatch(/install|Install/);
+    expect(msg).not.toContain('Restart the server');
+  });
+
+  test('returns binary-missing message when Perl is present but binary not found', async () => {
+    const mgr = new OnboardingManager(makeContext(), makeOutputChannel()) as any;
+    mgr._execCheck = jest.fn((_cmd: string) =>
+      Promise.resolve({ stdout: '5.036000', stderr: '' }),
+    );
+    // No binary path provided (null) — binary check will fail
+    const msg = await mgr.runStartupDiagnostics(null);
+    expect(msg).toMatch(/binary|perllsp/i);
+    // Perl IS installed — should NOT show the Perl install guide
+    expect(msg).not.toContain('Install Perl 5.10');
   });
 });

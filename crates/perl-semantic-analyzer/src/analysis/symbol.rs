@@ -30,9 +30,11 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-// Re-export the unified symbol types from perl-symbol-types
+const UNIVERSAL_METHODS: [&str; 4] = ["can", "isa", "DOES", "VERSION"];
+
+// Re-export the unified symbol types from perl-symbol
 /// Symbol kind enums used during Index/Analyze workflows.
-pub use perl_symbol_types::{SymbolKind, VarKind};
+pub use perl_symbol::{SymbolKind, VarKind};
 
 #[derive(Debug, Clone)]
 /// A symbol definition in Perl code with comprehensive metadata for Index/Navigate workflows.
@@ -204,6 +206,14 @@ pub struct SymbolTable {
     current_package: String,
 }
 
+/// Return `true` if the method is one of Perl's always-available `UNIVERSAL` methods.
+///
+/// Used in analyze/index workflow stages to keep method lookup behavior
+/// consistent across parser and LSP navigation flows.
+pub fn is_universal_method(method_name: &str) -> bool {
+    UNIVERSAL_METHODS.contains(&method_name)
+}
+
 impl SymbolTable {
     /// Create a new symbol table for Index/Analyze workflows.
     pub fn new() -> Self {
@@ -334,10 +344,39 @@ pub enum FrameworkKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Web framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum WebFrameworkKind {
+    /// `use Dancer;`
+    Dancer,
     /// `use Dancer2;` or `use Dancer2::Core;`
     Dancer2,
     /// `use Mojolicious::Lite;`
     MojoliciousLite,
+    /// `use Plack::Builder;`
+    PlackBuilder,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Async framework variant detected via `use` statements during Parse/Analyze workflows.
+pub enum AsyncFrameworkKind {
+    /// `use AnyEvent;`
+    AnyEvent,
+    /// `use EV;`
+    EV,
+    /// `use Future;`
+    Future,
+    /// `use Future::XS;`
+    FutureXS,
+    /// `use Promise;`
+    Promise,
+    /// `use Promise::XS;`
+    PromiseXS,
+    /// `use POE;`
+    POE,
+    /// `use IO::Async;`
+    IOAsync,
+    /// `use Mojo::Redis;`
+    MojoRedis,
+    /// `use Mojo::Pg;`
+    MojoPg,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -349,8 +388,12 @@ pub struct FrameworkFlags {
     pub class_accessor: bool,
     /// Which specific Moo/Moose variant was detected.
     pub kind: Option<FrameworkKind>,
-    /// Web framework variant, if any (Dancer2, Mojolicious::Lite).
+    /// Web framework variant, if any (Dancer, Dancer2, Mojolicious::Lite).
     pub web_framework: Option<WebFrameworkKind>,
+    /// Async framework variant, if any (IO::Async).
+    pub async_framework: Option<AsyncFrameworkKind>,
+    /// Catalyst controller/package marker used for action synthesis.
+    pub catalyst_controller: bool,
 }
 
 /// Extract symbols from an AST for Parse/Index workflows.
@@ -360,6 +403,10 @@ pub struct SymbolExtractor {
     source: String,
     /// Per-package framework detection flags, keyed by package name.
     framework_flags: HashMap<String, FrameworkFlags>,
+    /// Whether `use Const::Fast` has been seen in the current compilation unit.
+    const_fast_enabled: bool,
+    /// Whether `use Readonly` has been seen in the current compilation unit.
+    readonly_enabled: bool,
 }
 
 impl Default for SymbolExtractor {
@@ -377,6 +424,8 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: String::new(),
             framework_flags: HashMap::new(),
+            const_fast_enabled: false,
+            readonly_enabled: false,
         }
     }
 
@@ -388,6 +437,8 @@ impl SymbolExtractor {
             table: SymbolTable::new(),
             source: source.to_string(),
             framework_flags: HashMap::new(),
+            const_fast_enabled: false,
+            readonly_enabled: false,
         }
     }
 
@@ -483,7 +534,7 @@ impl SymbolExtractor {
             NodeKind::Subroutine {
                 name,
                 prototype: _,
-                signature: _,
+                signature,
                 attributes,
                 body,
                 name_span: _,
@@ -493,6 +544,37 @@ impl SymbolExtractor {
 
                 if name.is_some() {
                     let documentation = self.extract_leading_comment(node.location.start);
+                    let mut symbol_attributes = attributes.clone();
+                    let documentation = if self.current_package_is_catalyst_controller()
+                        && let Some((action_kind, action_details)) =
+                            Self::catalyst_action_metadata(attributes)
+                    {
+                        symbol_attributes.push("framework=Catalyst".to_string());
+                        symbol_attributes.push("catalyst_controller=true".to_string());
+                        symbol_attributes.push("catalyst_action=true".to_string());
+                        symbol_attributes.push(format!("catalyst_action_kind={action_kind}"));
+                        if !action_details.is_empty() {
+                            symbol_attributes.push(format!(
+                                "catalyst_action_attributes={}",
+                                action_details.join(", ")
+                            ));
+                        }
+
+                        let action_doc = if action_details.is_empty() {
+                            format!("Catalyst action ({action_kind})")
+                        } else {
+                            format!(
+                                "Catalyst action ({action_kind}; {})",
+                                action_details.join(", ")
+                            )
+                        };
+                        match documentation {
+                            Some(doc) => Some(format!("{doc}\n{action_doc}")),
+                            None => Some(action_doc),
+                        }
+                    } else {
+                        documentation
+                    };
                     let symbol = Symbol {
                         name: sub_name.clone(),
                         qualified_name: format!("{}::{}", self.table.current_package, sub_name),
@@ -501,7 +583,7 @@ impl SymbolExtractor {
                         scope_id: self.table.current_scope(),
                         declaration: None,
                         documentation,
-                        attributes: attributes.clone(),
+                        attributes: symbol_attributes,
                     };
 
                     self.table.add_symbol(symbol);
@@ -510,9 +592,12 @@ impl SymbolExtractor {
                 // Create subroutine scope
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
 
-                {
-                    self.visit_node(body);
+                // Register signature parameters as implicit `my` declarations
+                if let Some(sig) = signature {
+                    self.register_signature_params(sig);
                 }
+
+                self.visit_node(body);
 
                 self.table.pop_scope();
             }
@@ -520,6 +605,9 @@ impl SymbolExtractor {
             NodeKind::Package { name, block, name_span: _ } => {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
+                if Self::is_catalyst_controller_package_name(name) {
+                    self.mark_catalyst_controller_package(name);
+                }
 
                 let documentation = self.extract_package_documentation(name, node.location);
                 let symbol = Symbol {
@@ -620,6 +708,19 @@ impl SymbolExtractor {
             }
 
             NodeKind::FunctionCall { name, args } => {
+                if self.const_fast_enabled
+                    && name == "const"
+                    && self.try_extract_const_fast_declaration(args)
+                {
+                    return;
+                }
+                if self.readonly_enabled
+                    && name == "Readonly"
+                    && self.try_extract_readonly_declaration(args)
+                {
+                    return;
+                }
+
                 // Track function call as a reference
                 let reference = SymbolReference {
                     name: name.clone(),
@@ -629,6 +730,9 @@ impl SymbolExtractor {
                     is_write: false,
                 };
                 self.table.add_reference(reference);
+
+                self.synthesize_plack_builder_symbols(name, args);
+                self.synthesize_ev_symbols(name, node.location);
 
                 for arg in args {
                     self.visit_node(arg);
@@ -647,6 +751,8 @@ impl SymbolExtractor {
                     is_write: false,
                 });
 
+                self.synthesize_async_framework_class_symbol(object);
+                self.synthesize_future_api_symbols(object, method, node.location);
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -702,15 +808,42 @@ impl SymbolExtractor {
 
             NodeKind::Use { module, args, .. } => {
                 self.update_framework_context(module, args);
+                if module == "Const::Fast" {
+                    self.const_fast_enabled = true;
+                }
+                if module == "Readonly" {
+                    self.readonly_enabled = true;
+                }
+                if module == "EV" {
+                    self.synthesize_ev_framework_symbol(node.location);
+                }
+                if module == "constant" {
+                    self.synthesize_use_constant_symbols(args, node.location);
+                }
             }
 
             NodeKind::No { module: _, args: _, .. } => {
                 // We don't currently track framework deactivation via `no`.
             }
 
-            NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
-                // BEGIN, END, CHECK, INIT blocks
+            NodeKind::PhaseBlock { phase, phase_span: _, block } => {
+                // BEGIN, END, CHECK, INIT, UNITCHECK blocks — expose as named symbols
+                // so they appear in document outline / Outline View (#3464).
+                let symbol = Symbol {
+                    name: phase.clone(),
+                    qualified_name: format!("{}::{}", self.table.current_package, phase),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location,
+                    scope_id: self.table.current_scope(),
+                    declaration: None,
+                    documentation: None,
+                    attributes: vec![],
+                };
+                self.table.add_symbol(symbol);
+
+                self.table.push_scope(ScopeKind::Block, node.location);
                 self.visit_node(block);
+                self.table.pop_scope();
             }
 
             NodeKind::StatementModifier { statement, modifier: _, condition } => {
@@ -718,14 +851,19 @@ impl SymbolExtractor {
                 self.visit_node(condition);
             }
 
-            NodeKind::Do { block } | NodeKind::Eval { block } => {
+            NodeKind::Do { block } | NodeKind::Eval { block } | NodeKind::Defer { block } => {
                 self.visit_node(block);
             }
 
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 self.visit_node(body);
-                for (_, catch_block) in catch_blocks {
+                for (catch_var, catch_block) in catch_blocks {
+                    self.table.push_scope(ScopeKind::Block, catch_block.location);
+                    if let Some(full_name) = catch_var.as_deref() {
+                        self.register_catch_variable(full_name, catch_block.location);
+                    }
                     self.visit_node(catch_block);
+                    self.table.pop_scope();
                 }
                 if let Some(finally) = finally_block {
                     self.visit_node(finally);
@@ -746,8 +884,13 @@ impl SymbolExtractor {
                 self.visit_node(body);
             }
 
-            NodeKind::Class { name, body } => {
+            NodeKind::Class { name, parents, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
+                if Self::is_catalyst_controller_package_name(name)
+                    || parents.iter().any(|parent| parent == "Catalyst::Controller")
+                {
+                    self.mark_catalyst_controller_package(name);
+                }
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -765,7 +908,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Method { name, signature: _, attributes, body } => {
+            NodeKind::Method { name, signature, attributes, body } => {
                 let documentation = self.extract_leading_comment(node.location.start);
                 let mut symbol_attributes = Vec::with_capacity(attributes.len() + 1);
                 symbol_attributes.push("method".to_string());
@@ -783,6 +926,12 @@ impl SymbolExtractor {
                 self.table.add_symbol(symbol);
 
                 self.table.push_scope(ScopeKind::Subroutine, node.location);
+
+                // Register signature parameters as implicit `my` declarations
+                if let Some(sig) = signature {
+                    self.register_signature_params(sig);
+                }
+
                 self.visit_node(body);
                 self.table.pop_scope();
             }
@@ -815,8 +964,21 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+            NodeKind::Untie { variable } => {
                 self.visit_node(variable);
+            }
+
+            NodeKind::Goto { target } => {
+                if let NodeKind::Identifier { name } = &target.kind {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Label,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                self.visit_node(target);
             }
 
             // Regex related nodes - we recurse into expression
@@ -867,14 +1029,26 @@ impl SymbolExtractor {
             | NodeKind::MissingStatement
             | NodeKind::MissingIdentifier
             | NodeKind::MissingBlock
-            | NodeKind::UnknownRest
-            | NodeKind::Error { .. } => {
+            | NodeKind::UnknownRest => {
                 // No symbols to extract
+            }
+
+            NodeKind::Error { partial, .. } => {
+                // Descend into the partial sub-tree if present. The parser stores
+                // the partially-parsed node inside Error when it managed to build
+                // some structure before failing (e.g. a variable expression whose
+                // postfix chain was truncated). Visiting it keeps symbol.rs in
+                // parity with every other traversal in the codebase (semantic
+                // tokens, class model, scope analyzer via children()) that already
+                // descends into partial.
+                if let Some(partial_node) = partial {
+                    self.visit_node(partial_node);
+                }
             }
 
             _ => {
                 // For any unhandled node types, log a warning
-                eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
+                tracing::warn!(kind = ?node.kind, "Unhandled node type in symbol extractor");
             }
         }
     }
@@ -1048,10 +1222,10 @@ impl SymbolExtractor {
         None
     }
 
-    /// Detect Moo/Moose method modifiers (`around`, `before`, `after`).
+    /// Detect Moo/Moose method modifiers (`before`, `after`, `around`, `override`, `augment`).
     ///
     /// Pattern (two statements):
-    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
+    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`/`override`/`augment`)
     /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
     ///
     /// Also handles FunctionCall form: `around 'name' => sub { }` (post parser fix).
@@ -1061,11 +1235,11 @@ impl SymbolExtractor {
         // FunctionCall form: `around 'name' => sub { }` parsed as a bare call.
         if let NodeKind::ExpressionStatement { expression } = &first.kind
             && let NodeKind::FunctionCall { name, args } = &expression.kind
-            && matches!(name.as_str(), "around" | "before" | "after")
+            && Self::is_moose_method_modifier(name)
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
-                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+                args.iter().flat_map(Self::collect_symbol_names).collect();
             if !method_names.is_empty() {
                 let scope_id = self.table.current_scope();
                 let package = self.table.current_package.clone();
@@ -1093,12 +1267,10 @@ impl SymbolExtractor {
 
         let second = &statements[idx + 1];
 
-        // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
+        // Check: first is ExpressionStatement(Identifier("before"|"after"|"around"|"override"|"augment"))
         let modifier_name = match &first.kind {
             NodeKind::ExpressionStatement { expression } => match &expression.kind {
-                NodeKind::Identifier { name }
-                    if matches!(name.as_str(), "around" | "before" | "after") =>
-                {
+                NodeKind::Identifier { name } if Self::is_moose_method_modifier(name) => {
                     name.as_str()
                 }
                 _ => return None,
@@ -1143,6 +1315,10 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    fn is_moose_method_modifier(name: &str) -> bool {
+        matches!(name, "before" | "after" | "around" | "override" | "augment")
+    }
+
     /// Detect Moo/Moose `extends 'Parent'` and `with 'Role'` declarations.
     ///
     /// Pattern (two statements):
@@ -1161,6 +1337,10 @@ impl SymbolExtractor {
             let keyword = name.as_str();
             let names: Vec<String> = args.iter().flat_map(Self::collect_symbol_names).collect();
             if !names.is_empty() {
+                if names.iter().any(|name| name == "Catalyst::Controller") {
+                    let package = self.table.current_package.clone();
+                    self.mark_catalyst_controller_package(&package);
+                }
                 let ref_kind =
                     if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
                 for ref_name in names {
@@ -1201,6 +1381,11 @@ impl SymbolExtractor {
         let names = Self::collect_symbol_names(expression);
         if names.is_empty() {
             return None;
+        }
+
+        if names.iter().any(|name| name == "Catalyst::Controller") {
+            let package = self.table.current_package.clone();
+            self.mark_catalyst_controller_package(&package);
         }
 
         let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
@@ -1393,7 +1578,7 @@ impl SymbolExtractor {
         if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
-    /// Detect Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
+    /// Detect Dancer/Dancer2/Mojolicious::Lite route declarations and synthesize route symbols.
     ///
     /// Pattern (two statements):
     /// 1. `ExpressionStatement(Identifier("get"|"post"|"put"|"del"|"patch"|"any"))`
@@ -1406,6 +1591,10 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
+        let web_framework = self
+            .framework_flags
+            .get(&self.table.current_package)
+            .and_then(|flags| flags.web_framework);
         let first = &statements[idx];
 
         // FunctionCall form: `get '/path' => sub { }` parsed as a bare call.
@@ -1438,6 +1627,25 @@ impl SymbolExtractor {
                             documentation: Some(format!("{http_method} {path}")),
                             attributes: vec![format!("http_method={http_method}")],
                         });
+
+                        if matches!(
+                            web_framework,
+                            Some(WebFrameworkKind::Dancer | WebFrameworkKind::Dancer2)
+                        ) && let Some(target_node) = args.get(1)
+                        {
+                            if let Some(target_name) =
+                                Self::collect_symbol_names(target_node).first().cloned()
+                            {
+                                self.table.add_reference(SymbolReference {
+                                    name: target_name,
+                                    kind: SymbolKind::Subroutine,
+                                    location: target_node.location,
+                                    scope_id: self.table.current_scope(),
+                                    is_write: false,
+                                });
+                            }
+                        }
+
                         self.visit_node(first);
                         return Some(1);
                     }
@@ -1513,6 +1721,145 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    /// Synthesize Plack::Builder middleware and mount symbols from a builder block.
+    fn synthesize_plack_builder_symbols(&mut self, name: &str, args: &[Node]) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.web_framework != Some(WebFrameworkKind::PlackBuilder) || name != "builder" {
+            return;
+        }
+
+        let Some(block) = args.first() else {
+            return;
+        };
+        let NodeKind::Block { statements } = &block.kind else {
+            return;
+        };
+
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for statement in statements {
+            let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+                continue;
+            };
+            let NodeKind::FunctionCall { name: stmt_name, args: stmt_args } = &expression.kind
+            else {
+                continue;
+            };
+
+            match stmt_name.as_str() {
+                "enable" => {
+                    self.synthesize_plack_enable_symbol(statement, stmt_args, scope_id, &package);
+                }
+                "mount" => {
+                    self.synthesize_plack_mount_symbol(statement, stmt_args, scope_id, &package);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn synthesize_plack_enable_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(first) = args.first() else {
+            return;
+        };
+        let Some(raw_name) = Self::single_symbol_name(first) else {
+            return;
+        };
+        let middleware_name = if raw_name.contains("::") {
+            raw_name
+        } else {
+            format!("Plack::Middleware::{raw_name}")
+        };
+        if middleware_name.is_empty() {
+            return;
+        }
+
+        if self.table.symbols.get(&middleware_name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Package
+                    && symbol.declaration.as_deref() == Some("enable")
+                    && symbol
+                        .attributes
+                        .iter()
+                        .any(|attr| attr == &format!("middleware={middleware_name}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: middleware_name.clone(),
+            qualified_name: middleware_name.clone(),
+            kind: SymbolKind::Package,
+            location: statement.location,
+            scope_id,
+            declaration: Some("enable".to_string()),
+            documentation: Some(format!("PSGI middleware {middleware_name}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("middleware={middleware_name}"),
+            ],
+        });
+    }
+
+    fn synthesize_plack_mount_symbol(
+        &mut self,
+        statement: &Node,
+        args: &[Node],
+        scope_id: ScopeId,
+        _package: &str,
+    ) {
+        let Some(path_node) = args.first() else {
+            return;
+        };
+        let Some(path) = Self::single_symbol_name(path_node) else {
+            return;
+        };
+        if path.is_empty() {
+            return;
+        }
+
+        let target = args
+            .get(1)
+            .map(Self::value_summary)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "$app".to_string());
+
+        if self.table.symbols.get(&path).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("mount")
+                    && symbol.attributes.iter().any(|attr| attr == &format!("mount_path={path}"))
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: path.clone(),
+            qualified_name: path.clone(),
+            kind: SymbolKind::Subroutine,
+            location: statement.location,
+            scope_id,
+            declaration: Some("mount".to_string()),
+            documentation: Some(format!("PSGI mount {path} -> {target}")),
+            attributes: vec![
+                "framework=Plack::Builder".to_string(),
+                format!("mount_path={path}"),
+                format!("mount_target={target}"),
+            ],
+        });
+    }
+
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
     fn try_extract_class_accessor_declaration(&mut self, statement: &Node) -> bool {
         let NodeKind::ExpressionStatement { expression } = &statement.kind else {
@@ -1563,6 +1910,224 @@ impl SymbolExtractor {
         true
     }
 
+    /// Synthesize class symbols for async framework namespaces used in method-call form.
+    fn synthesize_async_framework_class_symbol(&mut self, object: &Node) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+
+        let (module_name, framework_name, exact_match) = match flags.async_framework {
+            Some(AsyncFrameworkKind::AnyEvent) => ("AnyEvent", "AnyEvent", false),
+            Some(AsyncFrameworkKind::EV) => ("EV", "EV", true),
+            Some(AsyncFrameworkKind::Future) => ("Future", "Future", true),
+            Some(AsyncFrameworkKind::FutureXS) => ("Future::XS", "Future::XS", true),
+            Some(AsyncFrameworkKind::Promise) => ("Promise", "Promise", true),
+            Some(AsyncFrameworkKind::PromiseXS) => ("Promise::XS", "Promise::XS", true),
+            Some(AsyncFrameworkKind::POE) => ("POE", "POE", false),
+            Some(AsyncFrameworkKind::IOAsync) => ("IO::Async", "IO::Async", false),
+            Some(AsyncFrameworkKind::MojoRedis) => ("Mojo::Redis", "Mojo::Redis", true),
+            Some(AsyncFrameworkKind::MojoPg) => ("Mojo::Pg", "Mojo::Pg", true),
+            None => return false,
+        };
+
+        let Some(name) = Self::single_symbol_name(object) else {
+            return false;
+        };
+        if flags.async_framework == Some(AsyncFrameworkKind::AnyEvent) {
+            if !matches!(
+                name.as_str(),
+                "AnyEvent" | "AnyEvent::CondVar" | "AnyEvent::Timer" | "AnyEvent::IO"
+            ) {
+                return false;
+            }
+        } else if exact_match {
+            if name != module_name {
+                return false;
+            }
+        } else if !name.starts_with(&format!("{module_name}::")) {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(&name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        let framework_attr = format!("framework={framework_name}");
+
+        self.table.add_symbol(Symbol {
+            name: name.clone(),
+            qualified_name: name.clone(),
+            kind: SymbolKind::Class,
+            location: object.location,
+            scope_id: self.table.current_scope(),
+            declaration: Some(framework_attr.clone()),
+            documentation: Some(format!("Synthetic {framework_name} class")),
+            attributes: vec![framework_attr],
+        });
+
+        true
+    }
+
+    /// Synthesize the `EV` namespace symbol when the framework is imported.
+    fn synthesize_ev_framework_symbol(&mut self, location: SourceLocation) {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return;
+        }
+
+        let name = "EV";
+        if self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Class
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        }) {
+            return;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Class,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some("Synthetic EV namespace".to_string()),
+            attributes: vec!["framework=EV".to_string()],
+        });
+    }
+
+    /// Synthesize narrow EV watcher / loop API symbols used in function-call form.
+    fn synthesize_ev_symbols(&mut self, name: &str, location: SourceLocation) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+        if flags.async_framework != Some(AsyncFrameworkKind::EV) {
+            return false;
+        }
+
+        let Some(ev_suffix) = name.strip_prefix("EV::") else {
+            return false;
+        };
+        if !matches!(ev_suffix, "timer" | "io" | "signal" | "idle") {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(name).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some("framework=EV")
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("framework=EV".to_string()),
+            documentation: Some(format!("Synthetic EV API `{ev_suffix}`")),
+            attributes: vec!["framework=EV".to_string(), format!("ev_api={ev_suffix}")],
+        });
+
+        true
+    }
+
+    /// Synthesize a narrow async framework API surface for common entrypoints.
+    ///
+    /// This intentionally avoids type inference. It only exposes the canonical
+    /// constructor / class methods and the common chain methods that are most
+    /// useful for navigation and references when a file opts into an async
+    /// framework such as Future or Promise.
+    fn synthesize_future_api_symbols(
+        &mut self,
+        object: &Node,
+        method: &str,
+        location: SourceLocation,
+    ) -> bool {
+        let Some(flags) = self.framework_flags.get(&self.table.current_package) else {
+            return false;
+        };
+
+        let (framework_name, root_name, chain_methods, class_entrypoints) =
+            match flags.async_framework {
+                Some(AsyncFrameworkKind::Future) => (
+                    "Future",
+                    "Future",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::FutureXS) => (
+                    "Future::XS",
+                    "Future::XS",
+                    vec!["then", "catch", "finally", "get", "is_done", "is_ready"],
+                    vec!["new", "done", "fail", "wait_all", "needs_all", "needs_any"],
+                ),
+                Some(AsyncFrameworkKind::Promise) => (
+                    "Promise",
+                    "Promise",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                Some(AsyncFrameworkKind::PromiseXS) => (
+                    "Promise::XS",
+                    "Promise::XS",
+                    vec!["then", "catch", "finally", "resolve", "reject"],
+                    vec!["new", "all", "race", "any"],
+                ),
+                _ => return false,
+            };
+
+        let object_name = Self::single_symbol_name(object);
+
+        let should_synthesize = if chain_methods.contains(&method) {
+            true
+        } else if class_entrypoints.contains(&method) {
+            object_name.is_some_and(|name| name == root_name)
+        } else {
+            false
+        };
+        if !should_synthesize {
+            return false;
+        }
+
+        let already_synthesized = self.table.symbols.get(method).is_some_and(|symbols| {
+            symbols.iter().any(|symbol| {
+                symbol.kind == SymbolKind::Subroutine
+                    && symbol.declaration.as_deref() == Some(&format!("framework={framework_name}"))
+                    && symbol.attributes.iter().any(|attr| attr == &format!("future_api={method}"))
+            })
+        });
+        if already_synthesized {
+            return true;
+        }
+
+        self.table.add_symbol(Symbol {
+            name: method.to_string(),
+            qualified_name: format!("{framework_name}::{method}"),
+            kind: SymbolKind::Subroutine,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some(format!("framework={framework_name}")),
+            documentation: Some(format!("Synthetic {framework_name} API `{method}`")),
+            attributes: vec![format!("framework={framework_name}"), format!("future_api={method}")],
+        });
+
+        true
+    }
+
     /// Update framework detection state from `use` statements.
     fn update_framework_context(&mut self, module: &str, args: &[String]) {
         let pkg = self.table.current_package.clone();
@@ -1576,24 +2141,86 @@ impl SymbolExtractor {
         };
 
         if let Some(kind) = framework_kind {
-            let flags = self.framework_flags.entry(pkg).or_default();
+            let flags = self.framework_flags.entry(pkg.clone()).or_default();
             flags.moo = true;
             flags.kind = Some(kind);
             return;
         }
 
         if module == "Class::Accessor" {
-            self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
             return;
         }
 
         let web_kind = match module {
+            "Dancer" => Some(WebFrameworkKind::Dancer),
             "Dancer2" | "Dancer2::Core" => Some(WebFrameworkKind::Dancer2),
             "Mojolicious::Lite" => Some(WebFrameworkKind::MojoliciousLite),
+            "Plack::Builder" => Some(WebFrameworkKind::PlackBuilder),
             _ => None,
         };
         if let Some(kind) = web_kind {
-            self.framework_flags.entry(pkg).or_default().web_framework = Some(kind);
+            self.framework_flags.entry(pkg.clone()).or_default().web_framework = Some(kind);
+            return;
+        }
+
+        if module == "IO::Async" || module.starts_with("IO::Async::") {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::IOAsync);
+            return;
+        }
+
+        if module == "AnyEvent" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::AnyEvent);
+            return;
+        }
+
+        if module == "EV" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::EV);
+            return;
+        }
+
+        if module == "Future" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::Future);
+            return;
+        }
+
+        if module == "Future::XS" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::FutureXS);
+            return;
+        }
+
+        if module == "Promise" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::Promise);
+            return;
+        }
+
+        if module == "Promise::XS" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::PromiseXS);
+            return;
+        }
+
+        if module == "POE" || module.starts_with("POE::") {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::POE);
+            return;
+        }
+
+        if module == "Mojo::Redis" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoRedis);
+            return;
+        }
+
+        if module == "Mojo::Pg" {
+            self.framework_flags.entry(pkg.clone()).or_default().async_framework =
+                Some(AsyncFrameworkKind::MojoPg);
             return;
         }
 
@@ -1603,9 +2230,81 @@ impl SymbolExtractor {
                 .filter_map(|arg| Self::normalize_symbol_name(arg))
                 .any(|arg| arg == "Class::Accessor");
             if has_class_accessor_parent {
-                self.framework_flags.entry(pkg).or_default().class_accessor = true;
+                self.framework_flags.entry(pkg.clone()).or_default().class_accessor = true;
+            }
+            let has_catalyst_controller_parent = args
+                .iter()
+                .filter_map(|arg| Self::normalize_symbol_name(arg))
+                .any(|arg| arg == "Catalyst::Controller");
+            if has_catalyst_controller_parent {
+                self.mark_catalyst_controller_package(&pkg);
             }
         }
+    }
+
+    fn mark_catalyst_controller_package(&mut self, package: &str) {
+        self.framework_flags.entry(package.to_string()).or_default().catalyst_controller = true;
+    }
+
+    fn current_package_is_catalyst_controller(&self) -> bool {
+        self.framework_flags
+            .get(&self.table.current_package)
+            .is_some_and(|flags| flags.catalyst_controller)
+            || Self::is_catalyst_controller_package_name(&self.table.current_package)
+    }
+
+    fn is_catalyst_controller_package_name(package: &str) -> bool {
+        package.contains("::Controller::") || package.ends_with("::Controller")
+    }
+
+    fn catalyst_action_metadata(attributes: &[String]) -> Option<(String, Vec<String>)> {
+        let mut kind = None;
+        let mut details = Vec::new();
+        let mut seen = HashSet::new();
+
+        for attr in attributes {
+            let attr_name = Self::attribute_base_name(attr);
+            if !Self::is_catalyst_action_attribute(&attr_name) {
+                continue;
+            }
+
+            if kind.is_none()
+                || matches!(kind.as_deref(), Some("Args" | "CaptureArgs" | "PathPart"))
+            {
+                if matches!(attr_name.as_str(), "Path" | "Local" | "Global" | "Regex" | "Chained") {
+                    kind = Some(attr_name.clone());
+                } else if kind.is_none() {
+                    kind = Some(attr_name.clone());
+                }
+            }
+
+            if seen.insert(attr.clone()) {
+                details.push(attr.clone());
+            }
+        }
+
+        if let Some(action_kind) = kind.as_deref()
+            && matches!(action_kind, "Path" | "Local" | "Global" | "Regex" | "Chained")
+        {
+            details.retain(|attr| Self::attribute_base_name(attr) != action_kind);
+        }
+
+        kind.map(|kind| (kind, details))
+    }
+
+    fn is_catalyst_action_attribute(attr_name: &str) -> bool {
+        matches!(
+            attr_name,
+            "Path" | "Local" | "Global" | "Regex" | "Chained" | "PathPart" | "Args" | "CaptureArgs"
+        )
+    }
+
+    fn attribute_base_name(attr: &str) -> String {
+        attr.trim_start_matches(':')
+            .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':'))
+            .next()
+            .unwrap_or("")
+            .to_string()
     }
 
     /// Parse attribute metadata from Moo/Moose option hashes.
@@ -1839,6 +2538,7 @@ impl SymbolExtractor {
                 Self::normalize_symbol_name(value).unwrap_or_else(|| value.clone())
             }
             NodeKind::Identifier { name } => name.clone(),
+            NodeKind::Variable { sigil, name } => format!("{sigil}{name}"),
             NodeKind::Number { value } => value.clone(),
             NodeKind::ArrayLiteral { elements } => {
                 let mut entries = Vec::new();
@@ -2037,6 +2737,28 @@ impl SymbolExtractor {
         None
     }
 
+    /// Register signature parameters as implicit `my` variable declarations in the current scope.
+    ///
+    /// Handles `MandatoryParameter`, `OptionalParameter`, `SlurpyParameter`, and
+    /// `NamedParameter` nodes by extracting the inner variable and registering it
+    /// exactly as if the user had written `my $x` at the top of the subroutine body.
+    fn register_signature_params(&mut self, sig: &Node) {
+        let NodeKind::Signature { parameters } = &sig.kind else {
+            return;
+        };
+        for param in parameters {
+            let variable = match &param.kind {
+                NodeKind::MandatoryParameter { variable } => variable.as_ref(),
+                NodeKind::OptionalParameter { variable, .. } => variable.as_ref(),
+                NodeKind::SlurpyParameter { variable } => variable.as_ref(),
+                NodeKind::NamedParameter { variable } => variable.as_ref(),
+                // Unexpected node kind inside a signature — skip gracefully
+                _ => continue,
+            };
+            self.handle_variable_declaration("my", variable, &[], variable.location, None);
+        }
+    }
+
     /// Handle variable declaration
     fn handle_variable_declaration(
         &mut self,
@@ -2073,6 +2795,194 @@ impl SymbolExtractor {
         }
     }
 
+    fn try_extract_const_fast_declaration(&mut self, args: &[Node]) -> bool {
+        let mut matched = false;
+
+        for arg in args {
+            match &arg.kind {
+                NodeKind::VariableDeclaration { declarator, variable, .. } => {
+                    if self.add_constant_wrapper_symbol(
+                        variable,
+                        &[],
+                        declarator,
+                        "const",
+                        "Const::Fast read-only variable",
+                    ) {
+                        matched = true;
+                    }
+                }
+                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
+                    let mut saw_decl = false;
+                    for variable in variables {
+                        if self.add_constant_wrapper_symbol(
+                            variable,
+                            attributes,
+                            declarator,
+                            "const",
+                            "Const::Fast read-only variable",
+                        ) {
+                            saw_decl = true;
+                        }
+                    }
+                    matched |= saw_decl;
+                }
+                _ => self.visit_node(arg),
+            }
+        }
+
+        matched
+    }
+
+    fn try_extract_readonly_declaration(&mut self, args: &[Node]) -> bool {
+        let mut matched = false;
+
+        for arg in args {
+            match &arg.kind {
+                NodeKind::VariableDeclaration { declarator, variable, attributes, .. } => {
+                    if self.add_constant_wrapper_symbol(
+                        variable,
+                        attributes,
+                        declarator,
+                        "Readonly",
+                        "Readonly read-only variable",
+                    ) {
+                        matched = true;
+                    }
+                }
+                NodeKind::VariableListDeclaration { declarator, variables, attributes, .. } => {
+                    let mut saw_decl = false;
+                    for variable in variables {
+                        if self.add_constant_wrapper_symbol(
+                            variable,
+                            attributes,
+                            declarator,
+                            "Readonly",
+                            "Readonly read-only variable",
+                        ) {
+                            saw_decl = true;
+                        }
+                    }
+                    matched |= saw_decl;
+                }
+                _ => self.visit_node(arg),
+            }
+        }
+
+        matched
+    }
+
+    fn add_constant_wrapper_symbol(
+        &mut self,
+        variable: &Node,
+        attributes: &[String],
+        scope_declarator: &str,
+        declarator: &str,
+        documentation: &str,
+    ) -> bool {
+        match &variable.kind {
+            NodeKind::Variable { name, .. } => {
+                self.table.add_symbol(Symbol {
+                    name: name.clone(),
+                    qualified_name: if scope_declarator == "our" {
+                        format!("{}::{}", self.table.current_package, name)
+                    } else {
+                        name.clone()
+                    },
+                    kind: SymbolKind::Constant,
+                    location: variable.location,
+                    scope_id: self.table.current_scope(),
+                    declaration: Some(declarator.to_string()),
+                    documentation: Some(documentation.to_string()),
+                    attributes: attributes.to_vec(),
+                });
+                true
+            }
+            NodeKind::VariableWithAttributes { variable, attributes: inner_attributes } => {
+                let mut merged = attributes.to_vec();
+                merged.extend(inner_attributes.iter().cloned());
+                self.add_constant_wrapper_symbol(
+                    variable,
+                    &merged,
+                    scope_declarator,
+                    declarator,
+                    documentation,
+                )
+            }
+            _ => false,
+        }
+    }
+
+    fn synthesize_use_constant_symbols(&mut self, args: &[String], location: SourceLocation) {
+        let constant_names = extract_constant_names_from_use_args(args);
+        for name in constant_names {
+            self.table.add_symbol(Symbol {
+                name: name.clone(),
+                qualified_name: format!("{}::{}", self.table.current_package, name),
+                kind: SymbolKind::Constant,
+                location,
+                scope_id: self.table.current_scope(),
+                declaration: Some("constant".to_string()),
+                documentation: Some("use constant declaration".to_string()),
+                attributes: vec![],
+            });
+        }
+    }
+
+    fn register_catch_variable(&mut self, full_name: &str, catch_block_location: SourceLocation) {
+        let (sigil, name) = split_variable_name(full_name);
+        let kind = match sigil {
+            "$" => SymbolKind::scalar(),
+            "@" => SymbolKind::array(),
+            "%" => SymbolKind::hash(),
+            _ => return,
+        };
+        if name.is_empty() || name.contains("::") {
+            return;
+        }
+
+        let location = self
+            .find_catch_variable_location(catch_block_location.start, full_name)
+            .unwrap_or(SourceLocation {
+                start: catch_block_location.start,
+                end: catch_block_location.start,
+            });
+
+        self.table.add_symbol(Symbol {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind,
+            location,
+            scope_id: self.table.current_scope(),
+            declaration: Some("my".to_string()),
+            documentation: Some("Exception variable bound by catch".to_string()),
+            attributes: vec![],
+        });
+    }
+
+    fn find_catch_variable_location(
+        &self,
+        catch_body_start: usize,
+        full_name: &str,
+    ) -> Option<SourceLocation> {
+        if self.source.is_empty()
+            || full_name.is_empty()
+            || catch_body_start == 0
+            || catch_body_start > self.source.len()
+        {
+            return None;
+        }
+
+        let window_start = catch_body_start.saturating_sub(256);
+        let window = self.source.get(window_start..catch_body_start)?;
+        let catch_start = window.rfind("catch")?;
+        let search_start = catch_start + "catch".len();
+        let var_offset = window[search_start..].rfind(full_name)? + search_start;
+        let start = window_start + var_offset;
+        let end = start + full_name.len();
+
+        Some(SourceLocation { start, end })
+    }
+
     /// Mark a node as a write reference (used in assignments)
     fn mark_write_reference(&mut self, node: &Node) {
         // This is a simplified version - in practice we'd need to handle
@@ -2090,7 +3000,11 @@ impl SymbolExtractor {
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
         let scalar_re = match SCALAR_RE
-            .get_or_init(|| Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})"))
+            .get_or_init(|| {
+                Regex::new(
+                    r"\$((?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)|\{(?:[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)\})",
+                )
+            })
             .as_ref()
         {
             Ok(re) => re,
@@ -2127,6 +3041,174 @@ impl SymbolExtractor {
             }
         }
     }
+}
+
+fn split_variable_name(full_name: &str) -> (&str, &str) {
+    full_name
+        .char_indices()
+        .next()
+        .map(|(idx, ch)| (&full_name[idx..idx + ch.len_utf8()], &full_name[idx + ch.len_utf8()..]))
+        .unwrap_or(("", ""))
+}
+
+/// Extract constant names from `NodeKind::Use { module: "constant", args, .. }`.
+fn extract_constant_names_from_use_args(args: &[String]) -> Vec<String> {
+    fn push_unique(names: &mut Vec<String>, seen: &mut HashSet<String>, candidate: &str) {
+        if seen.insert(candidate.to_string()) {
+            names.push(candidate.to_string());
+        }
+    }
+
+    fn normalize_constant_name(token: &str) -> Option<&str> {
+        let stripped = token.trim_matches(|c: char| {
+            matches!(c, '\'' | '"' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';')
+        });
+        if stripped.is_empty() || stripped.starts_with('-') {
+            return None;
+        }
+        stripped.chars().all(|c| c.is_alphanumeric() || c == '_').then_some(stripped)
+    }
+
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+    let Some(first) = args.first().map(String::as_str) else {
+        return names;
+    };
+
+    if first.starts_with("qw") {
+        let (qw_words, remainder) = extract_qw_words(first);
+        if remainder.trim().is_empty() {
+            for word in qw_words {
+                if let Some(candidate) = normalize_constant_name(&word) {
+                    push_unique(&mut names, &mut seen, candidate);
+                }
+            }
+            return names;
+        }
+
+        let content = first.trim_start_matches("qw").trim_start();
+        let content = content
+            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+        for word in content.split_whitespace() {
+            if let Some(candidate) = normalize_constant_name(word) {
+                push_unique(&mut names, &mut seen, candidate);
+            }
+        }
+        return names;
+    }
+
+    let starts_hash_form = first == "{"
+        || first == "+{"
+        || (first == "+" && args.get(1).map(String::as_str) == Some("{"));
+    if starts_hash_form {
+        let mut skipped_leading_plus = false;
+        let mut iter = args.iter().peekable();
+        while let Some(arg) = iter.next() {
+            if arg == "+{" {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "+" && !skipped_leading_plus {
+                skipped_leading_plus = true;
+                continue;
+            }
+            if arg == "{" || arg == "}" || arg == "," || arg == "=>" {
+                continue;
+            }
+            if let Some(candidate) = normalize_constant_name(arg)
+                && iter.peek().map(|s| s.as_str()) == Some("=>")
+            {
+                push_unique(&mut names, &mut seen, candidate);
+            }
+        }
+        return names;
+    }
+
+    if let Some(candidate) = normalize_constant_name(first) {
+        push_unique(&mut names, &mut seen, candidate);
+    }
+
+    names
+}
+
+fn extract_qw_words(input: &str) -> (Vec<String>, String) {
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+    let mut words = Vec::new();
+    let mut remainder = String::new();
+
+    while i < chars.len() {
+        if chars[i] == 'q'
+            && i + 1 < chars.len()
+            && chars[i + 1] == 'w'
+            && (i == 0 || !chars[i - 1].is_alphanumeric())
+        {
+            let mut j = i + 2;
+            while j < chars.len() && chars[j].is_whitespace() {
+                j += 1;
+            }
+            if j >= chars.len() {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let open = chars[j];
+            let (close, is_paired_delimiter) = match open {
+                '(' => (')', true),
+                '[' => (']', true),
+                '{' => ('}', true),
+                '<' => ('>', true),
+                _ => (open, false),
+            };
+            if open.is_alphanumeric() || open == '_' || open == '\'' || open == '"' {
+                remainder.push(chars[i]);
+                i += 1;
+                continue;
+            }
+
+            let mut k = j + 1;
+            if is_paired_delimiter {
+                let mut depth = 1usize;
+                while k < chars.len() && depth > 0 {
+                    if chars[k] == open {
+                        depth += 1;
+                    } else if chars[k] == close {
+                        depth -= 1;
+                    }
+                    k += 1;
+                }
+                if depth != 0 {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+                k -= 1;
+            } else {
+                while k < chars.len() && chars[k] != close {
+                    k += 1;
+                }
+                if k >= chars.len() {
+                    remainder.extend(chars[i..].iter());
+                    break;
+                }
+            }
+
+            let content: String = chars[j + 1..k].iter().collect();
+            for word in content.split_whitespace() {
+                if !word.is_empty() {
+                    words.push(word.to_string());
+                }
+            }
+            i = k + 1;
+            continue;
+        }
+
+        remainder.push(chars[i]);
+        i += 1;
+    }
+
+    (words, remainder)
 }
 
 #[cfg(test)]
@@ -2202,6 +3284,202 @@ class MyClass {
         assert!(
             greet_symbols[0].attributes.contains(&"method".to_string()),
             "method symbol should have 'method' attribute"
+        );
+    }
+
+    // ── Issue #3361: signature parameters added to symbol table ──
+
+    #[test]
+    fn test_subroutine_mandatory_params_in_symbol_table() {
+        let code = r#"
+sub foo ($x, $y) {
+    return $x + $y;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("y"),
+            "mandatory parameter $y should be in the symbol table"
+        );
+
+        let x_symbols = &table.symbols["x"];
+        assert_eq!(x_symbols.len(), 1);
+        assert_eq!(
+            x_symbols[0].declaration,
+            Some("my".to_string()),
+            "$x should be declared as 'my'"
+        );
+
+        let y_symbols = &table.symbols["y"];
+        assert_eq!(y_symbols.len(), 1);
+        assert_eq!(
+            y_symbols[0].declaration,
+            Some("my".to_string()),
+            "$y should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_subroutine_optional_param_in_symbol_table() {
+        let code = r#"
+sub bar ($x, $y = 0) {
+    return $x + $y;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("y"),
+            "optional parameter $y should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["y"][0].declaration,
+            Some("my".to_string()),
+            "optional parameter $y should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_subroutine_slurpy_param_in_symbol_table() {
+        let code = r#"
+sub baz ($x, @rest) {
+    return scalar @rest;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("x"),
+            "mandatory parameter $x should be in the symbol table"
+        );
+        assert!(
+            table.symbols.contains_key("rest"),
+            "slurpy parameter @rest should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["rest"][0].declaration,
+            Some("my".to_string()),
+            "slurpy parameter @rest should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_method_signature_params_in_symbol_table() {
+        let code = r#"
+class Foo {
+    method greet ($name) {
+        return $name;
+    }
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("name"),
+            "method signature parameter $name should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["name"][0].declaration,
+            Some("my".to_string()),
+            "method parameter $name should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_empty_signature_no_crash() {
+        // Edge case: empty signature `sub foo () { }` — should not crash and
+        // should leave the symbol table with only the sub itself, not any param.
+        let code = r#"
+sub foo () {
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        // Sub `foo` is registered as a symbol
+        assert!(table.symbols.contains_key("foo"), "sub foo should be in the symbol table");
+        // No spurious variable symbols from an empty signature
+        assert_eq!(
+            table.symbols.len(),
+            1,
+            "only 'foo' should be in the symbol table for an empty-signature sub"
+        );
+    }
+
+    #[test]
+    fn test_hash_slurpy_param_in_symbol_table() {
+        // Edge case: hash slurpy `%opts` — sigil % maps to SymbolKind::hash()
+        let code = r#"
+sub configure ($x, %opts) {
+    return $opts{key};
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        assert!(
+            table.symbols.contains_key("opts"),
+            "hash slurpy parameter %opts should be in the symbol table"
+        );
+        assert_eq!(
+            table.symbols["opts"][0].declaration,
+            Some("my".to_string()),
+            "hash slurpy parameter %opts should be declared as 'my'"
+        );
+    }
+
+    #[test]
+    fn test_optional_param_location_is_variable_span() {
+        // The symbol location for an optional param `$y = 0` should span just
+        // the variable `$y`, not the entire `$y = 0` expression.  Callers like
+        // go-to-definition use this span to highlight the declaration site.
+        let code = "sub bar ($x, $y = 0) { $x + $y }";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+
+        // `$y` starts at offset 13 in "sub bar ($x, $y = 0)"
+        //                                            ^ offset 13
+        let y_sym = &table.symbols["y"][0];
+        let span_len = y_sym.location.end - y_sym.location.start;
+        // The variable node "$y" is 2 bytes; the full param "$y = 0" is 6 bytes.
+        assert_eq!(
+            span_len, 2,
+            "symbol location should cover just '$y' (2 chars), not the full '$y = 0' (6 chars)"
         );
     }
 }

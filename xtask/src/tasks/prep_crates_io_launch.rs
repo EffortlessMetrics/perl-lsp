@@ -5,13 +5,15 @@ use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use tempfile::TempDir;
 
 use crate::utils::project_root;
 
 const CORE_LAUNCH_CRATES: &[&str] =
-    &["perl-parser", "perl-lexer", "perl-lsp", "perl-dap", "perl-corpus"];
+    &["perl-parser", "perl-lexer", "perl-lsp-rs", "perllsp", "perl-dap", "perl-corpus"];
 
 #[derive(Deserialize)]
 struct RootCargoManifest {
@@ -35,13 +37,14 @@ struct RootPublishMetadata {
 
 #[derive(Deserialize)]
 struct CargoMetadata {
-    workspace_root: String,
     packages: Vec<MetadataPackage>,
+    target_directory: PathBuf,
 }
 
 #[derive(Deserialize)]
 struct MetadataPackage {
     name: String,
+    version: String,
     manifest_path: String,
     publish: Option<JsonValue>,
 }
@@ -55,7 +58,6 @@ pub fn run(all: bool) -> Result<()> {
     };
 
     let metadata = load_cargo_metadata(&root)?;
-    let patch_args = package_patch_args(&metadata);
     let package_names: HashSet<_> =
         metadata.packages.iter().map(|package| package.name.as_str()).collect();
 
@@ -74,7 +76,7 @@ pub fn run(all: bool) -> Result<()> {
         if all { "all publish-allowlist crates" } else { "core launch crates" }
     );
     println!(
-        "📦 Running cargo check + cargo publish --dry-run for {} crate(s)",
+        "📦 Running cargo check + cargo package + offline packaged-manifest check for {} crate(s)",
         launch_crates.len()
     );
 
@@ -82,7 +84,12 @@ pub fn run(all: bool) -> Result<()> {
         println!();
         println!("==> {crate_name}");
         run_cargo_check(&root, &crate_name)?;
-        run_cargo_publish_dry_run(&root, &crate_name, &patch_args)?;
+        let patch_args = package_patch_args(&metadata, Some(&crate_name));
+        let package =
+            metadata.packages.iter().find(|package| package.name == crate_name).ok_or_else(
+                || color_eyre::eyre::eyre!("missing cargo metadata for {crate_name}"),
+            )?;
+        run_cargo_package_check(&root, &metadata.target_directory, package, &patch_args)?;
     }
 
     println!();
@@ -91,12 +98,14 @@ pub fn run(all: bool) -> Result<()> {
     Ok(())
 }
 
-fn package_patch_args(metadata: &CargoMetadata) -> Vec<String> {
+fn package_patch_args(metadata: &CargoMetadata, skip_name: Option<&str>) -> Vec<String> {
     let mut args = Vec::new();
-    let workspace_root = Path::new(&metadata.workspace_root);
 
     for package in &metadata.packages {
         if !is_publish_candidate(&package.publish) {
+            continue;
+        }
+        if skip_name == Some(package.name.as_str()) {
             continue;
         }
 
@@ -105,12 +114,11 @@ fn package_patch_args(metadata: &CargoMetadata) -> Vec<String> {
             Some(dir) => dir,
             None => continue,
         };
-        let rel_dir = crate_dir.strip_prefix(workspace_root).unwrap_or(crate_dir);
 
         args.push(format!(
             "--config=patch.crates-io.{}.path=\"{}\"",
             package.name,
-            toml_safe_path(rel_dir)
+            toml_safe_path(crate_dir)
         ));
     }
 
@@ -187,13 +195,33 @@ fn run_cargo_check(root: &Path, crate_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_cargo_publish_dry_run(root: &Path, crate_name: &str, patch_args: &[String]) -> Result<()> {
+fn package_output_dir(target_directory: &Path) -> PathBuf {
+    target_directory.join("package")
+}
+
+fn crate_archive_path(target_directory: &Path, package: &MetadataPackage) -> PathBuf {
+    package_output_dir(target_directory).join(format!("{}-{}.crate", package.name, package.version))
+}
+
+fn run_cargo_package_check(
+    root: &Path,
+    target_directory: &Path,
+    package: &MetadataPackage,
+    patch_args: &[String],
+) -> Result<()> {
+    let archive_path = crate_archive_path(target_directory, package);
+    if archive_path.exists() {
+        fs::remove_file(&archive_path).with_context(|| {
+            format!("failed to remove stale crate archive {}", archive_path.display())
+        })?;
+    }
+
     let mut args = vec![
-        "publish".to_string(),
-        "--dry-run".to_string(),
+        "package".to_string(),
         "--locked".to_string(),
+        "--no-verify".to_string(),
         "-p".to_string(),
-        crate_name.to_string(),
+        package.name.clone(),
     ];
     args.extend(patch_args.iter().cloned());
 
@@ -204,22 +232,133 @@ fn run_cargo_publish_dry_run(root: &Path, crate_name: &str, patch_args: &[String
         .context("failed to run cargo package")?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let metadata_learning_failed = stderr.contains("could not learn metadata for:");
+        if !(metadata_learning_failed && archive_path.is_file()) {
+            bail!("cargo package failed for {}: {}", package.name, stderr.trim_end());
+        }
+    }
+
+    let unpack_dir = unpack_crate_archive(target_directory, package)?;
+    let packaged_manifest =
+        unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
+
+    let mut verify_args = vec![
+        "check".to_string(),
+        "--offline".to_string(),
+        "--manifest-path".to_string(),
+        packaged_manifest.to_string_lossy().into_owned(),
+    ];
+    verify_args.extend(patch_args.iter().cloned());
+
+    let verify_output = Command::new("cargo")
+        .current_dir(root)
+        .args(verify_args)
+        .output()
+        .context("failed to run cargo check on packaged manifest")?;
+
+    if !verify_output.status.success() {
         bail!(
-            "cargo publish dry-run failed for {crate_name}: {}",
-            String::from_utf8_lossy(&output.stderr).trim_end()
+            "offline packaged-manifest check failed for {}: {}",
+            package.name,
+            String::from_utf8_lossy(&verify_output.stderr).trim_end()
         );
     }
 
     Ok(())
 }
 
+fn unpack_crate_archive(target_directory: &Path, package: &MetadataPackage) -> Result<TempDir> {
+    let archive_path = crate_archive_path(target_directory, package);
+    if !archive_path.is_file() {
+        bail!("crate archive missing for {}: {}", package.name, archive_path.display());
+    }
+
+    let unpack_dir = tempfile::Builder::new()
+        .prefix(&format!("{}-{}-", package.name, package.version))
+        .tempdir_in(package_output_dir(target_directory))
+        .context("failed to create temp directory for crate verification")?;
+
+    let archive_file = File::open(&archive_path)
+        .with_context(|| format!("failed to open crate archive {}", archive_path.display()))?;
+    let decoder = flate2::read::GzDecoder::new(archive_file);
+    let mut archive = tar::Archive::new(decoder);
+    archive
+        .unpack(unpack_dir.path())
+        .with_context(|| format!("failed to unpack crate archive {}", archive_path.display()))?;
+
+    let manifest_path =
+        unpack_dir.path().join(format!("{}-{}", package.name, package.version)).join("Cargo.toml");
+    if !manifest_path.is_file() {
+        bail!("unpacked manifest missing for {}: {}", package.name, manifest_path.display());
+    }
+
+    Ok(unpack_dir)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::toml_safe_path;
-    use std::path::Path;
+    use super::{
+        CargoMetadata, MetadataPackage, crate_archive_path, package_output_dir, package_patch_args,
+        toml_safe_path,
+    };
+    use serde_json::Value as JsonValue;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn toml_safe_path_normalizes_backslashes() {
         assert_eq!(toml_safe_path(Path::new(r"crates\perl-ast")), "crates/perl-ast");
+    }
+
+    #[test]
+    fn package_patch_args_skips_current_crate() {
+        let metadata = CargoMetadata {
+            target_directory: PathBuf::from("/workspace/target"),
+            packages: vec![
+                MetadataPackage {
+                    name: "perl-parser".to_string(),
+                    version: "0.12.1".to_string(),
+                    manifest_path: "/workspace/crates/perl-parser/Cargo.toml".to_string(),
+                    publish: Some(JsonValue::Bool(true)),
+                },
+                MetadataPackage {
+                    name: "perl-lexer".to_string(),
+                    version: "0.12.1".to_string(),
+                    manifest_path: "/workspace/crates/perl-lexer/Cargo.toml".to_string(),
+                    publish: Some(JsonValue::Bool(true)),
+                },
+            ],
+        };
+
+        let args = package_patch_args(&metadata, Some("perl-parser"));
+
+        assert_eq!(
+            args,
+            vec![
+                "--config=patch.crates-io.perl-lexer.path=\"/workspace/crates/perl-lexer\""
+                    .to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn package_output_dir_uses_cargo_target_directory() {
+        let path = package_output_dir(Path::new("/workspace/custom-target"));
+
+        assert_eq!(path, Path::new("/workspace/custom-target/package"));
+    }
+
+    #[test]
+    fn crate_archive_path_points_to_packaged_archive_in_target_directory() {
+        let package = MetadataPackage {
+            name: "perl-parser".to_string(),
+            version: "0.12.1".to_string(),
+            manifest_path: "/workspace/crates/perl-parser/Cargo.toml".to_string(),
+            publish: Some(JsonValue::Bool(true)),
+        };
+
+        let path = crate_archive_path(Path::new("/workspace/custom-target"), &package);
+
+        assert_eq!(path, Path::new("/workspace/custom-target/package/perl-parser-0.12.1.crate"));
     }
 }

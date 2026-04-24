@@ -1,6 +1,0 @@
----
-source: crates/perl-parser/tests/ast_snapshot_tests.rs
-expression: "parse_errors(\"my $x = ;\")"
----
-expected expression, found ';' at position 8
-expected statement, found ';' at position 8

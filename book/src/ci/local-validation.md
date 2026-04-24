@@ -266,7 +266,7 @@ This runs the **full CI pipeline** (~10-20 minutes) including:
 
 ```bash
 # 1. Build release binary
-cargo build -p perl-lsp --release
+cargo build -p perl-lsp-rs --release
 
 # 2. Test LSP server health
 ./target/release/perl-lsp --version
@@ -431,7 +431,7 @@ sudo pacman -S openssl pkg-config
 just ci-test-lsp
 
 # If running manually:
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Issue: `error: could not find Cargo.toml`
@@ -469,10 +469,10 @@ LSP tests use **adaptive threading** to prevent resource exhaustion:
 
 ```bash
 # Standard threading (may fail on CI runners)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # Adaptive threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **Environment variables:**

@@ -235,6 +235,11 @@ mod extra_uri_to_fs_path {
     #[test]
     fn root_uri() -> Result<(), String> {
         let path = uri_to_fs_path("file:///").ok_or("expected Some for root")?;
+        #[cfg(windows)]
+        if !path.has_root() {
+            return Err(format!("expected rooted path, got: {}", path.display()));
+        }
+        #[cfg(not(windows))]
         if !path.to_string_lossy().starts_with('/') {
             return Err(format!("expected root path, got: {}", path.display()));
         }
@@ -488,15 +493,29 @@ mod extra_roundtrip {
     use perl_uri::{fs_path_to_uri, uri_to_fs_path};
     use std::path::Path;
 
+    fn assert_roundtrip_matches(back: &Path, original: &str) -> Result<(), String> {
+        #[cfg(windows)]
+        if let Some(rootless) = original.strip_prefix('/') {
+            let expected_suffix = rootless.replace('/', "\\");
+            if back.ends_with(Path::new(&expected_suffix)) {
+                return Ok(());
+            }
+            return Err(format!("mismatch: {} vs {}", back.display(), original));
+        }
+
+        if back == Path::new(original) {
+            Ok(())
+        } else {
+            Err(format!("mismatch: {} vs {}", back.display(), original))
+        }
+    }
+
     #[test]
     fn roundtrip_path_with_hash() -> Result<(), String> {
         let original = "/tmp/file#name.pl";
         let uri = fs_path_to_uri(original)?;
         let back = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if back != Path::new(original) {
-            return Err(format!("mismatch: {} vs {}", back.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&back, original)
     }
 
     #[test]
@@ -504,10 +523,7 @@ mod extra_roundtrip {
         let original = "/tmp/file?name.pl";
         let uri = fs_path_to_uri(original)?;
         let back = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if back != Path::new(original) {
-            return Err(format!("mismatch: {} vs {}", back.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&back, original)
     }
 
     #[test]
@@ -515,10 +531,7 @@ mod extra_roundtrip {
         let original = "/tmp/a  b   c/test.pl";
         let uri = fs_path_to_uri(original)?;
         let back = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if back != Path::new(original) {
-            return Err(format!("mismatch: {} vs {}", back.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&back, original)
     }
 
     #[test]
@@ -526,10 +539,7 @@ mod extra_roundtrip {
         let original = "/tmp/archive.tar.gz.bak";
         let uri = fs_path_to_uri(original)?;
         let back = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if back != Path::new(original) {
-            return Err(format!("mismatch: {} vs {}", back.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&back, original)
     }
 
     #[test]
@@ -537,10 +547,7 @@ mod extra_roundtrip {
         let original = "/tmp/.hidden_file";
         let uri = fs_path_to_uri(original)?;
         let back = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if back != Path::new(original) {
-            return Err(format!("mismatch: {} vs {}", back.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&back, original)
     }
 
     #[test]

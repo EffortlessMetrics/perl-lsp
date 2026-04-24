@@ -6,9 +6,10 @@
 
 use perl_semantic_analyzer::{
     Parser,
+    declaration::{current_package_at, symbol_at_cursor},
     symbol::{SymbolExtractor, SymbolKind, SymbolTable},
 };
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 
 fn extract_symbols(code: &str) -> SymbolTable {
     let mut parser = Parser::new(code);
@@ -18,6 +19,13 @@ fn extract_symbols(code: &str) -> SymbolTable {
 
 fn has_symbol(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
     table.symbols.get(name).is_some_and(|symbols| symbols.iter().any(|symbol| symbol.kind == kind))
+}
+
+fn has_reference(table: &SymbolTable, name: &str, kind: SymbolKind) -> bool {
+    table
+        .references
+        .get(name)
+        .is_some_and(|references| references.iter().any(|reference| reference.kind == kind))
 }
 
 fn symbol_doc(table: &SymbolTable, name: &str, kind: SymbolKind) -> Option<String> {
@@ -244,5 +252,152 @@ any '/multi' => sub { return 'multi' };
     assert!(
         has_symbol(&table, "/multi", SymbolKind::Subroutine),
         "expected route symbol `/multi` from `any` route"
+    );
+}
+
+#[test]
+fn dancer_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Dancer;
+
+get '/about' => 'show_about';
+
+sub show_about {
+    return 'About';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "show_about", SymbolKind::Subroutine),
+        "expected route target string `show_about` to be recorded as a Subroutine reference"
+    );
+}
+
+#[test]
+fn dancer2_route_target_string_adds_subroutine_reference() {
+    let code = r#"
+use Dancer2;
+
+get '/status' => 'show_status';
+
+sub show_status {
+    return 'ok';
+}
+"#;
+    let table = extract_symbols(code);
+    assert!(
+        has_reference(&table, "show_status", SymbolKind::Subroutine),
+        "expected route target string `show_status` to be recorded as a Subroutine reference"
+    );
+}
+
+// === Plack::Builder middleware chain detection ===
+
+#[test]
+fn plack_builder_enable_emits_middleware_symbol() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "Plack::Middleware::Static", SymbolKind::Package),
+        "expected quoted middleware `Static` to normalize to `Plack::Middleware::Static`"
+    );
+    assert!(
+        has_symbol(&table, "Plack::Middleware::Session", SymbolKind::Package),
+        "expected quoted middleware `Plack::Middleware::Session` to be preserved"
+    );
+
+    let attrs = symbol_attrs(&table, "Plack::Middleware::Static", SymbolKind::Package);
+    assert!(
+        attrs.iter().any(|a| a == "framework=Plack::Builder"),
+        "expected Plack framework attribute on middleware symbol, got: {attrs:?}"
+    );
+
+    let doc = symbol_doc(&table, "Plack::Middleware::Static", SymbolKind::Package);
+    assert!(
+        doc.is_some_and(|d| d.contains("middleware") && d.contains("Static")),
+        "expected middleware documentation to mention the normalized module name"
+    );
+}
+
+#[test]
+fn plack_builder_enable_symbol_at_cursor_resolves_middleware_package() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    enable 'Static';
+    enable 'Plack::Middleware::Session';
+};
+"#;
+    let mut parser = Parser::new(code);
+    let ast = must(parser.parse());
+
+    let static_offset = must_some(code.find("Static"));
+    let current_pkg = current_package_at(&ast, static_offset);
+    let symbol = must_some(symbol_at_cursor(&ast, static_offset, current_pkg));
+
+    assert_eq!(
+        symbol.pkg.as_ref(),
+        "Plack::Middleware::Static",
+        "short-name Plack middleware should normalize to the full package name"
+    );
+    assert_eq!(
+        symbol.name.as_ref(),
+        "Plack::Middleware::Static",
+        "short-name Plack middleware should normalize to the full package name"
+    );
+}
+
+#[test]
+fn plack_builder_mount_emits_mount_symbol() {
+    let code = r#"
+use Plack::Builder;
+
+builder {
+    mount '/api' => $api_app;
+    mount '/' => $app;
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(has_symbol(&table, "/api", SymbolKind::Subroutine), "expected `/api` mount symbol");
+    assert!(has_symbol(&table, "/", SymbolKind::Subroutine), "expected `/` mount symbol");
+
+    let attrs = symbol_attrs(&table, "/api", SymbolKind::Subroutine);
+    assert!(
+        attrs.iter().any(|a| a == "mount_path=/api"),
+        "expected mount path attribute on `/api`, got: {attrs:?}"
+    );
+    assert!(
+        attrs.iter().any(|a| a == "mount_target=$api_app"),
+        "expected mount target attribute on `/api`, got: {attrs:?}"
+    );
+}
+
+#[test]
+fn plack_builder_without_use_is_not_synthesized() {
+    let code = r#"
+builder {
+    enable Static;
+    mount '/api' => $api_app;
+};
+"#;
+    let table = extract_symbols(code);
+
+    assert!(
+        !has_symbol(&table, "Plack::Middleware::Static", SymbolKind::Package),
+        "bare `builder` should not synthesize Plack middleware symbols"
+    );
+    assert!(
+        !has_symbol(&table, "/api", SymbolKind::Subroutine),
+        "bare `builder` should not synthesize mount symbols"
     );
 }

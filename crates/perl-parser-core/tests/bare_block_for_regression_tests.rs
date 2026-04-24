@@ -11,17 +11,17 @@ fn parse_clean(src: &str) -> Result<(), String> {
 }
 
 #[test]
-fn bare_block_then_for_my_var() {
-    parse_clean("{ my $x = 1; }\nfor my $i (1..3) { print $i; }\n").unwrap();
+fn bare_block_then_for_my_var() -> Result<(), String> {
+    parse_clean("{ my $x = 1; }\nfor my $i (1..3) { print $i; }\n")
 }
 
 #[test]
-fn bare_block_then_foreach_my_var() {
-    parse_clean("{ my $y = 2; }\nforeach my $item (@arr) { print $item; }\n").unwrap();
+fn bare_block_then_foreach_my_var() -> Result<(), String> {
+    parse_clean("{ my $y = 2; }\nforeach my $item (@arr) { print $item; }\n")
 }
 
 #[test]
-fn bare_block_then_for_my_alias() {
+fn bare_block_then_for_my_alias() -> Result<(), String> {
     // Real-world pattern from List::SomeUtils / Module::Implementation
     parse_clean(
         r#"
@@ -39,16 +39,15 @@ for my $alias ( keys %aliases ) {
 }
 "#,
     )
-    .unwrap();
 }
 
 #[test]
-fn if_block_then_for_still_works() {
+fn if_block_then_for_still_works() -> Result<(), String> {
     // if/while/etc. blocks were already compound — should be unaffected
-    parse_clean("if (1) { my $x = 1; }\nfor my $i (1..3) { print $i; }\n").unwrap();
+    parse_clean("if (1) { my $x = 1; }\nfor my $i (1..3) { print $i; }\n")
 }
 
 #[test]
-fn nested_bare_blocks_then_for() {
-    parse_clean("{ { my $x = 1; } }\nfor my $k (keys %h) { print $k; }\n").unwrap();
+fn nested_bare_blocks_then_for() -> Result<(), String> {
+    parse_clean("{ { my $x = 1; } }\nfor my $k (keys %h) { print $k; }\n")
 }

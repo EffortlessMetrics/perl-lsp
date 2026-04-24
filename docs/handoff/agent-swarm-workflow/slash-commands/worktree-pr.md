@@ -50,7 +50,7 @@ EOF
 6. **Push and PR**:
 ```bash
 git push -u origin <branch-name>
-gh pr create --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
+gh pr create --title "<type>(<scope>): <description> (#1234)" --body "$(cat <<'EOF'
 ## Summary
 <what and why>
 
@@ -61,5 +61,9 @@ gh pr create --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
 EOF
 )"
 ```
+
+The PR title must include an issue reference so `validate-title` passes. Keep
+the body focused on the worktree's actual change and use the issue number the
+branch is tracking.
 
 7. **Return the PR URL**.

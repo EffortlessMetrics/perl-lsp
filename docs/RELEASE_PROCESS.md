@@ -169,6 +169,7 @@ Monitor the following workflows:
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
 6. **Scoop Auto-Bump** - Creates PR to Scoop
 7. **Chocolatey Auto-Bump** - Creates PR to Chocolatey
+8. **Winget Manifest Refresh** - Refreshes the repo-local winget manifest
 
 ### Step 5: Verify Release
 
@@ -182,7 +183,7 @@ After all workflows complete, verify:
 2. **crates.io**
    - Verify all crates are published
    - Check that versions match release version
-   - Test `cargo install perl-lsp`
+   - Test `cargo install perllsp`
 
 3. **VSCode Extension**
    - Check VSCode Marketplace for new version
@@ -198,6 +199,7 @@ After all workflows complete, verify:
    - Monitor Homebrew PR status
    - Monitor Scoop PR status
    - Monitor Chocolatey PR status
+   - Review the winget manifest refresh PR and submit the upstream `winget-pkgs` PR manually
 
 ## Distribution Channels
 
@@ -209,7 +211,7 @@ The exact crate list and count are printed in the `Compute publish order` step o
 
 **Installation:**
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 ### GitHub Releases
@@ -229,9 +231,9 @@ Binaries are published for all platforms:
 **Installation:**
 ```bash
 # Download and extract
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v<0.x.y>/perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v<0.x.y>/perllsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perllsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perllsp-<0.x.y>-x86_64-unknown-linux-gnu/perllsp /usr/local/bin/
 ```
 
 ### Homebrew
@@ -261,6 +263,37 @@ Chocolatey package is automatically updated via PR to chocolatey-community/choco
 ```powershell
 choco install perl-lsp
 ```
+
+### Winget
+
+Winget uses a repo-local manifest source under `distribution/winget/`.
+The release workflow refreshes that manifest from the same Windows release asset
+and checksum data used by Scoop and Chocolatey. Submitting the manifest to
+`winget-pkgs` remains a manual follow-up until that external approval flow is in scope.
+
+**Installation from a local manifest:**
+```powershell
+winget install --manifest .\distribution\winget\perl-lsp.yaml
+```
+
+### Windows Package-Manager Verification
+
+The repo-owned verification story is intentionally narrower than the user-facing
+install story:
+
+- Automated: the release workflow publishes the Windows zip and
+  `SHA256SUMS`; the Scoop and Chocolatey bump workflows download that asset,
+  recompute the checksum, and rewrite the repo-owned manifests through
+  `distribution/windows/update-manifests.ps1`.
+- Guard rails: both bump workflows fail if release placeholders remain in the
+  manifests after the update step.
+- Manual: upstream PR acceptance in the Scoop and Chocolatey package repos,
+  then a real Windows install check with `scoop install perl-lsp` or
+  `choco install perl-lsp`, followed by `perllsp --health` and editor/PATH
+  discovery.
+
+Run `powershell -NoLogo -NoProfile -File scripts/check-windows-distribution.ps1`
+to audit the repo-side claims above.
 
 ### Docker
 
@@ -425,6 +458,11 @@ For a complete rollback:
 - Verify Windows binary is available
 - Check GitHub token permissions
 
+**Issue: Winget manifest not updated**
+- Check winget-bump.yml logs
+- Verify Windows binary is available
+- Confirm `distribution/winget/perl-lsp.yaml` still matches the release asset layout
+
 ## Release Checklist
 
 ### Pre-Release
@@ -453,7 +491,7 @@ For a complete rollback:
 ### Post-Release
 
 - [ ] Download and test binaries
-- [ ] Test `cargo install perl-lsp`
+- [ ] Test `cargo install perllsp`
 - [ ] Test VSCode extension
 - [ ] Test Docker images
 - [ ] Monitor package manager PRs
@@ -478,7 +516,7 @@ For a complete rollback:
 
 ```bash
 # Using cargo
-cargo install perl-lsp
+cargo install perllsp
 
 # Using Homebrew (macOS/Linux)
 brew install perl-lsp

@@ -1,7 +1,10 @@
 //! Monitoring and lifecycle support types for workspace indexing.
 //!
-//! This module was extracted to the `perl-workspace-index-monitoring` microcrate to
-//! keep workspace indexing focused on symbol extraction/query behavior while
-//! retaining the public path.
+//! Re-exports from the internal `monitoring` module to preserve existing caller paths
+//! like `perl_workspace::workspace::monitoring::IndexPhase`.
 
-pub use perl_workspace_index_monitoring::*;
+pub use crate::monitoring::{
+    DegradationReason, EarlyExitReason, EarlyExitRecord, IndexInstrumentation,
+    IndexInstrumentationSnapshot, IndexMetrics, IndexPerformanceCaps, IndexPhase,
+    IndexPhaseTransition, IndexResourceLimits, IndexStateKind, IndexStateTransition, ResourceKind,
+};

@@ -6,7 +6,7 @@ This guide covers deploying the Perl LSP VS Code extension for internal use with
 
 The extension supports three deployment modes:
 
-1. **Local Binary Path** - Point to a locally installed `perl-lsp` binary
+1. **Local Binary Path** - Point to a locally installed `perllsp` binary
 2. **Internal File Server** - Host binaries on an internal web server  
 3. **Bundled Extension** - Package the binary directly with the extension
 
@@ -16,22 +16,22 @@ The simplest approach for internal deployment.
 
 ### Setup
 
-1. **Install perl-lsp binary** on each developer machine:
+1. **Install perllsp binary** on each developer machine:
    ```bash
    # Build from source
-   cargo build -p perl-lsp --release
+   cargo build -p perllsp --release
 
    # Copy to standard location
-   sudo cp target/release/perl-lsp /usr/local/bin/
+   sudo cp target/release/perllsp /usr/local/bin/
 
    # Or install via Cargo
-   cargo install --path crates/perl-lsp
+   cargo install --path crates/perllsp
    ```
 
 2. **Configure VS Code** workspace settings (`.vscode/settings.json`):
    ```json
    {
-     "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
+     "perl-lsp.serverPath": "/usr/local/bin/perllsp",
      "perl-lsp.autoDownload": false
    }
    ```
@@ -64,14 +64,14 @@ Host binaries on an internal web server for automatic distribution.
 1. **Prepare binary releases** on your internal server:
    ```bash
    # Create directory structure
-   mkdir -p /var/www/perl-lsp-binaries
-   cd /var/www/perl-lsp-binaries
+   mkdir -p /var/www/perllsp-binaries
+   cd /var/www/perllsp-binaries
    
    # Copy your pre-built binaries
-   # Naming convention: perl-lsp-VERSION-TARGET.tar.gz
-   cp perl-lsp-v0.8.3-x86_64-unknown-linux-gnu.tar.gz .
-   cp perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz .
-   cp perl-lsp-v0.8.3-x86_64-pc-windows-msvc.zip .
+   # Naming convention: perllsp-VERSION-TARGET.tar.gz
+   cp perllsp-0.8.3-x86_64-unknown-linux-gnu.tar.gz .
+   cp perllsp-0.8.3-x86_64-apple-darwin.tar.gz .
+   cp perllsp-0.8.3-x86_64-pc-windows-msvc.zip .
    
    # Optional: Create checksum file
    sha256sum *.tar.gz *.zip > SHA256SUMS
@@ -82,7 +82,7 @@ Host binaries on an internal web server for automatic distribution.
    server {
        listen 80;
        server_name internal-binaries.yourcompany.com;
-       root /var/www/perl-lsp-binaries;
+       root /var/www/perllsp-binaries;
        
        location / {
            autoindex on;
@@ -115,13 +115,13 @@ Package the binary directly with the extension.
 1. **Build binaries** for target platforms:
    ```bash
    # Linux
-   cargo build -p perl-lsp --release --target x86_64-unknown-linux-gnu
+   cargo build -p perllsp --release --target x86_64-unknown-linux-gnu
 
    # macOS
-   cargo build -p perl-lsp --release --target x86_64-apple-darwin
+   cargo build -p perllsp --release --target x86_64-apple-darwin
 
    # Windows
-   cargo build -p perl-lsp --release --target x86_64-pc-windows-msvc
+   cargo build -p perllsp --release --target x86_64-pc-windows-msvc
    ```
 
 2. **Create binary directory structure**:
@@ -130,9 +130,9 @@ Package the binary directly with the extension.
    mkdir -p bin/linux-x64 bin/darwin-x64 bin/win32-x64
    
    # Copy platform-specific binaries
-   cp ../target/x86_64-unknown-linux-gnu/release/perl-lsp bin/linux-x64/
-   cp ../target/x86_64-apple-darwin/release/perl-lsp bin/darwin-x64/
-   cp ../target/x86_64-pc-windows-msvc/release/perl-lsp.exe bin/win32-x64/
+   cp ../target/x86_64-unknown-linux-gnu/release/perllsp bin/linux-x64/
+   cp ../target/x86_64-apple-darwin/release/perllsp bin/darwin-x64/
+   cp ../target/x86_64-pc-windows-msvc/release/perllsp.exe bin/win32-x64/
    ```
 
 3. **Package extension**:
@@ -165,7 +165,7 @@ Copy the provided `.vscode/settings.json` to your project root and customize:
 
 ```json
 {
-  "perl-lsp.serverPath": "/path/to/your/perl-lsp",
+  "perl-lsp.serverPath": "/path/to/your/perllsp",
   "perl-lsp.autoDownload": false,
   "perl-lsp.enableDiagnostics": true,
   "perl-lsp.enableSemanticTokens": true,
@@ -187,15 +187,15 @@ Copy the provided `.vscode/settings.json` to your project root and customize:
 ### Build Commands
 ```bash
 # Quick build for testing
-cargo build -p perl-lsp
+cargo build -p perllsp
 
 # Optimized release build
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 
 # Cross-platform builds (with targets installed)
-cargo build -p perl-lsp --release --target x86_64-unknown-linux-gnu
-cargo build -p perl-lsp --release --target x86_64-apple-darwin
-cargo build -p perl-lsp --release --target x86_64-pc-windows-msvc
+cargo build -p perllsp --release --target x86_64-unknown-linux-gnu
+cargo build -p perllsp --release --target x86_64-apple-darwin
+cargo build -p perllsp --release --target x86_64-pc-windows-msvc
 
 # Install targets if needed
 rustup target add x86_64-unknown-linux-gnu
@@ -206,11 +206,11 @@ rustup target add x86_64-pc-windows-msvc
 ### Verification
 ```bash
 # Test binary works
-./target/release/perl-lsp --version
-./target/release/perl-lsp --help
+./target/release/perllsp --version
+./target/release/perllsp --help
 
 # Quick LSP test
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./target/release/perl-lsp --stdio
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./target/release/perllsp --stdio
 ```
 
 ## Troubleshooting
@@ -218,7 +218,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./target/rel
 ### Binary Not Found
 1. Check `perl-lsp.serverPath` setting
 2. Verify binary permissions (`chmod +x`)
-3. Test binary directly: `perl-lsp --version`
+3. Test binary directly: `perllsp --version`
 
 ### Download Failures
 1. Check `perl-lsp.downloadBaseUrl` setting
@@ -242,7 +242,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | ./target/rel
 For internal deployment issues:
 1. Check the VS Code Output panel (Perl Language Server)
 2. Enable debug logging: `"perl-lsp.trace.server": "verbose"`
-3. Test binary independently: `perl-lsp --stdio --log`
+3. Test binary independently: `perllsp --stdio --log`
 4. Verify workspace configuration matches your setup
 
 This approach ensures the extension works both internally (with overrides) and publicly (default behavior) when released.

@@ -11,6 +11,7 @@ package-lock.json
 /debug_parse/
 /target/
 /target-tests/
+.build/
 *.a
 *.dylib
 *.so
@@ -39,6 +40,10 @@ scripts/__pycache__/
 # Claude — agents/ is gitignored to allow swapping the active agents symlink.
 # agents2/, agents3/, agents4/ etc. are version-tracked.
 /.claude/agents/
+# Worktrees used by Claude agent isolation — ephemeral, never committed.
+/.claude/worktrees/
+# Codex worktree metadata — ephemeral agent artifacts, never committed.
+/.codex-worktrees/
 
 # Swarm ops — ignore the entire directory (contains repo mirror artifacts),
 # but force-track the specific knowledge files we need.
@@ -210,3 +215,17 @@ rustc-ice-*
 *.orig
 *.bak
 patch.diff
+
+# Raw screen recordings (too large for version control — see docs/assets/recordings/README.md)
+docs/assets/recordings/*.mp4
+docs/assets/recordings/*.mov
+docs/assets/recordings/*.mkv
+docs/assets/recordings/*.webm
+
+# Playwright MCP browser session artifacts (page state dumps)
+.playwright-mcp/
+
+# Workspace scorecard xlarge fixture (generated on demand; see scripts/gen-xlarge-workspace.sh)
+# The README.md in that directory is tracked; the generated Perl files are not.
+test_corpus/workspaces/xlarge/lib/
+test_corpus/workspaces/xlarge/bin/

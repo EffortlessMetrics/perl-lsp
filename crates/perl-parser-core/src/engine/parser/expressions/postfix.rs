@@ -1,18 +1,32 @@
 impl<'a> Parser<'a> {
-    /// Parse postfix expression
+    /// Entry point for parsing postfix expressions.
+    ///
+    /// Parses a primary expression first, then applies any postfix operators
+    /// (arrow chains, subscripts, etc.) to form a complete postfix expression.
     fn parse_postfix(&mut self) -> ParseResult<Node> {
         let expr = self.parse_primary()?;
         self.parse_postfix_chain(expr)
     }
 
     /// Apply postfix operators (arrow chains, subscripts, etc.) to an
-    /// already-parsed expression.  Factored out of `parse_postfix` so
-    /// that callers who build an initial node outside the normal
-    /// `parse_primary` path (e.g. typeglobs in `parse_unary`) can still
-    /// participate in postfix chaining.
+    /// already-parsed expression.
+    ///
+    /// This function is factored out of `parse_postfix` so that callers who
+    /// build an initial node outside the normal `parse_primary` path
+    /// (e.g. typeglobs in `parse_unary`) can still participate in postfix chaining.
+    ///
+    /// The loop handles several postfix patterns in order of precedence:
+    /// 1. Hash/array slice without arrow (`@hash{...}`, `%hash{...}`)
+    /// 2. Increment/decrement operators (`++`, `--`)
+    /// 3. Arrow dereference (`->`)
+    /// 4. Array subscript (`[...]`)
+    /// 5. Hash subscript with block handling (`{...}`)
+    /// 6. Function call parentheses (`(...)`)
     pub(crate) fn parse_postfix_chain(&mut self, mut expr: Node) -> ParseResult<Node> {
         let mut postfix_chain_depth = 0usize;
 
+        // Closure to track nesting depth and prevent stack overflow on deeply
+        // nested postfix chains (e.g., `$a->[0]->[1]->[2]->...`).
         let mut record_postfix_layer = || -> ParseResult<()> {
             postfix_chain_depth += 1;
             if postfix_chain_depth > MAX_RECURSION_DEPTH {
@@ -25,6 +39,50 @@ impl<'a> Parser<'a> {
         };
 
         loop {
+            // --------------------------------------------------------------------
+            // Hash/array slice without arrow: @hash{...} or %hash{...}
+            //
+            // In Perl, `@hash{...}` and `%hash{...}` are valid hash/array slice
+            // operations that do NOT require an intervening `->`.
+            //
+            // This must be checked BEFORE the Arrow arm (line 69) because the
+            // Arrow arm's LeftBrace handling (line 295) is only reached when there
+            // is a `->` preceding the `{`. Without this early check, `@hash{...}`
+            // would fall through to the generic hash-element arm at line 428,
+            // which would incorrectly parse `{...}` as a block instead of a subscript.
+            //
+            // The condition checks:
+            // 1. The next token is `{` (not `->`)
+            // 2. The current expression is a variable with `@` or `%` sigil
+            //
+            // Example: `@ops_seen{ map split(/ /), values %ops }` should parse as
+            // a hash slice, not as `@ops_seen` followed by a block.
+            // --------------------------------------------------------------------
+            if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                if let NodeKind::Variable { sigil, .. } = &expr.kind {
+                    if sigil == "@" || sigil == "%" {
+                        // Hash/array slice: @hash{...} or %hash{...}
+                        self.tokens.next()?; // consume {
+                        let key = self.parse_hash_subscript_key()?;
+                        self.expect(TokenKind::RightBrace)?;
+
+                        let start = expr.location.start;
+                        let end = self.previous_position();
+
+                        record_postfix_layer()?;
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: "{}".to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(key),
+                            },
+                            SourceLocation { start, end },
+                        );
+                        continue;
+                    }
+                }
+            }
+
             match self.peek_kind() {
                 Some(k) if Self::is_postfix_op(Some(k)) => {
                     let op_token = self.consume_token()?;
@@ -183,9 +241,7 @@ impl<'a> Parser<'a> {
                             }
                         }
 
-                        Some(kind)
-                            if kind == TokenKind::Identifier || Self::is_keyword_token(kind) =>
-                        {
+                        Some(kind) if Self::can_be_sub_name(kind) => {
                             // Check for ->$#* (postfix last-index dereference, Perl 5.20+).
                             // The lexer produces Identifier("$#") for `$#` when no array
                             // name follows, so we handle it here before the method-call path.
@@ -440,13 +496,17 @@ impl<'a> Parser<'a> {
                                 // In Perl, the block form does not require a comma
                                 // before the list: `grep { ... } @array`
                                 // First consume without a comma/fat arrow if present
-                                if !self.is_at_statement_end()
+                                if (if is_bare_func {
+                                    self.should_continue_bare_call_after_block()
+                                } else {
+                                    !self.is_at_statement_end()
+                                })
                                     && !matches!(
                                         self.peek_kind(),
                                         Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                     )
                                 {
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
                                 }
 
                                 // Then consume any remaining comma/fat-arrow-separated arguments
@@ -455,10 +515,14 @@ impl<'a> Parser<'a> {
                                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
                                 ) {
                                     self.consume_token()?; // consume comma or fat arrow
-                                    if self.is_at_statement_end() {
+                                    if is_bare_func {
+                                        if !self.should_continue_bare_call_after_block() {
+                                            break;
+                                        }
+                                    } else if self.is_at_statement_end() {
                                         break;
                                     }
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
                                 }
                             } else {
                                 // Other builtins - parse {} as first argument (filehandle or hash)
@@ -595,6 +659,42 @@ impl<'a> Parser<'a> {
                     }
                 }
 
+                // `undef(LIST)` — undef with explicit argument list undefines variables.
+                // `EXPR(args)` where EXPR is a subscript or dereference — implicit coderef call.
+                // In Perl: `$h{cb}($arg)` and `$arr[0]($arg)` are valid coderef invocations
+                // without a mandatory `->`.  We handle this for the patterns that arise in
+                // real CPAN code; the test cases are driven by the expected_colon error bucket.
+                Some(TokenKind::LeftParen)
+                    if matches!(&expr.kind, NodeKind::Undef | NodeKind::Binary { .. }) =>
+                {
+                    // Disambiguate: `Undef` → `undef(LIST)` builtin call.
+                    // Everything else (subscript / deref Binary) → implicit coderef call.
+                    let args = self.parse_args()?;
+                    let start = expr.location.start;
+                    let end = self.previous_position();
+
+                    record_postfix_layer()?;
+                    expr = if matches!(&expr.kind, NodeKind::Undef) {
+                        Node::new(
+                            NodeKind::FunctionCall {
+                                name: "undef".to_string(),
+                                args,
+                            },
+                            SourceLocation { start, end },
+                        )
+                    } else {
+                        let mut all_args = vec![expr];
+                        all_args.extend(args);
+                        Node::new(
+                            NodeKind::FunctionCall {
+                                name: "->()".to_string(),
+                                args: all_args,
+                            },
+                            SourceLocation { start, end },
+                        )
+                    };
+                }
+
                 _ => {
                     // Check if this is a builtin function that can take bare arguments
                     if let NodeKind::Identifier { name } = &expr.kind {
@@ -646,7 +746,12 @@ impl<'a> Parser<'a> {
                             // sigil-starting argument is a bare function call.
                             // Handles `blessed $self`, `reftype $x`, `weaken $ref`, etc.
                             // (imported unary functions that look like builtins at the call site)
-                            let arg = self.parse_ternary()?;
+                            //
+                            // Parse only a high-precedence argument expression here so
+                            // lower-precedence operators remain outside the call.
+                            // Example: `is_ready $obj ? 1 : 0` must parse as
+                            // `(is_ready $obj) ? 1 : 0`, not `is_ready($obj ? 1 : 0)`.
+                            let arg = self.parse_shift()?;
                             let start = expr.location.start;
                             let end = arg.location.end;
                             expr = Node::new(
@@ -945,7 +1050,22 @@ impl<'a> Parser<'a> {
                                     }
                                 } else {
                                     // Parse the first argument
-                                    args.push(self.parse_ternary()?);
+                                    args.push(self.parse_assignment_or_declaration()?);
+
+                                    // Generic bare calls can also take implicit list arguments
+                                    // after a leading block/hash argument, just like parse_args()
+                                    // does for parenthesized calls.
+                                    while matches!(
+                                        args.last(),
+                                        Some(n)
+                                            if matches!(
+                                                n.kind,
+                                                NodeKind::Block { .. } | NodeKind::HashLiteral { .. }
+                                            )
+                                    ) && self.should_continue_bare_call_after_block()
+                                    {
+                                        args.push(self.parse_assignment_or_declaration()?);
+                                    }
 
                                     // Special case: print/say/printf/exec/send with indirect object.
                                     // `print $fh $msg` / `send $sock $msg` — first arg is the
@@ -991,7 +1111,7 @@ impl<'a> Parser<'a> {
                                             if self.is_at_statement_end() {
                                                 break;
                                             }
-                                            args.push(self.parse_ternary()?);
+                                            args.push(self.parse_assignment_or_declaration()?);
                                         }
                                     }
 
@@ -1005,7 +1125,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_ternary()?);
+                                        args.push(self.parse_assignment_or_declaration()?);
                                     }
                                 }
 
@@ -1136,68 +1256,102 @@ impl<'a> Parser<'a> {
     /// This function builds a proper parse tree node for them, including support
     /// for hash slices like `@h{m, s}` which require a list node.
     fn parse_hash_subscript_key(&mut self) -> ParseResult<Node> {
-        // Classic keyword-as-bareword (not, and, or, xor, do, eval) when directly
-        // before `}`.  These were handled here before this PR and are preserved.
-        if let Some(kind) = self.peek_kind() {
-            let is_simple_keyword_key = matches!(
-                kind,
-                TokenKind::WordNot
-                    | TokenKind::WordAnd
-                    | TokenKind::WordOr
-                    | TokenKind::WordXor
-                    | TokenKind::Do
-                    | TokenKind::Eval
-            );
-            if is_simple_keyword_key {
-                if let Ok(second) = self.tokens.peek_second() {
-                    if second.kind == TokenKind::RightBrace {
-                        let token = self.tokens.next()?;
-                        return Ok(Node::new(
-                            NodeKind::Identifier { name: token.text.to_string() },
-                            SourceLocation { start: token.start, end: token.end },
-                        ));
-                    }
-                }
-            }
+        // Try keyword-as-bareword first (not, and, or, xor, do, eval)
+        if let Some(node) = self.try_parse_keyword_bareword_key()? {
+            return Ok(node);
         }
 
-        // Quote-op names (m, s, q, qq, qw, qr, qx, tr, y) used as bareword hash keys.
-        // The lexer (hash_brace_depth > 0) already emits these as Identifier tokens
-        // rather than triggering quote-op parsing.  Here in the parser we must build
-        // a comma-separated list when multiple such keys appear (hash slice case,
-        // e.g. `@h{m, s}`), since `parse_expression` → `parse_comma` would still
-        // try to interpret `m` as a regex operator at the `parse_primary` level.
-        if self.peek_is_quote_op_bareword() {
-            let first = self.consume_as_bareword_string()?;
-            let start = first.location.start;
-
-            // Single key (common case): `$h{m}` — `}` immediately follows
-            if self.peek_kind() != Some(TokenKind::Comma) {
-                return Ok(first);
-            }
-
-            // Slice case: `@h{m, s, q}` — build a list node from all bareword keys
-            let mut elements = vec![first];
-            while self.peek_kind() == Some(TokenKind::Comma) {
-                self.consume_token()?; // consume `,`
-                if self.peek_kind() == Some(TokenKind::RightBrace) {
-                    break; // trailing comma before `}` is fine
-                }
-                if self.peek_is_quote_op_bareword() {
-                    elements.push(self.consume_as_bareword_string()?);
-                } else {
-                    // Mixed slice like `@h{m, $var}` — parse rest normally
-                    elements.push(self.parse_assignment()?);
-                }
-            }
-
-            let end = elements.last().map(|n| n.location.end).unwrap_or(start);
-            return Ok(Node::new(
-                NodeKind::ArrayLiteral { elements },
-                SourceLocation { start, end },
-            ));
+        // Try quote-op names as bareword hash keys
+        if let Some(node) = self.try_parse_quote_op_bareword_key()? {
+            return Ok(node);
         }
 
+        // Default: parse as a general expression
         self.parse_expression()
+    }
+
+    /// Attempt to parse a keyword (`not`, `and`, `or`, `xor`, `do`, `eval`) as a
+    /// bareword hash key when it appears directly before `}`.
+    ///
+    /// Returns `Some(Node)` if the current token is a keyword followed by `}`,
+    /// otherwise returns `None` to fall through to general expression parsing.
+    fn try_parse_keyword_bareword_key(&mut self) -> ParseResult<Option<Node>> {
+        let Some(kind) = self.peek_kind() else {
+            return Ok(None);
+        };
+
+        let is_simple_keyword_key = matches!(
+            kind,
+            TokenKind::WordNot
+                | TokenKind::WordAnd
+                | TokenKind::WordOr
+                | TokenKind::WordXor
+                | TokenKind::Do
+                | TokenKind::Eval
+        );
+
+        if !is_simple_keyword_key {
+            return Ok(None);
+        }
+
+        let Ok(second) = self.tokens.peek_second() else {
+            return Ok(None);
+        };
+
+        if second.kind != TokenKind::RightBrace {
+            return Ok(None);
+        }
+
+        let token = self.tokens.next()?;
+        Ok(Some(Node::new(
+            NodeKind::Identifier { name: token.text.to_string() },
+            SourceLocation { start: token.start, end: token.end },
+        )))
+    }
+
+    /// Attempt to parse a quote-operator name (`m`, `s`, `q`, `qq`, `qw`, `qr`,
+    /// `qx`, `tr`, `y`) as a bareword hash key when used in a hash subscript.
+    ///
+    /// The lexer suppresses quote-op detection inside hash subscripts
+    /// (hash_brace_depth > 0), emitting them as Identifier tokens.
+    /// This method builds a proper parse tree node, including support for
+    /// hash slices like `@h{m, s}` which require an ArrayLiteral node.
+    ///
+    /// Returns `Some(Node)` if the current token is a quote-op name followed by
+    /// `}` or `,` (indicating it's being used as a bareword key rather than as
+    /// the start of a quote expression). Returns `None` otherwise.
+    fn try_parse_quote_op_bareword_key(&mut self) -> ParseResult<Option<Node>> {
+        if !self.peek_is_quote_op_bareword() {
+            return Ok(None);
+        }
+
+        let first = self.consume_as_bareword_string()?;
+        let start = first.location.start;
+
+        // Single key (common case): `$h{m}` — `}` immediately follows
+        if self.peek_kind() != Some(TokenKind::Comma) {
+            return Ok(Some(first));
+        }
+
+        // Slice case: `@h{m, s, q}` — build a list node from all bareword keys
+        let mut elements = vec![first];
+        while self.peek_kind() == Some(TokenKind::Comma) {
+            self.consume_token()?; // consume `,`
+            if self.peek_kind() == Some(TokenKind::RightBrace) {
+                break; // trailing comma before `}` is fine
+            }
+            if self.peek_is_quote_op_bareword() {
+                elements.push(self.consume_as_bareword_string()?);
+            } else {
+                // Mixed slice like `@h{m, $var}` — parse rest normally
+                elements.push(self.parse_assignment()?);
+            }
+        }
+
+        let end = elements.last().map(|n| n.location.end).unwrap_or(start);
+        Ok(Some(Node::new(
+            NodeKind::ArrayLiteral { elements },
+            SourceLocation { start, end },
+        )))
     }
 }

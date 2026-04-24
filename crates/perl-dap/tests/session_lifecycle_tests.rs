@@ -201,7 +201,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
             assert!(!success, "Launch should fail without arguments");
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(must_some(message).contains("Missing launch arguments"));
+            assert!(must_some(message).contains("no launch configuration was provided"));
         }
         _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
@@ -228,7 +228,7 @@ fn test_session_lifecycle_launch_empty_program() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("empty") || msg.contains("cannot be empty"),
+                msg.contains("No Perl script was specified") || msg.contains("empty"),
                 "Error should mention empty path: {}",
                 msg
             );
@@ -258,7 +258,7 @@ fn test_session_lifecycle_launch_nonexistent_program() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("Could not access") || msg.contains("not a regular file"),
+                msg.contains("Cannot find") || msg.contains("is not a file"),
                 "Error should mention access issue: {}",
                 msg
             );
@@ -289,10 +289,12 @@ fn test_session_lifecycle_attach_missing_arguments() {
 #[test]
 // AC:5.5
 fn test_session_lifecycle_attach_validation() {
-    // Test that attach validates arguments correctly
+    // Test that attach validates a valid TCP attach via handle_request_mock, which now
+    // routes through the real dispatch path instead of returning a stale stub.
     let (mut adapter, _rx) = create_test_adapter();
 
-    // Test with valid TCP attach arguments
+    // Valid TCP attach arguments — will attempt a real TCP connection and fail
+    // because no listener is running on the port, but validation passes first.
     let args = json!({
         "host": "localhost",
         "port": 13603,
@@ -302,17 +304,68 @@ fn test_session_lifecycle_attach_validation() {
     let response = adapter.handle_request_mock(1, "attach", Some(args));
 
     match response {
-        DapMessage::Response { success, command, message, .. } => {
-            assert!(!success, "Attach not yet implemented");
+        DapMessage::Response { success: _, command, message, .. } => {
             assert_eq!(command, "attach");
             assert!(message.is_some());
-            // Should validate but indicate not implemented
+            // The real handler either connects successfully (unlikely in CI) or
+            // fails with a connection error — not "not yet fully implemented".
             let msg = must_some(message);
             assert!(
-                msg.contains("not yet fully implemented")
-                    || msg.contains("localhost:13603")
-                    || msg.contains("Process ID attachment"),
-                "Should validate args: {}",
+                !msg.contains("not yet fully implemented"),
+                "Stale stub message must not appear: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_attach_pid_zero_rejected() {
+    // processId: 0 is explicitly invalid — the handler must reject it.
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let args = json!({ "processId": 0 });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "processId 0 should be rejected");
+            assert_eq!(command, "attach");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("greater than zero") || msg.contains("processId"),
+                "Error should mention processId constraint: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_attach_port_out_of_range() {
+    // Ports above 65535 are invalid — the handler must reject them.
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let args = json!({
+        "host": "localhost",
+        "port": 99999
+    });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "Out-of-range port should be rejected");
+            assert_eq!(command, "attach");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("out of range") || msg.contains("65535"),
+                "Error should mention port range: {}",
                 msg
             );
         }
@@ -931,6 +984,54 @@ fn test_error_handling_variables_missing_reference() {
 
 #[test]
 // AC:5.4
+fn test_error_handling_variables_negative_start_rejected() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({
+            "variablesReference": 1,
+            "start": -1
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "variables with negative start should fail");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Invalid start"));
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
+fn test_error_handling_variables_negative_count_rejected() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "variables",
+        Some(json!({
+            "variablesReference": 1,
+            "count": -7
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "variables with negative count should fail");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Invalid count"));
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.4
 fn test_error_handling_launch_program_is_directory() {
     // Test that launch rejects directory paths
     let (mut adapter, _rx) = create_test_adapter();
@@ -949,7 +1050,9 @@ fn test_error_handling_launch_program_is_directory() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("not a regular file") || msg.contains("directory"),
+                msg.contains("not a regular file")
+                    || msg.contains("directory")
+                    || msg.contains("is not a file"),
                 "Error should mention file type: {}",
                 msg
             );
@@ -1040,4 +1143,145 @@ fn test_multiple_sessions_sequential() {
         }
         let _term_event = wait_for_event(&rx, 100);
     }
+}
+
+// ============================================================================
+// AC:5.5 — DAP Attach: stopOnEntry support (#3524)
+// ============================================================================
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_stop_on_entry_true_emits_stopped_event() {
+    // When stopOnEntry is true and attaching by PID, a stopped event with reason "entry"
+    // must be emitted after the initial "attach" stopped event.
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({
+        "processId": 9999,
+        "stopOnEntry": true
+    });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach with stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    // Must receive at least one stopped event with reason "entry"
+    let mut found_entry_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    if b.get("reason").and_then(|r| r.as_str()) == Some("entry") {
+                        found_entry_stop = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(found_entry_stop, "stopOnEntry=true must emit a stopped event with reason='entry'");
+}
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_stop_on_entry_false_no_entry_event() {
+    // When stopOnEntry is false, PID attach should emit reason "attach" but NOT "entry".
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({
+        "processId": 8888,
+        "stopOnEntry": false
+    });
+
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach without stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    let mut found_entry_stop = false;
+    let mut found_attach_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    match b.get("reason").and_then(|r| r.as_str()) {
+                        Some("entry") => found_entry_stop = true,
+                        Some("attach") => found_attach_stop = true,
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+    assert!(!found_entry_stop, "stopOnEntry=false must not emit an entry stop event");
+    assert!(
+        found_attach_stop,
+        "PID attach should always emit a stopped event with reason='attach'"
+    );
+}
+
+#[test]
+// AC:5.5
+fn test_attach_pid_mode_default_stop_on_entry_is_false() {
+    // When stopOnEntry is omitted it defaults to false — no entry-stop event emitted.
+    let (mut adapter, rx) = create_test_adapter();
+
+    let args = json!({ "processId": 7777 });
+    let response = adapter.handle_request(1, "attach", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "PID attach with omitted stopOnEntry should succeed");
+            assert_eq!(command, "attach");
+        }
+        _ => must(Err::<(), _>("Expected Response message")),
+    }
+
+    let mut found_entry_stop = false;
+    for _ in 0..3 {
+        if let Some(DapMessage::Event { event, body, .. }) = wait_for_event(&rx, 100) {
+            if event == "stopped" {
+                if let Some(ref b) = body {
+                    if b.get("reason").and_then(|r| r.as_str()) == Some("entry") {
+                        found_entry_stop = true;
+                    }
+                }
+            }
+        }
+    }
+    assert!(!found_entry_stop, "Default stopOnEntry must not emit entry-stop event");
+}
+
+#[test]
+// AC:5.5
+fn test_attach_config_stop_on_entry_field() -> Result<(), Box<dyn std::error::Error>> {
+    // AttachConfiguration must expose stop_on_entry and round-trip through serde.
+    use perl_dap::configuration::AttachConfiguration;
+
+    let config = AttachConfiguration {
+        host: "localhost".to_string(),
+        port: 13603,
+        timeout_ms: Some(5000),
+        stop_on_entry: Some(true),
+    };
+    assert_eq!(config.stop_on_entry, Some(true));
+
+    let json_str = serde_json::to_string(&config)?;
+    let deserialized: AttachConfiguration = serde_json::from_str(&json_str)?;
+    assert_eq!(deserialized.stop_on_entry, Some(true));
+
+    let default_config = AttachConfiguration::default();
+    assert_eq!(default_config.stop_on_entry, None);
+    Ok(())
 }

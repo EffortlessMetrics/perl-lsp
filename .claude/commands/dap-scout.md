@@ -35,4 +35,10 @@ Target: **$ARGUMENTS** (default: all DAP crates with low coverage)
 
 ## Output
 
-Write findings as a GitHub issue via `gh issue create --label swarm-discovered` with the SLICE definitions in the body.
+Use the **Full Scout Report** variant from `/scout-issue`. Include DAP metadata subsection after Root Cause:
+
+- `crate`: which DAP crate
+- `current_test_count`: number of existing tests
+- `loc`: lines of code
+- `suggested_tests`: what to test
+- `related_issues`: linked GitHub issues

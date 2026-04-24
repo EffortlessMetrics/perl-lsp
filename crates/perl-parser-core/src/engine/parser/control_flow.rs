@@ -572,7 +572,18 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    /// Parse try/catch/finally block
+    /// Parse `defer { ... }` block (Perl 5.36+ experimental, stable in 5.40)
+    pub(crate) fn parse_defer(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'defer'
+        let block = self.parse_block()?;
+        let end = block.location.end;
+        Ok(Node::new(
+            NodeKind::Defer { block: Box::new(block) },
+            SourceLocation { start, end },
+        ))
+    }
+
+        /// Parse try/catch/finally block
     fn parse_try(&mut self) -> ParseResult<Node> {
         let start = self.consume_token()?.start; // consume 'try'
 

@@ -179,7 +179,7 @@ labels:
   ci:lsp: 'Full LSP integration tests'
 
   # Code coverage generation
-  ci:coverage: 'Generate coverage reports'
+  ci:coverage: 'Generate branch-aware coverage reports'
 
   # Performance benchmarks
   ci:bench: 'Run benchmarks'
@@ -201,3 +201,26 @@ labels:
 
   # All tests
   ci:all-tests: 'Comprehensive test suite'
+# =============================================================================
+# Nextest Partition Configuration
+# =============================================================================
+# Partitions defined in .config/nextest-partitions.toml
+# See tests/TAXONOMY.md for tier definitions
+#
+# Usage:
+#   cargo nextest run --workspace --lib --profile ci --partition smoke
+#   cargo nextest run --workspace --lib --profile ci --partition deep
+#
+nextest-partitions:
+  smoke:
+    filter: "package(perl-parser) | package(perl-lexer) | package(perl-keywords) | package(perl-token) | package(perl-error)"
+    target-duration: "<30s total"
+    ci-trigger: "every PR"
+  deep:
+    filter: "package(perl-lsp-rs) | package(perl-dap)"
+    target-duration: "<5 min total"
+    ci-trigger: "merge gate + nightly"
+  slow:
+    filter: "test(~slow)"
+    target-duration: "variable"
+    ci-trigger: "nightly only"

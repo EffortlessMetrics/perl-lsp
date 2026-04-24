@@ -9,7 +9,21 @@ use std::fs;
 
 use crate::utils::project_root;
 
-const ALLOWED_WORKFLOWS: &[&str] = &["ci.yml", "check-ignored.yml", "ci-security.yml"];
+const ALLOWED_WORKFLOWS: &[&str] = &[
+    "ci.yml",
+    "check-ignored.yml",
+    "ci-security.yml",
+    // Path-filtered to UX-relevant crates only; runs on all PRs touching LSP/DAP/extension
+    "ux-regression-gate.yml",
+    // publish-dry-run.yml is a PR gate that runs unconditionally on Cargo.toml
+    // path changes. The `paths:` filter in the workflow trigger is the cost gate
+    // (only triggers when Cargo.toml or publish scripts change). Adding an `if:`
+    // on top of the paths filter would be redundant and defeat the purpose.
+    "publish-dry-run.yml",
+    // ci-gate-self-tests.yml is path-filtered to gate scripts only.
+    // Runs only when the gate scripts or self-test scripts change.
+    "ci-gate-self-tests.yml",
+];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
 
@@ -55,27 +69,24 @@ pub fn run() -> Result<()> {
             continue;
         }
 
-        let jobs = workflow.get("jobs");
-        if let Some(jobs) = jobs {
-            if let Some(jobs) = jobs.as_mapping() {
-                for (job_name, job_cfg) in jobs {
-                    let Some(name) = job_name.as_str() else {
-                        continue;
-                    };
+        if let Some(jobs) = workflow.get("jobs").and_then(Value::as_mapping) {
+            for (job_name, job_cfg) in jobs {
+                let Some(name) = job_name.as_str() else {
+                    continue;
+                };
 
-                    if ALLOWED_UNGATED_JOBS.contains(&name) {
-                        continue;
-                    }
+                if ALLOWED_UNGATED_JOBS.contains(&name) {
+                    continue;
+                }
 
-                    let Some(job_cfg) = job_cfg.as_mapping() else {
-                        continue;
-                    };
+                let Some(job_cfg) = job_cfg.as_mapping() else {
+                    continue;
+                };
 
-                    if !job_cfg.contains_key(&Value::String("if".to_string())) {
-                        violations.push(format!(
-                            "{workflow_name}:{name} - runs on PRs without if: condition"
-                        ));
-                    }
+                if !job_cfg.contains_key(Value::String("if".to_string())) {
+                    violations.push(format!(
+                        "{workflow_name}:{name} - runs on PRs without if: condition"
+                    ));
                 }
             }
         }
@@ -110,7 +121,7 @@ fn has_pr_trigger(workflow: &Value) -> bool {
         Value::Sequence(values) => {
             values.iter().any(|value| value.as_str() == Some("pull_request"))
         }
-        Value::Mapping(values) => values.contains_key(&Value::String("pull_request".to_string())),
+        Value::Mapping(values) => values.contains_key(Value::String("pull_request".to_string())),
         Value::String(value) => value == "pull_request",
         _ => false,
     }

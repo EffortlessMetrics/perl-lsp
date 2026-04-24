@@ -5,7 +5,9 @@
 //! so failures are immediate and pinpoint the exact string, not a
 //! hover-position-lookup that can silently pass when hover returns null.
 
-use perl_semantic_analyzer::analysis::semantic::get_builtin_documentation;
+use perl_semantic_analyzer::analysis::semantic::{
+    get_builtin_documentation, get_operator_documentation,
+};
 use perl_tdd_support::must_some;
 
 // ---------------------------------------------------------------------------
@@ -107,6 +109,34 @@ fn test_wantarray_void_context_doc() {
         "wantarray description must mention undef for void context: {}",
         doc.description
     );
+}
+
+// ---------------------------------------------------------------------------
+// file test operators
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_file_test_operator_docs() {
+    let cases = [
+        ("-e", "exists"),
+        ("-f", "plain file"),
+        ("-d", "directory"),
+        ("-r", "readable"),
+        ("-w", "writable"),
+        ("-M", "program start"),
+        ("-A", "last access"),
+        ("-C", "inode change"),
+    ];
+
+    for (op, expected) in cases {
+        let doc = must_some(get_operator_documentation(op));
+        assert!(
+            doc.description.contains(expected),
+            "{op} description should mention {expected}: {}",
+            doc.description
+        );
+        assert!(!doc.signature.is_empty(), "{op} should have a non-empty signature");
+    }
 }
 
 // ---------------------------------------------------------------------------

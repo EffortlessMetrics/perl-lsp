@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "fixture": "inc_system_inc",
+  "resolution_mode": "system_inc",
+  "assertions": [
+    {
+      "kind": "resolves",
+      "module": "SystemModule",
+      "expected_suffix": "SystemModule.pm",
+      "use_line": 2,
+      "use_col": 4,
+      "consumers": ["diagnostic_no_pl701", "goto_definition", "hover"],
+      "rationale": "system @INC (injected via PERL5LIB) resolves SystemModule via all three consumers"
+    }
+  ]
+}

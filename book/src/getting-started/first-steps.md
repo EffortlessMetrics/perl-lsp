@@ -98,7 +98,7 @@ cargo build --workspace
 cargo test
 
 # Run LSP server
-cargo run -p perl-lsp -- --stdio
+cargo run -p perl-lsp-rs -- --stdio
 
 # Check for issues
 cargo clippy --workspace
@@ -111,8 +111,8 @@ cargo doc --no-deps --package perl-parser
 
 # Run specific tests
 cargo test -p perl-parser               # Parser tests
-cargo test -p perl-lsp                  # LSP tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
+cargo test -p perl-lsp-rs                  # LSP tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs  # With adaptive threading
 ```
 
 ## 💡 Where to Start Contributing

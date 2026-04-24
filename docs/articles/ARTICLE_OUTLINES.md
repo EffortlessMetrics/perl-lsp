@@ -488,7 +488,7 @@ Eight publication-ready article outlines for the perl-lsp 0.12.0 public alpha la
    - Dependency management: `cargo machete` for unused deps, `semver-check` for API stability
 
 7. **Feature Governance**
-   - `features.toml`: 97 LSP capabilities governed through a 3-stage pipeline
+   - `features.toml`: 116 LSP/DAP capabilities governed through a 3-stage pipeline (87 LSP + 24 DAP + 5 extension, post PR #4107 audit)
    - Feature microcrates (`perl-lsp-feature-*`) gate capability advertisement
    - Dual indexing: symbols indexed under both qualified and bare names
 

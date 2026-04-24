@@ -4,6 +4,7 @@
 //! Supports LocationLink for enhanced client experience.
 
 use crate::ast::{Node, NodeKind};
+use crate::symbol::is_universal_method;
 use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -239,9 +240,9 @@ impl<'a> DeclarationProvider<'a> {
 
             // If we exhausted the cap, we have a cycle
             if depth >= cap {
-                eprintln!(
-                    "Cycle detected in ParentMap - node is its own ancestor (depth limit {})",
-                    cap
+                tracing::warn!(
+                    depth_limit = cap,
+                    "Cycle detected in ParentMap - node is its own ancestor"
                 );
                 break;
             }
@@ -337,6 +338,17 @@ impl<'a> DeclarationProvider<'a> {
                 self.find_method_declaration(node, method, object)
             }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
+            NodeKind::Goto { target } => {
+                if let NodeKind::Identifier { name } = &target.kind {
+                    self.find_label_declaration(node, name)
+                        .or_else(|| self.find_subroutine_declaration(node, name))
+                } else {
+                    None
+                }
+            }
+            // Handle string literals that are method names inside modifier calls:
+            // `before 'save' => sub { }` — cursor on 'save' navigates to sub save { }
+            NodeKind::String { value, .. } => self.find_modifier_target_declaration(node, value),
             _ => None,
         }
     }
@@ -368,6 +380,14 @@ impl<'a> DeclarationProvider<'a> {
             let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
                 break;
             };
+
+            if matches!(parent.kind, NodeKind::Subroutine { .. } | NodeKind::Method { .. }) {
+                if let Some(links) =
+                    self.find_signature_parameter_declaration(parent, usage, var_name)
+                {
+                    return Some(links);
+                }
+            }
 
             // Check siblings before this node in the current scope
             for child in self.get_children(parent) {
@@ -414,6 +434,48 @@ impl<'a> DeclarationProvider<'a> {
             }
 
             current_ptr = parent_ptr;
+        }
+
+        None
+    }
+
+    fn find_signature_parameter_declaration(
+        &self,
+        declaration_site: &Node,
+        usage: &Node,
+        var_name: &str,
+    ) -> Option<Vec<LocationLink>> {
+        let signature = match &declaration_site.kind {
+            NodeKind::Subroutine { signature, .. } | NodeKind::Method { signature, .. } => {
+                signature.as_deref()?
+            }
+            _ => return None,
+        };
+
+        let NodeKind::Signature { parameters } = &signature.kind else {
+            return None;
+        };
+
+        for parameter in parameters {
+            let variable = match &parameter.kind {
+                NodeKind::MandatoryParameter { variable }
+                | NodeKind::OptionalParameter { variable, .. }
+                | NodeKind::SlurpyParameter { variable }
+                | NodeKind::NamedParameter { variable } => variable.as_ref(),
+                _ => continue,
+            };
+
+            let NodeKind::Variable { name, .. } = &variable.kind else {
+                continue;
+            };
+
+            if name == var_name {
+                return Some(vec![self.create_location_link(
+                    usage,
+                    parameter,
+                    (variable.location.start, variable.location.end),
+                )]);
+            }
         }
 
         None
@@ -495,6 +557,17 @@ impl<'a> DeclarationProvider<'a> {
                     self.get_subroutine_name_range(decl),
                 )]);
             }
+
+            if is_universal_method(method_name)
+                && let Some(decl) =
+                    declarations.iter().find(|d| self.find_current_package(d) == Some("UNIVERSAL"))
+            {
+                return Some(vec![self.create_location_link(
+                    node,
+                    decl,
+                    self.get_subroutine_name_range(decl),
+                )]);
+            }
         }
 
         // Fall back to any subroutine with this name
@@ -503,6 +576,14 @@ impl<'a> DeclarationProvider<'a> {
 
     /// Find declaration for an identifier
     fn find_identifier_declaration(&self, node: &Node, name: &str) -> Option<Vec<LocationLink>> {
+        // `goto LABEL` should resolve to the statement label before considering
+        // sub/package/constant declarations.
+        if self.identifier_is_goto_target(node)
+            && let Some(links) = self.find_label_declaration(node, name)
+        {
+            return Some(links);
+        }
+
         // Try to find as subroutine first
         if let Some(links) = self.find_subroutine_declaration(node, name) {
             return Some(links);
@@ -526,6 +607,143 @@ impl<'a> DeclarationProvider<'a> {
                 const_decl,
                 self.get_constant_name_range_for(const_decl, name),
             )]);
+        }
+
+        None
+    }
+
+    fn find_label_declaration(&self, origin: &Node, label_name: &str) -> Option<Vec<LocationLink>> {
+        let mut labels = Vec::new();
+        self.collect_label_declarations(&self.ast, label_name, &mut labels);
+        let labeled_stmt = labels.first().copied()?;
+
+        Some(vec![self.create_location_link(
+            origin,
+            labeled_stmt,
+            self.get_labeled_statement_label_range(labeled_stmt),
+        )])
+    }
+
+    fn collect_label_declarations<'b>(
+        &'b self,
+        node: &'b Node,
+        label_name: &str,
+        labels: &mut Vec<&'b Node>,
+    ) {
+        if let NodeKind::LabeledStatement { label, .. } = &node.kind
+            && label == label_name
+        {
+            labels.push(node);
+        }
+
+        for child in self.get_children(node) {
+            self.collect_label_declarations(child, label_name, labels);
+        }
+    }
+
+    fn get_labeled_statement_label_range(&self, node: &Node) -> (usize, usize) {
+        let NodeKind::LabeledStatement { label, .. } = &node.kind else {
+            return (node.location.start, node.location.end);
+        };
+
+        let start = node.location.start;
+        let end = node.location.end.min(self.content.len());
+        if start >= end {
+            return (node.location.start, node.location.end);
+        }
+
+        let text = &self.content[start..end];
+        let label_start = text.find(label).map_or(start, |idx| start + idx);
+        let label_end = label_start.saturating_add(label.len()).min(end);
+        (label_start, label_end)
+    }
+
+    fn identifier_is_goto_target(&self, node: &Node) -> bool {
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = FxHashMap::default();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        let node_lookup = self.build_node_lookup_map();
+
+        let node_ptr = node as *const _;
+        let Some(parent_ptr) = parent_map.get(&node_ptr).copied() else {
+            return false;
+        };
+        let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
+            return false;
+        };
+
+        match &parent.kind {
+            NodeKind::Goto { target } => std::ptr::eq(target.as_ref(), node),
+            _ => false,
+        }
+    }
+
+    /// Find the definition of the method that a modifier string argument targets.
+    ///
+    /// When the cursor is on the string `'save'` in `before 'save' => sub { }`,
+    /// this walks up the parent map to confirm the string is the first argument
+    /// of a `before`/`after`/`around` function call, then returns the location of
+    /// `sub save { }`.
+    fn find_modifier_target_declaration(
+        &self,
+        string_node: &Node,
+        method_name: &str,
+    ) -> Option<Vec<LocationLink>> {
+        // Strip surrounding quotes from the raw token text ('save' → save, "save" → save).
+        let bare_name = method_name.trim().trim_matches('\'').trim_matches('"').trim();
+        if bare_name.is_empty() {
+            return None;
+        }
+
+        // Build parent map for upward traversal.
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = FxHashMap::default();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        let node_lookup = self.build_node_lookup_map();
+
+        // Walk up: String → FunctionCall { name: "before"/"after"/"around" }
+        // The String node may be a direct child of the FunctionCall's args list,
+        // so its immediate parent should be the FunctionCall node.
+        let string_ptr: *const Node = string_node as *const _;
+        let parent_ptr = parent_map.get(&string_ptr).copied()?;
+        let parent = node_lookup.get(&parent_ptr).copied()?;
+
+        // Check direct parent is a modifier FunctionCall where the string is first arg.
+        if let NodeKind::FunctionCall { name, args } = &parent.kind {
+            if matches!(name.as_str(), "before" | "after" | "around" | "override") {
+                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                    return self.find_subroutine_declaration(string_node, bare_name);
+                }
+            }
+        }
+
+        // The FunctionCall may be wrapped in an ExpressionStatement — check one
+        // level further up in case the parent is the statement wrapper.
+        let grandparent_ptr = parent_map.get(&parent_ptr).copied()?;
+        let grandparent = node_lookup.get(&grandparent_ptr).copied()?;
+
+        if let NodeKind::FunctionCall { name, args } = &grandparent.kind {
+            if matches!(name.as_str(), "before" | "after" | "around" | "override") {
+                if args.first().map(|a| std::ptr::eq(a, string_node)).unwrap_or(false) {
+                    return self.find_subroutine_declaration(string_node, bare_name);
+                }
+            }
         }
 
         None
@@ -992,10 +1210,24 @@ impl<'a> DeclarationProvider<'a> {
             }
             NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
             NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
+            NodeKind::Return { value } => {
+                if let Some(value) = value {
+                    vec![value.as_ref()]
+                } else {
+                    vec![]
+                }
+            }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 let mut children = vec![variable.as_ref()];
                 if let Some(init) = initializer {
                     children.push(init.as_ref());
+                }
+                children
+            }
+            NodeKind::Method { signature, body, .. } => {
+                let mut children = vec![body.as_ref()];
+                if let Some(sig) = signature {
+                    children.push(sig.as_ref());
                 }
                 children
             }
@@ -1112,7 +1344,12 @@ impl<'a> DeclarationProvider<'a> {
 ///     println!("Found symbol: {:?}", sym);
 /// }
 /// ```
-pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
+fn symbol_at_cursor_internal(
+    ast: &Node,
+    offset: usize,
+    current_pkg: &str,
+    source_text: &str,
+) -> Option<SymbolKey> {
     fn collect_node_path_at_offset<'a>(
         node: &'a Node,
         offset: usize,
@@ -1133,13 +1370,14 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         true
     }
 
-    fn find_symbol_node_at_offset(ast: &Node, offset: usize) -> Option<&Node> {
+    fn find_symbol_node_at_offset(ast: &Node, offset: usize) -> Option<(Vec<&Node>, &Node)> {
         let mut path = Vec::new();
         if !collect_node_path_at_offset(ast, offset, &mut path) {
             return None;
         }
 
-        path.iter()
+        let node = path
+            .iter()
             .rev()
             .copied()
             .find(|node| {
@@ -1152,11 +1390,431 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                         | NodeKind::Use { .. }
                 )
             })
-            .or_else(|| path.last().copied())
+            .or_else(|| path.last().copied())?;
+
+        Some((path, node))
     }
 
     fn node_variable_name(node: &Node) -> Option<&str> {
         if let NodeKind::Variable { name, .. } = &node.kind { Some(name.as_str()) } else { None }
+    }
+
+    fn normalize_symbol_name(raw: &str) -> Option<String> {
+        let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    }
+
+    fn token_at_offset_in_text(text: &str, rel_offset: usize) -> Option<String> {
+        let bytes = text.as_bytes();
+        if rel_offset >= bytes.len() {
+            return None;
+        }
+        let is_ident = |b: u8| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b':');
+        if !is_ident(bytes[rel_offset]) {
+            return None;
+        }
+
+        let mut start = rel_offset;
+        while start > 0 && is_ident(bytes[start - 1]) {
+            start -= 1;
+        }
+        let mut end = rel_offset + 1;
+        while end < bytes.len() && is_ident(bytes[end]) {
+            end += 1;
+        }
+        Some(text[start..end].to_string())
+    }
+
+    fn export_tag_members(module: &str, tag: &str) -> &'static [&'static str] {
+        match (module, tag) {
+            // POSIX tag sets commonly used in system scripts.
+            ("POSIX", ":sys_wait_h") => {
+                &["WEXITSTATUS", "WIFEXITED", "WIFSIGNALED", "WIFSTOPPED", "WTERMSIG"]
+            }
+            ("POSIX", ":fcntl_h") => &["F_GETFD", "F_SETFD", "F_GETFL", "F_SETFL", "FD_CLOEXEC"],
+            ("POSIX", ":termios_h") => {
+                &["B9600", "B19200", "B38400", "TCSANOW", "TCSADRAIN", "TCSAFLUSH"]
+            }
+            // File::Find exports.
+            ("File::Find", ":find") => &["find", "finddepth"],
+            // Fcntl exports.
+            ("Fcntl", ":seek") => &["SEEK_SET", "SEEK_CUR", "SEEK_END"],
+            ("Fcntl", ":lock") => &["LOCK_SH", "LOCK_EX", "LOCK_NB", "LOCK_UN"],
+            // Encode exports.
+            ("Encode", ":fallback") => &[
+                "FB_DEFAULT",
+                "FB_CROAK",
+                "FB_QUIET",
+                "FB_WARN",
+                "FB_PERLQQ",
+                "FB_HTMLCREF",
+                "FB_XMLCREF",
+            ],
+            _ => &[],
+        }
+    }
+
+    fn tag_imports_symbol(module: &str, import_token: &str, symbol_name: &str) -> bool {
+        if !import_token.starts_with(':') {
+            return false;
+        }
+        export_tag_members(module, import_token).contains(&symbol_name)
+    }
+
+    /// Pragmas and structural modules whose qw/string arguments are NOT
+    /// imported symbol names. Cursor-on-arg for these should not resolve
+    /// to a bogus `SymbolKey` — they carry inheritance lists, feature names,
+    /// or other non-import semantics.
+    const NON_IMPORT_PRAGMAS: &[&str] = &[
+        "constant", // constant definitions, not imports
+        "parent",   // inheritance: qw/string args are class names
+        "base",     // legacy inheritance
+        "vars",     // variable declarations, not imports
+        "Exporter", // 'import' arg is a proxy method, not an imported symbol
+        "mro",      // method resolution order pragma
+        "if",       // conditional module load
+        "lib",      // adds directories to @INC
+        "feature",  // enables Perl feature flags
+        "utf8",     // encoding pragma
+    ];
+
+    fn use_args_import_symbol(module: &str, args: &[String], symbol_name: &str) -> bool {
+        args.iter().any(|arg| {
+            if arg == symbol_name || tag_imports_symbol(module, arg, symbol_name) {
+                return true;
+            }
+
+            if arg.starts_with("qw") {
+                let content = arg
+                    .trim_start_matches("qw")
+                    .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                    .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                return content
+                    .split_whitespace()
+                    .any(|tok| tok == symbol_name || tag_imports_symbol(module, tok, symbol_name));
+            }
+
+            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+            bare == symbol_name || tag_imports_symbol(module, bare, symbol_name)
+        })
+    }
+
+    fn find_import_source(ast: &Node, symbol_name: &str) -> Option<String> {
+        /// Extract the module name from a `require Module;` statement node.
+        ///
+        /// Matches both `require Foo::Bar` (Identifier arg) and
+        /// `require "Foo/Bar.pm"` forms, returning the module name as a
+        /// `::` -separated string suitable for workspace lookup.
+        fn require_module_name(node: &Node) -> Option<String> {
+            let args = match &node.kind {
+                NodeKind::FunctionCall { name, args } if name == "require" => args,
+                _ => return None,
+            };
+            let arg = args.first()?;
+            match &arg.kind {
+                NodeKind::Identifier { name } => Some(name.clone()),
+                NodeKind::String { value, .. } => {
+                    // "Foo/Bar.pm" -> "Foo::Bar"
+                    let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                    let module = cleaned.trim_end_matches(".pm").replace('/', "::");
+                    Some(module)
+                }
+                _ => None,
+            }
+        }
+
+        /// Check whether a MethodCall node is `Module->import(...)` and, if
+        /// so, whether its argument list contains `symbol`.  Handles four
+        /// argument forms:
+        /// - bare string literals:  `->import('foo', 'bar')`
+        /// - qw list as ArrayLit:   `->import(qw(foo bar))` → ArrayLiteral
+        /// - Identifier nodes:      `->import(foo)` (unusual but legal)
+        /// - String value trimming: quoted strings like `"'foo'"` from qw
+        fn import_call_exports(
+            method_node: &Node,
+            expected_module: &str,
+            symbol: &str,
+            aliases: &std::collections::HashMap<String, String>,
+        ) -> bool {
+            let (object, method, args) = match &method_node.kind {
+                NodeKind::MethodCall { object, method, args } => (object, method, args),
+                _ => return false,
+            };
+            if method != "import" {
+                return false;
+            }
+            // The object must be the same module name.
+            let obj_name = match &object.kind {
+                NodeKind::Identifier { name } => Some(name.as_str()),
+                NodeKind::Variable { name, .. } => aliases.get(name).map(String::as_str),
+                _ => return false,
+            };
+            let Some(obj_name) = obj_name else {
+                return false;
+            };
+            if obj_name != expected_module {
+                return false;
+            }
+            if args.is_empty() {
+                // `Module->import()` default import set is module-specific and may
+                // come from `@EXPORT` in another file.  We do not currently have
+                // a workspace export table in this lookup path, so stay
+                // conservative and do not claim symbol ownership here.
+                return false;
+            }
+            // Walk the argument list looking for the symbol.
+            for arg in args {
+                if arg_node_matches_symbol(arg, expected_module, symbol) {
+                    return true;
+                }
+            }
+            false
+        }
+
+        /// Check whether a single AST argument node matches `symbol`.
+        /// Handles: String literals, Identifiers (including raw "qw(...)"),
+        /// and ArrayLiteral (the AST form produced by `qw(...)` in expression
+        /// context).
+        fn arg_node_matches_symbol(arg: &Node, module: &str, symbol: &str) -> bool {
+            match &arg.kind {
+                NodeKind::String { value, .. } => {
+                    // Strip surrounding single/double quotes that some code
+                    // paths leave in the value (e.g. qw in quotes.rs).
+                    let bare = value.trim_matches('\'').trim_matches('"');
+                    bare == symbol || tag_imports_symbol(module, bare, symbol)
+                }
+                NodeKind::Identifier { name } => {
+                    if name == symbol {
+                        return true;
+                    }
+                    // qw(...) stored as a raw "qw(...)" Identifier string
+                    // (from the Use-node code path that reuses this helper).
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        return content
+                            .split_whitespace()
+                            .any(|tok| tok == symbol || tag_imports_symbol(module, tok, symbol));
+                    }
+                    false
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    // qw(...) in expression context → ArrayLiteral of String nodes
+                    elements.iter().any(|el| arg_node_matches_symbol(el, module, symbol))
+                }
+                _ => false,
+            }
+        }
+
+        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+            let (alias_name, call_node) = match &expr.kind {
+                NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
+                    let NodeKind::Variable { name, .. } = &lhs.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                NodeKind::VariableDeclaration { variable, initializer: Some(rhs), .. } => {
+                    let NodeKind::Variable { name, .. } = &variable.kind else {
+                        return None;
+                    };
+                    (name.as_str(), rhs.as_ref())
+                }
+                _ => return None,
+            };
+
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            if !matches!(
+                name.as_str(),
+                "use_module"
+                    | "require_module"
+                    | "Module::Runtime::use_module"
+                    | "Module::Runtime::require_module"
+            ) {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some((alias_name.to_string(), module.to_string()))
+        }
+
+        /// Unwrap an ExpressionStatement to its inner expression, or return
+        /// the node unchanged (handles the case where we're already at the
+        /// expression level).
+        fn inner_expr(node: &Node) -> &Node {
+            if let NodeKind::ExpressionStatement { expression } = &node.kind {
+                expression.as_ref()
+            } else {
+                node
+            }
+        }
+
+        /// Scan a flat statement list for a `require M; M->import(...)` pair
+        /// that exports `symbol`.  The require and import calls do not have to
+        /// be adjacent — the import just needs to appear anywhere in the same
+        /// statement list after (or even before) the require.
+        fn scan_statements_for_require_import(stmts: &[Node], symbol: &str) -> Option<String> {
+            // Collect all `require Module` names present in this block.
+            let mut required_modules: Vec<String> =
+                stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+            let mut aliases: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for stmt in stmts {
+                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                    aliases.insert(alias, module.clone());
+                    if !required_modules.contains(&module) {
+                        required_modules.push(module);
+                    }
+                }
+            }
+
+            if required_modules.is_empty() {
+                return None;
+            }
+
+            // Check whether any `Module->import(...)` call in this block
+            // exports our symbol, using the set of required modules.
+            for stmt in stmts {
+                let expr = inner_expr(stmt);
+                for module in &required_modules {
+                    if import_call_exports(expr, module, symbol, &aliases) {
+                        return Some(module.clone());
+                    }
+                }
+            }
+            None
+        }
+
+        fn find(node: &Node, name: &str) -> Option<String> {
+            if let NodeKind::Use { module, args, .. } = &node.kind {
+                // Skip structural pragmas — their args are not import-list symbols
+                if NON_IMPORT_PRAGMAS.contains(&module.as_str()) {
+                    // Fall through to children
+                } else {
+                    for arg in args {
+                        if arg == name {
+                            return Some(module.clone());
+                        }
+                        if tag_imports_symbol(module, arg, name) {
+                            return Some(module.clone());
+                        }
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            for import_token in content.split_whitespace() {
+                                if import_token == name
+                                    || tag_imports_symbol(module, import_token, name)
+                                {
+                                    return Some(module.clone());
+                                }
+                            }
+                        } else {
+                            // Parenthesized import list: use Foo ('bar', 'baz')
+                            // The parser emits each token as a separate arg including commas
+                            // and string literals with their surrounding quotes.
+                            let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+                            if bare == name {
+                                return Some(module.clone());
+                            }
+                            if tag_imports_symbol(module, bare, name) {
+                                return Some(module.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scan block/program statement lists for `require M; M->import(sym)` patterns.
+            let stmts = match &node.kind {
+                NodeKind::Program { statements } => Some(statements.as_slice()),
+                NodeKind::Block { statements } => Some(statements.as_slice()),
+                _ => None,
+            };
+            if let Some(statements) = stmts {
+                if let Some(module) = scan_statements_for_require_import(statements, name) {
+                    return Some(module);
+                }
+            }
+
+            for child in get_node_children(node) {
+                if let Some(module) = find(child, name) {
+                    return Some(module);
+                }
+            }
+
+            None
+        }
+
+        find(ast, symbol_name)
+    }
+
+    fn plack_builder_middleware_symbol(path: &[&Node], offset: usize) -> Option<SymbolKey> {
+        let has_builder = path.iter().any(|ancestor| {
+            matches!(ancestor.kind, NodeKind::FunctionCall { ref name, .. } if name == "builder")
+        });
+        if !has_builder {
+            return None;
+        }
+
+        let block = path.iter().rev().find_map(|ancestor| {
+            if let NodeKind::Block { statements } = &ancestor.kind {
+                Some(statements)
+            } else {
+                None
+            }
+        })?;
+
+        for statement in block {
+            let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+                continue;
+            };
+            let NodeKind::FunctionCall { name, args } = &expression.kind else {
+                continue;
+            };
+            if name != "enable" {
+                continue;
+            }
+
+            let Some(first) = args.first() else {
+                continue;
+            };
+            if offset < first.location.start || offset > first.location.end {
+                continue;
+            }
+
+            let raw_name = match &first.kind {
+                NodeKind::String { value, .. } => normalize_symbol_name(value)?,
+                NodeKind::Identifier { name } => name.clone(),
+                _ => continue,
+            };
+
+            let middleware_name = if raw_name.contains("::") {
+                raw_name
+            } else {
+                format!("Plack::Middleware::{raw_name}")
+            };
+
+            return Some(SymbolKey {
+                pkg: middleware_name.clone().into(),
+                name: middleware_name.into(),
+                sigil: None,
+                kind: SymKind::Pack,
+            });
+        }
+
+        None
     }
 
     fn looks_like_package_name(name: &str) -> bool {
@@ -1248,7 +1906,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
     }
 
-    let node = find_symbol_node_at_offset(ast, offset)?;
+    let (path, node) = find_symbol_node_at_offset(ast, offset)?;
+
+    if let Some(symbol_key) = plack_builder_middleware_symbol(&path, offset) {
+        return Some(symbol_key);
+    }
+
     match &node.kind {
         NodeKind::Variable { sigil, name } => {
             // Variable already has sigil separated
@@ -1262,9 +1925,12 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
         NodeKind::FunctionCall { name, .. } => {
             let (pkg, bare) = if let Some(idx) = name.rfind("::") {
-                (&name[..idx], &name[idx + 2..])
+                (name[..idx].to_string(), name[idx + 2..].to_string())
             } else {
-                (current_pkg, name.as_str())
+                (
+                    find_import_source(ast, name).unwrap_or_else(|| current_pkg.to_string()),
+                    name.clone(),
+                )
             };
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }
@@ -1288,7 +1954,28 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 kind: SymKind::Sub,
             })
         }
-        NodeKind::Use { module, .. } => {
+        NodeKind::Use { module, args, .. } => {
+            if !NON_IMPORT_PRAGMAS.contains(&module.as_str())
+                && !source_text.is_empty()
+                && offset >= node.location.start
+                && offset <= node.location.end
+            {
+                let rel_offset = offset.saturating_sub(node.location.start);
+                if let Some(stmt_text) = source_text.get(node.location.start..node.location.end)
+                    && let Some(token) = token_at_offset_in_text(stmt_text, rel_offset)
+                    && token != *module
+                    && token != "use"
+                    && use_args_import_symbol(module, args, &token)
+                {
+                    return Some(SymbolKey {
+                        pkg: module.clone().into(),
+                        name: token.into(),
+                        sigil: None,
+                        kind: SymKind::Sub,
+                    });
+                }
+            }
+
             // When cursor is on a `use Module::Name` statement, resolve to the package
             Some(SymbolKey {
                 pkg: module.clone().into(),
@@ -1299,6 +1986,27 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
         }
         _ => None,
     }
+}
+
+/// Extract a symbol key at a cursor offset with access to source text.
+///
+/// This variant is used by LSP handlers when additional source-aware
+/// disambiguation is needed (for example, barewords in `use ... qw(...)` lists).
+pub fn symbol_at_cursor_with_source(
+    ast: &Node,
+    offset: usize,
+    current_pkg: &str,
+    source_text: &str,
+) -> Option<SymbolKey> {
+    symbol_at_cursor_internal(ast, offset, current_pkg, source_text)
+}
+
+/// Extract a symbol key at a cursor offset.
+///
+/// This keeps the historical API and defers to [`symbol_at_cursor_with_source`]
+/// without source text-specific disambiguation.
+pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<SymbolKey> {
+    symbol_at_cursor_internal(ast, offset, current_pkg, "")
 }
 
 /// Determines the current package context at the given offset.

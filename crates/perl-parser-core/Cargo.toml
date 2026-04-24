@@ -1,6 +1,6 @@
 [package]
 name = "perl-parser-core"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -27,21 +27,31 @@ perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-ast = { workspace = true }
 perl-ast-v2 = { workspace = true }
-perl-quote = { workspace = true }
 perl-pragma = { workspace = true }
-perl-edit = { workspace = true }
-perl-builtins = { workspace = true }
 perl-regex = { workspace = true }
-perl-heredoc = { workspace = true }
-perl-error = { workspace = true }
-perl-tokenizer = { workspace = true }
+perl-token = { workspace = true }
+# Wave D absorbed (internal modules in src/syntax/):
+#   perl-quote → src/syntax/quote.rs
+#   perl-heredoc → src/syntax/heredoc.rs
+#   perl-error → src/syntax/error/
+#   perl-edit → src/syntax/edit.rs
+#   perl-path-normalize → src/syntax/path_normalize.rs
+#   perl-path-security → src/syntax/path_security.rs
+#   perl-text-line → src/syntax/text_line.rs
+thiserror.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }
 tracing-subscriber = "0.3"
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

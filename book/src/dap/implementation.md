@@ -1215,7 +1215,7 @@ sub render_value {
 - <50ms LSP response time maintained
 - No memory leaks or resource contention
 
-**Test Validation**: `cargo test -p perl-lsp --test lsp_dap_non_regression`
+**Test Validation**: `cargo test -p perl-lsp-rs --test lsp_dap_non_regression`
 
 #### Task 3.6: Dependency Management (AC18)
 **Duration**: 0.5 weeks
@@ -1788,7 +1788,7 @@ jobs:
 | Test coverage (adapter) | >95% | `cargo tarpaulin -p perl-dap` |
 | Test coverage (shim) | >80% | `cover -test` (Devel::TSPerlDAP) |
 | Security findings | 0 | `cargo test -p perl-dap --test security_validation` |
-| LSP non-regression | 100% pass rate | `cargo test -p perl-lsp --test lsp_dap_non_regression` |
+| LSP non-regression | 100% pass rate | `cargo test -p perl-lsp-rs --test lsp_dap_non_regression` |
 | Documentation completeness | 100% | `cargo test --test dap_documentation_complete` |
 
 ### 10.4 Cross-Platform Metrics
@@ -1888,7 +1888,7 @@ cargo test --test dap_documentation_complete
 cargo test -p perl-dap --test security_validation
 
 # AC17: LSP non-regression
-cargo test -p perl-lsp --test lsp_dap_non_regression
+cargo test -p perl-lsp-rs --test lsp_dap_non_regression
 
 # AC18: Dependency management
 cargo test --test dap_dependency_installation

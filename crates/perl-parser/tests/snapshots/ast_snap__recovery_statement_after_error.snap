@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"my $x = ;\\nmy $y = 10;\")"
+---
+(source_file (my_declaration (variable $ x)(missing_expression)) (my_declaration (variable $ y)(number 10)))

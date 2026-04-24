@@ -59,8 +59,9 @@ cd xtask && cargo run highlight -- --path ../crates/tree-sitter-perl/test/highli
 - **Not a workspace member** -- excluded from the Cargo workspace.
 - **`.gitattributes`** marks the directory `linguist-vendored`.
 - **`.trivyignore`** excludes `tree-sitter-perl/test/corpus/**` from security scans.
-- The workspace `Cargo.toml` alias `tree-sitter-perl` resolves to `crates/tree-sitter-perl-rs`
-  (the Rust bindings crate), not this directory.
+- The workspace previously had a `tree-sitter-perl` alias pointing to `crates/tree-sitter-perl-rs`,
+  but that harness crate has been archived to `archive/crates/tree-sitter-perl-rs/`; the alias
+  no longer exists in the workspace.
 
 ## Adding new highlight tests
 
@@ -72,5 +73,5 @@ cd xtask && cargo run highlight -- --path ../crates/tree-sitter-perl/test/highli
 ## Important notes
 
 - This directory is **data only** -- no Rust source, no `Cargo.toml`, no binaries.
-- Do not confuse with `crates/tree-sitter-perl-rs/` (the Rust crate) or
+- Do not confuse with `archive/crates/tree-sitter-perl-rs/` (the archived Rust harness) or
   `tree-sitter-perl/` (the vendored upstream C grammar at the repo root).

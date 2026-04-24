@@ -1,0 +1,5 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "parse_sexp(\"state $counter = 0; $counter //= 1;\")"
+---
+(source_file (state_declaration (variable $ counter)(number 0)) (assignment_//assign (variable $ counter) (number 1)))

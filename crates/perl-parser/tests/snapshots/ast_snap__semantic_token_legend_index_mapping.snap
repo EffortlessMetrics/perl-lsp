@@ -1,0 +1,42 @@
+---
+source: crates/perl-parser/tests/ast_snapshot_tests.rs
+expression: "lines.join(\"\\n\")"
+---
+token_types:
+  0: namespace
+  1: type
+  2: class
+  3: interface
+  4: enum
+  5: enumMember
+  6: typeParameter
+  7: function
+  8: method
+  9: property
+  10: macro
+  11: variable
+  12: parameter
+  13: keyword
+  14: modifier
+  15: comment
+  16: string
+  17: number
+  18: regexp
+  19: operator
+  20: sql_string
+  21: sql_heredoc_keyword
+  22: json_heredoc_key
+modifiers:
+  0: declaration
+  1: definition
+  2: readonly
+  3: static
+  4: deprecated
+  5: abstract
+  6: async
+  7: modification
+  8: documentation
+  9: defaultLibrary
+  10: scalarVariable
+  11: arrayVariable
+  12: hashVariable

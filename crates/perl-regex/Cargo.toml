@@ -1,6 +1,6 @@
 [package]
 name = "perl-regex"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -14,10 +14,10 @@ keywords = ["perl", "regex", "validation", "security", "backtracking"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
-thiserror = "2.0.18"
+thiserror.workspace = true
 
-[dev-dependencies]
-perl-tdd-support = { path = "../perl-tdd-support" }
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

@@ -3,15 +3,17 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand, ValueEnum};
-use color_eyre::eyre::Result;
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
 mod tasks;
 mod types;
 mod utils;
+use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::*;
@@ -29,6 +31,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -274,6 +280,13 @@ enum Commands {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
     },
 
     /// Run corpus tests
@@ -368,6 +381,24 @@ enum Commands {
         output: PathBuf,
     },
 
+    /// Compute the CI scope — changed crates, reverse-dep closure, and architectural wideners.
+    ///
+    /// Emits a JSON (or text) payload listing changed files, mapped crates, the
+    /// reverse-dependency closure, architectural wideners applied, and the
+    /// selected CI lanes with reasons. Deterministic given the same diff and
+    /// `cargo metadata` output.
+    ///
+    /// Example: `cargo xtask ci-scope --base origin/master --format json`
+    CiScope {
+        /// Base git reference to diff against (default: origin/master).
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Output format: `json` or `text` (default: json).
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -451,11 +482,11 @@ enum Commands {
     #[cfg(feature = "parser-tasks")]
     Bindings {
         /// Header file to generate bindings from
-        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/tree_sitter/parser.h")]
         header: PathBuf,
 
         /// Output file for bindings
-        #[arg(long, default_value = "crates/tree-sitter-perl-rs/src/bindings.rs")]
+        #[arg(long, default_value = "archive/crates/tree-sitter-perl-rs/src/bindings.rs")]
         output: PathBuf,
     },
 
@@ -496,6 +527,28 @@ enum Commands {
         /// Skip confirmation
         #[arg(long)]
         yes: bool,
+    },
+
+    /// Extract the curated release body from `docs/releases/<tag>.md`.
+    ///
+    /// Reads the file, strips its YAML frontmatter, and emits the body to
+    /// stdout (or to `--output` if provided). Used by the `release.yml`
+    /// workflow to drive GitHub Release bodies from the curated per-release
+    /// notes that ship in the repo.
+    ReleaseNotes {
+        /// Release tag (e.g. `v0.12.4`). A bare version like `0.12.4` is
+        /// accepted and normalized to `v0.12.4`.
+        #[arg(long)]
+        tag: String,
+
+        /// Optional output file. When omitted, the body is written to stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Override the repository root used to resolve `docs/releases/`.
+        /// Intended as a testing seam; the release workflow never passes this.
+        #[arg(long, hide = true)]
+        root: Option<PathBuf>,
     },
 
     /// Trigger PR-driven release orchestration workflow
@@ -613,7 +666,7 @@ enum Commands {
     },
 
     /// Run three-way parser comparison
-    #[cfg(feature = "legacy")]
+    #[cfg(feature = "parser-tasks")]
     CompareThree {
         /// Show detailed output
         #[arg(long)]
@@ -639,14 +692,14 @@ enum Commands {
         cleanup: bool,
     },
 
-    /// Bump version numbers across project
+    /// Bump the workspace version across every tracked site.
+    ///
+    /// Non-interactive and idempotent. Delegates to `perl-ci-hygiene
+    /// bump-version`, which owns the canonical site list shared with the
+    /// `check-version-sync` CI gate.
     BumpVersion {
-        /// New version to set
+        /// New version to set (X.Y.Z format).
         version: String,
-
-        /// Skip confirmation
-        #[arg(long)]
-        yes: bool,
     },
 
     /// Publish crates to crates.io
@@ -713,6 +766,32 @@ enum Commands {
         #[arg(long)]
         token: Option<String>,
     },
+
+    /// Verify transitive normal-dep closure of published crates contains only publishable deps
+    PublishClosure {
+        /// Check only this crate (default: all allowlisted crates)
+        #[arg(long)]
+        crate_name: Option<String>,
+    },
+
+    /// Ratchet gate: published-crate count must not increase above baseline.
+    ///
+    /// Reads the current entry count from `[workspace.metadata.publish.allow]`
+    /// (via `cargo metadata --no-deps`), compares against the baseline stored in
+    /// `xtask/published-crate-baseline.txt`, and fails if the count increased.
+    /// When the count has decreased, the baseline is auto-tightened.
+    PublishedCrateCount,
+
+    /// Offline manifest validation: allowlist drift + LICENSE present.
+    ///
+    /// Checks that every entry in `[workspace.metadata.publish.allow]` is a
+    /// publishable workspace member and vice versa (allowlist drift), and that
+    /// every allowlisted crate has a `license` or `license-file` field set.
+    /// Uses `cargo metadata --no-deps` — no network contact.
+    ///
+    /// Replaces the Python `--check-drift` step in `publish-dry-run.yml` and
+    /// is wired into `just pr-fast` and `just ci-gate`.
+    PublishManifestCheck,
 
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
@@ -850,6 +929,12 @@ enum Commands {
         output: Option<PathBuf>,
     },
 
+    /// Enforce crate layer-dependency constraints (leaf crates must not depend on higher layers).
+    ///
+    /// Current rules:
+    ///   - perl-diagnostics must NOT depend on any perl-lsp-* crate.
+    LayerCheck,
+
     /// Scan for built-but-not-wired crates: those with tests but zero import by perl-lsp
     ///
     /// Finds crates that have `#[test]` annotations but are not listed as direct
@@ -864,9 +949,18 @@ enum Commands {
         #[arg(long)]
         check: bool,
 
-        /// Name of the root LSP crate to check (default: perl-lsp)
-        #[arg(long, default_value = "perl-lsp")]
+        /// Name of the root LSP crate to check (default: perl-lsp-rs)
+        #[arg(long, default_value = "perl-lsp-rs")]
         lsp_crate: String,
+    },
+
+    /// Check that test-bearing Rust files are reachable from their module tree.
+    CheckTestWiring,
+
+    /// Emit per-subsystem engineering-health metrics.
+    Metrics {
+        #[command(subcommand)]
+        command: MetricsCommand,
     },
 
     /// Validate memory profiling functionality
@@ -969,6 +1063,17 @@ enum Commands {
         mode: CheckMode,
     },
 
+    /// Resolve the Cargo package name for a crate directory.
+    ///
+    /// Prints the package name from Cargo.toml to stdout (one line, no trailing noise).
+    /// Used by the pre-push hook to convert a directory basename into the correct -p argument.
+    ///
+    /// Example: `cargo xtask resolve-package-name crates/perl-lsp-rs` outputs `perl-lsp-rs`
+    ResolvePackageName {
+        /// Crate directory path, relative to workspace root (e.g., "crates/perl-lsp-rs")
+        crate_dir: String,
+    },
+
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
@@ -977,6 +1082,18 @@ enum Commands {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
         #[arg(default_value = ".ops-perl-lsp")]
         ops_dir: PathBuf,
+
+        /// Summarize only entries at or after the given window, e.g. `24h`, `7d`, `30m`, or `all`.
+        #[arg(long)]
+        since: Option<String>,
+
+        /// Maximum number of rows to show in each summary section.
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+
+        /// Output format for the swarm summary.
+        #[arg(long, value_enum, default_value = "human")]
+        format: swarm_summary::SwarmSummaryOutputFormat,
     },
 
     /// Populate mdBook source directory from `docs/`.
@@ -1043,6 +1160,12 @@ enum CpanCorpusCommand {
         /// Verbose output
         #[arg(long)]
         verbose: bool,
+
+        /// Force a full wipe of the install directory before installing.
+        /// Default is an incremental install that keeps `lib/perl5` between
+        /// runs and lets cpanm skip already-installed modules.
+        #[arg(long)]
+        reset: bool,
     },
 
     /// Run parser corpus sweep against installed CPAN modules
@@ -1091,6 +1214,75 @@ enum FeaturesCommand {
     Report,
 }
 
+#[derive(Subcommand)]
+enum MetricsCommand {
+    /// Emit parser phase timings and benchmark summary.
+    ParserStats {
+        /// Path to benchmark JSON (default: most recent in benchmarks/results/)
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Write output to .ci/metrics/parser.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
+    LspStats {
+        /// Write output to .ci/metrics/editor_intelligence.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// [stub] Workspace index memory and timing statistics.
+    WorkspaceStats,
+    /// [stub] Diagnostics accuracy and latency statistics.
+    DiagnosticsStats,
+    /// [stub] Hierarchical memory breakdown across LSP subsystems.
+    Memory,
+    /// Release-health dashboard — debt ledger + merge-gate baseline summary.
+    ReleaseHealth {
+        /// Number of days of history reported in the receipt window field.
+        #[arg(long, default_value_t = 30)]
+        days: u64,
+        /// Write output to .ci/metrics/release-health.json
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check scorecard floor metrics against the committed baseline.
+    ///
+    /// Loads `.ci/metrics/baselines/<subsystem>.json` and compares against the
+    /// current metric receipt.  Exits nonzero on any floor breach.
+    RatchetCheck {
+        /// Subsystem name (e.g. "parser", "engineering_health").
+        subsystem: String,
+        /// Path to current-metrics JSON (default: target/receipts/metrics/<subsystem>.json).
+        #[arg(long)]
+        current: Option<PathBuf>,
+        /// Record this run in target/metrics/stable_wins/<subsystem>.json.
+        #[arg(long)]
+        record: bool,
+    },
+    /// Show which improvement metrics are stable enough to raise the floor baseline.
+    PromoteBaseline {
+        /// Subsystem name.
+        subsystem: String,
+        /// Minimum fractional improvement required (default: 1%).
+        #[arg(long, default_value_t = 0.01)]
+        delta_pct: f64,
+    },
+    /// Summarize a parser corpus sweep receipt (phase timings, slowest files,
+    /// median error density, first-error buckets).
+    ///
+    /// Reads the JSON written by `cargo xtask parser-corpus-sweep --receipt`
+    /// (or any other path via `--input`) and emits the same human-readable
+    /// report that the sweep prints at end-of-run — useful for analyzing
+    /// historical receipts without re-running the sweep.
+    SweepStats {
+        /// Path to a sweep receipt JSON. Defaults to
+        /// `target/receipts/system-corpus-sweep.json`.
+        #[arg(long)]
+        input: Option<PathBuf>,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1103,6 +1295,10 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::List => {
+            print_top_level_commands();
+            Ok(())
+        }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
@@ -1172,7 +1368,7 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
-        Commands::Fmt { check } => fmt::run(check),
+        Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
@@ -1189,6 +1385,7 @@ fn main() -> Result<()> {
             parse_rust::run(source, sexp, ast, bench)
         }
         Commands::Release { version, yes } => release::run(version, yes),
+        Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,
             positional_version,
@@ -1236,6 +1433,9 @@ fn main() -> Result<()> {
         Commands::CiBaseline { branch, days, limit, output } => {
             ci_metrics::run_ci_baseline(branch, days, limit, output)
         }
+        Commands::CiScope { base, format } => {
+            ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::SecurityHardening => hardening::security_hardening(),
@@ -1261,14 +1461,14 @@ fn main() -> Result<()> {
             })
         }
         Commands::ParserMatrix { report, output } => parser_matrix::run_with_paths(report, output),
-        #[cfg(feature = "legacy")]
+        #[cfg(feature = "parser-tasks")]
         Commands::CompareThree { verbose, format } => {
             compare_parsers::run_three_way(verbose, format.as_str())
         }
         Commands::TestLsp { create_only, test, cleanup } => {
             test_lsp::run(create_only, test, cleanup)
         }
-        Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
+        Commands::BumpVersion { version } => bump_version::run(version),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishRelease { version, dry_run, git_ref } => {
             publish::publish_release(version, dry_run, git_ref)
@@ -1279,6 +1479,9 @@ fn main() -> Result<()> {
         Commands::ForbidFatalConstructs { args } => forbid_fatal_constructs::run(args),
         Commands::CiHygiene { command, args } => ci_hygiene::run(command, args),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
+        Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
+        Commands::PublishedCrateCount => count_ratchet::run(),
+        Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
         Commands::ParserCorpusSweep {
@@ -1293,6 +1496,7 @@ fn main() -> Result<()> {
             let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
             let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
             parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
+                corpus_profile: None,
                 base_roots,
                 corpus_roots,
                 manifest_path: manifest,
@@ -1314,10 +1518,11 @@ fn main() -> Result<()> {
                     }
                     cpan_corpus::fetch_list(&config)
                 }
-                CpanCorpusCommand::Install { dist_list, install_dir, verbose } => {
+                CpanCorpusCommand::Install { dist_list, install_dir, verbose, reset } => {
                     if let Some(dl) = dist_list {
                         config.dist_list = dl;
                     }
+                    config.force_reset = reset;
                     if let Some(id) = install_dir {
                         config.install_dir = id;
                     }
@@ -1372,6 +1577,26 @@ fn main() -> Result<()> {
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
         }
+        Commands::CheckTestWiring => check_test_wiring::run(),
+        Commands::Metrics { command } => match command {
+            MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
+            MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),
+            MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
+            MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),
+            MetricsCommand::Memory => metrics::memory::run(),
+            MetricsCommand::ReleaseHealth { days, json } => {
+                metrics::release_health::run(days, json)
+            }
+            MetricsCommand::RatchetCheck { subsystem, current, record } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_ratchet_check(&root, &subsystem, current, record)
+            }
+            MetricsCommand::PromoteBaseline { subsystem, delta_pct } => {
+                let root = utils::project_root()?;
+                metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
+            }
+            MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
+        },
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {
@@ -1406,9 +1631,21 @@ fn main() -> Result<()> {
             verbose,
         }),
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
+        Commands::ResolvePackageName { crate_dir } => {
+            // Use the current working directory as workspace root so this subcommand
+            // works correctly both in the main workspace and in test synthetic workspaces.
+            let root = std::env::current_dir()
+                .map_err(|e| eyre!("Failed to get current working directory: {e}"))?;
+            let name = tasks::targeted_checks::resolve_single_package_name(&root, &crate_dir)?;
+            println!("{name}");
+            Ok(())
+        }
         Commands::WorktreeCleanup => worktrees::cleanup(),
-        Commands::SwarmSummary { ops_dir } => swarm_summary::run(ops_dir),
+        Commands::SwarmSummary { ops_dir, since, limit, format } => {
+            swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
+        }
         Commands::PopulateBook => populate_book::run(),
+        Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
             build_timing::run_receipt(clean, incremental, tests, output, baseline)
@@ -1416,5 +1653,17 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+    }
+}
+
+fn print_top_level_commands() {
+    let mut command_names = Cli::command()
+        .get_subcommands()
+        .map(|subcommand| subcommand.get_name().to_string())
+        .collect::<Vec<_>>();
+    command_names.sort_unstable();
+
+    for command_name in command_names {
+        println!("{command_name}");
     }
 }

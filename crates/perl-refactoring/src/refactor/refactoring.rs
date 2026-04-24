@@ -38,10 +38,10 @@ use crate::workspace_index::WorkspaceIndex;
 #[cfg(feature = "workspace_refactor")]
 use crate::workspace_refactor::WorkspaceRefactor;
 use perl_parser_core::line_index::LineIndex;
-use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
-use perl_qualified_name::{
+use perl_parser_core::qualified_name::{
     is_valid_identifier_part, validate_perl_qualified_name as validate_package_name,
 };
+use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -1058,10 +1058,6 @@ impl RefactoringEngine {
                     let files_modified = self.apply_file_edits(&filtered_result.file_edits)?;
                     let changes_made =
                         filtered_result.file_edits.iter().map(|e| e.edits.len()).sum();
-                    println!(
-                        "perform_symbol_rename DEBUG: result.success=true, files_modified={}, changes_made={}",
-                        files_modified, changes_made
-                    );
 
                     let refac_result = RefactoringResult {
                         success: true,
@@ -1071,7 +1067,6 @@ impl RefactoringEngine {
                         errors: vec![],
                         operation_id: None,
                     };
-                    println!("perform_symbol_rename DEBUG: returning result: {:?}", refac_result);
                     Ok(refac_result)
                 }
                 Err(e) => Ok(RefactoringResult {

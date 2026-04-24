@@ -2,8 +2,11 @@
  * Contract tests for the command-palette feature set:
  *   - perl-lsp.checkSyntax
  *   - perl-lsp.runCurrentTest
+ *   - perl-lsp.runTestAtCursor
  *   - perl-lsp.runAllTests
  *   - perl-lsp.formatDocument
+ *   - perl-lsp.runPerlCritic
+ *   - perl-lsp.setPerlCriticSeverity
  *   - perl-lsp.showIncPaths
  *   - perl-lsp.openModule
  *   - perl-lsp.showParserAst
@@ -35,8 +38,11 @@ function readPackageJson(): any {
 const NEW_COMMAND_IDS = [
   'perl-lsp.checkSyntax',
   'perl-lsp.runCurrentTest',
+  'perl-lsp.runTestAtCursor',
   'perl-lsp.runAllTests',
   'perl-lsp.formatDocument',
+  'perl-lsp.runPerlCritic',
+  'perl-lsp.setPerlCriticSeverity',
   'perl-lsp.showIncPaths',
   'perl-lsp.openModule',
   'perl-lsp.showParserAst',
@@ -87,6 +93,11 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
       expect(entry?.when).toContain('editorLangId == perl');
     });
 
+    test('runTestAtCursor is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runTestAtCursor');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
     test('runAllTests is guarded by workspaceFolderCount >= 1', () => {
       const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runAllTests');
       expect(entry?.when).toContain('workspaceFolderCount >= 1');
@@ -94,6 +105,16 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
 
     test('formatDocument is guarded by editorLangId == perl', () => {
       const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.formatDocument');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('runPerlCritic is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.runPerlCritic');
+      expect(entry?.when).toContain('editorLangId == perl');
+    });
+
+    test('setPerlCriticSeverity is guarded by editorLangId == perl', () => {
+      const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.setPerlCriticSeverity');
       expect(entry?.when).toContain('editorLangId == perl');
     });
 
@@ -114,6 +135,12 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
   });
 
   describe('activation events', () => {
+    test('every contributed command has an activation event', () => {
+      for (const command of pkg.contributes.commands) {
+        expect(pkg.activationEvents).toContain(`onCommand:${command.command}`);
+      }
+    });
+
     for (const id of NEW_COMMAND_IDS) {
       test(`activates on ${id} command`, () => {
         expect(pkg.activationEvents).toContain(`onCommand:${id}`);
@@ -163,6 +190,50 @@ describe('perl-lsp.extractVariable command', () => {
     expect(kb.key.toLowerCase()).toBe('shift+alt+v');
     expect(kb.when).toContain('editorLangId == perl');
     expect(kb.when).toContain('editorHasSelection');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runTestAtCursor
+// ---------------------------------------------------------------------------
+describe('perl-lsp.runTestAtCursor command', () => {
+  let pkg: any;
+
+  beforeAll(() => {
+    pkg = readPackageJson();
+  });
+
+  test('is declared in contributes.commands', () => {
+    const ids = pkg.contributes.commands.map((c: any) => c.command);
+    expect(ids).toContain('perl-lsp.runTestAtCursor');
+  });
+
+  test('has title "Run Test at Cursor"', () => {
+    const cmd = pkg.contributes.commands.find((c: any) => c.command === 'perl-lsp.runTestAtCursor');
+    expect(cmd).toBeDefined();
+    expect(cmd.title).toBe('Run Test at Cursor');
+  });
+
+  test('has a command palette entry guarded by editorLangId == perl', () => {
+    const palette = pkg.contributes.menus.commandPalette;
+    const entry = palette.find((e: any) => e.command === 'perl-lsp.runTestAtCursor');
+    expect(entry).toBeDefined();
+    expect(entry.when).toContain('editorLangId == perl');
+  });
+
+  test('appears in the editor context menu', () => {
+    const contextMenu = pkg.contributes.menus['editor/context'];
+    const entry = contextMenu.find((e: any) => e.command === 'perl-lsp.runTestAtCursor');
+    expect(entry).toBeDefined();
+    expect(entry.when).toContain('editorLangId == perl');
+  });
+
+  test('has a keyboard shortcut', () => {
+    const keybindings: any[] = pkg.contributes.keybindings;
+    const kb = keybindings.find((k: any) => k.command === 'perl-lsp.runTestAtCursor');
+    expect(kb).toBeDefined();
+    expect(kb.key.toLowerCase()).toBe('ctrl+alt+shift+t');
+    expect(kb.when).toContain('editorLangId == perl');
   });
 });
 

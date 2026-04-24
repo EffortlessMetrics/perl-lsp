@@ -1,3 +1,5 @@
+> **In progress (2026-04-14):** The publishing pipeline is being simplified as part of the microcrate collapse — see [ADR-0041](adr/0041-microcrate-collapse.md), [PUBLISHING_AFTER_COLLAPSE.md](project/PUBLISHING_AFTER_COLLAPSE.md), and [tracking issue #4410](https://github.com/EffortlessMetrics/perl-lsp/issues/4410). This document describes the current 132-crate pipeline; expect dramatic simplification once the collapse lands.
+
 # Publishing Guide
 
 This guide covers crates.io publishing for release alignment during the initial and subsequent release train.
@@ -61,13 +63,14 @@ cargo publish -p <crate-name>
 After publish completes:
 
 1. Verify `RELEASE_NOTES.md` and release artifacts are complete.
-2. Confirm `cargo install perl-lsp` works for the new release version.
-3. Update documentation links where versioned examples are present.
-4. Announce release in project channels.
+2. Confirm `cargo search perl-lsp-rs --limit 1` and `cargo search perllsp --limit 1` show the new release version.
+3. Confirm `cargo install perllsp` works for the new release version.
+4. Update documentation links where versioned examples are present.
+5. Announce release in project channels.
 
 - Confirm `Release` and `Publish to crates.io` workflows completed successfully.
-- Spot-check package index visibility with `cargo search` for critical crates (`perl-lsp`, `perl-parser`, `perl-dap`).
-- Validate `cargo install perl-lsp` succeeds and executes `perl-lsp --version`.
+- Spot-check package index visibility with `cargo search` for critical crates (`perllsp`, `perl-lsp-rs`, `perl-parser`, `perl-dap`).
+- Validate `cargo install perllsp` succeeds and executes `perllsp --version`.
 
 ## Pre-Publish Checklist
 

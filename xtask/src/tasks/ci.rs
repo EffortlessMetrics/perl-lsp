@@ -50,7 +50,7 @@ pub fn run() -> Result<()> {
     spinner.println("✓ Clippy check passed");
 
     // Step 3: Test each crate explicitly with constrained resources
-    let test_crates = ["perl-lexer", "perl-parser", "perl-lsp"];
+    let test_crates = ["perl-lexer", "perl-parser", "perl-lsp-rs"];
 
     spinner.set_message("🧪 Running constrained test suite...");
     for crate_name in &test_crates {

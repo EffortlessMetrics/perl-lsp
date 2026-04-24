@@ -56,7 +56,7 @@ use crate::ast::{Node, NodeKind};
 use crate::position::{Position, Range};
 use crate::workspace::workspace_index::{WorkspaceIndex, SymbolReference};
 use lsp_types::*;
-use perl_keywords::is_parser_lsp_keyword;
+use perl_lexer::is_parser_lsp_keyword;
 use std::collections::HashMap;
 use url::Url;
 
@@ -337,8 +337,9 @@ impl RenameProvider {
                 new_text: new_name.to_string(),
             };
             
-            file_changes.entry(reference.uri.clone())
-                .or_insert_with(Vec::new)
+            file_changes
+                .entry(reference.uri.clone())
+                .or_default()
                 .push(text_edit);
         }
         

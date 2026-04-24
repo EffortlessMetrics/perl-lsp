@@ -10,9 +10,11 @@ use color_eyre::eyre::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::parser_corpus_sweep;
 
@@ -22,14 +24,44 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default path for the full CPAN corpus baseline report
 const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
-/// Default install target directory
+/// Default install target directory (relative to workspace root)
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
+/// Temp report path used by ratchet (relative to workspace root)
+const CPAN_RATCHET_REPORT_PATH: &str = "target/cpan-corpus-ratchet-report.json";
 /// cpanm cache directory preserved across install resets
 const CPANM_CACHE_DIR: &str = ".cpanm";
 /// Standalone cpanm bootstrap URL
 const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
+/// Hard timeout for a batch cpanm invocation. Batch installs fall back to
+/// per-distribution retries when one distribution wedges inside configure/build.
+const CPANM_BATCH_TIMEOUT: Duration = Duration::from_secs(120);
+/// Hard timeout for a single-distribution retry. Native-heavy distributions
+/// such as `PDL` legitimately need more wall-clock time than a whole batch
+/// should get before we split it apart.
+const CPANM_SINGLE_DIST_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Return the workspace root path, anchored at compile time to the xtask
+/// crate's manifest directory. This makes every relative CPAN corpus path
+/// resolve deterministically against the workspace root regardless of the
+/// current working directory `cargo xtask` was invoked from.
+///
+/// Using `env!("CARGO_MANIFEST_DIR")` (the xtask crate dir) with `.parent()`
+/// is robust because:
+/// - it is baked into the xtask binary at build time, so no runtime shell-out,
+/// - it does not depend on `CARGO_TARGET_DIR` or `std::env::current_dir()`,
+/// - it always points at the workspace that built this xtask binary.
+pub(crate) fn workspace_root() -> PathBuf {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    manifest_dir.parent().map(PathBuf::from).unwrap_or(manifest_dir)
+}
+
+/// Join a path segment onto the workspace root so callers get an absolute
+/// path even if the current working directory is not the workspace root.
+fn workspace_path(rel: &str) -> PathBuf {
+    workspace_root().join(rel)
+}
 
 /// Configuration for cpan-corpus sub-commands
 #[derive(Debug, Clone)]
@@ -44,16 +76,27 @@ pub struct CpanCorpusConfig {
     pub top_n: usize,
     /// Verbose output
     pub verbose: bool,
+    /// Force a full wipe of the install directory before installing.
+    /// When false (default) and the install directory already contains
+    /// `lib/perl5`, the reset is skipped and cpanm runs in incremental
+    /// mode — only modules that are missing or out-of-date get installed.
+    /// This turns re-runs into a cheap cache hit instead of a full rebuild.
+    pub force_reset: bool,
 }
 
 impl Default for CpanCorpusConfig {
     fn default() -> Self {
+        // Anchor default paths at the workspace root rather than the current
+        // working directory, so `cargo xtask cpan-corpus ...` always looks
+        // for the corpus in the same place `actions/cache` restored it to
+        // (see issue #3189).
         Self {
-            dist_list: PathBuf::from(DIST_LIST_PATH),
-            manifest: PathBuf::from(CPAN_MANIFEST_PATH),
-            install_dir: PathBuf::from(CPAN_INSTALL_DIR),
+            dist_list: workspace_path(DIST_LIST_PATH),
+            manifest: workspace_path(CPAN_MANIFEST_PATH),
+            install_dir: workspace_path(CPAN_INSTALL_DIR),
             top_n: 1000,
             verbose: false,
+            force_reset: false,
         }
     }
 }
@@ -179,12 +222,36 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     let preserved_dist_list =
         config.dist_list.strip_prefix(&config.install_dir).ok().map(|_| config.dist_list.as_path());
 
+    // Incremental cache: skip the wipe if the install directory is already
+    // populated and the caller did not ask for a forced reset.  cpanm itself
+    // is idempotent (`--local-lib` + `--notest` skips already-installed
+    // modules), so keeping `lib/perl5` between runs turns a full rebuild
+    // into a cheap delta install.
+    let already_populated = is_install_populated(&config.install_dir);
+    let should_reset = config.force_reset || !already_populated;
+
     let cpanm = if Command::new("cpanm").arg("--version").output().is_ok() {
         let launcher = CpanmLauncher::System;
-        reset_install_dir(&config.install_dir, Some(&launcher), preserved_dist_list)?;
+        if should_reset {
+            reset_install_dir(&config.install_dir, Some(&launcher), preserved_dist_list)?;
+        } else {
+            println!(
+                "Existing install detected at {} — running incremental update (pass --reset for a full rebuild)",
+                config.install_dir.display(),
+            );
+            fs::create_dir_all(&config.install_dir)
+                .context("Failed to create install directory")?;
+        }
         launcher
-    } else {
+    } else if should_reset {
         reset_install_dir(&config.install_dir, None, preserved_dist_list)?;
+        resolve_cpanm_launcher(config)?
+    } else {
+        println!(
+            "Existing install detected at {} — running incremental update (pass --reset for a full rebuild)",
+            config.install_dir.display(),
+        );
+        fs::create_dir_all(&config.install_dir).context("Failed to create install directory")?;
         resolve_cpanm_launcher(config)?
     };
 
@@ -210,6 +277,10 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         cmd.env("PERL_CPANM_HOME", &cpanm_home);
         cmd.env("PERL_MM_USE_DEFAULT", "1");
         cmd.env("NONINTERACTIVE_TESTING", "1");
+        // Some CPAN distributions still try to prompt during configure/build.
+        // Detach stdin so batch installs stay noninteractive and fail fast
+        // instead of hanging on an inherited TTY.
+        cmd.stdin(Stdio::null());
         cmd.arg("--notest");
         cmd.arg("--local-lib");
         cmd.arg(local_lib.display().to_string());
@@ -219,9 +290,21 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
             cmd.arg(dist);
         }
 
-        let output = cmd.output().context("Failed to run cpanm")?;
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if !output.status.success() && config.verbose {
+        let output = run_command_with_timeout(cmd, CPANM_BATCH_TIMEOUT)?;
+        let stderr = String::from_utf8_lossy(&output.output.stderr);
+        if output.timed_out {
+            println!(
+                "cpanm batch {batch_num} timed out after {}s; retrying distributions individually",
+                CPANM_BATCH_TIMEOUT.as_secs()
+            );
+            let (batch_installed, batch_failed) =
+                install_distributions_individually(&cpanm, &cpanm_home, &local_lib, chunk, config)?;
+            installed += batch_installed;
+            failed += batch_failed;
+            continue;
+        }
+
+        if !output.output.status.success() && config.verbose {
             eprintln!("cpanm batch {batch_num} warnings:\n{stderr}");
         }
 
@@ -275,6 +358,110 @@ fn count_cpanm_failures(stderr: &str) -> usize {
         .count()
 }
 
+#[derive(Debug)]
+struct TimedCommandOutput {
+    output: Output,
+    timed_out: bool,
+}
+
+fn run_command_with_timeout(mut cmd: Command, timeout: Duration) -> Result<TimedCommandOutput> {
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().context("Failed to run cpanm")?;
+    let stdout_reader = child.stdout.take().map(spawn_output_reader);
+    let stderr_reader = child.stderr.take().map(spawn_output_reader);
+
+    let deadline = Instant::now() + timeout;
+    let mut timed_out = false;
+    let status = loop {
+        match child.try_wait().context("Failed to poll cpanm process")? {
+            Some(status) => break status,
+            None if Instant::now() >= deadline => {
+                timed_out = true;
+                let _ = child.kill();
+                break child.wait().context("Failed to wait for timed-out cpanm process")?;
+            }
+            None => thread::sleep(Duration::from_millis(200)),
+        }
+    };
+
+    let stdout = join_output_reader(stdout_reader);
+    let stderr = join_output_reader(stderr_reader);
+
+    Ok(TimedCommandOutput { output: Output { status, stdout, stderr }, timed_out })
+}
+
+fn spawn_output_reader<R>(mut reader: R) -> thread::JoinHandle<Vec<u8>>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut buffer = Vec::new();
+        if let Err(err) = reader.read_to_end(&mut buffer) {
+            eprintln!(
+                "Warning: failed to read cpanm process output: {err} (captured {} bytes)",
+                buffer.len()
+            );
+        }
+        buffer
+    })
+}
+
+fn join_output_reader(handle: Option<thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    handle.and_then(|join| join.join().ok()).unwrap_or_default()
+}
+
+fn install_distributions_individually(
+    cpanm: &CpanmLauncher,
+    cpanm_home: &Path,
+    local_lib: &Path,
+    chunk: &[String],
+    config: &CpanCorpusConfig,
+) -> Result<(usize, usize)> {
+    let mut installed = 0usize;
+    let mut failed = 0usize;
+
+    for dist in chunk {
+        let mut cmd = cpanm.command();
+        cmd.env("PERL_CPANM_HOME", cpanm_home);
+        cmd.env("PERL_MM_USE_DEFAULT", "1");
+        cmd.env("NONINTERACTIVE_TESTING", "1");
+        cmd.stdin(Stdio::null());
+        cmd.arg("--notest");
+        cmd.arg("--local-lib");
+        cmd.arg(local_lib.display().to_string());
+        cmd.arg("--quiet");
+        cmd.arg(dist);
+
+        let output = run_command_with_timeout(cmd, CPANM_SINGLE_DIST_TIMEOUT)?;
+        let stderr = String::from_utf8_lossy(&output.output.stderr);
+        if output.timed_out {
+            failed += 1;
+            println!("  timed out after {}s: {}", CPANM_SINGLE_DIST_TIMEOUT.as_secs(), dist);
+            continue;
+        }
+
+        let failed_for_dist = if output.output.status.success() {
+            0
+        } else {
+            let explicit_failures = count_cpanm_failures(&stderr);
+            explicit_failures.max(1)
+        };
+
+        if failed_for_dist > 0 {
+            failed += failed_for_dist;
+            if config.verbose {
+                eprintln!("cpanm retry warnings for {dist}:\n{stderr}");
+            }
+        } else {
+            installed += 1;
+        }
+    }
+
+    Ok((installed, failed))
+}
+
 #[derive(Debug, Clone)]
 enum CpanmLauncher {
     System,
@@ -301,6 +488,17 @@ fn resolve_cpanm_launcher(config: &CpanCorpusConfig) -> Result<CpanmLauncher> {
 
     let script_path = bootstrap_cpanm_script(config)?;
     Ok(CpanmLauncher::Bootstrapped(script_path))
+}
+
+/// Return true if the install directory already contains a non-empty
+/// `lib/perl5` tree, meaning cpanm has previously installed modules here
+/// and another install call can run in incremental mode.
+fn is_install_populated(install_dir: &Path) -> bool {
+    let lib_perl5 = install_dir.join("lib").join("perl5");
+    let Ok(mut entries) = fs::read_dir(&lib_perl5) else {
+        return false;
+    };
+    entries.next().is_some()
 }
 
 fn bootstrap_cpanm_path(install_dir: &Path) -> PathBuf {
@@ -411,7 +609,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
     let baseline_path = if enforce {
-        let bp = PathBuf::from(CPAN_BASELINE_PATH);
+        let bp = workspace_path(CPAN_BASELINE_PATH);
         if bp.exists() {
             Some(bp)
         } else {
@@ -426,6 +624,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     };
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
+        corpus_profile: Some("cpan".to_string()),
         base_roots: base_roots.clone(),
         corpus_roots: corpus_roots.clone(),
         manifest_path: None,
@@ -469,6 +668,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
                 manifest_modules.len()
             );
             let manifest_sweep = parser_corpus_sweep::SweepConfig {
+                corpus_profile: Some("cpan-common".to_string()),
                 base_roots,
                 corpus_roots: corpus_roots.clone(),
                 manifest_path: Some(config.manifest.clone()),
@@ -504,13 +704,16 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
     let base_roots = vec![lib_perl5.clone()];
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
-    // Write a temp report to capture results
-    let report_path = PathBuf::from("target/cpan-corpus-ratchet-report.json");
+    // Write a temp report to capture results. Anchor at workspace root so
+    // the target directory is the same one cargo uses for builds, even when
+    // xtask is invoked from a subdirectory.
+    let report_path = workspace_path(CPAN_RATCHET_REPORT_PATH);
     if let Some(parent) = report_path.parent() {
         fs::create_dir_all(parent).context("Failed to create report directory")?;
     }
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
+        corpus_profile: Some("cpan".to_string()),
         base_roots,
         corpus_roots,
         manifest_path: None,
@@ -629,7 +832,7 @@ fn path_to_module_name(file_path: &str, lib_root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     fn unique_test_dir(name: &str) -> PathBuf {
         let nanos =
@@ -671,12 +874,53 @@ mod tests {
     }
 
     #[test]
+    fn test_is_install_populated_detects_lib_perl5() -> Result<()> {
+        let dir = unique_test_dir("cpan-populated");
+
+        // Missing directory -> not populated
+        assert!(!is_install_populated(&dir));
+
+        // Empty install dir -> not populated
+        fs::create_dir_all(&dir)?;
+        assert!(!is_install_populated(&dir));
+
+        // Empty lib/perl5 -> not populated (no entries)
+        fs::create_dir_all(dir.join("lib").join("perl5"))?;
+        assert!(!is_install_populated(&dir));
+
+        // At least one file under lib/perl5 -> populated
+        fs::write(dir.join("lib").join("perl5").join("Test.pm"), "1;\n")?;
+        assert!(is_install_populated(&dir));
+
+        fs::remove_dir_all(&dir)?;
+        Ok(())
+    }
+
+    #[test]
     fn test_default_config() {
         let config = CpanCorpusConfig::default();
-        assert_eq!(config.dist_list, PathBuf::from(".ci/cpan-top-1000-distributions.txt"));
-        assert_eq!(config.manifest, PathBuf::from(".ci/cpan-corpus-manifest.txt"));
-        assert_eq!(config.install_dir, PathBuf::from("target/cpan-corpus"));
+        // Default paths are anchored at the workspace root (see issue #3189)
+        // so that `cargo xtask cpan-corpus ...` finds the corpus regardless
+        // of the current working directory.
+        let root = workspace_root();
+        assert_eq!(config.dist_list, root.join(".ci/cpan-top-1000-distributions.txt"));
+        assert_eq!(config.manifest, root.join(".ci/cpan-corpus-manifest.txt"));
+        assert_eq!(config.install_dir, root.join("target/cpan-corpus"));
         assert_eq!(config.top_n, 1000);
+    }
+
+    #[test]
+    fn test_workspace_root_points_at_workspace() {
+        // Guardrail: `workspace_root()` must point at a directory that
+        // contains the top-level workspace `Cargo.toml`. If xtask ever
+        // moves out of `<workspace>/xtask/`, this assertion catches the
+        // regression so the corpus ratchet path resolution does not drift.
+        let root = workspace_root();
+        assert!(
+            root.join("Cargo.toml").exists(),
+            "workspace_root() = {} must contain Cargo.toml",
+            root.display()
+        );
     }
 
     #[test]
@@ -711,6 +955,34 @@ mod tests {
 ! Failed to fetch distribution Foo\n\
 Some other line";
         assert_eq!(count_cpanm_failures(stderr), 2);
+    }
+
+    #[test]
+    fn test_run_command_with_timeout_captures_stderr() -> Result<()> {
+        let mut cmd = Command::new("perl");
+        cmd.args(["-e", "print STDERR qq(warn\\n);"]);
+
+        let result = run_command_with_timeout(cmd, Duration::from_secs(2))?;
+        assert!(!result.timed_out);
+        assert!(result.output.status.success());
+        assert_eq!(String::from_utf8_lossy(&result.output.stderr), "warn\n");
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_command_with_timeout_kills_hung_process() -> Result<()> {
+        let mut cmd = Command::new("perl");
+        cmd.args(["-e", "$|=1; print STDERR qq(waiting\\n); sleep 5;"]);
+
+        let started = Instant::now();
+        let result = run_command_with_timeout(cmd, Duration::from_millis(200))?;
+        assert!(result.timed_out);
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "timed command should be interrupted quickly"
+        );
+        assert!(String::from_utf8_lossy(&result.output.stderr).contains("waiting"));
+        Ok(())
     }
 
     #[test]

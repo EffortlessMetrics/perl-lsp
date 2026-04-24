@@ -19,8 +19,63 @@ fn is_typeglob_punct_terminator(kind: Option<TokenKind>) -> bool {
 }
 
 impl<'a> Parser<'a> {
+    fn is_contextual_await_start(&mut self) -> bool {
+        if self.peek_kind() != Some(TokenKind::Identifier)
+            || !self.tokens.peek().is_ok_and(|token| token.text.as_ref() == "await")
+        {
+            return false;
+        }
+
+        let second_kind = self.tokens.peek_second().ok().map(|token| token.kind);
+        if matches!(
+            second_kind,
+            Some(TokenKind::FatArrow | TokenKind::Arrow | TokenKind::DoubleColon)
+        ) {
+            return false;
+        }
+
+        if second_kind == Some(TokenKind::Colon)
+            && self.tokens.peek_third().is_ok_and(|token| token.kind == TokenKind::Colon)
+        {
+            return false;
+        }
+
+        true
+    }
+
     /// Parse unary expression
     fn parse_unary(&mut self) -> ParseResult<Node> {
+        if self.peek_kind() == Some(TokenKind::Slash) {
+            self.tokens.relex_as_term();
+        }
+
+        if self.is_contextual_await_start() {
+            let op_token = self.tokens.next()?;
+            let start = op_token.start;
+
+            if self.tokens.is_eof() || self.is_at_statement_end() {
+                let end = op_token.end;
+                return Ok(Node::new(
+                    NodeKind::Unary {
+                        op: op_token.text.to_string(),
+                        operand: Box::new(Node::new(
+                            NodeKind::Undef,
+                            SourceLocation { start: end, end },
+                        )),
+                    },
+                    SourceLocation { start, end },
+                ));
+            }
+
+            let operand = self.parse_unary()?;
+            let end = operand.location.end;
+
+            return Ok(Node::new(
+                NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(operand) },
+                SourceLocation { start, end },
+            ));
+        }
+
         if let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Minus => {
@@ -31,6 +86,23 @@ impl<'a> Parser<'a> {
                     if let Some(TokenKind::Identifier) = self.peek_kind() {
                         let next_token = self.tokens.peek()?;
                         if next_token.text.len() == 1 {
+                            // Before a fat arrow, `-G`, `-r`, etc. are hash/list keys, not
+                            // file-test operators.
+                            if self
+                                .tokens
+                                .peek_second()
+                                .is_ok_and(|token| token.kind == TokenKind::FatArrow)
+                            {
+                                let test_token = self.tokens.next()?;
+                                let end = test_token.end;
+                                return Ok(Node::new(
+                                    NodeKind::Identifier {
+                                        name: format!("-{}", test_token.text),
+                                    },
+                                    SourceLocation { start, end },
+                                ));
+                            }
+
                             // It's a file test operator
                             let test_token = self.tokens.next()?;
                             let file_test = format!("-{}", test_token.text);
@@ -169,7 +241,7 @@ impl<'a> Parser<'a> {
                     if op_token.kind == TokenKind::Star {
                         if let Some(next_kind) = self.peek_kind() {
                             match next_kind {
-                                TokenKind::Identifier => {
+                                kind if Self::can_be_sub_name(kind) => {
                                     let id_token = self.tokens.next()?;
                                     let end = id_token.end;
                                     let node = Node::new(

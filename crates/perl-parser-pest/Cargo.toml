@@ -1,7 +1,6 @@
 [package]
 name = "perl-parser-pest"
-version = "0.12.0"
-publish = false
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -18,10 +17,10 @@ include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 pest = "2.8.6"
 pest_derive = "2.8.6"
-regex = "1.12.2"
+regex.workspace = true
 stacker = "0.1.23"
-thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"] }
+thiserror.workspace = true
+serde = { workspace = true }
 
 [features]
 default = []
@@ -33,6 +32,10 @@ perl-tdd-support = { workspace = true }
 
 [lib]
 doctest = false
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

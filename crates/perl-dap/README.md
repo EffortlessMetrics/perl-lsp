@@ -1,39 +1,48 @@
 # perl-dap
-[![Crates.io](https://img.shields.io/crates/v/perl-dap.svg)](https://crates.io/crates/perl-dap)
-[![Documentation](https://docs.rs/perl-dap/badge.svg)](https://docs.rs/perl-dap)
 
-Debug Adapter Protocol (DAP) server for Perl, enabling debugging in VS Code, Neovim, Emacs, and other DAP-compatible editors.
+Use this crate when you need a native Debug Adapter Protocol server for Perl,
+not just debugger helper components.
 
-Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+`perl-dap` is the runtime layer of the debugger stack. It speaks DAP over stdio
+or TCP, dispatches requests, validates breakpoints, and renders values for
+DAP-capable editors and tools.
 
-## Features
+## Boundaries
 
-- **Native adapter** (default): drives `perl -d` directly over stdio or TCP socket
-- **Bridge adapter** (library): proxies DAP messages to Perl::LanguageServer
-- **Breakpoint management** with AST-based validation via `perl-dap-breakpoint`
-- **Variable inspection** and **safe expression evaluation** via `perl-dap-variables` / `perl-dap-eval`
-- **Stack trace parsing** via `perl-dap-stack`
-- **Security hardening**: path traversal prevention, expression sanitization, resource limits
-- **Cross-platform**: Linux, macOS, Windows, and WSL path translation
+- `perl-dap-platform` finds the Perl executable, normalizes paths, and builds
+  launch environment maps.
+- `perl-dap-shell` formats shell-safe launch arguments and environment values.
+- `perl-dap-types` carries shared frame, source, and variable models.
+- `perl-dap-value` models debugger values for rendering.
+- `perl-dap-breakpoint` validates whether a source line can accept a breakpoint.
 
-## Usage
+## Key pieces
 
-```bash
-cargo install perl-dap
-perl-dap --stdio            # Native adapter on stdio (default)
-perl-dap --socket --port 13603  # Native adapter on TCP
-perl-dap --bridge           # Bridge mode (requires Perl::LanguageServer)
-```
+- `DapServer`, `DapConfig`, and `DapMode` wire the server and its launch mode.
+- `DapDispatcher` and `DebugAdapter` handle request routing and protocol state.
+- `BridgeAdapter` supports migration from `Perl::LanguageServer`.
+- `TcpAttachConfig` and `BreakpointStore` support socket attach and breakpoint tracking.
 
-## Bridge Adapter
-
-`BridgeAdapter` proxies DAP messages to an existing `Perl::LanguageServer` installation:
+## Run
 
 ```bash
-cpanm Perl::LanguageServer
+perl-dap --stdio
+perl-dap --socket --port 13603
 perl-dap --bridge
 ```
 
-## License
+## BridgeAdapter dependency
 
-MIT OR Apache-2.0
+`--bridge` mode requires the CPAN module `Perl::LanguageServer`.
+Install it with either:
+
+```bash
+cpan Perl::LanguageServer
+cpanm Perl::LanguageServer
+```
+
+You can verify availability with:
+
+```bash
+perl -e "use Perl::LanguageServer::DebuggerInterface; print qq{OK\n};"
+```

@@ -10,7 +10,7 @@
 //! - Moose method modifiers (`around`, `before`, `after`)
 //! - Multiple packages in a single file
 
-use perl_workspace_index::workspace::workspace_index::WorkspaceIndex;
+use perl_workspace::workspace::workspace_index::WorkspaceIndex;
 use url::Url;
 
 // ---------------------------------------------------------------------------
@@ -439,7 +439,7 @@ sub gamma_method { return 'g'; }
     let syms = index.file_symbols(&uri_str);
     let pkg_names: Vec<&str> = syms
         .iter()
-        .filter(|s| s.kind == perl_symbol_types::SymbolKind::Package)
+        .filter(|s| s.kind == perl_symbol::SymbolKind::Package)
         .map(|s| s.name.as_str())
         .collect();
     assert!(pkg_names.contains(&"Alpha"), "Alpha package should be indexed");

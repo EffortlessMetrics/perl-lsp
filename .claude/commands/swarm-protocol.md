@@ -21,21 +21,7 @@ You are empowered to fix problems you encounter, even outside your assigned slic
 - Broken imports caused by your changes
 
 **File an issue for everything else** (a fresh agent handles it):
-Don't try to branch-switch or stash in your worktree. Just create a GitHub issue with enough context that a fresh agent can pick it up without re-investigating:
-
-```bash
-gh issue create --title "<type>: <description>" --label "swarm-discovered" \
-  --body "Discovered by <agent-type> while working on <branch>.
-
-## Context
-<what you found, why it matters — enough that no one re-investigates>
-
-## Files
-<paths with line numbers>
-
-## Suggested Approach
-<if you have one>"
-```
+Don't try to branch-switch or stash in your worktree. Just create a GitHub issue with enough context that a fresh agent can pick it up without re-investigating. Use the **Discovery Issue (Lightweight)** variant from `/scout-issue`:
 
 Create issues for: security vulnerabilities, design flaws, missing features, recurring patterns needing architectural decisions.
 
@@ -104,6 +90,8 @@ After completing any task, append to `.ops-perl-lsp/swarm-metrics.jsonl`:
 ```
 
 Append-only. The lead/merger analyzes periodically for patterns.
+Use `cargo xtask swarm-summary --ops-dir .ops-perl-lsp --since 24h --limit 10`
+for the daily status window and `--since 7d` for report rollups.
 
 ## 5. Agent Self-Improvement
 
@@ -133,11 +121,14 @@ The user is an **observer** who checks in every few hours or daily.
 
 Every code-writing subagent MUST use `isolation: "worktree"`. No editing files on local HEAD.
 
+- **Session start**: Run `just doctor` before spawning the first worktree agent. It auto-detects and (where safe) auto-fixes the recurring state-corruption bugs that have bitten the worktree workflow — `core.bare = true` (#3205), worktree file leaks, orphaned worktree directories, stale local branches, missing pre-push hook, and an out-of-date master.
 - Subagent prompts MUST include: "Run ALL commands from your worktree path. Do NOT cd to the main repo."
 - No code-writing agent is active until it has: a named worktree, a branch, a claimed file surface, and a verification command.
 - Builder prompts must explicitly state the exact files to touch — no open-ended "fix all the things."
 - PR size hard limit: **max 10 files per PR**. If a change touches >10 files, split it into multiple worktree agents with non-overlapping file surfaces.
 - **Worktree cleanup cadence**: Janitor runs `bash scripts/cleanup-completed-worktrees.sh` every 10 merged PRs (or invoke `/cleanup-worktrees`). This removes worktrees whose branches are merged or abandoned, while preserving active work. Use `--dry-run` first.
+- **Worktree lifecycle manager**: use `/worktree-manager query` before spawning new workers, `/worktree-manager allocate` to reuse or reserve a slot, `/worktree-manager release` when a worker is done, and `/worktree-manager cleanup` to prune stale slots and reconcile runtime state.
+- When a hook or wrapper allocates/releases a slot, export the agent name as `WORKTREE_MANAGER_OWNER` (or pass `--owner`) so the slot record shows the current owner while the slot is active. Releasing a slot clears that current-owner field.
 
 ## 7b. Agent Lifecycle
 
@@ -280,27 +271,7 @@ gh pr merge <N> --squash --delete-branch   # Only if both above are green
 
 **Every scout MUST write findings as a GitHub issue.** Agent output is ephemeral; GitHub issues persist.
 
-Scouts file structured issues using `gh issue create`. Template:
-
-```bash
-gh issue create --title "<sector>: <finding>" --label "swarm-discovered" \
-  --body "$(cat <<'EOF'
-## Problem
-<what is wrong or missing — specific, not vague>
-
-## Options
-1. <option A> — trade-off: ...
-2. <option B> — trade-off: ...
-
-## Acceptance Criteria
-- [ ] <measurable condition>
-- [ ] <measurable condition>
-
-## Key Files
-- `<path>:<line>` — <why this file matters>
-EOF
-)"
-```
+Scouts file structured issues using the **Full Scout Report** variant from `/scout-issue`. Do NOT hand-roll `gh issue create` bodies.
 
 ### Scout sector discipline
 
@@ -341,7 +312,7 @@ Skills are the single source of truth for multi-step procedures. When an agent i
 | Format + clippy + test | `/verify` | Don't hand-roll `cargo fmt && cargo clippy && cargo test` |
 | Create PR | `/pr-create` | Don't hand-roll `gh pr create` with ad-hoc body |
 | Code review checklist | `/coding-standards` | Don't guess at project conventions |
-| Scout findings | `gh issue create --label swarm-discovered` | Don't skip the issue template |
+| Scout findings | `/scout-issue` (full or discovery variant) | Don't hand-roll `gh issue create` bodies |
 | Parser fix TDD | `/parser-fix` | Don't skip the red-green-refactor cycle |
 
 ### Why this matters

@@ -13,6 +13,7 @@
 | Test counts & tracked debt | [status/tests.md](status/tests.md) |
 | Parser corpus & coverage | [status/parser.md](status/parser.md) |
 | Quality metrics | [status/quality.md](status/quality.md) |
+| Editor UX planning scaffold | [status/editor_ux.json](status/editor_ux.json) |
 | Release readiness & blockers | [status/release.md](status/release.md) |
 | Verification protocol | [protocols/verification.md](protocols/verification.md) |
 | Planning & roadmap | [ROADMAP.md](ROADMAP.md) |
@@ -21,18 +22,22 @@
 
 | Metric | Value | Source |
 | --- | --- | --- |
-| **Current release line** | `v0.12.0` public alpha | [`Cargo.toml`](../../Cargo.toml) |
-| **Active milestone** | `v0.12.0` public-alpha hardening sprint | [status/index.md](status/index.md) |
+| **Workspace version line** | `v0.12.4` | [`Cargo.toml`](../../Cargo.toml) |
+| **Latest GitHub/editor release** | `v0.12.4`, 2026-04-12 | GitHub Releases, VS Code Marketplace |
+| **crates.io line** | `v0.12.2`, 2026-04-08 | crates.io |
+| **Release history** | [RELEASE_HISTORY.md](../../RELEASE_HISTORY.md) | Canonical cross-channel ledger |
+| **Active milestone** | `v0.13.0` public alpha announcement | [status/index.md](status/index.md) |
 | **Merge gate** | `nix develop -c just ci-gate` | [protocols/verification.md](protocols/verification.md) |
 | **LSP Coverage** | See [status/lsp.md](status/lsp.md) | Generated per-merge |
 | **Test counts** | See [status/tests.md](status/tests.md) | Generated per-merge |
 | **Parser coverage** | See [status/parser.md](status/parser.md) | Generated per-merge |
 | **Quality metrics** | See [status/quality.md](status/quality.md) | Generated per-merge |
+| **Editor UX planning scaffold** | See [status/editor_ux.json](status/editor_ux.json) | Generated per-merge |
 
 ## How to Update Metrics
 
 ```bash
-just status-update            # regenerate all 4 subsystem files
+just status-update            # regenerate all 4 subsystem files plus the UX planning scaffold
 just status-update lsp        # regenerate only LSP metrics (fast)
 just status-check             # verify subsystem files are current
 ```

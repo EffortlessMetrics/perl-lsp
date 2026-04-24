@@ -75,8 +75,11 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
         return None;
     }
 
-    // Convert to filesystem path using the url crate's built-in method
-    url.to_file_path().ok()
+    // Convert to filesystem path using the url crate's built-in method.
+    // On Windows, accept rooted file URIs like file:///tmp/test.pl as \tmp\test.pl
+    // so cross-platform tests and internal helpers stay permissive.
+    let path = url.to_file_path().ok().or_else(|| windows_rooted_file_uri_to_path(&url))?;
+    Some(repair_path_mojibake(path))
 }
 
 /// Convert a filesystem path to a `file://` URI.
@@ -114,7 +117,7 @@ pub fn uri_to_fs_path(uri: &str) -> Option<std::path::PathBuf> {
 /// This function is not available on `wasm32` targets (no filesystem).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, String> {
-    let path = path.as_ref();
+    let path = normalize_filesystem_path(path.as_ref());
 
     // Convert to absolute path if relative
     let abs_path = if path.is_absolute() {
@@ -129,6 +132,101 @@ pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, Stri
     Url::from_file_path(&abs_path)
         .map(|url| url.to_string())
         .map_err(|_| format!("Failed to convert path to URI: {}", abs_path.display()))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn normalize_filesystem_path(path: &std::path::Path) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(path_str) = path.to_str() {
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\UNC\") {
+                return std::path::PathBuf::from(format!(r"\\{}", stripped));
+            }
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                return std::path::PathBuf::from(stripped);
+            }
+        }
+    }
+
+    path.to_path_buf()
+}
+
+#[cfg(all(not(target_arch = "wasm32"), windows))]
+fn windows_rooted_file_uri_to_path(url: &Url) -> Option<std::path::PathBuf> {
+    use percent_encoding::percent_decode_str;
+
+    match url.host_str() {
+        None | Some("localhost") => {}
+        Some(_) => return None,
+    }
+
+    let decoded = percent_decode_str(url.path()).decode_utf8().ok()?;
+    if decoded.is_empty() {
+        return None;
+    }
+
+    let native = if decoded.len() > 3
+        && decoded.starts_with('/')
+        && decoded.as_bytes()[2] == b':'
+        && decoded.as_bytes()[1].is_ascii_alphabetic()
+    {
+        decoded[1..].replace('/', "\\")
+    } else {
+        decoded.replace('/', "\\")
+    };
+
+    Some(std::path::PathBuf::from(native))
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(windows)))]
+fn windows_rooted_file_uri_to_path(_url: &Url) -> Option<std::path::PathBuf> {
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn repair_path_mojibake(path: std::path::PathBuf) -> std::path::PathBuf {
+    let Some(path_text) = path.to_str() else {
+        return path;
+    };
+
+    let repaired = repair_mojibake_text(path_text);
+    if repaired == path_text { path } else { std::path::PathBuf::from(repaired) }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn repair_mojibake_text(text: &str) -> String {
+    if !looks_like_mojibake(text) {
+        return text.to_string();
+    }
+
+    let mut bytes = Vec::with_capacity(text.len());
+    for ch in text.chars() {
+        let code = u32::from(ch);
+        let Ok(byte) = u8::try_from(code) else {
+            return text.to_string();
+        };
+        bytes.push(byte);
+    }
+
+    let Ok(candidate) = String::from_utf8(bytes) else {
+        return text.to_string();
+    };
+
+    if mojibake_marker_count(&candidate) < mojibake_marker_count(text) {
+        candidate
+    } else {
+        text.to_string()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn looks_like_mojibake(text: &str) -> bool {
+    mojibake_marker_count(text) > 0
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mojibake_marker_count(text: &str) -> usize {
+    text.chars().filter(|ch| matches!(ch, 'Ã' | 'Â' | 'â' | 'ð' | '�')).count()
 }
 
 /// Normalize a URI to a consistent form.
@@ -164,6 +262,16 @@ pub fn fs_path_to_uri<P: AsRef<std::path::Path>>(path: P) -> Result<String, Stri
 /// On `wasm32`, only URI parsing is performed without filesystem operations.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn normalize_uri(uri: &str) -> String {
+    let path = std::path::Path::new(uri);
+
+    // Raw absolute filesystem paths should normalize to file:// URIs before
+    // URL parsing, especially on Windows where `C:\foo` can parse as `c:`.
+    if path.is_absolute()
+        && let Ok(uri_string) = fs_path_to_uri(path)
+    {
+        return uri_string;
+    }
+
     // Try to parse as URL first
     if let Ok(url) = Url::parse(uri) {
         // Already a valid URI, return as-is
@@ -171,8 +279,6 @@ pub fn normalize_uri(uri: &str) -> String {
     }
 
     // If not a valid URI, try to treat as a file path
-    let path = std::path::Path::new(uri);
-
     // Try to convert path to URI using our helper function
     if let Ok(uri_string) = fs_path_to_uri(path) {
         return uri_string;
@@ -198,7 +304,9 @@ pub fn normalize_uri(uri: &str) -> String {
     if let Ok(url) = Url::parse(uri) { url.to_string() } else { uri.to_string() }
 }
 
-pub use perl_uri_classify::{is_file_uri, is_special_scheme, uri_extension, uri_key};
+/// URI classification and key normalization helpers (previously `perl-uri-classify`).
+pub mod classify;
+pub use classify::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used)]
@@ -272,6 +380,13 @@ mod tests {
         }
 
         #[test]
+        fn test_uri_to_fs_path_repairs_common_mojibake() {
+            let path = must_some(uri_to_fs_path("file:///tmp/caf%C3%83%C2%A9.pl"));
+            let path_str = path.to_string_lossy();
+            assert!(path_str.contains("café.pl"), "expected repaired UTF-8 path, got {path_str}");
+        }
+
+        #[test]
         fn test_fs_path_to_uri_basic() {
             let uri = must(fs_path_to_uri("/tmp/test.pl"));
             assert!(uri.starts_with("file:///"));
@@ -294,6 +409,15 @@ mod tests {
         fn test_normalize_uri_special() {
             let uri = normalize_uri("untitled:Untitled-1");
             assert_eq!(uri, "untitled:Untitled-1");
+        }
+
+        #[test]
+        fn test_normalize_uri_absolute_path() {
+            let path = std::env::temp_dir().join("normalize-uri-absolute.pl");
+            let raw_path = path.to_string_lossy();
+            let expected = must(fs_path_to_uri(&path));
+
+            assert_eq!(normalize_uri(raw_path.as_ref()), expected);
         }
 
         #[test]

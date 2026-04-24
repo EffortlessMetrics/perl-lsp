@@ -47,12 +47,14 @@
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{ParseError, ParseResult, error};
 pub use perl_parser_core::{Parser, ast, position};
-pub use perl_workspace_index::{document_store, workspace_index};
+pub use perl_workspace::{document_store, workspace_index};
 
 /// Refactoring and modernization helpers.
 pub mod refactor;
 
 pub use refactor::import_optimizer;
+/// Subroutine inlining refactoring operation.
+pub use refactor::inline;
 /// Code modernization utilities for Perl best practices.
 pub use refactor::modernize;
 /// Enhanced code modernization with refactoring capabilities.

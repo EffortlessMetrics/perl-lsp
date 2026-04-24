@@ -89,15 +89,18 @@
 //! - **[`quote_parser`]**: Specialized parser for quote-like operators
 //! - **[`heredoc_collector`]**: FIFO heredoc collection with indent stripping
 //!
-//! ### IDE Integration (LSP Provider Modules)
+//! ### IDE Integration (LSP Provider Crates)
 //!
-//! - **[`completion`]**: Context-aware completion providers
-//! - **[`diagnostics`]**: Diagnostics generation and formatting
-//! - **[`references`]**: Reference search providers
-//! - **[`rename`]**: Rename providers with validation
-//! - **[`semantic_tokens`]**: Semantic token generation
-//! - **[`type_definition`]**: Type definition providers
-//! - **[`workspace_symbols`]**: Workspace symbol search
+//! LSP provider modules were removed from `perl-parser` as part of #4414 (microcrate
+//! collapse, PR #0). Import directly from the provider crates:
+//!
+//! - `perl_lsp_completion` — context-aware completion providers
+//! - `perl_lsp_diagnostics` — diagnostics generation and formatting
+//! - `perl_lsp_navigation` — references, document links, type definitions, workspace symbols
+//! - `perl_lsp_rename` — rename providers with validation
+//! - `perl_lsp_semantic_tokens` — semantic token generation
+//! - `perl_lsp_inlay_hints` — inlay hint providers
+//! - `perl_lsp_code_actions` — code action providers
 //!
 //! ### Analysis ([`analysis`])
 //!
@@ -127,7 +130,8 @@
 //!
 //! ## LSP Feature Support
 //!
-//! This crate provides the engine for LSP features. The standalone server is in `perl-lsp`.
+//! This crate provides the engine for LSP features. The public standalone server is in
+//! `perllsp`, backed by the `perl-lsp-rs` implementation crate.
 //!
 //! ### Implemented Features
 //!
@@ -226,16 +230,16 @@
 //!
 //! ```bash
 //! # Build LSP server
-//! cargo build -p perl-lsp --release
+//! cargo build -p perllsp --release
 //!
 //! # Install globally
-//! cargo install --path crates/perl-lsp
+//! cargo install --path crates/perllsp
 //!
 //! # Run LSP server
-//! perl-lsp --stdio
+//! perllsp --stdio
 //!
 //! # Check server health
-//! perl-lsp --health
+//! perllsp --health
 //! ```
 //!
 //! ## Integration Examples
@@ -246,7 +250,7 @@
 //!
 //! ```json
 //! {
-//!   "perl.lsp.path": "/path/to/perl-lsp",
+//!   "perl.lsp.path": "/path/to/perllsp",
 //!   "perl.lsp.args": ["--stdio"]
 //! }
 //! ```
@@ -255,7 +259,7 @@
 //!
 //! ```lua
 //! require'lspconfig'.perl.setup{
-//!   cmd = { "/path/to/perl-lsp", "--stdio" },
+//!   cmd = { "/path/to/perllsp", "--stdio" },
 //! }
 //! ```
 //!
@@ -275,7 +279,8 @@
 //!
 //! ## Related Crates
 //!
-//! - `perl-lsp`: Standalone LSP server runtime (moved from this crate)
+//! - `perllsp`: Public Cargo entry point for the standalone LSP server
+//! - `perl-lsp-rs`: Standalone LSP server runtime implementation (moved from this crate)
 //! - `perl-lexer`: Context-aware Perl tokenizer
 //! - `perl-corpus`: Comprehensive test corpus and generators
 //! - `perl-dap`: Debug Adapter Protocol implementation
@@ -406,10 +411,31 @@ pub mod refactor;
 pub mod tdd;
 /// Token stream, trivia, and token wrapper utilities.
 pub mod tokens;
-/// External tooling integration (perltidy, perlcritic, performance).
-pub mod tooling;
 /// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
+
+// =============================================================================
+// Wave D absorbed satellite crates (as internal modules)
+// =============================================================================
+
+/// AST range and insertion helpers for Perl LSP features (previously `perl-ast-utils`).
+pub mod ast_utils;
+/// Anti-pattern detection for problematic Perl heredoc patterns (previously `perl-heredoc-anti-patterns`).
+// Wave D: allow missing_docs — original crate had an explicit exception per CLAUDE.md
+#[allow(missing_docs)]
+pub mod heredoc_anti_patterns;
+/// Secure workspace-relative path normalization (previously `perl-path-normalize`; from perl-parser-core).
+pub use perl_parser_core::path_normalize;
+/// Workspace-bound path validation and traversal prevention (previously `perl-path-security`; from perl-parser-core).
+pub use perl_parser_core::path_security;
+/// Nearest-rank percentile helpers for integer latency samples (previously `perl-percentile`; from perl-parser-core).
+pub use perl_parser_core::percentile;
+/// Perl qualified-name parsing, splitting, and validation helpers (previously `perl-qualified-name`; from perl-parser-core).
+pub use perl_parser_core::qualified_name;
+/// Shared Perl source-file classification helpers (previously `perl-source-file`; from perl-parser-core).
+pub use perl_parser_core::source_file;
+/// Text-line cursor and boundary helpers (previously `perl-text-line`; from perl-parser-core).
+pub use perl_parser_core::text_line;
 
 /// Variable and subroutine declaration analysis.
 pub use analysis::declaration;
@@ -428,70 +454,12 @@ pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 /// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
-/// Dead code detection for Perl workspaces.
+/// Dead code detection for Perl workspaces (absorbed from `perl-dead-code`).
 #[cfg(not(target_arch = "wasm32"))]
-pub use perl_dead_code as dead_code_detector;
-
-// Re-exports from extracted microcrates
-/// LSP code actions for automated refactoring and fixes.
-pub mod code_actions {
-    pub use perl_lsp_code_actions::*;
-}
-/// Enhanced code actions provider with workspace-aware refactoring.
-pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
-/// LSP completion for code suggestions.
-pub mod completion {
-    pub use perl_lsp_completion::*;
-}
-/// LSP diagnostics for error reporting.
-pub mod diagnostics {
-    pub use perl_lsp_diagnostics::*;
-}
-/// LSP document links provider for file and URL navigation.
-pub mod document_links {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP implementation provider.
-pub mod implementation_provider {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP inlay hints for inline type and parameter information.
-pub mod inlay_hints {
-    pub use perl_lsp_inlay_hints::*;
-}
-/// LSP inlay hints provider implementation.
-pub mod inlay_hints_provider {
-    pub use perl_lsp_inlay_hints::*;
-}
-/// LSP references provider for symbol usage analysis.
-pub mod references {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP rename for symbol renaming.
-pub mod rename {
-    pub use perl_lsp_rename::*;
-}
-/// LSP semantic tokens provider for syntax highlighting.
-pub mod semantic_tokens {
-    pub use perl_lsp_semantic_tokens::*;
-}
-/// LSP semantic tokens provider implementation.
-pub mod semantic_tokens_provider {
-    pub use perl_lsp_semantic_tokens::*;
-}
-/// LSP type definition provider.
-#[cfg(feature = "lsp-compat")]
-pub mod type_definition {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP type hierarchy provider for inheritance navigation.
-pub mod type_hierarchy {
-    pub use perl_lsp_navigation::*;
-}
-/// LSP workspace symbols provider.
-pub mod workspace_symbols {
-    pub use perl_lsp_navigation::*;
-}
+pub mod dead_code;
+/// Backwards-compatibility alias: `perl_parser::dead_code_detector` still works.
+#[cfg(not(target_arch = "wasm32"))]
+pub use dead_code as dead_code_detector;
 
 /// Import statement analysis and optimization.
 pub use refactor::import_optimizer;
@@ -509,12 +477,6 @@ pub use tokens::token_wrapper;
 pub use tokens::trivia;
 /// Parser that preserves trivia tokens for formatting.
 pub use tokens::trivia_parser;
-/// Performance measurement and caching utilities.
-pub use tooling::performance;
-/// Perl::Critic integration for lint diagnostics.
-pub use tooling::perl_critic;
-/// Perltidy integration for code formatting.
-pub use tooling::perltidy;
 
 #[cfg(feature = "incremental")]
 /// Advanced AST node reuse strategies for incremental parsing.
@@ -916,7 +878,7 @@ mod tests {
             "class Point { }",
             "method new { }",
             "try { } catch ($e) { }",
-            // "defer { }", // defer is not yet supported by the lexer
+            "defer { }",
             "my $x :shared = 42;",
         ];
 

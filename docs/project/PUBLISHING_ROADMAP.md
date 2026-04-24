@@ -1,9 +1,8 @@
 # Publishing Roadmap
 
-> Machine-executable release guide. Every step is a command or a binary pass/fail check.
-> Covers: v0.13.0 (next release) and any subsequent minor release.
-> Authoritative release mechanics: `RELEASE.md`. Authoritative feature catalog: `features.toml`.
-> Replace `NEW_VERSION` and `PREV_VERSION` throughout with actual semver strings (e.g., `0.13.0`, `0.12.0`).
+> Machine-executable release-day playbook. Every step is a command or a binary pass/fail check.
+> Use with `RELEASE.md` for release mechanics and `RELEASE_CHECKLIST.md` for the preflight gate.
+> Replace `NEW_VERSION` and `PREV_VERSION` throughout with the actual semver strings for the cut.
 
 ---
 
@@ -13,8 +12,8 @@
 
 ```bash
 export CARGO_TARGET_DIR="/tmp/release-preflight-target"
-export NEW_VERSION="0.13.0"
-export PREV_VERSION="0.12.0"
+export NEW_VERSION="NEW_VERSION"
+export PREV_VERSION="PREV_VERSION"
 ```
 
 ### 1.2 Verify all version strings agree
@@ -47,7 +46,7 @@ gh workflow run version-bump.yml --field version=NEW_VERSION
 
 ```bash
 grep "## \[${NEW_VERSION}\]" CHANGELOG.md
-# Must match: ## [0.13.0] - YYYY-MM-DD
+# Must match: ## [NEW_VERSION] - YYYY-MM-DD
 ```
 
 Fail if missing. To promote [Unreleased] to a dated release:
@@ -62,7 +61,7 @@ git commit -m "chore: finalize CHANGELOG for v${NEW_VERSION}"
 CHANGELOG section structure (required):
 
 ```markdown
-## [0.13.0] - 2026-MM-DD
+## [NEW_VERSION] - YYYY-MM-DD
 
 ### Added
 - ...
@@ -88,7 +87,7 @@ All checks must pass. Common failures and fixes:
 |---------|-----|
 | `cargo fmt --check` fails | `cargo fmt --all` then commit |
 | clippy error | Fix lint, commit |
-| stale `.snap.new` files | `cargo insta accept && git add crates/perl-lsp/tests/snapshots/ && git commit -m "test: accept snapshots"` |
+| stale `.snap.new` files | `cargo insta accept && git add crates/perl-lsp-rs/tests/snapshots/ && git commit -m "test: accept snapshots"` |
 | test failure | Fix the test, do not skip |
 
 ### 1.5 Run release-check gate (superset of ci-gate)
@@ -141,8 +140,9 @@ for pkg in meta["packages"]:
 
 ```bash
 cargo publish --dry-run -p perl-parser
-cargo publish --dry-run -p perl-lsp
-# Both must succeed.
+cargo publish --dry-run -p perl-lsp-rs
+cargo publish --dry-run -p perllsp
+# All three must succeed.
 ```
 
 ### 1.10 Check GitHub secrets exist
@@ -166,9 +166,9 @@ gh run list --branch master --limit 3
 Run these tests manually against the release binary before tagging. Build the binary first:
 
 ```bash
-cargo build -p perl-lsp --release
-BINARY="./target/release/perl-lsp"
-$BINARY --version    # Must print: perl-lsp NEW_VERSION
+cargo build -p perllsp --release
+BINARY="./target/release/perllsp"
+$BINARY --version    # Must print: perllsp NEW_VERSION
 $BINARY --health     # Must print healthy status for all subsystems
 ```
 
@@ -328,7 +328,7 @@ git tag -a "v${NEW_VERSION}" -m "Release v${NEW_VERSION}"
 git push origin "v${NEW_VERSION}"
 ```
 
-Tag must be: `v` + semver. Examples: `v0.13.0`, `v0.13.1`. Never: `0.13.0`, `release-0.13.0`.
+Tag must be: `v` + semver. Examples: `vNEW_VERSION`, `vNEXT_PATCH_VERSION`. Never: `NEW_VERSION`, `release-NEW_VERSION`.
 
 ### 3.3 GitHub release
 
@@ -341,13 +341,13 @@ gh release view "v${NEW_VERSION}"
 Release must include:
 
 ```
-perl-lsp-NEW_VERSION-x86_64-unknown-linux-gnu.tar.gz
-perl-lsp-NEW_VERSION-aarch64-unknown-linux-gnu.tar.gz
-perl-lsp-NEW_VERSION-x86_64-unknown-linux-musl.tar.gz
-perl-lsp-NEW_VERSION-aarch64-unknown-linux-musl.tar.gz
-perl-lsp-NEW_VERSION-x86_64-apple-darwin.tar.gz
-perl-lsp-NEW_VERSION-aarch64-apple-darwin.tar.gz
-perl-lsp-NEW_VERSION-x86_64-pc-windows-msvc.zip
+perllsp-NEW_VERSION-x86_64-unknown-linux-gnu.tar.gz
+perllsp-NEW_VERSION-aarch64-unknown-linux-gnu.tar.gz
+perllsp-NEW_VERSION-x86_64-unknown-linux-musl.tar.gz
+perllsp-NEW_VERSION-aarch64-unknown-linux-musl.tar.gz
+perllsp-NEW_VERSION-x86_64-apple-darwin.tar.gz
+perllsp-NEW_VERSION-aarch64-apple-darwin.tar.gz
+perllsp-NEW_VERSION-x86_64-pc-windows-msvc.zip
 SHA256SUMS
 sbom-spdx.json
 perl-lsp-rs-NEW_VERSION.vsix
@@ -357,7 +357,7 @@ Verify binary checksum:
 
 ```bash
 gh release download "v${NEW_VERSION}" \
-  --pattern "perl-lsp-${NEW_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+  --pattern "perllsp-${NEW_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
   --pattern SHA256SUMS
 sha256sum --check SHA256SUMS --ignore-missing
 ```
@@ -375,8 +375,10 @@ Publish order is in `Cargo.toml` under `[workspace.metadata.publish].allow`. Do 
 Verify after publish:
 
 ```bash
-cargo search perl-lsp --limit 1
-# Expected: perl-lsp = "NEW_VERSION"
+cargo search perl-lsp-rs --limit 1
+# Expected: perl-lsp-rs = "NEW_VERSION"
+cargo search perllsp --limit 1
+# Expected: perllsp = "NEW_VERSION"
 ```
 
 ### 3.5 VSCode extension publishing (automated via workflow)
@@ -461,7 +463,7 @@ gh workflow run version-bump.yml \
   --field bump_type=minor
 # OR:
 gh workflow run version-bump.yml \
-  --field version=0.14.0
+  --field version=NEW_VERSION
 
 # Merge the resulting version-bump PR.
 ```
@@ -479,11 +481,11 @@ This opens a PR that bumps `Cargo.toml`, `vscode-extension/package.json`, `featu
 gh release view "v${NEW_VERSION}"
 
 # crates.io
-cargo search perl-lsp --limit 1
+cargo search perllsp --limit 1
 
 # Docker Hub
 docker pull effortlessmetrics/perl-lsp:${NEW_VERSION}
-docker run --rm effortlessmetrics/perl-lsp:${NEW_VERSION} perl-lsp --version
+docker run --rm effortlessmetrics/perl-lsp:${NEW_VERSION} perllsp --version
 
 # GHCR
 docker pull ghcr.io/effortlessmetrics/perl-lsp:${NEW_VERSION}
@@ -502,13 +504,13 @@ gh run list --workflow=brew-bump.yml --limit 3
 
 ```bash
 # From crates.io
-cargo install perl-lsp --version ${NEW_VERSION}
-perl-lsp --version    # Must print: perl-lsp NEW_VERSION
-perl-lsp --health     # Must show healthy
+cargo install perllsp --version ${NEW_VERSION}
+perllsp --version     # Must print: perllsp NEW_VERSION
+perllsp --health      # Must show healthy
 
 # From install script
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
-perl-lsp --version
+perllsp --version
 ```
 
 ### 4.3 Monitoring plan (Week 1)
@@ -524,7 +526,7 @@ gh issue list --state open --label "P0" --limit 10
 gh issue list --state open --label "crash" --limit 10
 
 # Download count (crates.io)
-curl -s https://crates.io/api/v1/crates/perl-lsp | python3 -c \
+curl -s https://crates.io/api/v1/crates/perllsp | python3 -c \
   'import json,sys; d=json.load(sys.stdin)["crate"]; print(f"downloads: {d[\"downloads\"]}, recent: {d[\"recent_downloads\"]}")'
 ```
 
@@ -534,10 +536,10 @@ Triage SLA:
 |----------|---------------|
 | Crash or hang | Same day — file P0 issue, assign to next build cycle |
 | Parse error on valid Perl | 48 hours — file issue, label `parser-corpus` |
-| Feature gap | 1 week — triage to v0.13.x milestone |
+| Feature gap | 1 week — triage to the next release milestone |
 | Enhancement | Triage to roadmap, no SLA |
 
-### 4.4 v0.13.0 issue triage (Week 1 — after release)
+### 4.4 Current release issue triage (Week 1 — after release)
 
 ```bash
 # List all open issues
@@ -546,10 +548,10 @@ gh issue list --state open --limit 200
 # Label new issues from post-release feedback
 # Use these labels: bug, parser-corpus, lsp-feature, enhancement, good-first-issue
 gh issue edit ISSUE_NUMBER --add-label "parser-corpus"
-gh issue edit ISSUE_NUMBER --milestone "v0.13.0"
+gh issue edit ISSUE_NUMBER --milestone "NEW_VERSION"
 ```
 
-Milestone priorities for v0.13.0 (from ROADMAP.md):
+Milestone priorities for NEW_VERSION (from ROADMAP.md):
 
 1. Diagnostic hardening: `strict`, `warnings`, dead-code signals
 2. CPAN corpus clean-parse rate to 95%+
@@ -578,7 +580,7 @@ git commit -m "chore: ratchet corpus post-v${NEW_VERSION} fixes"
 
 | Metric | Target | Check |
 |--------|--------|-------|
-| crates.io downloads | 100+ | `cargo search perl-lsp` |
+| crates.io downloads | 100+ | `cargo search perllsp` |
 | VSCode installs | 200+ | Marketplace dashboard |
 | GitHub stars | 50+ | GitHub repo page |
 | Crash reports | 0 critical | `gh issue list --label crash` |
@@ -599,7 +601,7 @@ git tag -d "v${NEW_VERSION}"
 git push origin ":refs/tags/v${NEW_VERSION}"
 
 # Yank a specific crate from crates.io (irreversible — cannot delete, only yank)
-cargo yank --version ${NEW_VERSION} perl-lsp
+cargo yank --version ${NEW_VERSION} perllsp
 
 # Yank all published crates at once
 VERSION=${NEW_VERSION}

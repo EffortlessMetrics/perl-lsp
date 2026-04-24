@@ -1,3 +1,5 @@
+mod version_sync;
+
 use chrono::Utc;
 use clap::{Parser, Subcommand};
 use color_eyre::eyre::{Context, Result};
@@ -72,10 +74,6 @@ enum CliCommand {
         #[arg(trailing_var_arg = true)]
         args: Vec<String>,
     },
-    /// Benchmark pure-Rust and C parser implementations (multi-file, timed runs).
-    BenchmarkPureRustVsC,
-    /// Run simple benchmark comparison between pure-Rust and C parser implementations.
-    BenchmarkRustVsCSimple,
     /// Compare modern, C legacy, and parser outputs across sample snippets.
     RunComparison,
     /// Run quick parser benchmarks across preselected fixture files.
@@ -93,8 +91,23 @@ enum CliCommand {
     TestWithOverride,
     /// Emit a single initialize request against perl-lsp stdin.
     SimpleLspTest,
-    /// Check workspace version sync across Cargo.toml, features.toml, and VSCode manifest.
+    /// Check workspace version sync across every tracked site.
+    ///
+    /// This walks Cargo.toml (workspace + per-crate), features.toml, the
+    /// VSCode extension manifest, and the doc surface (README, CLAUDE.md,
+    /// ROADMAP) and fails if any site drifts from the canonical workspace
+    /// version.
     CheckVersionSync,
+
+    /// Bump the workspace version across every tracked site.
+    ///
+    /// Non-interactive and idempotent: running it twice with the same
+    /// version produces no diff on the second run. Pair it with
+    /// `check-version-sync` in CI to catch drift at merge time.
+    BumpVersion {
+        /// New version to set (X.Y.Z format).
+        version: String,
+    },
     /// Run edge case test suites, with optional benchmark/coverage submodes.
     TestEdgeCases {
         /// Run edge case benchmark suite.
@@ -202,8 +215,6 @@ fn run() -> Result<i32> {
         CliCommand::TestIterativeParser => cmd_test_iterative_parser(&repo_root)?,
         CliCommand::CheckV2BundleSync => cmd_check_v2_bundle_sync(&repo_root)?,
         CliCommand::CompareBenchmarks { args } => cmd_compare_benchmarks(&repo_root, &args)?,
-        CliCommand::BenchmarkPureRustVsC => cmd_benchmark_pure_rust_vs_c(&repo_root)?,
-        CliCommand::BenchmarkRustVsCSimple => cmd_benchmark_rust_vs_c_simple(&repo_root)?,
         CliCommand::RunComparison => cmd_run_comparison(&repo_root)?,
         CliCommand::QuickBench => cmd_quick_bench(&repo_root)?,
         CliCommand::SimpleBench => cmd_simple_bench(&repo_root)?,
@@ -214,6 +225,7 @@ fn run() -> Result<i32> {
         CliCommand::TestWithOverride => cmd_test_with_override(&repo_root)?,
         CliCommand::SimpleLspTest => cmd_simple_lsp_test(&repo_root)?,
         CliCommand::CheckVersionSync => cmd_check_version_sync(&repo_root)?,
+        CliCommand::BumpVersion { version } => cmd_bump_version(&repo_root, &version)?,
         CliCommand::TestEdgeCases { bench, coverage } => {
             cmd_test_edge_cases(&repo_root, bench, coverage)?
         }
@@ -242,18 +254,12 @@ fn run() -> Result<i32> {
     Ok(code)
 }
 
-const CI_REPORT_CRATES_EXCLUDE: [&str; 11] = [
+const CI_REPORT_CRATES_EXCLUDE: [&str; 5] = [
     "tree-sitter-perl-c",
-    "tree-sitter-perl-rs",
     "perl-parser-pest",
     "perl-tdd-support",
     "perl-test-must",
     "perl-ci-hygiene",
-    "perl-ts-heredoc-analysis",
-    "perl-ts-logos-lexer",
-    "perl-ts-heredoc-parser",
-    "perl-ts-partial-ast",
-    "perl-ts-advanced-parsers",
 ];
 
 const CI_TEST_FILE_SUFFIXES: [&str; 3] = ["_test.rs", "_tests.rs", "tests.rs"];
@@ -264,6 +270,7 @@ fn is_excluded_test_path(path: &Path) -> bool {
         value == OsStr::new("tests")
             || value == OsStr::new("benches")
             || value == OsStr::new("examples")
+            || value == OsStr::new("bin")
     }) {
         return true;
     }
@@ -470,12 +477,14 @@ fn command_status_strict(
 }
 
 fn command_exists(command: &str) -> bool {
-    Command::new("sh")
-        .arg("-c")
-        .arg(format!("command -v {command} >/dev/null 2>&1"))
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    // Replaces `sh -c "command -v ..."` which is Unix-only.
+    // On Windows, also probe for .exe / .cmd / .bat extensions.
+    #[cfg(windows)]
+    let suffixes: &[&str] = &[".exe", ".cmd", ".bat", ""];
+    #[cfg(not(windows))]
+    let suffixes: &[&str] = &[""];
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+        .any(|dir| suffixes.iter().any(|ext| dir.join(format!("{command}{ext}")).exists()))
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
@@ -500,6 +509,8 @@ fn read_json_value(path: &Path) -> Result<Value> {
     Ok(value)
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_path(path: &Path) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     raw.trim()
@@ -507,6 +518,8 @@ fn read_usize_from_path(path: &Path) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// Used only in the #[cfg(not(windows))] preflight block.
+#[cfg_attr(windows, allow(dead_code))]
 fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
     let raw = fs::read_to_string(path).with_context(|| format!("reading {:?}", path))?;
     let tokens: Vec<&str> = raw.split_whitespace().collect();
@@ -519,14 +532,16 @@ fn read_usize_from_tokens(path: &Path, idx: usize) -> Result<usize> {
         .map_err(|err| color_eyre::eyre::eyre!("invalid usize in {}: {err}", path.display()))
 }
 
+// On Windows, the concurrency-cap variables are set but not mutated
+// (no /proc-based auto-degradation on Windows). Allow unused_mut for
+// cross-platform compatibility.
+#[cfg_attr(windows, allow(unused_mut))]
 fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
-    let pids_used =
-        command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?.lines().count();
-    let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
-    let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
-    let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
-
-    println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
+    #[cfg(windows)]
+    println!(
+        "note: preflight system metrics not available on Windows; \
+         skipping /proc checks — see scripts/preflight.sh for Linux-only usage"
+    );
 
     let uv_threadpool_size = env::var("UV_THREADPOOL_SIZE").unwrap_or_else(|_| "4".to_string());
     let mut pw_workers = env::var("PW_WORKERS").unwrap_or_else(|_| "2".to_string());
@@ -549,24 +564,37 @@ fn cmd_preflight(_repo_root: &Path) -> Result<i32> {
         env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
     }
 
-    if pids_used > (pid_max * 85 / 100) {
-        pw_workers = "1".into();
-        rust_test_threads = "1".into();
-        omp_num_threads = "1".into();
-        openblas_num_threads = "1".into();
-        mkl_num_threads = "1".into();
-        numexpr_num_threads = "1".into();
+    // Auto-degrade concurrency when the system is under heavy load.
+    // This block reads /proc data; it is Linux-only.
+    #[cfg(not(windows))]
+    {
+        let pids_used = command_with_output(Path::new("/"), "ps", &["-e", "--no-headers"], &[])?
+            .lines()
+            .count();
+        let pid_max = read_usize_from_path(Path::new("/proc/sys/kernel/pid_max"))?;
+        let files_used = read_usize_from_tokens(Path::new("/proc/sys/fs/file-nr"), 1)?;
+        let files_max = read_usize_from_path(Path::new("/proc/sys/fs/file-max"))?;
+        println!("PIDs: {pids_used} / {pid_max} | Open files: {files_used} / {files_max}");
 
-        // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
-        unsafe {
-            env::set_var("PW_WORKERS", &pw_workers);
-            env::set_var("RUST_TEST_THREADS", &rust_test_threads);
-            env::set_var("OMP_NUM_THREADS", &omp_num_threads);
-            env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
-            env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
-            env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+        if pids_used > (pid_max * 85 / 100) {
+            pw_workers = "1".into();
+            rust_test_threads = "1".into();
+            omp_num_threads = "1".into();
+            openblas_num_threads = "1".into();
+            mkl_num_threads = "1".into();
+            numexpr_num_threads = "1".into();
+
+            // SAFETY: This is a single-threaded CLI tool; no other threads are reading env vars.
+            unsafe {
+                env::set_var("PW_WORKERS", &pw_workers);
+                env::set_var("RUST_TEST_THREADS", &rust_test_threads);
+                env::set_var("OMP_NUM_THREADS", &omp_num_threads);
+                env::set_var("OPENBLAS_NUM_THREADS", &openblas_num_threads);
+                env::set_var("MKL_NUM_THREADS", &mkl_num_threads);
+                env::set_var("NUMEXPR_NUM_THREADS", &numexpr_num_threads);
+            }
+            println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
         }
-        println!("System hot → auto‑degraded workers (PW=1, RUST=1, *BLAS=1)");
     }
 
     Ok(0)
@@ -597,41 +625,65 @@ fn cmd_e2e_gate(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
         vec!["test".to_string(), "--".to_string(), format!("--test-threads={rust_test_threads}")];
     args.extend_from_slice(cargo_args);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-    let lock_file = "/tmp/e2e-suite.lock";
 
-    if !command_exists("flock") {
-        println!("warning: flock not found; running E2E tests without external lock");
-        return command_status_strict(
+    // flock is a Linux/macOS utility and does not exist on Windows.
+    // Skip the lock entirely and run the tests directly on Windows.
+    #[cfg(windows)]
+    {
+        println!("note: flock not available on Windows; running E2E tests without lock");
+        command_status_strict(
             repo_root,
             "cargo",
             &refs,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )
-        .map(|_| 0);
+        .map(|_| 0)
     }
 
-    if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
-        println!("E2E slot ready");
-        let direct_args =
+    #[cfg(not(windows))]
+    {
+        let lock_file_path = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_file_str = lock_file_path
+            .to_str()
+            .ok_or_else(|| color_eyre::eyre::eyre!("temp dir path is not valid UTF-8"))?
+            .to_owned();
+        let lock_file = lock_file_str.as_str();
+
+        if !command_exists("flock") {
+            println!("warning: flock not found; running E2E tests without external lock");
+            return command_status_strict(
+                repo_root,
+                "cargo",
+                &refs,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )
+            .map(|_| 0);
+        }
+
+        if command_status(repo_root, "flock", &["-n", lock_file, "true"], &[])? == 0 {
+            println!("E2E slot ready");
+            let direct_args =
+                std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
+            command_status_strict(
+                repo_root,
+                "flock",
+                &direct_args,
+                &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
+            )?;
+            return Ok(0);
+        }
+
+        println!("E2E slot busy → waiting...");
+        let blocking_args =
             std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
         command_status_strict(
             repo_root,
             "flock",
-            &direct_args,
+            &blocking_args,
             &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
         )?;
-        return Ok(0);
+        Ok(0)
     }
-
-    println!("E2E slot busy → waiting...");
-    let blocking_args = std::iter::once(lock_file).chain(refs.iter().copied()).collect::<Vec<_>>();
-    command_status_strict(
-        repo_root,
-        "flock",
-        &blocking_args,
-        &[("RUST_TEST_THREADS", rust_test_threads.as_str())],
-    )?;
-    Ok(0)
 }
 
 fn cmd_test_e2e_capped(repo_root: &Path, cargo_args: &[String]) -> Result<i32> {
@@ -684,7 +736,7 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
     const V2_BUNDLE_FILES: [&str; 5] =
         ["grammar.pest", "pure_rust_parser.rs", "pratt_parser.rs", "sexp_formatter.rs", "error.rs"];
 
-    let source_root = repo_root.join("crates/tree-sitter-perl-rs/src");
+    let source_root = repo_root.join("archive/crates/tree-sitter-perl-rs/src");
     let microcrate_root = repo_root.join("crates/perl-parser-pest/src");
     let mut status = 0;
     for file in V2_BUNDLE_FILES {
@@ -730,166 +782,6 @@ fn cmd_check_v2_bundle_sync(repo_root: &Path) -> Result<i32> {
 
     println!();
     println!("✅ v2 bundle is synchronized.");
-    Ok(0)
-}
-
-fn cmd_benchmark_pure_rust_vs_c(repo_root: &Path) -> Result<i32> {
-    println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
-    println!("Building both implementations...");
-
-    let rust_parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
-    let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
-
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-rs", "--bin", "parse-rust"],
-        &[],
-    )?;
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-c", "--bin", "parse_c"],
-        &[],
-    )?;
-
-    let workspace =
-        repo_root.join("target").join("perl-ci-hygiene").join("benchmark_pure_rust_vs_c");
-    fs::create_dir_all(&workspace).with_context(|| format!("creating {}", workspace.display()))?;
-
-    let test_simple = workspace.join("test_simple.pl");
-    let test_medium = workspace.join("test_medium.pl");
-    fs::write(&test_simple, "print \"Hello, World!\\n\";\n")?;
-    fs::write(
-        &test_medium,
-        r#"#!/usr/bin/env perl
-use strict;
-use warnings;
-
-my $scalar = "test";
-my @array = (1, 2, 3, 4, 5);
-my %hash = (a => 1, b => 2);
-
-my $ref = \$scalar;
-my $aref = \@array;
-my $href = \%hash;
-
-my $octal = 0o755;
-print "..." if $scalar;
-
-my $π = 3.14159;
-my $café = "coffee";
-
-sub process {
-    my ($x, $y) = @_;
-    return $x + $y;
-}
-
-for my $i (1..10) {
-    print "$i\\n" if $i % 2 == 0;
-}
-"#,
-    )?;
-
-    println!();
-    println!("Running benchmarks...");
-    println!("File,Pure_Rust_Time(ms),C_Time(ms),Rust/C_Ratio");
-
-    let files = vec![
-        ("test_simple.pl", test_simple),
-        ("test_medium.pl", test_medium),
-        ("examples/hello.pl", repo_root.join("examples/hello.pl")),
-    ];
-    for (name, file) in files {
-        if !file.is_file() {
-            continue;
-        }
-        let rust_ms = benchmark_average_ms(repo_root, &rust_parser, &file, 10)?;
-        let c_ms = benchmark_average_ms(repo_root, &c_parser, &file, 10)?;
-        let ratio = if c_ms > 0.0 { rust_ms / c_ms } else { f64::INFINITY };
-        println!("{},{rust_ms:.3},{c_ms:.3},{ratio:.2}", name);
-    }
-
-    Ok(0)
-}
-
-fn cmd_benchmark_rust_vs_c_simple(repo_root: &Path) -> Result<i32> {
-    println!("=== Pure Rust (Pest) vs C Parser Benchmark ===");
-    println!();
-
-    let rust_parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
-    let c_parser = repo_root.join("crates/tree-sitter-perl-c/target/release/parse_c");
-    let workspace =
-        repo_root.join("target").join("perl-ci-hygiene").join("benchmark_rust_vs_c_simple");
-    fs::create_dir_all(&workspace)?;
-
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-rs", "--bin", "parse-rust"],
-        &[],
-    )?;
-    command_status_strict(
-        repo_root,
-        "cargo",
-        &["build", "--release", "-p", "tree-sitter-perl-c", "--bin", "parse_c"],
-        &[],
-    )?;
-
-    let benchmark_file = workspace.join("test_benchmark.pl");
-    fs::write(
-        &benchmark_file,
-        r#"#!/usr/bin/env perl
-use strict;
-use warnings;
-
-my $scalar = "Hello, World!";
-my @array = (1..10);
-my %hash = map { $_ => $_ * 2 } 1..5;
-
-my $sref = \$scalar;
-my $aref = \@array;
-my $href = \%hash;
-
-my $perms = 0o755;
-my $old_perms = 0755;
-
-sub todo {
-    ...
-}
-
-my $π = 3.14159;
-my $café = "coffee shop";
-sub 日本語 { return "Japanese" }
-
-for my $i (@array) {
-    print "$i\\n" if $i % 2 == 0;
-}
-
-my $text = "foo bar baz";
-$text =~ s/foo/FOO/g;
-
-1;
-"#,
-    )?;
-
-    println!("Running 5 iterations each...");
-    println!();
-    println!("Pure Rust (Pest) Parser:");
-    for i in 1..=5 {
-        let time_ms = timed_file_run_ms(repo_root, &rust_parser, &benchmark_file)?;
-        println!("  Run {i}: {:.3}s", time_ms / 1000.0);
-    }
-
-    println!();
-    println!("C Parser:");
-    for i in 1..=5 {
-        let time_ms = timed_file_run_ms(repo_root, &c_parser, &benchmark_file)?;
-        println!("  Run {i}: {:.3}s", time_ms / 1000.0);
-    }
-
-    println!();
-    println!("Note: Times include process startup overhead");
     Ok(0)
 }
 
@@ -964,7 +856,16 @@ fn cmd_run_comparison(repo_root: &Path) -> Result<i32> {
 }
 
 fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
-    println!("=== Quick Parser Comparison ===");
+    println!("=== Three-Way Parser Comparison ===");
+    println!();
+    println!("Parsers:");
+    println!("  native-v3  : perl-parser-bench  (v3 recursive-descent, raw parser API)");
+    println!(
+        "  facade     : bench_facade        (tree-sitter-perl-rs, v3 wrapped in tree-sitter ergonomics)"
+    );
+    println!(
+        "  c-grammar  : bench_parser_c      (tree-sitter C grammar binding, requires libclang)"
+    );
     println!();
 
     let files = vec![
@@ -983,38 +884,103 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         .collect();
     candidates.sort_by(|a, b| a.0.cmp(&b.0));
 
-    println!("File,Size,C_Time(µs),Rust_Time(µs),Speedup");
-    println!("----,----,----------,------------- ,-------");
+    // Collect results once to avoid running each parser twice per file.
+    struct Row {
+        name: String,
+        size: u64,
+        rust_time: Option<f64>,
+        facade_time: Option<f64>,
+        c_time: Option<f64>,
+    }
 
-    for (name, path) in candidates {
-        let size = fs::metadata(&path).map(|metadata| metadata.len()).unwrap_or(0);
+    let mut rows: Vec<Row> = Vec::new();
+    for (name, path) in &candidates {
+        let size = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+        let rust_time = run_rust_bench_us(repo_root, path)?;
+        let facade_time = run_facade_bench_us(repo_root, path)?;
+        let c_time = run_c_bench_us(repo_root, path)?;
+        rows.push(Row { name: name.clone(), size, rust_time, facade_time, c_time });
+    }
 
-        let c_time = run_bench_parser_ms(repo_root, "c-scanner test-utils", &path, false)?;
-        let rust_time = run_bench_parser_ms(repo_root, "pure-rust test-utils", &path, false)?;
+    // --- Table 1: raw timings ---
+    let col_file = 30usize;
+    let col_num = 12usize;
+    println!(
+        "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  fastest",
+        "File", "Size", "native-v3(µs)", "facade(µs)", "c-gram(µs)"
+    );
+    println!(
+        "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  -------",
+        "----", "----", "-------------", "----------", "----------"
+    );
 
-        let speedup = if let (Some(c_val), Some(rust_val)) = (c_time, rust_time) {
-            if rust_val > 0.0 { Some(c_val / rust_val) } else { None }
-        } else {
-            None
+    for row in &rows {
+        let times: [(&str, Option<f64>); 3] =
+            [("native-v3", row.rust_time), ("facade", row.facade_time), ("c-grammar", row.c_time)];
+        let fastest_label = times
+            .iter()
+            .filter_map(|(label, t)| t.map(|v| (label, v)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(label, _)| *label)
+            .unwrap_or("N/A");
+
+        let fmt = |v: Option<f64>| -> String {
+            v.map(|us| format!("{us:.0}")).unwrap_or_else(|| "N/A".to_string())
         };
 
-        let speedup_text = if let Some(speedup) = speedup {
-            if speedup > 1.0 {
-                format!("{speedup:.2}x (Rust faster)")
-            } else {
-                format!("{:.2}x (C faster)", 1.0 / speedup.max(0.000_000_1))
+        println!(
+            "{:<col_file$} {:>8}  {:>col_num$}  {:>col_num$}  {:>col_num$}  {}",
+            row.name,
+            row.size,
+            fmt(row.rust_time),
+            fmt(row.facade_time),
+            fmt(row.c_time),
+            fastest_label,
+        );
+    }
+
+    println!();
+
+    // --- Table 2: relative-to-fastest ---
+    println!("=== Relative to fastest (per file) ===");
+    println!();
+    println!(
+        "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+        "File", "native-v3", "facade", "c-grammar"
+    );
+    println!(
+        "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+        "----", "---------", "------", "---------"
+    );
+
+    for row in &rows {
+        let available: Vec<f64> =
+            [row.rust_time, row.facade_time, row.c_time].iter().filter_map(|&t| t).collect();
+        let min = available.iter().cloned().fold(f64::INFINITY, f64::min);
+
+        let rel = |v: Option<f64>| -> String {
+            match v {
+                Some(us) if min > 0.0 => format!("{:.2}x", us / min),
+                Some(_) => "1.00x".to_string(),
+                None => "N/A".to_string(),
             }
-        } else {
-            "N/A".to_string()
         };
 
-        let c_ms = c_time.unwrap_or(0.0);
-        let rust_ms = rust_time.unwrap_or(0.0);
-        println!("{:<30} {:>8} {:>12.0} {:>12.0} {}", name, size, c_ms, rust_ms, speedup_text);
+        println!(
+            "{:<col_file$}  {:>col_num$}  {:>col_num$}  {:>col_num$}",
+            row.name,
+            rel(row.rust_time),
+            rel(row.facade_time),
+            rel(row.c_time),
+        );
     }
 
     println!();
     println!("Quick benchmark complete!");
+    println!("Note: c-grammar requires libclang; N/A means libclang was not found.");
+    println!(
+        "Note: facade overhead vs native-v3 should be near epsilon (facade wraps same v3 parser)."
+    );
     Ok(0)
 }
 
@@ -1022,7 +988,7 @@ fn cmd_simple_bench(repo_root: &Path) -> Result<i32> {
     println!("Pure Rust Perl Parser Performance Test");
     println!("======================================");
 
-    let parser = repo_root.join("crates/tree-sitter-perl-rs/target/release/parse-rust");
+    let parser = repo_root.join("archive/crates/tree-sitter-perl-rs/target/release/parse-rust");
     command_status_strict(
         repo_root,
         "cargo",
@@ -1172,21 +1138,108 @@ fn cmd_profile_stack_overflow(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn run_bench_parser_ms(
-    repo_root: &Path,
-    features: &str,
-    file: &Path,
-    _fail_fast: bool,
-) -> Result<Option<f64>> {
+/// Crate identifier for the v3 native Rust parser benchmark.
+const RUST_BENCH_CRATE: &str = "perl-parser-bench";
+
+/// Binary identifier for the v3 native Rust parser benchmark.
+///
+/// Used by [`cmd_quick_bench`] and asserted in the unit test that guards
+/// against regressing the C-vs-Rust comparison (see issue #3204).
+const RUST_BENCH_BIN: &str = "perl-parser-bench";
+
+/// Binary identifier for the legacy C tree-sitter parser benchmark.
+///
+/// Lives in the workspace-EXCLUDED `tree-sitter-perl-c` crate (libclang-dev
+/// dependency), so it must be invoked via `--manifest-path` rather than `-p`.
+const C_BENCH_BIN: &str = "bench_parser_c";
+
+/// Relative path (from repo root) to the C tree-sitter crate's Cargo.toml.
+///
+/// Pinned here alongside `C_BENCH_BIN` so that the regression test
+/// (`quick_bench_uses_distinct_binaries_for_c_and_rust`) can assert both the
+/// binary name and the crate location remain distinct from the Rust bench path.
+const C_BENCH_MANIFEST: &str = "crates/tree-sitter-perl-c/Cargo.toml";
+
+/// Crate identifier for the `tree-sitter-perl-rs` facade benchmark.
+///
+/// Lives in the normal workspace (no excluded crate dance), so it is
+/// invoked with `-p FACADE_BENCH_CRATE --bin FACADE_BENCH_BIN`.
+const FACADE_BENCH_CRATE: &str = "tree-sitter-perl-rs";
+
+/// Binary identifier for the `tree-sitter-perl-rs` facade benchmark.
+///
+/// Used by [`cmd_quick_bench`] and asserted in the unit test
+/// `three_way_bench_all_binaries_distinct`.
+const FACADE_BENCH_BIN: &str = "bench_facade";
+
+/// Run the v3 native Rust parser bench binary against `file`.
+///
+/// Returns wall-clock duration in microseconds, or `None` if the bench
+/// binary exits non-zero. Note that the elapsed time includes the
+/// `cargo run` startup overhead; both [`run_rust_bench_us`] and
+/// [`run_c_bench_us`] share that overhead so the comparison stays fair.
+fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
     let file_arg = file.to_string_lossy().into_owned();
     let args = [
         "run",
         "--quiet",
         "--release",
-        "--features",
-        features,
+        "-p",
+        RUST_BENCH_CRATE,
         "--bin",
-        "bench_parser",
+        RUST_BENCH_BIN,
+        "--",
+        file_arg.as_str(),
+    ];
+    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
+    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+}
+
+/// Run the legacy C tree-sitter parser bench binary against `file`.
+///
+/// `tree-sitter-perl-c` is in `[workspace.exclude]` because of its libclang
+/// build dependency, so this helper invokes cargo with `--manifest-path`
+/// pointing at that crate's Cargo.toml. The `test-utils` feature is required
+/// for the binary target.
+///
+/// Returns wall-clock duration in microseconds, or `None` if the bench
+/// binary fails to build or exits non-zero (e.g. on systems without
+/// libclang installed). Quick-bench treats `None` as N/A in the speedup
+/// column rather than failing the whole run.
+fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let file_arg = file.to_string_lossy().into_owned();
+    let args = [
+        "run",
+        "--quiet",
+        "--release",
+        "--manifest-path",
+        C_BENCH_MANIFEST,
+        "--bin",
+        C_BENCH_BIN,
+        "--features",
+        "test-utils",
+        "--",
+        file_arg.as_str(),
+    ];
+    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
+    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+}
+
+/// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
+///
+/// The facade crate lives in the normal workspace so it is invoked with
+/// `-p` rather than `--manifest-path`. Returns wall-clock duration in
+/// microseconds, or `None` if the bench binary exits non-zero.
+fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let file_arg = file.to_string_lossy().into_owned();
+    let args = [
+        "run",
+        "--quiet",
+        "--release",
+        "-p",
+        FACADE_BENCH_CRATE,
+        "--bin",
+        FACADE_BENCH_BIN,
         "--",
         file_arg.as_str(),
     ];
@@ -1207,20 +1260,6 @@ fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64
             file.display()
         ))
     }
-}
-
-fn benchmark_average_ms(
-    repo_root: &Path,
-    parser: &Path,
-    file: &Path,
-    iterations: usize,
-) -> Result<f64> {
-    let mut total_ms = 0.0;
-    for _ in 0..iterations {
-        let elapsed_ms = timed_file_run_ms(repo_root, parser, file)?;
-        total_ms += elapsed_ms;
-    }
-    Ok(total_ms / iterations as f64)
 }
 
 fn cmd_cargo_package_workspace_dry_run(repo_root: &Path, crates: &[String]) -> Result<i32> {
@@ -1473,57 +1512,50 @@ fn cmd_test_with_override(repo_root: &Path) -> Result<i32> {
 
 fn cmd_simple_lsp_test(repo_root: &Path) -> Result<i32> {
     println!("Testing Perl LSP server...");
-    let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
+    #[cfg(windows)]
+    {
+        let _ = repo_root;
+        println!(
+            "note: simple-lsp-test uses a POSIX shell pipeline and is not supported on Windows"
+        );
+        Ok(0)
+    }
+    #[cfg(not(windows))]
+    {
+        let shell_script = r#"cat <<'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
 Content-Length: 205
 
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":123,"rootUri":"file:///tmp","capabilities":{},"initializationOptions":{},"trace":"off","workspaceFolders":null}}
 EOF
 "#;
-    let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
-    for line in output.lines().take(20) {
-        println!("{line}");
+        let output = command_with_output(repo_root, "sh", &["-c", shell_script], &[])?;
+        for line in output.lines().take(20) {
+            println!("{line}");
+        }
+        Ok(0)
     }
-    Ok(0)
 }
 
 fn cmd_check_version_sync(repo_root: &Path) -> Result<i32> {
-    let cargo_toml = read_to_value(repo_root.join("Cargo.toml"))?;
-    let features_toml = read_to_value(repo_root.join("features.toml"))?;
-    let vscode_json = read_json_value(&repo_root.join("vscode-extension/package.json"))?;
+    version_sync::check(repo_root)?;
+    Ok(0)
+}
 
-    let cargo_version = cargo_toml
-        .get("workspace")
-        .and_then(|workspace| workspace.get("package"))
-        .and_then(|pkg| pkg.get("version"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
-    let features_version = features_toml
-        .get("meta")
-        .and_then(|meta| meta.get("version"))
-        .and_then(|value| value.as_str())
-        .unwrap_or("");
-    let vscode_version = vscode_json.get("version").and_then(|value| value.as_str()).unwrap_or("");
-
-    println!("Version sync check:");
-    println!("  Cargo.toml [workspace]: {}", cargo_version);
-    println!("  features.toml:          {}", features_version);
-    println!("  vscode-extension:       {}", vscode_version);
-
-    if cargo_version.is_empty() || features_version.is_empty() || vscode_version.is_empty() {
-        return Err(color_eyre::eyre::eyre!("one or more version values were missing"));
+fn cmd_bump_version(repo_root: &Path, new_version: &str) -> Result<i32> {
+    version_sync::validate_version_format(new_version)?;
+    println!("Bumping workspace version to {new_version}");
+    let report = version_sync::bump(repo_root, new_version)?;
+    println!(
+        "Version sync bump: {} sites inspected, {} updated ({} already current), {} files touched",
+        report.sites_total, report.sites_updated, report.sites_unchanged, report.files_updated,
+    );
+    for file in &report.touched_files {
+        println!("  updated: {}", file.display());
     }
-
-    if cargo_version == features_version && cargo_version == vscode_version {
-        println!("Version sync check: all sources agree on {cargo_version}");
-        Ok(0)
-    } else {
-        Err(color_eyre::eyre::eyre!(
-            "version mismatch detected: {} != {} != {}",
-            cargo_version,
-            features_version,
-            vscode_version
-        ))
+    if report.sites_updated == 0 {
+        println!("Version sync bump: no changes required (already at {new_version})");
     }
+    Ok(0)
 }
 
 fn cmd_test_edge_cases(repo_root: &Path, bench: bool, coverage: bool) -> Result<i32> {
@@ -1801,34 +1833,192 @@ fn cmd_generate_badges(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
-    let hook_path = repo_root.join(".git").join("hooks").join("pre-push");
-    if let Some(parent) = hook_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let hook = r#"#!/usr/bin/env bash
+fn pre_push_hook_script() -> &'static str {
+    r#"#!/usr/bin/env bash
+# ============================================================================
+# perl-lsp pre-push hook (generated by `cargo xtask ci-hygiene install-githooks`)
+# ============================================================================
+#
+# Bypass policy
+# -------------
+# OK to bypass with `git push --no-verify`:
+#   * Deletion-only push on master (the hook already auto-skips, but if it
+#     doesn't, bypassing is safe — there's nothing to validate).
+#   * Urgent fixes during incident response, when the gate has a known bug
+#     being tracked (see hint output below for issue numbers).
+#   * The hook is failing for an environmental reason that is out of band of
+#     your change (e.g., nix store cache miss, transient toolchain issue).
+#
+# NOT OK to bypass:
+#   * "I just don't want to wait."
+#   * "I just want to push something quick."
+#   * Code-touching changes where you haven't actually run the gate locally.
+#
+# If you find yourself bypassing repeatedly, file an issue and link it here.
+# ============================================================================
+
 set -euo pipefail
 
-echo "🚪 Running local gate before push: nix develop -c just ci-gate"
-echo "   (Skip with: git push --no-verify)"
-echo ""
-
-# --- Check if test files changed and CURRENT_STATUS.md needs updating ---
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-# Detect test file changes in the commits being pushed
-# stdin provides: <local ref> <local sha> <remote ref> <remote sha>
-TEST_FILES_CHANGED=false
-while read -r _local_ref local_sha _remote_ref remote_sha; do
-    # For new branches, compare against merge-base with origin/master
-    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-        remote_sha="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha")"
+# --- Self-heal core.bare corruption (issue #3205) ---
+# Some sequences of `git worktree add`/`remove` silently flip core.bare=true
+# on the main checkout, breaking every worktree-aware git command including
+# this hook. Auto-unset before doing anything else.
+if [ "$(git config --get core.bare 2>/dev/null || true)" = "true" ]; then
+    # Confirm this is actually a non-bare repo (has a working tree).
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "⚠️  Detected core.bare=true corruption (issue #3205) — auto-fixing"
+        git config --local --unset core.bare || true
     fi
-    if git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null | grep -qE '^crates/.*/tests/.*\.rs$'; then
-        TEST_FILES_CHANGED=true
+fi
+
+# --- Self-heal stale hook installation (issue #4220) ---
+# When hooks/pre-push is updated in master, .git/hooks/pre-push is only
+# updated when install-githooks is re-run. Auto-copy when drift is detected.
+# Note: exec "$0" "$@" does NOT work here — git stdin is already consumed
+# before the hook executes. Copy and continue; the fresh hook takes effect
+# on the next push.
+REPO_ROOT_FOR_HOOK="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -n "$REPO_ROOT_FOR_HOOK" ] && [ -f "$REPO_ROOT_FOR_HOOK/hooks/pre-push" ]; then
+    if ! diff -q "$0" "$REPO_ROOT_FOR_HOOK/hooks/pre-push" >/dev/null 2>&1; then
+        echo "pre-push hook updated from hooks/pre-push (was stale — takes effect next push)"
+        cp "$REPO_ROOT_FOR_HOOK/hooks/pre-push" "$0" && chmod +x "$0" || true
+    fi
+fi
+
+# stdin provides: <local ref> <local sha> <remote ref> <remote sha>
+# Git sends all-zero SHA for deletions. Read all refs into an array first
+# so stdin is available for both the delete-check and the test-file scan.
+PUSH_REFS=()
+while IFS= read -r line; do
+    PUSH_REFS+=("$line")
+done
+
+# --- Skip CI gate when all refs are being deleted ---
+IS_DELETE_ONLY=true
+for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
+    local_sha="$(echo "$line" | awk '{print $2}')"
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        IS_DELETE_ONLY=false
         break
     fi
 done
 
+if [ "$IS_DELETE_ONLY" = true ]; then
+    echo "Branch deletion — skipping CI gate"
+    exit 0
+fi
+
+# --- Detect doc-only changes for the fast-path gate ---
+# A push is doc-only if every changed file matches one of:
+#   *.md, *.txt, LICENSE*, CHANGELOG*, docs/**, .github/ISSUE_TEMPLATE/**,
+#   or */LICENSE* (crate-subdir license files, e.g. crates/*/LICENSE-APACHE)
+# Doc-only pushes skip code gates entirely instead of running the full
+# ci-gate, since the test suite and workspace-wide rustfmt check are
+# pointless for prose-only changes and can fail spuriously on Windows (#4047).
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+DOC_ONLY=true
+TEST_FILES_CHANGED=false
+HAS_DIFFABLE_REF=false
+# Track unique crate names for the single-crate tier.
+# We use a newline-separated string rather than an array for POSIX compat.
+SINGLE_CRATE_NAMES=""
+SINGLE_CRATE_ALL_UNDER_CRATES=true
+for line in "${PUSH_REFS[@]+"${PUSH_REFS[@]}"}"; do
+    read -r _local_ref local_sha _remote_ref remote_sha <<< "$line"
+    # For new branches, compare against merge-base with origin/master
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        remote_sha="$(git merge-base "$local_sha" origin/master 2>/dev/null || echo "$local_sha")"
+    fi
+    CHANGED_FILES="$(git diff --name-only "$remote_sha" "$local_sha" 2>/dev/null || true)"
+    if [ -n "$CHANGED_FILES" ]; then
+        HAS_DIFFABLE_REF=true
+    fi
+    while IFS= read -r changed; do
+        [ -z "$changed" ] && continue
+        case "$changed" in
+            *.md|*.txt|LICENSE*|CHANGELOG*|docs/*|.github/ISSUE_TEMPLATE/*|*/LICENSE*)
+                ;;
+            *)
+                DOC_ONLY=false
+                # Track whether this code file lives under crates/<name>/
+                case "$changed" in
+                    crates/*/*)
+                        # Extract the crate directory name: crates/<name>/...
+                        crate_name="${changed#crates/}"
+                        crate_name="${crate_name%%/*}"
+                        # Append to list if not already present
+                        if ! printf '%s\n' "$SINGLE_CRATE_NAMES" | grep -qxF "$crate_name" 2>/dev/null; then
+                            SINGLE_CRATE_NAMES="${SINGLE_CRATE_NAMES}${crate_name}
+"
+                        fi
+                        ;;
+                    *)
+                        # File is outside crates/ — can't be single-crate
+                        SINGLE_CRATE_ALL_UNDER_CRATES=false
+                        ;;
+                esac
+                ;;
+        esac
+    done <<< "$CHANGED_FILES"
+    if echo "$CHANGED_FILES" | grep -qE '^crates/.*/tests/.*\.rs$'; then
+        TEST_FILES_CHANGED=true
+    fi
+done
+
+# If we couldn't compute a diff for any ref (e.g., shallow clone, missing
+# remote), assume code changes and run the full gate to be safe.
+if [ "$HAS_DIFFABLE_REF" != true ]; then
+    DOC_ONLY=false
+fi
+
+if [ "$DOC_ONLY" = true ]; then
+    echo "📝 Doc-only push — skipping code gates"
+    echo "   (Skip with: git push --no-verify)"
+    echo "✅ Doc-only fast-path gate passed"
+    exit 0
+fi
+
+# --- Single-crate proportional gate ---
+# If every code change is under a single crates/<name>/ directory, run a
+# targeted cargo fmt/clippy/test -p <name> instead of the full workspace gate.
+# Falls back to the full gate if classification is ambiguous.
+SINGLE_CRATE_COUNT="$(printf '%s' "$SINGLE_CRATE_NAMES" | grep -c . 2>/dev/null || echo 0)"
+if [ "$SINGLE_CRATE_ALL_UNDER_CRATES" = true ] && [ "$SINGLE_CRATE_COUNT" = "1" ]; then
+    SINGLE_CRATE_DIR="$(printf '%s' "$SINGLE_CRATE_NAMES" | tr -d '[:space:]')"
+    # Resolve the Cargo package name from Cargo.toml, not the directory basename.
+    # This fixes the perl-lsp -> perl-lsp-rs mismatch (issue #4512).
+    # Falls back to directory name if cargo xtask is unavailable.
+    SINGLE_CRATE_NAME="$(cargo xtask resolve-package-name "crates/${SINGLE_CRATE_DIR}" 2>/dev/null || printf '%s' "$SINGLE_CRATE_DIR")"
+    echo "Single-crate push (${SINGLE_CRATE_DIR} -> ${SINGLE_CRATE_NAME}) — running targeted gate"
+    echo "   (Skip with: git push --no-verify)"
+    echo ""
+    run_single_crate_gate() {
+        cargo fmt -p "$SINGLE_CRATE_NAME" -- --check && \
+        cargo clippy -p "$SINGLE_CRATE_NAME" -- -D warnings && \
+        cargo test -p "$SINGLE_CRATE_NAME"
+    }
+    GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
+    trap 'rm -f "$GATE_LOG"' EXIT
+    set +e
+    run_single_crate_gate 2>&1 | tee "$GATE_LOG"
+    GATE_STATUS=${PIPESTATUS[0]}
+    set -e
+    if [ "$GATE_STATUS" -ne 0 ]; then
+        echo ""
+        echo "❌ Single-crate gate failed (exit $GATE_STATUS)"
+        echo "   See bypass policy at the top of .git/hooks/pre-push for when"
+        echo "   --no-verify is appropriate."
+        exit "$GATE_STATUS"
+    fi
+    echo "✅ Single-crate gate passed"
+    exit 0
+fi
+
+echo "Running local fast gate before push: nix develop -c just pr-fast"
+echo "   (Skip with: git push --no-verify)"
+echo ""
+
+# --- Check if test files changed and CURRENT_STATUS.md needs updating ---
 if [ "$TEST_FILES_CHANGED" = true ] && [ -f "$REPO_ROOT/scripts/update-current-status.py" ]; then
     echo "📊 Test files changed — checking if docs/project/status/ is up to date..."
     if command -v python3 &>/dev/null; then
@@ -1845,28 +2035,134 @@ if [ "$TEST_FILES_CHANGED" = true ] && [ -f "$REPO_ROOT/scripts/update-current-s
     fi
 fi
 
-# Try nix develop first, fall back to just alone
-if command -v nix &>/dev/null && [ -f flake.nix ]; then
-    nix develop -c just ci-gate
-elif command -v just &>/dev/null; then
-    just ci-gate
-else
-    echo "⚠️  Neither 'nix develop' nor 'just' available, skipping pre-push gate"
-    echo "   Install just: cargo install just"
-    exit 0
+# --- Run the full gate, capturing output for failure-mode hints ---
+GATE_LOG="$(mktemp -t perl-lsp-prepush.XXXXXX.log 2>/dev/null || mktemp)"
+trap 'rm -f "$GATE_LOG"' EXIT
+
+run_gate() {
+    if command -v nix &>/dev/null && [ -f flake.nix ]; then
+        nix develop -c just pr-fast
+    elif command -v just &>/dev/null; then
+        just pr-fast
+    else
+        echo "⚠️  Neither 'nix develop' nor 'just' available, skipping pre-push gate"
+        echo "   Install just: cargo install just"
+        return 0
+    fi
+}
+
+set +e
+run_gate 2>&1 | tee "$GATE_LOG"
+GATE_STATUS=${PIPESTATUS[0]}
+set -e
+
+if [ "$GATE_STATUS" -ne 0 ]; then
+    echo ""
+    echo "❌ pr-fast failed (exit $GATE_STATUS) — checking for known issues..."
+    HINTED=false
+    if grep -q 'ci-parser-features-check' "$GATE_LOG" 2>/dev/null && \
+       grep -qE 'os error 5|Access is denied' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Known: Windows file-lock race in ci-parser-features-check (#3202)"
+        echo "     Workaround: re-run the gate, or use --no-verify if you're confident"
+        echo "     your change is unrelated to xtask/parser-features."
+        HINTED=true
+    fi
+    if grep -qE 'cargo (xtask )?fmt.*--check' "$GATE_LOG" 2>/dev/null && \
+       grep -qE 'Diff in|rustfmt' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Formatting drift — run \`cargo xtask fmt\` to auto-fix"
+        HINTED=true
+    fi
+    if grep -qE 'clippy::|warning: .*-> .*\.rs' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Clippy warnings — look for the error above and fix the warnings"
+        HINTED=true
+    fi
+    if grep -qE 'os error 206|filename.*too long|ERROR_FILENAME_EXCED' "$GATE_LOG" 2>/dev/null; then
+        echo "   • Windows CreateProcess command-line length limit (os error 206)"
+        echo "     'cargo fmt --all' passes all 1200+ source files in one command,"
+        echo "     exceeding the ~32K-char CreateProcess limit on Windows."
+        echo "     Fix: bash scripts/install-githooks.sh"
+        echo "     This installs the current hook which uses 'cargo xtask fmt' (per-crate)."
+        echo "     See: docs/contributing/FIRST_PR.md"
+        HINTED=true
+    fi
+    if [ "$HINTED" = false ]; then
+        echo "   No known-issue patterns matched. Read the gate output above."
+    fi
+    echo ""
+    echo "   See bypass policy at the top of .git/hooks/pre-push for when"
+    echo "   --no-verify is appropriate."
+    exit "$GATE_STATUS"
+fi
+"#
+}
+
+fn cmd_install_githooks(repo_root: &Path) -> Result<i32> {
+    let hooks_dir = resolve_git_hooks_dir(repo_root)?;
+    fs::create_dir_all(&hooks_dir)?;
+
+    let pre_commit_hook = r#"#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_USER_NAME="$(git config user.name 2>/dev/null || true)"
+GIT_USER_EMAIL="$(git config user.email 2>/dev/null || true)"
+
+if [ "$GIT_USER_NAME" = "Codex Release Validation" ] || \
+   [ "$GIT_USER_EMAIL" = "codex-release-validation@example.invalid" ] || \
+   [ "$GIT_USER_NAME" = "xtask hook tests" ] || \
+   [ "$GIT_USER_EMAIL" = "xtask@example.invalid" ]; then
+    echo "❌ Refusing commit with placeholder git identity"
+    echo "   user.name:  $GIT_USER_NAME"
+    echo "   user.email: $GIT_USER_EMAIL"
+    echo ""
+    echo "   Fix this repo-local override first:"
+    echo "   git config --local --unset-all user.name"
+    echo "   git config --local --unset-all user.email"
+    exit 1
 fi
 "#;
-    fs::write(&hook_path, format!("{hook}\n"))
+    write_git_hook(&hooks_dir.join("pre-commit"), pre_commit_hook)?;
+
+    write_git_hook(&hooks_dir.join("pre-push"), pre_push_hook_script())?;
+
+    println!("✅ Installed pre-commit and pre-push hooks");
+    println!("   The pre-commit hook blocks known placeholder git identities");
+    println!("   The pre-push hook runs 'nix develop -c just pr-fast' before each push");
+    println!("   Skip with: git commit --no-verify / git push --no-verify");
+    Ok(0)
+}
+
+fn resolve_git_hooks_dir(repo_root: &Path) -> Result<PathBuf> {
+    let output = Command::new("git")
+        .current_dir(repo_root)
+        .args(["rev-parse", "--git-path", "hooks"])
+        .output()
+        .with_context(|| format!("resolving git hooks dir from {}", repo_root.display()))?;
+
+    if !output.status.success() {
+        return Err(color_eyre::eyre::eyre!(
+            "git rev-parse --git-path hooks failed in {}: {}",
+            repo_root.display(),
+            String::from_utf8_lossy(&output.stderr).trim_end()
+        ));
+    }
+
+    let hooks_path = String::from_utf8(output.stdout)
+        .context("git rev-parse --git-path hooks emitted non-UTF8 output")?;
+    let hooks_path = hooks_path.trim();
+    let hooks_dir = PathBuf::from(hooks_path);
+
+    Ok(if hooks_dir.is_absolute() { hooks_dir } else { repo_root.join(hooks_dir) })
+}
+
+fn write_git_hook(hook_path: &Path, hook: &str) -> Result<()> {
+    fs::write(hook_path, format!("{hook}\n"))
         .with_context(|| format!("writing {:?}", hook_path))?;
     #[cfg(unix)]
     {
-        fs::set_permissions(&hook_path, fs::Permissions::from_mode(0o755))
+        fs::set_permissions(hook_path, fs::Permissions::from_mode(0o755))
             .with_context(|| format!("setting executable bit for {:?}", hook_path))?;
     }
-    println!("✅ Installed pre-push hook");
-    println!("   The hook runs 'nix develop -c just ci-gate' before each push");
-    println!("   Skip with: git push --no-verify");
-    Ok(0)
+    Ok(())
 }
 
 fn read_required_usize(path: &Path) -> Result<usize> {
@@ -2222,8 +2518,8 @@ fn cmd_check_local(repo_root: &Path) -> Result<i32> {
     println!();
 
     println!("{}1. Format check...{}", YELLOW, NC);
-    if command_status_strict(repo_root, "cargo", &["fmt", "--all", "--", "--check"], &[]).is_err() {
-        println!("{}✗ Format check failed - run 'cargo fmt --all' to fix{}", RED, NC);
+    if command_status_strict(repo_root, "cargo", &["xtask", "fmt", "--check"], &[]).is_err() {
+        println!("{}✗ Format check failed - run 'cargo xtask fmt' to fix{}", RED, NC);
         return Ok(1);
     }
     println!();
@@ -2455,29 +2751,18 @@ fn cmd_check_parse_errors(repo_root: &Path) -> Result<i32> {
 
     let baseline = read_required_usize(&baseline_file)?;
 
-    let _ = command_status(
-        repo_root,
-        "cargo",
-        &[
-            "run",
-            "-p",
-            "xtask",
-            "--no-default-features",
-            "-q",
-            "--",
-            "corpus-audit",
-            "--fresh",
-            "--corpus-path",
-            ".",
-            "--output",
-            report_file.to_string_lossy().as_ref(),
-        ],
-        &[],
-    )?;
-
+    // NOTE (issue #3202): we deliberately do NOT spawn `cargo run -p xtask -- corpus-audit`
+    // here. The justfile target `ci-parser-features-check` runs corpus-audit first, then
+    // invokes this check. Spawning xtask from inside this binary used to cause a Windows
+    // file-lock race: the parent xtask.exe was still running and Windows blocks relinking
+    // a running executable, surfacing as `os error 5: Access is denied`. By requiring the
+    // report to exist already, we keep this command pure (just JSON read + comparison) and
+    // unblock all Windows contributors from running `just ci-gate` locally.
     if !report_file.is_file() {
         return Err(color_eyre::eyre::eyre!(
-            "Report file not generated: {}",
+            "Report file not found: {}\n\nRun `cargo xtask corpus-audit --fresh --corpus-path . --output {}` first, \
+             or use `just ci-parser-features-check` which runs both steps in order.",
+            report_file.display(),
             report_file.display()
         ));
     }
@@ -2808,6 +3093,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     let mut panic_offenders = Vec::new();
 
     for path in walk_rust_source_files_for_ci_checks(repo_root)? {
+        let rel = display_path(repo_root, &path);
         let lines = read_lines(&path)?;
         let test_start = first_cfg_test_line_number(&path).unwrap_or(usize::MAX);
         for (index, line) in lines.iter().enumerate() {
@@ -2821,12 +3107,13 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
                     || line.contains("s.expect(")
                     || line.contains("self.context.expect("))
             {
-                unwrap_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+                unwrap_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
-            if panic_re.is_match(line) && !comment_re.is_match(line) {
-                panic_offenders
-                    .push(format!("{}:{line_no}:{line}", display_path(repo_root, &path)));
+            if panic_re.is_match(line)
+                && !comment_re.is_match(line)
+                && !is_allowlisted_prod_panic_hit(&rel, line)
+            {
+                panic_offenders.push(format!("{rel}:{line_no}:{line}"));
             }
         }
     }
@@ -2866,6 +3153,11 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
         return Ok(1);
     }
     Ok(0)
+}
+
+fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
+    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
+        && line.contains("regex failed to compile")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -3000,10 +3292,8 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     } else {
         repo_root.join(docs_dir)
     };
-    let home_machine = Regex::new(r"/home/[^u]")?;
-    let home_steven = Regex::new(r"/home/steven")?;
-    let users_machine = Regex::new(r"/Users/[^N]")?;
-    let users_placeholder = Regex::new(r"/Users/Name")?;
+    let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+    let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
 
     let mut hard_failures = Vec::new();
     let mut warnings = Vec::new();
@@ -3024,13 +3314,10 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
         let contents = fs::read_to_string(path)?;
         for (line_no, line) in contents.lines().enumerate() {
             let number = line_no + 1;
-            if home_machine.is_match(line) && !line.contains("/home/user") {
+            if has_machine_specific_home_path(line, &home_user_path) {
                 hard_failures.push(format!("{rel}:{number}:{line}"));
             }
-            if home_steven.is_match(line) {
-                hard_failures.push(format!("{rel}:{number}:{line}"));
-            }
-            if users_machine.is_match(line) && !users_placeholder.is_match(line) {
+            if has_machine_specific_users_path(line, &users_name_path) {
                 warnings.push(format!("{rel}:{number}:{line}"));
             }
         }
@@ -3060,11 +3347,28 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
     Ok(1)
 }
 
+fn has_machine_specific_home_path(line: &str, home_user_path: &Regex) -> bool {
+    home_user_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| !name.as_str().eq_ignore_ascii_case("user"))
+    })
+}
+
+fn has_machine_specific_users_path(line: &str, users_name_path: &Regex) -> bool {
+    users_name_path.captures_iter(line).any(|captures| {
+        captures.get(1).is_some_and(|name| {
+            let value = name.as_str();
+            !(value.eq_ignore_ascii_case("name") || value.eq_ignore_ascii_case("user"))
+        })
+    })
+}
+
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
     // "xtask" is excluded because it is build tooling whose source code documents and implements
     // the TODO-scanner itself (unwired_scan.rs), producing unavoidable self-referential matches.
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask"];
+    // ".claude" is excluded because it contains ephemeral agent worktrees and tooling state that
+    // are gitignored — the scanner should not see them as project source.
+    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive", "xtask", ".claude"];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
         repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),
@@ -3083,7 +3387,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("complex_paren_args_tests.rs"),
     ];
 
-    let todo_re = Regex::new(r"TODO|FIXME")?;
+    let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
     let entries = collect_todo_hits(repo_root, &exclude_dirs, &exclude_files, &todo_re)?;
 
     if list_mode {
@@ -3187,10 +3491,8 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
         println!();
     }
 
-    let exit_violations: Vec<String> = exits
-        .into_iter()
-        .filter(|hit| !hit.contains("/bin/") && !hit.contains("/lifecycle.rs:"))
-        .collect();
+    let exit_violations: Vec<String> =
+        exits.into_iter().filter(|hit| !is_allowlisted_exit_hit(hit)).collect();
 
     if !exit_violations.is_empty() {
         println!("{RED}ERROR: std::process::exit() found outside allowlist{NC}");
@@ -3228,9 +3530,7 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
 
 fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
     let rel = path.strip_prefix(repo_root).unwrap_or(path).to_path_buf();
-    let mut rel_string = String::new();
-    rel_string.push('/');
-    rel_string.push_str(&rel.display().to_string());
+    let rel_string = format!("/{}", normalize_path_for_match(&rel.display().to_string()));
 
     if rel_string.contains("/tests/") {
         return Ok(true);
@@ -3247,17 +3547,7 @@ fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
     }) {
         return Ok(true);
     }
-    for excluded in [
-        "tree-sitter-perl-c",
-        "tree-sitter-perl-rs",
-        "perl-tdd-support",
-        "perl-ts-heredoc-analysis",
-        "perl-ts-logos-lexer",
-        "perl-ts-heredoc-parser",
-        "perl-ts-partial-ast",
-        "perl-ts-advanced-parsers",
-        "perl-ci-hygiene",
-    ] {
+    for excluded in ["tree-sitter-perl-c", "perl-tdd-support", "perl-ci-hygiene"] {
         if rel_string.contains(&format!("/{excluded}/")) {
             return Ok(true);
         }
@@ -3267,6 +3557,15 @@ fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
         || path_has_component(path, "benches")
         || path_has_component(path, "build.rs")
         || path_has_component(path, "examples"))
+}
+
+fn normalize_path_for_match(value: &str) -> String {
+    value.replace('\\', "/")
+}
+
+fn is_allowlisted_exit_hit(hit: &str) -> bool {
+    let normalized = normalize_path_for_match(hit);
+    normalized.contains("/bin/") || normalized.contains("/lifecycle.rs:")
 }
 
 fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result<i32> {
@@ -3528,9 +3827,21 @@ fn collect_todo_hits(
             continue;
         }
         let contents = read_lines(path)?;
+        let mut raw_string_state = None;
+        let mut in_block_comment = false;
         for (line_no, line) in contents.iter().enumerate() {
             let match_line = if is_rust {
-                has_unlinked_todo_in_rust_line(line, todo_re)
+                has_unlinked_todo_in_rust_line_with_context(
+                    line,
+                    todo_re,
+                    &mut raw_string_state,
+                    &mut in_block_comment,
+                )
+            } else if path
+                .extension()
+                .is_some_and(|ext| matches!(ext.to_str(), Some("pl" | "pm" | "t")))
+            {
+                has_unlinked_todo_in_perl_line(line, todo_re)
             } else {
                 has_unlinked_todo_in_hash_line(line, todo_re)
             };
@@ -3543,37 +3854,339 @@ fn collect_todo_hits(
     Ok(hits)
 }
 
+#[cfg(test)]
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
-    let mut has_hit = false;
-    if let Some(idx) = line.find("//")
-        && !is_url_like_hash_comment(line, idx)
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+    let mut raw_string_state = None;
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        &mut in_block_comment,
+    )
+}
+
+#[cfg(test)]
+fn has_unlinked_todo_in_rust_line_with_block_context(
+    line: &str,
+    token_re: &Regex,
+    in_block_comment: &mut bool,
+) -> bool {
+    let mut raw_string_state = None;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        &mut raw_string_state,
+        in_block_comment,
+    )
+}
+
+#[cfg(test)]
+fn has_unlinked_todo_in_rust_line_with_state(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+) -> bool {
+    let mut in_block_comment = false;
+    has_unlinked_todo_in_rust_line_with_context(
+        line,
+        token_re,
+        raw_string_state,
+        &mut in_block_comment,
+    )
+}
+
+fn has_unlinked_todo_in_rust_line_with_context(
+    line: &str,
+    token_re: &Regex,
+    raw_string_state: &mut Option<usize>,
+    in_block_comment: &mut bool,
+) -> bool {
+    if *in_block_comment {
+        if let Some(end_idx) = find_block_comment_end(line, 0) {
+            let mut found = has_unlinked_token(&line[..end_idx], token_re);
+            *in_block_comment = false;
+            found |= has_unlinked_todo_in_rust_line_with_context(
+                &line[end_idx + 2..],
+                token_re,
+                raw_string_state,
+                in_block_comment,
+            );
+            return found;
+        }
+        return has_unlinked_token(line, token_re);
     }
-    if let Some(idx) = line.find("/*")
-        && has_unlinked_token(&line[idx + 2..], token_re)
-    {
-        has_hit = true;
+
+    for (idx, _) in line.match_indices("//") {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
+            continue;
+        }
+        if is_url_like_hash_comment(line, idx) {
+            continue;
+        }
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
-    let trimmed = line.trim_start();
-    if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
-        has_hit = true;
+
+    for (idx, _) in line.match_indices("/*") {
+        if is_index_in_rust_literal(line, idx, *raw_string_state) {
+            continue;
+        }
+        if is_likely_string_literal_comment_start(line, idx) {
+            continue;
+        }
+        if let Some(end_idx) = find_block_comment_end(line, idx + 2) {
+            if has_unlinked_token(&line[idx + 2..end_idx], token_re) {
+                return true;
+            }
+            continue;
+        }
+        *in_block_comment = true;
+        return has_unlinked_token(&line[idx + 2..], token_re);
     }
-    has_hit
+
+    *raw_string_state = rust_raw_string_state_after_line(line, *raw_string_state);
+    false
+}
+
+fn find_block_comment_end(line: &str, start_idx: usize) -> Option<usize> {
+    let mut depth = 1usize;
+    let mut cursor = start_idx;
+
+    while cursor < line.len() {
+        let next_open = line[cursor..]
+            .match_indices("/*")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+        let next_close = line[cursor..]
+            .match_indices("*/")
+            .map(|(rel_idx, _)| cursor + rel_idx)
+            .find(|&idx| !is_index_in_rust_literal(line, idx, None));
+
+        match (next_open, next_close) {
+            (_, None) => return None,
+            (None, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
+            (Some(open_idx), Some(close_idx)) if open_idx < close_idx => {
+                depth += 1;
+                cursor = open_idx + 2;
+            }
+            (_, Some(close_idx)) => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(close_idx);
+                }
+                cursor = close_idx + 2;
+            }
+        }
+    }
+
+    None
 }
 
 fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
-    if let Some(idx) = line.find('#') {
-        if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
-            return false;
+    let Some(idx) = find_hash_comment_start(line, false) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+fn has_unlinked_todo_in_perl_line(line: &str, token_re: &Regex) -> bool {
+    let Some(idx) = find_hash_comment_start(line, true) else {
+        return false;
+    };
+    has_unlinked_token(&line[idx + 1..], token_re)
+}
+
+#[derive(Clone, Copy)]
+struct PerlQuoteLikeState {
+    close_delimiter: char,
+    remaining_closures: u8,
+    escaped: bool,
+}
+
+fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut in_backtick = false;
+    let mut prev_was_escape_single = false;
+    let mut prev_was_escape_double = false;
+    let mut prev_was_escape_backtick = false;
+    let mut perl_quote_like: Option<PerlQuoteLikeState> = None;
+
+    for (idx, ch) in line.char_indices() {
+        if let Some(mut quote_like) = perl_quote_like {
+            if quote_like.escaped {
+                quote_like.escaped = false;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == '\\' {
+                quote_like.escaped = true;
+                perl_quote_like = Some(quote_like);
+                continue;
+            }
+            if ch == quote_like.close_delimiter {
+                quote_like.remaining_closures = quote_like.remaining_closures.saturating_sub(1);
+                if quote_like.remaining_closures == 0 {
+                    perl_quote_like = None;
+                } else {
+                    perl_quote_like = Some(quote_like);
+                }
+            } else {
+                perl_quote_like = Some(quote_like);
+            }
+            continue;
         }
-        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
-            return false;
+
+        if in_single {
+            if prev_was_escape_single {
+                prev_was_escape_single = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_single = true;
+                continue;
+            }
+            if ch == '\'' {
+                in_single = false;
+                prev_was_escape_single = false;
+            }
+            continue;
         }
-        has_unlinked_token(&line[idx + 1..], token_re)
+        if in_double {
+            if prev_was_escape_double {
+                prev_was_escape_double = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_double = true;
+                continue;
+            }
+            if ch == '"' {
+                in_double = false;
+            }
+            continue;
+        }
+        if in_backtick {
+            if prev_was_escape_backtick {
+                prev_was_escape_backtick = false;
+                continue;
+            }
+            if ch == '\\' {
+                prev_was_escape_backtick = true;
+                continue;
+            }
+            if ch == '`' {
+                in_backtick = false;
+            }
+            continue;
+        }
+
+        if perl_mode && let Some(state) = perl_quote_like_state_at_delimiter(line, idx) {
+            perl_quote_like = Some(state);
+            continue;
+        }
+
+        match ch {
+            '\'' => {
+                in_single = true;
+                prev_was_escape_single = false;
+            }
+            '"' => {
+                in_double = true;
+                prev_was_escape_double = false;
+            }
+            '`' => {
+                in_backtick = true;
+                prev_was_escape_backtick = false;
+            }
+            '#' => {
+                // Bash/Perl parameter-length expansion (`${#var}`) is not a comment.
+                if idx >= 2 && line.as_bytes().get(idx - 2..idx) == Some(b"${") {
+                    continue;
+                }
+                if idx == 0 && line.as_bytes().get(1) == Some(&b'!') {
+                    return None;
+                }
+                if idx == 0 {
+                    return Some(idx);
+                }
+                if perl_mode {
+                    return Some(idx);
+                }
+                if let Some(prev) = line[..idx].chars().next_back()
+                    && (prev.is_whitespace()
+                        || matches!(
+                            prev,
+                            ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>' | ','
+                        ))
+                {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn perl_quote_like_state_at_delimiter(
+    line: &str,
+    delimiter_idx: usize,
+) -> Option<PerlQuoteLikeState> {
+    let delimiter = line[delimiter_idx..].chars().next()?;
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_ascii_whitespace() || delimiter == '_' {
+        return None;
+    }
+
+    let prefix = &line[..delimiter_idx];
+    let mut op_end = prefix.len();
+
+    while op_end > 0 && prefix.as_bytes()[op_end - 1].is_ascii_whitespace() {
+        op_end -= 1;
+    }
+    if op_end == 0 {
+        return None;
+    }
+
+    let mut op_start = op_end;
+    while op_start > 0 && prefix.as_bytes()[op_start - 1].is_ascii_alphabetic() {
+        op_start -= 1;
+    }
+
+    if op_start == op_end {
+        return None;
+    }
+
+    if op_start > 0 {
+        let before = prefix.as_bytes()[op_start - 1];
+        if before.is_ascii_alphanumeric() || before == b'_' || matches!(before, b'$' | b'@' | b'%')
+        {
+            return None;
+        }
+    }
+
+    let op = &prefix[op_start..op_end];
+    let remaining_closures = if matches!(op, "s" | "tr" | "y") { 2 } else { 1 };
+    let close_delimiter = match delimiter {
+        '(' => ')',
+        '{' => '}',
+        '[' => ']',
+        '<' => '>',
+        other => other,
+    };
+    if matches!(op, "m" | "q" | "qq" | "qw" | "qx" | "qr" | "s" | "tr" | "y") {
+        Some(PerlQuoteLikeState { close_delimiter, remaining_closures, escaped: false })
     } else {
-        false
+        None
     }
 }
 
@@ -3585,6 +4198,201 @@ fn is_url_like_hash_comment(line: &str, slash_idx: usize) -> bool {
     matches!(before, b'/' | b':' | b'"')
 }
 
+fn is_likely_string_literal_comment_start(line: &str, comment_idx: usize) -> bool {
+    if comment_idx == 0 {
+        return false;
+    }
+    matches!(line.as_bytes()[comment_idx - 1], b'"' | b'\'' | b'#')
+}
+
+fn is_index_in_rust_literal(
+    line: &str,
+    target_idx: usize,
+    initial_raw_hashes: Option<usize>,
+) -> bool {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes = initial_raw_hashes;
+
+    while i < bytes.len() && i < target_idx {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    in_string || in_char || raw_hashes.is_some()
+}
+
+fn is_prefixed_string_start(bytes: &[u8], idx: usize, prefix: u8) -> bool {
+    bytes[idx] == prefix && idx + 1 < bytes.len() && bytes[idx + 1] == b'"'
+}
+
+fn raw_string_prefix_len(bytes: &[u8], idx: usize) -> usize {
+    if bytes[idx] == b'r' {
+        return 1;
+    }
+    if idx + 1 < bytes.len() && (bytes[idx] == b'b' || bytes[idx] == b'c') && bytes[idx + 1] == b'r'
+    {
+        return 2;
+    }
+    0
+}
+
+fn rust_raw_string_state_after_line(
+    line: &str,
+    initial_raw_hashes: Option<usize>,
+) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    let mut in_char = false;
+    let mut escape = false;
+    let mut raw_hashes = initial_raw_hashes;
+
+    while i < bytes.len() {
+        if let Some(hash_count) = raw_hashes {
+            if bytes[i] == b'"'
+                && i + 1 + hash_count <= bytes.len()
+                && bytes[i + 1..i + 1 + hash_count].iter().all(|&b| b == b'#')
+            {
+                raw_hashes = None;
+                i += 1 + hash_count;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_string {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_char {
+            if escape {
+                escape = false;
+            } else if bytes[i] == b'\\' {
+                escape = true;
+            } else if bytes[i] == b'\'' {
+                in_char = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if is_prefixed_string_start(bytes, i, b'b') || is_prefixed_string_start(bytes, i, b'c') {
+            in_string = true;
+            i += 2;
+            continue;
+        }
+
+        let raw_prefix_len = raw_string_prefix_len(bytes, i);
+        if raw_prefix_len > 0 {
+            let mut j = i + raw_prefix_len;
+            while j < bytes.len() && bytes[j] == b'#' {
+                j += 1;
+            }
+            if j < bytes.len() && bytes[j] == b'"' {
+                raw_hashes = Some(j.saturating_sub(i + raw_prefix_len));
+                i = j + 1;
+                continue;
+            }
+        }
+
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+
+        if bytes[i] == b'\'' {
+            in_char = true;
+            i += 1;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    raw_hashes
+}
+
 fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
     for m in token_re.find_iter(comment) {
         let suffix = &comment[m.end()..];
@@ -3592,11 +4400,35 @@ fn has_unlinked_token(comment: &str, token_re: &Regex) -> bool {
             return true;
         }
     }
+    let upper_comment = comment.to_ascii_uppercase();
+    for token in ["TODO", "FIXME"] {
+        for (idx, _) in upper_comment.match_indices(token) {
+            if !is_ascii_word_boundary(comment, idx, idx + token.len()) {
+                continue;
+            }
+            let suffix = &comment[idx + token.len()..];
+            if !linked_marker(suffix) {
+                return true;
+            }
+        }
+    }
     false
 }
 
+fn is_ascii_word_boundary(s: &str, start: usize, end: usize) -> bool {
+    let bytes = s.as_bytes();
+    let prev_ok =
+        start == 0 || !bytes[start - 1].is_ascii_alphanumeric() && bytes[start - 1] != b'_';
+    let next_ok = end >= bytes.len() || !bytes[end].is_ascii_alphanumeric() && bytes[end] != b'_';
+    prev_ok && next_ok
+}
+
 fn linked_marker(suffix: &str) -> bool {
-    let suffix = suffix.trim_start();
+    let mut suffix = suffix.trim_start();
+    while let Some(next) = suffix.strip_prefix(':').or_else(|| suffix.strip_prefix('-')) {
+        suffix = next.trim_start();
+    }
+
     let Some(rest) = suffix.strip_prefix("(#") else {
         return false;
     };
@@ -3687,6 +4519,7 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
 fn categorize_ignore(reason: &str, context: &str) -> String {
     let reason = reason.trim().to_lowercase();
     let context = context.to_lowercase();
+    let reason_no_space = reason.replace(' ', "");
 
     if reason.starts_with("manual:")
         || reason.contains("manual ")
@@ -3726,6 +4559,7 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         return "bug".to_string();
     }
     if reason.starts_with("todo:")
+        || reason_no_space.starts_with("todo(#")
         || reason.starts_with("infra:")
         || reason.contains("infra ")
         || reason.contains("fixme")
@@ -3749,7 +4583,8 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
         || reason.contains("pending")
         || reason.contains("when.implemented")
         || reason.contains("remove.when")
-        || reason.contains("ac")
+        || reason.contains("ac:")
+        || reason.contains("ac ")
         || reason.contains("not.yet")
         || reason.contains("tdd.scaffold")
         || reason.contains("scaffold")
@@ -3825,6 +4660,9 @@ mod tests {
     fn linked_marker_requires_parenthesized_issue_number() {
         assert!(linked_marker("(#123)"));
         assert!(linked_marker("   (#42) trailing text"));
+        assert!(linked_marker(": (#42) trailing text"));
+        assert!(linked_marker(" - (#42) trailing text"));
+        assert!(linked_marker(":- (#42) trailing text"));
         assert!(!linked_marker("#123"));
         assert!(!linked_marker("(#)"));
         assert!(!linked_marker("(#12"));
@@ -3833,24 +4671,365 @@ mod tests {
 
     #[test]
     fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
-        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
 
         assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// todo: investigate", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// FiXmE: investigate", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("// todo(#123): tracked", &todo_re));
         assert!(!has_unlinked_todo_in_rust_line("let u = \"http://TODO\";", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let u = \"http://TODO\"; // TODO: investigate",
+            &todo_re
+        ));
         assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
 
         Ok(())
     }
 
     #[test]
-    fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
+    fn rust_todo_detection_ignores_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = r#\"// TODO in literal\"#;", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = r#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_c_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in literal\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in literal */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = c\"safe literal\"; // TODO: follow up",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_raw_string_content() -> Result<()> {
         let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = r#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_multiline_c_raw_string_content() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut raw_state = None;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "let s = cr#\"",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state(
+            "// TODO in multiline C raw literal",
+            &todo_re,
+            &mut raw_state,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_state("\"#;", &todo_re, &mut raw_state,));
+        assert!(has_unlinked_todo_in_rust_line_with_state(
+            "// TODO: actual follow-up comment",
+            &todo_re,
+            &mut raw_state,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_non_raw_string_comment_markers() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"not a comment // TODO in literal\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = \"block marker /* FIXME in literal */\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "let s = \"safe literal\"; // TODO: follow up",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn todo_detection_uses_word_boundaries() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("// METHODOLOGY notes", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("// PREFIXME suffix", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("// TODO: real marker", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi # FIXME: real marker", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_c_string_literals() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line("let s = c\"// TODO in C string\";", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let s = cr#\"/* FIXME in C raw string */\"#;",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line("let s = c\"safe\"; // TODO: follow up", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_scans_only_block_comment_text() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* tracked */ let s = \"TODO in code string\";",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_rust_line(
+            "/* TODO: follow up */ let s = \"safe\";",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "/* TODO(#123): tracked */ let s = \"safe\";",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_tracks_multiline_block_comments_across_lines() -> Result<()> {
+        let todo_re = Regex::new(r"\b(?:TODO|FIXME)\b")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* context",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(has_unlinked_todo_in_rust_line_with_block_context(
+            "  TODO: capture this follow-up",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(in_block_comment);
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "*/ let x = 1;",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_linked_todos_inside_multiline_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+        let mut in_block_comment = false;
+
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            "/* header",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " * TODO(#123): tracked",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!has_unlinked_todo_in_rust_line_with_block_context(
+            " */",
+            &todo_re,
+            &mut in_block_comment,
+        ));
+        assert!(!in_block_comment);
+
+        Ok(())
+    }
+
+    #[test]
+    fn rust_todo_detection_handles_nested_block_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO: follow up */",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_rust_line(
+            "let x = 1; /* outer /* nested */ TODO(#42): tracked */",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
 
         assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("len=${#TODO_COUNT}", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi;# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi;# fixme: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"#not-a-comment\" # TODO: follow up",
+            &todo_re,
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("echo '# TODO in string' && true", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line(r"print 'it\'s # TODO in string';", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo '# TODO in string' # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re,));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            r"print 'it\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line("echo ok&&# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo ok||# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("cat <# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("cat ># TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("len=${#value} # TODO: follow up", &todo_re));
         assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi&&# TODO: follow up", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi||# TODO: follow up", &todo_re));
         assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo `printf '# TODO in backticks'`", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo `printf '# TODO in backticks'` # TODO: follow up",
+            &todo_re
+        ));
+        assert!(has_unlinked_todo_in_hash_line("my @x = (1,# TODO: follow up", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("my @x = (1,# TODO(#77): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("print 'it\\'s # TODO in string';", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line(
+            "print 'it\\'s # TODO in string'; # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' && true",
+            &todo_re,
+        ));
+        assert!(has_unlinked_todo_in_hash_line(
+            "printf $'it\\'s # TODO in string' # TODO: follow up",
+            &todo_re,
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_escaped_quotes_before_comment() -> Result<()> {
+        let todo_re = Regex::new(r"(?i)\b(?:todo|fixme)\b")?;
+
+        assert!(has_unlinked_todo_in_hash_line(
+            "echo \"quoted \\\"value\\\"\" # TODO: follow up",
+            &todo_re
+        ));
+        assert!(!has_unlinked_todo_in_hash_line(
+            "echo \"quoted # TODO in string\" && true",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+
+    #[test]
+    fn perl_todo_detection_allows_comment_start_without_whitespace() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_perl_line("print# TODO: perl comment", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = '# TODO in string';", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("print# TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $re = m#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = q#TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = qq #TODO#;", &todo_re));
+        assert!(!has_unlinked_todo_in_perl_line("my $s = s#foo#TODO#;", &todo_re));
+        assert!(has_unlinked_todo_in_perl_line(
+            "my $s = s#foo#bar#; # TODO: add edge-cases",
+            &todo_re
+        ));
+
+        Ok(())
+    }
+    #[test]
+    fn home_path_detection_only_allows_generic_user_examples() -> Result<()> {
+        let home_user_path = Regex::new(r"/home/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_home_path(
+            "Use /home/user/project as the example.",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path(
+            "My path is /home/ubuntu/workspace/perl-lsp",
+            &home_user_path,
+        ));
+        assert!(has_machine_specific_home_path("Local path: /home/u/project", &home_user_path,));
+
+        Ok(())
+    }
+
+    #[test]
+    fn users_path_detection_only_allows_generic_name_examples() -> Result<()> {
+        let users_name_path = Regex::new(r"/Users/([A-Za-z0-9._-]+)")?;
+
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/Name/project",
+            &users_name_path,
+        ));
+        assert!(!has_machine_specific_users_path(
+            "Template: /Users/user/project",
+            &users_name_path,
+        ));
+        assert!(has_machine_specific_users_path(
+            "Personal path: /Users/alice/dev/perl-lsp",
+            &users_name_path,
+        ));
 
         Ok(())
     }
@@ -3859,8 +5038,12 @@ mod tests {
     fn categorize_ignore_maps_reasons_to_expected_buckets() {
         assert_eq!(categorize_ignore("manual: run locally", ""), "manual");
         assert_eq!(categorize_ignore("TODO: requires CI setup", ""), "infra");
+        assert_eq!(categorize_ignore("TODO(#123): tracked follow-up", ""), "infra");
+        assert_eq!(categorize_ignore("TODO (#123): tracked follow-up", ""), "infra");
         assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
+        assert_eq!(categorize_ignore("AC: parser behavior", ""), "feature");
         assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
+        assert_eq!(categorize_ignore("cache invalidation follow-up", ""), "other");
         assert_eq!(categorize_ignore("ignore", ""), "bare");
         assert_eq!(categorize_ignore("some new reason", ""), "other");
     }
@@ -3870,5 +5053,444 @@ mod tests {
         assert_eq!(format_delta(5, 5), "0");
         assert_eq!(format_delta(7, 5), format!("{RED}+2{NC}"));
         assert_eq!(format_delta(4, 7), format!("{GREEN}-3{NC}"));
+    }
+
+    #[test]
+    fn normalize_path_for_match_converts_backslashes() {
+        assert_eq!(
+            normalize_path_for_match(r"crates\perl-ci-hygiene\src\main.rs"),
+            "crates/perl-ci-hygiene/src/main.rs"
+        );
+    }
+
+    #[test]
+    fn excluded_test_paths_skip_bin_directories() {
+        assert!(is_excluded_test_path(Path::new(
+            "crates/perl-workspace-index/src/bin/workspace_memory_profile.rs"
+        )));
+    }
+
+    #[test]
+    fn allowlisted_exit_hit_matches_windows_and_unix_paths() {
+        assert!(is_allowlisted_exit_hit(
+            r"crates\perl-parser\src\bin\perl-parse.rs:127:std::process::exit(0);"
+        ));
+        assert!(is_allowlisted_exit_hit(
+            "crates/perl-lsp-rs/src/runtime/dispatch/lifecycle.rs:29:std::process::exit(exit_code);"
+        ));
+        assert!(!is_allowlisted_exit_hit(
+            r#"crates\perl-ci-hygiene\src\main.rs:3196:println!("std::process::exit")"#
+        ));
+    }
+
+    #[test]
+    fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-heredoc-anti-patterns/src/lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(!is_allowlisted_prod_panic_hit(
+            "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
+            r#"                        _ => unreachable!(),"#
+        ));
+    }
+
+    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
+    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
+    // both forward-slash and backslash path separators (Windows vs Unix).
+    #[test]
+    fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
+        let all_seven = [
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("SOURCE_FILTER_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("REGEX_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
+            r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
+        ];
+        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
+        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        for line in &all_seven {
+            assert!(
+                is_allowlisted_prod_panic_hit(forward, line),
+                "forward-slash path must allowlist: {line}"
+            );
+            assert!(
+                is_allowlisted_prod_panic_hit(backward, line),
+                "backslash path must allowlist: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn quick_bench_uses_distinct_binaries_for_c_and_rust() {
+        // Regression guard for issue #3204: cmd_quick_bench previously called
+        // the same binary twice and reported the (meaningless) delta as a
+        // C-vs-Rust speedup. The fix wires the two columns to distinct
+        // binaries — this test pins those identifiers so a future refactor
+        // can't silently collapse them again.
+        assert_ne!(
+            RUST_BENCH_BIN, C_BENCH_BIN,
+            "C and Rust quick-bench must invoke different binaries"
+        );
+        assert_eq!(RUST_BENCH_BIN, "perl-parser-bench");
+        assert_eq!(C_BENCH_BIN, "bench_parser_c");
+        // Pin the manifest path for the C bench so a rename of the C crate
+        // directory is caught here rather than silently producing wrong timings.
+        assert_eq!(C_BENCH_MANIFEST, "crates/tree-sitter-perl-c/Cargo.toml");
+        // The C bench must use a manifest path (workspace-excluded crate) while
+        // the Rust bench uses a workspace package selector — they must diverge in
+        // invocation style, not just binary name.
+        assert!(!C_BENCH_MANIFEST.is_empty());
+    }
+
+    #[test]
+    fn three_way_bench_all_binaries_distinct() {
+        // Guard for the three-way comparison introduced after PR #3255
+        // (tree-sitter-perl-rs facade). All three parser binaries must be
+        // distinct so a future refactor can't silently collapse any pair.
+        assert_ne!(RUST_BENCH_BIN, C_BENCH_BIN, "raw Rust v3 and C binaries must differ");
+        assert_ne!(RUST_BENCH_BIN, FACADE_BENCH_BIN, "raw Rust v3 and facade binaries must differ");
+        assert_ne!(C_BENCH_BIN, FACADE_BENCH_BIN, "C and facade binaries must differ");
+        assert_eq!(FACADE_BENCH_BIN, "bench_facade");
+        assert_eq!(FACADE_BENCH_CRATE, "tree-sitter-perl-rs");
+        // Facade crate lives in the workspace, so it is invoked with -p, not
+        // --manifest-path.  Pin that it has no separate manifest string.
+        assert_ne!(FACADE_BENCH_CRATE, C_BENCH_MANIFEST);
+    }
+
+    #[test]
+    fn pre_push_hook_skips_gate_on_delete_only_push() {
+        let hook = pre_push_hook_script();
+        // The hook must detect when all refs have a zero local SHA (deletion).
+        assert!(
+            hook.contains("0000000000000000000000000000000000000000"),
+            "hook must check for all-zero SHA (deletion sentinel)"
+        );
+        assert!(
+            hook.contains("IS_DELETE_ONLY"),
+            "hook must track whether this is a delete-only push"
+        );
+        assert!(
+            hook.contains("Branch deletion"),
+            "hook must print a message when skipping due to deletion"
+        );
+        // Normal pushes (non-zero SHA) must still run the fast push gate.
+        assert!(
+            hook.contains("just pr-fast"),
+            "hook must invoke the fast PR gate for normal pushes"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_documents_bypass_policy() {
+        let hook = pre_push_hook_script();
+        // The header comment block must explain when --no-verify is appropriate
+        // so contributors can make informed decisions instead of bypassing blindly.
+        assert!(
+            hook.contains("Bypass policy"),
+            "hook must contain a 'Bypass policy' header explaining --no-verify rules"
+        );
+        assert!(hook.contains("OK to bypass"), "hook must list when bypass is acceptable");
+        assert!(hook.contains("NOT OK to bypass"), "hook must list when bypass is unacceptable");
+    }
+
+    #[test]
+    fn pre_push_hook_auto_unsets_core_bare_corruption() {
+        let hook = pre_push_hook_script();
+        // Issue #3205 — core.bare=true keeps getting silently set on the main
+        // checkout. The hook should self-heal by unsetting it before doing any
+        // work that would otherwise fail with "must be run in a work tree".
+        assert!(hook.contains("core.bare"), "hook must check for core.bare corruption");
+        assert!(
+            hook.contains("--unset core.bare"),
+            "hook must unset the core.bare flag when corruption is detected"
+        );
+        assert!(hook.contains("#3205"), "hook must reference issue #3205 in the warning message");
+    }
+
+    #[test]
+    fn pre_push_hook_has_doc_only_fast_path() {
+        let hook = pre_push_hook_script();
+        // Doc-only pushes (markdown, text, license, changelog) should run a
+        // lighter gate instead of the full ci-gate. The full test suite is
+        // pointless for prose-only changes.
+        assert!(
+            hook.contains("DOC_ONLY") || hook.contains("doc_only"),
+            "hook must detect doc-only diffs"
+        );
+        assert!(
+            hook.contains("Doc-only push") || hook.contains("doc-only push"),
+            "hook must announce when it picks the doc-only fast path"
+        );
+        // The lighter gate should NOT shell out to `just ci-gate` from the
+        // doc-only branch — it should exit before reaching that fallback.
+        // We verify this indirectly: the doc-only message must precede an exit.
+        let doc_idx = hook
+            .find("Doc-only push")
+            .or_else(|| hook.find("doc-only push"))
+            .expect("doc-only message must exist");
+        let after_doc = &hook[doc_idx..];
+        assert!(
+            after_doc.contains("exit 0"),
+            "doc-only branch must exit 0 without invoking the full gate"
+        );
+        let exit_idx = after_doc.find("exit 0").expect("doc-only branch must exit");
+        let doc_branch = &after_doc[..exit_idx];
+        assert!(
+            !doc_branch.contains("cargo fmt --all -- --check"),
+            "doc-only branch must not run workspace-wide rustfmt checks before exiting"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_doc_only_fast_path_matches_crate_subdir_license_files() {
+        let hook = pre_push_hook_script();
+        // Issue #3305: the doc-only case pattern must also match license files
+        // in crate subdirectories (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE).
+        // Pattern `LICENSE*` only matches root-level files; `*/LICENSE*` is required
+        // to handle files like `crates/*/LICENSE-APACHE` and `crates/*/LICENSE-MIT`.
+        assert!(
+            hook.contains("*/LICENSE*"),
+            "hook doc-only pattern must include '*/LICENSE*' to match crate-subdir license files              (e.g. crates/tree-sitter-perl-rs/LICENSE-APACHE) — see issue #3305"
+        );
+    }
+
+    #[test]
+    fn checked_in_pre_push_hook_matches_generated_hook() {
+        let checked_in = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../hooks/pre-push"))
+            .replace("\r\n", "\n");
+        let generated = pre_push_hook_script().replace("\r\n", "\n");
+
+        assert_eq!(
+            checked_in, generated,
+            "checked-in hooks/pre-push must stay in sync with the generated ci-hygiene hook"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_single_crate_tier() {
+        let hook = pre_push_hook_script();
+        // When all changed files are under crates/<name>/, run a targeted
+        // cargo fmt/clippy/test -p <name> instead of the workspace-wide
+        // just pr-fast.  This is the single-crate proportional tier.
+        assert!(
+            hook.contains("SINGLE_CRATE") || hook.contains("single_crate"),
+            "hook must detect single-crate diffs"
+        );
+        assert!(
+            hook.contains("cargo test -p"),
+            "hook must run targeted 'cargo test -p <crate>' for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo clippy -p") || hook.contains("cargo clippy --package"),
+            "hook must run targeted clippy for single-crate pushes"
+        );
+        assert!(
+            hook.contains("cargo fmt -p") || hook.contains("cargo fmt --package"),
+            "hook must run targeted fmt for single-crate pushes"
+        );
+        // The single-crate path must announce itself so the contributor knows
+        // why the gate is faster than usual.
+        assert!(
+            hook.contains("Single-crate") || hook.contains("single-crate"),
+            "hook must announce when it picks the single-crate fast path"
+        );
+        // The single-crate path must exit before reaching just pr-fast
+        let single_idx = hook
+            .find("Single-crate")
+            .or_else(|| hook.find("single-crate"))
+            .expect("single-crate message must exist");
+        let after_single = &hook[single_idx..];
+        assert!(
+            after_single.contains("exit 0"),
+            "single-crate branch must exit 0 without invoking just pr-fast"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_single_crate_tier_falls_back_on_cross_crate() {
+        let hook = pre_push_hook_script();
+        // When files span multiple crates, we must NOT run the single-crate
+        // path — it must fall through to the full just pr-fast gate.
+        // The safest way to verify this is: the hook must still invoke
+        // just pr-fast for the cross-crate (default) case.
+        assert!(
+            hook.contains("just pr-fast"),
+            "hook must still invoke just pr-fast for cross-crate pushes"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_explains_known_failure_modes() {
+        let hook = pre_push_hook_script();
+        // When the gate fails, the hook should hint at known issues so
+        // contributors can recognize them instead of bypassing in confusion.
+        assert!(hook.contains("#3202"), "hook must mention issue #3202 (Windows file-lock race)");
+        assert!(
+            hook.contains("cargo xtask fmt") || hook.contains("cargo fmt"),
+            "hook must suggest the fmt fix command on fmt failures"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_stale_hook_self_heal() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — when hooks/pre-push is updated in master, the installed
+        // .git/hooks/pre-push is only updated when install-githooks is re-run.
+        // The hook must detect its own staleness and auto-copy the fresh version.
+        assert!(
+            hook.contains("REPO_ROOT_FOR_HOOK") && hook.contains("hooks/pre-push"),
+            "hook must self-heal stale installation (issue #4220)"
+        );
+    }
+
+    #[test]
+    fn pre_push_hook_has_os_error_206_hint() {
+        let hook = pre_push_hook_script();
+        // Issue #4220 — Windows CreateProcess command-line limit (os error 206)
+        // hint must appear in the gate-failure handler so contributors know how to fix it.
+        assert!(
+            hook.contains("os error 206") || hook.contains("CreateProcess"),
+            "hook must hint at Windows CreateProcess limit fix (issue #4220)"
+        );
+    }
+
+    #[test]
+    fn command_exists_finds_cargo() {
+        // cargo is always present in the test environment
+        assert!(command_exists("cargo"), "cargo should be found via PATH");
+    }
+
+    #[test]
+    fn command_exists_rejects_nonexistent() {
+        assert!(
+            !command_exists("__xyzzy_not_a_real_command_99__"),
+            "non-existent command must not be found"
+        );
+    }
+
+    #[test]
+    fn e2e_lock_file_path_is_portable() {
+        let lock = std::env::temp_dir().join("e2e-suite.lock");
+        let lock_str = lock.to_str().expect("temp dir must be valid UTF-8 in CI");
+        // On Linux CI this will be /tmp/e2e-suite.lock (acceptable)
+        // On Windows this will be C:\Users\...\AppData\Local\Temp\e2e-suite.lock
+        assert!(!lock_str.is_empty(), "lock file path must be non-empty");
+    }
+
+    /// Regression guard for issue #4229: test files must not write to hardcoded /tmp paths.
+    ///
+    /// Tests that assign a hardcoded `/tmp/...` string to a variable and then call
+    /// `fs::write(variable, ...)` will fail on minimal Windows environments that lack Git
+    /// for Windows (where `/tmp` is mapped). All file-writing tests must use
+    /// `tempfile::tempdir()` or `std::env::temp_dir()` instead.
+    ///
+    /// Detection heuristic: any line matching `let <name> = "/tmp/` where the same
+    /// variable name appears on a later `fs::write(` line in the same file.
+    #[test]
+    fn no_hardcoded_tmp_writes_in_tests() {
+        // Crates whose test files are checked. Extend this list as new crates are added.
+        // Format: (package-name, directory-name). These may differ when a crate is renamed
+        // but the directory is kept for Windows MAX_PATH safety (e.g. perl-workspace Wave A).
+        const CHECKED_CRATES: &[(&str, &str)] = &[
+            ("perl-lsp", "perl-lsp"),
+            ("perl-dap", "perl-dap"),
+            ("perl-uri", "perl-uri"),
+            // Package name changed perl-workspace-index → perl-workspace (#4426),
+            // but the directory crates/perl-workspace-index/ was not renamed.
+            ("perl-workspace", "perl-workspace-index"),
+            ("perl-dap-platform", "perl-dap-platform"),
+        ];
+
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut violations: Vec<String> = Vec::new();
+
+        for (_crate_name, crate_dir_name) in CHECKED_CRATES {
+            let crate_dir = workspace_root.join("crates").join(crate_dir_name);
+
+            // Scan both src (inline #[test] modules) and tests directories
+            for subdir in &["src", "tests"] {
+                let dir = crate_dir.join(subdir);
+                if !dir.exists() {
+                    continue;
+                }
+
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .flatten()
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
+                {
+                    let path = entry.path();
+                    let Ok(contents) = std::fs::read_to_string(path) else {
+                        continue;
+                    };
+
+                    // Look for pattern: let <var_name> = "/tmp/..."; followed by fs::write(<var_name>
+                    // This is the problematic pattern: variable holds a hardcoded /tmp path,
+                    // then that variable is used in a filesystem write.
+                    let mut tmp_vars: Vec<&str> = Vec::new();
+                    for line in contents.lines() {
+                        let trimmed = line.trim();
+                        // Detect: let [mut] var_name[: type] = "/tmp/...";
+                        if trimmed.starts_with("let ") && trimmed.contains("= \"/tmp/") {
+                            // Extract variable name between "let [mut]" and "[: type] ="
+                            if let Some(rest) = trimmed.strip_prefix("let ")
+                                && let Some(raw) = rest.split('=').next()
+                            {
+                                // Strip optional `mut ` keyword
+                                let raw = raw.trim();
+                                let raw = raw.strip_prefix("mut ").map_or(raw, str::trim);
+                                // Strip optional type annotation (`: &str`, `: String`, …)
+                                let var = raw.split(':').next().map_or(raw, str::trim);
+                                if !var.is_empty() {
+                                    tmp_vars.push(var);
+                                }
+                            }
+                        }
+                        // Detect: fs::write(var_name, ...) where var_name is a known /tmp var.
+                        // Require that `var_name` appears as an argument (preceded by `(` or `, `)
+                        // to avoid false positives like `var` matching `file_var`.
+                        if trimmed.contains("fs::write(") || trimmed.contains("fs::write(&") {
+                            for var in &tmp_vars {
+                                // Match `(var` or `(&var` or `, var` but NOT `file_var`
+                                let as_arg1 = format!("({var},");
+                                let as_arg2 = format!("(&{var},");
+                                let as_arg3 = format!("({var})");
+                                if trimmed.contains(&as_arg1)
+                                    || trimmed.contains(&as_arg2)
+                                    || trimmed.contains(&as_arg3)
+                                {
+                                    let rel = path
+                                        .strip_prefix(&workspace_root)
+                                        .unwrap_or(path)
+                                        .to_string_lossy()
+                                        .replace('\\', "/");
+                                    let violation =
+                                        format!("{rel}: `fs::write({var}, ...)` with /tmp path");
+                                    if !violations.contains(&violation) {
+                                        violations.push(violation);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(
+            violations.is_empty(),
+            "Test files write to hardcoded /tmp paths (issue #4229).\n\
+             Replace `let path = \"/tmp/...\"; fs::write(path, ...)` with\n\
+             `let tmp = tempfile::tempdir()?; let path = tmp.path().join(\"...\");`\n\
+             Violations found in:\n  {}",
+            violations.join("\n  ")
+        );
     }
 }

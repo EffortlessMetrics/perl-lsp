@@ -36,7 +36,7 @@ fn test_description() -> Result<()> {
 
 ### 4. Verify
 ```bash
-cargo fmt --all
+cargo xtask fmt
 cargo clippy -p perl-parser-core --lib
 cargo test -p perl-parser-core
 cargo test -p perl-parser

@@ -12,10 +12,10 @@ This guide provides step-by-step instructions for using the enhanced LSP error h
 
 ```bash
 # Start LSP server with enhanced error logging
-perl-lsp --stdio --log
+perllsp --stdio --log
 
 # Alternative: Use environment variable for detailed logging
-RUST_LOG=perl_lsp=debug perl-lsp --stdio
+RUST_LOG=perl_lsp=debug perllsp --stdio
 ```
 
 ### Step 2: Monitor Malformed Frame Recovery
@@ -34,7 +34,7 @@ EOF
 chmod +x test_malformed.sh
 
 # Test malformed frame recovery
-./test_malformed.sh | perl-lsp --stdio
+./test_malformed.sh | perllsp --stdio
 ```
 
 **Expected behavior:**
@@ -51,15 +51,15 @@ cat > comprehensive_error_test.sh << 'EOF'
 
 # Test 1: Invalid JSON structure
 echo "Testing invalid JSON structure..."
-echo 'Content-Length: 30\r\n\r\n{"invalid": json here}' | timeout 5s perl-lsp --stdio
+echo 'Content-Length: 30\r\n\r\n{"invalid": json here}' | timeout 5s perllsp --stdio
 
 # Test 2: Oversized content (>100 chars) - should be truncated
 echo "Testing oversized malformed content..."
-echo 'Content-Length: 200\r\n\r\n{"jsonrpc":"2.0","method":"invalid","params":{"very_long_content_that_exceeds_100_characters_and_should_be_truncated_safely":true}}' | timeout 5s perl-lsp --stdio
+echo 'Content-Length: 200\r\n\r\n{"jsonrpc":"2.0","method":"invalid","params":{"very_long_content_that_exceeds_100_characters_and_should_be_truncated_safely":true}}' | timeout 5s perllsp --stdio
 
 # Test 3: Malformed Content-Length header
 echo "Testing malformed headers..."
-echo 'Content-Length: invalid\r\n\r\n{"jsonrpc":"2.0"}' | timeout 5s perl-lsp --stdio
+echo 'Content-Length: invalid\r\n\r\n{"jsonrpc":"2.0"}' | timeout 5s perllsp --stdio
 EOF
 
 chmod +x comprehensive_error_test.sh
@@ -235,7 +235,7 @@ test_error_recovery() {
 
 # Start LSP server and test
 timeout 10s bash -c '
-    test_error_recovery | perl-lsp --stdio > lsp_output.log 2>&1 &
+    test_error_recovery | perllsp --stdio > lsp_output.log 2>&1 &
     LSP_PID=$!
     sleep 2
 
@@ -324,10 +324,10 @@ command -v rg || echo "Using grep fallback (may be slower)"
 **Issue: LSP server not logging errors**
 ```bash
 # Increase log level
-RUST_LOG=debug perl-lsp --stdio
+RUST_LOG=debug perllsp --stdio
 
 # Check stderr output specifically
-perl-lsp --stdio 2> error_log.txt
+perllsp --stdio 2> error_log.txt
 ```
 
 **Issue: Tests failing after removing ignore**
@@ -345,13 +345,13 @@ cargo check -p perl-parser --tests
 
 ```bash
 # Run comprehensive error handling tests
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test
 
 # Validate malformed frame scenarios
 cargo test -p perl-parser error_recovery
 
 # Check LSP server resilience
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 ```
 
 ### Validate Budget System

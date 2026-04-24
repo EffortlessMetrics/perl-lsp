@@ -26,7 +26,7 @@ This means:
 
 | Test file | Snapshots directory | Coverage |
 |-----------|-------------------|----------|
-| `tests/ast_snapshot_tests.rs` | `tests/snapshots/ast_snapshot_tests__*.snap` | AST sexp, error recovery AST, error messages, semantic token legend |
+| `tests/ast_snap.rs` | `tests/snapshots/ast_snap__*.snap` | AST sexp, error recovery AST, error messages, semantic token legend |
 
 These tests cover:
 - **Clean Perl AST** (15 inputs): Variable declarations, sub definitions, packages,
@@ -37,14 +37,14 @@ These tests cover:
 - **Semantic token legend** (3 snapshots): Token type ordering, modifier ordering,
   and the full index-to-name mapping table.
 
-### LSP Capability Snapshots — `crates/perl-lsp/tests/`
+### LSP Capability Snapshots — `crates/perl-lsp-rs/tests/`
 
 | Test file | Snapshots directory | Coverage |
 |-----------|-------------------|----------|
 | `tests/lsp_features_snapshot_test.rs` | `tests/snapshots/lsp_features_snapshot_test__*.snap` | Advertised feature catalog vs server caps |
-| `tests/lsp_capability_snapshot_test.rs` | `tests/snapshots/lsp_capability_snapshot_test__*.snap` | Full server capabilities, code action kinds, completion triggers, semantic token legend |
+| `tests/lsp_cap_snap.rs` | `tests/snapshots/lsp_cap_snap__*.snap` | Full server capabilities, code action kinds, completion triggers, semantic token legend |
 
-The `lsp_capability_snapshot_test.rs` tests cover:
+The `lsp_cap_snap.rs` tests cover:
 - **Minimal client capabilities**: Capabilities advertised when the client declares no optional features.
 - **Full client capabilities**: Capabilities advertised to a fully-capable client.
 - **Code action kinds**: The set of code action categories (quickfix, refactor, etc.).
@@ -57,14 +57,14 @@ The `lsp_capability_snapshot_test.rs` tests cover:
 
 ```bash
 # Parser AST snapshots
-cargo test -p perl-parser --test ast_snapshot_tests
+cargo test -p perl-parser --test ast_snap
 
 # LSP capability snapshots
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
 
 # All snapshot tests (combined)
-cargo test -p perl-parser --test ast_snapshot_tests
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+cargo test -p perl-parser --test ast_snap
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
 ```
 
 ## Updating Snapshots After Intentional Changes
@@ -73,8 +73,8 @@ When parser output, error messages, or LSP capabilities change intentionally:
 
 ```bash
 # Accept all pending new/changed snapshots automatically
-INSTA_UPDATE=unseen cargo test -p perl-parser --test ast_snapshot_tests
-INSTA_UPDATE=unseen RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_capability_snapshot_test -- --test-threads=2
+INSTA_UPDATE=unseen cargo test -p perl-parser --test ast_snap
+INSTA_UPDATE=unseen RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_cap_snap -- --test-threads=2
 
 # Or use cargo-insta for interactive review (recommended for large changes)
 cargo install cargo-insta
@@ -88,7 +88,7 @@ workflow when multiple snapshots change at once.
 ## PR Workflow
 
 1. Make your change.
-2. Run `cargo test -p perl-parser --test ast_snapshot_tests` (and the LSP test).
+2. Run `cargo test -p perl-parser --test ast_snap` (and the LSP test).
 3. If snapshot tests fail, inspect the diff — is this change expected?
 4. If expected: run `INSTA_UPDATE=unseen cargo test ...` or `cargo insta review`.
 5. Commit both the code change and the updated `.snap` files together.
@@ -115,16 +115,16 @@ response and decode them using the legend received at initialization. This means
 - **Reordering** any existing entry is a breaking change that silently miscolors tokens in all clients.
 - **Removing** an entry is a breaking change.
 
-The snapshots `ast_snapshot_tests__snapshot_semantic_token_legend_index_mapping.snap`
-and `lsp_capability_snapshot_test__semantic_tokens_legend_from_capabilities.snap`
+The snapshots `ast_snap__semantic_token_legend_index_mapping.snap`
+and `lsp_cap_snap__semantic_tokens_legend_from_capabilities.snap`
 guard against accidental reordering.
 
 ## Adding New Snapshot Tests
 
 Follow these conventions:
 
-1. Add the test in the appropriate `tests/` file (`ast_snapshot_tests.rs` for parser,
-   `lsp_capability_snapshot_test.rs` for LSP capabilities).
+1. Add the test in the appropriate `tests/` file (`ast_snap.rs` for parser,
+   `lsp_cap_snap.rs` for LSP capabilities).
 2. Use `insta::assert_snapshot!` for plain text and `insta::assert_yaml_snapshot!`
    for structured data.
 3. Run with `INSTA_UPDATE=unseen` to generate the initial snapshot.
@@ -137,7 +137,7 @@ use insta::assert_snapshot;
 use perl_parser::Parser;
 
 #[test]
-fn snapshot_ast_my_construct() {
+fn ast_my_construct() {
     let mut parser = Parser::new("my $x = 42;");
     let output = parser.parse_with_recovery();
     assert_snapshot!(output.ast.to_sexp());

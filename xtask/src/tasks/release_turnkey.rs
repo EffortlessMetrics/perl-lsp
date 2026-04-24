@@ -38,7 +38,7 @@ impl ReleaseTurnkeyConfig {
         }
     }
 
-    fn to_args(self, version: &str) -> Vec<String> {
+    fn build_args(&self, version: &str) -> Vec<String> {
         let mut args = vec!["--version".to_string(), version.to_string()];
 
         if self.prerelease {
@@ -56,9 +56,9 @@ impl ReleaseTurnkeyConfig {
         if self.skip_docker {
             args.push("--skip-docker".to_string());
         }
-        if let Some(base_branch) = self.base_branch {
+        if let Some(base_branch) = &self.base_branch {
             args.push("--base-branch".to_string());
-            args.push(base_branch);
+            args.push(base_branch.clone());
         }
         if self.no_auto_merge {
             args.push("--no-auto-merge".to_string());
@@ -84,7 +84,7 @@ pub fn run(config: ReleaseTurnkeyConfig) -> Result<()> {
     let script = root.join("scripts").join("release-turnkey-pr.sh");
 
     let version = config.resolve_version()?;
-    let args = config.to_args(&version);
+    let args = config.build_args(&version);
 
     let status = Command::new("bash")
         .arg(&script)

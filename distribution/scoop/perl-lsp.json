@@ -5,28 +5,28 @@
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v__RELEASE_VERSION__/perl-lsp-__RELEASE_VERSION__-x86_64-pc-windows-msvc.zip",
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v__RELEASE_VERSION__/perllsp-__RELEASE_VERSION__-x86_64-pc-windows-msvc.zip",
       "hash": "__RELEASE_HASH__"
     }
   },
-  "bin": ["perl-lsp.exe", "perl-dap.exe"],
+  "bin": ["perllsp.exe", "perl-dap.exe"],
   "checkver": "github",
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip"
+        "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perllsp-$version-x86_64-pc-windows-msvc.zip"
       }
     },
     "hash": {
-      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip.sha256",
-      "regex": "^([a-fA-F0-9]{64})"
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/SHA256SUMS",
+      "regex": "(?m)^([a-fA-F0-9]{64})\\s+perllsp-\\$version-x86_64-pc-windows-msvc\\.zip$"
     }
   },
   "notes": [
     "perl-lsp is a high-performance Language Server Protocol implementation for Perl.",
     "",
     "Usage:",
-    "  perl-lsp --stdio",
+    "  perllsp --stdio",
     "",
     "For more information, visit: https://github.com/EffortlessMetrics/perl-lsp"
   ]

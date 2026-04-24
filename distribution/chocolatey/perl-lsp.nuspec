@@ -30,7 +30,7 @@ go-to-definition, find references, symbol search, and refactoring support.
 
 ## Installation
 
-After installation, configure your editor to use `perl-lsp --stdio`.
+After installation, configure your editor to use `perllsp --stdio`.
 
 ## Documentation
 

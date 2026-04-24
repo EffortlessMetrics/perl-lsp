@@ -44,7 +44,7 @@ Choose one of the following methods:
 #### Option 1: Install from crates.io (Recommended)
 
 ```bash
-cargo install perl-lsp
+cargo install perllsp
 ```
 
 #### Option 2: Download Pre-built Binary
@@ -68,17 +68,17 @@ sudo mv perl-lsp /usr/local/bin/
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install --path crates/perl-lsp
+cargo install perllsp
 ```
 
 ### Verify Installation
 
 ```bash
 # Check version
-perl-lsp --version
+perllsp --version
 
 # Quick health check
-perl-lsp --health
+perllsp --health
 # Should output: ok 0.10.0
 ```
 
@@ -620,7 +620,7 @@ nnoremap <silent> <space>y  :<C-u>CocList -A --normal yank<cr>
 
 4. **Test server manually**:
    ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
    ```
 
 ### No Diagnostics

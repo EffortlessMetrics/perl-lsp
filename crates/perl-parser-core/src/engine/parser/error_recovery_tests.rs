@@ -58,6 +58,55 @@ fn test_recovery_missing_expression() {
 }
 
 #[test]
+fn test_recovery_missing_rhs_before_sub_declaration_keyword() {
+    // Missing RHS before `sub foo { ... }` should recover at `sub` as a
+    // statement boundary, instead of consuming `sub` as an identifier.
+    let code = "my $x = sub foo { print 1; }";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should recover missing assignment RHS");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 2, "Should recover and keep the following sub declaration");
+        assert!(
+            matches!(statements[0].kind, NodeKind::VariableDeclaration { .. }),
+            "First statement should stay a recovered variable declaration"
+        );
+        assert!(
+            matches!(statements[1].kind, NodeKind::Subroutine { .. }),
+            "Second statement should parse as subroutine declaration"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(!parser.errors().is_empty(), "Recovery should record a missing operand diagnostic");
+}
+
+#[test]
+fn test_no_recovery_for_anonymous_sub_assignment_rhs() {
+    let code = "local $SIG{__WARN__} = sub { };";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept anonymous sub assignment RHS");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1, "Anonymous sub RHS should stay in a single statement");
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        !ast.to_sexp().contains("missing_expression"),
+        "Anonymous sub assignment should not create MissingExpression recovery nodes"
+    );
+}
+
+#[test]
 fn test_recovery_multiple_errors() {
     // Phase 2: `my $x = ;` now produces a VariableDeclaration with MissingExpression
     // instead of an Error node. Each missing RHS emits exactly 1 Recovered error.
@@ -375,4 +424,114 @@ fn test_451_ac10_comprehensive_scenarios() {
     let mut parser3 = Parser::new(code3);
     let _result3 = parser3.parse();
     assert!(!parser3.errors().is_empty(), "AC10: Should handle different error types");
+}
+
+#[test]
+fn test_no_recovery_for_my_code_eq_anon_sub() {
+    // Regression test for #5017: `my $code = sub { ... }` must parse as a
+    // single VariableDeclaration with an AnonymousSubroutineExpression RHS.
+    // Before the fix, this produced MissingExpression + dangling anon-sub.
+    let code = "my $code = sub { my ($x) = @_; return $x * 2; };";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept `my $var = sub {{...}};`");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(
+            statements.len(),
+            1,
+            "my $code = sub {{...}} must be a single statement, not split in two"
+        );
+        // Verify no error nodes and no missing_expression
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("missing_expression"),
+            "RHS anonymous sub must not produce MissingExpression: {sexp}"
+        );
+        assert!(!sexp.contains("error"), "RHS anonymous sub must not produce Error nodes: {sexp}");
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        parser.errors().is_empty(),
+        "No recovery errors expected for valid anonymous sub assignment: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
+fn test_local_as_assignment_rhs() {
+    // `local` is a valid expression and must be allowed as an assignment RHS.
+    // Regression test: removing Local from is_infix_rhs_absent must not break
+    // recovery for genuine missing-RHS cases that happen to follow a `local` expr.
+    let code = "local(*RS) = local(*/);";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(result.is_ok(), "Parser should accept `local(x) = local(y);`");
+    let ast = must(result);
+
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert_eq!(statements.len(), 1, "`local(x) = local(y)` must parse as a single statement");
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("missing_expression"),
+            "local-as-RHS must not produce MissingExpression: {sexp}"
+        );
+    } else {
+        unreachable!("Expected program root");
+    }
+
+    assert!(
+        parser.errors().is_empty(),
+        "No recovery errors expected for `local(x) = local(y)`: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
+fn test_recovery_unclosed_qw() {
+    let code = "my @items = qw(one two three print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed qw()");
+    let ast = must(result);
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 1, "Should have recovered statements after unclosed qw");
+    }
+    assert!(!parser.errors().is_empty(), "Should record unclosed delimiter error");
+}
+
+#[test]
+fn test_recovery_unclosed_q_brace() {
+    let code = "my $str = q{ hello world print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed q braces");
+    let ast = must(result);
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 1, "Should have recovered statements");
+    }
+    assert!(!parser.errors().is_empty(), "Should record unclosed brace error");
+}
+
+#[test]
+fn test_recovery_unclosed_qq() {
+    let code = "my $name = \"unknown; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed qq string");
+    assert!(!parser.errors().is_empty(), "Should record unclosed quote error");
+}
+
+#[test]
+fn test_recovery_nested_qw_paren_mismatch() {
+    let code = "my @list = qw(one (two three) print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from nested paren in qw");
+    assert!(!parser.errors().is_empty(), "Should record delimiter mismatch error");
 }

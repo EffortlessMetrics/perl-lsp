@@ -1,0 +1,38 @@
+[package]
+name = "perl-ts-partial-ast"
+version = "0.12.2"
+edition = "2024"
+rust-version = "1.92"
+description = "Partial parse and anti-pattern AST for Perl"
+publish = false
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+documentation = "https://docs.rs/perl-ts-partial-ast"
+keywords = ["perl", "parser", "ast", "heredoc", "tree-sitter"]
+categories = ["parser-implementations", "development-tools"]
+
+[dependencies]
+regex.workspace = true
+perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
+perl-parser-pest = { path = "../perl-parser-pest" }
+pest = "2.8.4"
+serde_json.workspace = true
+
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
+[lints.rust]
+unused_imports = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+collapsible_if = "warn"
+manual_strip = "warn"
+unnecessary_map_or = "warn"
+redundant_closure = "warn"
+while_let_on_iterator = "warn"
+len_zero = "warn"
+only_used_in_recursion = "warn"
+ptr_arg = "warn"

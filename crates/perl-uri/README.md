@@ -1,37 +1,37 @@
 # perl-uri
 
-URI-to-filesystem-path conversion and normalization utilities for the Perl LSP ecosystem.
+URI and filesystem-path normalization for Perl tooling.
 
-Part of the [`tree-sitter-perl-rs`](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+Use this crate when a caller may hand you either a `file://` URI or a raw
+filesystem path and you need a stable representation for caches, lookups, or
+workspace edges.
 
-## Public API
+## Where it fits
 
-| Function | Purpose |
-|----------|---------|
-| `uri_to_fs_path` | Convert a `file://` URI to a `PathBuf` (non-wasm only) |
-| `fs_path_to_uri` | Convert a filesystem path to a `file://` URI string (non-wasm only) |
-| `normalize_uri` | Normalize a URI (or bare path) to a consistent `file://` form |
-| `uri_key` | Normalize a URI for use as a lookup key (lowercases Windows drive letters) |
-| `is_file_uri` | Check whether a URI uses the `file://` scheme |
-| `is_special_scheme` | Check whether a URI uses a non-file scheme (`untitled:`, `git:`, etc.) |
-| `uri_extension` | Extract the file extension from a URI string |
+`perl-uri` sits at the protocol boundary. It is used by LSP and DAP code before
+files hit the parser, workspace index, or other path-sensitive layers.
 
-## Usage
+## Key entry points
+
+- `uri_to_fs_path(uri)` - convert `file://` URIs to filesystem paths
+- `fs_path_to_uri(path)` - convert filesystem paths to `file://` URIs
+- `normalize_uri(uri)` - normalize raw paths, malformed file URIs, and valid URIs
+- `uri_key(uri)` - produce a lookup key with Windows drive-letter normalization
+- `is_file_uri(uri)` and `is_special_scheme(uri)` - classify URIs
+- `uri_extension(uri)` - extract the extension from a URI string
+
+## Example
 
 ```rust
-use perl_uri::{uri_to_fs_path, fs_path_to_uri, uri_key};
+use perl_uri::{normalize_uri, uri_key};
 
-let path = uri_to_fs_path("file:///tmp/test.pl");    // Some(PathBuf)
-let uri  = fs_path_to_uri("/tmp/test.pl").unwrap();   // "file:///tmp/test.pl"
-let key  = uri_key("file:///C:/Users/test.pl");        // "file:///c:/Users/test.pl"
+#[cfg(windows)]
+assert_eq!(normalize_uri(r"C:\workspace\script.pl"), "file:///c:/workspace/script.pl");
+assert_eq!(uri_key("file:///C:/Users/test.pl"), "file:///c:/Users/test.pl");
 ```
 
-## Platform Support
+## Typical use
 
-`uri_to_fs_path`, `fs_path_to_uri`, and `normalize_uri` require filesystem access and are
-not available on `wasm32` targets. The remaining helpers work on all platforms.
-
-## License
-
-Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
-[MIT license](LICENSE-MIT) at your option.
+Use `perl-uri` when you need consistent cache keys or filesystem lookups
+without making callers care whether they passed a URI or a path. On `wasm32`,
+only the URI-parsing helpers are available.

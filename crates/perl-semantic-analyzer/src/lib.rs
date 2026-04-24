@@ -7,7 +7,17 @@
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
-#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::panic,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::print_stderr,
+        clippy::print_stdout
+    )
+)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -50,7 +60,7 @@ pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{
     Parser, ast, edit, error, parser, parser_context, position, pragma_tracker, quote_parser, util,
 };
-pub use perl_workspace_index::workspace_index;
+pub use perl_workspace::workspace_index;
 
 /// Semantic analysis, symbol extraction, and type inference.
 pub mod analysis;

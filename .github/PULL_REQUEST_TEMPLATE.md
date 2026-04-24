@@ -1,3 +1,12 @@
+<!--
+PR title convention: end with a real issue ref, e.g.
+  fix(crate): description (#NNNN)
+
+Replace NNNN with the tracking issue number this PR addresses.
+The validate-title CI check enforces this format — placeholder refs
+like (#0000) or (#9999) will fail CI.
+-->
+
 ## Summary
 <!-- What changed and why. Link the issue: Fixes #NNN -->
 
@@ -8,9 +17,11 @@
 <!-- What test was added? Does it fail before the fix and pass after? -->
 
 ## Verification
-- [ ] `cargo fmt --all` — clean
+- [ ] `cargo xtask fmt` — clean
+- [ ] I used a narrow orthogonal pass first (freshness check, truth-check, or targeted repro) before the broader gate.
 - [ ] `cargo clippy -p <crate> --tests` — clean
 - [ ] `cargo test -p <crate>` — pass
+- [ ] This PR introduces UX-visible changes. I have verified that error messages are actionable and the UX test harness still passes.
 
 ## What I considered but didn't do
 <!-- Alternative approaches, related issues found, scope decisions -->

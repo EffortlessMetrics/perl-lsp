@@ -5,12 +5,11 @@
 ### How do I install perl-lsp?
 
 - **VS Code (recommended)**: install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) — it downloads the server binary automatically.
-- **crates.io**: `cargo install perl-lsp`
 - **Pre-built binary**: download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 - **Installer script (Linux/macOS, best-effort)**:
   `curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash`
 - **From source**:
-  `cargo install --path crates/perl-lsp`
+  `cargo install --path crates/perllsp`
 
 ### Does perl-lsp require Perl to be installed?
 
@@ -42,13 +41,15 @@ Building from source (Rust 1.92+) works on any Rust-supported platform.
 
 ### Which Perl versions does perl-lsp support?
 
-The parser covers Perl 5.8 through 5.40. This includes:
+The parser targets Perl 5.8 through 5.40. This includes:
 
 - All core syntax from Perl 5.8+
 - Modern features: `say`, `given`/`when`, `state`, `fc`
 - Perl 5.36+ signatures (experimental)
 - `use v5.38; class ...` object syntax (partial support)
 - Moose, Moo, and common OO frameworks (detection-level support)
+
+This claim is backed by a visible CI workflow: [Perl Version Matrix](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/perl-version-matrix.yml). It runs version-gated Perl syntax probes on every Perl minor from 5.8 through 5.40, and also runs a Rust smoke test on both edge versions (5.8 and 5.40).
 
 If you encounter a Perl construct that fails to parse, [report it](https://github.com/EffortlessMetrics/perl-lsp/issues) with a minimal example.
 
@@ -62,12 +63,14 @@ Yes. The parser targets Perl 5.8 as the minimum and handles most idioms from tha
 
 ### Which editors work with perl-lsp?
 
-Any editor with LSP client support works. Point it at `perl-lsp --stdio`:
+Any editor with LSP client support works. Point it at `perllsp --stdio`:
 
 - **VS Code** — native extension with auto-download, UI settings, and DAP debugging
+- **Trae (ByteDance)** — VS Code-compatible setup (extension or generic LSP command)
 - **Neovim** — via `nvim-lspconfig` (`perl_ls` server)
 - **Emacs** — via `eglot` or `lsp-mode`
 - **Helix** — via `languages.toml`
+- **Zed** — via a Perl extension (see [ZED_SETUP.md](../EDITORS/ZED_SETUP.md))
 - **Sublime Text** — via the LSP package
 - **Kate**, **Lapce**, **Kakoune** — any editor with a generic LSP client
 
@@ -75,7 +78,7 @@ See [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) for editor-specific configurati
 
 ### Can I use it without VS Code?
 
-Yes. The VS Code extension is the easiest path, but `perl-lsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
+Yes. The VS Code extension is the easiest path, but `perllsp --stdio` is a plain LSP server that works with any compliant client. The extension is a convenience layer on top of the same binary.
 
 ### Does it support debugging (DAP)?
 
@@ -159,4 +162,8 @@ Yes. perl-lsp is dual-licensed under [MIT](../../LICENSE-MIT) and [Apache-2.0](.
 
 ### What is the release cadence?
 
-perl-lsp is in active development. Releases are made when meaningful milestones are reached (e.g. corpus coverage improvements, new LSP features). The current release is v0.12.0 (public alpha).
+perl-lsp is in active development. Releases are cut when meaningful milestones
+are ready, such as parser coverage gains, new LSP features, or release-surface
+hardening. The workspace version on `main` can move ahead of the latest
+published release during release prep, so check GitHub Releases for the
+currently shipped public release.

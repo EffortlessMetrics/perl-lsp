@@ -50,7 +50,7 @@ fi
 
 # Test LSP functionality
 print_status "INFO" "Testing LSP functionality..."
-if cargo test -p perl-lsp --lib --release --timeout $TEST_TIMEOUT 2>/dev/null; then
+if cargo test -p perl-lsp-rs --lib --release --timeout $TEST_TIMEOUT 2>/dev/null; then
     print_status "OK" "LSP tests passed"
 else
     print_status "ERROR" "LSP tests failed"
@@ -74,7 +74,7 @@ print_status "INFO" "Running integration tests..."
 
 # Test LSP integration
 print_status "INFO" "Testing LSP integration..."
-if cargo test -p perl-lsp --test '*' --release --timeout $TEST_TIMEOUT 2>/dev/null; then
+if cargo test -p perl-lsp-rs --test '*' --release --timeout $TEST_TIMEOUT 2>/dev/null; then
     print_status "OK" "LSP integration tests passed"
 else
     print_status "WARN" "Some LSP integration tests failed"
@@ -126,7 +126,7 @@ print_status "INFO" "Testing LSP with large workspace..."
 cd "$LARGE_WORKSPACE_DIR"
 
 # Start LSP server in background
-timeout 60 cargo run --bin perl-lsp -- --stdio < /dev/null > /dev/null 2>&1 &
+timeout 60 cargo run -p perllsp --bin perllsp -- --stdio < /dev/null > /dev/null 2>&1 &
 LSP_PID=$!
 sleep 2
 

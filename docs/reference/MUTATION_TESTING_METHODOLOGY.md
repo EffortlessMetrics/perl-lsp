@@ -178,7 +178,7 @@ fn test_incremental_parsing_mutation_resistance() {
 RUST_TEST_THREADS=2 cargo test -p perl-parser --test mutation_hardening_tests
 
 # Performance regression testing with security validation
-cargo test -p perl-lsp lsp_encoding_edge_cases -- --nocapture
+cargo test -p perl-lsp-rs lsp_encoding_edge_cases -- --nocapture
 
 # Comprehensive quality gate validation
 cargo test -p perl-parser --test mutation_hardening_tests -- security_hardening

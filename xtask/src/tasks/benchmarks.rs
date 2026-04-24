@@ -165,11 +165,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_no_regression.json"),
-        1.0,
-        None,
-        &["No performance alerts detected"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_no_regression.json"),
+            multiplier: 1.0,
+            format: None,
+            expected: &["No performance alerts detected"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -177,11 +179,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_warning.json"),
-        1.11,
-        None,
-        &["WARNING", "1"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_warning.json"),
+            multiplier: 1.11,
+            format: None,
+            expected: &["WARNING", "1"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -189,11 +193,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_regression.json"),
-        1.25,
-        None,
-        &["REGRESSION"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_regression.json"),
+            multiplier: 1.25,
+            format: None,
+            expected: &["REGRESSION"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -201,11 +207,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_critical.json"),
-        1.60,
-        None,
-        &["CRITICAL"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_critical.json"),
+            multiplier: 1.60,
+            format: None,
+            expected: &["CRITICAL"],
+            expect_success: true,
+        },
     )?;
     run_alert_case(
         &root,
@@ -213,11 +221,13 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_markdown.json"),
-        1.25,
-        Some("markdown"),
-        &["## Performance Benchmark Results", "⚠️ Performance Regressions"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_markdown.json"),
+            multiplier: 1.25,
+            format: Some("markdown"),
+            expected: &["## Performance Benchmark Results", "⚠️ Performance Regressions"],
+            expect_success: true,
+        },
     )?;
     run_alert_check_case(
         &root,
@@ -232,15 +242,25 @@ pub fn test_alert_system() -> Result<()> {
         &config_path,
         &baseline_path,
         &baseline,
-        workdir.join("alert_test_improvement.json"),
-        0.80,
-        None,
-        &["IMPROVED"],
-        true,
+        AlertCase {
+            current_path: workdir.join("alert_test_improvement.json"),
+            multiplier: 0.80,
+            format: None,
+            expected: &["IMPROVED"],
+            expect_success: true,
+        },
     )?;
 
     println!("All benchmark alert-system checks passed");
     Ok(())
+}
+
+struct AlertCase<'a> {
+    current_path: PathBuf,
+    multiplier: f64,
+    format: Option<&'a str>,
+    expected: &'a [&'a str],
+    expect_success: bool,
 }
 
 fn run_alert_case(
@@ -249,25 +269,21 @@ fn run_alert_case(
     config_path: &Path,
     baseline_path: &Path,
     baseline: &Value,
-    current_path: PathBuf,
-    multiplier: f64,
-    format: Option<&str>,
-    expected: &[&str],
-    expect_success: bool,
+    case: AlertCase<'_>,
 ) -> Result<()> {
     let mut current = baseline.clone();
-    mutate_parse_simple_script(&mut current, multiplier)?;
-    fs::write(&current_path, serde_json::to_string_pretty(&current)?)
-        .with_context(|| format!("Failed to write {}", current_path.display()))?;
+    mutate_parse_simple_script(&mut current, case.multiplier)?;
+    fs::write(&case.current_path, serde_json::to_string_pretty(&current)?)
+        .with_context(|| format!("Failed to write {}", case.current_path.display()))?;
 
     let mut args = vec![
         alert_script.to_string_lossy().to_string(),
         baseline_path.to_string_lossy().to_string(),
-        current_path.to_string_lossy().to_string(),
+        case.current_path.to_string_lossy().to_string(),
         "--config".to_string(),
         config_path.to_string_lossy().to_string(),
     ];
-    if let Some(format) = format {
+    if let Some(format) = case.format {
         args.push("--format".to_string());
         args.push(format.to_string());
     }
@@ -279,11 +295,11 @@ fn run_alert_case(
         .context("Failed to execute alert.py")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    if expect_success != output.status.success() {
-        bail!("alert.py command status mismatch (expected success: {expect_success})");
+    if case.expect_success != output.status.success() {
+        bail!("alert.py command status mismatch (expected success: {})", case.expect_success);
     }
 
-    for fragment in expected {
+    for fragment in case.expected {
         if !stdout.contains(fragment) {
             bail!("Expected output to contain '{fragment}'");
         }
@@ -396,14 +412,11 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
             .components()
             .map(|part| part.as_os_str().to_string_lossy().to_string())
             .collect();
-        if parts.len() < 3 {
+        let Some((group, bench_name)) = parse_criterion_identity(&parts) else {
             eprintln!("Warning: unexpected criterion path {}", path.display());
             continue;
-        }
-
-        let group = parts[0].as_str();
-        let bench_name = parts[1].as_str();
-        let category = categorize_benchmark(group, bench_name);
+        };
+        let category = categorize_benchmark(&group, &bench_name);
 
         let file_content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -439,13 +452,38 @@ fn parse_criterion_results(criterion_dir: &Path) -> Result<BTreeMap<String, Map<
         entry.insert("unit".to_string(), Value::String(unit));
         entry.insert("display".to_string(), Value::String(display));
 
-        by_category
-            .entry(category)
-            .or_default()
-            .insert(bench_name.to_string(), Value::Object(entry));
+        by_category.entry(category).or_default().insert(bench_name, Value::Object(entry));
     }
 
     Ok(by_category)
+}
+
+fn parse_criterion_identity(parts: &[String]) -> Option<(String, String)> {
+    if parts.len() < 3 || parts.last().is_none_or(|part| part != "estimates.json") {
+        return None;
+    }
+
+    // Ignore Criterion comparison-diff directories. We only want direct run output.
+    if parts.iter().any(|part| part == "change") {
+        return None;
+    }
+
+    let marker = parts.get(parts.len().saturating_sub(2)).map(String::as_str);
+    if matches!(marker, Some("base")) {
+        return None;
+    }
+
+    if matches!(marker, Some("new")) && parts.len() >= 4 {
+        let bench_name = parts[parts.len() - 3].clone();
+        let group = parts[..parts.len() - 3].join("/");
+        let group = if group.is_empty() { "unknown".to_string() } else { group };
+        return Some((group, bench_name));
+    }
+
+    let bench_name = parts[parts.len() - 2].clone();
+    let group = parts[..parts.len() - 2].join("/");
+    let group = if group.is_empty() { "unknown".to_string() } else { group };
+    Some((group, bench_name))
 }
 
 fn categorize_benchmark(group: &str, bench_name: &str) -> String {
@@ -524,8 +562,7 @@ fn rust_version() -> Result<String> {
 fn load_json(path: &Path) -> Result<Value> {
     let content =
         fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
-    Ok(serde_json::from_str(&content)
-        .with_context(|| format!("Invalid JSON in {}", path.display()))?)
+    serde_json::from_str(&content).with_context(|| format!("Invalid JSON in {}", path.display()))
 }
 
 fn run_script(script: &Path, args: &[&str], label: &str) -> Result<()> {
@@ -553,5 +590,110 @@ fn run_python_script(script: &Path, args: &[&str], label: &str) -> Result<()> {
         Ok(())
     } else {
         bail!("python benchmark task failed: {}", label);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn parse_criterion_identity_handles_new_layout() {
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "new".to_string(),
+            "estimates.json".to_string(),
+        ];
+        let result = parse_criterion_identity(&parts);
+        assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
+    }
+
+    #[test]
+    fn parse_criterion_identity_supports_nested_group_names() {
+        let parts = vec![
+            "lsp".to_string(),
+            "rope".to_string(),
+            "position_conversion".to_string(),
+            "new".to_string(),
+            "estimates.json".to_string(),
+        ];
+        let result = parse_criterion_identity(&parts);
+        assert_eq!(result, Some(("lsp/rope".to_string(), "position_conversion".to_string())));
+    }
+
+    #[test]
+    fn parse_criterion_identity_rejects_too_few_parts() {
+        assert_eq!(parse_criterion_identity(&[]), None);
+        assert_eq!(parse_criterion_identity(&["estimates.json".to_string()]), None);
+        assert_eq!(
+            parse_criterion_identity(&["group".to_string(), "estimates.json".to_string()]),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_criterion_identity_rejects_base_runs() {
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "base".to_string(),
+            "estimates.json".to_string(),
+        ];
+        assert_eq!(parse_criterion_identity(&parts), None);
+    }
+
+    #[test]
+    fn parse_criterion_identity_rejects_change_dirs() {
+        let parts = vec![
+            "parser".to_string(),
+            "large_file".to_string(),
+            "change".to_string(),
+            "estimates.json".to_string(),
+        ];
+        assert_eq!(parse_criterion_identity(&parts), None);
+    }
+
+    #[test]
+    fn parse_criterion_identity_handles_plain_layout_without_new_subdir() {
+        // Older Criterion versions write estimates.json directly under bench_name/
+        let parts =
+            vec!["parser".to_string(), "large_file".to_string(), "estimates.json".to_string()];
+        let result = parse_criterion_identity(&parts);
+        assert_eq!(result, Some(("parser".to_string(), "large_file".to_string())));
+    }
+
+    #[test]
+    fn parse_criterion_results_excludes_base_and_change_results() -> Result<()> {
+        let dir = TempDir::new()?;
+        let root = dir.path();
+
+        let include_path = root.join("parser").join("parse_simple").join("new");
+        fs::create_dir_all(&include_path)?;
+        fs::write(
+            include_path.join("estimates.json"),
+            r#"{"mean":{"point_estimate":1000.0,"confidence_interval":{"lower_bound":900.0,"upper_bound":1100.0}}}"#,
+        )?;
+
+        let base_path = root.join("parser").join("parse_simple").join("base");
+        fs::create_dir_all(&base_path)?;
+        fs::write(base_path.join("estimates.json"), r#"{"mean":{"point_estimate":5000.0}}"#)?;
+
+        let change_path = root.join("parser").join("parse_simple").join("change");
+        fs::create_dir_all(&change_path)?;
+        fs::write(change_path.join("estimates.json"), r#"{"mean":{"point_estimate":8000.0}}"#)?;
+
+        let results = parse_criterion_results(root)?;
+        let parser = results
+            .get("parser")
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing parser category"))?;
+        let parse_simple = parser
+            .get("parse_simple")
+            .and_then(Value::as_object)
+            .ok_or_else(|| color_eyre::eyre::eyre!("missing parse_simple benchmark"))?;
+        assert_eq!(parse_simple.get("mean_ns"), Some(&Value::from(1000_u64)));
+        Ok(())
     }
 }

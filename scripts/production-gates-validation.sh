@@ -76,7 +76,7 @@ echo "1. Code Quality Gates"
 echo "--------------------"
 
 # Formatting check
-check_gate "Code Formatting" "cargo fmt --all -- --check" "success"
+check_gate "Code Formatting" "cargo xtask fmt --check" "success"
 
 # Clippy checks
 check_gate "Clippy Linting" "cargo clippy --workspace --locked -- -D warnings" "success"
@@ -96,7 +96,7 @@ check_gate "Unit Tests" "cargo test --workspace --lib --exclude tree-sitter-perl
 check_gate "Integration Tests" "cargo test --workspace --test '*' --exclude tree-sitter-perl --exclude session_lifecycle_tests::test_session_lifecycle_attach_validation" "success"
 
 # LSP specific tests
-check_gate "LSP Tests" "cargo test -p perl-lsp" "success"
+check_gate "LSP Tests" "cargo test -p perl-lsp-rs" "success"
 
 # Parser specific tests
 check_gate "Parser Tests" "cargo test -p perl-parser" "success"
@@ -195,7 +195,7 @@ echo "7. Feature Gates"
 echo "----------------"
 
 # Check critical features work
-check_gate "LSP Features" "cargo test -p perl-lsp --features workspace --locked" "success"
+check_gate "LSP Features" "cargo test -p perl-lsp-rs --features workspace --locked" "success"
 
 check_gate "Incremental Parsing" "cargo test -p perl-parser --features incremental --locked" "success"
 

@@ -19,7 +19,7 @@ The perl-lsp async architecture is **well-structured** with tokio runtime drivin
 
 ### Runtime: Tokio Multi-threaded
 
-**Config** (`crates/perl-lsp/Cargo.toml:75`):
+**Config** (`crates/perl-lsp-rs/Cargo.toml:75`):
 ```toml
 tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
 ```

@@ -4,33 +4,39 @@
 > The canonical planning document is [docs/project/ROADMAP.md](docs/project/ROADMAP.md).
 > Evidence and current receipts live in [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
-## Current Framing
+Use this file to see what the project is trying to land next. Use the canonical
+project docs when you need exact release facts, receipts, or milestone detail.
 
-- Current release line: `v0.11.0` public alpha (`Cargo.toml` `workspace.package.version`)
-- Active milestone: `v0.12.0` public-alpha hardening sprint
-- Current priorities: parser-quality ratchets, semantic-framework coverage, DAP/LSP hardening, and documentation alignment
+## State References
 
-## Now
+- Active milestone plan: [docs/project/ROADMAP.md](docs/project/ROADMAP.md)
+- Current truth and receipts: [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)
+- Published release tracking: [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
-- Raise the CPAN baseline and keep parser boundedness receipts green
-- Land semantic framework work for Moo, Moose, `use parent` / `use base`, and export-list-aware resolution
-- Keep release and validation flows stable while the hardening work lands
-- Align top-level documentation so README, roadmap, status, and agent guidance stop contradicting each other
+## Now (post-v0.12.3 ship / pre-announcement cleanup)
 
-## Next
+- `v0.12.3` shipped to GitHub Releases, VS Code Marketplace, and Open VSX on 2026-04-09
+- crates.io intentionally remains on `0.12.2` while the registry window is still deferred
+- Pre-announcement plumbing: license badge fix, Docker arm64 timeout fix, dependency triage, harness archival, SRP microcrate extractions
+- Distribution channel verification across GitHub Releases, VS Code Marketplace, Open VSX, Docker Hub, and the delayed crates.io line
+- See [docs/project/ROADMAP.md](docs/project/ROADMAP.md) "Now (post-v0.12.3 / pre-v0.13.0)" for the active item list
 
-- Diagnostic hardening around `strict`, `warnings`, dead-code signals, and safe analysis
-- Refactoring reliability and debugger hardening beyond the current preview posture
-- Distribution and release-surface cleanup after the public-alpha hardening sprint
+## Next (v0.13.0 — public alpha announcement)
 
-## Later
+- 0.12.x line built confidence across parser, diagnostics, refactoring, distribution, AI inline completion
+- Quality cleanup PRs land, version bump to 0.13.0
+- Seamless install story verified across all distribution channels
+- Announcement blog post / release notes
 
-- `v0.15.0` stability contract for APIs and advertised wire behavior
-- Platform certification and broader distribution packaging
-- Performance, security, and API-stability hardening on the path to `v1.0.0`
+## Beyond v0.13.0
+
+- Stability contract for APIs and advertised wire behavior
+- Performance hardening for larger workspaces
+- Security posture and documentation hardening
+- Path to `v1.0.0`
 
 ## Update Rules
 
 - Update [docs/project/ROADMAP.md](docs/project/ROADMAP.md) when milestone framing changes.
 - Update [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) with `just status-update` and `just status-check` when generated metrics move.
-- Keep this file short. If it starts carrying detailed receipts or large milestone tables again, move that detail back to the canonical project docs.
+- Keep this file short. Detailed receipts, milestone criteria, and subsystem metrics belong in the canonical project docs.

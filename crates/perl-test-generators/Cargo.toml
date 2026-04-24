@@ -1,0 +1,27 @@
+[package]
+name = "perl-test-generators"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Proptest strategies and Arbitrary impls for Perl domain objects"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-test-generators"
+keywords = ["perl", "proptest", "testing", "property-based"]
+categories = ["development-tools", "development-tools::testing"]
+include = [
+  "src/**",
+  "tests/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

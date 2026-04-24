@@ -25,14 +25,16 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - CI checks green on the current HEAD SHA
    - No blocking review comments
 
-3. **Deep review check (defense-in-depth)** — verify `reviewed-deep` label is present:
+3. **Policy gate (defense-in-depth)** — run the scripted pre-merge guard:
    ```bash
-   gh pr view <number> --json labels --jq '[.labels[].name] | contains(["reviewed-deep"])'
+   just pre-merge-check <number>
+   # or: bash scripts/pre-merge-check.sh <number>
    ```
-   If `false`, **skip this PR** with reason: "missing deep review signal — route to reviewer-deep."
-   This is a defense-in-depth check. The `pr-ready` gate should have already caught this, but
-   we verify again at merge time because labels can be manually removed or PRs can be
-   marked ready through non-standard paths.
+   This codifies the policy:
+   - non-docs PRs need `deep-reviewed`
+   - docs-only PRs may merge with `merge-ready` alone
+   - draft/title/label mistakes still fail loud
+   If it fails, **skip this PR** with the script's reason.
 
 4. **Build a good commit message** for each PR:
    ```bash
@@ -53,15 +55,15 @@ Merge up to 3 PRs from the candidates identified in step 1.
    gh pr view <number> --json state --jq .state
    # Remove merge-ready from the now-merged PR
    gh pr edit <number> --remove-label "merge-ready"
-   # Remove reviewed-deep from the now-merged PR
-   gh pr edit <number> --remove-label "reviewed-deep"
+   # Remove deep-reviewed from the now-merged PR
+   gh pr edit <number> --remove-label "deep-reviewed"
    # Remove in-build from the linked issue (if any)
    CLOSING_ISSUE=$(gh pr view <number> --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
    if [ -n "$CLOSING_ISSUE" ]; then
      gh issue edit "$CLOSING_ISSUE" --remove-label "in-build"
    fi
    ```
-   Label cleanup prevents stale `merge-ready`, `reviewed-deep`, and `in-build` labels from
+   Label cleanup prevents stale `merge-ready`, `deep-reviewed`, and `in-build` labels from
    misleading future orchestrator queries.
 
 7. If a merge fails or pre-check fails:
@@ -69,7 +71,7 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - CI red or pending → skip, note "CI not green on current HEAD"
    - CI green on old SHA → skip, note "stale CI — needs rerun"
    - Draft → skip, note "still in review"
-   - Missing `reviewed-deep` → skip, note "missing deep review signal"
+   - Missing `deep-reviewed` on a non-docs PR → skip, note "missing deep review signal"
 
 ## Rules
 

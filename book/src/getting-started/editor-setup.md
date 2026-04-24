@@ -20,7 +20,7 @@ This guide provides copy/paste ready configurations for setting up the Perl LSP 
 
 ```bash
 # Option 1: Install from crates.io (recommended)
-cargo install perl-lsp
+cargo install perl-lsp-rs
 
 # Option 2: Install from source
 git clone https://github.com/EffortlessMetrics/perl-lsp.git

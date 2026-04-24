@@ -3,13 +3,53 @@
 use super::*;
 
 impl DebugAdapter {
+    const SUPPORTED_COMMANDS: [&str; 37] = [
+        "initialize",
+        "launch",
+        "attach",
+        "disconnect",
+        "terminate",
+        "setBreakpoints",
+        "setFunctionBreakpoints",
+        "setExceptionBreakpoints",
+        "configurationDone",
+        "threads",
+        "stackTrace",
+        "scopes",
+        "variables",
+        "setVariable",
+        "continue",
+        "next",
+        "stepIn",
+        "stepOut",
+        "pause",
+        "evaluate",
+        "inlineValues",
+        "breakpointLocations",
+        "source",
+        "loadedSources",
+        "modules",
+        "completions",
+        "exceptionInfo",
+        "restart",
+        "setExpression",
+        "dataBreakpointInfo",
+        "setDataBreakpoints",
+        "cancel",
+        "stepInTargets",
+        "gotoTargets",
+        "goto",
+        "restartFrame",
+        "terminateThreads",
+    ];
+
     pub fn handle_request(
         &mut self,
         request_seq: i64,
         command: &str,
         arguments: Option<Value>,
     ) -> DapMessage {
-        eprintln!("DAP request: {} {:?}", command, arguments);
+        tracing::debug!(command, arguments = ?arguments, "DAP request");
 
         let response = self.dispatch_request(request_seq, command, arguments);
 
@@ -29,19 +69,7 @@ impl DebugAdapter {
         command: &str,
         arguments: Option<Value>,
     ) -> DapMessage {
-        eprintln!("DAP request (mock): {} {:?}", command, arguments);
-
-        if command == "attach" {
-            let seq = self.next_seq();
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "attach".to_string(),
-                body: None,
-                message: Some("Attach not yet fully implemented".to_string()),
-            };
-        }
+        tracing::debug!(command, arguments = ?arguments, "DAP request (mock)");
 
         let response = self.dispatch_request(request_seq, command, arguments);
         if command == "initialize" && Self::response_succeeded_for_command(&response, "initialize")
@@ -107,9 +135,21 @@ impl DebugAdapter {
                 success: false,
                 command: command.to_string(),
                 body: None,
-                message: Some(format!("Unknown command: {}", command)),
+                message: Some(Self::unknown_command_message(command)),
             },
         }
+    }
+
+    fn unknown_command_message(command: &str) -> String {
+        if let Some(suggestion) = Self::suggested_command(command) {
+            format!("Unknown command: {command}. Did you mean '{suggestion}'?")
+        } else {
+            format!("Unknown command: {command}")
+        }
+    }
+
+    fn suggested_command(command: &str) -> Option<&'static str> {
+        Self::SUPPORTED_COMMANDS.iter().copied().find(|known| known.eq_ignore_ascii_case(command))
     }
 
     pub(super) fn response_succeeded_for_command(

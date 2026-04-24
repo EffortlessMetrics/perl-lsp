@@ -39,7 +39,7 @@ Agent(subagent_type: "scout", prompt: "Investigate: <topic>. Follow your todo li
 As scouts complete, they file GitHub issues. Check for new findings:
 ```bash
 gh issue list --label "swarm-discovered" --state open --limit 30
-gh issue list --label "research-verified" --state open --limit 30
+gh issue list --label "research-reviewed" --state open --limit 30
 gh issue list --label "needs-plan-review" --state open --limit 30
 ```
 
@@ -50,7 +50,7 @@ For issues labeled `swarm-discovered` that contain external claims to verify, ro
 Agent(subagent_type: "research-verifier", prompt: "Verify facts in issue #NNN. Follow your todo list.", name: "research-verify-NNN")
 ```
 
-Then for issues labeled `research-verified` or `needs-plan-review`, spawn plan-reviewers:
+Then for issues labeled `research-reviewed` or `needs-plan-review`, spawn plan-reviewers:
 ```
 Agent(subagent_type: "plan-reviewer", prompt: "Review issue #NNN. Follow your todo list.", name: "plan-review-NNN")
 ```

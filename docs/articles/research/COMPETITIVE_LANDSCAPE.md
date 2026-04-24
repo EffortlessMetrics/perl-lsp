@@ -141,7 +141,7 @@ Based on issue reports, forum discussions, and CPAN community feedback:
 
 perl-lsp does not require a Perl installation. The parser is a hand-written recursive descent parser in Rust (`crates/perl-parser-core/`) with a mode-based lexer (`crates/perl-lexer/`) that handles Perl's 10 major parsing ambiguities statically.
 
-**Why this matters**: Installation is `cargo install perl-lsp` or a single binary download. No Perl, no CPAN modules, no configuration. The LSP server starts in milliseconds and consumes minimal memory.
+**Why this matters**: Installation is `cargo install perllsp` or a single binary download. No Perl, no CPAN modules, no configuration. The LSP server starts in milliseconds and consumes minimal memory.
 
 **The trade-off**: A static parser cannot be 100% correct for Perl (source filters, `use constant`, runtime prototype changes). perl-lsp's corpus testing shows 80%+ clean parse rate on real CPAN modules, targeting 90%+ for 0.12.0.
 

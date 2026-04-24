@@ -147,7 +147,7 @@ body:
         ```bash
         cargo test -p perl-parser-core -- test_check_as_label --exact
         cargo test -p perl-parser-core -- test_end_as_label --exact
-        cargo fmt --all && cargo clippy -p perl-parser-core --tests
+        cargo xtask fmt && cargo clippy -p perl-parser-core --tests
         ```
       render: markdown
     validations:
@@ -187,6 +187,20 @@ body:
         - HARD (>8h)
     validations:
       required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: "Optional — for security-scout findings and critical bugs"
+      options:
+        - "— not applicable —"
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: false
 
   - type: dropdown
     id: category

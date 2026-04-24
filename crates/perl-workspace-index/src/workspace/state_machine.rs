@@ -1,7 +1,9 @@
 //! Index lifecycle state machine for workspace index operations.
 //!
-//! This module was extracted to the `perl-workspace-index-state-machine` microcrate to
-//! keep workspace orchestration code focused on indexing concerns while retaining the
-//! public path.
+//! Re-exports from the internal `state_machine` module to preserve existing caller paths
+//! like `perl_workspace::workspace::state_machine::IndexStateMachine`.
 
-pub use perl_workspace_index_state_machine::*;
+pub use crate::state_machine::{
+    BuildPhase, BuildPhaseTransition, DegradationReason, IndexState, IndexStateKind,
+    IndexStateMachine, IndexStateTransition, InvalidationReason, ResourceKind, TransitionResult,
+};

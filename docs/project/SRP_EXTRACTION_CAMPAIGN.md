@@ -125,7 +125,7 @@ The typical test plan runs three commands:
 ```bash
 cargo test -p perl-lsp-folding            # New crate's own tests
 cargo test -p perl-lsp-providers          # Parent crate still passes
-cargo test -p perl-lsp --lib              # Integration tests pass
+cargo test -p perl-lsp-rs --lib              # Integration tests pass
 ```
 
 PR #1238 changed 10 files, added 379 lines, deleted 317 lines, and was

@@ -119,8 +119,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - name: Install cross
@@ -128,7 +129,7 @@ jobs:
         run: cargo install cross --locked --git https://github.com/cross-rs/cross
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           key: ${{ matrix.target }}
           cache-on-failure: true
@@ -141,13 +142,13 @@ jobs:
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
             BUILD_CMD="cross"
           fi
-          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perllsp --bin perllsp
           $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-dap --bin perl-dap
 
       - name: Package binaries
         shell: bash
         run: |
-          NAME="perl-lsp"
+          NAME="perllsp"
           TARGET="${{ matrix.target }}"
           VERSION="${{ needs.release-metadata.outputs.version }}"
 
@@ -214,7 +215,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       - name: Install cargo-release
         run: cargo install cargo-release --locked
@@ -237,36 +240,33 @@ jobs:
           cd ..
           cat SHA256SUMS
 
-      - name: Generate release notes
+      - name: Verify curated release notes exist
+        id: release_notes_preflight
+        run: |
+          TAG="${{ needs.release-metadata.outputs.tag }}"
+          NOTE_FILE="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTE_FILE" ]; then
+            echo "::error file=$NOTE_FILE::Curated release notes missing for ${TAG}. See RELEASE.md \"Release History Updates\" — every release must ship docs/releases/${TAG}.md before tagging."
+            exit 1
+          fi
+          echo "note_file=$NOTE_FILE" >> "$GITHUB_OUTPUT"
+          echo "✅ Found curated release notes: $NOTE_FILE"
+
+      - name: Generate release notes from docs/releases/<tag>.md
         id: release_notes
         run: |
-          VERSION="${{ needs.release-metadata.outputs.version }}"
-          cat > release_notes.md << EOF
-          ## Release ${VERSION}
-
-          ### Installation
-
-          ```bash
-          # Using cargo
-          cargo install perl-lsp
-
-          # Or download binary for your platform
-          # See assets below
-          ```
-
-          ### Changes
-
-          See the [CHANGELOG](CHANGELOG.md) for detailed changes.
-
-          ### Checksums
-
-          Verify downloads with the consolidated `SHA256SUMS` file attached to this release.
-          EOF
+          TAG="${{ needs.release-metadata.outputs.tag }}"
+          # xtask strips YAML frontmatter and emits the curated body. The
+          # command fails hard if the note file is missing — the earlier
+          # preflight step makes that a clearer error message in the UI.
+          cargo xtask release-notes --tag "$TAG" --output release_notes.md
+          echo "--- release_notes.md ---"
           cat release_notes.md
+          echo "--- /release_notes.md ---"
 
       - name: Create GitHub Release
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
         with:
           files: |
             artifacts/*/*
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload SBOM as release asset
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
         with:
           files: sbom-spdx.json
           tag_name: ${{ needs.release-metadata.outputs.tag }}

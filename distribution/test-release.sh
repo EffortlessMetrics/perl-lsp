@@ -4,7 +4,7 @@
 set -e
 
 VERSION="${1:-1.0.0}"
-PACKAGE_NAME="perl-lsp"
+PACKAGE_NAME="perllsp"
 
 # Colors for output
 RED='\033[0;31m'
@@ -12,7 +12,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Testing perl-lsp release artifacts v${VERSION}${NC}"
+echo -e "${GREEN}Testing perllsp release artifacts v${VERSION}${NC}"
 echo ""
 
 # Function to test binary
@@ -33,7 +33,7 @@ test_binary() {
 
     # Test help
     HELP_OUTPUT=$("$binary" --help 2>&1 || true)
-    if [[ "$HELP_OUTPUT" == *"perl-lsp"* ]]; then
+    if [[ "$HELP_OUTPUT" == *"perllsp"* ]]; then
         echo -e "${GREEN}  ✓ Help output valid${NC}"
     else
         echo -e "${RED}  ✗ Help output invalid${NC}"
@@ -86,28 +86,28 @@ test_checksum() {
 }
 
 # Test if we're in a release directory
-if [ -d "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu" ]; then
+if [ -d "perllsp-${VERSION}-x86_64-unknown-linux-gnu" ]; then
     # Test Linux x86_64
-    test_binary "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu/perl-lsp" "Linux x86_64"
-    test_checksum "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu/perl-lsp" \
-                  "perl-lsp-${VERSION}-x86_64-unknown-linux-gnu/SHA256SUMS.txt"
-elif [ -d "perl-lsp-${VERSION}-x86_64-apple-darwin" ]; then
+    test_binary "perllsp-${VERSION}-x86_64-unknown-linux-gnu/perllsp" "Linux x86_64"
+    test_checksum "perllsp-${VERSION}-x86_64-unknown-linux-gnu/perllsp" \
+                  "perllsp-${VERSION}-x86_64-unknown-linux-gnu/SHA256SUMS.txt"
+elif [ -d "perllsp-${VERSION}-x86_64-apple-darwin" ]; then
     # Test macOS x86_64
-    test_binary "perl-lsp-${VERSION}-x86_64-apple-darwin/perl-lsp" "macOS x86_64"
-    test_checksum "perl-lsp-${VERSION}-x86_64-apple-darwin/perl-lsp" \
-                  "perl-lsp-${VERSION}-x86_64-apple-darwin/SHA256SUMS.txt"
-elif [ -d "perl-lsp-${VERSION}-x86_64-pc-windows-msvc" ]; then
+    test_binary "perllsp-${VERSION}-x86_64-apple-darwin/perllsp" "macOS x86_64"
+    test_checksum "perllsp-${VERSION}-x86_64-apple-darwin/perllsp" \
+                  "perllsp-${VERSION}-x86_64-apple-darwin/SHA256SUMS.txt"
+elif [ -d "perllsp-${VERSION}-x86_64-pc-windows-msvc" ]; then
     # Test Windows x86_64
-    test_binary "perl-lsp-${VERSION}-x86_64-pc-windows-msvc/perl-lsp.exe" "Windows x86_64"
-    test_checksum "perl-lsp-${VERSION}-x86_64-pc-windows-msvc/perl-lsp.exe" \
-                  "perl-lsp-${VERSION}-x86_64-pc-windows-msvc/SHA256SUMS.txt"
+    test_binary "perllsp-${VERSION}-x86_64-pc-windows-msvc/perllsp.exe" "Windows x86_64"
+    test_checksum "perllsp-${VERSION}-x86_64-pc-windows-msvc/perllsp.exe" \
+                  "perllsp-${VERSION}-x86_64-pc-windows-msvc/SHA256SUMS.txt"
 else
     echo -e "${YELLOW}No release directory found for v${VERSION}${NC}"
     echo ""
     echo "Usage: $0 [version]"
     echo ""
     echo "Extract release artifacts first:"
-    echo "  tar xzf perl-lsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+    echo "  tar xzf perllsp-${VERSION}-x86_64-unknown-linux-gnu.tar.gz"
     echo "  ./distribution/test-release.sh ${VERSION}"
     exit 1
 fi

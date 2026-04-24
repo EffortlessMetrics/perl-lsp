@@ -213,7 +213,11 @@
 //! 5. Run `cargo test` to validate
 //!
 //! See existing corpus files for examples and conventions.
-#![allow(clippy::pedantic)] // Corpus crate - focus on core clippy lints only
+#![allow(clippy::pedantic)]
+// Corpus crate - focus on core clippy lints only
+// Lint enforcement: library code must use tracing, not direct stderr/stdout prints.
+#![deny(clippy::print_stderr, clippy::print_stdout)]
+#![cfg_attr(test, allow(clippy::print_stderr, clippy::print_stdout))]
 
 pub mod cases;
 pub mod codegen;
@@ -222,6 +226,7 @@ pub mod files;
 pub mod format_statements;
 pub mod r#gen;
 pub mod glob_expressions;
+pub mod gold;
 pub mod index;
 pub mod lint;
 pub mod meta;
@@ -250,6 +255,13 @@ pub use format_statements::{
 };
 pub use glob_expressions::{
     GlobExpressionCase, GlobExpressionGenerator, find_glob_case, glob_expression_cases,
+};
+pub use gold::{
+    CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
+    GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
+    GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
+    load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
+    load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
 use meta::Section;
 use regex::Regex;

@@ -1,0 +1,33 @@
+Name:           __PACKAGE_NAME__
+Version:        __RELEASE_VERSION__
+Release:        1%{?dist}
+Summary:        __PACKAGE_SUMMARY__
+License:        __PACKAGE_LICENSE__
+URL:            __PACKAGE_HOMEPAGE__
+BuildArch:      __RPM_ARCH__
+Source0:        __SOURCE_TARBALL__
+
+%description
+perl-lsp is a native Perl language server written in Rust.
+This package installs the perllsp and perl-dap executables from the release artifact.
+
+%prep
+%autosetup -n __SOURCE_DIR__
+
+%build
+true
+
+%install
+rm -rf %{buildroot}
+install -Dpm 0755 perllsp %{buildroot}%{_bindir}/perllsp
+install -Dpm 0755 perl-dap %{buildroot}%{_bindir}/perl-dap
+
+%files
+%license LICENSE-MIT LICENSE-APACHE
+%doc README.md
+%{_bindir}/perllsp
+%{_bindir}/perl-dap
+
+%changelog
+* Thu Jan 01 1970 __PACKAGE_MAINTAINER__ - __RELEASE_VERSION__-1
+- Initial packaging template

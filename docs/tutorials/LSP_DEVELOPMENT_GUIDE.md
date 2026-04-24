@@ -402,8 +402,8 @@ cargo test -p perl-parser workspace_index_enhanced_deduplication
 cargo test -p perl-parser workspace_rename_package_qualified_support
 
 # Integration tests for LSP features
-cargo test -p perl-lsp test_find_references_excludes_definitions
-cargo test -p perl-lsp test_package_qualified_navigation
+cargo test -p perl-lsp-rs test_find_references_excludes_definitions
+cargo test -p perl-lsp-rs test_package_qualified_navigation
 ```
 
 ## Adding New LSP Features
@@ -1059,18 +1059,18 @@ export LSP_TEST_FALLBACKS=1
 **Usage Examples**:
 ```bash
 # Run all LSP tests in fast mode
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs
 
 # Combine threading control with fast mode for optimal CI reliability (v0.8.8+)
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Performance testing with enhanced test harness (PR #140)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_behavioral_tests     # 0.31s (was 1560s+)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 
 # Traditional performance-sensitive tests with controlled threading
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_workspace_symbol_search -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs test_completion_detail_formatting -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs test_workspace_symbol_search -- --test-threads=2
 
 # Validate workspace builds quickly
 LSP_TEST_FALLBACKS=1 cargo check --workspace
@@ -1166,7 +1166,7 @@ let definition = harness.request_with_timeout(
 cargo test -p perl-parser your_feature
 
 # LSP API contract tests (async harness)
-cargo test -p perl-lsp lsp_api_contracts
+cargo test -p perl-lsp-rs lsp_api_contracts
 
 # Integration tests with timeout handling
 cargo test -p perl-parser lsp_your_feature_tests
@@ -1174,19 +1174,19 @@ cargo test -p perl-parser lsp_your_feature_tests
 # Manual testing with real protocol
 
 # Test external dependency robustness
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test test_e2e_document_formatting  # Passes with or without perltidy
-cargo test -p perl-lsp --test lsp_perltidy_test                                         # Tests capability advertising
-echo '{"jsonrpc":"2.0","method":"your_method",...}' | perl-lsp --stdio
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test test_e2e_document_formatting  # Passes with or without perltidy
+cargo test -p perl-lsp-rs --test lsp_perltidy_test                                         # Tests capability advertising
+echo '{"jsonrpc":"2.0","method":"your_method",...}' | perllsp --stdio
 
 # Run comprehensive E2E tests (100% passing as of v0.8.6)
 cargo test -p perl-parser lsp_comprehensive_e2e_test
 
 # LSP testing with enhanced harness (PR #140)
-cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
-cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests     # 0.31s (was 1560s+)
+cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 
 # Run all LSP tests with async harness (48+ tests, <10s total)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 ```
 
 ## Enhanced Position Tracking Development (v0.8.7+)
@@ -1658,11 +1658,11 @@ This section provides comprehensive guidance for diagnosing and resolving issues
    ```bash
    # Force fallbacks for comprehensive testing
    export LSP_TEST_FALLBACKS=1
-   perl-lsp --stdio
+   perllsp --stdio
    
    # Force fallbacks in production (debugging)
    export LSP_FORCE_FALLBACKS=1
-   perl-lsp --stdio
+   perllsp --stdio
    ```
 
 2. **Configuration-Based Activation**
@@ -1678,7 +1678,7 @@ This section provides comprehensive guidance for diagnosing and resolving issues
 
 ```bash
 # Enable detailed logging to see when fallbacks activate
-perl-lsp --stdio --log-level debug 2>lsp-debug.log
+perllsp --stdio --log-level debug 2>lsp-debug.log
 
 # Monitor fallback activation in real-time
 tail -f lsp-debug.log | grep -E "(fallback|Primary.*failed)"
@@ -1761,7 +1761,7 @@ fn validate_fallback_accuracy() {
 echo "sub test_function { return 42; }" | grep -E "sub\s+([A-Za-z_][A-Za-z0-9_]*)"
 
 # Verify fallback symbol extraction
-LSP_TEST_FALLBACKS=1 perl-lsp --stdio < test_request.json
+LSP_TEST_FALLBACKS=1 perllsp --stdio < test_request.json
 ```
 
 **Resolution**:
@@ -2281,24 +2281,24 @@ impl WorkflowPerformanceConfig {
 #### **End-to-End Workflow Testing**
 ```bash
 # Test complete workflow pipeline
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test
 
 # Test individual workflow phases
 cargo test -p perl-parser --test parsing_performance_tests     # Phase 1: Parse
 cargo test -p perl-parser --test workspace_indexing_tests     # Phase 2: Index
-cargo test -p perl-lsp --test navigation_integration_tests    # Phase 3: Navigate
-cargo test -p perl-lsp --test completion_integration_tests    # Phase 4: Complete
-cargo test -p perl-lsp --test diagnostic_integration_tests    # Phase 5: Analyze
-cargo test -p perl-lsp --test execute_command_integration_tests # Phase 6: Execute
+cargo test -p perl-lsp-rs --test navigation_integration_tests    # Phase 3: Navigate
+cargo test -p perl-lsp-rs --test completion_integration_tests    # Phase 4: Complete
+cargo test -p perl-lsp-rs --test diagnostic_integration_tests    # Phase 5: Analyze
+cargo test -p perl-lsp-rs --test execute_command_integration_tests # Phase 6: Execute
 
 # Performance validation across complete workflow
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### **Workflow Performance Benchmarks**
 ```bash
 # Validate workflow performance targets
-cargo test -p perl-lsp --test workflow_performance_tests
+cargo test -p perl-lsp-rs --test workflow_performance_tests
 
 # Individual phase performance validation
 cargo bench parsing_phase        # Target: <1ms

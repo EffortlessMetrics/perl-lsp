@@ -178,7 +178,7 @@ These tests exhibit non-deterministic behavior requiring special execution confi
 #### P1-001: LSP Document Symbols Test
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_document_symbols_test.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_document_symbols_test.rs`  
 **Symptoms**: BrokenPipe errors, intermittent timeouts
 
 **Root Cause**
@@ -188,7 +188,7 @@ Tests spawn LSP server instances without using the global mutex serialization, l
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_symbols_test -- --test-threads=2
 ```
 
 **Related Documentation**
@@ -199,7 +199,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_symbols_test -- -
 #### P1-002: LSP Document Links Test
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_document_links_test.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_document_links_test.rs`  
 **Symptoms**: BrokenPipe errors when sending notifications
 
 **Root Cause**
@@ -209,7 +209,7 @@ Flakiness inherited from running alongside other LSP tests that spawn servers.
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_document_links_test -- --test-threads=2
 ```
 
 **Related Documentation**
@@ -220,7 +220,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_document_links_test -- --t
 #### P1-003: LSP Encoding Edge Cases
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_encoding_edge_cases.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_encoding_edge_cases.rs`  
 **Symptoms**: BrokenPipe, Timeout  
 **Tracking**: Issue #200
 
@@ -231,7 +231,7 @@ Complex Unicode processing with UTF-16 position conversion adds overhead, especi
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- --test-threads=2
 ```
 
 **Adaptive Timeout**
@@ -254,7 +254,7 @@ fn compute_adaptive_timeout() -> Duration {
 #### P1-004: LSP Cancellation Infrastructure Tests
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_cancellation_infrastructure_tests.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_infrastructure_tests.rs`  
 **Symptoms**: Timeout, Race conditions  
 **Tracking**: Issue #48
 
@@ -265,7 +265,7 @@ Shared cancellation state accessed by multiple threads with timing-dependent ass
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_infrastructure_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_infrastructure_tests -- --test-threads=1
 ```
 
 **Related Documentation**
@@ -277,7 +277,7 @@ RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_infrastructur
 #### P1-005: LSP Cancellation Parser Integration Tests
 
 **Status**: ⚠️ Mitigated  
-**File**: `crates/perl-lsp/tests/lsp_cancellation_parser_integration_tests.rs`  
+**File**: `crates/perl-lsp-rs/tests/lsp_cancellation_parser_integration_tests.rs`  
 **Symptoms**: Timeout, Race conditions  
 **Tracking**: Issue #48
 
@@ -288,7 +288,7 @@ LSP server initialization is asynchronous; tests may send requests before server
 **Mitigation**
 
 ```bash
-RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_cancellation_parser_integration_tests -- --test-threads=1
+RUST_TEST_THREADS=1 cargo test -p perl-lsp-rs --test lsp_cancellation_parser_integration_tests -- --test-threads=1
 ```
 
 **Related Documentation**
@@ -449,7 +449,7 @@ cpanm Perl::LanguageServer
 LSP tests require thread-constrained execution:
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **Mitigation**

@@ -35,4 +35,10 @@ Scout for security issues across the codebase. READ ONLY — returns findings, d
 
 ## Output
 
-Write findings as a GitHub issue via `gh issue create --label swarm-discovered` with severity-ranked findings in the body.
+Use the **Full Scout Report** variant from `/scout-issue`. Add a `## Severity` section immediately after Problem, with one line per finding:
+
+```
+## Severity
+
+- **[critical/high/medium/low]** <finding name> — <one-line justification>
+```

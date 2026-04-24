@@ -15,7 +15,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Building perl-lsp distribution packages v${VERSION}${NC}"
+echo -e "${GREEN}Building perllsp distribution packages v${VERSION}${NC}"
 
 # Check if cargo is installed
 if ! command -v cargo &> /dev/null; then
@@ -25,7 +25,7 @@ fi
 
 # Build the release binary
 echo -e "${YELLOW}Building release binary...${NC}"
-cargo build --release --bin perl-lsp -p perl-lsp
+cargo build --release --bin perllsp -p perllsp
 
 # Create temporary directory for packaging
 TEMP_DIR=$(mktemp -d)
@@ -34,25 +34,25 @@ trap "rm -rf $TEMP_DIR" EXIT
 # Prepare binary
 BIN_DIR="$TEMP_DIR/usr/bin"
 mkdir -p "$BIN_DIR"
-cp target/release/perl-lsp "$BIN_DIR/"
-chmod 755 "$BIN_DIR/perl-lsp"
+cp target/release/perllsp "$BIN_DIR/"
+chmod 755 "$BIN_DIR/perllsp"
 
 # Create man page
 MAN_DIR="$TEMP_DIR/usr/share/man/man1"
 mkdir -p "$MAN_DIR"
-cat > "$MAN_DIR/perl-lsp.1" << 'EOF'
-.TH PERL-LSP 1 "February 2026" "perl-lsp 1.0.0" "User Commands"
+cat > "$MAN_DIR/perllsp.1" << 'EOF'
+.TH PERLLSP 1 "February 2026" "perllsp 1.0.0" "User Commands"
 .SH NAME
-perl-lsp \- Perl Language Server Protocol implementation
+perllsp \- Perl Language Server Protocol implementation
 .SH SYNOPSIS
-.B perl-lsp
+.B perllsp
 [\fB\-\-stdio\fR]
 [\fB\-\-tcp\fR \fIPORT\fR]
 [\fB\-\-log\fR]
 [\fB\-\-version\fR]
 [\fB\-\-help\fR]
 .SH DESCRIPTION
-.B perl-lsp
+.B perllsp
 is a high-performance Language Server Protocol implementation for Perl,
 providing IDE features like code completion, go-to-definition, find references,
 and more.
@@ -75,16 +75,16 @@ Display help message
 .SH EXAMPLES
 .TP
 Start the server for editor integration:
-.B perl-lsp --stdio
+.B perllsp --stdio
 .TP
 Start with debug logging:
-.B perl-lsp --stdio --log
+.B perllsp --stdio --log
 .SH AUTHOR
 Steven Zimmerman, CPA
 .SH BUGS
 Report bugs at https://github.com/EffortlessMetrics/perl-lsp/issues
 EOF
-gzip -9 "$MAN_DIR/perl-lsp.1"
+gzip -9 "$MAN_DIR/perllsp.1"
 
 # Create systemd service file (optional)
 SYSTEMD_DIR="$TEMP_DIR/usr/lib/systemd/user"
@@ -96,7 +96,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/perl-lsp --tcp 9999
+ExecStart=/usr/bin/perllsp --tcp 9999
 Restart=on-failure
 StandardOutput=journal
 StandardError=journal
@@ -145,7 +145,7 @@ set -e
 
 if [ "$1" = "configure" ]; then
     echo "perl-lsp has been installed successfully."
-    echo "To use with your editor, configure it to use 'perl-lsp --stdio'"
+    echo "To use with your editor, configure it to use 'perllsp --stdio'"
 fi
 
 exit 0
@@ -202,8 +202,8 @@ cp -a usr \$RPM_BUILD_ROOT/
 
 %files
 %defattr(-,root,root,-)
-/usr/bin/perl-lsp
-/usr/share/man/man1/perl-lsp.1.gz
+/usr/bin/perllsp
+/usr/share/man/man1/perllsp.1.gz
 /usr/lib/systemd/user/perl-lsp.service
 
 %changelog
@@ -223,12 +223,12 @@ EOF
 build_tarball() {
     echo -e "${YELLOW}Building .tar.gz archive...${NC}"
     
-    ARCHIVE_NAME="perl-lsp-${VERSION}-linux-x86_64.tar.gz"
+    ARCHIVE_NAME="perllsp-${VERSION}-linux-x86_64.tar.gz"
     
     # Create a clean directory structure
-    ARCHIVE_DIR="$TEMP_DIR/perl-lsp-${VERSION}"
+    ARCHIVE_DIR="$TEMP_DIR/perllsp-${VERSION}"
     mkdir -p "$ARCHIVE_DIR"
-    cp target/release/perl-lsp "$ARCHIVE_DIR/"
+    cp target/release/perllsp "$ARCHIVE_DIR/"
     
     # Add README
     cat > "$ARCHIVE_DIR/README.md" << EOF
@@ -237,15 +237,15 @@ build_tarball() {
 ## Installation
 
 1. Extract the archive
-2. Move perl-lsp to a directory in your PATH:
+2. Move perllsp to a directory in your PATH:
    \`\`\`bash
-   sudo cp perl-lsp /usr/local/bin/
-   chmod +x /usr/local/bin/perl-lsp
+   sudo cp perllsp /usr/local/bin/
+   chmod +x /usr/local/bin/perllsp
    \`\`\`
 
 ## Usage
 
-Configure your editor to use \`perl-lsp --stdio\`
+Configure your editor to use \`perllsp --stdio\`
 
 ## Documentation
 
@@ -254,7 +254,7 @@ EOF
     
     # Create the archive
     cd "$TEMP_DIR"
-    tar czf "$OLDPWD/$ARCHIVE_NAME" "perl-lsp-${VERSION}/"
+    tar czf "$OLDPWD/$ARCHIVE_NAME" "perllsp-${VERSION}/"
     cd -
     
     echo -e "${GREEN}Created $ARCHIVE_NAME${NC}"
@@ -267,4 +267,4 @@ build_tarball
 
 echo -e "${GREEN}All packages built successfully!${NC}"
 echo -e "${YELLOW}Files created:${NC}"
-ls -lh perl-lsp*.{deb,rpm,tar.gz} 2>/dev/null || true
+ls -lh perl-lsp*.deb perl-lsp*.rpm perllsp*.tar.gz 2>/dev/null || true

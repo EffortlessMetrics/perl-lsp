@@ -2,114 +2,7 @@ impl<'a> Parser<'a> {
     /// Parse comma operator (lowest precedence except for word operators)
     fn parse_comma(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_assignment()?;
-
-        // In scalar context, comma creates a list
-        // For now, we'll just parse it as sequential expressions
-        // Also handle fat arrow (=>) which acts like comma
-        if self.peek_kind() == Some(TokenKind::Comma)
-            || self.peek_kind() == Some(TokenKind::FatArrow)
-        {
-            let mut expressions = vec![expr];
-            let mut saw_fat_comma = false;
-
-            // Handle initial fat arrow — auto-quote the key if it is a bare identifier
-            if self.peek_kind() == Some(TokenKind::FatArrow) {
-                saw_fat_comma = true;
-                // Auto-quote bare identifiers before =>
-                let last_idx = expressions.len() - 1;
-                if let NodeKind::Identifier { ref name } = expressions[last_idx].kind {
-                    let loc = expressions[last_idx].location;
-                    expressions[last_idx] = Node::new(
-                        NodeKind::String { value: name.clone(), interpolated: false },
-                        loc,
-                    );
-                }
-                self.tokens.next()?; // consume =>
-                expressions.push(self.parse_assignment()?);
-            }
-
-            while self.peek_kind() == Some(TokenKind::Comma)
-                || self.peek_kind() == Some(TokenKind::FatArrow)
-            {
-                let was_comma = self.peek_kind() == Some(TokenKind::Comma);
-                if was_comma {
-                    self.consume_token()?; // consume comma
-                }
-
-                // Handle `, =>` (comma then fat arrow) — Perl allows this as a
-                // redundant separator.  The `=>` after a comma acts just like
-                // another comma.  Example: `(KEY, => 'val')` from B::Deparse.
-                //
-                // Also handle chained `=>` (value followed by `=>`) — the value
-                // was already pushed to expressions; auto-quote the last element
-                // and consume the `=>` to parse the next value.
-                // Example: `[inc_override => INC => [@INC]]`.
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    saw_fat_comma = true;
-                    // Auto-quote the last expression if it's a bare identifier
-                    // (the `=>` auto-quotes its left operand)
-                    if !was_comma {
-                        if let Some(last) = expressions.last_mut() {
-                            if let NodeKind::Identifier { ref name } = last.kind {
-                                *last = Node::new(
-                                    NodeKind::String { value: name.clone(), interpolated: false },
-                                    last.location,
-                                );
-                            }
-                        }
-                    }
-                    self.consume_token()?; // consume =>
-                }
-
-                // Check for end of expression (includes statement modifier
-                // keywords so that `$a, $b if $cond` does not try to parse the
-                // modifier as another comma element).
-                match self.peek_kind() {
-                    Some(TokenKind::Semicolon)
-                    | Some(TokenKind::RightParen)
-                    | Some(TokenKind::RightBrace)
-                    | Some(TokenKind::RightBracket) => break,
-                    Some(k) if Self::is_stmt_modifier_kind(k) => break,
-                    _ => {}
-                }
-
-                let mut elem = self.parse_assignment()?;
-
-                // Check for fat arrow after element — auto-quote bare identifiers
-                if self.peek_kind() == Some(TokenKind::FatArrow) {
-                    saw_fat_comma = true;
-                    if let NodeKind::Identifier { ref name } = elem.kind {
-                        elem = Node::new(
-                            NodeKind::String { value: name.clone(), interpolated: false },
-                            elem.location,
-                        );
-                    }
-                    self.tokens.next()?; // consume =>
-                    expressions.push(elem);
-
-                    // Check again for end of expression
-                    match self.peek_kind() {
-                        Some(TokenKind::Semicolon)
-                        | Some(TokenKind::RightParen)
-                        | Some(TokenKind::RightBrace)
-                        | Some(TokenKind::RightBracket) => break,
-                        Some(k) if Self::is_stmt_modifier_kind(k) => break,
-                        _ => expressions.push(self.parse_assignment()?),
-                    }
-                } else {
-                    expressions.push(elem);
-                }
-            }
-
-            // Convert to hash literal if we saw fat comma and have even number of elements
-            let start = expressions[0].location.start;
-            let end = expressions
-                .last()
-                .ok_or_else(|| ParseError::syntax("Empty expression list", start))?
-                .location
-                .end;
-            expr = Self::build_list_or_hash(expressions, saw_fat_comma, start, end);
-        }
+        expr = self.collect_comma_fat_arrow_continuation(expr)?;
 
         // Now handle word operators (or, xor, and, not) which have the lowest precedence
         expr = self.parse_word_or_expr(expr)?;
@@ -130,33 +23,12 @@ impl<'a> Parser<'a> {
                     // Parse the right side as a full expression starting with assignment.
                     // In Perl, comma has higher precedence than word operators, so
                     // '\ or \ = 1, 0' parses as '\ or ((\ = 1), 0)'.
-                    // After parsing the first assignment, collect trailing comma elements.
+                    // After parsing the first assignment, collect trailing comma / fat-arrow
+                    // elements before building the word-operator node.
                     let mut right = self.parse_assignment()?;
                     // Apply any 'and' operators to the right side
                     right = self.parse_word_and_expr_with(right)?;
-
-                    // Collect trailing comma-separated elements (comma > or in precedence)
-                    if self.peek_kind() == Some(TokenKind::Comma) {
-                        let mut elements = vec![right];
-                        while self.peek_kind() == Some(TokenKind::Comma) {
-                            self.consume_token()?; // consume ','
-                            match self.peek_kind() {
-                                Some(TokenKind::Semicolon)
-                                | Some(TokenKind::RightParen)
-                                | Some(TokenKind::RightBrace)
-                                | Some(TokenKind::RightBracket)
-                                | None => break,
-                                Some(k) if Self::is_stmt_modifier_kind(k) => break,
-                                _ => {
-                                    let elem = self.parse_assignment()?;
-                                    elements.push(elem);
-                                }
-                            }
-                        }
-                        let r_start = elements[0].location.start;
-                        let r_end = elements[elements.len() - 1].location.end;
-                        right = Self::build_list_or_hash(elements, false, r_start, r_end);
-                    }
+                    right = self.collect_comma_fat_arrow_continuation(right)?;
 
                     let start = expr.location.start;
                     let end = right.location.end;
@@ -189,31 +61,10 @@ impl<'a> Parser<'a> {
             // Parse right side as a 'not' expression or assignment.
             // In Perl, comma has higher precedence than word operators, so
             // `$a and $x = 1, last` parses as `$a and ($x = 1, last)`.
-            // After parsing the first assignment, collect trailing comma elements.
+            // After parsing the first assignment, collect trailing comma / fat-arrow
+            // elements before building the word-operator node.
             let mut right = self.parse_word_not_expr()?;
-
-            // Collect trailing comma-separated elements (comma > and in precedence)
-            if self.peek_kind() == Some(TokenKind::Comma) {
-                let mut elements = vec![right];
-                while self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume ','
-                    match self.peek_kind() {
-                        Some(TokenKind::Semicolon)
-                        | Some(TokenKind::RightParen)
-                        | Some(TokenKind::RightBrace)
-                        | Some(TokenKind::RightBracket)
-                        | None => break,
-                        Some(k) if Self::is_stmt_modifier_kind(k) => break,
-                        _ => {
-                            let elem = self.parse_assignment()?;
-                            elements.push(elem);
-                        }
-                    }
-                }
-                let r_start = elements[0].location.start;
-                let r_end = elements[elements.len() - 1].location.end;
-                right = Self::build_list_or_hash(elements, false, r_start, r_end);
-            }
+            right = self.collect_comma_fat_arrow_continuation(right)?;
 
             let start = expr.location.start;
             let end = right.location.end;
@@ -251,9 +102,23 @@ impl<'a> Parser<'a> {
 
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
-        // Check if we have a 'not' operator first
-        if self.peek_kind() == Some(TokenKind::WordNot) {
-            return self.parse_word_not_expr();
+        if let Some(kind) = self.peek_kind() {
+            if matches!(
+                kind,
+                TokenKind::WordNot | TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordXor
+            ) && self.is_keyword_before_fat_arrow()
+            {
+                let token = self.tokens.next()?;
+                return Ok(Node::new(
+                    NodeKind::Identifier { name: token.text.to_string() },
+                    SourceLocation { start: token.start, end: token.end },
+                ));
+            }
+
+            // Check if we have a 'not' operator first
+            if kind == TokenKind::WordNot {
+                return self.parse_word_not_expr();
+            }
         }
 
         // Handle 'return' as an expression in expression context

@@ -43,7 +43,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       - name: Compute topological order
         id: topo
@@ -60,13 +62,81 @@ jobs:
               if pkg["id"] in workspace_members:
                   packages[pkg["name"]] = pkg
 
-          # Build dependency graph (only internal deps)
-          deps = {}
+          # Build separate normal and dev dependency graphs (only internal deps).
+          # cargo publish resolves dev-deps from the registry when packaging the
+          # manifest, so a crate that dev-depends on another workspace member
+          # must be published after that member.  However, dev-dep edges can
+          # form cycles between workspace crates (e.g. crate A dev-depends on
+          # crate B while B normally depends on A).  We break those cycles by
+          # running Tarjan SCC: intra-SCC dev edges are dropped (they are the
+          # only edges that can close a cycle), while inter-SCC dev edges are
+          # kept so that the ordering constraint is honoured.
+          from collections import defaultdict
+
+          normal_deps = defaultdict(set)
+          dev_deps = defaultdict(set)
           for name, pkg in packages.items():
-              deps[name] = set()
               for dep in pkg["dependencies"]:
-                  if dep["name"] in packages and dep.get("kind") != "dev":
-                      deps[name].add(dep["name"])
+                  if dep["name"] not in packages:
+                      continue
+                  if dep.get("kind") == "dev":
+                      dev_deps[name].add(dep["name"])
+                  else:
+                      normal_deps[name].add(dep["name"])
+
+          # Tarjan SCC on the full graph (normal + dev edges).
+          def tarjan_sccs(graph, nodes):
+              index_counter = [0]
+              stack = []
+              lowlink = {}
+              index = {}
+              on_stack = {}
+              sccs = []
+
+              def strongconnect(v):
+                  index[v] = index_counter[0]
+                  lowlink[v] = index_counter[0]
+                  index_counter[0] += 1
+                  stack.append(v)
+                  on_stack[v] = True
+                  for w in graph.get(v, set()):
+                      if w not in index:
+                          strongconnect(w)
+                          lowlink[v] = min(lowlink[v], lowlink[w])
+                      elif on_stack.get(w):
+                          lowlink[v] = min(lowlink[v], index[w])
+                  if lowlink[v] == index[v]:
+                      scc = []
+                      while True:
+                          w = stack.pop()
+                          on_stack[w] = False
+                          scc.append(w)
+                          if w == v:
+                              break
+                      sccs.append(scc)
+
+              sys.setrecursionlimit(max(10000, len(nodes) * 2))
+              for v in nodes:
+                  if v not in index:
+                      strongconnect(v)
+              return sccs
+
+          full_graph = {name: normal_deps[name] | dev_deps[name] for name in packages}
+          sccs = tarjan_sccs(full_graph, list(packages.keys()))
+          node_to_scc = {}
+          for i, scc in enumerate(sccs):
+              for node in scc:
+                  node_to_scc[node] = i
+
+          # Build final dep graph: normal edges always included; dev edges only
+          # when they cross SCC boundaries (intra-SCC dev edges are dropped to
+          # break cycles).
+          deps = {}
+          for name in packages:
+              deps[name] = set(normal_deps[name])
+              for dep in dev_deps[name]:
+                  if node_to_scc.get(dep) != node_to_scc.get(name):
+                      deps[name].add(dep)
 
           # Topological sort (Kahn algorithm)
           in_degree = {name: len(d) for name, d in deps.items()}
@@ -172,10 +242,12 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable (master)
+        with:
+          toolchain: stable
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           cache-on-failure: true
           cache-all-crates: true
@@ -217,18 +289,104 @@ jobs:
           TOTAL=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
           echo "Publishing $TOTAL crates..."
 
+          # Compute the sparse-index path for a crate name per the cargo
+          # sparse-index layout: https://doc.rust-lang.org/cargo/reference/registry-index.html
+          #   1-char names -> "1/<name>"
+          #   2-char names -> "2/<name>"
+          #   3-char names -> "3/<first-char>/<name>"
+          #   4+ char names -> "<first-two-chars>/<next-two-chars>/<name>"
+          # Crate names are lowercased for index path lookup.
+          sparse_index_path() {
+            local name_lc
+            name_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+            local len=${#name_lc}
+            case "$len" in
+              1) printf '1/%s' "$name_lc" ;;
+              2) printf '2/%s' "$name_lc" ;;
+              3) printf '3/%s/%s' "${name_lc:0:1}" "$name_lc" ;;
+              *) printf '%s/%s/%s' "${name_lc:0:2}" "${name_lc:2:2}" "$name_lc" ;;
+            esac
+          }
+
+          # Returns 0 if $1@$2 is present (non-yanked) in the crates.io sparse
+          # index, 1 otherwise. Uses curl to fetch the index file and parses the
+          # JSON-lines body for the exact version.
+          check_sparse_index() {
+            local name="$1"
+            local version="$2"
+            local path
+            path=$(sparse_index_path "$name")
+            local url="https://index.crates.io/${path}"
+            local body
+            body=$(curl -fsSL --max-time 15 "$url" 2>/dev/null) || return 1
+            printf '%s\n' "$body" | VERS="$version" python3 -c '
+          import json, os, sys
+          target = os.environ["VERS"]
+          for line in sys.stdin:
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  entry = json.loads(line)
+              except Exception:
+                  continue
+              if entry.get("vers") == target and not entry.get("yanked", False):
+                  sys.exit(0)
+          sys.exit(1)
+          '
+          }
+
+          # Build a map of crate name -> manifest path from cargo metadata.
+          # We cannot assume crates/<name>/Cargo.toml because some crates have
+          # a different directory name than their package name (e.g. perl-lsp-rs
+          # lives in crates/perl-lsp/).
+          MANIFEST_MAP="$(mktemp)"
+          cargo metadata --format-version=1 --no-deps | python3 -c '
+          import json, sys
+          meta = json.load(sys.stdin)
+          ws = set(meta["workspace_members"])
+          for pkg in meta["packages"]:
+              if pkg["id"] in ws:
+                  print("{} {}".format(pkg["name"], pkg["manifest_path"]))
+          ' > "$MANIFEST_MAP"
+
+          # Write a Python helper script that strips [dev-dependencies] from a
+          # Cargo.toml in-place.
+          #
+          # Why strip? cargo publish resolves dev-deps during manifest
+          # preparation even with --no-verify, which causes publish failures
+          # when a crate has a dev-dep on a workspace sibling not yet on
+          # crates.io. Stripping dev-deps from the on-disk manifest before
+          # the publish call is the only reliable fix. This is safe: downstream
+          # consumers never use dev-deps, so the published Cargo.toml is
+          # functionally identical for all users of the crate. The original
+          # Cargo.toml is always restored from backup after each publish.
+          #
+          # The regex matches [dev-dependencies] and everything up to the next
+          # TOML section header (^[) or end of file. It does NOT match
+          # [target.*.dev-dependencies] because that variant does not start at
+          # column 0 with exactly "[dev-dependencies]".
+          STRIP_SCRIPT="$(mktemp --suffix=.py)"
+          cat > "$STRIP_SCRIPT" << 'STRIP_SCRIPT_EOF'
+          import re, sys, pathlib
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          new_text = re.sub(
+              r"^\[dev-dependencies\].*?(?=^\[|\Z)",
+              "",
+              text,
+              flags=re.MULTILINE | re.DOTALL,
+          )
+          path.write_text(new_text, encoding="utf-8")
+          STRIP_SCRIPT_EOF
+
+          FAILED_CRATES=()
+          PUBLISHED_COUNT=0
           CRATES_LIST="$(mktemp)"
           echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             echo ""
             echo "===> $CRATE@$VERSION"
-
-            # Check if already published
-            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
-              echo "::warning::$CRATE@$VERSION already published, skipping"
-              continue
-            fi
 
             if [ "$DRY_RUN" = "true" ]; then
               TARGET_DIR="${RUNNER_TEMP}/cargo-package-${CRATE//\//-}"
@@ -238,70 +396,225 @@ jobs:
               continue
             fi
 
-            # Publish with retries.
-            # Use --no-verify because workspace dev-dependency cycles can fail
-            # verification before all crates are indexed on crates.io.
-            PUBLISHED=false
-            for attempt in 1 2 3; do
-              echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify"
-              PUBLISH_LOG="$(mktemp)"
-              if cargo publish -p "$CRATE" --no-verify 2>&1 | tee "$PUBLISH_LOG"; then
-                PUBLISHED=true
-                rm -f "$PUBLISH_LOG"
-                break
-              fi
+            # Fast-path: if the crate@version is already in the sparse index,
+            # nothing to do. This lets re-runs after a partial failure skip
+            # the work that already landed.
+            if check_sparse_index "$CRATE" "$VERSION"; then
+              echo "::notice::$CRATE@$VERSION already present in sparse index, skipping"
+              PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
+              continue
+            fi
 
-              if grep -q "crate ${CRATE}@${VERSION} already exists on crates.io index" "$PUBLISH_LOG"; then
-                echo "::warning::$CRATE@$VERSION already exists on crates.io index, skipping"
-                PUBLISHED=true
-                rm -f "$PUBLISH_LOG"
-                break
-              fi
-
-              rm -f "$PUBLISH_LOG"
-              echo "Attempt $attempt failed, waiting 30s..."
-              sleep 30
-            done
-
-            if [ "$PUBLISHED" != "true" ]; then
-              echo "::error::Failed to publish $CRATE after 3 attempts"
+            # Locate the manifest for this crate (package name may differ from
+            # directory name, so we look it up from cargo metadata).
+            MANIFEST_PATH="$(grep "^${CRATE} " "$MANIFEST_MAP" | awk '{print $2}')"
+            if [ -z "$MANIFEST_PATH" ]; then
+              echo "::error::Could not find manifest path for $CRATE in cargo metadata"
               exit 1
             fi
 
-            # Wait for crates.io sparse index to pick up the new version
-            echo "Waiting for $CRATE@$VERSION to appear in index..."
-            for i in $(seq 1 30); do
-              SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-              if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
-                echo "$CRATE@$VERSION indexed successfully"
+            # Back up the manifest and register a trap to restore it on any
+            # unexpected exit so [dev-dependencies] is always reinstated.
+            MANIFEST_BACKUP="$(mktemp)"
+            cp "$MANIFEST_PATH" "$MANIFEST_BACKUP"
+            # shellcheck disable=SC2064
+            trap "cp '$MANIFEST_BACKUP' '$MANIFEST_PATH'; rm -f '$MANIFEST_BACKUP'" EXIT
+
+            # Strip [dev-dependencies] from the manifest before publishing.
+            echo "Stripping [dev-dependencies] from $MANIFEST_PATH before publish"
+            python3 "$STRIP_SCRIPT" "$MANIFEST_PATH"
+
+            # Publish with retries.
+            # Use --no-verify because workspace dev-dependency cycles can fail
+            # verification before all crates are indexed on crates.io.
+            #
+            # Each attempt = (publish + inter-publish throttle sleep + progressive
+            # index wait + sparse-index verify). If the sparse-index verify never
+            # confirms the upload, retry the whole cycle up to 3 times before
+            # failing hard. This distinguishes slow-indexing (crate IS published,
+            # just not yet visible — confirmed by the sparse-index check) from
+            # silently-dropped uploads (cargo publish returned 0 but the crate
+            # never appeared).
+            #
+            # Rate-limit context (crates.io docs: https://crates.io/docs/rate-limits):
+            #   - Update existing crate: burst 30, then 1 per 12s steady-state
+            #   - Publish new crate:     burst 5,  then 1 per 60s steady-state
+            # After the burst of 30 is exhausted (which happens fast with 129
+            # crates), each publish must wait ≥ 12s before the next one is
+            # allowed. We sleep 13s after every successful publish so the whole
+            # pipeline runs at < 5 crates/min — reliably under the rate limit.
+            # With 129 crates that is ~28 minutes total, well within the 360-min
+            # job timeout. The sleep appears BEFORE the sparse-index wait, so the
+            # inter-publish gap is at least 13s (+ however long indexing takes).
+            PUBLISHED=false
+            for attempt in 1 2 3; do
+              echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify --allow-dirty"
+              PUBLISH_LOG="$(mktemp)"
+              PUBLISH_EXIT=0
+              cargo publish -p "$CRATE" --no-verify --allow-dirty 2>&1 | tee "$PUBLISH_LOG" || PUBLISH_EXIT=${PIPESTATUS[0]}
+
+              ALREADY_EXISTS=false
+              if grep -q "crate ${CRATE}@${VERSION} already exists on crates.io index" "$PUBLISH_LOG"; then
+                echo "::warning::$CRATE@$VERSION already exists on crates.io index"
+                ALREADY_EXISTS=true
+              fi
+
+              # Detect HTTP 429 rate-limit responses for longer back-off.
+              IS_RATE_LIMITED=false
+              if grep -qE "429|Too Many Requests" "$PUBLISH_LOG"; then
+                IS_RATE_LIMITED=true
+              fi
+              rm -f "$PUBLISH_LOG"
+
+              # If cargo publish hard-failed and it wasn't the "already exists"
+              # benign case, back off and retry the publish.
+              # 429 rate-limit: wait 60s (burst window + margin) before retrying.
+              # Other errors: wait 30s.
+              if [ "$PUBLISH_EXIT" != "0" ] && [ "$ALREADY_EXISTS" != "true" ]; then
+                if [ "$IS_RATE_LIMITED" = "true" ]; then
+                  echo "Publish attempt $attempt hit 429 rate limit, waiting 60s before retry..."
+                  sleep 60
+                else
+                  echo "Publish attempt $attempt failed (exit $PUBLISH_EXIT), waiting 30s before retry..."
+                  sleep 30
+                fi
+                continue
+              fi
+
+              # Inter-publish throttle: sleep 13s after a successful publish call
+              # so the next crate's publish stays under the crates.io steady-state
+              # rate limit of 1 update per 12s. This does NOT apply to the
+              # "already exists" path because that path made no API call.
+              if [ "$ALREADY_EXISTS" != "true" ]; then
+                echo "Throttle: sleeping 13s to stay under crates.io rate limit (1 update/12s steady-state)..."
+                sleep 13
+              fi
+
+              # Progressive sparse-index wait: probe at 5s, 15s, 45s, 90s
+              # elapsed. Most crates are indexed within ~30s; the 90s cap is
+              # the worst-case wait per attempt (down from the previous 300s
+              # fixed sleep). Deltas: 5, 10, 30, 45 -> cumulative 5, 15, 45, 90.
+              echo "Waiting for $CRATE@$VERSION to appear in sparse index..."
+              INDEXED=false
+              ELAPSED=0
+              for delta in 5 10 30 45; do
+                sleep "$delta"
+                ELAPSED=$((ELAPSED + delta))
+                if check_sparse_index "$CRATE" "$VERSION"; then
+                  echo "$CRATE@$VERSION indexed after ${ELAPSED}s"
+                  INDEXED=true
+                  break
+                fi
+                echo "  ${ELAPSED}s elapsed, not yet in sparse index..."
+              done
+
+              if [ "$INDEXED" = "true" ]; then
+                PUBLISHED=true
                 break
               fi
-              if [ "$i" = "30" ]; then
-                echo "::warning::$CRATE@$VERSION not yet indexed after 5 min, proceeding anyway"
-              fi
-              sleep 10
+
+              echo "::warning::$CRATE@$VERSION not in sparse index after 90s on attempt $attempt/3; will retry publish"
             done
+
+            # Restore the original Cargo.toml (with [dev-dependencies]) now
+            # that publishing is done, then clear the EXIT trap so it does not
+            # fire redundantly on the next loop iteration.
+            cp "$MANIFEST_BACKUP" "$MANIFEST_PATH"
+            rm -f "$MANIFEST_BACKUP"
+            trap - EXIT
+
+            if [ "$PUBLISHED" != "true" ]; then
+              echo "::error::Failed to publish $CRATE@$VERSION after 3 attempts — not visible in sparse index at https://index.crates.io/$(sparse_index_path "$CRATE")"
+              FAILED_CRATES+=("$CRATE@$VERSION")
+              continue
+            fi
+
+            PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
           done < "$CRATES_LIST"
 
-          echo ""
-          echo "All crates processed."
+          if [ "$DRY_RUN" = "true" ]; then
+            echo ""
+            echo "DRY RUN complete: $TOTAL crates packaged (no actual publish)."
+            exit 0
+          fi
 
-  # Step 3: Verify all crates are published
+          echo ""
+          echo "PUBLISHED: ${PUBLISHED_COUNT}/${TOTAL}"
+          if [ "${#FAILED_CRATES[@]}" -gt 0 ]; then
+            echo ""
+            echo "FAILED CRATES (${#FAILED_CRATES[@]}):"
+            for entry in "${FAILED_CRATES[@]}"; do
+              echo "  - $entry"
+            done
+            echo ""
+            echo "NEXT STEPS: Re-trigger this workflow with the same version."
+            echo "  Already-published crates will be skipped via the sparse-index"
+            echo "  fast-path; only the failed crates above will be retried."
+            exit 1
+          fi
+          echo "All crates published successfully."
+
+  # Step 3: Verify all crates are published.
+  #
+  # This job runs UNCONDITIONALLY (`if: always()` gated on compute-order
+  # producing the crate list) so that even a partial publish run produces a
+  # hard error listing exactly which crates failed to land. This is the final
+  # safety net against the "soft success" class of bug where the publish
+  # step prints a warning and exits 0 while real uploads silently failed
+  # (see #3197).
+  #
+  # Verification hits the crates.io sparse index directly, which is the
+  # authoritative view of what is actually published (cargo search hits a
+  # different cache and can lag).
   verify:
     name: Verify all crates published
     needs: [compute-order, publish]
-    if: github.event.inputs.dry_run != 'true'
+    if: always() && needs.compute-order.result == 'success' && github.event.inputs.dry_run != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Verify all crates
+      - name: Verify all crates against sparse index
         env:
           CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
         run: |
+          sparse_index_path() {
+            local name_lc
+            name_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+            local len=${#name_lc}
+            case "$len" in
+              1) printf '1/%s' "$name_lc" ;;
+              2) printf '2/%s' "$name_lc" ;;
+              3) printf '3/%s/%s' "${name_lc:0:1}" "$name_lc" ;;
+              *) printf '%s/%s/%s' "${name_lc:0:2}" "${name_lc:2:2}" "$name_lc" ;;
+            esac
+          }
+
+          check_sparse_index() {
+            local name="$1"
+            local version="$2"
+            local path
+            path=$(sparse_index_path "$name")
+            local url="https://index.crates.io/${path}"
+            local body
+            body=$(curl -fsSL --max-time 15 "$url" 2>/dev/null) || return 1
+            printf '%s\n' "$body" | VERS="$version" python3 -c '
+          import json, os, sys
+          target = os.environ["VERS"]
+          for line in sys.stdin:
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  entry = json.loads(line)
+              except Exception:
+                  continue
+              if entry.get("vers") == target and not entry.get("yanked", False):
+                  sys.exit(0)
+          sys.exit(1)
+          '
+          }
+
           FAILED=""
           TOTAL=0
           OK=0
@@ -311,13 +624,12 @@ jobs:
           while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 
-            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
-            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+            if check_sparse_index "$CRATE" "$VERSION"; then
               echo "OK $CRATE@$VERSION"
               OK=$((OK + 1))
             else
-              echo "FAIL $CRATE@$VERSION"
-              FAILED="${FAILED} ${CRATE}"
+              echo "FAIL $CRATE@$VERSION (not present in https://index.crates.io/$(sparse_index_path "$CRATE"))"
+              FAILED="${FAILED} ${CRATE}@${VERSION}"
             fi
           done < "$CRATES_LIST"
 
@@ -325,11 +637,22 @@ jobs:
           echo "Published: ${OK}/${TOTAL}"
 
           if [ -n "$FAILED" ]; then
-            echo "::error::Failed crates:${FAILED}"
+            echo "::error::The following crates are missing from the crates.io sparse index:${FAILED}"
+            {
+              echo "## Publish verification FAILED :x:"
+              echo ""
+              echo "Verified ${OK}/${TOTAL} crates present in the crates.io sparse index."
+              echo ""
+              echo "**Missing crates:**"
+              for entry in $FAILED; do
+                echo "- \`${entry}\`"
+              done
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
       - name: Summary
+        if: success()
         env:
           CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
           TARGET_VERSION: ${{ needs.compute-order.outputs.version }}
@@ -339,4 +662,4 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Crates**: ${COUNT} published in topological order" >> $GITHUB_STEP_SUMMARY
           echo "- **Target version**: ${TARGET_VERSION}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: All crates verified on crates.io" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: All crates verified on crates.io sparse index" >> $GITHUB_STEP_SUMMARY

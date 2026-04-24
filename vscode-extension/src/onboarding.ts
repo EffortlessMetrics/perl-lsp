@@ -35,6 +35,55 @@ export interface HealthCheckResult {
 }
 
 // ---------------------------------------------------------------------------
+// Startup failure classifier
+// ---------------------------------------------------------------------------
+
+/**
+ * User-facing message surfaced when Perl interpreter is not found.
+ * Shown instead of the generic "Restart the server" message so the user
+ * immediately knows the root cause and what to do.
+ */
+export const PERL_MISSING_MESSAGE =
+  'Perl interpreter not found. ' +
+  'Install Perl 5.10+ (Windows: Strawberry Perl at https://strawberryperl.com/, macOS: `brew install perl`, Linux: use your distro package manager) ' +
+  'and reload the window. ' +
+  'Alternatively, set the `perl-lsp.perl.path` setting to an existing Perl executable.';
+
+/**
+ * Given the results of a health check, return a specific user-facing error
+ * string that names the root cause of an LSP startup failure.
+ *
+ * Priority: Perl missing > binary missing > unknown crash.
+ */
+export function classifyStartupFailure(results: HealthCheckResult[]): string {
+  const perlResult = results.find(r => r.label === 'Perl interpreter');
+  const binaryResult = results.find(r => r.label === 'LSP binary');
+
+  // Perl not found — highest priority, most actionable for the user.
+  if (!perlResult || (perlResult.ok === false && perlResult.status === HealthCheckStatus.Error)) {
+    return PERL_MISSING_MESSAGE;
+  }
+
+  // LSP binary not found — Perl is present but the server binary is missing.
+  if (binaryResult && binaryResult.ok === false && binaryResult.status === HealthCheckStatus.Error) {
+    const detail = binaryResult.detail.trimEnd();
+    const detailWithPeriod = detail.endsWith('.') ? detail : `${detail}.`;
+    return (
+      'Perl Language Server binary (perllsp) not found. ' +
+      detailWithPeriod +
+      ' Check the Output panel for download details or reinstall the extension.'
+    );
+  }
+
+  // All checks passed — unknown crash (e.g. version mismatch, system ABI issue).
+  return (
+    'Perl Language Server failed to start. ' +
+    'Check the Output panel for details. ' +
+    'You can also try reinstalling the extension or running the Health Check from the command palette.'
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Internal exec helper type
 // ---------------------------------------------------------------------------
 
@@ -60,7 +109,6 @@ export class OnboardingManager {
    * Replaceable exec function.  In production this wraps `child_process.execFile`;
    * in tests it is replaced with a jest mock via `mgr._execCheck = jest.fn(...)`.
    */
-  // eslint-disable-next-line @typescript-eslint/naming-convention
   _execCheck: ExecCheckFn;
 
   constructor(
@@ -117,7 +165,8 @@ export class OnboardingManager {
         label,
         ok: false,
         status: HealthCheckStatus.Error,
-        detail: `Perl not found on PATH. Install Perl and reload. (${msg})`,
+        detail:
+          'Perl not found on PATH. Install Perl (Windows: strawberryperl.com, macOS: `brew install perl`, Linux: use your distro package manager) and reload.',
       };
     }
   }
@@ -152,6 +201,52 @@ export class OnboardingManager {
         detail:
           'perltidy not found — document formatting will be unavailable. ' +
           'Install via: cpanm Perl::Tidy',
+      };
+    }
+  }
+
+  /** Check perlcritic availability/profile when perl-lsp.perlcritic.enabled is true. */
+  async checkPerlcriticSetup(): Promise<HealthCheckResult> {
+    const label = 'perlcritic';
+    const perlcriticConfig = vscode.workspace.getConfiguration('perl-lsp').get<any>('perlcritic', {});
+    const enabled = Boolean(perlcriticConfig?.enabled);
+    const profile = typeof perlcriticConfig?.profile === 'string' ? perlcriticConfig.profile.trim() : '';
+
+    if (!enabled) {
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: 'Perl::Critic is disabled',
+      };
+    }
+
+    if (profile && !fs.existsSync(profile)) {
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail: `Configured perlcritic profile was not found: ${profile}`,
+      };
+    }
+
+    try {
+      await this._execCheck('perlcritic', ['--version']);
+      return {
+        label,
+        ok: true,
+        status: HealthCheckStatus.Ok,
+        detail: 'perlcritic found',
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        label,
+        ok: false,
+        status: HealthCheckStatus.Warning,
+        detail:
+          `Perl::Critic is enabled but perlcritic was not found on PATH. (${msg}) ` +
+          'Install via: cpanm Perl::Critic',
       };
     }
   }
@@ -201,9 +296,10 @@ export class OnboardingManager {
   ): Promise<HealthCheckResult[]> {
     this.outputChannel.appendLine('[onboarding] Running setup health check...');
 
-    const [perlResult, perltidyResult] = await Promise.all([
+    const [perlResult, perltidyResult, perlcriticResult] = await Promise.all([
       this.checkPerlInstalled(),
       this.checkPerltidyInstalled(),
+      this.checkPerlcriticSetup(),
     ]);
 
     const binaryResult = this.checkBinaryDownloaded(serverPath);
@@ -211,6 +307,7 @@ export class OnboardingManager {
     const results: HealthCheckResult[] = [
       perlResult,
       perltidyResult,
+      perlcriticResult,
       binaryResult,
     ];
 
@@ -227,6 +324,31 @@ export class OnboardingManager {
     }
 
     return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Startup diagnostics
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Run a targeted health check after an LSP startup failure and return a
+   * user-facing error string that names the specific root cause.
+   *
+   * Call this instead of surfacing the generic "restart server" message so
+   * users immediately know whether the problem is a missing Perl interpreter,
+   * a missing LSP binary, or an unknown crash.
+   *
+   * @param serverPath  Path to the LSP binary, or `null` if unavailable.
+   */
+  async runStartupDiagnostics(serverPath: string | null): Promise<string> {
+    try {
+      const results = await this.runSetupHealthCheck(serverPath);
+      return classifyStartupFailure(results);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.outputChannel.appendLine(`[onboarding] Startup diagnostics failed: ${msg}`);
+      return PERL_MISSING_MESSAGE;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -269,14 +391,23 @@ function defaultExecCheck(
 ): Promise<{ stdout: string; stderr: string }> {
   const initialInvocation = { command: cmd, args };
   return runExecInvocation(initialInvocation).catch(async (err: unknown) => {
-    const fallbackInvocation = await resolveWindowsInvocationFallback(
+    const windowsFallback = await resolveWindowsInvocationFallback(
       initialInvocation,
       err,
     );
-    if (!fallbackInvocation) {
-      throw err;
+    if (windowsFallback) {
+      return runExecInvocation(windowsFallback);
     }
-    return runExecInvocation(fallbackInvocation);
+
+    const unixShellFallback = resolveUnixShellInvocationFallback(
+      initialInvocation,
+      err,
+    );
+    if (unixShellFallback) {
+      return runExecInvocation(unixShellFallback);
+    }
+
+    throw err;
   });
 }
 
@@ -339,6 +470,40 @@ function resolveWindowsCommandCandidate(command: string): Promise<string | null>
       resolve(selectWindowsCommandCandidate(stdout));
     });
   });
+}
+
+export function resolveUnixShellInvocationFallback(
+  invocation: ExecInvocation,
+  err: unknown,
+): ExecInvocation | null {
+  if (
+    process.platform === 'win32' ||
+    !isSpawnNotFound(err) ||
+    invocation.command.includes('/') ||
+    invocation.command.includes('\\')
+  ) {
+    return null;
+  }
+
+  const shell = process.env.SHELL?.trim();
+  if (!shell) {
+    return null;
+  }
+
+  return {
+    command: shell,
+    // Warp and other terminals often expose PATH/tooling via shell startup
+    // scripts; using login-shell exec improves compatibility for health checks.
+    args: ['-lc', toPosixShellCommand(invocation.command, invocation.args)],
+  };
+}
+
+export function toPosixShellCommand(command: string, args: string[]): string {
+  return [command, ...args].map(escapePosixShellArg).join(' ');
+}
+
+function escapePosixShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export function selectWindowsCommandCandidate(stdout: string): string | null {

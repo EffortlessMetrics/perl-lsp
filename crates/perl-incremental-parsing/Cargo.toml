@@ -1,6 +1,7 @@
 [package]
 name = "perl-incremental-parsing"
-version = "0.12.0"
+publish = false
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -23,21 +24,22 @@ include = [
 doctest = false
 
 [dependencies]
-perl-parser-core = { workspace = true }
-perl-edit = { workspace = true }
-perl-lexer = { workspace = true }
-perl-line-index = { workspace = true }
-anyhow = "1.0.102"
-lsp-types = "0.97.0"
-ropey = "1.6.1"
-serde_json = "1.0.149"
-tracing = "0.1.44"
+perl-parser = { workspace = true, features = ["incremental"] }
 
 [features]
 default = []
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+criterion.workspace = true
+lsp-types.workspace = true
+perl-lexer = { workspace = true }
+ropey = "1.6.1"
+serde_json.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

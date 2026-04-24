@@ -381,6 +381,10 @@ impl Node {
                 format!("(do {})", block.to_sexp())
             }
 
+            NodeKind::Defer { block } => {
+                format!("(defer {})", block.to_sexp())
+            }
+
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 let mut parts = vec![format!("(try {})", body.to_sexp())];
 
@@ -765,8 +769,12 @@ impl Node {
                 }
             }
 
-            NodeKind::Class { name, body } => {
-                format!("(class {} {})", name, body.to_sexp())
+            NodeKind::Class { name, parents, body } => {
+                if parents.is_empty() {
+                    format!("(class {} {})", name, body.to_sexp())
+                } else {
+                    format!("(class {} :isa({}) {})", name, parents.join(","), body.to_sexp())
+                }
             }
 
             NodeKind::Format { name, body } => {
@@ -940,6 +948,7 @@ impl Node {
             // Eval and Do blocks
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
+            NodeKind::Defer { block } => f(block),
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
@@ -1189,6 +1198,7 @@ impl Node {
             // Eval and Do blocks
             NodeKind::Eval { block } => f(block),
             NodeKind::Do { block } => f(block),
+            NodeKind::Defer { block } => f(block),
             NodeKind::Try { body, catch_blocks, finally_block } => {
                 f(body);
                 for (_, catch_body) in catch_blocks {
@@ -1636,6 +1646,12 @@ pub enum NodeKind {
         block: Box<Node>,
     },
 
+    /// Defer block for deferred cleanup on scope exit (Perl 5.36+ experimental, stable in 5.40)
+    Defer {
+        /// Block to execute on scope exit
+        block: Box<Node>,
+    },
+
     /// Try-catch-finally for modern exception handling (Syntax::Keyword::Try style)
     Try {
         /// Try block body
@@ -2008,6 +2024,8 @@ pub enum NodeKind {
     Class {
         /// Class name
         name: String,
+        /// Parent class names from `:isa(Parent)` attributes
+        parents: Vec<String>,
         /// Class body containing methods and attributes
         body: Box<Node>,
     },
@@ -2095,6 +2113,7 @@ impl NodeKind {
             NodeKind::Block { .. } => "Block",
             NodeKind::Eval { .. } => "Eval",
             NodeKind::Do { .. } => "Do",
+            NodeKind::Defer { .. } => "Defer",
             NodeKind::Try { .. } => "Try",
             NodeKind::If { .. } => "If",
             NodeKind::LabeledStatement { .. } => "LabeledStatement",
@@ -2154,6 +2173,7 @@ impl NodeKind {
         "Class",
         "DataSection",
         "Default",
+        "Defer",
         "Diamond",
         "Do",
         "Ellipsis",
@@ -2468,6 +2488,7 @@ mod tests {
             NodeKind::Block { statements: vec![] },
             NodeKind::Eval { block: Box::new(dummy_node()) },
             NodeKind::Do { block: Box::new(dummy_node()) },
+            NodeKind::Defer { block: Box::new(dummy_node()) },
             NodeKind::Try {
                 body: Box::new(dummy_node()),
                 catch_blocks: vec![],
@@ -2586,7 +2607,7 @@ mod tests {
                 block: Box::new(dummy_node()),
             },
             NodeKind::DataSection { marker: String::new(), body: None },
-            NodeKind::Class { name: String::new(), body: Box::new(dummy_node()) },
+            NodeKind::Class { name: String::new(), parents: vec![], body: Box::new(dummy_node()) },
             NodeKind::Format { name: String::new(), body: String::new() },
             NodeKind::Identifier { name: String::new() },
             NodeKind::Error {

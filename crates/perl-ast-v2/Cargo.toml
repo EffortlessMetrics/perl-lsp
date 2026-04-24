@@ -1,6 +1,6 @@
 [package]
 name = "perl-ast-v2"
-version = "0.12.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -15,6 +15,9 @@ categories = ["parsing", "development-tools"]
 
 [dependencies]
 perl-position-tracking = { workspace = true }
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

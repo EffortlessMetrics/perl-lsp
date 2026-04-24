@@ -1,8 +1,23 @@
 # perl-lsp Documentation
 
-This directory is the main documentation home for the repository. Treat it as a navigation hub, not a frozen snapshot of project metrics.
+Use this directory as the short docs front door. It tells you where to go next
+without making you learn the workspace layout first. For the full Diataxis-style
+map of the docs tree, use [INDEX.md](INDEX.md).
 
-## Canonical Truth Sources
+## Diataxis in This Repository
+
+When adding or moving docs, choose the content type first, then the file:
+
+| Content intent | Place it under | Writing focus |
+| --- | --- | --- |
+| Teach by doing | `docs/tutorials/` | step-by-step learning journey |
+| Solve a concrete task | `docs/how-to/` | shortest reliable path to an outcome |
+| Describe the contract | `docs/reference/` | exact behavior, options, and constraints |
+| Explain rationale | `docs/explanation/` | design tradeoffs and mental models |
+
+If a doc starts mixing multiple intents, split it and cross-link the parts.
+
+## Canonical Sources
 
 | Topic | Source | Verified By |
 | --- | --- | --- |
@@ -12,99 +27,41 @@ This directory is the main documentation home for the repository. Treat it as a 
 | Capability catalog | [`../features.toml`](../features.toml) | `just ci-gate` |
 | Local validation flow | [project/CI_LOCAL_VALIDATION.md](project/CI_LOCAL_VALIDATION.md) | `just ci-gate` |
 
-Rule: if you see a project metric duplicated outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as suspect until reverified.
+Rule: if a project metric appears outside [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), treat it as stale until reverified.
 
-## Start Here
+## Common Routes
 
-- Users: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
-- Editor setup: [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
-- Contributors: [../CONTRIBUTING.md](../CONTRIBUTING.md)
-- Current project posture: [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
-- Active milestone: [project/ROADMAP.md](project/ROADMAP.md)
-- Historical analyses and launch material: [articles/README.md](articles/README.md)
-
-## Tutorials
-
-- [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md)
-- [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md)
-- [tutorials/LSP_DEVELOPMENT_GUIDE.md](tutorials/LSP_DEVELOPMENT_GUIDE.md)
-- [tutorials/EXECUTE_COMMAND_TUTORIAL.md](tutorials/EXECUTE_COMMAND_TUTORIAL.md)
-- [tutorials/COMPREHENSIVE_TESTING_GUIDE.md](tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
-
-## How-To Guides
-
-- [how-to/INSTALLATION.md](how-to/INSTALLATION.md)
-- [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md)
-- [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md)
-- [how-to/DEPENDENCY_MANAGEMENT.md](how-to/DEPENDENCY_MANAGEMENT.md)
-- [how-to/SEMVER_WORKFLOW.md](how-to/SEMVER_WORKFLOW.md)
-- [how-to/COVERAGE.md](how-to/COVERAGE.md)
-- [how-to/DEAD_CODE_DETECTION.md](how-to/DEAD_CODE_DETECTION.md)
-
-## Reference
-
-- [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md)
-- [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md)
-- [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md)
-- [reference/LSP_IMPLEMENTATION_GUIDE.md](reference/LSP_IMPLEMENTATION_GUIDE.md)
-- [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md)
-- [reference/STABILITY.md](reference/STABILITY.md)
-- [reference/CONFIG.md](reference/CONFIG.md)
-- [reference/FAQ.md](reference/FAQ.md)
-- [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md)
-- [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md)
-
-## Explanation
-
-- [explanation/PURE_RUST_PARSER.md](explanation/PURE_RUST_PARSER.md)
-- [explanation/ERROR_HANDLING_STRATEGY.md](explanation/ERROR_HANDLING_STRATEGY.md)
-- [explanation/DEBT_TRACKING.md](explanation/DEBT_TRACKING.md)
-- [explanation/SLASH_DISAMBIGUATION.md](explanation/SLASH_DISAMBIGUATION.md)
-
-## Project Docs
-
-- [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md)
-- [project/ROADMAP.md](project/ROADMAP.md)
-- [project/MILESTONES.md](project/MILESTONES.md)
-- [project/LESSONS.md](project/LESSONS.md)
-- [project/CASEBOOK.md](project/CASEBOOK.md)
-- [project/CODEBASE_CURIOSITIES.md](project/CODEBASE_CURIOSITIES.md)
-- [project/CI.md](project/CI.md)
-- [project/CI_TEST_LANES.md](project/CI_TEST_LANES.md)
-
-## Historical Analyses
-
-- [articles/README.md](articles/README.md)
-- [articles/FIVE_ERAS.md](articles/FIVE_ERAS.md)
-- [articles/SWARM_METHODOLOGY.md](articles/SWARM_METHODOLOGY.md)
-- [articles/ZERO_PANIC.md](articles/ZERO_PANIC.md)
-- [articles/PARSING_PERL.md](articles/PARSING_PERL.md)
-- [articles/CURIOSITIES.md](articles/CURIOSITIES.md)
-
-## Strategic Docs
-
-- [STRATEGIC_DOCUMENTATION.md](STRATEGIC_DOCUMENTATION.md)
-- [../ROADMAP.md](../ROADMAP.md)
-- [../NOW_NEXT_LATER.md](../NOW_NEXT_LATER.md)
-- [../TECHNICAL_VISION.md](../TECHNICAL_VISION.md)
-
-## Other Directories
-
-| Directory | Purpose |
+| If you need to... | Read this |
 | --- | --- |
-| [adr/](adr/) | Architecture Decision Records |
-| [archive/](archive/) | Historical docs |
-| [articles/](articles/) | Historical analyses plus article research notes |
-| [benchmarks/](benchmarks/) | Benchmark docs |
-| [ci/](ci/) | CI-specific docs |
-| [design/](design/) | Design notes |
-| [EDITORS/](EDITORS/) | Editor-specific setup |
-| [forensics/](forensics/) | PR archaeology |
-| [issues/](issues/) | Gap tracking and investigations |
-| [semantic/](semantic/) | Semantic validation |
-| [specs/](specs/) | Specifications |
+| get working fast | [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md) |
+| set up continuous testing | [how-to/CONTINUOUS_TESTING.md](how-to/CONTINUOUS_TESTING.md) |
+| set up pre-commit hooks | [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md) |
+| install or upgrade | [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/UPGRADING.md](how-to/UPGRADING.md) |
+| set up `perllsp` in GitHub Actions | [how-to/GITHUB_ACTIONS.md](how-to/GITHUB_ACTIONS.md) |
+| configure an editor | [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md) |
+| troubleshoot a broken setup | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
+| enforce public API docs coverage in CI | [reference/MISSING_DOCUMENTATION_GUIDE.md](reference/MISSING_DOCUMENTATION_GUIDE.md) |
+| learn API docs writing standards | [reference/API_DOCUMENTATION_STANDARDS.md](reference/API_DOCUMENTATION_STANDARDS.md) |
+| choose the right Diátaxis doc type before writing | [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md) |
+| tune performance or threading | [how-to/PERFORMANCE_TUNING.md](how-to/PERFORMANCE_TUNING.md), [how-to/THREADING_CONFIGURATION_GUIDE.md](how-to/THREADING_CONFIGURATION_GUIDE.md) |
+| work with DAP workflows | [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md) |
+| understand project architecture | [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md), [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md) |
+| check known limitations and parser support | [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md) |
+| see what is true now | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) |
+| see the current release plan | [project/ROADMAP.md](project/ROADMAP.md) |
+| inspect the workflow UX scorecard contract | [project/metrics/WORKFLOW_SCORECARDS.md](project/metrics/WORKFLOW_SCORECARDS.md), [reference/UX_TESTING.md](reference/UX_TESTING.md) |
+| work on the codebase | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
+| browse the full docs map | [INDEX.md](INDEX.md) |
+| classify or author docs by Diataxis type | [reference/DIATAXIS_GUIDE.md](reference/DIATAXIS_GUIDE.md) |
 
-## Documentation Maintenance
+## Docs by Type
+
+- Tutorials: [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md), [tutorials/LSP_DEVELOPMENT_GUIDE.md](tutorials/LSP_DEVELOPMENT_GUIDE.md), [tutorials/DAP_USER_GUIDE.md](tutorials/DAP_USER_GUIDE.md), [tutorials/COMPREHENSIVE_TESTING_GUIDE.md](tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
+- How-to: [how-to/INSTALLATION.md](how-to/INSTALLATION.md), [how-to/GITHUB_ACTIONS.md](how-to/GITHUB_ACTIONS.md), [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md), [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md), [how-to/CONTINUOUS_TESTING.md](how-to/CONTINUOUS_TESTING.md), [how-to/UPGRADING.md](how-to/UPGRADING.md), [how-to/PRE_COMMIT.md](how-to/PRE_COMMIT.md), [how-to/PERFORMANCE_TUNING.md](how-to/PERFORMANCE_TUNING.md), [how-to/THREADING_CONFIGURATION_GUIDE.md](how-to/THREADING_CONFIGURATION_GUIDE.md), [how-to/SECURITY_DEVELOPMENT_GUIDE.md](how-to/SECURITY_DEVELOPMENT_GUIDE.md)
+- Reference: [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md), [reference/CONFIG.md](reference/CONFIG.md), [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md), [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md), [reference/CRATE_ARCHITECTURE_GUIDE.md](reference/CRATE_ARCHITECTURE_GUIDE.md), [reference/KNOWN_LIMITATIONS.md](reference/KNOWN_LIMITATIONS.md), [reference/PARSER_FEATURE_MATRIX.md](reference/PARSER_FEATURE_MATRIX.md), [reference/MISSING_DOCUMENTATION_GUIDE.md](reference/MISSING_DOCUMENTATION_GUIDE.md), [reference/API_DOCUMENTATION_STANDARDS.md](reference/API_DOCUMENTATION_STANDARDS.md), [reference/DIATAXIS_GUIDE.md](reference/DIATAXIS_GUIDE.md), [reference/DOCUMENTATION_GUIDE.md](reference/DOCUMENTATION_GUIDE.md), [reference/FAQ.md](reference/FAQ.md)
+- Project, specs, and explanations: [INDEX.md](INDEX.md), [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), [project/ROADMAP.md](project/ROADMAP.md), [project/CI.md](project/CI.md), [project/FEATURE_GOVERNANCE.md](project/FEATURE_GOVERNANCE.md), [explanation/LSP_DOCUMENTATION.md](explanation/LSP_DOCUMENTATION.md)
+
+## Maintenance
 
 ```bash
 nix develop -c just ci-gate
@@ -114,4 +71,5 @@ just status-check
 
 - Put computed metrics in [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md), not scattered through the docs tree.
 - Update [project/ROADMAP.md](project/ROADMAP.md) when the active milestone or release framing changes.
-- Keep top-level summary docs short and linked back to the canonical project docs.
+- Keep top-level summary docs short and link back to the canonical project docs.
+- Keep each doc in the correct Diataxis category; prefer cross-links over hybrid docs that try to do everything.

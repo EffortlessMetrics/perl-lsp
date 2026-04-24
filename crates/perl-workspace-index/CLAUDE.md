@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Crate**: `perl-workspace-index`
-- **Version**: 0.10.0
+- **Version**: workspace (currently 0.12.3)
 - **Tier**: 3 (two-level internal dependencies)
 - **Purpose**: Central workspace indexing engine providing cross-file symbol lookup, document management, lifecycle state machine, bounded caching, and SLO monitoring for the Perl LSP server.
 
@@ -25,7 +25,7 @@ cargo bench -p perl-workspace-index --features workspace  # Benchmarks
 
 - `perl-parser-core` -- core parsing infrastructure (re-exports `Parser`, `Node`, `NodeKind`, `SourceLocation`, `line_index`)
 - `perl-position-tracking` -- position/range types with `lsp-compat` feature
-- `perl-symbol-types` -- symbol taxonomy
+- `perl-symbol` -- symbol taxonomy
 - `perl-uri` -- URI normalization and filesystem path conversion
 
 ### Features

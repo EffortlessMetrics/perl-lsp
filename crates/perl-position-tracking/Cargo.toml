@@ -21,9 +21,9 @@ include = [
 ]
 
 [dependencies]
-serde_json = "1.0"
+serde_json.workspace = true
 ropey = "1.6.1"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { workspace = true }
 
 [features]
 default = []
@@ -35,6 +35,12 @@ optional = true
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
+perl-test-generators = { path = "../perl-test-generators" }
+proptest.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true

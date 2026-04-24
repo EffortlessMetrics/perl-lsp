@@ -1,0 +1,19 @@
+pkgname=__PACKAGE_NAME__
+pkgver=__RELEASE_VERSION__
+pkgrel=1
+pkgdesc="__PACKAGE_SUMMARY__"
+arch=('__PACMAN_ARCH__')
+url='__PACKAGE_HOMEPAGE__'
+license=('__PACKAGE_LICENSE__')
+depends=('glibc')
+source=("__SOURCE_TARBALL__")
+sha256sums=('__DOWNLOAD_SHA256__')
+
+package() {
+  cd "$srcdir/__SOURCE_DIR__"
+  install -Dm755 perllsp "$pkgdir/usr/bin/perllsp"
+  install -Dm755 perl-dap "$pkgdir/usr/bin/perl-dap"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE-MIT "$pkgdir/usr/share/licenses/$pkgname/LICENSE-MIT"
+  install -Dm644 LICENSE-APACHE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-APACHE"
+}

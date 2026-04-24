@@ -234,3 +234,21 @@ description = "Performance regression detection (10% threshold)"
 docs_url = "justfile#benchmark"
 cost_tier = "high"
 failure_impact = "medium"
+
+[[gate]]
+id = "real-project-latency"
+name = "Real Project Latency Benchmark"
+type = "performance"
+blocking = false
+run_on = "nightly"
+timeout_seconds = 1800
+command = "cargo test -p perl-lsp-rs --test real_project_latency -- --include-ignored --nocapture --test-threads=1"
+evidence_pattern = "=== .* files ==="
+threshold = { type = "benchmark_delta", pass = { max_regression_percent = 10.0 } }
+
+[gate.metadata]
+description = "LSP p50/p95/p99 latency on Mojolicious, Dancer2, Catalyst skeletons (nightly only)"
+docs_url = "docs/how-to/BENCHMARKING.md"
+cost_tier = "high"
+failure_impact = "informational"
+baseline_path = ".ci/metrics/real_project_latency.json"

@@ -90,7 +90,7 @@ fi
 
 echo ""
 echo ">>> fmt check"
-cargo fmt --all -- --check
+cargo xtask fmt --check
 
 echo ""
 # cspell:ignore clippy
@@ -109,7 +109,7 @@ echo "  ✓ Workspace build compiles"
 
 echo ""
 echo ">>> Build perl-lsp binary (ensures tests use correct version)"
-cargo build -p perl-lsp $PROFILE_FLAG
+cargo build -p perl-lsp-rs $PROFILE_FLAG
 
 echo ""
 echo ">>> perl-parser lib tests"
@@ -118,8 +118,8 @@ cargo test -p perl-parser --lib -- --test-threads="$RUST_TEST_THREADS"
 echo ""
 echo ">>> perl-lsp integration tests (including binary version check)"
 # Run the version test first to catch stale binary issues early
-cargo test -p perl-lsp --test binary_version_test $PROFILE_FLAG -- --test-threads="$RUST_TEST_THREADS"
-cargo test -p perl-lsp --tests $PROFILE_FLAG -- --test-threads="$RUST_TEST_THREADS"
+cargo test -p perl-lsp-rs --test binary_version_test $PROFILE_FLAG -- --test-threads="$RUST_TEST_THREADS"
+cargo test -p perl-lsp-rs --tests $PROFILE_FLAG -- --test-threads="$RUST_TEST_THREADS"
 
 echo ""
 echo ">>> perl-lexer tests (optional)"

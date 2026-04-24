@@ -5,9 +5,9 @@
 use color_eyre::eyre::{Result, bail};
 use color_eyre::owo_colors::OwoColorize;
 use perl_parser::Parser as ModernParser;
+use perl_parser_pest::PureRustPerlParser;
 use serde_json;
 use std::time::{Duration, Instant};
-use tree_sitter_perl::PureRustPerlParser;
 
 pub fn run_three_way(verbose: bool, format: &str) -> Result<()> {
     match format {
@@ -161,7 +161,7 @@ fn bench_legacy_c(code: &str) -> Result<Duration> {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_perl::language())?;
+        parser.set_language(&tree_sitter_perl_c::language())?;
 
         let tree = parser.parse(code, None);
         if tree.is_none() {

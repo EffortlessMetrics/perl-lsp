@@ -1,0 +1,18 @@
+[package]
+name = "perl-module"
+version = "0.12.4"
+publish = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+description = "Perl module resolution, import analysis, and refactoring — unified facade"
+
+[dependencies]
+url = { workspace = true }
+perl-parser-core = { workspace = true }
+perl-workspace = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+perl-tdd-support = { workspace = true }

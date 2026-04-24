@@ -1,297 +1,76 @@
 # CI Local Validation
 
-*Part of Issue #211: CI Pipeline Cleanup*
+This guide is the local companion to [CI.md](./CI.md) and
+[CI_TEST_LANES.md](./CI_TEST_LANES.md). It keeps the contributor flow aligned
+with the actual gate order used in the repo.
 
-This guide documents the **local-first validation philosophy** for perl-lsp development. All CI gates run locally before pushing to prevent cost overruns and ensure fast feedback loops.
+## Canonical Flow
 
----
-
-## Overview
-
-### Local-First Philosophy
-
-The perl-lsp project is **local-first by design**. CI is a confirmation step, not your iteration loop. All validation gates run locally before pushing:
-
-- **Fast feedback**: Catch issues in seconds, not minutes
-- **Cost awareness**: Avoid burning GitHub Actions minutes on known failures
-- **Developer productivity**: Iterate without waiting for CI
-- **Deterministic builds**: Same results locally and in CI
-
-### CI Cost Awareness
-
-**Why validate locally?**
-- GitHub Actions minutes cost money (~$0.06-0.08 per PR for essential jobs)
-- Untested CI pipelines can burn hundreds of dollars in compute costs
-- Flaky tests multiply costs through retries and re-runs
-- Local validation is **free** and **instant**
-
-**Budget discipline:**
-- Issue #211 targets $720/year savings through CI optimization
-- Pre-push validation prevents wasted CI runs
-- Label-gated expensive jobs (mutation, benchmarks) are opt-in only
-
----
-
-## Quick Start
-
-### Prerequisites
-
-**Option 1: Nix (Recommended - Deterministic, Reproducible)**
+Run the commands in this order:
 
 ```bash
-# Install Nix (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
-
-# Enter development shell
-nix develop
-
-# You now have:
-# - Rust 1.92.0 (MSRV) with wasm32-unknown-unknown target
-# - cargo, rustfmt, clippy
-# - just (command runner)
-# - cargo-nextest (fast test runner)
-# - cargo-audit (security scanner)
-# - cargo-mutants (mutation testing)
-# - gh (GitHub CLI)
-# - jq, python3 (for CI scripts)
-```
-
-**Option 2: Standard Rust Toolchain**
-
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install just command runner
-cargo install just
-
-# Install cargo-nextest (optional but recommended)
-cargo install cargo-nextest
-
-# Ensure MSRV compliance (Rust 1.92)
-rustup install 1.92.0
-rustup override set 1.92.0
-```
-
----
-
-## Nix-Based CI Workflow
-
-### Why Nix?
-
-Nix provides **reproducible builds** - the exact same tools and versions on every machine:
-
-1. **Pinned toolchain**: Rust 1.92.0 (MSRV) is locked via `flake.lock`
-2. **All CI tools included**: just, cargo-nextest, cargo-audit, gh, etc.
-3. **Cross-platform**: Works on Linux, macOS, and WSL
-4. **No system pollution**: Tools don't affect your global environment
-
-### Available Nix Commands
-
-```bash
-# Enter development shell (primary workflow)
-nix develop
-
-# Run checks in Nix sandbox (fast, no network)
-nix flake check
-
-# Build the perl-lsp binary
-nix build
-
-# Run the LSP server
-nix run
-
-# Enter minimal CI shell (for CI runners)
-nix develop .#ci
-```
-
-### Nix Flake Checks
-
-The `nix flake check` command runs these gates in the Nix sandbox:
-
-| Check | Description | Duration |
-|-------|-------------|----------|
-| `format` | `cargo fmt --check` | ~5s |
-| `clippy-lib` | Clippy on libraries | ~30-60s |
-| `clippy-prod-no-unwrap` | No panic-prone code | ~20-30s |
-| `test-lib` | Library tests | ~1-2min |
-| `wasm-check` | WASM32 compilation | ~30s |
-| `policy` | ExitStatus policy | ~5s |
-| `no-nested-lock` | Lockfile hygiene | ~2s |
-
-**Note**: `nix flake check` runs in a sandbox without network access. For full CI simulation (including tests that need network), use:
-
-```bash
+just devex
+just pr-fast
 nix develop -c just ci-gate
-```
-
-### Canonical Pre-Push Command
-
-The **single source of truth** for local validation:
-
-```bash
-nix develop -c just ci-gate
-```
-
-This mirrors what CI runs and is the REQUIRED command before pushing.
-
-### Basic Validation
-
-**Canonical local gate (REQUIRED before push):**
-
-```bash
-# With Nix (recommended)
-nix develop -c just ci-gate
-
-# Without Nix
-just ci-gate
-```
-
-This runs the **fast merge gate** (~2-5 minutes) that validates:
-- Code formatting
-- Clippy lints (library only)
-- Core library tests
-- Policy compliance
-- LSP semantic definition tests
-- Parser feature coverage
-
-**Full validation (RECOMMENDED for large changes):**
-
-```bash
-# With Nix
-nix develop -c just ci-full
-
-# Without Nix
 just ci-full
+just status-update
+just status-check
+just release-check
 ```
 
-This runs the **full CI pipeline** (~10-20 minutes) including:
-- All clippy lints (all targets)
-- Core tests (libraries + binaries)
-- LSP integration tests (thread-constrained)
-- Documentation build
+If you do not use Nix, run the same `just ...` commands directly. The Nix
+shell is only there to make the toolchain and external helpers reproducible.
+
+## What Each Step Means
+
+- `just devex` checks the local environment and highlights missing tools.
+- `just pr-fast` is the quick edit loop for normal PR iteration.
+- `nix develop -c just ci-gate` is the canonical full local merge gate.
+- `just ci-full` is the broader validation pass for large refactors or release
+  confidence.
+- `just status-update` and `just status-check` keep generated status docs in
+  sync.
+- `just release-check` is the release-prep gate before tagging or publishing.
+
+If a change is security-sensitive, also run `just security-audit`. If it touches
+MSRV-sensitive code, use `just ci-gate-msrv` or `just ci-full-msrv`.
+
+## Nix and Non-Nix Usage
+
+Nix is recommended because it gives everyone the same toolchain and helper
+commands. The plain `just` entry points stay available for contributors who
+already have the Rust toolchain and project tools installed locally.
+
+`nix flake check` is useful for a quick sandbox sanity pass, but it is not a
+replacement for `nix develop -c just ci-gate`.
 
 ---
 
 ## Gate Tiers
 
-### Tier A: Merge Gate (REQUIRED)
+### Tier A: PR-Fast / Push Guard
 
-**Command:** `just ci-gate`
-**Duration:** ~2-5 minutes
-**Purpose:** Fast feedback for every commit
+- **Command:** `just pr-fast`
+- **Use when:** during normal iteration and before every push (the pre-push hook runs this tier)
+- **Checks:** fast formatting/lint/test coverage meant to catch obvious regressions quickly
 
-**What it checks:**
+### Tier B: Merge Gate
 
-1. **Code formatting** (`cargo fmt --check`)
-   - Ensures consistent style
-   - Fast fail: runs in <5 seconds
+- **Command:** `just ci-gate`
+- **Use when:** before merge, or any time you need the full local merge receipt
+- **Checks:** formatting, library Clippy, library tests, policy checks, LSP semantic definition tests, parser feature checks, and the hooks that CI relies on
 
-2. **Clippy lints - Libraries** (`cargo clippy --workspace --lib`)
-   - Catches common mistakes
-   - Runs on library code only (faster than full check)
-   - Enforces `-D warnings` (all warnings are errors)
-   - Allows `-A missing_docs` during systematic resolution
+### Tier C: Release Confidence
 
-3. **Library tests** (`cargo test --workspace --lib`)
-   - Fast, essential tests
-   - Runs in ~1-2 minutes
-   - Uses `--locked` to ensure Cargo.lock consistency
+- **Command:** `just ci-full`
+- **Use when:** the change is broad, touches several crates, or needs release-level confidence
+- **Checks:** everything from Tier B, plus the broader Clippy/test/doc coverage used by the full local pipeline
 
-4. **Production panic safety** (`clippy-prod-no-unwrap`)
-   - Enforces no `.unwrap()` or `.expect()` in production code
-   - Prevents panic-prone code in shipped binaries (Issue #143)
-   - Only checks `--lib` and `--bins`, excludes tests
-   - Uses `--no-deps` to check workspace code only
+### Tier D: Manual Smoke Test
 
-5. **Policy compliance**
-   - Checks for direct `ExitStatus::from_raw()` usage
-   - Validates CURRENT_STATUS.md metrics are up-to-date
-   - Enforces missing docs baseline (ratcheting down)
-
-6. **LSP semantic definition tests** (`just ci-lsp-def`)
-   - Semantic-aware go-to-definition validation
-   - Resource-efficient mode: `RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1`
-   - Critical for LSP correctness
-
-7. **Parser feature coverage** (`just ci-parser-features-check`)
-   - Baseline enforcement for parse error count
-   - Prevents parser regressions
-   - Validates against corpus
-
-**Why Tier A matters:**
-- Blocks all merges to main/master
-- Must pass before creating pull requests
-- Pre-push hook runs this automatically
-
-### Tier B: Release Confidence (RECOMMENDED)
-
-**Command:** `just ci-full`
-**Duration:** ~10-20 minutes
-**Purpose:** Comprehensive validation before releases
-
-**Additional checks beyond Tier A:**
-
-1. **Full clippy** (`cargo clippy --workspace --all-targets`)
-   - Includes tests, benches, examples
-   - More thorough than library-only check
-
-2. **Core tests** (`cargo test --workspace --lib --bins`)
-   - Libraries + binaries
-   - More comprehensive than library-only
-
-3. **LSP integration tests** (`just ci-test-lsp`)
-   - Full LSP protocol validation
-   - Adaptive threading: `RUST_TEST_THREADS=2 --test-threads=2`
-   - Tests workspace navigation, cross-file features
-   - Validates incremental parsing (<1ms updates)
-
-4. **Documentation build** (`just ci-docs`)
-   - Ensures docs compile without errors
-   - Catches broken doc links
-   - Validates examples in doc comments
-
-**When to use Tier B:**
-- Large refactorings
-- Parser changes affecting LSP
-- Before creating release tags
-- After enabling ignored tests
-
-### Tier C: Manual Smoke Test (As Needed)
-
-**Duration:** ~5-10 minutes
-**Purpose:** Real-world editor integration verification
-
-**Manual testing checklist:**
-
-```bash
-# 1. Build release binary
-cargo build -p perl-lsp --release
-
-# 2. Test LSP server health
-./target/release/perl-lsp --version
-
-# 3. Editor integration (choose your editor)
-# - VS Code: Open a Perl file, verify:
-#   - Syntax highlighting works
-#   - Go-to-definition (Ctrl+Click)
-#   - Hover shows documentation
-#   - Completion suggestions appear
-# - Neovim: Similar verification
-# - Helix: Similar verification
-
-# 4. Corpus parsing validation
-cargo run -p xtask -- corpus-audit --fresh
-
-# 5. Benchmark smoke test (optional)
-cargo bench -p perl-parser --bench parse_benchmark -- --quick
-```
-
-**When to use Tier C:**
-- Before releases
-- After LSP protocol changes
-- After parser architecture changes
-- Suspected editor-specific issues
+- **Command:** build and run the release binary, then verify it in the editor you care about
+- **Use when:** editor behavior changed, parser behavior changed, or you are validating release readiness
+- **Typical checks:** build `perl-lsp`, confirm the binary starts, exercise hover/completion/definition, and run a corpus smoke test if the change touches parsing or indexing
 
 ---
 
@@ -304,58 +83,9 @@ cargo bench -p perl-parser --bench parse_benchmark -- --quick
 bash scripts/install-githooks.sh
 ```
 
-This creates `.git/hooks/pre-push` that runs `nix develop -c just ci-gate` (or `just ci-gate` if Nix is unavailable).
-
-### What It Checks
-
-The pre-push hook automatically runs Tier A (merge gate) before every push:
-
-```
-🚪 Running local gate before push: nix develop -c just ci-gate
-   (Skip with: git push --no-verify)
-
-📝 Checking code formatting...
-✅ Format check passed
-
-🔍 Running clippy (libraries only)...
-✅ Clippy (lib) passed
-
-🧪 Running library tests...
-✅ Library tests passed
-
-🔒 Enforcing no unwrap/expect in production code...
-✅ Production code is panic-safe (no unwrap/expect)
-
-📋 Running policy checks...
-✅ Policy checks passed
-
-🔎 Running LSP semantic definition tests...
-✅ LSP semantic definition tests passed
-
-🔍 Checking parser features baseline...
-✅ Parser features baseline maintained
-
-✅ Merge gate passed!
-```
-
-### Bypassing the Hook
-
-**When to bypass:**
-- Emergency hotfixes (with caution)
-- WIP branches that intentionally break tests
-- Documentation-only changes (though hook is fast enough to run anyway)
-
-**How to bypass:**
-
-```bash
-# Skip pre-push hook
-git push --no-verify
-
-# Or use the environment variable
-SKIP_PREPUSH=1 git push
-```
-
-**Warning:** Only bypass if you understand the risks. Broken commits on main/master affect everyone.
+The hook runs `nix develop -c just pr-fast` when Nix is available, or
+`just pr-fast` otherwise. Use `git push --no-verify` only if you intentionally
+need to bypass the fast local push guard.
 
 ---
 
@@ -431,7 +161,7 @@ sudo pacman -S openssl pkg-config
 just ci-test-lsp
 
 # If running manually:
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 #### Issue: `error: could not find Cargo.toml`
@@ -469,10 +199,10 @@ LSP tests use **adaptive threading** to prevent resource exhaustion:
 
 ```bash
 # Standard threading (may fail on CI runners)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # Adaptive threading (recommended)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 **Environment variables:**
@@ -504,19 +234,10 @@ nix develop -c just ci-gate
 
 #### Issue: Nix builds are slow
 
-**Problem:** First build takes a long time as Nix builds everything from source.
+**Problem:** The first Nix run is slower because it populates the store.
 
-**Solution:** This is expected for first build. Subsequent builds are cached:
-
-```bash
-# First build: ~10-20 minutes
-nix develop -c just ci-gate
-
-# Subsequent builds: ~2-5 minutes (cached)
-nix develop -c just ci-gate
-```
-
-To speed up development, use `just ci-gate` outside Nix shell for iteration.
+**Solution:** Reuse the same dev shell and run `just ci-gate` directly for
+faster iteration once your local toolchain is set up.
 
 ---
 
@@ -636,57 +357,22 @@ just ci-workflow-audit
 
 ### Gate Flow
 
-```
-┌─────────────────────────────────────────┐
-│  Developer Workstation (Local-First)    │
-└────────────┬────────────────────────────┘
-             │
-             ├─► just ci-gate (~2-5 min)
-             │   ├─ Format check
-             │   ├─ Clippy (lib)
-             │   ├─ Library tests
-             │   ├─ Panic safety check
-             │   ├─ Policy checks
-             │   ├─ LSP semantic tests
-             │   └─ Parser features check
-             │
-             ├─► just ci-full (~10-20 min)
-             │   ├─ All ci-gate checks
-             │   ├─ Full clippy
-             │   ├─ Core tests (lib + bins)
-             │   ├─ LSP integration tests
-             │   └─ Documentation build
-             │
-             └─► git push
-                 ├─ Pre-push hook runs ci-gate
-                 └─ GitHub Actions (confirmation)
-                     ├─ Default lane (every PR)
-                     └─ Label-gated lanes (opt-in)
-```
+The practical order is:
+
+1. `just pr-fast` while iterating.
+2. Let the pre-push hook re-run `just pr-fast` on push, or run it manually first.
+3. `nix develop -c just ci-gate` before merge.
+4. `just ci-full` for large refactors or release confidence.
+5. `just release-check` before tagging a release.
 
 ### Test Lanes
 
-| Lane | Trigger | Cost | Purpose |
-|------|---------|------|---------|
-| **Core** | Every PR | Low | Format, clippy, essential tests |
-| **LSP** | Code changes | Medium | LSP integration tests |
-| **Stress** | `ci:stress` label | High | Long-running stability tests |
-| **Extras** | `ci:extras` label | Medium | Optional LSP features |
-| **Mutation** | `ci:mutation` label | Very High | Mutation testing (~15-30 min) |
-| **Benchmark** | `ci:bench` label | High | Performance benchmarks |
-| **Coverage** | `ci:coverage` label | High | Code coverage analysis |
-
-### Concurrency Controls
-
-All workflows include concurrency cancellation to prevent wasted CI runs:
-
-```yaml
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-```
-
-**Impact:** Push 5 times in a row, only pay for the last run.
+| Lane | Local command | Notes |
+|------|---------------|-------|
+| PR smoke | `just pr-fast` | Fast feedback for every PR |
+| Merge gate | `nix develop -c just ci-gate` | Local equivalent of the merge gate |
+| Full validation | `just ci-full` | Broader workspace confidence |
+| Security | `just security-audit` | Use when security-sensitive changes land |
 
 ### Path Filters
 
@@ -797,89 +483,9 @@ nix develop -c just ci-gate
 
 ### Large Refactorings
 
-```bash
-# Recommended workflow
-1. Make changes
-2. Run: just ci-full
-3. Run manual smoke test (Tier C)
-4. If passing, commit and push
-5. Add ci:stress label for stress tests
-6. Monitor GitHub Actions for cross-platform issues
-```
-
-### Before Releases
-
-```bash
-# Release validation
-1. Run: just ci-full
-2. Run: just ci-full-msrv (validate MSRV)
-3. Run manual smoke test with editors
-4. Run: cargo run -p xtask -- corpus-audit --fresh
-5. Check: bash scripts/ignored-test-count.sh
-6. Verify: just status-check
-7. Tag release
-```
-
-### Cost-Conscious Development
-
-```bash
-# Minimize CI costs
-1. Always run ci-gate locally before pushing
-2. Use pre-push hook (automatic)
-3. Only add expensive labels when needed
-4. Iterate locally, confirm on GitHub Actions
-5. Use concurrency cancellation (automatic)
-6. Skip CI on docs-only PRs (automatic)
-```
-
----
-
-## Performance Benchmarks
-
-### Typical Local Gate Times
-
-| Stage | Duration | Notes |
-|-------|----------|-------|
-| Format check | <5 seconds | Fast fail |
-| Clippy (lib) | ~30-60 seconds | Cached after first run |
-| Library tests | ~1-2 minutes | Fast, essential |
-| Panic safety | ~20-30 seconds | Production code only |
-| Policy checks | ~5-10 seconds | Lightweight |
-| LSP semantic | ~30-60 seconds | Resource-constrained |
-| Parser features | ~10-20 seconds | Baseline validation |
-| **Total** | **~2-5 minutes** | Full merge gate |
-
-### Typical Full Pipeline Times
-
-| Stage | Duration | Notes |
-|-------|----------|-------|
-| ci-gate | ~2-5 minutes | See above |
-| Full clippy | ~1-2 minutes | All targets |
-| Core tests | ~2-3 minutes | Lib + bins |
-| LSP integration | ~2-4 minutes | Thread-constrained |
-| Documentation | ~1-2 minutes | No deps |
-| **Total** | **~10-20 minutes** | Full CI pipeline |
-
-### CI Cost Estimates
-
-Based on GitHub Actions pricing (as of 2025):
-
-```
-Essential jobs per PR (Ubuntu + Windows):
-- Format check:     ~$0.01
-- Clippy:           ~$0.02
-- Core tests:       ~$0.03
-- LSP tests:        ~$0.02
-─────────────────────────────
-Total:              ~$0.06-0.08 per PR
-
-With concurrency cancellation:
-- 5 pushes = 1 billable run = $0.06-0.08
-- Without cancellation: $0.30-0.40 (5x more!)
-
-Annual savings (Issue #211 target):
-- CI optimization: $720/year
-```
+- Use `just ci-full` and `just release-check` before you ask for review.
+- If the change touches parsing or indexing, add a manual editor smoke test.
+- If the change touches release packaging, also run the MSRV variants.
 
 ---
 
@@ -978,6 +584,5 @@ nix develop -c cargo mutants -p perl-parser --timeout 60
 
 ---
 
-**Last Updated:** 2026-01-24
-**Issue:** #211 (CI Pipeline Cleanup)
-**Status:** Phase 3 - Nix-Based CI Infrastructure
+**Last Updated:** 2026-03-29
+**Status:** Local validation and CI command flow aligned with the current gate model

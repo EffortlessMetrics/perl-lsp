@@ -38,12 +38,47 @@ export enum ProgressLocation {
 }
 
 export class Range {
+  public start: { line: number; character: number };
+  public end: { line: number; character: number };
+
   constructor(
     public startLine: number,
     public startCharacter: number,
     public endLine: number,
     public endCharacter: number,
-  ) {}
+  ) {
+    this.start = { line: startLine, character: startCharacter };
+    this.end = { line: endLine, character: endCharacter };
+  }
+}
+
+export enum SymbolKind {
+  File = 0,
+  Module = 1,
+  Namespace = 2,
+  Package = 3,
+  Class = 4,
+  Method = 5,
+  Property = 6,
+  Field = 7,
+  Constructor = 8,
+  Enum = 9,
+  Interface = 10,
+  Function = 11,
+  Variable = 12,
+  Constant = 13,
+  String = 15,
+  Number = 16,
+  Boolean = 17,
+  Array = 18,
+  Object = 19,
+  Key = 20,
+  Null = 21,
+  EnumMember = 22,
+  Struct = 23,
+  Event = 24,
+  Operator = 25,
+  TypeParameter = 26,
 }
 
 export class TestMessage {
@@ -115,7 +150,10 @@ export const workspace = {
   onDidChangeConfiguration: jest.fn(),
   textDocuments: [],
   findFiles: jest.fn(async () => []),
-  openTextDocument: jest.fn(async (p: string) => ({ uri: { fsPath: p } })),
+  openTextDocument: jest.fn(async (value: any) => ({
+    uri: typeof value === 'string' ? { fsPath: value } : value,
+    getText: jest.fn(() => ''),
+  })),
   workspaceFolders: undefined as any[] | undefined,
 };
 
@@ -174,6 +212,7 @@ export const env = {
 };
 
 export const extensions = {
+  all: [] as any[],
   getExtension: jest.fn(() => undefined),
 };
 
@@ -204,4 +243,8 @@ export enum ConfigurationTarget {
 export const languages = {
   onDidChangeDiagnostics: jest.fn(() => ({ dispose: jest.fn() })),
   getDiagnostics: jest.fn(() => [] as Array<[any, any[]]>),
+  registerDocumentSymbolProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerFoldingRangeProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerCodeActionsProvider: jest.fn(() => ({ dispose: jest.fn() })),
+  registerDefinitionProvider: jest.fn(() => ({ dispose: jest.fn() })),
 };

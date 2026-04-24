@@ -259,7 +259,7 @@ cargo test -p perl-parser test_dual_indexing_comprehensive_coverage
 cargo test -p perl-parser workspace_dual_pattern_reference_search
 
 # Test Unicode processing enhancements
-cargo test -p perl-lsp --test lsp_encoding_edge_cases -- unicode_performance_validation
+cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- unicode_performance_validation
 ```
 
 ## Performance and Quality Metrics

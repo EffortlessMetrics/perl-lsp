@@ -7,38 +7,38 @@ class PerlLsp < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-#{version}-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-aarch64-apple-darwin.tar.gz"
       sha256 "__SHA256_MACOS_AARCH64__"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-#{version}-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-x86_64-apple-darwin.tar.gz"
       sha256 "__SHA256_MACOS_X86_64__"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "__SHA256_LINUX_AARCH64__"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-#{version}-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perllsp-#{version}-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "__SHA256_LINUX_X86_64__"
     end
   end
 
   def install
-    # Expected extracted layout: perl-lsp-<version>-<target>/{perl-lsp,perl-dap}
+    # Expected extracted layout: perllsp-<version>-<target>/{perllsp,perl-dap}
     # If the release packaging layout changes, update this extraction logic with a follow-up.
-    extracted_dir = Dir.glob("perl-lsp-*").find { |dir| Dir.exist?(dir) }
+    extracted_dir = Dir.glob("perllsp-*").find { |dir| Dir.exist?(dir) }
     if extracted_dir
-      bin.install "#{extracted_dir}/perl-lsp"
+      bin.install "#{extracted_dir}/perllsp"
       bin.install "#{extracted_dir}/perl-dap" if File.exist?("#{extracted_dir}/perl-dap")
     else
-      bin.install "perl-lsp"
+      bin.install "perllsp"
       bin.install "perl-dap" if File.exist?("perl-dap")
     end
   end
 
   test do
-    assert_match(/perl-lsp|Perl LSP/, shell_output("#{bin}/perl-lsp --version"))
+    assert_match(/perllsp|Perl LSP/, shell_output("#{bin}/perllsp --version"))
   end
 end

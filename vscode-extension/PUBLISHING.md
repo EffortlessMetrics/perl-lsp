@@ -15,12 +15,12 @@
 
 ### 1. Build the LSP Binary
 
-First, ensure the perl-lsp binary is built:
+First, ensure the `perllsp` binary is built:
 
 ```bash
 # From the project root
 cd ..
-cargo build -p perl-lsp --release
+cargo build -p perllsp --release
 ```
 
 ### 2. Build and Validate the Extension
@@ -80,10 +80,10 @@ cargo build --target x86_64-pc-windows-msvc --release
 ```
 
 Place binaries in appropriate directories:
-- `bin/linux-x64/perl-lsp`
-- `bin/darwin-x64/perl-lsp`
-- `bin/darwin-arm64/perl-lsp`
-- `bin/win32-x64/perl-lsp.exe`
+- `bin/linux-x64/perllsp`
+- `bin/darwin-x64/perllsp`
+- `bin/darwin-arm64/perllsp`
+- `bin/win32-x64/perllsp.exe`
 
 ### 5. Create Publisher
 
@@ -126,6 +126,9 @@ vsce publish 0.5.1  # Specific version
 
 2. **Update Documentation**
    - Update main README.md with marketplace link
+   - Refresh the manually maintained VS Marketplace installs badge count/date in:
+     - `/README.md`
+     - `/vscode-extension/README.md`
    - Add installation instructions
    - Update CHANGELOG.md
 

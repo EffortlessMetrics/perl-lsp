@@ -79,7 +79,7 @@ echo
     send_message '{"jsonrpc":"2.0","id":5,"method":"shutdown"}'
     sleep 0.2
     
-) | ./target/release/perl-lsp --stdio 2>&1 | grep -E "(Received|Content-Length|result|capabilities|title|label)" | head -20
+) | ./target/release/perllsp --stdio 2>&1 | grep -E "(Received|Content-Length|result|capabilities|title|label)" | head -20
 
 echo
 echo "=== Demo Complete ==="
@@ -92,4 +92,4 @@ echo "4. Hover information"
 echo "5. Code actions for fixes"
 echo "6. Clean shutdown"
 echo
-echo "To use in your editor, configure it to run: perl-lsp --stdio"
+echo "To use in your editor, configure it to run: perllsp --stdio"

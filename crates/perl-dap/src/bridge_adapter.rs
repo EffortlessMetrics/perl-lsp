@@ -235,7 +235,7 @@ impl BridgeAdapter {
                 Ok(Some(_)) => return true,
                 Ok(None) => sleep(Duration::from_millis(PLS_SHUTDOWN_POLL_MS)).await,
                 Err(e) => {
-                    eprintln!("Failed to poll Perl::LanguageServer process: {}", e);
+                    tracing::error!(error = %e, "Failed to poll Perl::LanguageServer process");
                     return false;
                 }
             }

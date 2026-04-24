@@ -148,10 +148,10 @@ cargo test -p perl-parser --test mutation_hardening_tests --release -- --nocaptu
 
 ```bash
 # Validate performance is maintained with security enhancements
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_behavioral_tests
 # Target: 0.31s (maintained from PR #140, not degraded by PR #153 security)
 
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories
 # Target: 0.32s (preserved from PR #140)
 
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test
@@ -278,15 +278,15 @@ cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
 
 ```bash
 # Performance validation (PR #140)
-cargo test -p perl-lsp --test lsp_behavioral_tests     # Validate sub-second (0.31s)
-cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # Validate sub-second (0.32s)
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests     # Validate sub-second (0.31s)
+cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # Validate sub-second (0.32s)
 
 # Enhanced test harness performance measurement
-RUST_TEST_THREADS=2 time cargo test -p perl-lsp       # Adaptive timeout validation
-LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp     # Mock response performance
+RUST_TEST_THREADS=2 time cargo test -p perl-lsp-rs       # Adaptive timeout validation
+LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp-rs     # Mock response performance
 
 # Idle detection optimization benchmarking
-RUST_LOG=debug cargo test -p perl-lsp -- --nocapture | grep -i "idle"  # 200ms cycle validation
+RUST_LOG=debug cargo test -p perl-lsp-rs -- --nocapture | grep -i "idle"  # 200ms cycle validation
 
 # Strategic performance analysis
 echo "Before PR #140: 1560s+ behavioral tests"
@@ -328,7 +328,7 @@ cargo run -p perl-parser --bin workspace_coverage_benchmark -- \
   --dual-indexing-enabled
 
 # Unicode processing performance validation
-cargo test -p perl-lsp --test lsp_encoding_edge_cases -- unicode_performance_validation --release
+cargo test -p perl-lsp-rs --test lsp_encoding_edge_cases -- unicode_performance_validation --release
 
 # Benchmark concurrent workspace indexing
 cargo run -p perl-parser --bin concurrent_indexing_benchmark -- \
@@ -788,7 +788,7 @@ Benchmark execution benefits from controlled threading to ensure consistent and 
 RUST_TEST_THREADS=2 cargo xtask bench --save --output ci_benchmark.json
 
 # For LSP-specific benchmarks with controlled threading
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --release -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --release -- --test-threads=2
 
 # Combined with memory tracking
 RUST_TEST_THREADS=2 cargo xtask compare --report
@@ -919,16 +919,16 @@ The framework now includes specialized LSP performance benchmarking to validate 
 #### LSP Benchmark Commands
 ```bash
 # Run LSP performance tests with standard timeouts
-cargo test -p perl-lsp test_completion_detail_formatting
+cargo test -p perl-lsp-rs test_completion_detail_formatting
 
 # Run with fast mode (99.5% timeout reduction)
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_completion_detail_formatting
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs test_completion_detail_formatting
 
 # Benchmark workspace symbol search performance
-cargo test -p perl-lsp test_workspace_symbol_search -- --nocapture
+cargo test -p perl-lsp-rs test_workspace_symbol_search -- --nocapture
 
 # Run all LSP tests in fast mode
-LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp
+LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs
 ```
 
 #### Performance Validation Metrics
@@ -954,8 +954,8 @@ export PERL_LSP_INCREMENTAL=1        # Enable incremental parsing
 #### Performance Gate Validation (PR #140)
 ```bash
 # Validate performance improvements
-time cargo test -p perl-lsp --test lsp_behavioral_tests         # Should be <1s (0.31s target)
-time cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # Should be <1s (0.32s target)
+time cargo test -p perl-lsp-rs --test lsp_behavioral_tests         # Should be <1s (0.31s target)
+time cargo test -p perl-lsp-rs --test lsp_full_coverage_user_stories  # Should be <1s (0.32s target)
 
 # Strategic performance comparison
 echo "Performance Gates:"
@@ -965,14 +965,14 @@ echo "- Workspace tests: <1s (achieved 0.26s vs previous 60s+)"
 echo "- Overall suite: <10s (achieved <10s vs previous 60s+)"
 
 # Adaptive timeout validation
-RUST_TEST_THREADS=2 time cargo test -p perl-lsp               # Validate 500ms LSP harness timeouts
-RUST_TEST_THREADS=4 time cargo test -p perl-lsp               # Validate 300ms LSP harness timeouts
-RUST_TEST_THREADS=8 time cargo test -p perl-lsp               # Validate 200ms LSP harness timeouts
+RUST_TEST_THREADS=2 time cargo test -p perl-lsp-rs               # Validate 500ms LSP harness timeouts
+RUST_TEST_THREADS=4 time cargo test -p perl-lsp-rs               # Validate 300ms LSP harness timeouts
+RUST_TEST_THREADS=8 time cargo test -p perl-lsp-rs               # Validate 200ms LSP harness timeouts
 
 # Traditional performance validation (pre-PR #140)
-time cargo test -p perl-lsp test_completion_detail_formatting  # Should be <1s
-time cargo test -p perl-lsp test_workspace_symbol_search
-LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp test_workspace_symbol_search
+time cargo test -p perl-lsp-rs test_completion_detail_formatting  # Should be <1s
+time cargo test -p perl-lsp-rs test_workspace_symbol_search
+LSP_TEST_FALLBACKS=1 time cargo test -p perl-lsp-rs test_workspace_symbol_search
 ```
 
 ## Contributing

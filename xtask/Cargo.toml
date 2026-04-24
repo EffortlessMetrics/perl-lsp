@@ -14,39 +14,47 @@ keywords = ["perl", "parser", "lsp", "tasks"]
 categories = ["development-tools"]
 
 [dependencies]
-clap = { version = "4.5.60", features = ["derive"] }
+clap = { workspace = true }
 color-eyre = "0.6.5"
-similar = "2.7.0"
+similar = "3.1.0"
 duct = "1.1.1"
-walkdir = "2.5.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-anyhow = "1.0.102"
-perl-feature-catalog = { workspace = true }
+walkdir.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+anyhow.workspace = true
+# (perl-feature-catalog absorbed into perl-lsp-rs-core::feature_catalog — Wave Final PR B)
+perl-lsp-rs-core = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
+perl-corpus = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
-tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true, features = ["c-parser"] }
-regex = "1.12.2"
+tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
+regex.workspace = true
 serde_yaml_ng = "0.10.0"
-toml = "1.0.4"
+toml = "1.1.2"
 bindgen = "0.72.1"
 peak_alloc = "0.3.0"
 notify = "8.2.0"
+flate2 = "1.1.5"
+tar = "0.4.44"
+tempfile.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.18.0"
 
 [dev-dependencies]
-tempfile = "3.24.0"
 assert_cmd = "2.1.2"
 perl-tdd-support = { workspace = true }
 
 [features]
-# Additional tasks that depend on legacy tree-sitter-perl crate
-legacy = ["tree-sitter-perl", "perl-parser-pest"]
-# Parser-related tasks
-parser-tasks = ["tree-sitter-perl"]
+# Legacy Pest-based (v2) tasks -- v2-parity corpus, v2-only diagnostics.
+# Does not include the C tree-sitter parser (no libclang/C toolchain needed).
+legacy = ["perl-parser-pest"]
+# Parser-related tasks that additionally require the C tree-sitter parser
+# (bindings generation, highlight tests, three-way parser comparison).
+# Building this feature requires a C toolchain and libclang to compile
+# `tree-sitter-perl-c`.
+parser-tasks = ["legacy", "tree-sitter-perl-c"]

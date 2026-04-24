@@ -1,0 +1,11 @@
+Package: __PACKAGE_NAME__
+Version: __RELEASE_VERSION__
+Section: devel
+Priority: optional
+Architecture: __DEB_ARCH__
+Maintainer: __PACKAGE_MAINTAINER__
+Homepage: __PACKAGE_HOMEPAGE__
+Depends: libc6 (>= 2.31)
+Description: __PACKAGE_SUMMARY__
+ __PACKAGE_DESCRIPTION_LINE_1__
+ __PACKAGE_DESCRIPTION_LINE_2__

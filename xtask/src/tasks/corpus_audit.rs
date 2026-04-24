@@ -11,7 +11,7 @@ use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 mod corpus;
@@ -68,6 +68,72 @@ impl Default for AuditConfig {
             check: false,
         }
     }
+}
+
+/// Lightweight corpus snapshot for status reporting.
+#[derive(Debug, Clone)]
+pub struct StatusSummary {
+    pub total_files: usize,
+    pub ok_files: usize,
+    pub error_files: usize,
+    pub timeout_files: usize,
+    pub panic_files: usize,
+    pub test_corpus_files: usize,
+    pub perl_corpus_files: usize,
+    pub nodekind_covered: usize,
+    pub nodekind_total: usize,
+    pub ga_covered: usize,
+    pub ga_total: usize,
+}
+
+/// Compute a lightweight repo-corpus summary for `update-status`.
+///
+/// This reuses the same corpus discovery and parse logic as `parser-audit`, but
+/// stops after the metrics needed for `docs/project/status/parser.md`.
+pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<StatusSummary> {
+    let corpus_files = parse_corpus_files(corpus_path)?;
+    let inventory = corpus::generate_inventory(&corpus_files);
+    let parse_results = parse_corpus_with_timeout(&corpus_files, timeout)?;
+    let nodekind_stats = analyze_nodekind_coverage(&parse_results);
+    let ga_coverage = check_ga_feature_alignment(&corpus_files)?;
+
+    let mut ok_files = 0usize;
+    let mut error_files = 0usize;
+    let mut timeout_files = 0usize;
+    let mut panic_files = 0usize;
+
+    for outcome in parse_results.values() {
+        match outcome {
+            ParseOutcome::Ok { .. } => ok_files += 1,
+            ParseOutcome::Error { .. } => error_files += 1,
+            ParseOutcome::Timeout { .. } => timeout_files += 1,
+            ParseOutcome::Panic { .. } => panic_files += 1,
+        }
+    }
+
+    let mut test_corpus_files = 0usize;
+    let mut perl_corpus_files = 0usize;
+    for layer_count in inventory.files_by_layer {
+        match layer_count.layer {
+            corpus::CorpusLayer::TestCorpus => test_corpus_files = layer_count.count,
+            corpus::CorpusLayer::PerlCorpus => perl_corpus_files = layer_count.count,
+            _ => {}
+        }
+    }
+
+    Ok(StatusSummary {
+        total_files: inventory.total_files,
+        ok_files,
+        error_files,
+        timeout_files,
+        panic_files,
+        test_corpus_files,
+        perl_corpus_files,
+        nodekind_covered: nodekind_stats.covered_count,
+        nodekind_total: nodekind_stats.total_count,
+        ga_covered: ga_coverage.covered_count,
+        ga_total: ga_coverage.total_count,
+    })
 }
 
 /// Run corpus audit with the given configuration

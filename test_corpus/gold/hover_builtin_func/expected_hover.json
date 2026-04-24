@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "fixture": "hover_builtin_func",
+  "assertions": [
+    {
+      "kind": "hover_non_null",
+      "line": 5,
+      "character": 0,
+      "rationale": "hover on builtin 'push' must return documentation"
+    },
+    {
+      "kind": "hover_contains",
+      "line": 5,
+      "character": 0,
+      "needle": "push",
+      "rationale": "hover on push must reference the function name"
+    }
+  ]
+}

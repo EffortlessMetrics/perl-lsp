@@ -1,153 +1,65 @@
-# Release Checklist for 0.12.0 Public Alpha
+# Release Checklist
 
-This checklist covers all verification steps required before cutting the 0.12.0
-release. Items marked **[automated]** are enforced by `just release-check`.
-Items marked **[manual]** require human verification.
+This checklist is the release gate for the current cut.
+The mechanics live in [RELEASE.md](../../RELEASE.md), the release-day sequence lives in
+[PUBLISHING_ROADMAP.md](../PUBLISHING_ROADMAP.md), and changelog generation lives in
+[CHANGELOG_WORKFLOW.md](../CHANGELOG_WORKFLOW.md).
 
-## Prerequisites
+Use `NEW_VERSION` as the target semver string for the release you are preparing.
+
+## Preflight
+
+- [ ] The working tree is clean on the current default branch.
+- [ ] `just release-check` passes.
+- [ ] `just status-check` passes if any files under `docs/project/status/` changed.
+- [ ] `gh secret list` shows `CARGO_REGISTRY_TOKEN`, `VSCE_PAT`, `OVSX_PAT`, `DOCKER_USERNAME`, and `DOCKER_PASSWORD`.
+- [ ] `just version-check` passes.
+- [ ] `CHANGELOG.md` contains a dated `## [NEW_VERSION]` section and leaves `[Unreleased]` empty.
+- [ ] The crates listed in `[workspace.metadata.publish.allow]` report `NEW_VERSION`.
+- [ ] `gh run list --branch master --limit 5` shows the default branch is green.
+- [ ] No stale `.snap.new` files remain in the worktree.
+
+Use this version check when you need to confirm the release target:
 
 ```bash
-# Install required tools (if not already available)
-cargo install cargo-audit cargo-sbom cargo-semver-checks --locked
+cargo metadata --format-version=1 --no-deps | python3 -c '
+import json, sys
+meta = json.load(sys.stdin)
+workspace_members = set(meta["workspace_members"])
+packages = {pkg["name"]: pkg for pkg in meta["packages"] if pkg["id"] in workspace_members}
+allow = meta.get("metadata", {}).get("publish", {}).get("allow", [])
+target = "NEW_VERSION"
+for crate_name in allow:
+    pkg = packages.get(crate_name)
+    if pkg is None:
+        print(f"UNKNOWN: {crate_name}")
+        continue
+    if pkg["version"] != target:
+        print(f"MISMATCH: {pkg[\"name\"]}@{pkg[\"version\"]}")
+'
 ```
-
-## Automated Gates
-
-Run all automated checks at once:
-
-```bash
-just release-check
-```
-
-This composes the following gates:
-
-### 1. CI Gate (`just ci-gate`) **[automated]**
-
-All merge-blocking gates must pass:
-
-- [ ] Code formatting (`cargo fmt --check --all`)
-- [ ] Clippy lints -- core crates and full workspace
-- [ ] Unit tests -- core crates and full workspace
-- [ ] LSP smoke tests (Tier A) and core behavior tests (Tier B)
-- [ ] LSP semantic definition tests
-- [ ] Common corpus clean (pinned modules parse with zero errors)
-- [ ] Security audit (`cargo audit`)
-- [ ] Policy checks (ExitStatus helper, CURRENT_STATUS freshness, features invariants)
-- [ ] Documentation build (`cargo doc`)
-- [ ] v2 parity and bundle sync
-- [ ] Workflow audit (no ungated expensive jobs)
-- [ ] No nested lockfiles
-
-### 2. Release Build **[automated]**
-
-- [ ] `cargo build -p perl-lsp --release --locked` succeeds
-- [ ] `cargo build -p perl-dap --release --locked` succeeds
-
-### 3. Version Sync **[automated]**
-
-- [ ] All version strings agree across `Cargo.toml` (workspace), `features.toml`,
-      `package.json` (VSCode extension), and any `build.rs` references
-- [ ] Verified by `just version-check`
-
-### 4. SemVer Check **[automated]**
-
-- [ ] No unintended breaking changes in public API
-- [ ] Checked by `cargo-semver-checks` against the last release tag
-
-### 5. SBOM Generation **[automated]**
-
-- [ ] SPDX SBOM generates successfully
-- [ ] CycloneDX SBOM generates successfully
-
-### 6. No Panic Constructs **[automated]**
-
-- [ ] No `unwrap()`, `expect()`, `panic!()`, `todo!()`, `unimplemented!()` in
-      production code (excluding allowed exceptions)
-
-### 7. CHANGELOG **[automated]**
-
-- [ ] `CHANGELOG.md` contains a `## [0.12.0]` section (not just `[Unreleased]`)
-
-### 8. Cargo Publish Dry-Run **[automated]**
-
-- [ ] `cargo publish --dry-run -p perl-parser` succeeds
-- [ ] `cargo publish --dry-run -p perl-lsp` succeeds
-
-## Manual Verification
-
-These steps require human judgment and cannot be fully automated.
-
-### 9. CPAN Corpus Coverage **[manual]**
-
-- [ ] Common corpus manifest is up to date
-- [ ] The manifest-shaped CPAN subset is the actionable release bar for 0.12.0
-- [ ] Run `just cpan-corpus-sweep` against the manifest-shaped subset and verify no regressions
-- [ ] If the broader 8k+ full installed sweep is red while the manifest-shaped subset stays clean, treat that as corpus-shape / baseline drift, not a silent product regression
-- [ ] Track deeper parser reduction work in `#2971` if the broad sweep still needs tightening
-
-### 10. Documentation Review **[manual]**
-
-- [ ] README.md is current and accurate
-- [ ] GETTING_STARTED.md installation instructions work
-- [ ] SUPPORT.md contact information is correct
-- [ ] docs/project/CURRENT_STATUS.md reflects reality (`just status-update`)
-- [ ] docs/project/ROADMAP.md milestones are current
-
-### 11. VSCode Extension **[manual]**
-
-- [ ] Extension version matches workspace version
-- [ ] Extension builds (`cd vscode-extension && npm run package`)
-- [ ] Auto-download of language server binary works
-- [ ] VSIX install / activation works end-to-end
-- [ ] Moose / OO flow: hover, goto-definition, references, cross-file call hierarchy
-- [ ] DBI flow: completion after `->`, hover docs, signature help, diagnostics
-- [ ] Plain-script flow: startup, symbols, diagnostics, health widget
-- [ ] Basic smoke test in VSCode: open a `.pl` file, verify diagnostics, completion, hover
-
-### 12. Installation Paths **[manual]**
-
-- [ ] `cargo install perl-lsp` (from local checkout) works
-- [ ] `perl-lsp --version` prints correct version
-- [ ] `perl-lsp --health` returns healthy status
-
-### 13. Platform Builds **[manual, CI-assisted]**
-
-Cross-platform builds are handled by the Release workflow, but verify:
-
-- [ ] Linux x86_64 binary runs
-- [ ] macOS arm64 binary runs (if available)
-- [ ] Windows x86_64 binary runs (if available)
 
 ## Release Execution
 
-Once all checks pass:
+- [ ] Prepare the version bump and changelog with `cargo xtask release-turnkey NEW_VERSION` or the `version-bump.yml` workflow.
+- [ ] Review and merge the generated version-bump PR.
+- [ ] Dispatch `release-orchestration.yml` with `version=NEW_VERSION`, `prerelease=false`, `skip_crates=false`, `skip_extension=false`, and `skip_docker=false`.
+- [ ] If a downstream publish stage fails, re-run orchestration with the relevant `skip_*` flags instead of tagging manually.
+- [ ] Let `release.yml`, `publish-crates.yml`, `publish-extension.yml`, and `docker-publish.yml` finish.
+- [ ] Confirm the release-published triggers for `brew-bump.yml`, `scoop-bump.yml`, and `chocolatey-bump.yml` fired as expected.
 
-1. **Bump version**: `just release-turnkey 0.12.0`
-   - Creates a version-bump PR with CHANGELOG updates
-2. **Merge the version-bump PR** after review
-3. **Trigger release**: Dispatch the Release Orchestration workflow
-   - GitHub Actions: `.github/workflows/release-orchestration.yml`
-   - Input: version=`0.12.0`, prerelease=`false`
-4. **Monitor workflows**: Release, Publish Crates, Publish Extension, Docker
-5. **Verify artifacts**:
-   - GitHub Release page has binaries for all platforms
-   - SHA256SUMS file attached
-   - SBOM attached
-   - crates.io page is live
-   - VSCode Marketplace listing is updated
-6. **Post-release**:
-   - Update Homebrew formula (automated via `brew-bump.yml`)
-   - Verify `cargo install perl-lsp` from crates.io
-   - Announce release
+## Post-Release Verification
 
-## Automation Reference
+- [ ] `gh release view vNEW_VERSION` shows the expected release notes and assets.
+- [ ] `cargo search perl-lsp-rs --limit 1` resolves `perl-lsp-rs = "NEW_VERSION"`.
+- [ ] `cargo search perllsp --limit 1` resolves `perllsp = "NEW_VERSION"`.
+- [ ] The VS Code Marketplace and Open VSX listings show `NEW_VERSION`.
+- [ ] `docker pull effortlessmetrics/perl-lsp:NEW_VERSION` and `docker pull ghcr.io/effortlessmetrics/perl-lsp:NEW_VERSION` succeed.
+- [ ] `cargo install perllsp` installs the new release and `perllsp --version` prints `NEW_VERSION`.
+- [ ] The smoke tests in [RELEASE.md](../../RELEASE.md) pass for the current release artifacts.
+- [ ] Any evidence-backed status docs are updated with `just status-update` and validated with `just status-check`.
 
-| Recipe | What it checks |
-|--------|---------------|
-| `just release-check` | All automated gates (superset of `release-gate`) |
-| `just release-gate` | ci-gate + release-build + sbom-verify + version-check |
-| `just ci-gate` | All merge-blocking gates |
-| `just ci-full` | Nightly-tier deep checks |
-| `just semver-check` | SemVer breaking change detection |
-| `just version-check` | Version string sync |
-| `just sbom-verify` | SBOM generation and verification |
+## Repo-Native Cleanup Notes
+
+- Manual tag creation, `git checkout -B master origin/master`, and direct `git push origin vNEW_VERSION` are historical instructions from the issue context, not the current release path.
+- If you need the operational release procedure, follow [RELEASE.md](../../RELEASE.md) instead of duplicating the workflow in an issue comment.

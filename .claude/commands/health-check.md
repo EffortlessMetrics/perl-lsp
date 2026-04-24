@@ -69,6 +69,34 @@ fi
 cargo machete 2>&1 | grep -c "unused" || echo "0"
 ```
 
+### 11. Stale In-Build Issues
+Detect issues labeled `in-build` that have no linked open PR and have not been updated in over 7 days.
+These are evidence of a builder that never started, or a PR that merged without closing the issue.
+Issues that also carry `structural-blocker` are excluded — those are legitimately stalled by design.
+
+```bash
+# Step 1: find candidate issues (age > 7 days, no structural-blocker label)
+JQ_FILTER='[.[] | select((.labels | map(.name) | index("structural-blocker") == null) and ((now - (.updatedAt | fromdateiso8601)) > (7*86400)))] | map(.number)'
+STALE_CANDIDATES=$(gh issue list --label "in-build" --state open --json number,updatedAt,labels --jq "$JQ_FILTER" 2>/dev/null || echo "[]")
+
+# Step 2: for each candidate, verify no open PR references it
+STALE_CONFIRMED=()
+for NUM in $(echo "$STALE_CANDIDATES" | jq -r '.[]'  2>/dev/null); do
+  PR_COUNT=$(gh pr list --state open --search "#${NUM} in:body" --limit 1 --json number --jq 'length' 2>/dev/null || echo "0")
+  if [ "$PR_COUNT" = "0" ]; then
+    STALE_CONFIRMED+=("$NUM")
+  fi
+done
+
+if [ "${#STALE_CONFIRMED[@]}" -eq 0 ]; then
+  echo "0"
+else
+  echo "${#STALE_CONFIRMED[@]}: issues ${STALE_CONFIRMED[*]}"
+fi
+```
+
+Note: If `gh` is offline or rate-limited, the `|| echo` fallbacks ensure this check returns `0` rather than erroring.
+
 ## Output Format
 
 Print a formatted table to stdout:
@@ -88,6 +116,7 @@ Print a formatted table to stdout:
 | Ignored tests      | <N>    | N ignored tests           |
 | Debt ledger        | OK/BAD | present / not found       |
 | Unused deps        | <N>    | N unused dependencies     |
+| Stale in-build     | <N>    | N issues flagged (list #NN) |
 
 Overall: OK / NEEDS ATTENTION (<list of BAD checks>)
 ```
@@ -105,6 +134,7 @@ Overall: OK / NEEDS ATTENTION (<list of BAD checks>)
 | Ignored tests | < 20 | >= 20 |
 | Debt ledger | File exists | File missing |
 | Unused deps | 0 | > 0 |
+| Stale in-build | 0 | > 0 (builder never started or PR merged without closing) |
 
 ## When to Use
 

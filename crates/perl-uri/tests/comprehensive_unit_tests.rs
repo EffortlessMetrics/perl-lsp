@@ -87,10 +87,9 @@ fn is_file_uri_false_for_plain_path() {
 }
 
 #[test]
-fn is_file_uri_case_sensitive() {
-    // file:// check is case-sensitive via starts_with
-    assert!(!is_file_uri("FILE:///tmp/test.pl"));
-    assert!(!is_file_uri("File:///tmp/test.pl"));
+fn is_file_uri_case_insensitive_for_file_scheme_prefix() {
+    assert!(is_file_uri("FILE:///tmp/test.pl"));
+    assert!(is_file_uri("File:///tmp/test.pl"));
 }
 
 // ── is_special_scheme ───────────────────────────────────────────────
@@ -109,6 +108,11 @@ fn is_special_scheme_detects_git() {
 #[test]
 fn is_special_scheme_detects_vscode_notebook() {
     assert!(is_special_scheme("vscode-notebook:cell-id"));
+}
+
+#[test]
+fn is_special_scheme_detects_vscode_notebook_cell() {
+    assert!(is_special_scheme("vscode-notebook-cell:/path/to/notebook.ipynb#cell-1"));
 }
 
 #[test]
@@ -171,8 +175,8 @@ fn uri_extension_handles_multiple_dots() {
 
 #[test]
 fn uri_extension_hidden_file_no_ext() {
-    // .gitignore → extension is "gitignore" (after the single dot)
-    assert_eq!(uri_extension("file:///tmp/.gitignore"), Some("gitignore"));
+    // Dotfiles like `.gitignore` are treated as extensionless.
+    assert_eq!(uri_extension("file:///tmp/.gitignore"), None);
 }
 
 #[test]
@@ -189,6 +193,11 @@ fn uri_extension_empty_string() {
 fn uri_extension_non_file_uri() {
     assert_eq!(uri_extension("https://example.com/test.pl"), Some("pl"));
     assert_eq!(uri_extension("untitled:Untitled-1.pl"), Some("pl"));
+}
+
+#[test]
+fn uri_extension_windows_style_path() {
+    assert_eq!(uri_extension(r"C:\Users\dev\script.pl"), Some("pl"));
 }
 
 #[test]
@@ -371,15 +380,29 @@ mod roundtrip_tests {
     use perl_uri::{fs_path_to_uri, uri_to_fs_path};
     use std::path::Path;
 
+    fn assert_roundtrip_matches(back: &Path, original: &str) -> Result<(), String> {
+        #[cfg(windows)]
+        if let Some(rootless) = original.strip_prefix('/') {
+            let expected_suffix = rootless.replace('/', "\\");
+            if back.ends_with(Path::new(&expected_suffix)) {
+                return Ok(());
+            }
+            return Err(format!("roundtrip mismatch: {} vs {}", back.display(), original));
+        }
+
+        if back == Path::new(original) {
+            Ok(())
+        } else {
+            Err(format!("roundtrip mismatch: {} vs {}", back.display(), original))
+        }
+    }
+
     #[test]
     fn path_to_uri_and_back() -> Result<(), String> {
         let original = "/tmp/roundtrip.pl";
         let uri = fs_path_to_uri(original)?;
         let path = uri_to_fs_path(&uri).ok_or("roundtrip failed: uri_to_fs_path returned None")?;
-        if path != Path::new(original) {
-            return Err(format!("roundtrip mismatch: {} vs {}", path.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&path, original)
     }
 
     #[test]
@@ -387,10 +410,7 @@ mod roundtrip_tests {
         let original = "/tmp/has spaces/file.pl";
         let uri = fs_path_to_uri(original)?;
         let path = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if path != Path::new(original) {
-            return Err(format!("roundtrip mismatch: {} vs {}", path.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&path, original)
     }
 
     #[test]
@@ -398,10 +418,7 @@ mod roundtrip_tests {
         let original = "/a/b/c/d/e/f/g.pm";
         let uri = fs_path_to_uri(original)?;
         let path = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if path != Path::new(original) {
-            return Err(format!("roundtrip mismatch: {} vs {}", path.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&path, original)
     }
 
     #[test]
@@ -409,10 +426,7 @@ mod roundtrip_tests {
         let original = "/tmp/日本語/テスト.pl";
         let uri = fs_path_to_uri(original)?;
         let path = uri_to_fs_path(&uri).ok_or("roundtrip failed")?;
-        if path != Path::new(original) {
-            return Err(format!("roundtrip mismatch: {} vs {}", path.display(), original));
-        }
-        Ok(())
+        assert_roundtrip_matches(&path, original)
     }
 }
 

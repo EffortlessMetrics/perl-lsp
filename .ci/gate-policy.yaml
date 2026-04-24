@@ -7,7 +7,7 @@
 # when and how strictly they are enforced.
 #
 # Schema Version: 1
-# Last Updated: 2026-01-24
+# Last Updated: 2026-04-23
 # Related: justfile (ci-gate, ci-full), .github/workflows/ci.yml
 #
 # =============================================================================
@@ -213,6 +213,22 @@ gates:
       - unit
       - workspace
 
+  - name: compile_all_targets
+    tier: merge_gate
+    description: "Compile all workspace targets (lib/bin/tests/benches) to catch integration and bench bit-rot; also validates all-features paths"
+    required: true
+    command: just check-all-targets
+    timeout_seconds: 240
+    retry_count: 0
+    budgets:
+      max_duration_ms: 180000
+    quarantine: false
+    tags:
+      - compile
+      - integration
+      - benches
+      - workspace
+
   - name: lsp_smoke
     tier: merge_gate
     description: "Deterministic LSP scenario test (semantic definitions)"
@@ -221,7 +237,7 @@ gates:
     command: >-
       env -u RUSTC_WRAPPER
       RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1
-      cargo test -p perl-lsp --test semantic_definition --locked
+      cargo test -p perl-lsp-rs --test semantic_definition --locked
       -- --test-threads=1
     timeout_seconds: 300
     retry_count: 1
@@ -271,10 +287,12 @@ gates:
 
   - name: policy_checks
     tier: merge_gate
-    description: "Enforce project policies (docs baseline, ExitStatus helper, features invariants)"
+    description: "Enforce project policies (docs baseline, version sync, ExitStatus helper, features invariants)"
     required: true
     command: >-
       cargo xtask check-from-raw &&
+      bash scripts/check-version-sync.sh &&
+      bash scripts/check_release_history.sh &&
       bash ci/check_missing_docs.sh &&
       bash ci/check_parse_errors.sh &&
       python3 scripts/check_features_invariants.py
@@ -292,7 +310,7 @@ gates:
     tier: merge_gate
     description: "Verify documentation builds without errors"
     required: true
-    command: cargo doc -p perl-parser -p perl-lsp --no-deps --locked
+    command: cargo doc -p perl-parser -p perl-lsp-rs --no-deps --locked
     timeout_seconds: 180
     retry_count: 0
     budgets:
@@ -370,6 +388,21 @@ gates:
     tags:
       - lockfile
       - hygiene
+
+  - name: published_crate_count
+    tier: merge_gate
+    description: "Ratchet: published crate count must not exceed baseline"
+    required: true
+    command: cargo xtask published-crate-count
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 5000
+    quarantine: true  # Until collapse completes (~30-31 crates)
+    tags:
+      - ratchet
+      - microcrate
+      - collapse
 
   # ===========================================================================
   # Tier: nightly
@@ -471,9 +504,9 @@ gates:
     description: "Code coverage collection and reporting"
     required: false
     command: >-
-      cargo install cargo-llvm-cov --locked 2>/dev/null || true;
-      cargo llvm-cov -p perl-parser --tests --lcov --output-path lcov.info;
-      cargo llvm-cov report -p perl-parser
+      rustup run nightly cargo install cargo-llvm-cov --locked 2>/dev/null || true;
+      rustup run nightly cargo llvm-cov -p perl-parser --lib --branch --lcov --output-path lcov.info;
+      bash ./scripts/check-coverage-baseline.sh lcov.info .ci/coverage-baseline.txt
     timeout_seconds: 900
     retry_count: 0
     budgets:
@@ -555,7 +588,7 @@ gates:
     tier: release
     description: "Release build with locked dependencies"
     required: true
-    command: cargo build -p perl-lsp --release --locked
+    command: cargo build -p perllsp --release --locked
     timeout_seconds: 300
     retry_count: 0
     budgets:
@@ -606,7 +639,7 @@ gates:
     description: "LSP smoke tests: capabilities, protocol basics (<30s)"
     required: true
     command: >-
-      cargo test -p perl-lsp
+      cargo test -p perl-lsp-rs
       --test cli_smoke --test lsp_capabilities_snapshot
       --test lsp_capabilities_contract --test lsp_protocol_tests
       --locked -- --test-threads=1
@@ -627,7 +660,7 @@ gates:
     required: true
     command: >-
       env RUST_TEST_THREADS=2
-      cargo test -p perl-lsp
+      cargo test -p perl-lsp-rs
       --test semantic_definition --test lsp_completion_tests
       --test lsp_color_tests
       --test lsp_code_lens_tests
@@ -635,6 +668,7 @@ gates:
       --test lsp_unhappy_paths --test lsp_code_actions_test
       --test execute_command_security_tests --test lsp_behavioral_tests
       --test lsp_workspace_index_e2e
+      --test editor_intelligence_scorecard
       --locked -- --test-threads=2
     timeout_seconds: 300
     retry_count: 1
@@ -819,6 +853,7 @@ workflow_integration:
         - policy_checks
         - workflow_audit
         - nested_lock_check
+        - published_crate_count
       # Note: security_audit and docs_build run in separate jobs for caching
 
     release-gate:

@@ -83,11 +83,11 @@ didChange v3 ─▶ gen=2, parse starts
               ◀─ v3 parse done: gen(2) = current(2) → store
 ```
 
-This mechanism is implemented in `crates/perl-lsp/src/runtime/text_sync.rs` and uses `SeqCst` ordering to guarantee visibility across the mutex boundary.
+This mechanism is implemented in `crates/perl-lsp-rs/src/runtime/text_sync.rs` and uses `SeqCst` ordering to guarantee visibility across the mutex boundary.
 
 ### workspace/didChangeWatchedFiles
 
-The server registers for file-system change notifications via dynamic registration. When a watched file changes outside the editor (e.g., `git checkout`, build tool output), the handler in `crates/perl-lsp/src/runtime/workspace.rs`:
+The server registers for file-system change notifications via dynamic registration. When a watched file changes outside the editor (e.g., `git checkout`, build tool output), the handler in `crates/perl-lsp-rs/src/runtime/workspace.rs`:
 
 - **Created**: indexes the new file into the workspace symbol table
 - **Changed**: re-indexes if the file is not currently open (open documents are authoritative via `textDocument/didChange`)
@@ -153,7 +153,7 @@ As of **Draft PR 159 (SPEC-149)**, all LSP provider implementations must comply 
 ///
 /// # Examples
 /// ```rust
-/// use perl_parser::completion::CompletionProvider;
+/// use perl_lsp_completion::CompletionProvider;
 /// use lsp_types::CompletionParams;
 ///
 /// let provider = CompletionProvider::new(workspace_index);
@@ -1053,7 +1053,7 @@ for (i, token) in tokens.iter().enumerate() {
 #### Step 3: Convert to LSP Format
 
 ```rust
-use perl_parser::semantic_tokens::encode_semantic_tokens;
+use perl_lsp_semantic_tokens::encode_semantic_tokens;
 
 // Convert to LSP-compliant delta encoding
 let encoded_tokens = encode_semantic_tokens(&tokens);
@@ -1067,7 +1067,7 @@ let lsp_response = serde_json::json!({
 #### Step 4: Advanced Usage - Custom Token Processing
 
 ```rust
-use perl_parser::semantic_tokens_provider::{SemanticTokenType, SemanticTokenModifier};
+use perl_lsp_semantic_tokens::{SemanticTokenType, SemanticTokenModifier};
 
 let tokens = provider.extract(&ast);
 
@@ -1631,13 +1631,13 @@ Comprehensive test coverage ensures reliable cancellation behavior:
 ```bash
 # Cancellation-specific test suites
 cargo test -p perl-parser --test cancellation_integration_tests
-cargo test -p perl-lsp --test lsp_cancellation_behavioral_tests
+cargo test -p perl-lsp-rs --test lsp_cancellation_behavioral_tests
 
 # Performance validation with cancellation
-cargo test -p perl-lsp --test lsp_cancellation_performance_tests
+cargo test -p perl-lsp-rs --test lsp_cancellation_performance_tests
 
 # Thread safety validation
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test cancellation_thread_safety_tests
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs --test cancellation_thread_safety_tests
 ```
 
 ### Detailed Documentation References (*Diataxis: Reference* - Complete cancellation system documentation)
@@ -1925,15 +1925,15 @@ impl ExecuteCommandProvider {
 **Test-Driven Development Pattern** (*Diataxis: How-to* - Testing new LSP features):
 ```bash
 # Comprehensive test suite for executeCommand and code actions
-cargo test -p perl-lsp --test lsp_execute_command_tests        # Execute command protocol compliance
-cargo test -p perl-lsp --test lsp_code_actions_tests          # Code action workflows
-cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_perlcritic  # End-to-end validation
+cargo test -p perl-lsp-rs --test lsp_execute_command_tests        # Execute command protocol compliance
+cargo test -p perl-lsp-rs --test lsp_code_actions_tests          # Code action workflows
+cargo test -p perl-lsp-rs --test lsp_behavioral_tests -- test_execute_command_perlcritic  # End-to-end validation
 
 # Performance validation with adaptive threading
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2  # Optimized thread configuration
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2  # Optimized thread configuration
 
 # Integration with existing test infrastructure
-cargo test -p perl-lsp --test lsp_comprehensive_e2e_test      # Full workflow validation
+cargo test -p perl-lsp-rs --test lsp_comprehensive_e2e_test      # Full workflow validation
 ```
 
 **Acceptance Criteria Validation**:
@@ -3150,16 +3150,16 @@ The adaptive timeout system implements sophisticated scaling:
 
 ```bash
 # CI environment testing with extended timeouts
-RUST_TEST_THREADS=2 cargo test -p perl-lsp
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs
 
 # Single-threaded testing (maximum timeout extension)
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test
 
 # Development environment (normal timeouts)
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # Custom timeout configuration
-LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp  # Override adaptive timeouts
+LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp-rs  # Override adaptive timeouts
 ```
 
 #### Adaptive Sleep Configuration (**Diataxis: Reference** - Helper functions)
@@ -3201,14 +3201,14 @@ This configuration provides:
 **Recommended CI Test Commands**:
 ```bash
 # Standard CI testing with thread control
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Combined with fast fallbacks for optimal CI performance
-RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp-rs -- --test-threads=2
 
 # Individual test suites with controlled threading
-cargo test -p perl-lsp --test lsp_edge_cases_test -- --test-threads=2
-cargo test -p perl-lsp --test lsp_integration_tests -- --test-threads=2
+cargo test -p perl-lsp-rs --test lsp_edge_cases_test -- --test-threads=2
+cargo test -p perl-lsp-rs --test lsp_integration_tests -- --test-threads=2
 ```
 
 **Thread Configuration Trade-offs**:
@@ -3368,11 +3368,11 @@ pub fn search_with_limit(
 export LSP_TEST_FALLBACKS=1
 
 # Run tests with performance optimizations
-cargo test -p perl-lsp
+cargo test -p perl-lsp-rs
 
 # Run specific performance-sensitive tests
-cargo test -p perl-lsp test_completion_detail_formatting
-cargo test -p perl-lsp test_workspace_symbol_search
+cargo test -p perl-lsp-rs test_completion_detail_formatting
+cargo test -p perl-lsp-rs test_workspace_symbol_search
 ```
 
 **Timeout Configuration Modes**:
@@ -3907,7 +3907,7 @@ impl LspServer {
 **Usage Example**:
 ```bash
 # Test malformed frame recovery
-echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perl-lsp --stdio
+echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perllsp --stdio
 
 # Expected behavior:
 # - Server logs parsing error safely
@@ -4939,7 +4939,7 @@ VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
 4. **Test with Protocol Examples**
    ```bash
    # Test specific LSP method
-   echo '{"jsonrpc":"2.0","id":1,"method":"workspace/symbol","params":{"query":"test"}}' | perl-lsp --stdio
+   echo '{"jsonrpc":"2.0","id":1,"method":"workspace/symbol","params":{"query":"test"}}' | perllsp --stdio
    ```
 
 ## Security Considerations in LSP Testing

@@ -14,6 +14,10 @@ just ci-gate  # ~2-5 min
 just ci-full  # ~10-20 min
 ```
 
+`just ci-full` is the automated release-confidence lane. It should include the
+broader integration surfaces that are too expensive for Tier A, including the
+`perl-lsp-ux-tests` first-5-minutes workflow harness.
+
 ## Tier C: Real User Confirmation
 
 Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rename

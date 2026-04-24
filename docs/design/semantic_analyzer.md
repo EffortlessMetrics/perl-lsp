@@ -386,7 +386,7 @@ sub example {
 
 ### Tier 2: LSP Integration Tests (E2E Validation)
 
-**Location**: `/crates/perl-lsp/tests/semantic_definition.rs`
+**Location**: `/crates/perl-lsp-rs/tests/semantic_definition.rs`
 
 **Purpose**: End-to-end validation of LSP `textDocument/definition` protocol with `SemanticModel` integration.
 
@@ -436,7 +436,7 @@ sub example {
 ```bash
 # Run tests individually on constrained hardware (WSL with limited resources)
 RUSTC_WRAPPER="" RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-  cargo test -p perl-lsp --test semantic_definition -- --nocapture test_name
+  cargo test -p perl-lsp-rs --test semantic_definition -- --nocapture test_name
 ```
 
 **Coverage Target**: LSP protocol compliance, `SemanticModel` API, position conversions, and workspace integration.

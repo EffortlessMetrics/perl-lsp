@@ -34,7 +34,7 @@
   - `src/import_optimizer.rs`: Import analysis and optimization engine
   - `src/code_actions.rs`: LSP code actions with import optimization integration
 
-### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
+### `/crates/perl-lsp-rs/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
 - **Purpose**: Clean LSP server implementation separated from parser logic
 - **Key Features**:
   - Standalone Language Server binary with production-grade CLI
@@ -632,7 +632,7 @@ roster.
 
 ### Development Locations
 - **Parser & LSP**: `/crates/perl-parser/` - main development with production Rope implementation
-- **LSP Server**: `/crates/perl-lsp/` - standalone LSP server binary (v0.8.8)
+- **LSP Server**: `/crates/perl-lsp-rs/` - standalone LSP server binary (v0.8.8)
 - **Lexer**: `/crates/perl-lexer/` - tokenization improvements
 - **Test Corpus**: `/crates/perl-corpus/` - test case additions
 - **Legacy (Excluded)**: `/crates/perl-parser-pest/` - maintenance only, excluded from workspace
