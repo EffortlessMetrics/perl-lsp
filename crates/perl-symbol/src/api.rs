@@ -24,4 +24,4 @@ pub use crate::cursor::{
 pub use crate::index::SymbolIndex;
 
 // surface — full public surface
-pub use crate::surface::{SymbolDecl, extract_symbol_decls};
+pub use crate::surface::{SymbolDecl, SymbolRef, extract_symbol_decls, extract_symbol_refs};
