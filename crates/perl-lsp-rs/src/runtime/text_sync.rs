@@ -87,6 +87,29 @@ fn build_incremental_edit_set(
 }
 
 impl LspServer {
+    fn extract_symbol_names_for_index(
+        &self,
+        ast: &perl_parser::ast::Node,
+        text: &str,
+    ) -> Vec<String> {
+        let extractor = crate::symbol::SymbolExtractor::new_with_source(text);
+        let symbol_table = extractor.extract(ast);
+        symbol_table
+            .symbols
+            .values()
+            .flat_map(|symbols| symbols.iter().map(|symbol| symbol.name.clone()))
+            .collect()
+    }
+
+    fn replace_document_symbol_index(&self, uri: &str, ast: &perl_parser::ast::Node, text: &str) {
+        let symbols = self.extract_symbol_names_for_index(ast, text);
+        self.symbol_index.lock().set_document_symbols(uri, symbols);
+    }
+
+    fn clear_document_symbol_index(&self, uri: &str) {
+        self.symbol_index.lock().remove_document(uri);
+    }
+
     /// Handle textDocument/didOpen notification.
     ///
     /// Delegates to [`Self::handle_did_open_with_cancellation`] with no token.
@@ -164,6 +187,7 @@ impl LspServer {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
 
+                self.clear_document_symbol_index(uri);
                 return Ok(());
             }
 
@@ -211,6 +235,7 @@ impl LspServer {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
 
+                self.clear_document_symbol_index(uri);
                 return Ok(());
             }
 
@@ -266,6 +291,7 @@ impl LspServer {
                     );
                 }
 
+                self.clear_document_symbol_index(uri);
                 return Ok(());
             }
 
@@ -375,28 +401,8 @@ impl LspServer {
             // Index symbols for workspace search
             // Note: Indexing is a MUTATION operation - use coordinator.index() directly
             // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
-            if let Some(ref _ast) = ast_arc {
-                // Update the fast symbol index with symbols from workspace index
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
-                    let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols
-                        .into_iter()
-                        .filter(|s| s.uri == uri)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut index = self.symbol_index.lock();
-                    for symbol in symbols {
-                        index.add_symbol(symbol);
-                    }
-                }
-                #[cfg(not(feature = "workspace"))]
-                {
-                    let _index = self.symbol_index.lock();
-                    // Just ensure the index exists even without workspace feature
-                }
+            if let Some(ref ast) = ast_arc {
+                self.replace_document_symbol_index(uri, ast, text);
 
                 // Update the workspace-wide index for cross-file features.
                 // Indexing runs in a background task so the handler returns
@@ -456,6 +462,8 @@ impl LspServer {
                         self.publish_diagnostics(uri);
                         return Ok(());
                     }
+                } else {
+                    self.clear_document_symbol_index(uri);
                 }
             }
 
@@ -663,6 +671,7 @@ impl LspServer {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
 
+                    self.clear_document_symbol_index(uri);
                     return Ok(());
                 }
 
@@ -968,7 +977,8 @@ impl LspServer {
                 // Index symbols for workspace search.
                 // Indexing runs in a background task so the handler returns
                 // immediately; `notify_parse_complete` is called inside the task.
-                if let Some(ref _ast) = ast_arc {
+                if let Some(ref ast) = ast_arc {
+                    self.replace_document_symbol_index(uri, ast, &text);
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
                         if let Ok(url) = url::Url::parse(uri) {
@@ -1005,6 +1015,8 @@ impl LspServer {
                             return Ok(());
                         }
                     }
+                } else {
+                    self.clear_document_symbol_index(uri);
                 }
 
                 // Notify coordinator synchronously when no coordinator/URL/workspace feature.
@@ -1075,6 +1087,8 @@ impl LspServer {
             if let Some(coordinator) = self.coordinator() {
                 coordinator.index().clear_file(uri);
             }
+
+            self.clear_document_symbol_index(uri);
 
             // Notify coordinator that cleanup is complete
             #[cfg(feature = "workspace")]

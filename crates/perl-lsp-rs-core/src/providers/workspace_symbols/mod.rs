@@ -204,8 +204,9 @@ impl WorkspaceSymbolsProvider {
     ) -> Vec<WorkspaceSymbol> {
         let mut results = Vec::new();
 
-        // Create a set of candidate names for fast lookup
-        let candidate_set: std::collections::HashSet<_> =
+        let candidate_set: std::collections::HashSet<&str> =
+            candidates.iter().map(String::as_str).collect();
+        let candidate_set_lower: std::collections::HashSet<String> =
             candidates.iter().map(|s| s.to_lowercase()).collect();
 
         for (uri, symbols) in &self.documents {
@@ -217,9 +218,9 @@ impl WorkspaceSymbolsProvider {
 
             for symbol in symbols {
                 // Check if this symbol is in our candidate set
-                if candidate_set.contains(&symbol.name.to_lowercase())
-                    && matches_query(&symbol.name, query)
-                {
+                let is_candidate = candidate_set.contains(symbol.name.as_str())
+                    || candidate_set_lower.contains(&symbol.name.to_lowercase());
+                if is_candidate && matches_query(&symbol.name, query) {
                     results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
                 }
             }

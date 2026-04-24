@@ -204,6 +204,87 @@ impl Drop for IndexingGuard {
 }
 
 impl LspServer {
+    fn search_open_documents_with_symbol_index(
+        &self,
+        query: &str,
+        cap: usize,
+    ) -> Vec<perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbol> {
+        let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
+            let documents = self.documents.lock();
+            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
+        };
+
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
+        let mut fallback_symbols = Vec::new();
+
+        for (uri, text, ast) in &docs_snapshot {
+            source_map.insert(uri.clone(), text.clone());
+            if let Some(ast) = ast {
+                provider.index_document(uri, ast, text);
+            } else {
+                fallback_symbols.extend(
+                    self.extract_text_based_symbols(text, uri, query).into_iter().map(|symbol| {
+                        perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbol {
+                            name: symbol.name,
+                            kind: i32::try_from(symbol.kind).unwrap_or(i32::MAX),
+                            location: symbol.location,
+                            container_name: symbol.container_name,
+                        }
+                    }),
+                );
+            }
+        }
+
+        let candidates = {
+            let index = self.symbol_index.lock();
+            let mut candidates = index.search_prefix(query);
+            candidates.extend(index.search_fuzzy(query));
+            let mut seen = std::collections::HashSet::new();
+            candidates.retain(|name| seen.insert(name.clone()));
+            candidates
+        };
+
+        let mut symbols = if candidates.is_empty() && !query.is_empty() {
+            provider.search(query, &source_map)
+        } else {
+            provider.search_with_candidates(query, &source_map, &candidates)
+        };
+
+        if symbols.is_empty() {
+            for (uri, text, ast) in &docs_snapshot {
+                if let Some(ast) = ast {
+                    let legacy_symbols = self.extract_document_symbols(ast, text, uri);
+                    symbols.extend(legacy_symbols.into_iter().filter_map(|symbol| {
+                        if perl_lsp_rs_core::providers::symbol_query::matches_query(
+                            &symbol.name,
+                            query,
+                        ) {
+                            Some(perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbol {
+                                name: symbol.name,
+                                kind: i32::try_from(symbol.kind).unwrap_or(i32::MAX),
+                                location: symbol.location,
+                                container_name: symbol.container_name,
+                            })
+                        } else {
+                            None
+                        }
+                    }));
+                }
+            }
+        }
+
+        symbols.extend(fallback_symbols);
+        symbols.sort_by(|a, b| {
+            perl_lsp_rs_core::providers::symbol_query::compare_names_by_query(
+                &a.name, &b.name, query,
+            )
+        });
+        symbols.truncate(cap);
+        symbols
+    }
+
     /// Request `workspace/configuration` for each workspace folder (if supported).
     pub(crate) fn request_workspace_configuration_for_folders(&self) {
         if !self.client_capabilities.lock().workspace_configuration_support {
@@ -435,51 +516,7 @@ impl LspServer {
         query: &str,
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let mut all_symbols = Vec::new();
-
-        // Collect lightweight snapshots without holding lock during iteration.
-        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
-        let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
-            let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
-        };
-
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
-
-        for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
-            // Cooperative yield every 8 documents
-            if i & 0x7 == 0 {
-                std::thread::yield_now();
-            }
-
-            // Early exit if we've hit the result cap
-            if all_symbols.len() >= cap {
-                break;
-            }
-
-            if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
-
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
-            } else {
-                // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(text, uri, query);
-                let remaining = cap.saturating_sub(all_symbols.len());
-                all_symbols.extend(text_symbols.into_iter().take(remaining));
-            }
-        }
-
-        // Truncate to cap in case we went slightly over
-        all_symbols.truncate(cap);
+        let all_symbols = self.search_open_documents_with_symbol_index(query, cap);
         tracing::debug!(
             count = all_symbols.len(),
             "Workspace symbol: returned results from open documents"
@@ -509,27 +546,8 @@ impl LspServer {
 
         tracing::debug!(query, "Workspace symbol search");
 
-        // Lightweight snapshot: only clone fields needed for symbol extraction,
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
-        let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
-            let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
-        };
-
-        // Build source map and index documents with WorkspaceSymbolsProvider.
         let cap = workspace_symbol_cap();
-        let mut provider =
-            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
-        let mut source_map = std::collections::HashMap::new();
-        for (uri, text, ast) in docs_snapshot.iter() {
-            if let Some(ast) = ast {
-                provider.index_document(uri, ast, text);
-            }
-            source_map.insert(uri.clone(), text.clone());
-        }
-
-        let mut symbols = provider.search(query, &source_map);
-        symbols.truncate(cap);
+        let symbols = self.search_open_documents_with_symbol_index(query, cap);
 
         tracing::debug!(count = symbols.len(), cap, "Found symbols total");
 

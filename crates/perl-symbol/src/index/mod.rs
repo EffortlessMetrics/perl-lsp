@@ -3,16 +3,22 @@
 //! This module has one responsibility: indexing symbol names for fast lookup
 //! across prefix and fuzzy query styles.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Symbol index for fast lookups.
 ///
 /// Supports both prefix and fuzzy matching using a trie and inverted index.
 pub struct SymbolIndex {
-    /// Trie structure for prefix matching
+    /// Trie structure for prefix matching.
     trie: SymbolTrie,
-    /// Inverted index for fuzzy matching
-    inverted_index: HashMap<String, Vec<String>>,
+    /// Inverted index for fuzzy matching.
+    ///
+    /// token -> (symbol -> refcount)
+    inverted_index: HashMap<String, HashMap<String, usize>>,
+    /// Global symbol refcounts across all sources/documents.
+    symbol_refcounts: HashMap<String, usize>,
+    /// Per-document symbol membership for replace/remove operations.
+    document_symbols: HashMap<String, Vec<String>>,
 }
 
 /// Trie data structure for efficient prefix matching
@@ -33,26 +39,52 @@ impl SymbolIndex {
     /// Create a new empty symbol index.
     #[must_use]
     pub fn new() -> Self {
-        Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
+        Self {
+            trie: SymbolTrie::new(),
+            inverted_index: HashMap::new(),
+            symbol_refcounts: HashMap::new(),
+            document_symbols: HashMap::new(),
+        }
     }
 
     /// Add a symbol to the index.
     ///
     /// Indexes the symbol for both prefix and fuzzy matching.
-    /// Duplicate calls with the same symbol are idempotent: the symbol is
-    /// stored exactly once in both the trie and the inverted index.
+    /// Duplicate calls with the same symbol are idempotent from a search-output
+    /// perspective: matches return each symbol name at most once.
     pub fn add_symbol(&mut self, symbol: String) {
-        // Add to trie for prefix matching; returns true only when newly inserted.
-        // Deduplication here prevents the inverted index from accumulating
-        // duplicate entries, which would inflate fuzzy-match scores.
-        if !self.trie.insert(&symbol) {
-            return;
+        self.increment_symbol(symbol);
+    }
+
+    /// Replace all symbols associated with a document.
+    ///
+    /// This is the primary mutation API for incremental indexing: reindexing the
+    /// same document removes stale names and inserts the new set atomically from
+    /// the caller's perspective.
+    pub fn set_document_symbols<I>(&mut self, document_id: &str, symbols: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        self.remove_document(document_id);
+
+        let mut seen = HashSet::new();
+        let deduped: Vec<String> = symbols.into_iter().filter(|s| seen.insert(s.clone())).collect();
+
+        for symbol in &deduped {
+            self.increment_symbol(symbol.clone());
         }
 
-        // Add to inverted index for fuzzy matching
-        let tokens = Self::tokenize(&symbol);
-        for token in tokens {
-            self.inverted_index.entry(token).or_default().push(symbol.clone());
+        if !deduped.is_empty() {
+            self.document_symbols.insert(document_id.to_string(), deduped);
+        }
+    }
+
+    /// Remove all symbols for a document.
+    pub fn remove_document(&mut self, document_id: &str) {
+        if let Some(symbols) = self.document_symbols.remove(document_id) {
+            for symbol in symbols {
+                self.decrement_symbol(&symbol);
+            }
         }
     }
 
@@ -74,7 +106,7 @@ impl SymbolIndex {
 
         for token in tokens {
             if let Some(symbols) = self.inverted_index.get(&token) {
-                for symbol in symbols {
+                for symbol in symbols.keys() {
                     *results.entry(symbol.clone()).or_insert(0) += 1;
                 }
             }
@@ -85,6 +117,44 @@ impl SymbolIndex {
         sorted.sort_by(|(_, a), (_, b)| b.cmp(a));
 
         sorted.into_iter().map(|(symbol, _)| symbol).collect()
+    }
+
+    fn increment_symbol(&mut self, symbol: String) {
+        let count = self.symbol_refcounts.entry(symbol.clone()).or_insert(0);
+        *count += 1;
+        if *count > 1 {
+            return;
+        }
+
+        self.trie.insert(&symbol);
+        let tokens = Self::tokenize(&symbol);
+        for token in tokens {
+            let bucket = self.inverted_index.entry(token).or_default();
+            *bucket.entry(symbol.clone()).or_insert(0) += 1;
+        }
+    }
+
+    fn decrement_symbol(&mut self, symbol: &str) {
+        let Some(count) = self.symbol_refcounts.get_mut(symbol) else {
+            return;
+        };
+
+        *count = count.saturating_sub(1);
+        if *count > 0 {
+            return;
+        }
+
+        self.symbol_refcounts.remove(symbol);
+        self.trie.remove(symbol);
+
+        for token in Self::tokenize(symbol) {
+            if let Some(bucket) = self.inverted_index.get_mut(&token) {
+                bucket.remove(symbol);
+                if bucket.is_empty() {
+                    self.inverted_index.remove(&token);
+                }
+            }
+        }
     }
 
     fn tokenize(s: &str) -> Vec<String> {
@@ -123,27 +193,34 @@ impl SymbolTrie {
     }
 
     /// Insert `symbol` into the trie.
-    ///
-    /// Returns `true` if the symbol was newly inserted, `false` if it was
-    /// already present (duplicate).  Callers use this to gate inverted-index
-    /// updates so both structures stay in sync.
-    fn insert(&mut self, symbol: &str) -> bool {
+    fn insert(&mut self, symbol: &str) {
         let mut node = self;
 
         for ch in symbol.chars() {
             node = node.children.entry(ch).or_insert_with(|| Box::new(SymbolTrie::new()));
         }
 
-        // Deduplicate: workspace indexing may call add_symbol for the same
-        // qualified name multiple times during incremental re-index.  Storing
-        // duplicates causes search_prefix to return the same entry N times,
-        // which produces duplicate completions in the UI.
         let owned = symbol.to_string();
-        if node.symbols.contains(&owned) {
-            return false;
+        if !node.symbols.contains(&owned) {
+            node.symbols.push(owned);
         }
-        node.symbols.push(owned);
-        true
+    }
+
+    fn remove(&mut self, symbol: &str) {
+        let chars: Vec<char> = symbol.chars().collect();
+        Self::remove_recursive(self, &chars, 0, symbol);
+    }
+
+    fn remove_recursive(node: &mut SymbolTrie, chars: &[char], depth: usize, symbol: &str) -> bool {
+        if depth == chars.len() {
+            node.symbols.retain(|existing| existing != symbol);
+        } else if let Some(child) = node.children.get_mut(&chars[depth]) {
+            if Self::remove_recursive(child, chars, depth + 1, symbol) {
+                node.children.remove(&chars[depth]);
+            }
+        }
+
+        node.children.is_empty() && node.symbols.is_empty()
     }
 
     fn search_prefix(&self, prefix: &str) -> Vec<String> {
@@ -190,5 +267,31 @@ mod tests {
 
         let fuzzy_results = index.search_fuzzy("user name");
         assert!(fuzzy_results.contains(&"get_user_name".to_string()));
+    }
+
+    #[test]
+    fn replacing_document_symbols_removes_stale_entries() {
+        let mut index = SymbolIndex::new();
+
+        index.set_document_symbols("file:///a.pl", ["alpha".to_string(), "beta".to_string()]);
+        assert!(index.search_prefix("al").contains(&"alpha".to_string()));
+
+        index.set_document_symbols("file:///a.pl", ["gamma".to_string()]);
+        assert!(index.search_prefix("al").is_empty());
+        assert!(index.search_prefix("ga").contains(&"gamma".to_string()));
+    }
+
+    #[test]
+    fn remove_document_preserves_symbols_still_referenced_elsewhere() {
+        let mut index = SymbolIndex::new();
+
+        index.set_document_symbols("file:///a.pl", ["shared".to_string()]);
+        index.set_document_symbols("file:///b.pl", ["shared".to_string()]);
+
+        index.remove_document("file:///a.pl");
+        assert!(index.search_prefix("sha").contains(&"shared".to_string()));
+
+        index.remove_document("file:///b.pl");
+        assert!(index.search_prefix("sha").is_empty());
     }
 }
