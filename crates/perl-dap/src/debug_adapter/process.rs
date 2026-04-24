@@ -483,6 +483,7 @@ impl DebugAdapter {
         let seq = self.seq.clone();
         let sender = self.event_sender.clone();
         let recent_output = self.recent_output.clone();
+        let next_recent_output_line_id = self.next_recent_output_line_id.clone();
         let breakpoints = self.breakpoints.clone();
         let exception_break_on_die = self.exception_break_on_die.clone();
         let exception_break_on_warn = self.exception_break_on_warn.clone();
@@ -563,19 +564,15 @@ impl DebugAdapter {
                         let analysis_text = if normalized_text.is_empty() {
                             sanitized_text.trim().to_string()
                         } else {
-                            normalized_text
+                            normalized_text.clone()
                         };
                         tracing::trace!(output = %text, "Debugger output");
-                        {
-                            let mut output = lock_or_recover(
-                                &recent_output,
-                                "debug_adapter.recent_output_reader",
-                            );
-                            if output.len() >= RECENT_OUTPUT_MAX_LINES {
-                                let _ = output.pop_front();
-                            }
-                            output.push_back(text.clone());
-                        }
+                        DebugAdapter::append_recent_output_line_with_normalized_state(
+                            &recent_output,
+                            &next_recent_output_line_id,
+                            &text,
+                            normalized_text.clone(),
+                        );
 
                         // Send all output to client with error handling
                         if let Some(ref sender) = sender

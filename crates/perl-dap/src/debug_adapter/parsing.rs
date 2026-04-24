@@ -352,13 +352,9 @@ mod tests {
     pub(super) fn test_parse_scope_variables_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_scope_variables.recent_output");
-            output.push_back("$foo = 42".to_string());
-            output.push_back("@arr = (1, 2, 3)".to_string());
-            output.push_back("%hash = {a => 1}".to_string());
-        }
+        adapter.append_recent_output_line("$foo = 42");
+        adapter.append_recent_output_line("@arr = (1, 2, 3)");
+        adapter.append_recent_output_line("%hash = {a => 1}");
 
         let (vars, child_cache) = adapter.parse_scope_variables_from_output(11, 0, 20);
         let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
@@ -420,19 +416,13 @@ mod tests {
     pub(super) fn test_capture_framed_debugger_output_isolated_by_marker()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_capture_framed_debugger_output.recent_output",
-            );
-            output.push_back("noise".to_string());
-            output.push_back(r#""DAP_BEGIN_100""#.to_string());
-            output.push_back("$a = 1".to_string());
-            output.push_back(r#""DAP_END_100""#.to_string());
-            output.push_back(r#""DAP_BEGIN_200""#.to_string());
-            output.push_back("$b = 2".to_string());
-            output.push_back(r#""DAP_END_200""#.to_string());
-        }
+        adapter.append_recent_output_line("noise");
+        adapter.append_recent_output_line(r#""DAP_BEGIN_100""#);
+        adapter.append_recent_output_line("$a = 1");
+        adapter.append_recent_output_line(r#""DAP_END_100""#);
+        adapter.append_recent_output_line(r#""DAP_BEGIN_200""#);
+        adapter.append_recent_output_line("$b = 2");
+        adapter.append_recent_output_line(r#""DAP_END_200""#);
 
         let lines = adapter
             .capture_framed_debugger_output("DAP_BEGIN_200", "DAP_END_200", 200)
@@ -445,14 +435,8 @@ mod tests {
     pub(super) fn test_stack_trace_uses_recent_output_when_available()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_stack_trace_recent_output.recent_output",
-            );
-            output.push_back("# 0 main::compute at /tmp/script.pl line 20".to_string());
-            output.push_back("# 1 Foo::process called at /tmp/Foo.pm line 15".to_string());
-        }
+        adapter.append_recent_output_line("# 0 main::compute at /tmp/script.pl line 20");
+        adapter.append_recent_output_line("# 1 Foo::process called at /tmp/Foo.pm line 15");
 
         let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
         match response {
@@ -478,11 +462,7 @@ mod tests {
     pub(super) fn test_parse_evaluate_result_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_evaluate_result.recent_output");
-            output.push_back("$result = 123".to_string());
-        }
+        adapter.append_recent_output_line("$result = 123");
 
         let parsed = adapter.parse_evaluate_result_from_output("$result");
         let (value, ty) = parsed.ok_or("expected parsed evaluate result")?;

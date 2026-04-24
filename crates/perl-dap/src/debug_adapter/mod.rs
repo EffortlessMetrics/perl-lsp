@@ -391,6 +391,20 @@ struct DataBreakpointRecord {
     condition: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct DebuggerOutputLine {
+    id: u64,
+    raw: String,
+    normalized: String,
+}
+
+#[derive(Debug, Default)]
+struct FramedCaptureScanState {
+    last_scanned_line_id: u64,
+    begin_seen: bool,
+    captured_lines: Vec<String>,
+}
+
 /// Check if the match is an escape sequence (preceded by backslash)
 fn is_escape_sequence(s: &str, match_start: usize) -> bool {
     if match_start == 0 {
@@ -416,7 +430,9 @@ pub struct DebugAdapter {
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
     /// Bounded history of debugger output for stack/variable/evaluate parsing
-    recent_output: Arc<Mutex<VecDeque<String>>>,
+    recent_output: Arc<Mutex<VecDeque<DebuggerOutputLine>>>,
+    /// Monotonic IDs for recent debugger output lines.
+    next_recent_output_line_id: Arc<AtomicU64>,
     /// Function breakpoints (`setFunctionBreakpoints`) stored with REPLACE semantics
     function_breakpoints: Arc<Mutex<Vec<String>>>,
     /// Monotonic IDs for function breakpoints
@@ -545,6 +561,7 @@ impl DebugAdapter {
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
             recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
+            next_recent_output_line_id: Arc::new(AtomicU64::new(1)),
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
             exception_break_on_die: Arc::new(Mutex::new(false)),
@@ -601,7 +618,69 @@ impl DebugAdapter {
     /// Snapshot debugger output history for parsing without holding locks.
     fn snapshot_recent_output_lines(&self) -> Vec<String> {
         let output = lock_or_recover(&self.recent_output, "debug_adapter.recent_output");
-        output.iter().cloned().collect()
+        output.iter().map(|line| line.raw.clone()).collect()
+    }
+
+    #[cfg(test)]
+    fn append_recent_output_line(&self, line: &str) {
+        let normalized = Self::normalize_debugger_output_line(line);
+        Self::append_recent_output_line_with_normalized_state(
+            &self.recent_output,
+            &self.next_recent_output_line_id,
+            line,
+            normalized,
+        );
+    }
+
+    fn append_recent_output_line_with_normalized_state(
+        recent_output: &Arc<Mutex<VecDeque<DebuggerOutputLine>>>,
+        next_line_id: &AtomicU64,
+        line: &str,
+        normalized: String,
+    ) {
+        let line_id = next_line_id.fetch_add(1, Ordering::Relaxed);
+        let mut output = lock_or_recover(recent_output, "debug_adapter.recent_output.append");
+        if output.len() >= RECENT_OUTPUT_MAX_LINES {
+            let _ = output.pop_front();
+        }
+        output.push_back(DebuggerOutputLine { id: line_id, raw: line.to_string(), normalized });
+    }
+
+    fn scan_framed_output_from_tail(
+        output: &VecDeque<DebuggerOutputLine>,
+        begin_marker: &str,
+        end_marker: &str,
+        state: &mut FramedCaptureScanState,
+    ) -> Option<Vec<String>> {
+        for line in output {
+            if line.id <= state.last_scanned_line_id {
+                continue;
+            }
+            state.last_scanned_line_id = line.id;
+            let normalized = line.normalized.as_str();
+            if !state.begin_seen {
+                if normalized.contains(begin_marker) {
+                    state.begin_seen = true;
+                    state.captured_lines.clear();
+                }
+                continue;
+            }
+
+            if normalized.contains(begin_marker) {
+                state.captured_lines.clear();
+                continue;
+            }
+
+            if normalized.contains(end_marker) {
+                return Some(state.captured_lines.clone());
+            }
+
+            if !normalized.trim().is_empty() {
+                state.captured_lines.push(normalized.to_string());
+            }
+        }
+
+        None
     }
 
     /// Allocate a unique marker id used for framed debugger output capture.
@@ -651,6 +730,8 @@ impl DebugAdapter {
         let deadline =
             Instant::now() + Duration::from_millis(Self::debugger_timeout_budget_ms(timeout_ms));
 
+        let mut scan_state = FramedCaptureScanState::default();
+
         loop {
             // Check for cancellation before each poll iteration
             if self.cancel_requested.load(Ordering::Acquire) {
@@ -658,23 +739,17 @@ impl DebugAdapter {
                 return None;
             }
 
-            let lines = self.snapshot_recent_output_lines();
-            let normalized_lines: Vec<String> =
-                lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
-
-            if let Some(begin_idx) =
-                normalized_lines.iter().rposition(|line| line.contains(begin_marker))
-                && let Some(end_rel) = normalized_lines[begin_idx + 1..]
-                    .iter()
-                    .position(|line| line.contains(end_marker))
-            {
-                let end_idx = begin_idx + 1 + end_rel;
-                let framed = normalized_lines[begin_idx + 1..end_idx]
-                    .iter()
-                    .filter(|line| !line.trim().is_empty())
-                    .cloned()
-                    .collect::<Vec<_>>();
-                return Some(framed);
+            let framed = {
+                let output = lock_or_recover(&self.recent_output, "debug_adapter.recent_output");
+                Self::scan_framed_output_from_tail(
+                    &output,
+                    begin_marker,
+                    end_marker,
+                    &mut scan_state,
+                )
+            };
+            if framed.is_some() {
+                return framed;
             }
 
             if Instant::now() >= deadline {
@@ -751,6 +826,56 @@ mod tests {
     #[test]
     fn test_debugger_output_window_ms_honors_extended_budget() {
         assert_eq!(DebugAdapter::debugger_output_window_ms(600), 600);
+    }
+
+    #[test]
+    fn test_scan_framed_output_from_tail_only_processes_new_lines() {
+        let mut output = VecDeque::new();
+        output.push_back(DebuggerOutputLine {
+            id: 1,
+            raw: "noise".to_string(),
+            normalized: "noise".to_string(),
+        });
+        output.push_back(DebuggerOutputLine {
+            id: 2,
+            raw: "\"DAP_BEGIN_1\"".to_string(),
+            normalized: "\"DAP_BEGIN_1\"".to_string(),
+        });
+        output.push_back(DebuggerOutputLine {
+            id: 3,
+            raw: "value = 42".to_string(),
+            normalized: "value = 42".to_string(),
+        });
+        output.push_back(DebuggerOutputLine {
+            id: 4,
+            raw: "still waiting".to_string(),
+            normalized: "still waiting".to_string(),
+        });
+
+        let mut state = FramedCaptureScanState::default();
+        let first = DebugAdapter::scan_framed_output_from_tail(
+            &output,
+            "DAP_BEGIN_1",
+            "DAP_END_1",
+            &mut state,
+        );
+        assert!(first.is_none(), "end marker has not arrived yet");
+        assert_eq!(state.last_scanned_line_id, 4);
+
+        output.push_back(DebuggerOutputLine {
+            id: 5,
+            raw: "\"DAP_END_1\"".to_string(),
+            normalized: "\"DAP_END_1\"".to_string(),
+        });
+
+        let second = DebugAdapter::scan_framed_output_from_tail(
+            &output,
+            "DAP_BEGIN_1",
+            "DAP_END_1",
+            &mut state,
+        );
+        assert_eq!(second, Some(vec!["value = 42".to_string(), "still waiting".to_string()]));
+        assert_eq!(state.last_scanned_line_id, 5);
     }
 
     #[test]
