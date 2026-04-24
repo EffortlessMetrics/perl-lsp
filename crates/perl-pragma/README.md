@@ -23,6 +23,31 @@ Tier 1 leaf crate. Depends only on `perl-ast`. Consumed by
 `perl-parser-core` and `perl-lsp-diagnostics` to provide scope-aware
 pragma analysis for parsing and diagnostic flows.
 
+## Benchmarking
+
+Run the benchmark suite (Criterion) for build/query-heavy pragma workloads:
+
+```bash
+cargo bench -p perl-pragma --bench pragma_benchmarks
+```
+
+Or run all benches for this crate:
+
+```bash
+cargo bench -p perl-pragma
+```
+
+The suite includes stable benchmark IDs so total runtime and per-iteration
+cost can be compared over time:
+
+- `build_small_file`
+- `build_large_file`
+- `query_random_offsets`
+- `query_monotonic_offsets`
+- `final_state_lookup`
+- `version_compat_walk_style`
+- `scope_analyzer_walk_style`
+
 ## License
 
 MIT OR Apache-2.0
