@@ -10,6 +10,8 @@
 //! published package is self-contained and does not need paths outside the
 //! crate directory. (The old `tree-sitter-perl-rs` harness has been archived
 //! to `archive/crates/tree-sitter-perl-rs/`.)
+//! Snapshot provenance (upstream reference, generator version, and refresh
+//! checklist) is documented in `UPSTREAM_SNAPSHOT.md`.
 //!
 //! No bindgen is involved: the single symbol we need from the C library
 //! (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.

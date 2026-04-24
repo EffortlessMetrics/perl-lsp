@@ -20,6 +20,10 @@ This crate tracks the upstream [tree-sitter-perl] C grammar. The public API
 (`language()`, `try_create_parser()`, `parse_perl_code()`, etc.) is stable.
 Breaking changes will follow semver.
 
+Snapshot provenance (upstream source, tracking ref, generator version, refresh
+steps, and validation checklist) is tracked in
+[`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+
 **Known limitations vs. upstream grammar:**
 
 - The vendored `c-src/` is a periodic snapshot; it may lag behind upstream by
@@ -32,6 +36,8 @@ Breaking changes will follow semver.
 ### Maintenance (ongoing)
 
 - Periodic snapshot updates when upstream tree-sitter-perl releases new grammar versions.
+- Keep upstream-vendored grammar files (`c-src/**`) and local wrapper code
+  (`build.rs`, `src/**`, `tests/**`) clearly separated in docs and review scope.
 - Keep `tree-sitter` runtime dependency in sync with the workspace.
 
 ### Not planned

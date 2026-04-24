@@ -17,6 +17,17 @@ The crate is self-contained: the C sources live under `c-src/` and are shipped
 in the published package. There is no `bindgen` or `libclang` dependency — the
 single symbol we need (`tree_sitter_perl`) is declared by hand in `src/lib.rs`.
 
+Snapshot provenance, refresh commands, and validation checklist are documented
+in [`UPSTREAM_SNAPSHOT.md`](UPSTREAM_SNAPSHOT.md).
+
+## Ownership boundary (upstream vs local code)
+
+| Area | Ownership |
+|---|---|
+| `c-src/**` | Vendored upstream grammar snapshot artifacts |
+| `build.rs`, `src/**`, `tests/**` | Local Rust wrapper/integration code in this repository |
+| `UPSTREAM_SNAPSHOT.md` | Local provenance and refresh procedure |
+
 ## This crate vs. `tree-sitter-perl-rs`
 
 | | `tree-sitter-perl-c` (this crate) | `tree-sitter-perl-rs` |
