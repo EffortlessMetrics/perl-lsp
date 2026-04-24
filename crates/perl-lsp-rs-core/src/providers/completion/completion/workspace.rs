@@ -240,6 +240,8 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    _include_paths: &[std::path::PathBuf],
+    _system_inc_paths: &[std::path::PathBuf],
 ) {
     let Some(index) = workspace_index else {
         return;
