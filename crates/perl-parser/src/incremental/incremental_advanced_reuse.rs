@@ -158,7 +158,13 @@ impl AdvancedReuseAnalyzer {
         self.find_direct_structural_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
 
         // Strategy 2: Position-shifted matching
-        self.find_position_shifted_matches(&old_analysis, &new_analysis, &mut reuse_map, config);
+        self.find_position_shifted_matches(
+            &old_analysis,
+            &new_analysis,
+            edits,
+            &mut reuse_map,
+            config,
+        );
 
         // Strategy 3: Content-updated matching
         if config.enable_content_reuse {
@@ -367,40 +373,87 @@ impl AdvancedReuseAnalyzer {
         &mut self,
         old_analysis: &TreeAnalysis,
         new_analysis: &TreeAnalysis,
+        edits: &EditSet,
         reuse_map: &mut HashMap<usize, ReuseStrategy>,
         config: &ReuseConfig,
     ) {
+        let mut used_new_positions: HashSet<usize> =
+            reuse_map.values().map(|strategy| strategy.target_position).collect();
+
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            // Skip if already matched or known to be directly affected by edits.
+            if reuse_map.contains_key(old_pos) || self.affected_nodes.contains(old_pos) {
                 continue;
             }
 
-            // Look for content matches that may have shifted position
+            let expected_new_pos = self.project_old_position_to_new(*old_pos, edits);
+            let mut best_match: Option<(usize, f64)> = None;
+
+            // Look for content matches that may have shifted position.
             for (new_pos, new_info) in &new_analysis.node_info {
+                if used_new_positions.contains(new_pos) {
+                    continue;
+                }
+
                 if old_info.content_hash == new_info.content_hash
                     && old_info.structural_hash == new_info.structural_hash
                 {
-                    let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
+                    let position_shift =
+                        (*new_pos as isize - expected_new_pos as isize).unsigned_abs();
                     if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
-                        if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
+                        let mut confidence =
+                            self.calculate_match_confidence(old_info, new_info) * 0.9;
+                        if *new_pos == expected_new_pos {
+                            confidence += 0.05;
+                        }
+                        confidence = confidence.min(1.0);
+
+                        if confidence >= config.min_confidence
+                            && best_match.as_ref().is_none_or(|&(_, best)| confidence > best)
+                        {
+                            best_match = Some((*new_pos, confidence));
                         }
                     }
                 }
             }
+
+            if let Some((target_position, confidence_score)) = best_match {
+                reuse_map.insert(
+                    *old_pos,
+                    ReuseStrategy {
+                        target_position,
+                        reuse_type: ReuseType::PositionShift,
+                        confidence_score,
+                        position_adjustment: (target_position as isize) - (*old_pos as isize),
+                    },
+                );
+                used_new_positions.insert(target_position);
+                self.analysis_stats.position_adjustments += 1;
+            }
         }
+    }
+
+    /// Project an old byte position forward through all pending edits.
+    ///
+    /// For non-overlapping edits this gives the expected location in the new source
+    /// for unaffected nodes, which helps disambiguate repeated subtree shapes.
+    fn project_old_position_to_new(&self, old_position: usize, edits: &EditSet) -> usize {
+        let mut projected = old_position as isize;
+
+        for edit in edits.edits() {
+            let old_end = edit.old_end_byte as isize;
+            let start = edit.start_byte as isize;
+            if old_end <= old_position as isize {
+                projected += edit.byte_shift();
+                continue;
+            }
+            if start <= old_position as isize && (old_position as isize) < old_end {
+                projected = start;
+                break;
+            }
+        }
+
+        projected.max(0) as usize
     }
 
     /// Find content-updated matches (structure same, values changed)
