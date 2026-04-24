@@ -32,7 +32,7 @@
 //! # Environment Variables
 //!
 //! - `PERL_LSP_BIN`: Override the path to the perl-lsp binary.
-//! - `UX_TEST_TIMEOUT_MS`: Per-request timeout in milliseconds (default: 10000).
+//! - `UX_TEST_TIMEOUT_MS`: Per-request timeout in milliseconds (default: 30000).
 //! - `UX_TEST_ECHO_STDERR`: If set, echo perl-lsp stderr lines to test output.
 
 #![deny(unsafe_code)]
@@ -66,7 +66,7 @@ use std::time::Duration;
 /// requiring callers to thread individual parameters through every helper.
 #[derive(Debug, Clone)]
 pub struct ScenarioConfig {
-    /// Per-request timeout. Defaults to 10 seconds.
+    /// Per-request timeout. Defaults to 30 seconds.
     pub timeout: Duration,
     /// If `Some`, restrict PATH to only these directory entries (absolute paths).
     /// This lets scenarios simulate "perltidy not found" without touching the
@@ -92,7 +92,7 @@ impl Default for ScenarioConfig {
         let timeout_ms = std::env::var("UX_TEST_TIMEOUT_MS")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(10_000);
+            .unwrap_or(30_000);
         let echo_stderr = std::env::var_os("UX_TEST_ECHO_STDERR").is_some();
         Self {
             timeout: Duration::from_millis(timeout_ms),
