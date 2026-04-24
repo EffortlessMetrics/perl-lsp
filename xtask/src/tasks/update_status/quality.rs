@@ -199,6 +199,8 @@ pub(super) fn generate_quality_status(root: &Path, original: &str) -> Result<Str
            first-5-minutes coverage, issue-burndown regression guards) are tracked in \
            `docs/project/status/editor_ux.json`\n\
          - **Mutation testing**: {mutation_note}\n\
+         - **Lexer performance scorecard**: `cargo bench -p perl-lexer --bench lexer_benchmarks` writes `benchmarks/results/lexer_scorecard.json` for trend comparisons
+\
          - **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     );
 
