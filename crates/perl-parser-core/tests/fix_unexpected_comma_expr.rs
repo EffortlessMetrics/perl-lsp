@@ -277,6 +277,24 @@ fn test_sort_with_custom_comparison() {
 }
 
 #[test]
+fn test_sort_with_named_subname() {
+    let source = r#"my @sorted = sort by_name @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_with_qualified_subname() {
+    let source = r#"my @sorted = sort My::Sorter::by_name @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_core_sort_with_named_subname() {
+    let source = r#"my @sorted = CORE::sort My::Sorter::by_name @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
 fn test_for_c_style() {
     let source = r#"for (my $i = 0; $i < 10; $i++) { print $i; }"#;
     assert_clean_parse(source);

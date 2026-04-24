@@ -897,28 +897,23 @@ impl<'a> Parser<'a> {
                                 } else if bare_name == "sort"
                                     && matches!(self.peek_kind(), Some(TokenKind::Identifier))
                                     && self.tokens.peek().ok().is_some_and(|t| {
-                                        // Named comparator: lowercase identifier that's not a
-                                        // binary string op and not a block-list function.
-                                        // e.g. `sort cmp_events @list`
-                                        // Block-list functions (grep, map, sort, etc.) cannot be
-                                        // sort comparators — `sort grep { ... } @list` means
-                                        // sort the result of grep, not `sort grep_func @list`.
+                                        // Named comparator function: `sort SUBNAME LIST`
+                                        //
+                                        // Accept plain and qualified names (`by_name`,
+                                        // `My::Sorter::cmp`), including uppercase package names.
+                                        // Exclude string operators and known block-list builtins:
+                                        // those are not comparator names in this position.
                                         let txt: &str = &t.text;
-                                        !txt.is_empty()
-                                            && txt.starts_with(|c: char| {
-                                                c.is_ascii_lowercase() || c == '_'
-                                            })
-                                            && !matches!(
-                                                txt,
-                                                "eq" | "ne"
-                                                    | "lt"
-                                                    | "le"
-                                                    | "gt"
-                                                    | "ge"
-                                                    | "cmp"
-                                                    | "x"
-                                            )
-                                            && !Self::is_block_list_func(txt)
+                                        !matches!(
+                                            txt,
+                                            "eq" | "ne"
+                                                | "lt"
+                                                | "le"
+                                                | "gt"
+                                                | "ge"
+                                                | "cmp"
+                                                | "x"
+                                        ) && !Self::is_block_list_func(txt)
                                     })
                                 {
                                     // sort FUNCNAME LIST — `sort by_name @list`
