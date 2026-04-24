@@ -102,9 +102,8 @@ impl LspServer {
         // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
         if include_system_inc {
             let mut folders = self.workspace_folders.lock();
-            if let Some(folder) = folders
-                .iter_mut()
-                .find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
+            if let Some(folder) =
+                folders.iter_mut().find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
             {
                 for path in folder.effective_workspace_config.get_system_inc() {
                     if seen_system.insert(path.clone()) {
