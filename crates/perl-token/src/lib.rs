@@ -399,6 +399,156 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// Return `true` when this kind is a Perl keyword token.
+    pub fn is_keyword(self) -> bool {
+        matches!(
+            self,
+            TokenKind::My
+                | TokenKind::Our
+                | TokenKind::Local
+                | TokenKind::State
+                | TokenKind::Sub
+                | TokenKind::If
+                | TokenKind::Elsif
+                | TokenKind::Else
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+                | TokenKind::Return
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                | TokenKind::Begin
+                | TokenKind::End
+                | TokenKind::Check
+                | TokenKind::Init
+                | TokenKind::Unitcheck
+                | TokenKind::Eval
+                | TokenKind::Do
+                | TokenKind::Given
+                | TokenKind::When
+                | TokenKind::Default
+                | TokenKind::Try
+                | TokenKind::Catch
+                | TokenKind::Finally
+                | TokenKind::Continue
+                | TokenKind::Next
+                | TokenKind::Last
+                | TokenKind::Redo
+                | TokenKind::Goto
+                | TokenKind::Class
+                | TokenKind::Method
+                | TokenKind::Field
+                | TokenKind::Format
+                | TokenKind::Undef
+                | TokenKind::Defer
+                | TokenKind::WordAnd
+                | TokenKind::WordOr
+                | TokenKind::WordNot
+                | TokenKind::WordXor
+                | TokenKind::StringCompare
+        )
+    }
+
+    /// Return `true` when this kind is punctuation/operator syntax.
+    pub fn is_operator(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Assign
+                | TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Star
+                | TokenKind::Slash
+                | TokenKind::Percent
+                | TokenKind::Power
+                | TokenKind::LeftShift
+                | TokenKind::RightShift
+                | TokenKind::BitwiseAnd
+                | TokenKind::BitwiseOr
+                | TokenKind::BitwiseXor
+                | TokenKind::BitwiseNot
+                | TokenKind::PlusAssign
+                | TokenKind::MinusAssign
+                | TokenKind::StarAssign
+                | TokenKind::SlashAssign
+                | TokenKind::PercentAssign
+                | TokenKind::DotAssign
+                | TokenKind::AndAssign
+                | TokenKind::OrAssign
+                | TokenKind::XorAssign
+                | TokenKind::PowerAssign
+                | TokenKind::LeftShiftAssign
+                | TokenKind::RightShiftAssign
+                | TokenKind::LogicalAndAssign
+                | TokenKind::LogicalOrAssign
+                | TokenKind::DefinedOrAssign
+                | TokenKind::Equal
+                | TokenKind::NotEqual
+                | TokenKind::Match
+                | TokenKind::NotMatch
+                | TokenKind::SmartMatch
+                | TokenKind::Less
+                | TokenKind::Greater
+                | TokenKind::LessEqual
+                | TokenKind::GreaterEqual
+                | TokenKind::Spaceship
+                | TokenKind::And
+                | TokenKind::Or
+                | TokenKind::Not
+                | TokenKind::DefinedOr
+                | TokenKind::Arrow
+                | TokenKind::FatArrow
+                | TokenKind::Dot
+                | TokenKind::Range
+                | TokenKind::Ellipsis
+                | TokenKind::Increment
+                | TokenKind::Decrement
+                | TokenKind::DoubleColon
+                | TokenKind::Question
+                | TokenKind::Colon
+                | TokenKind::Backslash
+        )
+    }
+
+    /// Return `true` when this kind is a delimiter token.
+    pub fn is_delimiter(self) -> bool {
+        matches!(
+            self,
+            TokenKind::LeftParen
+                | TokenKind::RightParen
+                | TokenKind::LeftBrace
+                | TokenKind::RightBrace
+                | TokenKind::LeftBracket
+                | TokenKind::RightBracket
+                | TokenKind::Semicolon
+                | TokenKind::Comma
+        )
+    }
+
+    /// Return `true` when this kind is a literal-like token.
+    pub fn is_literal(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Number
+                | TokenKind::String
+                | TokenKind::Regex
+                | TokenKind::Substitution
+                | TokenKind::Transliteration
+                | TokenKind::QuoteSingle
+                | TokenKind::QuoteDouble
+                | TokenKind::QuoteWords
+                | TokenKind::QuoteCommand
+                | TokenKind::HeredocStart
+                | TokenKind::HeredocBody
+                | TokenKind::FormatBody
+                | TokenKind::DataMarker
+                | TokenKind::DataBody
+                | TokenKind::VString
+        )
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.
@@ -560,5 +710,32 @@ impl TokenKind {
             TokenKind::Eof => "end of input",
             TokenKind::Unknown => "unknown token",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TokenKind;
+
+    #[test]
+    fn category_predicates_cover_expected_kinds() {
+        assert!(TokenKind::Sub.is_keyword());
+        assert!(TokenKind::WordAnd.is_keyword());
+        assert!(TokenKind::Plus.is_operator());
+        assert!(TokenKind::Semicolon.is_delimiter());
+        assert!(TokenKind::Regex.is_literal());
+        assert!(!TokenKind::Identifier.is_keyword());
+        assert!(!TokenKind::Eof.is_operator());
+    }
+
+    #[test]
+    fn p95_index_formula_matches_corrected_nearest_rank() {
+        fn p95_index(sample_count: usize) -> usize {
+            (sample_count * 95).div_ceil(100).saturating_sub(1).min(sample_count.saturating_sub(1))
+        }
+
+        assert_eq!(p95_index(1), 0);
+        assert_eq!(p95_index(5), 4);
+        assert_eq!(p95_index(20), 18);
     }
 }

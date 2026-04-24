@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "generated_at_epoch_s": 1777040219,
+  "metrics": {
+    "token_new_short": {"iterations": 2000, "median_ns": 40, "p95_ns": 60},
+    "token_new_long": {"iterations": 800, "median_ns": 153, "p95_ns": 168},
+    "token_clone": {"iterations": 3000, "median_ns": 50, "p95_ns": 51},
+    "token_equality": {"iterations": 3000, "median_ns": 59, "p95_ns": 80},
+    "token_kind_display_name": {"iterations": 6000, "median_ns": 17, "p95_ns": 21},
+    "token_kind_category_predicates": {"iterations": 6000, "median_ns": 17, "p95_ns": 18},
+    "lexer_to_parser_token_conversion": {"iterations": 2000, "median_ns": 61, "p95_ns": 62},
+    "eof_synthetic_token": {"iterations": 8000, "median_ns": 38, "p95_ns": 40}
+  }
+}

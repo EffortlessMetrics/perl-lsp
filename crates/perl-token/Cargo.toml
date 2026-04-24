@@ -16,8 +16,15 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 # No external dependencies for now (Arc is std)
 
+[dev-dependencies]
+perl-lexer = { workspace = true }
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "token_scorecard"
+harness = false
