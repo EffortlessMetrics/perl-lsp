@@ -144,6 +144,54 @@ docs_url = "justfile#ci-check-no-nested-lock"
 cost_tier = "low"  # <1 second
 failure_impact = "medium"
 
+[[gate]]
+id = "system-corpus-ratchet"
+name = "System Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo run -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces parser corpus clean-rate and ERROR-node ratchet against the committed system baseline"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "CPAN Corpus Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 900
+command = "cargo run -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces parser corpus clean-rate and ERROR-node ratchet against the committed CPAN baseline"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "high"
+
+[[gate]]
+id = "parser-audit-ratchet"
+name = "Parser Audit Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 300
+command = "cargo run -p xtask --no-default-features -- corpus-audit --fresh --corpus-path . --check"
+evidence_pattern = "^✅"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces strict-clean project corpus, valid-gap floor, and NodeKind allowlist ratchet"
+docs_url = "justfile#parser-audit"
+cost_tier = "medium"
+failure_impact = "high"
+
 # ============================================================================
 # Extended Gates (RECOMMENDED for large changes, ci-full)
 # ============================================================================

@@ -42,6 +42,8 @@ const MAX_HEREDOC_DEPTH: usize = 100;
 
 /// Maximum heredoc content size (1MB)
 const MAX_HEREDOC_SIZE: usize = 1_000_000;
+/// NodeKind names intentionally excluded from the repo-corpus coverage floor.
+const NODEKIND_ALLOWLIST_PATH: &str = ".ci/nodekind-coverage-allowlist.txt";
 
 /// Configuration for corpus audit
 #[derive(Debug, Clone)]
@@ -346,6 +348,22 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         ));
     }
 
+    // NodeKind coverage ratchet with explicit allowlist for intentionally unreachable kinds.
+    let allowlisted = read_nodekind_allowlist(Path::new(NODEKIND_ALLOWLIST_PATH))?;
+    let unexpected_never_seen: Vec<&str> = report
+        .nodekind_coverage
+        .never_seen
+        .iter()
+        .map(String::as_str)
+        .filter(|name| !allowlisted.iter().any(|allowed| allowed == name))
+        .collect();
+    if !unexpected_never_seen.is_empty() {
+        failures.push(format!(
+            "NodeKind coverage regression: unexpected never-seen kinds: {}",
+            unexpected_never_seen.join(", ")
+        ));
+    }
+
     // Print error category breakdown if there are errors (Issue #180)
     if current_errors > 0 && !report.parse_outcomes.error_by_category.is_empty() {
         println!("\n   Error breakdown by category:");
@@ -366,6 +384,20 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         }
         Err(color_eyre::eyre::eyre!("CI gate validation failed: {}", failures.join("; ")))
     }
+}
+
+fn read_nodekind_allowlist(path: &Path) -> Result<Vec<String>> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read NodeKind allowlist: {}", path.display()))?;
+    Ok(raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 /// Test function to verify corpus audit functionality

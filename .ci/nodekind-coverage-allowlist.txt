@@ -1,0 +1,6 @@
+# NodeKind variants intentionally absent from the repo-owned parser corpus.
+# CI fails if any additional never-seen NodeKinds appear.
+MissingStatement
+MissingIdentifier
+MissingBlock
+UnknownRest

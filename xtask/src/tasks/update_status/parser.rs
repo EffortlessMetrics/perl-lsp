@@ -24,6 +24,8 @@ pub(super) struct ParserMetrics {
     pub common_corpus_receipt: Option<super::super::parser_corpus_sweep::SweepReport>,
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
+    /// Number of allowlisted never-seen NodeKinds.
+    pub nodekind_allowlisted: usize,
 }
 
 pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
@@ -41,12 +43,21 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         .ok(),
         common_corpus_receipt,
         common_corpus_pinned,
+        nodekind_allowlisted: count_nodekind_allowlisted(root),
     }
 }
 
 /// Count the non-comment, non-blank lines in `.ci/common-corpus-manifest.txt`.
 pub(super) fn count_common_corpus_pinned(root: &Path) -> usize {
     let path = root.join(".ci/common-corpus-manifest.txt");
+    let Ok(raw) = fs::read_to_string(path) else {
+        return 0;
+    };
+    raw.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#')).count()
+}
+
+fn count_nodekind_allowlisted(root: &Path) -> usize {
+    let path = root.join(".ci/nodekind-coverage-allowlist.txt");
     let Ok(raw) = fs::read_to_string(path) else {
         return 0;
     };
@@ -158,9 +169,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
                 100.0 * summary.nodekind_covered as f64 / summary.nodekind_total as f64
             };
             let never_seen = summary.nodekind_total.saturating_sub(summary.nodekind_covered);
+            let allowlisted = metrics.nodekind_allowlisted;
             format!(
-                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds | `corpus_audit` |",
-                summary.nodekind_covered, summary.nodekind_total, pct, never_seen,
+                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds ({} allowlisted) | `corpus_audit` + `.ci/nodekind-coverage-allowlist.txt` |",
+                summary.nodekind_covered, summary.nodekind_total, pct, never_seen, allowlisted,
             )
         },
     );
@@ -302,6 +314,7 @@ mod tests {
             project_corpus: Some(summary),
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            nodekind_allowlisted: 4,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
@@ -329,6 +342,7 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
+            nodekind_allowlisted: 4,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
@@ -378,6 +392,7 @@ mod tests {
             project_corpus: None,
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
+            nodekind_allowlisted: 4,
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\

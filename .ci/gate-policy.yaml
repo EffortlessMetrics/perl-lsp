@@ -269,6 +269,61 @@ gates:
       - common
       - strict
 
+  - name: system_corpus_ratchet
+    tier: merge_gate
+    description: "System Perl corpus must stay at or above parser closeout baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - ratchet
+      - system
+
+  - name: cpan_corpus_ratchet
+    tier: merge_gate
+    description: "CPAN corpus must stay at or above parser closeout baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- cpan-corpus sweep --enforce
+    timeout_seconds: 900
+    retry_count: 0
+    budgets:
+      max_duration_ms: 900000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - ratchet
+      - cpan
+
+  - name: parser_audit_ratchet
+    tier: merge_gate
+    description: "Repo parser corpus must remain strict-clean with NodeKind allowlist ratchet"
+    required: true
+    command: >-
+      cargo run --locked -p xtask --no-default-features
+      -- corpus-audit --fresh --corpus-path . --check
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - nodekind
+      - ratchet
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"
@@ -847,6 +902,9 @@ workflow_integration:
         - unit_core
         - unit_full
         - common_corpus_clean
+        - system_corpus_ratchet
+        - cpan_corpus_ratchet
+        - parser_audit_ratchet
         - lsp_tier_a
         - lsp_tier_b
         - lsp_smoke
