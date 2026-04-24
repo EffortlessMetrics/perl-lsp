@@ -18,6 +18,9 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds that are intentionally allowlisted as unreachable
+    /// for deterministic clean-corpus coverage.
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
@@ -33,6 +36,15 @@ pub struct AtRiskNodeKind {
     pub count: usize,
     /// Risk level
     pub risk_level: RiskLevel,
+}
+
+/// A never-seen NodeKind covered by an explicit allowlist with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this NodeKind is intentionally allowlisted
+    pub rationale: String,
 }
 
 /// Risk level for NodeKind coverage
@@ -71,13 +83,31 @@ pub fn analyze_nodekind_coverage(
     // Get all NodeKinds from the parser
     let all_nodekinds = get_all_nodekinds();
     let total_count = all_nodekinds.len();
-    let covered_count = nodekind_counts.len();
+    let allowlist = unreachable_nodekind_allowlist();
+
+    // Split never-seen kinds into actionable vs intentionally unreachable.
+    let mut never_seen = Vec::new();
+    let mut allowlisted_never_seen = Vec::new();
+    for nodekind in all_nodekinds {
+        if !nodekind_counts.contains_key(&nodekind) {
+            if let Some(rationale) = allowlist.get(nodekind.as_str()) {
+                allowlisted_never_seen.push(AllowlistedNodeKind {
+                    name: nodekind.clone(),
+                    rationale: rationale.clone(),
+                });
+            } else {
+                never_seen.push(nodekind.clone());
+            }
+        }
+    }
+    never_seen.sort();
+    allowlisted_never_seen.sort_by(|left, right| left.name.cmp(&right.name));
+
+    // Effective coverage treats allowlisted unreachable recovery placeholders as covered
+    // for clean-corpus deterministic accuracy closeout.
+    let covered_count = total_count - never_seen.len();
     let coverage_percentage =
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
-
-    // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
-        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +132,7 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -146,6 +177,21 @@ fn get_all_nodekinds() -> HashSet<String> {
     perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
+/// NodeKinds intentionally allowlisted as unreachable in deterministic clean-corpus runs.
+///
+/// These are synthetic recovery placeholders that only appear when parsing malformed
+/// input and are therefore not expected in the 100%-clean project corpus.
+fn unreachable_nodekind_allowlist() -> HashMap<&'static str, String> {
+    let rationale = "Synthetic recovery placeholder produced only during malformed-input \
+                     error recovery; intentionally absent from strict clean-corpus fixtures."
+        .to_string();
+
+    ["MissingBlock", "MissingIdentifier", "MissingStatement", "UnknownRest"]
+        .into_iter()
+        .map(|name| (name, rationale.clone()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +220,15 @@ mod tests {
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn test_unreachable_nodekind_allowlist_is_recovery_only() {
+        let allowlist = unreachable_nodekind_allowlist();
+        let recovery: std::collections::HashSet<&str> =
+            perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES.iter().copied().collect();
+        for name in allowlist.keys() {
+            assert!(recovery.contains(name), "allowlisted NodeKind {name} must be recovery-only");
+        }
     }
 }
