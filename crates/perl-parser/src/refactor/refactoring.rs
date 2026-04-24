@@ -2824,10 +2824,12 @@ sub complex {
         fn test_cleanup_respects_retention_count() {
             use std::io::Write;
 
+            let temp_dir = must(tempfile::tempdir());
             let config = RefactoringConfig {
                 create_backups: true,
                 max_backup_retention: 2,
                 backup_max_age_seconds: 0, // Disable age-based retention
+                backup_root: Some(temp_dir.path().to_path_buf()),
                 ..RefactoringConfig::default()
             };
 
