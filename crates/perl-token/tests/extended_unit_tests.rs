@@ -176,6 +176,7 @@ fn token_kind_debug_keywords() {
         (TokenKind::Field, "Field"),
         (TokenKind::Format, "Format"),
         (TokenKind::Undef, "Undef"),
+        (TokenKind::Defer, "Defer"),
     ];
     for (kind, label) in cases {
         assert_eq!(format!("{kind:?}"), *label);
@@ -242,6 +243,7 @@ fn token_kind_debug_literals() {
         (TokenKind::FormatBody, "FormatBody"),
         (TokenKind::DataMarker, "DataMarker"),
         (TokenKind::DataBody, "DataBody"),
+        (TokenKind::VString, "VString"),
         (TokenKind::UnknownRest, "UnknownRest"),
         (TokenKind::HeredocDepthLimit, "HeredocDepthLimit"),
     ];
@@ -306,19 +308,7 @@ fn token_eq_transitivity() {
 
 #[test]
 fn token_eq_reflexive_for_all_kinds() {
-    let kinds = [
-        TokenKind::My,
-        TokenKind::Assign,
-        TokenKind::LeftParen,
-        TokenKind::Number,
-        TokenKind::Identifier,
-        TokenKind::Eof,
-        TokenKind::Unknown,
-        TokenKind::HeredocBody,
-        TokenKind::Class,
-        TokenKind::Try,
-    ];
-    for kind in &kinds {
+    for kind in TokenKind::all() {
         let tok = Token::new(*kind, "x", 0, 1);
         assert_eq!(tok, tok);
     }
@@ -377,6 +367,7 @@ fn keyword_kinds() -> Vec<TokenKind> {
         TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
+        TokenKind::Defer,
     ]
 }
 
@@ -404,8 +395,8 @@ fn sigil_kinds() -> Vec<TokenKind> {
 }
 
 #[test]
-fn keyword_count_is_40() {
-    assert_eq!(keyword_kinds().len(), 40);
+fn keyword_count_is_41() {
+    assert_eq!(keyword_kinds().len(), 41);
 }
 
 #[test]

@@ -399,6 +399,325 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// All known token kinds in declaration order.
+    pub const ALL: [Self; 132] = [
+        // Keywords
+        Self::My,
+        Self::Our,
+        Self::Local,
+        Self::State,
+        Self::Sub,
+        Self::If,
+        Self::Elsif,
+        Self::Else,
+        Self::Unless,
+        Self::While,
+        Self::Until,
+        Self::For,
+        Self::Foreach,
+        Self::Return,
+        Self::Package,
+        Self::Use,
+        Self::No,
+        Self::Begin,
+        Self::End,
+        Self::Check,
+        Self::Init,
+        Self::Unitcheck,
+        Self::Eval,
+        Self::Do,
+        Self::Given,
+        Self::When,
+        Self::Default,
+        Self::Try,
+        Self::Catch,
+        Self::Finally,
+        Self::Continue,
+        Self::Next,
+        Self::Last,
+        Self::Redo,
+        Self::Goto,
+        Self::Class,
+        Self::Method,
+        Self::Field,
+        Self::Format,
+        Self::Undef,
+        Self::Defer,
+        // Operators
+        Self::Assign,
+        Self::Plus,
+        Self::Minus,
+        Self::Star,
+        Self::Slash,
+        Self::Percent,
+        Self::Power,
+        Self::LeftShift,
+        Self::RightShift,
+        Self::BitwiseAnd,
+        Self::BitwiseOr,
+        Self::BitwiseXor,
+        Self::BitwiseNot,
+        Self::PlusAssign,
+        Self::MinusAssign,
+        Self::StarAssign,
+        Self::SlashAssign,
+        Self::PercentAssign,
+        Self::DotAssign,
+        Self::AndAssign,
+        Self::OrAssign,
+        Self::XorAssign,
+        Self::PowerAssign,
+        Self::LeftShiftAssign,
+        Self::RightShiftAssign,
+        Self::LogicalAndAssign,
+        Self::LogicalOrAssign,
+        Self::DefinedOrAssign,
+        Self::Equal,
+        Self::NotEqual,
+        Self::Match,
+        Self::NotMatch,
+        Self::SmartMatch,
+        Self::Less,
+        Self::Greater,
+        Self::LessEqual,
+        Self::GreaterEqual,
+        Self::Spaceship,
+        Self::StringCompare,
+        Self::And,
+        Self::Or,
+        Self::Not,
+        Self::DefinedOr,
+        Self::WordAnd,
+        Self::WordOr,
+        Self::WordNot,
+        Self::WordXor,
+        Self::Arrow,
+        Self::FatArrow,
+        Self::Dot,
+        Self::Range,
+        Self::Ellipsis,
+        Self::Increment,
+        Self::Decrement,
+        Self::DoubleColon,
+        Self::Question,
+        Self::Colon,
+        Self::Backslash,
+        // Delimiters
+        Self::LeftParen,
+        Self::RightParen,
+        Self::LeftBrace,
+        Self::RightBrace,
+        Self::LeftBracket,
+        Self::RightBracket,
+        Self::Semicolon,
+        Self::Comma,
+        // Literals
+        Self::Number,
+        Self::String,
+        Self::Regex,
+        Self::Substitution,
+        Self::Transliteration,
+        Self::QuoteSingle,
+        Self::QuoteDouble,
+        Self::QuoteWords,
+        Self::QuoteCommand,
+        Self::HeredocStart,
+        Self::HeredocBody,
+        Self::FormatBody,
+        Self::DataMarker,
+        Self::DataBody,
+        Self::VString,
+        Self::UnknownRest,
+        Self::HeredocDepthLimit,
+        // Identifiers and variables
+        Self::Identifier,
+        Self::ScalarSigil,
+        Self::ArraySigil,
+        Self::HashSigil,
+        Self::SubSigil,
+        Self::GlobSigil,
+        // Special
+        Self::Eof,
+        Self::Unknown,
+    ];
+
+    /// Returns all known token kinds in declaration order.
+    pub const fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    /// Returns true for language keywords and keyword-like builtins.
+    pub const fn is_keyword(self) -> bool {
+        matches!(
+            self,
+            Self::My
+                | Self::Our
+                | Self::Local
+                | Self::State
+                | Self::Sub
+                | Self::If
+                | Self::Elsif
+                | Self::Else
+                | Self::Unless
+                | Self::While
+                | Self::Until
+                | Self::For
+                | Self::Foreach
+                | Self::Return
+                | Self::Package
+                | Self::Use
+                | Self::No
+                | Self::Begin
+                | Self::End
+                | Self::Check
+                | Self::Init
+                | Self::Unitcheck
+                | Self::Eval
+                | Self::Do
+                | Self::Given
+                | Self::When
+                | Self::Default
+                | Self::Try
+                | Self::Catch
+                | Self::Finally
+                | Self::Continue
+                | Self::Next
+                | Self::Last
+                | Self::Redo
+                | Self::Goto
+                | Self::Class
+                | Self::Method
+                | Self::Field
+                | Self::Format
+                | Self::Undef
+                | Self::Defer
+        )
+    }
+
+    /// Returns true for operator/punctuator tokens.
+    pub const fn is_operator(self) -> bool {
+        matches!(
+            self,
+            Self::Assign
+                | Self::Plus
+                | Self::Minus
+                | Self::Star
+                | Self::Slash
+                | Self::Percent
+                | Self::Power
+                | Self::LeftShift
+                | Self::RightShift
+                | Self::BitwiseAnd
+                | Self::BitwiseOr
+                | Self::BitwiseXor
+                | Self::BitwiseNot
+                | Self::PlusAssign
+                | Self::MinusAssign
+                | Self::StarAssign
+                | Self::SlashAssign
+                | Self::PercentAssign
+                | Self::DotAssign
+                | Self::AndAssign
+                | Self::OrAssign
+                | Self::XorAssign
+                | Self::PowerAssign
+                | Self::LeftShiftAssign
+                | Self::RightShiftAssign
+                | Self::LogicalAndAssign
+                | Self::LogicalOrAssign
+                | Self::DefinedOrAssign
+                | Self::Equal
+                | Self::NotEqual
+                | Self::Match
+                | Self::NotMatch
+                | Self::SmartMatch
+                | Self::Less
+                | Self::Greater
+                | Self::LessEqual
+                | Self::GreaterEqual
+                | Self::Spaceship
+                | Self::StringCompare
+                | Self::And
+                | Self::Or
+                | Self::Not
+                | Self::DefinedOr
+                | Self::WordAnd
+                | Self::WordOr
+                | Self::WordNot
+                | Self::WordXor
+                | Self::Arrow
+                | Self::FatArrow
+                | Self::Dot
+                | Self::Range
+                | Self::Ellipsis
+                | Self::Increment
+                | Self::Decrement
+                | Self::DoubleColon
+                | Self::Question
+                | Self::Colon
+                | Self::Backslash
+        )
+    }
+
+    /// Returns true for delimiters and separators.
+    pub const fn is_delimiter(self) -> bool {
+        matches!(
+            self,
+            Self::LeftParen
+                | Self::RightParen
+                | Self::LeftBrace
+                | Self::RightBrace
+                | Self::LeftBracket
+                | Self::RightBracket
+                | Self::Semicolon
+                | Self::Comma
+        )
+    }
+
+    /// Returns true for literal and recovery-literal forms.
+    pub const fn is_literal(self) -> bool {
+        matches!(
+            self,
+            Self::Number
+                | Self::String
+                | Self::Regex
+                | Self::Substitution
+                | Self::Transliteration
+                | Self::QuoteSingle
+                | Self::QuoteDouble
+                | Self::QuoteWords
+                | Self::QuoteCommand
+                | Self::HeredocStart
+                | Self::HeredocBody
+                | Self::FormatBody
+                | Self::DataMarker
+                | Self::DataBody
+                | Self::VString
+                | Self::UnknownRest
+                | Self::HeredocDepthLimit
+        )
+    }
+
+    /// Returns true for identifier and sigil token forms.
+    pub const fn is_identifier_or_sigil(self) -> bool {
+        matches!(
+            self,
+            Self::Identifier
+                | Self::ScalarSigil
+                | Self::ArraySigil
+                | Self::HashSigil
+                | Self::SubSigil
+                | Self::GlobSigil
+        )
+    }
+
+    /// Returns true for non-language special sentinel/recovery tokens.
+    pub const fn is_special(self) -> bool {
+        matches!(self, Self::Eof | Self::Unknown)
+    }
+}
+
+impl TokenKind {
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.

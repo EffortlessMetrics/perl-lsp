@@ -20,6 +20,10 @@ use perl_token::{Token, TokenKind};
 
 let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
 assert_eq!(tok.kind, TokenKind::Identifier);
+
+// Newer literal/sigil forms are also represented
+assert_eq!(TokenKind::VString.display_name(), "version string");
+assert_eq!(TokenKind::GlobSigil.display_name(), "'*'");
 ```
 
 ## Workspace Role
