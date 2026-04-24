@@ -37,6 +37,15 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
             return path;
         }
 
+        // Only fall back to raw prefix-trim for local file URIs.  A URI with a
+        // non-local host (e.g. `file://evil.example.com/path`) must not reach
+        // this path, because `trim_file_uri_prefix` would strip the leading
+        // `//` and return `"evil.example.com/path"` — still leaking the remote
+        // hostname into a PathBuf that the caller may later open.
+        if file_uri_has_remote_host(workspace_folder) {
+            return PathBuf::from(workspace_folder);
+        }
+
         return PathBuf::from(trim_file_uri_prefix(workspace_folder));
     }
 
@@ -54,6 +63,20 @@ fn has_file_uri_prefix(value: &str) -> bool {
 fn trim_file_uri_prefix(value: &str) -> &str {
     let suffix = &value[5..];
     suffix.strip_prefix("//").unwrap_or(suffix)
+}
+
+/// Returns `true` when `value` is a `file://` URI whose authority component
+/// names a non-local host (i.e. something other than empty or `"localhost"`).
+///
+/// Used to block the `trim_file_uri_prefix` last-resort path in
+/// [`workspace_folder_to_path`] so that remote hostnames cannot leak into the
+/// returned `PathBuf`.
+fn file_uri_has_remote_host(value: &str) -> bool {
+    url::Url::parse(value)
+        .ok()
+        .filter(|u| u.scheme() == "file")
+        .and_then(|u| u.host_str().map(|h| !matches!(h, "" | "localhost")))
+        .unwrap_or(false)
 }
 
 fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
@@ -250,6 +273,36 @@ mod tests {
     fn does_not_generate_unc_path_for_non_local_file_uri_host() {
         let parsed = workspace_folder_to_path("file://evil.example.com/share/project");
         let path = parsed.to_string_lossy();
-        assert!(!path.starts_with("//evil.example.com"));
+        // Must not contain the remote hostname in any form — neither as a UNC-style
+        // `//evil.example.com/...` prefix nor as a plain leading component
+        // `evil.example.com/...` (which `trim_file_uri_prefix` would previously
+        // produce after stripping the `//`).
+        assert!(
+            !path.starts_with("//evil.example.com") && !path.starts_with("evil.example.com"),
+            "remote hostname leaked into path: {path}"
+        );
+    }
+
+    #[test]
+    fn does_not_resolve_remote_host_with_path_component() {
+        // Ensure the trim_file_uri_prefix last-resort path is also blocked for
+        // URIs that url::Url cannot convert to a file path (remote host present).
+        for uri in &[
+            "file://attacker.example.org/sensitive/data",
+            "file://192.0.2.1/share",
+            "file://[::1]/ipv6-local",
+        ] {
+            let parsed = workspace_folder_to_path(uri);
+            let path = parsed.to_string_lossy();
+            // The raw URI itself should be the fallback — the remote hostname
+            // must not appear as a bare leading path component.
+            assert!(
+                !path.starts_with("attacker.example.org")
+                    && !path.starts_with("192.0.2.1")
+                    && !path.starts_with("[::1]")
+                    && !path.starts_with("::1"),
+                "remote hostname leaked into path for {uri}: {path}"
+            );
+        }
     }
 }
