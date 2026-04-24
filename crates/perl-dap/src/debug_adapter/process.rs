@@ -483,6 +483,7 @@ impl DebugAdapter {
         let seq = self.seq.clone();
         let sender = self.event_sender.clone();
         let recent_output = self.recent_output.clone();
+        let recent_output_line_id = self.recent_output_line_id.clone();
         let breakpoints = self.breakpoints.clone();
         let exception_break_on_die = self.exception_break_on_die.clone();
         let exception_break_on_warn = self.exception_break_on_warn.clone();
@@ -574,7 +575,13 @@ impl DebugAdapter {
                             if output.len() >= RECENT_OUTPUT_MAX_LINES {
                                 let _ = output.pop_front();
                             }
-                            output.push_back(text.clone());
+                            let line_id = recent_output_line_id.fetch_add(1, Ordering::Relaxed);
+                            let normalized = DebugAdapter::normalize_debugger_output_line(&text);
+                            output.push_back(RecentOutputLine {
+                                id: line_id,
+                                raw: text.clone(),
+                                normalized,
+                            });
                         }
 
                         // Send all output to client with error handling

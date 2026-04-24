@@ -352,13 +352,9 @@ mod tests {
     pub(super) fn test_parse_scope_variables_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_scope_variables.recent_output");
-            output.push_back("$foo = 42".to_string());
-            output.push_back("@arr = (1, 2, 3)".to_string());
-            output.push_back("%hash = {a => 1}".to_string());
-        }
+        adapter.append_recent_output_line("$foo = 42".to_string());
+        adapter.append_recent_output_line("@arr = (1, 2, 3)".to_string());
+        adapter.append_recent_output_line("%hash = {a => 1}".to_string());
 
         let (vars, child_cache) = adapter.parse_scope_variables_from_output(11, 0, 20);
         let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
@@ -420,19 +416,13 @@ mod tests {
     pub(super) fn test_capture_framed_debugger_output_isolated_by_marker()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_capture_framed_debugger_output.recent_output",
-            );
-            output.push_back("noise".to_string());
-            output.push_back(r#""DAP_BEGIN_100""#.to_string());
-            output.push_back("$a = 1".to_string());
-            output.push_back(r#""DAP_END_100""#.to_string());
-            output.push_back(r#""DAP_BEGIN_200""#.to_string());
-            output.push_back("$b = 2".to_string());
-            output.push_back(r#""DAP_END_200""#.to_string());
-        }
+        adapter.append_recent_output_line("noise".to_string());
+        adapter.append_recent_output_line(r#""DAP_BEGIN_100""#.to_string());
+        adapter.append_recent_output_line("$a = 1".to_string());
+        adapter.append_recent_output_line(r#""DAP_END_100""#.to_string());
+        adapter.append_recent_output_line(r#""DAP_BEGIN_200""#.to_string());
+        adapter.append_recent_output_line("$b = 2".to_string());
+        adapter.append_recent_output_line(r#""DAP_END_200""#.to_string());
 
         let lines = adapter
             .capture_framed_debugger_output("DAP_BEGIN_200", "DAP_END_200", 200)
@@ -445,14 +435,11 @@ mod tests {
     pub(super) fn test_stack_trace_uses_recent_output_when_available()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_stack_trace_recent_output.recent_output",
-            );
-            output.push_back("# 0 main::compute at /tmp/script.pl line 20".to_string());
-            output.push_back("# 1 Foo::process called at /tmp/Foo.pm line 15".to_string());
-        }
+        adapter
+            .append_recent_output_line("# 0 main::compute at /tmp/script.pl line 20".to_string());
+        adapter.append_recent_output_line(
+            "# 1 Foo::process called at /tmp/Foo.pm line 15".to_string(),
+        );
 
         let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
         match response {
@@ -478,16 +465,64 @@ mod tests {
     pub(super) fn test_parse_evaluate_result_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_evaluate_result.recent_output");
-            output.push_back("$result = 123".to_string());
-        }
+        adapter.append_recent_output_line("$result = 123".to_string());
 
         let parsed = adapter.parse_evaluate_result_from_output("$result");
         let (value, ty) = parsed.ok_or("expected parsed evaluate result")?;
         assert_eq!(value, "123");
         assert_eq!(ty, "SCALAR");
+        Ok(())
+    }
+
+    #[test]
+    pub(super) fn test_capture_framed_debugger_output_honors_cancellation() {
+        let adapter = DebugAdapter::new();
+        adapter.cancel_requested.store(true, Ordering::Release);
+        let captured =
+            adapter.capture_framed_debugger_output("DAP_BEGIN_cancel", "DAP_END_cancel", 200);
+        assert!(captured.is_none(), "capture should stop when cancellation is requested");
+    }
+
+    #[test]
+    pub(super) fn test_capture_framed_debugger_output_large_history_remains_fast()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        for idx in 0..RECENT_OUTPUT_MAX_LINES {
+            adapter.append_recent_output_line(format!("noise line {idx}"));
+        }
+        adapter.append_recent_output_line(r#""DAP_BEGIN_9001""#.to_string());
+        adapter.append_recent_output_line("$value = 42".to_string());
+        adapter.append_recent_output_line(r#""DAP_END_9001""#.to_string());
+
+        let started = Instant::now();
+        let lines = adapter
+            .capture_framed_debugger_output("DAP_BEGIN_9001", "DAP_END_9001", 200)
+            .ok_or("expected framed output for marker 9001")?;
+        let elapsed = started.elapsed();
+
+        assert_eq!(lines, vec!["$value = 42".to_string()]);
+        assert!(
+            elapsed < Duration::from_millis(60),
+            "framed capture should avoid full-buffer rescans, elapsed={elapsed:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    pub(super) fn test_capture_framed_debugger_output_uses_exact_marker_boundaries()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.append_recent_output_line(r#""DAP_BEGIN_200""#.to_string());
+        adapter.append_recent_output_line("$older = 1".to_string());
+        adapter.append_recent_output_line(r#""DAP_END_200""#.to_string());
+        adapter.append_recent_output_line(r#""DAP_BEGIN_20""#.to_string());
+        adapter.append_recent_output_line("$wanted = 2".to_string());
+        adapter.append_recent_output_line(r#""DAP_END_20""#.to_string());
+
+        let lines = adapter
+            .capture_framed_debugger_output("DAP_BEGIN_20", "DAP_END_20", 200)
+            .ok_or("expected framed output for marker 20")?;
+        assert_eq!(lines, vec!["$wanted = 2".to_string()]);
         Ok(())
     }
 
