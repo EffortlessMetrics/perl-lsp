@@ -286,6 +286,56 @@ fn missing_paren_at_eof_in_list_assignment_emits_recovered() {
     );
 }
 
+/// When an inner subscript is missing `]`, but we encounter `)` from the
+/// enclosing call, recover at the inner owner and keep the outer closer.
+#[test]
+fn missing_inner_bracket_handoff_to_outer_paren_emits_recovered() {
+    let src = "foo($arr[$i), $j);";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_array_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArraySubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_array_recovery,
+        "Expected array-subscript InsertedCloser handoff recovery for '{}', got: {:?}",
+        src,
+        errors
+    );
+}
+
+/// Symmetric case: when an inner call is missing `)`, but we encounter `]`
+/// from the enclosing subscript, recover at ArgList and continue.
+#[test]
+fn missing_inner_paren_handoff_to_outer_bracket_emits_recovered() {
+    let src = "my $x = $arr[foo($a, $b];";
+    let (_ast, errors) = parse_errors(src);
+
+    let has_arg_list_recovery = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::ArgList,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        has_arg_list_recovery,
+        "Expected arg-list InsertedCloser handoff recovery for '{}', got: {:?}",
+        src,
+        errors
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Regression: clean-parse inputs must produce zero Recovered errors
 // ---------------------------------------------------------------------------

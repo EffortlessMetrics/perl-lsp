@@ -703,7 +703,7 @@ impl<'a> Parser<'a> {
             self.consume_token()?;
             return Ok(());
         }
-        if self.is_delimiter_recovery_point() {
+        if self.is_delimiter_recovery_point() || self.is_delimiter_handoff_point(kind) {
             let pos = self.current_position();
             let site = Self::recovery_site_for_closer(kind);
             self.errors.push(ParseError::Recovered {
@@ -719,6 +719,22 @@ impl<'a> Parser<'a> {
             self.peek_kind().map(|k| k.display_name()).unwrap_or("end of input"),
             pos,
         ))
+    }
+
+    /// Return true when the current token is a different closing delimiter.
+    ///
+    /// This typically means we lost ownership of an inner delimiter and are now
+    /// looking at the enclosing construct's closer (for example `)` while still
+    /// expecting `]`). In that case, we recover by inserting the expected closer
+    /// and leave the current token for the outer parser frame.
+    #[inline]
+    fn is_delimiter_handoff_point(&mut self, expected: TokenKind) -> bool {
+        matches!(
+            (expected, self.peek_kind()),
+            (TokenKind::RightParen, Some(TokenKind::RightBracket | TokenKind::RightBrace))
+                | (TokenKind::RightBracket, Some(TokenKind::RightParen | TokenKind::RightBrace))
+                | (TokenKind::RightBrace, Some(TokenKind::RightParen | TokenKind::RightBracket))
+        )
     }
 
     /// Map a closing-delimiter token to its [`RecoverySite`] for recovery annotations.
