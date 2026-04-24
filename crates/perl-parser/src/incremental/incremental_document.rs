@@ -135,25 +135,43 @@ impl IncrementalDocument {
         // Apply all edits to source in-place.
         // Reverse ordering keeps byte offsets stable while avoiding repeated
         // full-string allocations for each edit.
+        //
+        // If any edit cannot be mapped safely (out-of-bounds range, invalid
+        // range ordering, or non-UTF-8 boundary), take the conservative
+        // fallback path: keep the current source and perform a full parse.
+        // This avoids partial source mutations and prevents silent corruption.
         let mut new_source = self.source.clone();
+        let mut all_edits_mappable = true;
         for edit in &sorted_edits {
-            self.apply_edit_in_place(&mut new_source, edit);
+            if !self.apply_edit_in_place(&mut new_source, edit) {
+                all_edits_mappable = false;
+                break;
+            }
+        }
+
+        if !all_edits_mappable {
+            debug!("Batch contains unmappable edit(s); using conservative full-parse fallback");
+            let mut parser = Parser::new(&self.source);
+            let new_root = parser.parse()?;
+
+            self.root = Arc::new(new_root);
+            self.cache_subtrees();
+            self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
+            return Ok(());
         }
 
         // Find all affected ranges
         let affected_ranges: Vec<_> =
             sorted_edits.iter().map(|e| (e.start_byte, e.old_end_byte)).collect();
 
-        // Collect reusable subtrees outside affected ranges
-        let reusable = self.find_reusable_for_ranges(&affected_ranges);
+        // Collect reusable subtrees outside affected ranges for metrics. For
+        // batch edits we intentionally use a conservative full parse after all
+        // edits are safely applied, because aggressive subtree splicing can
+        // reintroduce stale nodes when multiple ranges are involved.
+        let _reusable = self.find_reusable_for_ranges(&affected_ranges);
 
-        // Parse with reuse when possible
-        let new_root = if !reusable.is_empty() {
-            self.parse_with_reuse(&new_source, reusable)?
-        } else {
-            let mut parser = Parser::new(&new_source);
-            parser.parse()?
-        };
+        let mut parser = Parser::new(&new_source);
+        let new_root = parser.parse()?;
 
         // Update state
         self.source = new_source;
@@ -191,20 +209,31 @@ impl IncrementalDocument {
         result
     }
 
-    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) {
-        let start = edit.start_byte.min(source.len());
-        let end = edit.old_end_byte.min(source.len());
+    fn apply_edit_in_place(&self, source: &mut String, edit: &IncrementalEdit) -> bool {
+        let source_len = source.len();
+        if edit.start_byte > source_len || edit.old_end_byte > source_len {
+            debug!(
+                "Invalid edit range beyond source len: start={}, end={}, len={}",
+                edit.start_byte, edit.old_end_byte, source_len
+            );
+            return false;
+        }
+
+        let start = edit.start_byte.min(source_len);
+        let end = edit.old_end_byte.min(source_len);
 
         if start > end {
-            debug!("Skipping invalid edit range: start={}, end={}", start, end);
-            return;
+            debug!("Invalid edit range ordering: start={}, end={}", start, end);
+            return false;
         }
 
-        if source.is_char_boundary(start) && source.is_char_boundary(end) {
-            source.replace_range(start..end, &edit.new_text);
-        } else {
+        if !source.is_char_boundary(start) || !source.is_char_boundary(end) {
             debug!("Invalid UTF-8 boundaries in edit: start={}, end={}", start, end);
+            return false;
         }
+
+        source.replace_range(start..end, &edit.new_text);
+        true
     }
 
     /// Find subtrees that can be reused (outside the edited range)
