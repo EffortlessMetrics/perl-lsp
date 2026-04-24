@@ -6,7 +6,7 @@
 //! Verifies that the UX harness can drive a real edit cycle and observe
 //! follow-up `textDocument/publishDiagnostics` updates for the edited file.
 
-use perl_lsp_ux_tests::{LspEvent, ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
 use std::time::{Duration, Instant};
 
 fn binary_available() -> bool {
@@ -66,11 +66,9 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
     // Drain so the next wait_for_diagnostics sees only the post-edit notification.
     harness.collect_notifications();
 
-    harness
-        .change_file_full("edit_diag.pl", FIXED_SOURCE)
+    let updated = harness
+        .apply_edit_and_collect_diagnostics("edit_diag.pl", FIXED_SOURCE, Duration::from_secs(5))
         .expect("didChange full document should succeed");
-
-    let updated = harness.wait_for_diagnostics("edit_diag.pl", Duration::from_secs(5));
     for diag in &updated {
         assert!(
             diag.get("range").is_some() && diag.get("message").is_some(),
@@ -81,14 +79,17 @@ fn scenario_18_diagnostics_republish_after_full_document_edit() {
 
     // After draining the open-event and sending didChange, wait for the server
     // to republish diagnostics.  We expect at least 1 new diagnostics event.
-    let uri = harness.workspace.uri("edit_diag.pl");
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut diagnostics_event_count = 0_usize;
     while Instant::now() < deadline {
         diagnostics_event_count = harness
             .peek_notifications()
             .iter()
-            .filter(|event| matches!(event, LspEvent::Diagnostics { uri: event_uri, .. } if event_uri == &uri))
+            .filter_map(|event| match event {
+                perl_lsp_ux_tests::LspEvent::Diagnostics { uri: event_uri, .. } => Some(event_uri),
+                _ => None,
+            })
+            .filter(|event_uri| event_uri.ends_with("/edit_diag.pl"))
             .count();
         if diagnostics_event_count >= 1 {
             break;

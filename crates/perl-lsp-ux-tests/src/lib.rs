@@ -51,11 +51,11 @@ pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
-pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
+pub use scorecard::{aggregate_editor_ux_scorecard, EditorUxScorecard, ScenarioScore};
 pub use workspace::FakeWorkspace;
 
-use anyhow::{Context, Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{anyhow, Context, Result};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -157,6 +157,20 @@ pub struct UxHarness {
     document_versions: Mutex<HashMap<String, i32>>,
 }
 
+/// UTF-16 cursor position used by editor-facing scenario fixtures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CursorPosition {
+    pub line: u32,
+    pub character: u32,
+}
+
+impl CursorPosition {
+    #[must_use]
+    pub const fn new(line: u32, character: u32) -> Self {
+        Self { line, character }
+    }
+}
+
 impl UxHarness {
     /// Spawn a fresh LSP server and set up a clean workspace.
     pub fn new(config: ScenarioConfig) -> Result<Self> {
@@ -218,6 +232,44 @@ impl UxHarness {
         self.client.did_open_with_language_id(&uri, content, language_id)
     }
 
+    /// Parse a fixture containing a cursor marker, open it, and return the marker position.
+    ///
+    /// Marker defaults to `<|>` in tests, but any non-empty marker is accepted.
+    pub fn open_fixture_with_cursor(
+        &self,
+        relative_path: &str,
+        fixture_with_cursor: &str,
+        marker: &str,
+    ) -> Result<CursorPosition> {
+        let (content, cursor) = Self::extract_cursor(fixture_with_cursor, marker)?;
+        self.open_file(relative_path, &content)?;
+        Ok(cursor)
+    }
+
+    /// Extract and remove a marker from fixture content, returning clean text + cursor position.
+    pub fn extract_cursor(
+        fixture_with_cursor: &str,
+        marker: &str,
+    ) -> Result<(String, CursorPosition)> {
+        if marker.is_empty() {
+            return Err(anyhow!("cursor marker must be non-empty"));
+        }
+        let Some(offset) = fixture_with_cursor.find(marker) else {
+            return Err(anyhow!("cursor marker {marker:?} not found in fixture"));
+        };
+        let clean = fixture_with_cursor.replacen(marker, "", 1);
+        let prefix = &fixture_with_cursor[..offset];
+        let line = prefix.bytes().filter(|b| *b == b'\n').count() as u32;
+        let line_start = prefix.rfind('\n').map_or(0, |idx| idx + 1);
+        let character = prefix[line_start..].chars().count() as u32;
+        Ok((clean, CursorPosition::new(line, character)))
+    }
+
+    /// Request hover information at the given cursor.
+    pub fn hover_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Option<Value>> {
+        self.hover(relative_path, cursor.line, cursor.character)
+    }
+
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
     ///
     /// Returns `None` if the server returned a null/empty result (degraded mode is OK).
@@ -260,6 +312,11 @@ impl UxHarness {
                 None => Ok(Vec::new()),
             },
         }
+    }
+
+    /// Request completion at the given cursor.
+    pub fn completion_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
+        self.completion(relative_path, cursor.line, cursor.character)
     }
 
     /// Request document formatting.
@@ -338,6 +395,32 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Request references (`textDocument/references`).
+    pub fn references(&self, relative_path: &str, line: u32, character: u32) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": true }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Request references at the given cursor.
+    pub fn references_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
+        self.references(relative_path, cursor.line, cursor.character)
     }
 
     /// Notify the server that workspace folders changed.
@@ -461,6 +544,11 @@ impl UxHarness {
         }
     }
 
+    /// Request go-to-definition at the given cursor.
+    pub fn definition_at(&self, relative_path: &str, cursor: CursorPosition) -> Result<Vec<Value>> {
+        self.definition(relative_path, cursor.line, cursor.character)
+    }
+
     /// Request go-to-declaration.
     pub fn declaration(
         &self,
@@ -491,6 +579,33 @@ impl UxHarness {
                 }
             }
         }
+    }
+
+    /// Apply a full-document edit and wait for refreshed diagnostics.
+    pub fn apply_edit_and_collect_diagnostics(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        timeout: Duration,
+    ) -> Result<Vec<Value>> {
+        self.change_file_full(relative_path, updated_content)?;
+        Ok(self.wait_for_diagnostics(relative_path, timeout))
+    }
+
+    /// Normalize and compare two JSON responses for platform-stable assertions.
+    pub fn assert_normalized_eq(&self, actual: &Value, expected: &Value) {
+        let normalized_actual = self.normalize_response(actual);
+        let normalized_expected = self.normalize_response(expected);
+        assert_eq!(
+            normalized_actual, normalized_expected,
+            "normalized LSP response mismatch.\nactual={normalized_actual:#}\nexpected={normalized_expected:#}"
+        );
+    }
+
+    /// Normalize URI/range-heavy LSP payloads for cross-platform assertions.
+    #[must_use]
+    pub fn normalize_response(&self, value: &Value) -> Value {
+        normalize_value(value, self.root_uri())
     }
 
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
@@ -587,6 +702,71 @@ impl UxHarness {
     }
 }
 
+const URI_KEYS: &[&str] = &["uri", "targetUri", "workspaceFolderUri"];
+const RANGE_KEYS: &[&str] = &["range", "targetRange", "selectionRange"];
+
+fn normalize_value(value: &Value, workspace_root_uri: &str) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(
+            items.iter().map(|item| normalize_value(item, workspace_root_uri)).collect(),
+        ),
+        Value::Object(map) => {
+            let mut normalized = serde_json::Map::new();
+            for (key, val) in map {
+                let normalized_val = if URI_KEYS.contains(&key.as_str()) {
+                    val.as_str()
+                        .map(|uri| Value::String(normalize_uri(uri, workspace_root_uri)))
+                        .unwrap_or_else(|| normalize_value(val, workspace_root_uri))
+                } else if RANGE_KEYS.contains(&key.as_str()) {
+                    normalize_range(val, workspace_root_uri)
+                } else {
+                    normalize_value(val, workspace_root_uri)
+                };
+                normalized.insert(key.clone(), normalized_val);
+            }
+            Value::Object(normalized)
+        }
+        _ => value.clone(),
+    }
+}
+
+fn normalize_range(value: &Value, workspace_root_uri: &str) -> Value {
+    match value {
+        Value::Object(range) => {
+            let mut normalized = serde_json::Map::new();
+            for (key, val) in range {
+                if key == "start" || key == "end" {
+                    normalized.insert(key.clone(), normalize_position(val));
+                } else {
+                    normalized.insert(key.clone(), normalize_value(val, workspace_root_uri));
+                }
+            }
+            Value::Object(normalized)
+        }
+        _ => normalize_value(value, workspace_root_uri),
+    }
+}
+
+fn normalize_position(value: &Value) -> Value {
+    match value {
+        Value::Object(position) => {
+            let line = position.get("line").and_then(Value::as_i64).unwrap_or_default();
+            let character = position.get("character").and_then(Value::as_i64).unwrap_or_default();
+            json!({ "line": line, "character": character })
+        }
+        _ => value.clone(),
+    }
+}
+
+fn normalize_uri(uri: &str, workspace_root_uri: &str) -> String {
+    let workspace_prefix = workspace_root_uri.trim_end_matches('/');
+    if let Some(relative) = uri.strip_prefix(workspace_prefix) {
+        let relative = relative.trim_start_matches('/');
+        return format!("file://$WORKSPACE/{relative}").replace('\\', "/");
+    }
+    uri.replace('\\', "/")
+}
+
 /// Outcome of a formatting request.
 #[derive(Debug)]
 pub enum FormatResult {
@@ -606,7 +786,11 @@ impl FormatResult {
 
     /// Extract the error message string if this is an error.
     pub fn error_message(&self) -> Option<&str> {
-        if let Self::Error(v) = self { v["message"].as_str() } else { None }
+        if let Self::Error(v) = self {
+            v["message"].as_str()
+        } else {
+            None
+        }
     }
 
     /// True if there are text edits.

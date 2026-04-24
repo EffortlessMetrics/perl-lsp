@@ -13,7 +13,7 @@
 //!   pointing back into that file.
 //! - No crash signatures after the request.
 
-use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use perl_lsp_ux_tests::{CursorPosition, ScenarioConfig, UxHarness};
 use std::time::Duration;
 
 fn binary_available() -> bool {
@@ -34,6 +34,18 @@ sub greet {\n\
 greet('World');\n\
 ";
 
+const GOTO_SOURCE_WITH_CURSOR: &str = "\
+use strict;\n\
+use warnings;\n\
+\n\
+sub greet {\n\
+    my ($name) = @_;\n\
+    return \"Hello, $name!\";\n\
+}\n\
+\n\
+<|>greet('World');\n\
+";
+
 #[test]
 fn scenario_10_definition_request_does_not_error() {
     if !binary_available() {
@@ -47,13 +59,14 @@ fn scenario_10_definition_request_does_not_error() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    let cursor = harness
+        .open_fixture_with_cursor("greet.pl", GOTO_SOURCE_WITH_CURSOR, "<|>")
+        .expect("fixture should open with cursor marker");
 
     // Allow the server to index the file.
     std::thread::sleep(Duration::from_millis(500));
 
-    // Request definition on the call site `greet('World')` — line 8, char 0.
-    let result = harness.definition("greet.pl", 8, 0);
+    let result = harness.definition_at("greet.pl", cursor);
     assert!(
         result.is_ok(),
         "textDocument/definition must not return a JSON-RPC error — feature grid regression: {:?}",
@@ -76,11 +89,13 @@ fn scenario_10_definition_result_is_location_or_empty() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("greet.pl", GOTO_SOURCE).expect("didOpen should succeed");
+    let cursor = harness
+        .open_fixture_with_cursor("greet.pl", GOTO_SOURCE_WITH_CURSOR, "<|>")
+        .expect("fixture should open with cursor marker");
 
     std::thread::sleep(Duration::from_millis(500));
 
-    let defs = harness.definition("greet.pl", 8, 0).expect("definition must not error");
+    let defs = harness.definition_at("greet.pl", cursor).expect("definition must not error");
 
     // If results are returned they must be well-formed Location objects.
     for loc in &defs {
@@ -90,12 +105,15 @@ fn scenario_10_definition_result_is_location_or_empty() {
             loc
         );
         // The location must point to our file (not some unrelated URI).
-        let uri = loc["uri"].as_str().unwrap_or("");
-        assert!(
-            uri.ends_with("greet.pl"),
-            "Definition location should point to greet.pl, got uri={:?}",
-            uri
-        );
+        if loc["uri"].is_string() && loc["range"].is_object() {
+            harness.assert_normalized_eq(
+                loc,
+                &serde_json::json!({
+                    "uri": "file://$WORKSPACE/greet.pl",
+                    "range": loc["range"].clone(),
+                }),
+            );
+        }
     }
 
     harness.assert_no_crash();
@@ -116,7 +134,7 @@ fn scenario_10_definition_on_unknown_position_returns_empty() {
 
     // Position in middle of `strict` string literal — no definition expected.
     let defs = harness
-        .definition("simple.pl", 0, 5)
+        .definition_at("simple.pl", CursorPosition::new(0, 5))
         .expect("definition must not error on arbitrary position");
 
     // Empty is fine; what we are testing is that no crash or error occurs.

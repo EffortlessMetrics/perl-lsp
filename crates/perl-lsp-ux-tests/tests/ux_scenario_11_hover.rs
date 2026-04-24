@@ -34,6 +34,32 @@ my $result = calculate_sum(3, 7);\n\
 print $result;\n\
 ";
 
+const HOVER_SOURCE_WITH_RESULT_CURSOR: &str = "\
+use strict;\n\
+use warnings;\n\
+\n\
+sub calculate_sum {\n\
+    my ($a, $b) = @_;\n\
+    return $a + $b;\n\
+}\n\
+\n\
+my <|>$result = calculate_sum(3, 7);\n\
+print $result;\n\
+";
+
+const HOVER_SOURCE_WITH_SUB_CURSOR: &str = "\
+use strict;\n\
+use warnings;\n\
+\n\
+sub <|>calculate_sum {\n\
+    my ($a, $b) = @_;\n\
+    return $a + $b;\n\
+}\n\
+\n\
+my $result = calculate_sum(3, 7);\n\
+print $result;\n\
+";
+
 #[test]
 fn scenario_11_hover_on_variable_does_not_error() {
     if !binary_available() {
@@ -47,12 +73,13 @@ fn scenario_11_hover_on_variable_does_not_error() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    let cursor = harness
+        .open_fixture_with_cursor("calc.pl", HOVER_SOURCE_WITH_RESULT_CURSOR, "<|>")
+        .expect("fixture should open with cursor marker");
 
     std::thread::sleep(Duration::from_millis(300));
 
-    // Hover on `$result` — line 8, char 3 (inside `$result`).
-    let hover_result = harness.hover("calc.pl", 8, 3);
+    let hover_result = harness.hover_at("calc.pl", cursor);
     assert!(
         hover_result.is_ok(),
         "textDocument/hover must not return a JSON-RPC error — feature grid regression: {:?}",
@@ -75,11 +102,13 @@ fn scenario_11_hover_result_has_valid_shape_when_non_null() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    let cursor = harness
+        .open_fixture_with_cursor("calc.pl", HOVER_SOURCE_WITH_RESULT_CURSOR, "<|>")
+        .expect("fixture should open with cursor marker");
 
     std::thread::sleep(Duration::from_millis(300));
 
-    match harness.hover("calc.pl", 8, 3) {
+    match harness.hover_at("calc.pl", cursor) {
         Ok(Some(result)) => {
             // Must contain `contents` field.
             assert!(
@@ -123,12 +152,13 @@ fn scenario_11_hover_on_sub_name_does_not_crash() {
     )
     .expect("Failed to create UX harness");
 
-    harness.open_file("calc.pl", HOVER_SOURCE).expect("didOpen should succeed");
+    let cursor = harness
+        .open_fixture_with_cursor("calc.pl", HOVER_SOURCE_WITH_SUB_CURSOR, "<|>")
+        .expect("fixture should open with cursor marker");
 
     std::thread::sleep(Duration::from_millis(300));
 
-    // Hover on `calculate_sum` sub declaration — line 3, char 4.
-    let hover_result = harness.hover("calc.pl", 3, 4);
+    let hover_result = harness.hover_at("calc.pl", cursor);
     assert!(hover_result.is_ok(), "Hover on sub declaration must not error: {:?}", hover_result);
 
     harness.assert_no_crash();
