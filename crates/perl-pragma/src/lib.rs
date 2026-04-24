@@ -99,6 +99,39 @@ impl PragmaState {
         self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
     }
 
+    /// Returns `true` when strict variable checks are effectively active.
+    ///
+    /// This includes `use strict 'vars'` as well as strictness implied through
+    /// `use feature 'signatures'`.
+    #[must_use]
+    pub const fn is_strict_vars_active(&self) -> bool {
+        self.strict_vars || self.signatures_strict
+    }
+
+    /// Returns `true` when strict bareword/subroutine checks are effectively active.
+    ///
+    /// This includes `use strict 'subs'` as well as strictness implied through
+    /// `use feature 'signatures'`.
+    #[must_use]
+    pub const fn is_strict_subs_active(&self) -> bool {
+        self.strict_subs || self.signatures_strict
+    }
+
+    /// Returns `true` when strict symbolic-reference checks are effectively active.
+    ///
+    /// This includes `use strict 'refs'` as well as strictness implied through
+    /// `use feature 'signatures'`.
+    #[must_use]
+    pub const fn is_strict_refs_active(&self) -> bool {
+        self.strict_refs || self.signatures_strict
+    }
+
+    /// Returns `true` when any strict mode is effectively active.
+    #[must_use]
+    pub const fn is_any_strict_active(&self) -> bool {
+        self.is_strict_vars_active() || self.is_strict_subs_active() || self.is_strict_refs_active()
+    }
+
     /// Returns `true` if the given feature name is currently enabled.
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {

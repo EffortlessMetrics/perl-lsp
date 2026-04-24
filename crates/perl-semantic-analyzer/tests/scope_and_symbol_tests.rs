@@ -1878,6 +1878,47 @@ print PL_sv_undef;
 }
 
 #[test]
+fn eval_scoped_strict_subs_does_not_leak_to_outer_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+eval {
+    use strict;
+    my $inner = 1;
+};
+print $outer;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "outer"),
+        "strict inside eval must not leak to outer scope where strict is otherwise disabled"
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_eval_no_strict_vars_does_not_disable_outer_strict()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict;
+eval {
+    eval {
+        no strict 'vars';
+        my $inner = 1;
+    };
+};
+$outer = 1;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        has_issue(&issues, IssueKind::UndeclaredVariable, "outer"),
+        "strict vars should be restored after nested eval exits"
+    );
+    Ok(())
+}
+
+#[test]
 fn strict_subs_allows_qw_imported_barewords() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use strict 'subs';
