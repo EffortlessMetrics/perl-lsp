@@ -1565,7 +1565,11 @@ impl CompletionProvider {
         }
 
         // Check for `->` immediately before the `{` (hashref deref — out of scope).
-        if brace_pos >= 2 && &source[brace_pos - 2..brace_pos] == "->" {
+        // Use byte comparison to avoid slicing at a non-char-boundary when a multi-byte
+        // character immediately precedes `{`.
+        if brace_pos >= 2
+            && source.as_bytes().get(brace_pos - 2..brace_pos) == Some(b"->")
+        {
             return None;
         }
 
@@ -4056,5 +4060,34 @@ sub run {
         let source = "☃config{ho";
         let result = CompletionProvider::detect_hash_key_context(source, source.len());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_unicode_before_brace_no_panic() {
+        // ☃ (3 bytes) immediately before `{` — previously caused a panic in the
+        // `->` check which sliced source[brace_pos-2..brace_pos] across a
+        // non-char-boundary.
+        let source = "$config☃{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        // ☃ is not a valid Perl identifier char so the variable name scan will not
+        // find a `$` sigil — result must be None without panicking.
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_4byte_emoji_in_key_no_panic() {
+        // 4-byte emoji (U+1F600) mid-key-prefix — exercises the char_indices rev path
+        // with a surrogate-range codepoint.
+        let source = "$config{\u{1F600}ho";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_detect_hash_key_context_ascii_regression() {
+        // Plain ASCII must still work correctly after the Unicode fixes.
+        let source = "$config{key";
+        let result = CompletionProvider::detect_hash_key_context(source, source.len());
+        assert_eq!(result, Some(("config".to_string(), "key".to_string())));
     }
 }
