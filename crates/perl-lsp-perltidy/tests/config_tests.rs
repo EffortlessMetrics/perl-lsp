@@ -232,8 +232,68 @@ fn builtin_formatter_handles_parens_and_brackets() {
 }
 
 #[test]
+fn builtin_formatter_indents_multiline_function_arguments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("my $value = foo($a,\n$b,\n$c,\n);\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "my $value = foo($a,");
+    assert_eq!(lines[1], "    $b,");
+    assert_eq!(lines[2], "    $c,");
+    assert_eq!(lines[3], ");");
+}
+
+#[test]
+fn builtin_formatter_ignores_delimiters_inside_strings_and_comments() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let formatted = formatter.format("if ($ok) {\nprint \"literal ) ] }\"; # comment )\nprint \"done\";\n}\n");
+
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($ok) {");
+    assert_eq!(lines[1], "    print \"literal ) ] }\"; # comment )");
+    assert_eq!(lines[2], "    print \"done\";");
+    assert_eq!(lines[3], "}");
+}
+
+#[test]
 fn builtin_formatter_handles_empty_input() {
     let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
     let formatted = formatter.format("");
     assert_eq!(formatted, "");
+}
+
+#[test]
+fn builtin_formatter_closing_line_does_not_double_decrement() {
+    // Regression: leading closers were subtracted before printing AND again by
+    // net_delimiter_delta after printing, causing the next line to be under-indented.
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    // Two nested braces: the two closing lines should be at levels 1 and 0.
+    let formatted = formatter.format("if ($a) {\nif ($b) {\nprint $b;\n}\nprint $a;\n}\n");
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($a) {");
+    assert_eq!(lines[1], "    if ($b) {");
+    assert_eq!(lines[2], "        print $b;");
+    assert_eq!(lines[3], "    }");
+    assert_eq!(lines[4], "    print $a;");
+    assert_eq!(lines[5], "}");
+}
+
+#[test]
+fn builtin_formatter_multi_closer_line_does_not_over_decrement() {
+    // Regression: a line like "})" has 2 leading closers; double-counting would
+    // subtract 4 from indent_level instead of 2, causing the line after it to
+    // be under-indented or pushed negative.
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    // Simple two-level close: outer if with a closing "}) style".
+    // Use a cleaner example: array ref in a block.
+    // After "}" the next line must be at level 0, not negative.
+    let formatted = formatter.format("if ($a) {\nif ($b) {\nprint 1;\n}\nprint 2;\n}\nprint 3;\n");
+    let lines: Vec<&str> = formatted.lines().collect();
+    assert_eq!(lines[0], "if ($a) {");
+    assert_eq!(lines[1], "    if ($b) {");
+    assert_eq!(lines[2], "        print 1;");
+    assert_eq!(lines[3], "    }");           // one closer — back to level 1
+    assert_eq!(lines[4], "    print 2;");   // still at level 1
+    assert_eq!(lines[5], "}");              // one closer — back to level 0
+    assert_eq!(lines[6], "print 3;");      // at level 0, not negative
 }

@@ -338,6 +338,14 @@ impl<'a> DeclarationProvider<'a> {
                 self.find_method_declaration(node, method, object)
             }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
+            NodeKind::Goto { target } => {
+                if let NodeKind::Identifier { name } = &target.kind {
+                    self.find_label_declaration(node, name)
+                        .or_else(|| self.find_subroutine_declaration(node, name))
+                } else {
+                    None
+                }
+            }
             // Handle string literals that are method names inside modifier calls:
             // `before 'save' => sub { }` — cursor on 'save' navigates to sub save { }
             NodeKind::String { value, .. } => self.find_modifier_target_declaration(node, value),
@@ -568,6 +576,14 @@ impl<'a> DeclarationProvider<'a> {
 
     /// Find declaration for an identifier
     fn find_identifier_declaration(&self, node: &Node, name: &str) -> Option<Vec<LocationLink>> {
+        // `goto LABEL` should resolve to the statement label before considering
+        // sub/package/constant declarations.
+        if self.identifier_is_goto_target(node)
+            && let Some(links) = self.find_label_declaration(node, name)
+        {
+            return Some(links);
+        }
+
         // Try to find as subroutine first
         if let Some(links) = self.find_subroutine_declaration(node, name) {
             return Some(links);
@@ -594,6 +610,80 @@ impl<'a> DeclarationProvider<'a> {
         }
 
         None
+    }
+
+    fn find_label_declaration(&self, origin: &Node, label_name: &str) -> Option<Vec<LocationLink>> {
+        let mut labels = Vec::new();
+        self.collect_label_declarations(&self.ast, label_name, &mut labels);
+        let labeled_stmt = labels.first().copied()?;
+
+        Some(vec![self.create_location_link(
+            origin,
+            labeled_stmt,
+            self.get_labeled_statement_label_range(labeled_stmt),
+        )])
+    }
+
+    fn collect_label_declarations<'b>(
+        &'b self,
+        node: &'b Node,
+        label_name: &str,
+        labels: &mut Vec<&'b Node>,
+    ) {
+        if let NodeKind::LabeledStatement { label, .. } = &node.kind
+            && label == label_name
+        {
+            labels.push(node);
+        }
+
+        for child in self.get_children(node) {
+            self.collect_label_declarations(child, label_name, labels);
+        }
+    }
+
+    fn get_labeled_statement_label_range(&self, node: &Node) -> (usize, usize) {
+        let NodeKind::LabeledStatement { label, .. } = &node.kind else {
+            return (node.location.start, node.location.end);
+        };
+
+        let start = node.location.start;
+        let end = node.location.end.min(self.content.len());
+        if start >= end {
+            return (node.location.start, node.location.end);
+        }
+
+        let text = &self.content[start..end];
+        let label_start = text.find(label).map_or(start, |idx| start + idx);
+        let label_end = label_start.saturating_add(label.len()).min(end);
+        (label_start, label_end)
+    }
+
+    fn identifier_is_goto_target(&self, node: &Node) -> bool {
+        let temp_parent_map;
+        let parent_map = if let Some(pm) = self.parent_map {
+            pm
+        } else {
+            temp_parent_map = {
+                let mut map = FxHashMap::default();
+                Self::build_parent_map(&self.ast, &mut map, None);
+                map
+            };
+            &temp_parent_map
+        };
+        let node_lookup = self.build_node_lookup_map();
+
+        let node_ptr = node as *const _;
+        let Some(parent_ptr) = parent_map.get(&node_ptr).copied() else {
+            return false;
+        };
+        let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
+            return false;
+        };
+
+        match &parent.kind {
+            NodeKind::Goto { target } => std::ptr::eq(target.as_ref(), node),
+            _ => false,
+        }
     }
 
     /// Find the definition of the method that a modifier string argument targets.

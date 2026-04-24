@@ -13,7 +13,8 @@ use std::io::{self, BufRead, Read, Write};
 // ── Absorbed from perl-content-length-framing ─────────────────────────────────
 
 const HEADER_SENTINEL: &[u8] = b"Content-Length:";
-const HEADER_END: &[u8] = b"\r\n\r\n";
+const HEADER_END_CRLF: &[u8] = b"\r\n\r\n";
+const HEADER_END_LF: &[u8] = b"\n\n";
 const RESYNC_TAIL_BYTES: usize = 8 * 1024;
 const MAX_DESYNC_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -81,20 +82,20 @@ impl ContentLengthFramer {
         self.resync_if_needed();
 
         let Some(start) = find_header_start(&self.buf) else {
-            if let Some(header_end) = find_subslice(&self.buf, HEADER_END) {
+            if let Some((header_end, header_len)) = find_header_end(&self.buf) {
                 match std::str::from_utf8(&self.buf[..header_end]) {
                     Ok(header) => {
                         let has_header_shape = header
-                            .split("\r\n")
+                            .lines()
                             .any(|line| !line.trim().is_empty() && line.contains(':'));
-                        self.consume_header_block(header_end);
+                        self.consume_header_block(header_end, header_len);
                         if has_header_shape {
                             return Err(FramingError::MissingContentLength);
                         }
                         return Err(FramingError::InvalidHeader);
                     }
                     Err(_) => {
-                        self.consume_header_block(header_end);
+                        self.consume_header_block(header_end, header_len);
                         return Err(FramingError::InvalidHeaderUtf8);
                     }
                 }
@@ -105,7 +106,7 @@ impl ContentLengthFramer {
             self.buf.drain(..start);
         }
 
-        let Some(header_end) = find_subslice(&self.buf, HEADER_END) else {
+        let Some((header_end, header_len)) = find_header_end(&self.buf) else {
             return Ok(None);
         };
 
@@ -113,7 +114,7 @@ impl ContentLengthFramer {
         let header_str = match std::str::from_utf8(header_bytes) {
             Ok(header) => header,
             Err(_) => {
-                self.consume_header_block(header_end);
+                self.consume_header_block(header_end, header_len);
                 return Err(FramingError::InvalidHeaderUtf8);
             }
         };
@@ -121,27 +122,27 @@ impl ContentLengthFramer {
         let length = match parse_content_length(header_str) {
             ContentLengthParse::Found(len) => len,
             ContentLengthParse::Missing => {
-                self.consume_header_block(header_end);
+                self.consume_header_block(header_end, header_len);
                 return Err(FramingError::MissingContentLength);
             }
             ContentLengthParse::Invalid => {
-                self.consume_header_block(header_end);
+                self.consume_header_block(header_end, header_len);
                 return Err(FramingError::InvalidContentLength);
             }
             ContentLengthParse::MalformedHeader => {
-                self.consume_header_block(header_end);
+                self.consume_header_block(header_end, header_len);
                 return Err(FramingError::InvalidHeader);
             }
         };
 
         if length > MAX_FRAME_SIZE {
-            self.consume_header_block(header_end);
+            self.consume_header_block(header_end, header_len);
             return Err(FramingError::FrameTooLarge { len: length });
         }
 
-        let body_start = header_end + HEADER_END.len();
+        let body_start = header_end + header_len;
         let Some(body_end) = body_start.checked_add(length) else {
-            self.consume_header_block(header_end);
+            self.consume_header_block(header_end, header_len);
             return Err(FramingError::InvalidContentLength);
         };
 
@@ -155,8 +156,8 @@ impl ContentLengthFramer {
         Ok(Some(body))
     }
 
-    fn consume_header_block(&mut self, header_end: usize) {
-        let drain_to = (header_end + HEADER_END.len()).min(self.buf.len());
+    fn consume_header_block(&mut self, header_end: usize, header_len: usize) {
+        let drain_to = (header_end + header_len).min(self.buf.len());
         self.buf.drain(..drain_to);
         self.resync_if_needed();
     }
@@ -180,10 +181,11 @@ impl ContentLengthFramer {
 /// Build a full `Content-Length` framed message from a payload body.
 #[must_use]
 pub fn frame(body: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(HEADER_SENTINEL.len() + 32 + HEADER_END.len() + body.len());
+    let mut out =
+        Vec::with_capacity(HEADER_SENTINEL.len() + 32 + HEADER_END_CRLF.len() + body.len());
     out.extend_from_slice(b"Content-Length: ");
     out.extend_from_slice(body.len().to_string().as_bytes());
-    out.extend_from_slice(HEADER_END);
+    out.extend_from_slice(HEADER_END_CRLF);
     out.extend_from_slice(body);
     out
 }
@@ -197,7 +199,8 @@ enum ContentLengthParse {
 
 fn parse_content_length(header: &str) -> ContentLengthParse {
     let mut found = None;
-    for line in header.split("\r\n") {
+    for raw_line in header.lines() {
+        let line = raw_line.trim_end_matches("\r");
         if line.is_empty() {
             continue;
         }
@@ -220,6 +223,18 @@ fn parse_content_length(header: &str) -> ContentLengthParse {
 fn find_header_start(hay: &[u8]) -> Option<usize> {
     hay.windows(HEADER_SENTINEL.len())
         .position(|window| window.eq_ignore_ascii_case(HEADER_SENTINEL))
+}
+
+fn find_header_end(hay: &[u8]) -> Option<(usize, usize)> {
+    let crlf_end = find_subslice(hay, HEADER_END_CRLF).map(|idx| (idx, HEADER_END_CRLF.len()));
+    let lf_end = find_subslice(hay, HEADER_END_LF).map(|idx| (idx, HEADER_END_LF.len()));
+
+    match (crlf_end, lf_end) {
+        (Some(crlf), Some(lf)) => Some(if crlf.0 <= lf.0 { crlf } else { lf }),
+        (Some(crlf), None) => Some(crlf),
+        (None, Some(lf)) => Some(lf),
+        (None, None) => None,
+    }
 }
 
 fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
@@ -781,6 +796,47 @@ mod tests {
             .params
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "expected params"))?;
         assert_eq!(params["text"], "abc\u{FFFD}");
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_accepts_lf_only_header_separator() -> io::Result<()> {
+        let body = r#"{"jsonrpc":"2.0","id":5,"method":"initialize","params":{}}"#;
+        let mut frame = format!("Content-Length: {}\n\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+
+        let mut cursor = Cursor::new(frame);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req = reader
+            .read_next(&mut cursor)?
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "expected request"))?;
+        assert_eq!(req.method, "initialize");
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_accepts_lf_only_back_to_back_frames() -> io::Result<()> {
+        let first = r#"{"jsonrpc":"2.0","id":1,"method":"a","params":{}}"#;
+        let second = r#"{"jsonrpc":"2.0","id":2,"method":"b","params":{}}"#;
+
+        let mut payload = format!("Content-Length: {}\n\n{}", first.len(), first).into_bytes();
+        payload.extend_from_slice(
+            format!("Content-Length: {}\n\n{}", second.len(), second).as_bytes(),
+        );
+
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let req1 = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected first request")
+        })?;
+        let req2 = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected second request")
+        })?;
+
+        assert_eq!(req1.method, "a");
+        assert_eq!(req2.method, "b");
         Ok(())
     }
 
