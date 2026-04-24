@@ -2980,6 +2980,28 @@ impl IndexVisitor {
                     kind: ReferenceKind::Usage,
                 });
 
+                if name == "require" {
+                    if let Some(first_arg) = args.first() {
+                        match &first_arg.kind {
+                            NodeKind::Identifier { name } => {
+                                file_index
+                                    .dependencies
+                                    .insert(normalize_dependency_module_name(name));
+                            }
+                            NodeKind::String { value, .. } => {
+                                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                                if !cleaned.is_empty() {
+                                    let module = cleaned.trim_end_matches(".pm").replace('/', "::");
+                                    file_index
+                                        .dependencies
+                                        .insert(normalize_dependency_module_name(&module));
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
                 if name == "extends" || name == "with" {
                     for module_name in extract_module_names_from_call_args(args) {
                         file_index
@@ -3158,6 +3180,12 @@ impl IndexVisitor {
                         kind: ReferenceKind::Usage,
                     },
                 );
+
+                if method == "import" {
+                    if let NodeKind::Identifier { name } = &object.kind {
+                        file_index.dependencies.insert(normalize_dependency_module_name(name));
+                    }
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3991,6 +4019,25 @@ use Data::Dumper;
         assert!(deps.contains("strict"));
         assert!(deps.contains("warnings"));
         assert!(deps.contains("Data::Dumper"));
+    }
+
+    #[test]
+    fn test_dependencies_include_static_require_and_manual_import() {
+        let index = WorkspaceIndex::new();
+        let uri = "file:///require_import.pl";
+
+        let code = r#"
+require Foo::Bar;
+Foo::Bar->import('baz');
+require 'Baz/Qux.pm';
+Baz::Qux->import(qw(alpha beta));
+"#;
+
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let deps = index.file_dependencies(uri);
+        assert!(deps.contains("Foo::Bar"));
+        assert!(deps.contains("Baz::Qux"));
     }
 
     #[test]

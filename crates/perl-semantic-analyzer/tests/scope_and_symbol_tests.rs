@@ -1914,6 +1914,45 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_require_manual_imported_barewords() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+My::Loader->import('load_data');
+print load_data;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should not flag static require + manual imported symbols"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_require_without_import_stays_conservative() -> Result<(), Box<dyn std::error::Error>>
+{
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+print load_data;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should still flag symbols without explicit manual import"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;

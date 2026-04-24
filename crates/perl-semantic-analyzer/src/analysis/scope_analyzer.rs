@@ -1865,6 +1865,99 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
+    fn require_module_name(node: &Node) -> Option<String> {
+        let args = match &node.kind {
+            NodeKind::FunctionCall { name, args } if name == "require" => args,
+            _ => return None,
+        };
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                if cleaned.is_empty() {
+                    return None;
+                }
+                Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+            }
+            _ => None,
+        }
+    }
+
+    fn import_arg_matches(
+        imported: &mut std::collections::HashSet<String>,
+        module: &str,
+        arg: &Node,
+    ) {
+        match &arg.kind {
+            NodeKind::String { value, .. } => push_symbol(imported, module, value),
+            NodeKind::Identifier { name } => {
+                if name.starts_with("qw") {
+                    let content = name
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    for token in content.split_whitespace() {
+                        push_symbol(imported, module, token);
+                    }
+                } else {
+                    push_symbol(imported, module, name);
+                }
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    import_arg_matches(imported, module, element);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_require_manual_imports(
+        stmts: &[Node],
+        imported: &mut std::collections::HashSet<String>,
+    ) {
+        let mut required_modules: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for stmt in stmts {
+            let expr = if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                expression.as_ref()
+            } else {
+                stmt
+            };
+            if let Some(module) = require_module_name(expr) {
+                required_modules.insert(module);
+            }
+        }
+
+        if required_modules.is_empty() {
+            return;
+        }
+
+        for stmt in stmts {
+            let expr = if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                expression.as_ref()
+            } else {
+                stmt
+            };
+            let NodeKind::MethodCall { object, method, args } = &expr.kind else {
+                continue;
+            };
+            if method != "import" || args.is_empty() {
+                continue;
+            }
+            let NodeKind::Identifier { name: module } = &object.kind else {
+                continue;
+            };
+            if !required_modules.contains(module) {
+                continue;
+            }
+            for arg in args {
+                import_arg_matches(imported, module, arg);
+            }
+        }
+    }
+
     fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
@@ -1880,6 +1973,10 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
                     push_symbol(imported, module, arg);
                 }
             }
+        }
+
+        if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind {
+            collect_require_manual_imports(statements, imported);
         }
 
         for child in node.children() {
