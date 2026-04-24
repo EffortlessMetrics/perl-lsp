@@ -1172,6 +1172,73 @@ mod tests {
         }
     }
 
+    // ANSI detection helpers
+
+    /// Guard: NO_COLOR=1 must disable ANSI regardless of terminal state.
+    #[test]
+    fn ansi_no_color_env_disables_ansi() {
+        let _guard = EnvGuard::set("NO_COLOR", "1");
+        // Even pretending we have a terminal, NO_COLOR wins.
+        assert!(!super::should_use_ansi(true));
+    }
+
+    /// Guard: CLICOLOR=0 must disable ANSI.
+    #[test]
+    fn ansi_clicolor_zero_disables_ansi() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard_fc = EnvGuard::remove("FORCE_COLOR");
+        let _guard_cfc = EnvGuard::remove("CLICOLOR_FORCE");
+        let _guard = EnvGuard::set("CLICOLOR", "0");
+        assert!(!super::should_use_ansi(true), "CLICOLOR=0 must disable ANSI");
+    }
+
+    /// Guard: FORCE_COLOR=1 must enable ANSI even without a terminal.
+    #[test]
+    fn ansi_force_color_enables_ansi_without_terminal() {
+        let _guard_nc = EnvGuard::remove("NO_COLOR");
+        let _guard = EnvGuard::set("FORCE_COLOR", "1");
+        assert!(super::should_use_ansi(false), "FORCE_COLOR=1 must enable ANSI even without a terminal");
+    }
+
+    /// Guard: is_warp_terminal() must be true when TERM_PROGRAM=WarpTerminal.
+    #[test]
+    fn ansi_warp_terminal_detection() {
+        let _guard = EnvGuard::set("TERM_PROGRAM", "WarpTerminal");
+        assert!(super::is_warp_terminal(), "WarpTerminal must be detected");
+    }
+
+    /// Helper to temporarily set/restore an env var for test isolation.
+    struct EnvGuard {
+        key: String,
+        previous: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            // SAFETY: test-only env var manipulation; restored in Drop.
+            unsafe { std::env::set_var(key, value) };
+            EnvGuard { key: key.to_string(), previous }
+        }
+
+        fn remove(key: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            // SAFETY: test-only env var manipulation; restored in Drop.
+            unsafe { std::env::remove_var(key) };
+            EnvGuard { key: key.to_string(), previous }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                // SAFETY: restoring the previous value.
+                Some(v) => unsafe { std::env::set_var(&self.key, v) },
+                None => unsafe { std::env::remove_var(&self.key) },
+            }
+        }
+    }
+
     #[test]
     fn startup_banner_socket_transport_derived_from_transport_mode() {
         // Verify that format_startup_banner reads the is_socket flag, not an env var.
