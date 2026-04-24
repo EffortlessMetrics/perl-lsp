@@ -206,9 +206,16 @@ impl LspServer {
             }
 
             // Initialize workspace folders
-            if let Some(workspace_folders) =
-                params.get("workspaceFolders").and_then(|f| f.as_array())
-            {
+            let workspace_folders = params
+                .get("workspaceFolders")
+                .or_else(|| {
+                    params
+                        .get("initializationOptions")
+                        .and_then(|opts| opts.get("workspaceFolders"))
+                })
+                .and_then(|f| f.as_array());
+
+            if let Some(workspace_folders) = workspace_folders {
                 let uris = extract_workspace_folder_uris(workspace_folders);
                 if let Some(first_uri) = uris.first() {
                     self.set_root_uri(first_uri);
@@ -510,6 +517,46 @@ mod tests {
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
             "root path should come from first workspace folder"
         );
+    }
+
+    #[test]
+    fn initialize_with_workspace_folders_in_initialization_options_sets_root_and_config(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let workspace = tempfile::tempdir()?;
+        let workspace_uri =
+            perl_workspace::folder::root_path_to_file_uri(&workspace.path().to_string_lossy());
+        let doc_uri = format!("{}/lib/Foo.pm", workspace_uri.trim_end_matches('/'));
+
+        let params = json!({
+            "capabilities": {},
+            "initializationOptions": {
+                "workspaceFolders": [
+                    { "uri": workspace_uri, "name": "workspace" }
+                ]
+            }
+        });
+
+        let result = server.handle_initialize(Some(params));
+        assert!(result.is_ok(), "initialize should succeed");
+
+        let root_path = server.root_path.lock();
+        assert!(
+            root_path.as_ref().is_some_and(|path| path == workspace.path()),
+            "root path should come from initializationOptions.workspaceFolders"
+        );
+        drop(root_path);
+
+        let folder = server.folder_for_doc_uri(&doc_uri).ok_or("expected workspace folder")?;
+        assert_eq!(folder.path.as_deref(), Some(workspace.path()));
+
+        let config = server.config_for_doc(&doc_uri).ok_or("expected workspace config")?;
+        assert!(
+            config.include_paths.contains(&"lib".to_string()),
+            "module-resolution config lookup should resolve via initialized workspace folder"
+        );
+
+        Ok(())
     }
 
     #[test]
