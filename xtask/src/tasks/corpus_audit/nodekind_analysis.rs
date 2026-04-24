@@ -7,6 +7,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+/// NodeKinds that are intentionally excluded from deterministic corpus coverage.
+///
+/// These variants are recovery/sentinel shapes used for malformed input or lexer
+/// budget exhaustion. They are validated in targeted unit tests instead.
+const NODEKIND_NEVER_SEEN_ALLOWLIST: &[(&str, &str)] = &[
+    ("MissingStatement", "Recovery sentinel emitted for malformed statements."),
+    ("MissingIdentifier", "Recovery sentinel emitted when identifiers are absent."),
+    ("MissingBlock", "Recovery sentinel emitted when block delimiters are absent."),
+    ("UnknownRest", "Fallback node emitted only after lexer UnknownRest budget exhaustion."),
+];
+
 /// Statistics about NodeKind coverage
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeKindStats {
@@ -18,10 +29,25 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds explicitly allowlisted as intentionally unreachable.
+    #[serde(default)]
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
+    /// Never-seen NodeKinds that are not allowlisted.
+    #[serde(default)]
+    pub actionable_never_seen: Vec<String>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// A never-seen NodeKind that is intentionally allowlisted with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name.
+    pub name: String,
+    /// Why this node is intentionally not required in deterministic corpus coverage.
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -76,8 +102,22 @@ pub fn analyze_nodekind_coverage(
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
+    let mut never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    never_seen.sort();
+
+    let allowlist: HashMap<&str, &str> = NODEKIND_NEVER_SEEN_ALLOWLIST.iter().copied().collect();
+    let allowlisted_never_seen: Vec<AllowlistedNodeKind> = never_seen
+        .iter()
+        .filter_map(|name| {
+            allowlist.get(name.as_str()).map(|rationale| AllowlistedNodeKind {
+                name: name.clone(),
+                rationale: (*rationale).to_string(),
+            })
+        })
+        .collect();
+    let actionable_never_seen: Vec<String> =
+        never_seen.iter().filter(|name| !allowlist.contains_key(name.as_str())).cloned().collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +142,8 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen,
+        actionable_never_seen,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -174,5 +216,14 @@ mod tests {
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn test_never_seen_allowlist_covers_missing_and_unknown_rest() {
+        let entries: HashSet<&str> =
+            NODEKIND_NEVER_SEEN_ALLOWLIST.iter().map(|(name, _)| *name).collect();
+        for expected in ["MissingStatement", "MissingIdentifier", "MissingBlock", "UnknownRest"] {
+            assert!(entries.contains(expected), "allowlist should include {expected}");
+        }
     }
 }

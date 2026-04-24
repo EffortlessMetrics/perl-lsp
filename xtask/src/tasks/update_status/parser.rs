@@ -159,8 +159,13 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
             };
             let never_seen = summary.nodekind_total.saturating_sub(summary.nodekind_covered);
             format!(
-                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds | `corpus_audit` |",
-                summary.nodekind_covered, summary.nodekind_total, pct, never_seen,
+                "| **Node-kind coverage** | {}/{} ({:.1}%) | {} never-seen node kinds ({} allowlisted, {} actionable) | `corpus_audit` |",
+                summary.nodekind_covered,
+                summary.nodekind_total,
+                pct,
+                never_seen,
+                summary.nodekind_allowlisted_never_seen,
+                summary.nodekind_actionable_never_seen,
             )
         },
     );
@@ -292,6 +297,8 @@ mod tests {
             perl_corpus_files: 22,
             nodekind_covered: 65,
             nodekind_total: 69,
+            nodekind_allowlisted_never_seen: 4,
+            nodekind_actionable_never_seen: 0,
             ga_covered: 12,
             ga_total: 12,
         };
@@ -312,6 +319,10 @@ mod tests {
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
         assert!(result.contains("4 never-seen"), "nodekind row missing never-seen count");
+        assert!(
+            result.contains("4 allowlisted, 0 actionable"),
+            "nodekind row missing allowlist/actionable detail"
+        );
         assert!(
             result.contains("unverified"),
             "strict-clean no-receipt row should say 'unverified'"

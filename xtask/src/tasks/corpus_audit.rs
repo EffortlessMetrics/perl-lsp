@@ -82,6 +82,8 @@ pub struct StatusSummary {
     pub perl_corpus_files: usize,
     pub nodekind_covered: usize,
     pub nodekind_total: usize,
+    pub nodekind_allowlisted_never_seen: usize,
+    pub nodekind_actionable_never_seen: usize,
     pub ga_covered: usize,
     pub ga_total: usize,
 }
@@ -131,6 +133,8 @@ pub fn compute_status_summary(corpus_path: &Path, timeout: Duration) -> Result<S
         perl_corpus_files,
         nodekind_covered: nodekind_stats.covered_count,
         nodekind_total: nodekind_stats.total_count,
+        nodekind_allowlisted_never_seen: nodekind_stats.allowlisted_never_seen.len(),
+        nodekind_actionable_never_seen: nodekind_stats.actionable_never_seen.len(),
         ga_covered: ga_coverage.covered_count,
         ga_total: ga_coverage.total_count,
     })
@@ -256,6 +260,25 @@ fn print_audit_summary(report: &AuditReport) {
         report.nodekind_coverage.coverage_percentage
     );
     println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
+    if !report.nodekind_coverage.never_seen.is_empty() {
+        println!("     Names: {}", report.nodekind_coverage.never_seen.join(", "));
+    }
+    if !report.nodekind_coverage.allowlisted_never_seen.is_empty() {
+        println!(
+            "   Allowlisted never-seen NodeKinds: {}",
+            report.nodekind_coverage.allowlisted_never_seen.len()
+        );
+        for nodekind in &report.nodekind_coverage.allowlisted_never_seen {
+            println!("     - {}: {}", nodekind.name, nodekind.rationale);
+        }
+    }
+    if !report.nodekind_coverage.actionable_never_seen.is_empty() {
+        println!(
+            "   Actionable never-seen NodeKinds: {}",
+            report.nodekind_coverage.actionable_never_seen.len()
+        );
+        println!("     Names: {}", report.nodekind_coverage.actionable_never_seen.join(", "));
+    }
     println!("   At-risk NodeKinds (<5 occurrences): {}", report.nodekind_coverage.at_risk.len());
     println!(
         "   GA features covered: {}/{} ({:.1}%)",
