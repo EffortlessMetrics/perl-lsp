@@ -411,6 +411,8 @@ pub mod refactor;
 pub mod tdd;
 /// Token stream, trivia, and token wrapper utilities.
 pub mod tokens;
+/// Read-only semantic query facade across parser, semantic, and workspace layers.
+pub mod semantic_query;
 /// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
 
@@ -549,6 +551,11 @@ pub use incremental::{Edit, IncrementalState, apply_edits};
 pub use semantic::{
     HoverInfo, SemanticAnalyzer, SemanticModel, SemanticToken, SemanticTokenModifier,
     SemanticTokenType,
+};
+/// Read-only semantic query types and facade.
+pub use semantic_query::{
+    DefinitionId, DefinitionLocation, EffectivePragmaState, InheritedOrigin, ParentChain,
+    ResolvedSymbol, SemanticQueryFacade, VisibleImport,
 };
 /// Symbol extraction, table, and reference types for navigation.
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
