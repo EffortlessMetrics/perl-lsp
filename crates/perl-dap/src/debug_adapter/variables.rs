@@ -3,6 +3,16 @@
 use super::*;
 
 impl DebugAdapter {
+    pub(super) const MAX_VARIABLE_CACHE_ENTRIES: usize = 1024;
+
+    fn is_scope_root_reference(variables_ref: i32) -> bool {
+        matches!(variables_ref % 10, 1..=3)
+    }
+
+    fn slice_cached_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
+        variables.iter().skip(start).take(count).cloned().collect()
+    }
+
     /// Handle variables request
     pub(super) fn handle_variables(
         &self,
@@ -50,8 +60,6 @@ impl DebugAdapter {
         let variables_ref = args.variables_reference as i32;
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
-        let can_use_root_cache = start == 0 && args.count.is_none();
-
         if variables_ref == 0 {
             return DapMessage::Response {
                 seq,
@@ -63,16 +71,46 @@ impl DebugAdapter {
             };
         }
 
-        // AC8.4: Render scalars/arrays/hashes with lazy child expansion.
+        // Child expansion path: serve from child cache with local slicing.
+        if !Self::is_scope_root_reference(variables_ref) {
+            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session")
+                && let Some(children) = session.child_variables.get(&variables_ref)
+            {
+                let variables = Self::slice_cached_variables(children, start, count);
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "variables".to_string(),
+                    body: Some(json!({ "variables": variables })),
+                    message: None,
+                };
+            }
+
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "variables".to_string(),
+                body: Some(json!({ "variables": Vec::<Variable>::new() })),
+                message: None,
+            };
+        }
+
+        // Scope root path: use root cache, otherwise parse once then cache roots + children.
         let parsed_from_output;
         let mut parsed_child_cache = HashMap::new();
-        let mut used_session_cache = false;
-
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            // Return cached variables first for stable references and fast repeated expansion.
-            if can_use_root_cache && let Some(vars) = session.variables.get(&variables_ref) {
-                used_session_cache = true;
-                parsed_from_output = vars.clone();
+            if let Some(cached) = session.root_variables.get(&variables_ref) {
+                let variables = Self::slice_cached_variables(cached, start, count);
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "variables".to_string(),
+                    body: Some(json!({ "variables": variables })),
+                    message: None,
+                };
             } else {
                 let mut framed_scope_lines = None;
 
@@ -144,16 +182,29 @@ impl DebugAdapter {
 
                 let (vars, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
                     let (framed_vars, framed_child_cache) =
-                        Self::parse_scope_variables_from_lines(lines, variables_ref, start, count);
+                        Self::parse_scope_variables_from_lines(
+                            lines,
+                            variables_ref,
+                            0,
+                            Self::MAX_VARIABLE_CACHE_ENTRIES,
+                        );
                     if framed_vars.is_empty() {
                         Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                        self.parse_scope_variables_from_output(variables_ref, start, count)
+                        self.parse_scope_variables_from_output(
+                            variables_ref,
+                            0,
+                            Self::MAX_VARIABLE_CACHE_ENTRIES,
+                        )
                     } else {
                         (framed_vars, framed_child_cache)
                     }
                 } else {
                     Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                    self.parse_scope_variables_from_output(variables_ref, start, count)
+                    self.parse_scope_variables_from_output(
+                        variables_ref,
+                        0,
+                        Self::MAX_VARIABLE_CACHE_ENTRIES,
+                    )
                 };
 
                 parsed_from_output = vars;
@@ -161,24 +212,27 @@ impl DebugAdapter {
             }
         } else {
             let (vars, _child_cache) =
-                self.parse_scope_variables_from_output(variables_ref, start, count);
+                self.parse_scope_variables_from_output(
+                    variables_ref,
+                    0,
+                    Self::MAX_VARIABLE_CACHE_ENTRIES,
+                );
             parsed_from_output = vars;
         }
 
-        let variables = if parsed_from_output.is_empty() {
+        let uncached_variables = if parsed_from_output.is_empty() {
             Self::fallback_scope_variables(variables_ref, start, count)
         } else {
-            parsed_from_output
+            Self::slice_cached_variables(&parsed_from_output, start, count)
         };
 
         // Cache parsed variables and generated child references for expansion requests.
-        if !used_session_cache
-            && can_use_root_cache
-            && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && !parsed_from_output.is_empty()
         {
-            session.variables.insert(variables_ref, variables.clone());
+            session.root_variables.insert(variables_ref, parsed_from_output);
             for (reference, children) in parsed_child_cache {
-                session.variables.insert(reference, children);
+                session.child_variables.insert(reference, children);
             }
         }
 
@@ -188,7 +242,7 @@ impl DebugAdapter {
             success: true,
             command: "variables".to_string(),
             body: Some(json!({
-                "variables": variables
+                "variables": uncached_variables
             })),
             message: None,
         }

@@ -138,7 +138,7 @@ impl DebugAdapter {
                 if seen.insert(name.clone()) {
                     parsed.push((name, value));
                 }
-                if parsed.len() >= 256 {
+                if parsed.len() >= DebugAdapter::MAX_VARIABLE_CACHE_ENTRIES {
                     break;
                 }
             }
@@ -164,7 +164,7 @@ impl DebugAdapter {
 
             if value.is_expandable() {
                 let children = renderer
-                    .render_children(&value, 0, 256)
+                    .render_children(&value, 0, DebugAdapter::MAX_VARIABLE_CACHE_ENTRIES)
                     .into_iter()
                     .map(Self::rendered_to_variable)
                     .collect::<Vec<_>>();

@@ -71,6 +71,28 @@ mod deep_truncation_tests {
     }
 
     #[test]
+    fn test_500element_array_pagination_windows_do_not_overlap() {
+        let renderer = PerlVariableRenderer::new();
+        let elements: Vec<PerlValue> = (0..500).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let first_window = renderer.render_children(&value, 0, 128);
+        let second_window = renderer.render_children(&value, 128, 128);
+        let near_end_window = renderer.render_children(&value, 384, 200);
+
+        assert_eq!(first_window.len(), 128);
+        assert_eq!(second_window.len(), 128);
+        assert_eq!(near_end_window.len(), 116);
+
+        assert_eq!(first_window.first().map(|child| child.name.as_str()), Some("[0]"));
+        assert_eq!(first_window.last().map(|child| child.name.as_str()), Some("[127]"));
+        assert_eq!(second_window.first().map(|child| child.name.as_str()), Some("[128]"));
+        assert_eq!(second_window.last().map(|child| child.name.as_str()), Some("[255]"));
+        assert_eq!(near_end_window.first().map(|child| child.name.as_str()), Some("[384]"));
+        assert_eq!(near_end_window.last().map(|child| child.name.as_str()), Some("[499]"));
+    }
+
+    #[test]
     fn test_cyclic_reference_rendering() {
         let renderer = PerlVariableRenderer::new();
 

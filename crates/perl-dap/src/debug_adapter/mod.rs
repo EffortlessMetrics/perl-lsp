@@ -451,8 +451,10 @@ struct DebugSession {
     state: DebugState,
     /// Stack frames
     stack_frames: Vec<StackFrame>,
-    /// Variables in current scope
-    variables: HashMap<i32, Vec<Variable>>,
+    /// Cached root scope variables keyed by scope `variablesReference`.
+    root_variables: HashMap<i32, Vec<Variable>>,
+    /// Cached child expansions keyed by child `variablesReference`.
+    child_variables: HashMap<i32, Vec<Variable>>,
     /// Thread ID
     thread_id: i32,
     /// Last resume command issued while running.

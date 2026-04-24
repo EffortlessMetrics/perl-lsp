@@ -121,10 +121,31 @@ mod dap_performance {
             first_elapsed
         );
 
+        let repeat_start = Instant::now();
+        let repeat = adapter.handle_request(
+            2,
+            "variables",
+            Some(json!({
+                "variablesReference": 11,
+                "start": 0,
+                "count": 50
+            })),
+        );
+        let repeat_elapsed = repeat_start.elapsed();
+        match repeat {
+            DapMessage::Response { success, .. } => assert!(success),
+            _ => anyhow::bail!("expected repeated variables response"),
+        }
+        assert!(
+            repeat_elapsed <= Duration::from_millis(100),
+            "repeated variables request should be cache-fast: {:?}",
+            repeat_elapsed
+        );
+
         if child_ref > 0 {
             let child_start = Instant::now();
             let child = adapter.handle_request(
-                2,
+                3,
                 "variables",
                 Some(json!({
                     "variablesReference": child_ref,
@@ -141,6 +162,27 @@ mod dap_performance {
                 child_elapsed < Duration::from_millis(100),
                 "child variable expansion too slow: {:?}",
                 child_elapsed
+            );
+
+            let child_repeat_start = Instant::now();
+            let child_repeat = adapter.handle_request(
+                4,
+                "variables",
+                Some(json!({
+                    "variablesReference": child_ref,
+                    "start": 50,
+                    "count": 50
+                })),
+            );
+            let child_repeat_elapsed = child_repeat_start.elapsed();
+            match child_repeat {
+                DapMessage::Response { success, .. } => assert!(success),
+                _ => anyhow::bail!("expected repeated child variables response"),
+            }
+            assert!(
+                child_repeat_elapsed < Duration::from_millis(100),
+                "repeated child variable expansion should be cache-fast: {:?}",
+                child_repeat_elapsed
             );
         }
 

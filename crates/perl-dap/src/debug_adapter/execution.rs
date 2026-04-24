@@ -25,7 +25,8 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
-            session.variables.clear();
+            session.root_variables.clear();
+            session.child_variables.clear();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -69,7 +70,8 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
-            session.variables.clear();
+            session.root_variables.clear();
+            session.child_variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -105,7 +107,8 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
-            session.variables.clear();
+            session.root_variables.clear();
+            session.child_variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -142,7 +145,8 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
-            session.variables.clear();
+            session.root_variables.clear();
+            session.child_variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -171,6 +175,10 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+            session.root_variables.clear();
+            session.child_variables.clear();
+        }
         let success = if let Some(ref session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
@@ -356,7 +364,8 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Goto;
-            session.variables.clear();
+            session.root_variables.clear();
+            session.child_variables.clear();
             let t_id = session.thread_id;
 
             self.send_event(
