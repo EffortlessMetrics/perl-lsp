@@ -17,8 +17,8 @@ use perl_lexer::{
 
 #[test]
 fn token_just_before_first_keyword_is_not_found() {
-    // "AUTOLOAD" is first in KEYWORDS; "AUTOLOA" sorts before it.
-    assert!(!is_keyword("AUTOLOA"));
+    // "ADJUST" is first in KEYWORDS; "ADJUS" sorts before it.
+    assert!(!is_keyword("ADJUS"));
 }
 
 #[test]
@@ -273,48 +273,38 @@ fn specialized_lists_are_proper_subsets() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn keywords_count_is_at_least_120() {
-    assert!(
-        KEYWORDS.len() >= 120,
-        "KEYWORDS should have at least 120 entries, found {}",
-        KEYWORDS.len()
-    );
+fn keyword_list_counts_match_inventory_snapshot() {
+    let expected_counts: &[(&str, usize, &[&str])] = &[
+        ("KEYWORDS", 127, KEYWORDS),
+        ("LSP_COMPLETION_KEYWORDS", 68, LSP_COMPLETION_KEYWORDS),
+        ("DAP_COMPLETION_KEYWORDS", 72, DAP_COMPLETION_KEYWORDS),
+        (
+            "LSP_RUNTIME_COMPLETION_KEYWORDS",
+            40,
+            LSP_RUNTIME_COMPLETION_KEYWORDS,
+        ),
+        ("RENAME_KEYWORDS", 25, RENAME_KEYWORDS),
+        ("PARSER_LSP_KEYWORDS", 32, PARSER_LSP_KEYWORDS),
+        ("LEXER_KEYWORDS", 67, LEXER_KEYWORDS),
+    ];
+
+    for &(name, expected_count, list) in expected_counts {
+        assert_eq!(
+            list.len(),
+            expected_count,
+            "{name} count drifted; inventory changed unexpectedly"
+        );
+    }
 }
 
 #[test]
-fn lsp_completion_keywords_count_at_least_40() {
-    assert!(
-        LSP_COMPLETION_KEYWORDS.len() >= 40,
-        "LSP_COMPLETION_KEYWORDS should have at least 40 entries, found {}",
-        LSP_COMPLETION_KEYWORDS.len()
-    );
-}
-
-#[test]
-fn dap_completion_keywords_count_at_least_60() {
-    assert!(
-        DAP_COMPLETION_KEYWORDS.len() >= 60,
-        "DAP_COMPLETION_KEYWORDS should have at least 60 entries, found {}",
-        DAP_COMPLETION_KEYWORDS.len()
-    );
-}
-
-#[test]
-fn lexer_keywords_count_at_least_50() {
-    assert!(
-        LEXER_KEYWORDS.len() >= 50,
-        "LEXER_KEYWORDS should have at least 50 entries, found {}",
-        LEXER_KEYWORDS.len()
-    );
-}
-
-#[test]
-fn rename_keywords_count_at_least_20() {
-    assert!(
-        RENAME_KEYWORDS.len() >= 20,
-        "RENAME_KEYWORDS should have at least 20 entries, found {}",
-        RENAME_KEYWORDS.len()
-    );
+fn rename_keywords_are_subset_of_lsp_completion_keywords() {
+    for &kw in RENAME_KEYWORDS {
+        assert!(
+            LSP_COMPLETION_KEYWORDS.binary_search(&kw).is_ok(),
+            "RENAME_KEYWORDS entry {kw:?} missing from LSP_COMPLETION_KEYWORDS"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
