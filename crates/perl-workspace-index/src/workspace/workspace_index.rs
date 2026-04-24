@@ -937,6 +937,28 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// Outcome state for safe-delete preflight checks.
+pub enum SafeDeletePreflightStatus {
+    /// Deletion can proceed because no external references were found.
+    Safe,
+    /// Deletion is blocked by references in other files.
+    BlockedByExternalReferences,
+}
+
+#[derive(Clone, Debug)]
+/// Structured result for safe-delete preflight checks.
+pub struct SafeDeletePreflightResult {
+    /// Symbol key used for the preflight query.
+    pub key: SymbolKey,
+    /// Definition location, if resolvable in the current index state.
+    pub definition: Option<Location>,
+    /// References found in files other than the definition file.
+    pub external_references: Vec<Location>,
+    /// Final preflight status.
+    pub status: SafeDeletePreflightStatus,
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -2687,6 +2709,37 @@ impl WorkspaceIndex {
         });
 
         all_refs
+    }
+
+    /// Run safe-delete preflight for a symbol key using cross-file references.
+    ///
+    /// This plumbing-first API only enforces one blocking rule:
+    /// references in files other than the definition file.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Normalized symbol key to evaluate for deletion safety.
+    ///
+    /// # Returns
+    ///
+    /// Structured preflight result suitable for later code-action/UI wiring.
+    pub fn safe_delete_preflight(&self, key: &SymbolKey) -> SafeDeletePreflightResult {
+        let definition = self.find_def(key);
+        let all_refs = self.find_refs(key);
+
+        let external_references = if let Some(def) = &definition {
+            all_refs.into_iter().filter(|reference| reference.uri != def.uri).collect()
+        } else {
+            all_refs
+        };
+
+        let status = if external_references.is_empty() {
+            SafeDeletePreflightStatus::Safe
+        } else {
+            SafeDeletePreflightStatus::BlockedByExternalReferences
+        };
+
+        SafeDeletePreflightResult { key: key.clone(), definition, external_references, status }
     }
 }
 

@@ -17,7 +17,8 @@ use perl_workspace::workspace::state_machine::{
     InvalidationReason, ResourceKind, TransitionResult,
 };
 use perl_workspace::workspace::workspace_index::{
-    IndexCoordinator, IndexResourceLimits, SymKind, SymbolKey, WorkspaceIndex,
+    IndexCoordinator, IndexResourceLimits, SafeDeletePreflightStatus, SymKind, SymbolKey,
+    WorkspaceIndex,
 };
 use std::sync::Arc;
 use url::Url;
@@ -324,6 +325,50 @@ fn test_find_refs_with_symbol_key() -> Result<(), Box<dyn std::error::Error>> {
     };
     // find_refs excludes the definition site
     let _refs = index.find_refs(&key);
+    Ok(())
+}
+
+#[test]
+fn test_safe_delete_preflight_blocked_by_external_refs() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let def_uri = file_url("/safe_delete_def.pm")?;
+    let caller_uri = file_url("/safe_delete_caller.pm")?;
+    index.index_file(def_uri, "package SafeDelete;\nsub victim { 1 }\nvictim();".to_string())?;
+    index.index_file(caller_uri, "package Caller;\nSafeDelete::victim();".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("SafeDelete"),
+        name: Arc::from("victim"),
+        sigil: None,
+        kind: SymKind::Sub,
+    };
+    let result = index.safe_delete_preflight(&key);
+
+    assert_eq!(result.status, SafeDeletePreflightStatus::BlockedByExternalReferences);
+    assert_eq!(result.external_references.len(), 1);
+    assert!(result.external_references[0].uri.contains("safe_delete_caller.pm"));
+
+    Ok(())
+}
+
+#[test]
+fn test_safe_delete_preflight_safe_when_no_external_refs() -> Result<(), Box<dyn std::error::Error>>
+{
+    let index = WorkspaceIndex::new();
+    let def_uri = file_url("/safe_delete_only.pm")?;
+    index.index_file(def_uri, "package SafeDelete;\nsub victim { 1 }\nvictim();".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("SafeDelete"),
+        name: Arc::from("victim"),
+        sigil: None,
+        kind: SymKind::Sub,
+    };
+    let result = index.safe_delete_preflight(&key);
+
+    assert_eq!(result.status, SafeDeletePreflightStatus::Safe);
+    assert!(result.external_references.is_empty());
+
     Ok(())
 }
 

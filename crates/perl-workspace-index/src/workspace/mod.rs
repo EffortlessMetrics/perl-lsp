@@ -51,4 +51,7 @@ pub use state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,
 };
-pub use workspace_index::{IndexResourceLimits, Location, WorkspaceIndex};
+pub use workspace_index::{
+    IndexResourceLimits, Location, SafeDeletePreflightResult, SafeDeletePreflightStatus,
+    WorkspaceIndex,
+};
