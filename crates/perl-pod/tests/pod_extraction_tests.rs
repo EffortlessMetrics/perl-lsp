@@ -518,6 +518,32 @@ fn link_display_text_markdown_delimiters_are_escaped() {
 }
 
 #[test]
+fn link_display_text_open_bracket_is_escaped() {
+    let doc = extract_pod("=head1 NAME\n\nL<[optional]|Module::Name>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    // Both '[' and ']' in display text must be escaped so the markdown renderer
+    // does not mistake them for a nested link boundary.
+    assert!(
+        name.contains("[\\[optional\\]](perl-module://Module::Name)"),
+        "expected open and close brackets in display to be escaped; got: {name}"
+    );
+}
+
+#[test]
+fn link_target_with_unicode_module_name_is_percent_encoded() {
+    // Non-ASCII bytes in a link target must be percent-encoded byte-by-byte (UTF-8).
+    // This ensures the resulting URL is well-formed even for exotic CPAN module names.
+    // 'Ü' is U+00DC, encoded in UTF-8 as the two bytes 0xC3 0x9C.
+    let doc = extract_pod("=head1 NAME\n\nL<click here|\u{dc}ber::Module>\n\n=cut\n");
+    let name = doc.name.as_deref().unwrap_or("");
+    // Both UTF-8 bytes must appear as %C3%9C in the URL.
+    assert!(
+        name.contains("perl-module://%C3%9Cber::Module"),
+        "expected non-ASCII bytes in target to be percent-encoded; got: {name}"
+    );
+}
+
+#[test]
 fn multiple_pod_blocks() {
     let source = r#"
 package Multi;
