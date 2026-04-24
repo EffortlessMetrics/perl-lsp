@@ -503,6 +503,67 @@ fn test_class_produces_symbol_decl() {
     assert!(d.anchor_span.is_none());
 }
 
+// ── Format / Label ───────────────────────────────────────────────────────────
+
+#[test]
+fn test_format_produces_symbol_decl() {
+    // format STDOUT =
+    let format_node = Node::new(
+        NodeKind::Format { name: "STDOUT".to_string(), body: "@<<<".to_string() },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let d = &decls[0];
+    assert_eq!(d.kind, SymbolKind::Format);
+    assert_eq!(d.name, "STDOUT");
+    assert_eq!(d.qualified_name, "STDOUT");
+    assert_eq!(d.full_span, (0, 18));
+    assert!(d.anchor_span.is_none());
+}
+
+#[test]
+fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Result<(), String> {
+    // OUTER: my $count;
+    let var = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "count".to_string() },
+        loc(10, 16),
+    );
+    let var_decl = Node::new(
+        NodeKind::VariableDeclaration {
+            declarator: "my".to_string(),
+            variable: Box::new(var),
+            attributes: vec![],
+            initializer: None,
+        },
+        loc(7, 16),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "OUTER".to_string(), statement: Box::new(var_decl) },
+        loc(0, 16),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 16));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert_eq!(decls.len(), 2);
+
+    let label = decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("label decl")?;
+    assert_eq!(label.name, "OUTER");
+    assert_eq!(label.qualified_name, "OUTER");
+    assert_eq!(label.full_span, (0, 16));
+    assert!(label.anchor_span.is_none());
+
+    let variable = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Variable(VarKind::Scalar))
+        .ok_or("variable decl")?;
+    assert_eq!(variable.name, "count");
+    Ok(())
+}
+
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]

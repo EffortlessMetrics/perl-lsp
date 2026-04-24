@@ -488,6 +488,25 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn edge_case_surface_plain_use_statement_is_conservatively_skipped() -> Result<()> {
+    // `use strict;` carries import semantics, but the current AST node does not
+    // expose explicit import/export declarations with stable spans.
+    let use_node = Node::new(
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec![],
+            has_filter_risk: false,
+        },
+        loc(0, 11),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![use_node] }, loc(0, 11));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert!(decls.is_empty(), "plain use statements should not synthesize Import/Export decls");
+    Ok(())
+}
+
 // ─── Regression: CLAUDE.md banned dependencies are not transitively present ──
 
 /// Regression: `perl-symbol` must not depend on `perl-parser-core` or any
