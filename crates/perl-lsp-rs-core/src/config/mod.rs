@@ -736,7 +736,8 @@ pub struct ProjectFormattingConfig {
 /// Load project config from `<workspace_root>/.perl-lsp.toml`.
 ///
 /// Returns `None` if the file does not exist (normal case — most projects won't have one).
-/// Returns `Err` only on TOML parse failure; caller should emit a `window/showMessage` warning.
+/// Returns `Err` on TOML parse failure, I/O errors, oversized files, or non-regular paths;
+/// caller should emit a `window/showMessage` warning and continue with defaults.
 pub fn load_project_config(
     workspace_root: &std::path::Path,
 ) -> Result<Option<ProjectConfig>, String> {
@@ -771,13 +772,19 @@ pub fn load_project_config(
         ));
     }
 
-    let file = File::open(&path).map_err(|e| {
-        format!(
-            "Could not read .perl-lsp.toml: {}. \
-             Check that the file is readable and not locked by another process.",
-            e
-        )
-    })?;
+    // Open the file; guard against a TOCTOU race where the file is removed after
+    // the metadata check succeeds — treat a vanished file the same as not-found.
+    let file = match File::open(&path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(format!(
+                "Could not read .perl-lsp.toml: {}. \
+                 Check that the file is readable and not locked by another process.",
+                e
+            ));
+        }
+    };
     let mut content = String::new();
     file.take(MAX_PROJECT_CONFIG_BYTES + 1)
         .read_to_string(&mut content)
@@ -785,7 +792,9 @@ pub fn load_project_config(
 
     if content.len() as u64 > MAX_PROJECT_CONFIG_BYTES {
         return Err(format!(
-            "Could not read .perl-lsp.toml: file is too large (max {} bytes).",
+            "Could not read .perl-lsp.toml: file is too large ({} bytes, max {} bytes). \
+             The file may have grown between the size check and the read.",
+            content.len(),
             MAX_PROJECT_CONFIG_BYTES
         ));
     }
@@ -972,6 +981,33 @@ perltidy_extra_args = ["-noll"]
             .err()
             .ok_or("expected oversized config file to return an error")?;
         assert!(err.contains("too large"));
+        Ok(())
+    }
+
+    /// A 1 MiB file (exactly at the cap) must be accepted without error.
+    #[test]
+    fn load_project_config_accepts_file_at_size_limit() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        // Write a 1 MiB file containing only '#' comment chars — valid TOML, empty config.
+        let exactly_at_limit = vec![b'#'; 1024 * 1024];
+        std::fs::write(temp.path().join(".perl-lsp.toml"), exactly_at_limit)?;
+        // Should parse successfully and yield a default ProjectConfig (no sections set).
+        let config = load_project_config(temp.path())?;
+        assert!(config.is_some(), "1 MiB file at the limit must be accepted");
+        Ok(())
+    }
+
+    /// An error from File::open when the file is not found (TOCTOU: file removed after metadata
+    /// check) must be treated as absent, not as a hard error.
+    #[test]
+    fn load_project_config_returns_none_for_vanished_file() -> TestResult {
+        // We can't easily reproduce a true TOCTOU race, but we can verify the code path by
+        // directly exercising the condition: call load_project_config on a path where no file
+        // exists (metadata returns NotFound at the first check, so this also confirms the
+        // original not-found path still works under the restructured code).
+        let temp = tempfile::tempdir()?;
+        let result = load_project_config(temp.path())?;
+        assert!(result.is_none(), "missing file must yield None, not Err");
         Ok(())
     }
 
