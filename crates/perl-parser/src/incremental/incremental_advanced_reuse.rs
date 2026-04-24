@@ -340,6 +340,10 @@ impl AdvancedReuseAnalyzer {
 
             // Look for exact structural matches in new tree
             for (new_pos, new_info) in &new_analysis.node_info {
+                if old_pos != new_pos {
+                    continue;
+                }
+
                 if old_info.structural_hash == new_info.structural_hash
                     && old_info.children_count == new_info.children_count
                 {
@@ -371,34 +375,54 @@ impl AdvancedReuseAnalyzer {
         config: &ReuseConfig,
     ) {
         for (old_pos, old_info) in &old_analysis.node_info {
-            // Skip if already matched or is a leaf node
-            if reuse_map.contains_key(old_pos) || old_info.children_count == 0 {
+            // Skip if already matched
+            if reuse_map.contains_key(old_pos) {
                 continue;
             }
+
+            let allow_shift_reuse =
+                old_info.children_count > 0 || self.is_shift_safe_terminal(&old_info.node);
+            if !allow_shift_reuse {
+                continue;
+            }
+
+            let mut best_match: Option<(usize, f64)> = None;
 
             // Look for content matches that may have shifted position
             for (new_pos, new_info) in &new_analysis.node_info {
                 if old_info.content_hash == new_info.content_hash
                     && old_info.structural_hash == new_info.structural_hash
+                    && self.is_position_unclaimed(reuse_map, *new_pos)
                 {
                     let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
                     if position_shift <= config.max_position_shift {
-                        let confidence = self.calculate_match_confidence(old_info, new_info) * 0.9; // Slight penalty for position shift
-                        if confidence >= config.min_confidence {
-                            reuse_map.insert(
-                                *old_pos,
-                                ReuseStrategy {
-                                    target_position: *new_pos,
-                                    reuse_type: ReuseType::PositionShift,
-                                    confidence_score: confidence,
-                                    position_adjustment: (*new_pos as isize) - (*old_pos as isize),
-                                },
-                            );
-                            self.analysis_stats.position_adjustments += 1;
-                            break;
+                        let base_confidence = self.calculate_match_confidence(old_info, new_info);
+                        let confidence = self.calculate_shift_confidence(
+                            &old_info.node,
+                            base_confidence,
+                            position_shift,
+                            config,
+                        );
+                        if confidence >= config.min_confidence
+                            && best_match.as_ref().is_none_or(|(_, best)| confidence > *best)
+                        {
+                            best_match = Some((*new_pos, confidence));
                         }
                     }
                 }
+            }
+
+            if let Some((best_pos, confidence)) = best_match {
+                reuse_map.insert(
+                    *old_pos,
+                    ReuseStrategy {
+                        target_position: best_pos,
+                        reuse_type: ReuseType::PositionShift,
+                        confidence_score: confidence,
+                        position_adjustment: (best_pos as isize) - (*old_pos as isize),
+                    },
+                );
+                self.analysis_stats.position_adjustments += 1;
             }
         }
     }
@@ -421,6 +445,7 @@ impl AdvancedReuseAnalyzer {
                 for (new_pos, new_info) in &new_analysis.node_info {
                     if old_info.structural_hash == new_info.structural_hash
                         && old_info.content_hash != new_info.content_hash
+                        && self.is_position_unclaimed(reuse_map, *new_pos)
                         && self.are_compatible_for_content_update(&old_info.node, &new_info.node)
                     {
                         let confidence = 0.8; // Content updates get medium confidence
@@ -458,13 +483,28 @@ impl AdvancedReuseAnalyzer {
                 continue;
             }
 
+            if old_info.children_count == 0 || !self.is_container_node(&old_info.node) {
+                continue;
+            }
+
             let mut best_match: Option<(usize, f64)> = None;
 
             for (new_pos, new_info) in &new_analysis.node_info {
+                if !self.is_container_node(&new_info.node)
+                    || !self.is_position_unclaimed(reuse_map, *new_pos)
+                {
+                    continue;
+                }
+
+                let position_shift = (*new_pos as isize - *old_pos as isize).unsigned_abs();
+                if position_shift > config.max_position_shift / 2 {
+                    continue;
+                }
+
                 // Compare structural similarity
                 let similarity =
                     self.calculate_structural_similarity(&old_info.node, &new_info.node);
-                if similarity >= config.min_confidence * 0.8 {
+                if similarity >= config.min_confidence * 0.85 {
                     // Slightly lower threshold for aggressive matching
                     if best_match.as_ref().is_none_or(|&(_, s)| similarity > s) {
                         best_match = Some((*new_pos, similarity));
@@ -585,7 +625,11 @@ impl AdvancedReuseAnalyzer {
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => statements.len(),
             NodeKind::VariableDeclaration { initializer, .. } => {
-                if initializer.is_some() { 2 } else { 1 } // variable + optional initializer
+                if initializer.is_some() {
+                    2
+                } else {
+                    1
+                } // variable + optional initializer
             }
             NodeKind::Binary { .. } => 2, // left + right
             NodeKind::Unary { .. } => 1,  // operand
@@ -688,6 +732,54 @@ impl AdvancedReuseAnalyzer {
             (NodeKind::Identifier { .. }, NodeKind::Identifier { .. }) => true,
             _ => false,
         }
+    }
+
+    fn is_position_unclaimed(
+        &self,
+        reuse_map: &HashMap<usize, ReuseStrategy>,
+        new_pos: usize,
+    ) -> bool {
+        !reuse_map.values().any(|strategy| strategy.target_position == new_pos)
+    }
+
+    fn is_shift_safe_terminal(&self, node: &Node) -> bool {
+        matches!(
+            node.kind,
+            NodeKind::Number { .. }
+                | NodeKind::String { .. }
+                | NodeKind::Variable { .. }
+                | NodeKind::Identifier { .. }
+        )
+    }
+
+    fn is_container_node(&self, node: &Node) -> bool {
+        matches!(
+            node.kind,
+            NodeKind::Program { .. }
+                | NodeKind::Block { .. }
+                | NodeKind::If { .. }
+                | NodeKind::FunctionCall { .. }
+                | NodeKind::VariableDeclaration { .. }
+                | NodeKind::Binary { .. }
+                | NodeKind::Unary { .. }
+        )
+    }
+
+    fn calculate_shift_confidence(
+        &self,
+        node: &Node,
+        base_confidence: f64,
+        position_shift: usize,
+        config: &ReuseConfig,
+    ) -> f64 {
+        if config.max_position_shift == 0 {
+            return 0.0;
+        }
+
+        let shift_ratio = position_shift as f64 / config.max_position_shift as f64;
+        let penalty_weight = if self.is_shift_safe_terminal(node) { 0.08 } else { 0.2 };
+        let distance_penalty = (shift_ratio * penalty_weight).min(penalty_weight);
+        (base_confidence - distance_penalty).clamp(0.0, 1.0)
     }
 
     /// Validate a reuse strategy for correctness
@@ -820,7 +912,7 @@ impl ReuseAnalysisResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::{SourceLocation, ast::Node};
+    use perl_parser_core::{ast::Node, SourceLocation};
 
     #[test]
     fn test_advanced_reuse_analyzer_creation() {
