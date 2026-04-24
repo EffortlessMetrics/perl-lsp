@@ -54,6 +54,7 @@ use crate::pragma_tracker::{PragmaState, PragmaTracker};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -358,7 +359,7 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
-    imported_barewords: std::collections::HashSet<String>,
+    imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
@@ -1079,7 +1080,7 @@ impl ScopeAnalyzer {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Check for duplicate parameters and shadowing
-                let mut param_names = std::collections::HashSet::new();
+                let mut param_names = HashSet::new();
 
                 // Extract parameters from signature if present
                 // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
@@ -1841,8 +1842,8 @@ impl ScopeAnalyzer {
     }
 }
 
-fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
-    fn push_symbol(imported: &mut std::collections::HashSet<String>, module: &str, token: &str) {
+fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
+    fn push_symbol(imported: &mut HashSet<String>, module: &str, token: &str) {
         let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
         if symbol.is_empty() || symbol == "," {
             return;
@@ -1888,8 +1889,8 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
 
     fn maybe_record_manual_imports(
         node: &Node,
-        required_modules: &std::collections::HashSet<String>,
-        imported: &mut std::collections::HashSet<String>,
+        required_modules: &HashSet<String>,
+        imported: &mut HashSet<String>,
     ) {
         let NodeKind::MethodCall { object, method, args } = &node.kind else {
             return;
@@ -1931,7 +1932,17 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
-    fn visit(node: &Node, imported: &mut std::collections::HashSet<String>) {
+    /// Unwrap an `ExpressionStatement` node to its inner expression, or return
+    /// the node itself if it is not an expression statement.
+    fn inner_node(stmt: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+            expression.as_ref()
+        } else {
+            stmt
+        }
+    }
+
+    fn visit(node: &Node, imported: &mut HashSet<String>) {
         if let NodeKind::Use { module, args, .. } = &node.kind {
             for arg in args {
                 if arg.starts_with("qw") {
@@ -1948,24 +1959,13 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
             }
         } else if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind
         {
-            let required_modules: std::collections::HashSet<String> = statements
+            let required_modules: HashSet<String> = statements
                 .iter()
-                .filter_map(|stmt| {
-                    if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                        require_module_name(expression)
-                    } else {
-                        require_module_name(stmt)
-                    }
-                })
+                .filter_map(|stmt| require_module_name(inner_node(stmt)))
                 .collect();
             if !required_modules.is_empty() {
                 for stmt in statements {
-                    let expr = if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-                        expression.as_ref()
-                    } else {
-                        stmt
-                    };
-                    maybe_record_manual_imports(expr, &required_modules, imported);
+                    maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
                 }
             }
         }
@@ -1975,7 +1975,7 @@ fn collect_imported_barewords(ast: &Node) -> std::collections::HashSet<String> {
         }
     }
 
-    let mut imported = std::collections::HashSet::new();
+    let mut imported = HashSet::new();
     visit(ast, &mut imported);
     imported
 }

@@ -3557,7 +3557,7 @@ fn extract_module_name_from_require_args(args: &[Node]) -> Option<String> {
     match &first.kind {
         NodeKind::Identifier { name } => Some(name.clone()),
         NodeKind::String { value, .. } => {
-            let cleaned = value.trim().trim_matches('"').trim_matches('\'');
+            let cleaned = value.trim_matches('\'').trim_matches('"').trim();
             if cleaned.is_empty() {
                 return None;
             }
