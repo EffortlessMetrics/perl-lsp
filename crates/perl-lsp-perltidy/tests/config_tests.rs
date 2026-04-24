@@ -246,7 +246,8 @@ fn builtin_formatter_indents_multiline_function_arguments() {
 #[test]
 fn builtin_formatter_ignores_delimiters_inside_strings_and_comments() {
     let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
-    let formatted = formatter.format("if ($ok) {\nprint \"literal ) ] }\"; # comment )\nprint \"done\";\n}\n");
+    let formatted =
+        formatter.format("if ($ok) {\nprint \"literal ) ] }\"; # comment )\nprint \"done\";\n}\n");
 
     let lines: Vec<&str> = formatted.lines().collect();
     assert_eq!(lines[0], "if ($ok) {");
@@ -292,8 +293,8 @@ fn builtin_formatter_multi_closer_line_does_not_over_decrement() {
     assert_eq!(lines[0], "if ($a) {");
     assert_eq!(lines[1], "    if ($b) {");
     assert_eq!(lines[2], "        print 1;");
-    assert_eq!(lines[3], "    }");           // one closer — back to level 1
-    assert_eq!(lines[4], "    print 2;");   // still at level 1
-    assert_eq!(lines[5], "}");              // one closer — back to level 0
-    assert_eq!(lines[6], "print 3;");      // at level 0, not negative
+    assert_eq!(lines[3], "    }"); // one closer — back to level 1
+    assert_eq!(lines[4], "    print 2;"); // still at level 1
+    assert_eq!(lines[5], "}"); // one closer — back to level 0
+    assert_eq!(lines[6], "print 3;"); // at level 0, not negative
 }
