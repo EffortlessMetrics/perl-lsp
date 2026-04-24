@@ -138,7 +138,8 @@ load_data();
 
 #[test]
 fn module_runtime_alias_then_import_resolves_pkg() {
-    let code = r#"my $loader = use_module('My::Loader');
+    let code = r#"use Module::Runtime qw(use_module);
+my $loader = use_module('My::Loader');
 $loader->import('load_data');
 load_data();
 "#;
@@ -147,5 +148,64 @@ load_data();
         pkg.as_deref(),
         Some("My::Loader"),
         "$loader->import() should resolve back to static use_module target, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_qualified_use_module_resolves_pkg() {
+    let code = r#"my $loader = Module::Runtime::use_module('My::Loader');
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "qualified Module::Runtime::use_module should resolve static target, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_require_module_literal_resolves_pkg() {
+    let code = r#"use Module::Runtime qw(require_module);
+require_module('My::Loader');
+My::Loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_eq!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "require_module literal should behave like require for import resolution, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_dynamic_name_remains_unresolved() {
+    let code = r#"use Module::Runtime qw(use_module);
+my $name = 'My::Loader';
+my $loader = use_module($name);
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "dynamic Module::Runtime target should remain unresolved, got: {pkg:?}"
+    );
+}
+
+#[test]
+fn module_runtime_unqualified_without_import_remains_unresolved() {
+    let code = r#"my $loader = use_module('My::Loader');
+$loader->import('load_data');
+load_data();
+"#;
+    let pkg = parse_and_symbol_at(code, "load_data()");
+    assert_ne!(
+        pkg.as_deref(),
+        Some("My::Loader"),
+        "unqualified use_module without Module::Runtime import should stay conservative, got: {pkg:?}"
     );
 }

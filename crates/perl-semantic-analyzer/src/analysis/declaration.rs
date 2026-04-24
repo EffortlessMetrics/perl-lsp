@@ -1544,7 +1544,71 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             }
         }
 
-        fn module_runtime_alias(expr: &Node) -> Option<(String, String)> {
+        fn module_runtime_imports(stmts: &[Node]) -> std::collections::HashSet<String> {
+            let mut imported = std::collections::HashSet::new();
+            for stmt in stmts {
+                let NodeKind::Use { module, args, .. } = &inner_expr(stmt).kind else {
+                    continue;
+                };
+                if module != "Module::Runtime" {
+                    continue;
+                }
+                for arg in args {
+                    if matches!(arg.as_str(), "use_module" | "require_module") {
+                        imported.insert(arg.clone());
+                        continue;
+                    }
+                    if arg.starts_with("qw") {
+                        let content = arg
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        for token in content.split_whitespace() {
+                            if matches!(token, "use_module" | "require_module") {
+                                imported.insert(token.to_string());
+                            }
+                        }
+                        continue;
+                    }
+                    let bare = arg.trim().trim_matches('\'').trim_matches('"').trim();
+                    if matches!(bare, "use_module" | "require_module") {
+                        imported.insert(bare.to_string());
+                    }
+                }
+            }
+            imported
+        }
+
+        fn module_runtime_literal_module(
+            call_node: &Node,
+            module_runtime_imports: &std::collections::HashSet<String>,
+        ) -> Option<String> {
+            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
+                return None;
+            };
+            let is_supported_runtime_call = matches!(
+                name.as_str(),
+                "Module::Runtime::use_module" | "Module::Runtime::require_module"
+            ) || (matches!(name.as_str(), "use_module" | "require_module")
+                && module_runtime_imports.contains(name));
+            if !is_supported_runtime_call {
+                return None;
+            }
+            let first = args.first()?;
+            let NodeKind::String { value, .. } = &first.kind else {
+                return None;
+            };
+            let module = value.trim_matches('\'').trim_matches('"').trim();
+            if module.is_empty() {
+                return None;
+            }
+            Some(module.to_string())
+        }
+
+        fn module_runtime_alias(
+            expr: &Node,
+            module_runtime_imports: &std::collections::HashSet<String>,
+        ) -> Option<(String, String)> {
             let (alias_name, call_node) = match &expr.kind {
                 NodeKind::Assignment { lhs, rhs, op } if op == "=" => {
                     let NodeKind::Variable { name, .. } = &lhs.kind else {
@@ -1561,27 +1625,8 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
                 _ => return None,
             };
 
-            let NodeKind::FunctionCall { name, args } = &call_node.kind else {
-                return None;
-            };
-            if !matches!(
-                name.as_str(),
-                "use_module"
-                    | "require_module"
-                    | "Module::Runtime::use_module"
-                    | "Module::Runtime::require_module"
-            ) {
-                return None;
-            }
-            let first = args.first()?;
-            let NodeKind::String { value, .. } = &first.kind else {
-                return None;
-            };
-            let module = value.trim_matches('\'').trim_matches('"').trim();
-            if module.is_empty() {
-                return None;
-            }
-            Some((alias_name.to_string(), module.to_string()))
+            let module = module_runtime_literal_module(call_node, module_runtime_imports)?;
+            Some((alias_name.to_string(), module))
         }
 
         /// Unwrap an ExpressionStatement to its inner expression, or return
@@ -1603,10 +1648,17 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             // Collect all `require Module` names present in this block.
             let mut required_modules: Vec<String> =
                 stmts.iter().filter_map(|s| require_module_name(inner_expr(s))).collect();
+            let runtime_imports = module_runtime_imports(stmts);
             let mut aliases: std::collections::HashMap<String, String> =
                 std::collections::HashMap::new();
             for stmt in stmts {
-                if let Some((alias, module)) = module_runtime_alias(inner_expr(stmt)) {
+                let expr = inner_expr(stmt);
+                if let Some(module) = module_runtime_literal_module(expr, &runtime_imports)
+                    && !required_modules.contains(&module)
+                {
+                    required_modules.push(module);
+                }
+                if let Some((alias, module)) = module_runtime_alias(expr, &runtime_imports) {
                     aliases.insert(alias, module.clone());
                     if !required_modules.contains(&module) {
                         required_modules.push(module);
