@@ -1330,6 +1330,14 @@ fn parse_perl_version_accepts_single_component_major_only() -> Result<(), Box<dy
 }
 
 #[test]
+fn parse_perl_version_accepts_developer_release_notation() -> Result<(), Box<dyn std::error::Error>>
+{
+    let parsed = perl_pragma::parse_perl_version("5.012_001");
+    assert_eq!(parsed, Some(PerlVersion::new(5, 12)));
+    Ok(())
+}
+
+#[test]
 fn parse_perl_version_ignores_patch_component() -> Result<(), Box<dyn std::error::Error>> {
     let parsed = perl_pragma::parse_perl_version("v5.36.2");
     assert_eq!(parsed, Some(PerlVersion::new(5, 36)));
