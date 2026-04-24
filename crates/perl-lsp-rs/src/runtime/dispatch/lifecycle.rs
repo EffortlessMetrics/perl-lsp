@@ -220,13 +220,16 @@ mod tests {
     }
 
     #[test]
-    fn given_initialized_server_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
+    fn given_server_receives_shutdown_when_shutdown_dispatch_runs_then_shutdown_flag_and_null_response_are_set()
     -> TestResult {
-        // Given — LSP spec requires initialize before shutdown
+        // Given — fully initialize so shutdown is valid per LSP spec
         let server = LspServer::new();
         server
             .handle_initialize(None)
             .map_err(|e| format!("initialize request should succeed: {e}"))?;
+        server
+            .handle_initialized_dispatch()
+            .map_err(|e| format!("initialized notification should succeed: {e}"))?;
 
         // When
         let response = server
