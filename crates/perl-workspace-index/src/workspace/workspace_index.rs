@@ -2980,7 +2980,7 @@ impl IndexVisitor {
                     kind: ReferenceKind::Usage,
                 });
 
-                if name == "extends" || name == "with" {
+                if name == "extends" || name == "with" || name == "require" {
                     for module_name in extract_module_names_from_call_args(args) {
                         file_index
                             .dependencies

@@ -313,9 +313,7 @@ mod tests {
     }
     #[test]
     fn apply_lsp_whitespace_options_trim_final_newlines_removes_all_trailing_newlines() {
-        // Regression: previous implementation used ends_with("
-
-") which left
+        // Regression: previous implementation used ends_with("\n\n") which left
         // one trailing newline. LSP trimFinalNewlines must remove ALL trailing newlines.
         let options = FormattingOptions {
             tab_size: 4,
@@ -324,17 +322,11 @@ mod tests {
             insert_final_newline: None,
             trim_final_newlines: Some(true),
         };
-        let r = apply_lsp_whitespace_options("content
-", &options);
+        let r = apply_lsp_whitespace_options("content\n", &options);
         assert_eq!(r, "content");
-        let r = apply_lsp_whitespace_options("content
-
-", &options);
+        let r = apply_lsp_whitespace_options("content\n\n", &options);
         assert_eq!(r, "content");
-        let r = apply_lsp_whitespace_options("content
-
-
-", &options);
+        let r = apply_lsp_whitespace_options("content\n\n\n", &options);
         assert_eq!(r, "content");
     }
-}}
+}

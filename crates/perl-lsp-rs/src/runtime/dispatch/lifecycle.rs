@@ -149,7 +149,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn initialized_requires_initialize_request_first() -> Result<()> {
+    fn initialized_requires_initialize_request_first() -> std::result::Result<(), JsonRpcError> {
         let server = LspServer::new();
 
         let result = server.handle_initialized_dispatch();
@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() -> Result<()> {
+    fn initialized_can_only_be_sent_once() -> std::result::Result<(), JsonRpcError> {
         let server = LspServer::new();
         server.handle_initialize(None)?;
 
@@ -173,7 +173,8 @@ mod tests {
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<()> {
+    fn auto_initialize_for_compat_promotes_initialized_state()
+    -> std::result::Result<(), JsonRpcError> {
         let server = LspServer::new();
         server.handle_initialize(None)?;
 
