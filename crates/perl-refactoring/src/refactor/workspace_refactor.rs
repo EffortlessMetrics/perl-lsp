@@ -52,9 +52,10 @@
 
 use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
-    SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
+    fs_path_to_uri, normalize_var, uri_to_fs_path, SymKind, SymbolKey, WorkspaceIndex,
 };
 use perl_module::path::module_name_to_path;
+use perl_module::rename::plan_module_rename_edits;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -524,6 +525,89 @@ impl WorkspaceRefactor {
         })
     }
 
+    /// Rewrite module imports and static qualified references after a module move.
+    ///
+    /// This operation is intentionally conservative and mechanical:
+    /// - rewrites import-like forms (`use`, `require`, `use parent/base`, etc.)
+    /// - rewrites obvious qualified call sites (`Old::Name::fn`, `Old::Name->method`)
+    /// - leaves ambiguous strings/comments untouched
+    ///
+    /// # Arguments
+    /// * `old_module` - The original module name (e.g. `Old::Name`)
+    /// * `new_module` - The new module name (e.g. `New::Name`)
+    ///
+    /// # Returns
+    /// * `Ok(RefactorResult)` with workspace edits
+    /// * `Err(RefactorError::InvalidInput)` if names are invalid
+    pub fn rewrite_module_imports_after_move(
+        &self,
+        old_module: &str,
+        new_module: &str,
+    ) -> Result<RefactorResult, RefactorError> {
+        if old_module.is_empty() {
+            return Err(RefactorError::InvalidInput("Old module name cannot be empty".to_string()));
+        }
+        if new_module.is_empty() {
+            return Err(RefactorError::InvalidInput("New module name cannot be empty".to_string()));
+        }
+        if old_module == new_module {
+            return Err(RefactorError::InvalidInput(
+                "Old and new module names are identical".to_string(),
+            ));
+        }
+
+        let mut file_edits = Vec::new();
+        let mut warnings = Vec::new();
+
+        for doc in self._index.document_store().all_documents() {
+            let Some(path) = uri_to_fs_path(&doc.uri) else { continue };
+            let planned = plan_module_rename_edits(&doc.text, old_module, new_module);
+            if planned.is_empty() {
+                continue;
+            }
+
+            let mut edits = Vec::new();
+            for line_edit in planned {
+                let Some(start) = doc
+                    .line_index
+                    .position_to_offset(line_edit.line as u32, line_edit.start_character as u32)
+                else {
+                    warnings.push(format!(
+                        "Skipping invalid planned edit at line {} in {}",
+                        line_edit.line,
+                        path.display()
+                    ));
+                    continue;
+                };
+                let Some(end) = doc
+                    .line_index
+                    .position_to_offset(line_edit.line as u32, line_edit.end_character as u32)
+                else {
+                    warnings.push(format!(
+                        "Skipping invalid planned edit end at line {} in {}",
+                        line_edit.line,
+                        path.display()
+                    ));
+                    continue;
+                };
+                edits.push(TextEdit { start, end, new_text: line_edit.new_text });
+            }
+
+            if !edits.is_empty() {
+                file_edits.push(FileEdit { file_path: path.clone(), edits });
+            }
+        }
+
+        Ok(RefactorResult {
+            file_edits,
+            description: format!(
+                "Rewrite module imports and qualified references from '{}' to '{}'",
+                old_module, new_module
+            ),
+            warnings,
+        })
+    }
+
     /// Move a subroutine from one file to another module
     ///
     /// Extracts a subroutine definition from one file and moves it to another module file.
@@ -976,7 +1060,7 @@ impl WorkspaceRefactor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{TempDir, tempdir};
+    use tempfile::{tempdir, TempDir};
 
     fn setup_index(
         files: Vec<(&str, &str)>,
@@ -1016,8 +1100,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_module_qualified_name_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_extract_module_qualified_name_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
@@ -1048,13 +1132,49 @@ mod tests {
     }
 
     #[test]
-    fn test_move_subroutine_qualified_target_uses_nested_path()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_move_subroutine_qualified_target_uses_nested_path(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
         assert_eq!(res.file_edits.len(), 2);
         assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("Target/Module.pm"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_module_imports_after_move_updates_multiple_consumers(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![
+            ("consumer_a.pl", "use Old::Name;\nOld::Name::run();\n"),
+            ("consumer_b.pl", "require Old::Name;\nmy $obj = Old::Name->new();\n"),
+            ("ambiguous.pl", "# use Old::Name;\nmy $s = \"Old::Name::run\";\nprint $s;\n"),
+        ])?;
+        let refactor = WorkspaceRefactor::new(index);
+
+        let result = refactor.rewrite_module_imports_after_move("Old::Name", "New::Name")?;
+        assert_eq!(result.file_edits.len(), 2);
+
+        let mut edited_paths: Vec<&PathBuf> =
+            result.file_edits.iter().map(|e| &e.file_path).collect();
+        edited_paths.sort();
+        assert!(edited_paths.contains(&&paths[0]));
+        assert!(edited_paths.contains(&&paths[1]));
+        assert!(!edited_paths.contains(&&paths[2]));
+        Ok(())
+    }
+
+    #[test]
+    fn test_rewrite_module_imports_after_move_leaves_ambiguous_sites_untouched(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, _paths) = setup_index(vec![(
+            "ambiguous_only.pl",
+            "# Old::Name in comment\nmy $s = \"Old::Name::run\";\nprint $s;\n",
+        )])?;
+        let refactor = WorkspaceRefactor::new(index);
+
+        let result = refactor.rewrite_module_imports_after_move("Old::Name", "New::Name")?;
+        assert!(result.file_edits.is_empty());
         Ok(())
     }
 
