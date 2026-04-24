@@ -321,6 +321,7 @@ clap = { version = "4.5.60", features = ["derive"] }
 tokio = { version = "1.51.1", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
 proptest = "1.11.0"
 criterion = "0.8.1"
+windows-sys = "0.61.2"
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]

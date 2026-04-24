@@ -4,6 +4,7 @@
 //! names (e.g., `Foo::Bar`) and module file paths (e.g., `Foo/Bar.pm`).
 
 use std::borrow::Cow;
+use std::path::{Path, PathBuf};
 
 /// Normalize legacy package separator `'` to canonical `::`.
 #[must_use]
@@ -16,6 +17,22 @@ pub fn normalize_package_separator(module_name: &str) -> Cow<'_, str> {
 pub fn module_name_to_path(module_name: &str) -> String {
     let normalized = normalize_package_separator(module_name);
     format!("{}.pm", normalized.replace("::", "/"))
+}
+
+/// Normalize Windows paths to their long-form representation.
+///
+/// On non-Windows platforms this is a no-op and returns `path.to_path_buf()`.
+#[must_use]
+pub fn canonicalize_path_long_form(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        windows_long_path(path).unwrap_or_else(|| path.to_path_buf())
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.to_path_buf()
+    }
 }
 
 /// Convert a module path/key into a module name.
@@ -57,6 +74,31 @@ fn strip_to_lib_relative_path(path: &str) -> Option<&str> {
     }
 
     path.rfind("/lib/").map(|lib_idx| &path[lib_idx + "/lib/".len()..])
+}
+
+#[cfg(windows)]
+fn windows_long_path(path: &Path) -> Option<PathBuf> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+    use windows_sys::Win32::Storage::FileSystem::GetLongPathNameW;
+
+    let path_wide: Vec<u16> = path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    // SAFETY: `path_wide` is NUL-terminated and pointers are valid for this call.
+    let required_len = unsafe { GetLongPathNameW(path_wide.as_ptr(), std::ptr::null_mut(), 0) };
+    if required_len == 0 {
+        return None;
+    }
+
+    let mut output = vec![0_u16; required_len as usize];
+    // SAFETY: input is NUL-terminated and `output` is allocated with `required_len` UTF-16 units.
+    let written_len =
+        unsafe { GetLongPathNameW(path_wide.as_ptr(), output.as_mut_ptr(), required_len) };
+    if written_len == 0 {
+        return None;
+    }
+
+    Some(PathBuf::from(OsString::from_wide(&output[..written_len as usize])))
 }
 
 fn strip_perl_extension(path: &str) -> &str {
