@@ -31,6 +31,7 @@ perllsp --health
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Eclipse | configure a Language Server entry for `perllsp --stdio` | [docs/EDITORS/ECLIPSE_SETUP.md](../EDITORS/ECLIPSE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -102,6 +103,12 @@ Perl source files.
 
 Register a Perl language-server client that launches `perllsp --stdio`, then
 restart the client after changing workspace settings or include paths.
+
+### Eclipse
+
+In `Preferences` → `Language Servers`, add a server command `perllsp` with
+argument `--stdio`, then associate it with Perl file patterns like `*.pl`,
+`*.pm`, and `*.t`.
 
 ## When Setup Fails
 
