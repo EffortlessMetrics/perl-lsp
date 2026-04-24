@@ -107,6 +107,22 @@ cost_tier = "low"  # <5 seconds
 failure_impact = "medium"  # Cost control
 
 [[gate]]
+id = "parser-accuracy-closeout"
+name = "Parser Accuracy Closeout"
+type = "correctness"
+blocking = true
+timeout_seconds = 180
+command = "cargo run --locked -p xtask --no-default-features -- corpus-audit --fresh --corpus-path . --check --output corpus_audit_report.json"
+evidence_pattern = "^✅|^❌|NodeKind coverage regression|Valid parser gap regression|Recovery salvage regression"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces parser closeout floors from .ci/metrics/baselines/parser.json via corpus-audit --check"
+docs_url = "docs/project/status/parser.md"
+cost_tier = "low"
+failure_impact = "high"
+
+[[gate]]
 id = "todo-compliance"
 name = "TODO Compliance"
 type = "governance"

@@ -269,6 +269,26 @@ gates:
       - common
       - strict
 
+  - name: parser_accuracy_closeout
+    tier: merge_gate
+    description: "Parser closeout ratchet: lock NodeKind, parser-gap, and recovery floors from corpus-audit baseline"
+    required: true
+    command: >-
+      cargo run --locked -p xtask --no-default-features
+      -- corpus-audit --fresh --corpus-path . --check --output corpus_audit_report.json
+    timeout_seconds: 180
+    retry_count: 0
+    budgets:
+      max_duration_ms: 150000
+    quarantine: false
+    artifacts:
+      - corpus_audit_report.json
+    tags:
+      - parser
+      - corpus
+      - ratchet
+      - closeout
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"

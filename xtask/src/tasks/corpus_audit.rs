@@ -9,7 +9,7 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -27,6 +27,24 @@ use report::generate_report;
 use timeout_detection::{ParseOutcome, detect_timeout_risks, parse_with_timeout};
 
 pub use report::{AuditReport, FailingFile, ParseOutcomesSummary};
+
+#[derive(Debug, serde::Deserialize)]
+struct ParserScorecardBaseline {
+    floor_metrics: BTreeMap<String, Option<f64>>,
+    improvement_metrics: BTreeMap<String, Option<f64>>,
+}
+
+fn load_parser_metric_floor(metric: &str) -> Option<f64> {
+    let baseline_path = Path::new(".ci/metrics/baselines/parser.json");
+    let raw = fs::read_to_string(baseline_path).ok()?;
+    let baseline: ParserScorecardBaseline = serde_json::from_str(&raw).ok()?;
+
+    baseline
+        .floor_metrics
+        .get(metric)
+        .and_then(|v| *v)
+        .or_else(|| baseline.improvement_metrics.get(metric).and_then(|v| *v))
+}
 
 /// Default timeout for parsing individual files
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -343,6 +361,45 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
         failures.push(format!(
             "Low GA feature coverage: {:.1}% (target: 80%)",
             report.ga_coverage.coverage_percentage
+        ));
+    }
+
+    // Parser scorecard ratchets.
+    let current_nodekind_coverage = if report.nodekind_coverage.total_count == 0 {
+        0.0
+    } else {
+        report.nodekind_coverage.covered_count as f64 / report.nodekind_coverage.total_count as f64
+    };
+    if let Some(nodekind_floor) = load_parser_metric_floor("node_kind_coverage")
+        && current_nodekind_coverage + f64::EPSILON < nodekind_floor
+    {
+        failures.push(format!(
+            "NodeKind coverage regression: {:.4} < {:.4} floor",
+            current_nodekind_coverage, nodekind_floor
+        ));
+    }
+
+    let current_valid_parser_gap_count = report.parse_outcomes.error as f64;
+    if let Some(valid_gap_ceiling) = load_parser_metric_floor("valid_parser_gap_count")
+        && current_valid_parser_gap_count > valid_gap_ceiling
+    {
+        failures.push(format!(
+            "Valid parser gap regression: {:.0} > {:.0} floor ceiling",
+            current_valid_parser_gap_count, valid_gap_ceiling
+        ));
+    }
+
+    let current_recovery_salvage_rate = if report.parse_outcomes.total == 0 {
+        1.0
+    } else {
+        report.parse_outcomes.ok as f64 / report.parse_outcomes.total as f64
+    };
+    if let Some(salvage_floor) = load_parser_metric_floor("recovery_salvage_rate")
+        && current_recovery_salvage_rate + f64::EPSILON < salvage_floor
+    {
+        failures.push(format!(
+            "Recovery salvage regression: {:.4} < {:.4} floor",
+            current_recovery_salvage_rate, salvage_floor
         ));
     }
 

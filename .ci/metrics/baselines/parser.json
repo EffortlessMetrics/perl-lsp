@@ -1,21 +1,22 @@
 {
   "schema_version": 1,
-  "measured_at": "2026-04-09T18:13:43Z",
+  "measured_at": "2026-04-24T00:00:00Z",
   "subsystem": "parser",
   "commit": "3f7ede36",
   "floor_metrics": {
-    "system_clean_rate": 0.971,
-    "cpan_clean_rate": 0.953,
+    "system_clean_rate": 0.971106412966878,
+    "cpan_clean_rate": 0.9529449423815621,
     "system_crash_count": 0,
     "system_files_unreadable": 48,
     "system_total_error_nodes": 604,
     "cpan_total_error_nodes": 3015,
-    "strict_clean_subset_pass_rate": 1.0
+    "strict_clean_subset_pass_rate": 1.0,
+    "valid_parser_gap_count": 0.0
   },
   "improvement_metrics": {
-    "node_kind_coverage": 0.941,
+    "node_kind_coverage": 0.9420289855072463,
     "error_density_per_1k_loc": null,
-    "recovery_salvage_rate": null
+    "recovery_salvage_rate": 1.0
   },
   "tolerance_pct": 0.005
 }
