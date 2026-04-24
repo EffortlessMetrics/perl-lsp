@@ -50,7 +50,6 @@ impl DebugAdapter {
         let variables_ref = args.variables_reference as i32;
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
-        let can_use_root_cache = start == 0 && args.count.is_none();
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -66,13 +65,14 @@ impl DebugAdapter {
         // AC8.4: Render scalars/arrays/hashes with lazy child expansion.
         let parsed_from_output;
         let mut parsed_child_cache = HashMap::new();
+        let mut parsed_full_roots = Vec::new();
         let mut used_session_cache = false;
 
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-            // Return cached variables first for stable references and fast repeated expansion.
-            if can_use_root_cache && let Some(vars) = session.variables.get(&variables_ref) {
+            // Serve requested pages from cache for stable references and cheap repeated expansion.
+            if let Some(vars) = session.variable_cache.get_page(variables_ref, start, count) {
                 used_session_cache = true;
-                parsed_from_output = vars.clone();
+                parsed_from_output = vars;
             } else {
                 let mut framed_scope_lines = None;
 
@@ -142,27 +142,31 @@ impl DebugAdapter {
                     _ => {}
                 }
 
-                let (vars, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
+                let (full_roots, child_cache) = if let Some(lines) = framed_scope_lines.as_ref() {
                     let (framed_vars, framed_child_cache) =
-                        Self::parse_scope_variables_from_lines(lines, variables_ref, start, count);
+                        Self::parse_scope_variables_from_lines(lines, variables_ref, 0, 1024);
                     if framed_vars.is_empty() {
                         Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                        self.parse_scope_variables_from_output(variables_ref, start, count)
+                        self.parse_scope_variables_from_output(variables_ref, 0, 1024)
                     } else {
                         (framed_vars, framed_child_cache)
                     }
                 } else {
                     Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-                    self.parse_scope_variables_from_output(variables_ref, start, count)
+                    self.parse_scope_variables_from_output(variables_ref, 0, 1024)
                 };
 
-                parsed_from_output = vars;
+                parsed_from_output = slice_variables(&full_roots, start, count);
+                parsed_full_roots = full_roots;
                 parsed_child_cache = child_cache;
             }
         } else {
-            let (vars, _child_cache) =
-                self.parse_scope_variables_from_output(variables_ref, start, count);
-            parsed_from_output = vars;
+            let (full_roots, _child_cache) = self.parse_scope_variables_from_output(
+                variables_ref,
+                0,
+                1024,
+            );
+            parsed_from_output = slice_variables(&full_roots, start, count);
         }
 
         let variables = if parsed_from_output.is_empty() {
@@ -171,15 +175,16 @@ impl DebugAdapter {
             parsed_from_output
         };
 
-        // Cache parsed variables and generated child references for expansion requests.
+        // Cache parsed roots and generated child references for expansion/paging requests.
         if !used_session_cache
-            && can_use_root_cache
+            && !parsed_full_roots.is_empty()
             && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
         {
-            session.variables.insert(variables_ref, variables.clone());
+            session.variable_cache.upsert(variables_ref, VariableCacheKind::Root, parsed_full_roots);
             for (reference, children) in parsed_child_cache {
-                session.variables.insert(reference, children);
+                session.variable_cache.upsert(reference, VariableCacheKind::Child, children);
             }
+            let _ = session.variable_cache.get_page(variables_ref, start, count);
         }
 
         DapMessage::Response {

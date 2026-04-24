@@ -175,6 +175,20 @@ fn array_children_pagination_start_offset() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn array_children_pagination_repeat_is_stable() -> Result<(), Box<dyn std::error::Error>> {
+    let renderer = PerlVariableRenderer::new();
+    let val = PerlValue::Array((0..25).map(PerlValue::Integer).collect());
+
+    let first = renderer.render_children(&val, 10, 5);
+    let second = renderer.render_children(&val, 10, 5);
+
+    assert_eq!(first, second);
+    assert_eq!(first[0].name, "[10]");
+    assert_eq!(first[4].name, "[14]");
+    Ok(())
+}
+
+#[test]
 fn array_children_pagination_past_end() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2)]);

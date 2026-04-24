@@ -365,7 +365,7 @@ impl DebugAdapter {
                     process: child,
                     state: DebugState::Running,
                     stack_frames: Vec::new(),
-                    variables: HashMap::new(),
+                    variable_cache: VariableCache::default(),
                     thread_id,
                     last_resume_mode: ResumeMode::Unknown,
                 };

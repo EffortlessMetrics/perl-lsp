@@ -121,10 +121,32 @@ mod dap_performance {
             first_elapsed
         );
 
+        let repeat_start = Instant::now();
+        let repeat = adapter.handle_request(
+            2,
+            "variables",
+            Some(json!({
+                "variablesReference": 11,
+                "start": 0,
+                "count": 50
+            })),
+        );
+        let repeat_elapsed = repeat_start.elapsed();
+        match repeat {
+            DapMessage::Response { success, .. } => assert!(success),
+            _ => anyhow::bail!("expected repeated variables response"),
+        }
+        assert!(
+            repeat_elapsed <= first_elapsed + Duration::from_millis(10),
+            "repeated variables request should not regress latency (first={:?}, repeat={:?})",
+            first_elapsed,
+            repeat_elapsed
+        );
+
         if child_ref > 0 {
             let child_start = Instant::now();
             let child = adapter.handle_request(
-                2,
+                3,
                 "variables",
                 Some(json!({
                     "variablesReference": child_ref,
