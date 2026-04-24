@@ -14,7 +14,9 @@ use perl_workspace::workspace_index::{
     SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex, WorkspaceSymbol,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use walkdir::WalkDir;
 
 /// Add workspace symbol completions for functions and variables
 ///
@@ -240,54 +242,177 @@ pub fn add_use_module_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
+    include_paths: &[PathBuf],
+    system_inc_paths: &[PathBuf],
 ) {
-    let Some(index) = workspace_index else {
-        return;
-    };
-
-    if !index.has_symbols() {
-        return;
-    }
-
     let mut seen: HashSet<String> = HashSet::new();
 
-    // Search for package symbols matching the prefix
-    let all_symbols = if context.prefix.is_empty() {
-        index.all_symbols()
-    } else {
-        index.find_symbols(&context.prefix)
-    };
+    if let Some(index) = workspace_index
+        && index.has_symbols()
+    {
+        let all_symbols = if context.prefix.is_empty() {
+            index.all_symbols()
+        } else {
+            index.find_symbols(&context.prefix)
+        };
 
-    for symbol in all_symbols {
-        if symbol.kind != WsSymbolKind::Package {
+        for symbol in all_symbols {
+            if symbol.kind != WsSymbolKind::Package {
+                continue;
+            }
+            if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
+                continue;
+            }
+            if !seen.insert(symbol.name.clone()) {
+                continue;
+            }
+
+            let name = &symbol.name;
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: CompletionItemKind::Module,
+                detail: Some("module".to_string()),
+                documentation: symbol
+                    .documentation
+                    .clone()
+                    .or_else(|| Some(format!("Package `{name}`"))),
+                insert_text: Some(name.clone()),
+                sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+                commit_characters: None,
+            });
+        }
+    }
+
+    for module_name in scan_directory_for_modules(include_paths) {
+        if !context.prefix.is_empty() && !module_name.starts_with(&context.prefix) {
+            continue;
+        }
+        if !seen.insert(module_name.clone()) {
             continue;
         }
 
-        // Match against the module name prefix
-        if !context.prefix.is_empty() && !symbol.name.starts_with(&context.prefix) {
-            continue;
-        }
-
-        if !seen.insert(symbol.name.clone()) {
-            continue;
-        }
-
-        let name = &symbol.name;
         completions.push(CompletionItem {
-            label: name.clone(),
+            label: module_name.clone(),
             kind: CompletionItemKind::Module,
-            detail: Some("module".to_string()),
-            documentation: symbol
-                .documentation
-                .clone()
-                .or_else(|| Some(format!("Package `{name}`"))),
-            insert_text: Some(name.clone()),
-            sort_text: Some(format!("1{}_{name}", module_sort_tier(name))),
-            filter_text: Some(name.clone()),
+            detail: Some("external module".to_string()),
+            documentation: Some(format!("Discovered in include paths: `{module_name}`")),
+            insert_text: Some(module_name.clone()),
+            sort_text: Some(format!("2{}_{module_name}", module_sort_tier(&module_name))),
+            filter_text: Some(module_name),
             additional_edits: vec![],
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
         });
+    }
+
+    for module_name in scan_directory_for_modules(system_inc_paths) {
+        if !context.prefix.is_empty() && !module_name.starts_with(&context.prefix) {
+            continue;
+        }
+        if !seen.insert(module_name.clone()) {
+            continue;
+        }
+
+        completions.push(CompletionItem {
+            label: module_name.clone(),
+            kind: CompletionItemKind::Module,
+            detail: Some("system module".to_string()),
+            documentation: Some(format!("Discovered in system @INC: `{module_name}`")),
+            insert_text: Some(module_name.clone()),
+            sort_text: Some(format!("3{}_{module_name}", module_sort_tier(&module_name))),
+            filter_text: Some(module_name),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+            commit_characters: None,
+        });
+    }
+}
+
+const MODULE_SCAN_MAX_DEPTH: usize = 20;
+const MODULE_SCAN_MAX_FILES: usize = 20_000;
+
+fn scan_directory_for_modules(roots: &[PathBuf]) -> Vec<String> {
+    let mut modules: Vec<String> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut scanned_files = 0usize;
+
+    for root in roots {
+        if scanned_files >= MODULE_SCAN_MAX_FILES {
+            break;
+        }
+        if !root.is_dir() {
+            continue;
+        }
+
+        for entry in WalkDir::new(root)
+            .max_depth(MODULE_SCAN_MAX_DEPTH)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if scanned_files >= MODULE_SCAN_MAX_FILES {
+                break;
+            }
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            scanned_files += 1;
+            if let Some(module_name) = path_to_module_name(root, entry.path())
+                && seen.insert(module_name.clone())
+            {
+                modules.push(module_name);
+            }
+        }
+    }
+
+    modules
+}
+
+fn path_to_module_name(root: &Path, path: &Path) -> Option<String> {
+    if path.extension().and_then(std::ffi::OsStr::to_str) != Some("pm") {
+        return None;
+    }
+
+    let rel_path = path.strip_prefix(root).ok()?;
+    let mut module_name = rel_path.to_str()?.replace(['/', '\\'], "::");
+    module_name.truncate(module_name.len().saturating_sub(3));
+
+    if module_name.is_empty() || module_name.contains("..") {
+        return None;
+    }
+
+    Some(module_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{path_to_module_name, scan_directory_for_modules};
+    use std::fs;
+
+    #[test]
+    fn path_to_module_name_maps_pm_path() -> Result<(), Box<dyn std::error::Error>> {
+        let root = std::path::PathBuf::from("/tmp/lib");
+        let module = std::path::PathBuf::from("/tmp/lib/File/Path/To/Module.pm");
+        let mapped = path_to_module_name(&root, &module);
+        assert_eq!(mapped.as_deref(), Some("File::Path::To::Module"));
+        Ok(())
+    }
+
+    #[test]
+    fn scan_directory_for_modules_finds_pm_files() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(root.join("DB"))?;
+        fs::write(root.join("DB").join("Driver.pm"), "package DB::Driver;\n1;\n")?;
+        fs::write(root.join("README.txt"), "not a module\n")?;
+
+        let modules = scan_directory_for_modules(&[root]);
+        assert!(modules.iter().any(|module| module == "DB::Driver"));
+        assert!(!modules.iter().any(|module| module == "README"));
+        Ok(())
     }
 }
 

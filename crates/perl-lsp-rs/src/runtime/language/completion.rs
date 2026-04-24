@@ -22,6 +22,7 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -295,6 +296,36 @@ impl LspServer {
         }
     }
 
+    fn module_completion_paths_for_doc(&self, doc_uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        let Some(folder) = self.folder_for_doc_uri(doc_uri) else {
+            return (Vec::new(), Vec::new());
+        };
+
+        let mut config = folder.effective_workspace_config.clone();
+        let perl5lib_paths = std::env::var("PERL5LIB")
+            .map(|value| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&value))
+            .unwrap_or_default();
+
+        let mut include_paths: Vec<PathBuf> = Vec::new();
+        for include_path in config.effective_include_paths(&perl5lib_paths) {
+            let path = PathBuf::from(include_path);
+            let resolved = if path.is_absolute() {
+                path
+            } else if let Some(root_path) = folder.path.as_ref() {
+                root_path.join(path)
+            } else {
+                path
+            };
+            if !include_paths.iter().any(|existing| existing == &resolved) {
+                include_paths.push(resolved);
+            }
+        }
+
+        let system_inc_paths =
+            if config.use_system_inc { config.get_system_inc().to_vec() } else { Vec::new() };
+        (include_paths, system_inc_paths)
+    }
+
     /// Handle completion request
     pub(crate) fn handle_completion(
         &self,
@@ -323,6 +354,8 @@ impl LspServer {
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let (include_paths, system_inc_paths) =
+                        self.module_completion_paths_for_doc(uri);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -332,15 +365,22 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_module_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_module_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths,
+                        system_inc_paths,
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -565,6 +605,8 @@ impl LspServer {
 
                 // Get completions with optimized cancellation support
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let (include_paths, system_inc_paths) =
+                        self.module_completion_paths_for_doc(uri);
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -574,14 +616,21 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_module_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths,
+                        system_inc_paths,
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_module_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths,
+                        system_inc_paths,
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
