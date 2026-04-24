@@ -37,3 +37,11 @@ fn transliteration_supports_empty_bodies_without_panicking() {
     assert_has_error(r#"$x =~ tr//A-Z/;"#, "missing search list");
     assert_clean_parse(r#"$x =~ tr/a-z//;"#);
 }
+
+#[test]
+fn transliteration_angle_bracket_and_paren_delimiters() {
+    // All four ASCII bracket pairs are valid delimiters for tr/y
+    assert_clean_parse(r#"$x =~ tr<a-z><A-Z>;"#);
+    assert_clean_parse(r#"$x =~ tr(a-z)(A-Z)s;"#);
+    assert_clean_parse(r#"$x =~ tr[a-z][A-Z]d;"#);
+}

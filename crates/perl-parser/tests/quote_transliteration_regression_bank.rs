@@ -23,6 +23,29 @@ fn transliteration_regression_bank() {
 }
 
 #[test]
+fn transliteration_all_four_paired_delimiter_kinds() {
+    // tr<>, tr{}, tr[], tr() — all four ASCII bracket pairs must work
+    let cases = [
+        ("tr<abc><xyz>", ("abc", "xyz", "")),
+        ("tr(abc)(xyz)s", ("abc", "xyz", "s")),
+        ("tr[abc][xyz]d", ("abc", "xyz", "d")),
+        ("tr{abc}{xyz}r", ("abc", "xyz", "r")),
+        // Nested brackets inside search/replace
+        ("tr{a{b}c}{x{y}z}", ("a{b}c", "x{y}z", "")),
+        ("tr<a<b>c><x<y>z>", ("a<b>c", "x<y>z", "")),
+    ];
+
+    for (input, expected) in cases {
+        let actual = extract_transliteration_parts(input);
+        assert_eq!(
+            (actual.0.as_str(), actual.1.as_str(), actual.2.as_str()),
+            expected,
+            "{input}",
+        );
+    }
+}
+
+#[test]
 fn strict_parser_rejects_invalid_delimiter_and_modifier() {
     let invalid_delimiter = extract_transliteration_parts_strict("trabc");
     assert_eq!(invalid_delimiter, Err(TransliterationError::InvalidDelimiter('a')));
