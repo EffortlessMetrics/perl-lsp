@@ -989,6 +989,18 @@ pub struct Location {
     pub range: Range,
 }
 
+#[derive(Debug, Clone)]
+/// Result of safe-delete preflight for a symbol.
+pub enum SafeDeletePreflight {
+    /// Symbol has no references in other workspace files.
+    SafeToDelete,
+    /// Symbol is referenced outside its defining file and should not be deleted.
+    Blocked {
+        /// External reference locations that block deletion.
+        external_references: Vec<Location>,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
@@ -2688,6 +2700,45 @@ impl WorkspaceIndex {
 
         all_refs
     }
+
+    /// Preflight symbol deletion by checking for cross-file references.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Symbol key to verify before deletion.
+    /// * `defining_uri` - URI of the file containing the symbol definition.
+    ///
+    /// # Returns
+    ///
+    /// [`SafeDeletePreflight::SafeToDelete`] when no external references exist;
+    /// otherwise [`SafeDeletePreflight::Blocked`] with the blocking reference
+    /// locations.
+    pub fn safe_delete_preflight(&self, key: &SymbolKey, defining_uri: &str) -> SafeDeletePreflight {
+        let defining_uri_key = DocumentStore::uri_key(&Self::normalize_uri(defining_uri));
+        let mut external_references: Vec<Location> = self
+            .find_refs(key)
+            .into_iter()
+            .filter(|location| {
+                let reference_uri_key = DocumentStore::uri_key(&Self::normalize_uri(&location.uri));
+                reference_uri_key != defining_uri_key
+            })
+            .collect();
+
+        external_references.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then(left.range.start.line.cmp(&right.range.start.line))
+                .then(left.range.start.column.cmp(&right.range.start.column))
+                .then(left.range.end.line.cmp(&right.range.end.line))
+                .then(left.range.end.column.cmp(&right.range.end.column))
+        });
+
+        if external_references.is_empty() {
+            SafeDeletePreflight::SafeToDelete
+        } else {
+            SafeDeletePreflight::Blocked { external_references }
+        }
+    }
 }
 
 /// AST visitor for extracting symbols and references
@@ -3971,6 +4022,75 @@ UsageDemo::helper();
         assert!(
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
+        );
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_blocks_symbol_with_external_references() {
+        let index = WorkspaceIndex::new();
+        let defining_uri = "file:///lib/My/DeleteTarget.pm";
+        let consumer_uri = "file:///t/delete_target_usage.t";
+
+        let defining_code = r#"
+package My::DeleteTarget;
+sub remove_me {
+    return 1;
+}
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(defining_uri)), defining_code.to_string()));
+
+        let consumer_code = r#"
+use My::DeleteTarget;
+My::DeleteTarget::remove_me();
+"#;
+        must(index.index_file(must(url::Url::parse(consumer_uri)), consumer_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::DeleteTarget"),
+            name: Arc::from("remove_me"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let preflight = index.safe_delete_preflight(&key, defining_uri);
+        assert!(
+            matches!(preflight, SafeDeletePreflight::Blocked { .. }),
+            "expected safe-delete preflight to be blocked by external references"
+        );
+        if let SafeDeletePreflight::Blocked { external_references } = preflight {
+            assert!(
+                external_references.iter().any(|reference| reference.uri == consumer_uri),
+                "expected external reference from consumer file"
+            );
+        }
+    }
+
+    #[test]
+    fn test_safe_delete_preflight_allows_symbol_without_external_references() {
+        let index = WorkspaceIndex::new();
+        let defining_uri = "file:///lib/My/LocalOnly.pm";
+        let defining_code = r#"
+package My::LocalOnly;
+sub local_only {
+    local_only();
+    return 1;
+}
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(defining_uri)), defining_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::LocalOnly"),
+            name: Arc::from("local_only"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+
+        let preflight = index.safe_delete_preflight(&key, defining_uri);
+        assert!(
+            matches!(preflight, SafeDeletePreflight::SafeToDelete),
+            "same-file references should not block safe-delete preflight"
         );
     }
 
