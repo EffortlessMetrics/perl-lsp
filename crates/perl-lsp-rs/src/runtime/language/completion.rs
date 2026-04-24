@@ -527,6 +527,10 @@ impl LspServer {
                             item["commitCharacters"] = json!(chars);
                         }
 
+                        if let Some(sort_text) = c.sort_text {
+                            item["sortText"] = json!(sort_text);
+                        }
+
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
                         if !c.additional_edits.is_empty() {
                             let edits: Vec<Value> = c
@@ -743,6 +747,10 @@ impl LspServer {
 
                         if commit_chars_support && let Some(chars) = commit_chars_for_kind(c.kind) {
                             item["commitCharacters"] = json!(chars);
+                        }
+
+                        if let Some(sort_text) = c.sort_text {
+                            item["sortText"] = json!(sort_text);
                         }
 
                         // Serialize additionalTextEdits (e.g. auto-import `use Module;`)
