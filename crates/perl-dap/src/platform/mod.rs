@@ -16,6 +16,7 @@ pub use perl_lsp_rs_core::platform::{
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 
 #[cfg(windows)]
 const PATH_SEPARATOR: char = ';';
@@ -43,6 +44,35 @@ pub enum PerlInterpreterResult {
     /// No Perl interpreter found anywhere.
     /// Carries the list of locations searched, for use in an error message.
     NotFound { searched: Vec<String> },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DiscoveryCacheKey {
+    path: Option<String>,
+    perlbrew_root: Option<String>,
+    plenv_root: Option<String>,
+    home: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct DiscoveryCacheEntry {
+    key: DiscoveryCacheKey,
+    result: PerlInterpreterResult,
+}
+
+static DISCOVERY_CACHE: OnceLock<Mutex<Option<DiscoveryCacheEntry>>> = OnceLock::new();
+
+fn discovery_cache() -> &'static Mutex<Option<DiscoveryCacheEntry>> {
+    DISCOVERY_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn current_discovery_cache_key() -> DiscoveryCacheKey {
+    DiscoveryCacheKey {
+        path: env::var("PATH").ok(),
+        perlbrew_root: env::var("PERLBREW_ROOT").ok(),
+        plenv_root: env::var("PLENV_ROOT").ok(),
+        home: env::var("HOME").ok(),
+    }
 }
 
 /// Rank a Perl binary path for preference on Windows.
@@ -160,21 +190,41 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
         }
     }
 
+    let cache_key = current_discovery_cache_key();
+    if let Ok(guard) = discovery_cache().lock()
+        && let Some(entry) = guard.as_ref()
+        && entry.key == cache_key
+    {
+        return entry.result.clone();
+    }
+
     let mut searched: Vec<String> = vec!["PATH".to_string()];
 
     // 2. Check toolchain managers (perlbrew, plenv) first.
     if let Some(path) = detect_perlbrew_perl() {
-        return PerlInterpreterResult::FoundOnPath(path);
+        let discovered = PerlInterpreterResult::FoundOnPath(path);
+        if let Ok(mut guard) = discovery_cache().lock() {
+            *guard = Some(DiscoveryCacheEntry { key: cache_key, result: discovered.clone() });
+        }
+        return discovered;
     }
     if let Some(path) = detect_plenv_perl() {
-        return PerlInterpreterResult::FoundOnPath(path);
+        let discovered = PerlInterpreterResult::FoundOnPath(path);
+        if let Ok(mut guard) = discovery_cache().lock() {
+            *guard = Some(DiscoveryCacheEntry { key: cache_key, result: discovered.clone() });
+        }
+        return discovered;
     }
 
     // 3. Walk PATH, ranking results on Windows.
     if let Ok(path_env) = env::var("PATH") {
         let ranked = find_all_perl_on_path(&path_env);
         if let Some(best) = ranked.into_iter().next() {
-            return PerlInterpreterResult::FoundOnPath(best);
+            let discovered = PerlInterpreterResult::FoundOnPath(best);
+            if let Ok(mut guard) = discovery_cache().lock() {
+                *guard = Some(DiscoveryCacheEntry { key: cache_key, result: discovered.clone() });
+            }
+            return discovered;
         }
     }
 
@@ -182,11 +232,22 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     for (path, label) in fallback_perl_paths() {
         searched.push(path.to_string_lossy().to_string());
         if path.exists() && path.is_file() {
-            return PerlInterpreterResult::FoundViaFallback { path, label: label.to_string() };
+            let discovered =
+                PerlInterpreterResult::FoundViaFallback { path, label: label.to_string() };
+            if let Ok(mut guard) = discovery_cache().lock() {
+                *guard = Some(DiscoveryCacheEntry { key: cache_key, result: discovered.clone() });
+            }
+            return discovered;
         }
     }
 
-    PerlInterpreterResult::NotFound { searched }
+    let discovered = PerlInterpreterResult::NotFound { searched };
+
+    if let Ok(mut guard) = discovery_cache().lock() {
+        *guard = Some(DiscoveryCacheEntry { key: cache_key, result: discovered.clone() });
+    }
+
+    discovered
 }
 
 #[cfg(test)]

@@ -2,28 +2,94 @@
 
 use super::*;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PerlInfoCacheKey {
+    path: Option<String>,
+    perlbrew_root: Option<String>,
+    plenv_root: Option<String>,
+    home: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct PerlInfoCacheEntry {
+    key: PerlInfoCacheKey,
+    info: String,
+}
+
+static PERL_INFO_CACHE: OnceLock<Mutex<Option<PerlInfoCacheEntry>>> = OnceLock::new();
+static PERL_VERSION_CACHE: OnceLock<Mutex<HashMap<PathBuf, Option<String>>>> = OnceLock::new();
+
+fn perl_info_cache() -> &'static Mutex<Option<PerlInfoCacheEntry>> {
+    PERL_INFO_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn perl_version_cache() -> &'static Mutex<HashMap<PathBuf, Option<String>>> {
+    PERL_VERSION_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn cached_perl_version(perl_path: &Path) -> Option<String> {
+    if let Ok(guard) = perl_version_cache().lock()
+        && let Some(version) = guard.get(perl_path)
+    {
+        return version.clone();
+    }
+
+    let discovered =
+        Command::new(perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
+            if out.status.success() {
+                String::from_utf8(out.stdout)
+                    .ok()
+                    .map(|v| v.trim().to_string())
+                    .filter(|v| !v.is_empty())
+            } else {
+                None
+            }
+        });
+
+    if let Ok(mut guard) = perl_version_cache().lock() {
+        guard.insert(perl_path.to_path_buf(), discovered.clone());
+    }
+
+    discovered
+}
+
 /// Try to detect the Perl interpreter available on the system and return a human-readable
 /// summary string.
 ///
-/// Uses `resolve_perl_path_with_toolchain()` to find Perl (checks perlbrew, plenv, then PATH),
-/// then runs `perl -e 'print $]'` to get the version number.  Returns a string describing what
-/// was found, or a "not found" / install-hint message suitable for inclusion in error messages.
+/// Uses `find_perl_interpreter(None)` to preserve configured/PATH/fallback detection behavior,
+/// and caches the result for a stable PATH value so repeated launch failures don't rerun
+/// interpreter discovery and version probes.
 fn detect_perl_info() -> String {
-    match crate::platform::resolve_perl_path_with_toolchain() {
-        Ok(perl_path) => {
-            let version_output =
-                Command::new(&perl_path).arg("-e").arg("print $]").output().ok().and_then(|out| {
-                    if out.status.success() { String::from_utf8(out.stdout).ok() } else { None }
-                });
+    let key = PerlInfoCacheKey {
+        path: std::env::var("PATH").ok(),
+        perlbrew_root: std::env::var("PERLBREW_ROOT").ok(),
+        plenv_root: std::env::var("PLENV_ROOT").ok(),
+        home: std::env::var("HOME").ok(),
+    };
+    if let Ok(guard) = perl_info_cache().lock()
+        && let Some(entry) = guard.as_ref()
+        && entry.key == key
+    {
+        return entry.info.clone();
+    }
 
-            match version_output {
-                Some(v) if !v.trim().is_empty() => {
-                    format!("Found Perl at {} (version {})", perl_path.display(), v.trim())
-                }
-                _ => format!("Found Perl at {}", perl_path.display()),
+    let info = match crate::platform::find_perl_interpreter(None) {
+        crate::platform::PerlInterpreterResult::ConfiguredPath(perl_path)
+        | crate::platform::PerlInterpreterResult::FoundOnPath(perl_path) => {
+            match cached_perl_version(&perl_path) {
+                Some(v) => format!("Found Perl at {} (version {v})", perl_path.display()),
+                None => format!("Found Perl at {}", perl_path.display()),
             }
         }
-        Err(_) => {
+        crate::platform::PerlInterpreterResult::FoundViaFallback { path, label } => {
+            match cached_perl_version(&path) {
+                Some(v) => {
+                    format!("Found Perl at {} via {} (version {v})", path.display(), label)
+                }
+                None => format!("Found Perl at {} via {}", path.display(), label),
+            }
+        }
+        crate::platform::PerlInterpreterResult::NotFound { .. } => {
             #[cfg(windows)]
             {
                 "Perl was not found on PATH. Install Perl from https://strawberryperl.com \
@@ -37,7 +103,13 @@ fn detect_perl_info() -> String {
                     .to_string()
             }
         }
+    };
+
+    if let Ok(mut guard) = perl_info_cache().lock() {
+        *guard = Some(PerlInfoCacheEntry { key, info: info.clone() });
     }
+
+    info
 }
 
 fn format_perl_spawn_error(error: &std::io::Error) -> String {
