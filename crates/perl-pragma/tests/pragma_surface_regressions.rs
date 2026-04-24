@@ -261,3 +261,17 @@ fn package_and_phase_blocks_restore_lexical_state_after_exit() {
     assert!(after.strict_refs);
     assert!(after.warnings);
 }
+
+#[test]
+fn no_builtin_bare_clears_all_imports() {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true floor weaken)"], 0, 33),
+        no_node("builtin", &[], 34, 47),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 40);
+    assert!(!state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("floor"));
+    assert!(!state.has_builtin_import("weaken"));
+}
