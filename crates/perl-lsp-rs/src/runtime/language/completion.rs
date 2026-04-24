@@ -22,6 +22,7 @@ use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -58,18 +59,25 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 
 impl LspServer {
     fn module_completion_roots_for_doc(&self, uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
-        let mut include_paths = Vec::new();
-        let mut system_inc_paths = Vec::new();
+        let mut include_paths: Vec<PathBuf> = Vec::new();
+        let mut seen_include: HashSet<PathBuf> = HashSet::new();
+        let mut system_inc_paths: Vec<PathBuf> = Vec::new();
+        let mut seen_system: HashSet<PathBuf> = HashSet::new();
         let mut include_system_inc = false;
 
-        if let Some(mut config) = self.config_for_doc(uri) {
+        // Resolve the folder root once for relative-path resolution.
+        let folder_root = self
+            .folder_for_doc_uri(uri)
+            .and_then(|folder| super::super::workspace_folder_path(&folder));
+
+        // Read effective include paths from the config clone (PERL5LIB + workspace paths).
+        // The clone is lightweight — it does not trigger the system @INC subprocess.
+        if let Some(config) = self.config_for_doc(uri) {
             let perl5lib_paths = std::env::var("PERL5LIB")
                 .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
                 .unwrap_or_default();
             let effective_paths = config.effective_include_paths(&perl5lib_paths);
-            let folder_root = self
-                .folder_for_doc_uri(uri)
-                .and_then(|folder| super::super::workspace_folder_path(&folder));
+            include_system_inc = config.use_system_inc;
 
             for path in effective_paths {
                 let resolved = {
@@ -82,15 +90,24 @@ impl LspServer {
                         PathBuf::from(path)
                     }
                 };
-                if !include_paths.contains(&resolved) {
+                if seen_include.insert(resolved.clone()) {
                     include_paths.push(resolved);
                 }
             }
+        }
 
-            include_system_inc = config.use_system_inc;
-            if include_system_inc {
-                for path in config.get_system_inc() {
-                    if !system_inc_paths.contains(path) {
+        // For system @INC, call get_system_inc() through the locked folder so the lazy
+        // subprocess result is written back to the authoritative cache and not discarded
+        // when the clone is dropped.  Without this, every completion request with
+        // use_system_inc=true would spawn `perl -e 'print join("\n", @INC)'`.
+        if include_system_inc {
+            let mut folders = self.workspace_folders.lock();
+            if let Some(folder) = folders
+                .iter_mut()
+                .find(|f| super::super::workspace_folder_matches_doc_uri(f, uri))
+            {
+                for path in folder.effective_workspace_config.get_system_inc() {
+                    if seen_system.insert(path.clone()) {
                         system_inc_paths.push(path.clone());
                     }
                 }

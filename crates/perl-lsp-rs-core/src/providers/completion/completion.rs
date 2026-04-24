@@ -3796,6 +3796,64 @@ sub helper { }
     }
 
     #[test]
+    fn test_path_to_module_name_rejects_non_pm_extension() -> Result<(), Box<dyn std::error::Error>>
+    {
+        // path_to_module_name must return None for files that are not .pm files,
+        // even if they look like module paths.  Without this guard the scanner
+        // would surface .pl scripts and .pod documentation as completable modules.
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        for name in &["Script.pl", "Doc.pod", "Archive.pm.bak", "README"] {
+            let file = root.join(name);
+            fs::write(&file, "")?;
+            assert!(
+                workspace::path_to_module_name(&root, &file).is_none(),
+                "expected None for {}",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_respects_max_depth() -> Result<(), Box<dyn std::error::Error>> {
+        // scan_directory_for_modules must not descend more than MAX_SCAN_DEPTH (8)
+        // levels below the root.  A directory exactly at depth 8 should be scanned;
+        // a directory at depth 9 should be silently skipped.
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+
+        // Build a path 9 levels deep: root/a/b/c/d/e/f/g/h/
+        let deep_dir = root
+            .join("a")
+            .join("b")
+            .join("c")
+            .join("d")
+            .join("e")
+            .join("f")
+            .join("g")
+            .join("h"); // depth 8 — should be scanned
+        let too_deep = deep_dir.join("x"); // depth 9 — must be skipped
+        fs::create_dir_all(&too_deep)?;
+        fs::write(deep_dir.join("AtLimit.pm"), "package A::B::C::D::E::F::G::H::AtLimit;\n1;\n")?;
+        fs::write(too_deep.join("TooDeep.pm"), "package TooDeep;\n1;\n")?;
+
+        let modules = workspace::scan_directory_for_modules(&root, "");
+        assert!(
+            modules.iter().any(|m| m == "a::b::c::d::e::f::g::h::AtLimit"),
+            "depth-8 module should be found; got: {:?}",
+            modules
+        );
+        assert!(
+            !modules.iter().any(|m| m == "x::TooDeep" || m == "TooDeep"),
+            "depth-9 module must not appear; got: {:?}",
+            modules
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_use_completion_not_triggered_outside_use_statement()
     -> Result<(), Box<dyn std::error::Error>> {
         // Verify that the scan does NOT fire for general variable completion.
