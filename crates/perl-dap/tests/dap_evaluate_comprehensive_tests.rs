@@ -13,7 +13,10 @@
 //! - setExpression missing-argument error handling
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
+use serde::Deserialize;
 use serde_json::json;
+use std::fs;
+use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -23,6 +26,26 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn new_adapter() -> DebugAdapter {
     DebugAdapter::new()
+}
+
+#[derive(Debug, Deserialize)]
+struct EvaluateFixtureBank {
+    evaluate_cases: EvaluateCases,
+}
+
+#[derive(Debug, Deserialize)]
+struct EvaluateCases {
+    safe_pass: Vec<String>,
+    blocked: Vec<String>,
+    timeout_oriented: Vec<String>,
+}
+
+fn load_evaluate_fixture_cases() -> Result<EvaluateCases, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/mocks/dap_correctness_fixture_bank.json");
+    let raw = fs::read_to_string(path)?;
+    let fixture: EvaluateFixtureBank = serde_json::from_str(&raw)?;
+    Ok(fixture.evaluate_cases)
 }
 
 /// Assert that the response is a failed evaluate with a message containing `needle`.
@@ -614,6 +637,72 @@ fn test_evaluate_increment_blocked_in_safe_mode() -> TestResult {
             Some(json!({ "expression": expr, "allowSideEffects": false })),
         );
         assert_evaluate_blocked(response, "Safe evaluation mode")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn fixture_safe_evaluate_expressions_pass_policy_validation() -> TestResult {
+    let mut adapter = new_adapter();
+    let fixture = load_evaluate_fixture_cases()?;
+
+    for expression in fixture.safe_pass {
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": expression, "allowSideEffects": false })),
+        );
+        assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn fixture_blocked_evaluate_expressions_fail_safely() -> TestResult {
+    let mut adapter = new_adapter();
+    let fixture = load_evaluate_fixture_cases()?;
+
+    for expression in fixture.blocked {
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": expression, "allowSideEffects": false })),
+        );
+        assert_evaluate_blocked(response, "Safe evaluation mode")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn fixture_timeout_oriented_expressions_fail_cleanly() -> TestResult {
+    let mut adapter = new_adapter();
+    let fixture = load_evaluate_fixture_cases()?;
+
+    for expression in fixture.timeout_oriented {
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": expression, "allowSideEffects": false })),
+        );
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(!success, "timeout-oriented expression must fail safely");
+                let error_message = message.unwrap_or_default();
+                assert!(
+                    !error_message.is_empty(),
+                    "timeout-oriented failure should return a message"
+                );
+                assert!(
+                    error_message.contains("Safe evaluation mode")
+                        || error_message.contains("timed out")
+                        || error_message.contains("session"),
+                    "unexpected evaluate failure message: {error_message}"
+                );
+            }
+            other => return Err(format!("expected Response, got {other:?}").into()),
+        }
     }
     Ok(())
 }

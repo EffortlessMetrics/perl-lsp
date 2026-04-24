@@ -4,6 +4,9 @@
 #[cfg(test)]
 mod deep_truncation_tests {
     use perl_dap::variables::{PerlValue, PerlVariableRenderer, VariableParser, VariableRenderer};
+    use serde::Deserialize;
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn test_7level_nested_hash_rendering() {
@@ -148,5 +151,183 @@ mod deep_truncation_tests {
 
         assert_eq!(children.len(), 1, "root should have 1 child");
         assert_eq!(children[0].name, "level1");
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FixtureBank {
+        variable_cases: Vec<VariableCase>,
+        scope_visibility: ScopeVisibility,
+        truncation_case: TruncationCase,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct VariableCase {
+        id: String,
+        assignment: String,
+        expected_type: String,
+        expected_indexed_variables: Option<i64>,
+        expected_named_variables: Option<i64>,
+        preview_contains: Vec<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct ScopeVisibility {
+        lexical: Vec<String>,
+        package: Vec<String>,
+        global: Vec<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct TruncationCase {
+        id: String,
+        summary: String,
+        total_count: Option<usize>,
+        expected_preview_contains: Vec<String>,
+    }
+
+    fn load_fixture_bank() -> Result<FixtureBank, Box<dyn std::error::Error>> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/mocks/dap_correctness_fixture_bank.json");
+        let raw = fs::read_to_string(path)?;
+        Ok(serde_json::from_str(&raw)?)
+    }
+
+    #[test]
+    fn fixture_bank_large_arrays_render_with_bounded_previews()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = load_fixture_bank()?;
+        let parser = VariableParser::new();
+        let renderer = PerlVariableRenderer::new();
+
+        for case_id in ["array_200_real_session", "array_500_real_session"] {
+            let case = fixture
+                .variable_cases
+                .iter()
+                .find(|entry| entry.id == case_id)
+                .ok_or_else(|| format!("missing fixture case: {case_id}"))?;
+            let (_, parsed_value) = parser.parse_assignment(&case.assignment)?;
+            let rendered = renderer.render("@fixture", &parsed_value);
+
+            assert_eq!(rendered.type_name.as_deref(), Some(case.expected_type.as_str()));
+            assert_eq!(rendered.indexed_variables, case.expected_indexed_variables);
+            assert!(rendered.value.len() < 600, "array preview should remain bounded");
+            for snippet in &case.preview_contains {
+                assert!(
+                    rendered.value.contains(snippet),
+                    "expected preview for {} to contain {:?}, got {:?}",
+                    case.id,
+                    snippet,
+                    rendered.value
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_bank_nested_hash_and_unicode_values_render() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let fixture = load_fixture_bank()?;
+        let parser = VariableParser::new();
+        let renderer = PerlVariableRenderer::new();
+
+        for case_id in ["deep_nested_hash_real_session", "unicode_hash_real_session"] {
+            let case = fixture
+                .variable_cases
+                .iter()
+                .find(|entry| entry.id == case_id)
+                .ok_or_else(|| format!("missing fixture case: {case_id}"))?;
+            let (_, parsed_value) = parser.parse_assignment(&case.assignment)?;
+            let rendered = renderer.render("%fixture", &parsed_value);
+
+            assert_eq!(rendered.type_name.as_deref(), Some(case.expected_type.as_str()));
+            assert_eq!(rendered.named_variables, case.expected_named_variables);
+            for snippet in &case.preview_contains {
+                assert!(
+                    rendered.value.contains(snippet),
+                    "expected preview for {} to contain {:?}, got {:?}",
+                    case.id,
+                    snippet,
+                    rendered.value
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_bank_coderef_and_blessed_object_previews_render()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = load_fixture_bank()?;
+        let parser = VariableParser::new();
+        let renderer = PerlVariableRenderer::new();
+
+        for case_id in ["coderef_preview_real_session", "blessed_object_preview_real_session"] {
+            let case = fixture
+                .variable_cases
+                .iter()
+                .find(|entry| entry.id == case_id)
+                .ok_or_else(|| format!("missing fixture case: {case_id}"))?;
+            let (_, parsed_value) = parser.parse_assignment(&case.assignment)?;
+            let rendered = renderer.render("$fixture", &parsed_value);
+
+            assert_eq!(rendered.type_name.as_deref(), Some(case.expected_type.as_str()));
+            for snippet in &case.preview_contains {
+                assert!(
+                    rendered.value.contains(snippet),
+                    "expected preview for {} to contain {:?}, got {:?}",
+                    case.id,
+                    snippet,
+                    rendered.value
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_bank_scope_visibility_sets_are_distinct() -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = load_fixture_bank()?;
+        let scopes = fixture.scope_visibility;
+
+        for lexical in &scopes.lexical {
+            assert!(!scopes.package.contains(lexical));
+            assert!(!scopes.global.contains(lexical));
+        }
+        for package in &scopes.package {
+            assert!(!scopes.global.contains(package));
+        }
+        assert!(scopes.lexical.iter().all(|name| name.starts_with('$')));
+        assert!(
+            scopes.package.iter().any(|name| name.starts_with("%main::")),
+            "package scope should include package-qualified hashes"
+        );
+        assert!(scopes.global.iter().any(|name| name == "$ENV"));
+        Ok(())
+    }
+
+    #[test]
+    fn fixture_bank_truncated_deep_structure_preview_is_stable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let fixture = load_fixture_bank()?;
+        let renderer = PerlVariableRenderer::new();
+        let trunc = fixture.truncation_case;
+        let value = PerlValue::Truncated { summary: trunc.summary, total_count: trunc.total_count };
+        let rendered = renderer.render("$deep", &value);
+
+        assert!(
+            rendered.indexed_variables.is_none(),
+            "truncated summary values should not expose child pagination metadata"
+        );
+        assert!(
+            rendered.value.len() < 300,
+            "truncated preview should be concise: {}",
+            rendered.value
+        );
+        for snippet in &trunc.expected_preview_contains {
+            assert!(rendered.value.contains(snippet));
+        }
+        assert!(trunc.id.contains("real_session"));
+        Ok(())
     }
 }
