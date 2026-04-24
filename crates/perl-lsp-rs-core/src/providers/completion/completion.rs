@@ -170,6 +170,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_paths: Vec<String>,
+    system_inc_paths: Vec<String>,
 }
 
 impl CompletionProvider {
@@ -200,7 +202,7 @@ impl CompletionProvider {
     /// ```
     /// Arguments: `ast`, `workspace_index`.
     pub fn new_with_index(ast: &Node, workspace_index: Option<Arc<WorkspaceIndex>>) -> Self {
-        Self::new_with_index_and_source(ast, "", workspace_index)
+        Self::new_with_index_source_and_paths(ast, "", workspace_index, Vec::new(), Vec::new())
     }
 
     /// Create a new completion provider from parsed AST and source with workspace integration
@@ -249,6 +251,21 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_source_and_paths(ast, source, workspace_index, Vec::new(), Vec::new())
+    }
+
+    /// Create a new completion provider with explicit include path vectors.
+    ///
+    /// `include_paths` and `system_inc_paths` are currently threaded through
+    /// module completion plumbing and reserved for future filesystem-backed
+    /// module completion expansion.
+    pub fn new_with_index_source_and_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_paths: Vec<String>,
+        system_inc_paths: Vec<String>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +275,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_paths,
+            system_inc_paths,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +799,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_paths,
+                &self.system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -3348,6 +3375,37 @@ sub helper { }
             completions.iter().any(|c| c.label == "MyApp" && c.kind == CompletionItemKind::Module),
             "use <cursor> should suggest workspace module names; got: {:?}",
             completions.iter().map(|c| (&c.label, &c.kind)).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_completion_with_explicit_include_vectors()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///lib/MyFeature.pm")?,
+            "package MyFeature;\n1;\n".to_string(),
+        )?;
+
+        let code = "use MyF";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index_source_and_paths(
+            &ast,
+            code,
+            Some(index),
+            vec!["lib".to_string()],
+            vec!["/usr/lib/perl5".to_string()],
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions
+                .iter()
+                .any(|c| c.label == "MyFeature" && c.kind == CompletionItemKind::Module),
+            "module completion should still work when include/system vectors are provided"
         );
         Ok(())
     }
