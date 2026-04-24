@@ -47,6 +47,7 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Parser::parse(&mut self, source: &str) -> Option<Tree>` | Parse Perl source; `None` only on complete failure |
 | `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
 | `Tree::source() -> &str` | Source text this tree was built from |
+| `Tree::semantic_overlay() -> SemanticOverlay<'_>` | Opt-in, in-development semantic queries |
 | `Node::kind() -> &'static str` | Node type name (e.g. `"Program"`, `"Subroutine"`) |
 | `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
 | `Node::child_count() -> usize` | Number of direct children |
@@ -58,6 +59,11 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Node::is_leaf() -> bool` | `true` if the node has no children |
 | `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
+
+`SemanticOverlay` currently exposes a small, read-only query set:
+- `definition_at_offset` / `definition_for_node` / `definition_for_span`
+- `visible_imports_at_offset`
+- `effective_pragma_state_at_offset`
 
 ## Error tolerance
 
@@ -72,6 +78,7 @@ This means you can pipe any Perl source through this parser and rely on getting 
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
 - `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
+- `SemanticOverlay` is intentionally limited while semantic facade support is in development.
 
 ## Backlog roadmap
 

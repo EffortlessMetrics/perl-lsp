@@ -53,7 +53,11 @@
 )]
 
 use perl_ast::Node as AstNode;
+use perl_ast::NodeKind as AstNodeKind;
 use perl_parser_core::Parser as CoreParser;
+use perl_parser_core::pragma_tracker::{PragmaState, PragmaTracker};
+use perl_semantic_analyzer::semantic::SemanticModel;
+use perl_semantic_analyzer::{SourceLocation, symbol::SymbolKind};
 
 /// Re-export of Edit type for tree-sitter-compatible incremental parsing.
 ///
@@ -210,6 +214,40 @@ pub struct Tree {
     pending_edits: Vec<InputEdit>,
 }
 
+/// Explicitly opt-in semantic query facade over a parsed [`Tree`].
+///
+/// This API is intentionally small and read-only while semantic overlay support
+/// in `tree-sitter-perl-rs` is still in development.
+pub struct SemanticOverlay<'tree> {
+    tree: &'tree Tree,
+    model: SemanticModel,
+    pragma_map: Vec<(std::ops::Range<usize>, PragmaState)>,
+}
+
+/// Summary of a resolved definition at a source position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DefinitionMatch {
+    /// Symbol name (without sigil normalization changes).
+    pub name: String,
+    /// Fully qualified symbol name, when known.
+    pub qualified_name: String,
+    /// Symbol kind classification from semantic analysis.
+    pub kind: SymbolKind,
+    /// Byte range of the definition site.
+    pub location: SourceLocation,
+}
+
+/// Import visible in source order up to a requested offset.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct VisibleImport {
+    /// Imported module or pragma token from `use ...`.
+    pub module: String,
+    /// Byte range of the import statement.
+    pub location: SourceLocation,
+}
+
 impl Tree {
     /// Returns the root node of the syntax tree.
     pub fn root_node(&self) -> Node<'_> {
@@ -239,6 +277,61 @@ impl Tree {
     /// `tree.root_node().walk()`.
     pub fn walk(&self) -> TreeCursor<'_> {
         self.root_node().walk()
+    }
+
+    /// Build an explicit semantic overlay for query-style semantic reads.
+    ///
+    /// This is intentionally limited in scope and currently provides:
+    /// - definition lookup at a node/span offset,
+    /// - visible `use` imports at an offset,
+    /// - effective pragma state at an offset.
+    pub fn semantic_overlay(&self) -> SemanticOverlay<'_> {
+        SemanticOverlay {
+            tree: self,
+            model: SemanticModel::build(&self.root, &self.source),
+            pragma_map: PragmaTracker::build(&self.root),
+        }
+    }
+}
+
+impl SemanticOverlay<'_> {
+    /// Resolve the definition visible at the provided byte offset.
+    pub fn definition_at_offset(&self, offset: usize) -> Option<DefinitionMatch> {
+        self.model.definition_at(offset).map(|symbol| DefinitionMatch {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            kind: symbol.kind,
+            location: symbol.location,
+        })
+    }
+
+    /// Resolve the definition for a tree node's start byte.
+    pub fn definition_for_node(&self, node: Node<'_>) -> Option<DefinitionMatch> {
+        self.definition_at_offset(node.start_byte())
+    }
+
+    /// Resolve the definition for the start of a byte span.
+    pub fn definition_for_span(
+        &self,
+        start_byte: usize,
+        _end_byte: usize,
+    ) -> Option<DefinitionMatch> {
+        self.definition_at_offset(start_byte)
+    }
+
+    /// List `use` imports visible up to the provided offset.
+    ///
+    /// This returns lexical imports encountered in source order where the
+    /// import statement starts at or before `offset`.
+    pub fn visible_imports_at_offset(&self, offset: usize) -> Vec<VisibleImport> {
+        let mut imports = Vec::new();
+        collect_visible_imports(&self.tree.root, offset, &mut imports);
+        imports
+    }
+
+    /// Return effective pragma state at the provided offset.
+    pub fn effective_pragma_state_at_offset(&self, offset: usize) -> PragmaState {
+        PragmaTracker::state_for_offset(&self.pragma_map, offset)
     }
 }
 
@@ -512,6 +605,21 @@ fn ast_child_at(node: &AstNode, index: usize) -> Option<&AstNode> {
         idx += 1;
     });
     found
+}
+
+fn collect_visible_imports(node: &AstNode, offset: usize, out: &mut Vec<VisibleImport>) {
+    if node.location.start > offset {
+        return;
+    }
+
+    if let AstNodeKind::Use { module, .. } = &node.kind {
+        out.push(VisibleImport {
+            module: module.clone(),
+            location: SourceLocation { start: node.location.start, end: node.location.end },
+        });
+    }
+
+    node.for_each_child(|child| collect_visible_imports(child, offset, out));
 }
 
 // Invariant: TreeCursor path is constructed by the traversal that just yielded this
@@ -965,10 +1073,14 @@ mod tests {
         while cursor.goto_next_sibling() {
             count += 1;
         }
+        assert!(count >= 1, "cursor should visit at least one sibling");
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
-        assert!(!node.kind().is_empty(), "cursor should remain at valid node after exhausting siblings");
+        assert!(
+            !node.kind().is_empty(),
+            "cursor should remain at valid node after exhausting siblings"
+        );
     }
 
     #[test]
@@ -1009,11 +1121,7 @@ mod tests {
 
         // reset() should bring us back to root
         cursor.reset();
-        assert_eq!(
-            cursor.node().grammar_kind(),
-            "source_file",
-            "reset must return cursor to root"
-        );
+        assert_eq!(cursor.node().grammar_kind(), "source_file", "reset must return cursor to root");
     }
 
     #[test]
@@ -1073,10 +1181,7 @@ mod tests {
             sibling_count += 1;
         }
 
-        assert_eq!(
-            sibling_count, child_count,
-            "sibling count should match root.child_count()"
-        );
+        assert_eq!(sibling_count, child_count, "sibling count should match root.child_count()");
     }
 
     #[test]
@@ -1213,5 +1318,49 @@ mod tests {
         // Should be back at root
         assert_eq!(cursor.node().grammar_kind(), "source_file");
         assert_eq!(depth, 0, "should have gone back up to root (depth 0)");
+    }
+
+    #[test]
+    fn test_semantic_overlay_definition_queries() {
+        let source = "my $x = 1;\n$x + 2;\n";
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+
+        let usage_offset = must_some(source.rfind("$x"));
+        let by_offset = must_some(overlay.definition_at_offset(usage_offset));
+        assert_eq!(by_offset.name, "x");
+
+        let usage_stmt = must_some(tree.root_node().child(1));
+        let by_node = must_some(overlay.definition_for_node(usage_stmt));
+        assert_eq!(by_node.name, "x");
+
+        let by_span = must_some(overlay.definition_for_span(usage_offset, usage_offset + 2));
+        assert_eq!(by_span.qualified_name, by_offset.qualified_name);
+    }
+
+    #[test]
+    fn test_semantic_overlay_visible_imports() {
+        let source = "use strict;\nuse warnings;\nmy $x = 1;";
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+
+        let imports = overlay.visible_imports_at_offset(source.len());
+        let modules: Vec<_> = imports.into_iter().map(|import| import.module).collect();
+        assert!(modules.contains(&"strict".to_string()));
+        assert!(modules.contains(&"warnings".to_string()));
+    }
+
+    #[test]
+    fn test_semantic_overlay_effective_pragma_state_at_offset() {
+        let source = "use strict;\nno strict 'refs';\nmy $x = 1;";
+        let mut parser = Parser::new();
+        let tree = must_some(parser.parse(source));
+        let overlay = tree.semantic_overlay();
+
+        let strict_state = overlay.effective_pragma_state_at_offset(source.len());
+        assert!(strict_state.strict_vars);
+        assert!(!strict_state.strict_refs);
     }
 }
