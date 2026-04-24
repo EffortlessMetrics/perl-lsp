@@ -147,36 +147,138 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
-    fn initialized_requires_initialize_request_first() {
+    fn initialized_requires_initialize_request_first() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
 
         let result = server.handle_initialized_dispatch();
 
         assert!(result.is_err(), "initialized before initialize must error");
         assert!(!server.is_initialized(), "server must remain uninitialized");
+        Ok(())
     }
 
     #[test]
-    fn initialized_can_only_be_sent_once() {
+    fn initialized_can_only_be_sent_once() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
 
         assert!(first.is_ok(), "first initialized must succeed");
         assert!(second.is_err(), "second initialized must error");
+        Ok(())
     }
 
     #[test]
-    fn auto_initialize_for_compat_promotes_initialized_state() {
+    fn auto_initialize_for_compat_promotes_initialized_state() -> Result<(), JsonRpcError> {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        server.handle_initialize(None)?;
 
         server.auto_initialize_for_compat("textDocument/hover");
 
         assert!(server.is_initialized(), "compatibility path should mark server initialized");
+        Ok(())
+    }
+
+    #[derive(Clone, Debug)]
+    enum LifecycleAction {
+        InitializeNull,
+        InitializeEmptyObject,
+        Initialized,
+        AutoInitializeCompat,
+        Shutdown,
+        SetTraceOff,
+        SetTraceMessages,
+        SetTraceVerbose,
+        SetTraceInvalid,
+        SetTraceMissingValue,
+    }
+
+    fn lifecycle_action_strategy() -> impl Strategy<Value = LifecycleAction> {
+        prop_oneof![
+            Just(LifecycleAction::InitializeNull),
+            Just(LifecycleAction::InitializeEmptyObject),
+            Just(LifecycleAction::Initialized),
+            Just(LifecycleAction::AutoInitializeCompat),
+            Just(LifecycleAction::Shutdown),
+            Just(LifecycleAction::SetTraceOff),
+            Just(LifecycleAction::SetTraceMessages),
+            Just(LifecycleAction::SetTraceVerbose),
+            Just(LifecycleAction::SetTraceInvalid),
+            Just(LifecycleAction::SetTraceMissingValue),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn lifecycle_dispatch_fuzz_does_not_violate_core_invariants(
+            actions in prop::collection::vec(lifecycle_action_strategy(), 0..128)
+        ) {
+            let server = LspServer::new();
+
+            for action in actions {
+                match action {
+                    LifecycleAction::InitializeNull => {
+                        let _ = server.handle_initialize_dispatch(None);
+                    }
+                    LifecycleAction::InitializeEmptyObject => {
+                        let _ = server.handle_initialize_dispatch(Some(json!({})));
+                    }
+                    LifecycleAction::Initialized => {
+                        let initialized_result = server.handle_initialized_dispatch();
+                        if !server.initialize_requested.load(Ordering::Acquire) {
+                            prop_assert!(
+                                matches!(
+                                    initialized_result,
+                                    Err(JsonRpcError {
+                                        code: -32002,
+                                        ..
+                                    })
+                                ),
+                                "initialized before initialize request must return ServerNotInitialized"
+                            );
+                        }
+                    }
+                    LifecycleAction::AutoInitializeCompat => {
+                        server.auto_initialize_for_compat("textDocument/hover");
+                    }
+                    LifecycleAction::Shutdown => {
+                        let _ = server.handle_shutdown_dispatch();
+                    }
+                    LifecycleAction::SetTraceOff => {
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "off" })));
+                    }
+                    LifecycleAction::SetTraceMessages => {
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })));
+                    }
+                    LifecycleAction::SetTraceVerbose => {
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
+                    }
+                    LifecycleAction::SetTraceInvalid => {
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "value": "unexpected" })));
+                    }
+                    LifecycleAction::SetTraceMissingValue => {
+                        let _ = server.handle_set_trace_dispatch(Some(json!({ "not_value": true })));
+                    }
+                }
+
+                if server.is_initialized() {
+                    prop_assert!(
+                        server.initialize_requested.load(Ordering::Acquire),
+                        "initialized state requires initialize request"
+                    );
+                }
+
+                let trace_level = server.trace_level.lock().clone();
+                prop_assert!(
+                    matches!(trace_level.as_str(), "off" | "messages" | "verbose"),
+                    "trace level must always remain in the allowed set"
+                );
+            }
+        }
     }
 }
