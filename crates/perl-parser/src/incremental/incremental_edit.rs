@@ -5,6 +5,15 @@
 
 use perl_parser_core::position::Position;
 
+/// Validation failures for an [`IncrementalEditSet`] batch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IncrementalEditBatchError {
+    /// An edit uses a backward range (`start_byte > old_end_byte`).
+    BackwardRange { index: usize, start_byte: usize, old_end_byte: usize },
+    /// Two normalized edits overlap in the old-source byte space.
+    OverlappingEdits { left_index: usize, right_index: usize },
+}
+
 /// Enhanced edit with text content for incremental parsing
 #[derive(Debug, Clone, PartialEq)]
 pub struct IncrementalEdit {
@@ -86,6 +95,54 @@ impl IncrementalEditSet {
         self.edits.push(edit);
     }
 
+    /// Normalize edit ordering for deterministic reverse-application and validate batch shape.
+    ///
+    /// Normalization behavior:
+    /// - removes obvious no-op edits when `filter_no_ops` is `true`
+    /// - sorts edits in deterministic reverse-application order (highest byte offset first)
+    ///
+    /// Validation behavior:
+    /// - rejects backward ranges (`start_byte > old_end_byte`)
+    /// - rejects overlaps after normalization unless `allow_overlaps` is `true`
+    pub fn normalize_and_validate(
+        &mut self,
+        allow_overlaps: bool,
+        filter_no_ops: bool,
+    ) -> Result<(), IncrementalEditBatchError> {
+        for (index, edit) in self.edits.iter().enumerate() {
+            if edit.start_byte > edit.old_end_byte {
+                return Err(IncrementalEditBatchError::BackwardRange {
+                    index,
+                    start_byte: edit.start_byte,
+                    old_end_byte: edit.old_end_byte,
+                });
+            }
+        }
+
+        if filter_no_ops {
+            self.edits.retain(|edit| !edit.is_obvious_no_op());
+        }
+
+        self.sort_reverse_deterministic();
+
+        if !allow_overlaps {
+            for left in 0..self.edits.len() {
+                for right in (left + 1)..self.edits.len() {
+                    if self.edits[left]
+                        .overlaps(self.edits[right].start_byte, self.edits[right].old_end_byte)
+                    {
+                        return Err(IncrementalEditBatchError::OverlappingEdits {
+                            left_index: left,
+                            right_index: right,
+                        });
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Sort edits by position (for correct application order)
     pub fn sort(&mut self) {
         self.edits.sort_by_key(|e| e.start_byte);
@@ -94,6 +151,19 @@ impl IncrementalEditSet {
     /// Sort edits in reverse order (for applying from end to start)
     pub fn sort_reverse(&mut self) {
         self.edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+    }
+
+    /// Sort edits in a deterministic reverse-application order.
+    ///
+    /// This keeps behavior stable even when multiple edits share a start byte.
+    pub fn sort_reverse_deterministic(&mut self) {
+        self.edits.sort_by(|left, right| {
+            right
+                .start_byte
+                .cmp(&left.start_byte)
+                .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+                .then_with(|| left.new_text.cmp(&right.new_text))
+        });
     }
 
     /// Check if the edit set is empty
@@ -133,6 +203,12 @@ impl IncrementalEditSet {
         }
 
         result
+    }
+}
+
+impl IncrementalEdit {
+    fn is_obvious_no_op(&self) -> bool {
+        self.start_byte == self.old_end_byte && self.new_text.is_empty()
     }
 }
 
