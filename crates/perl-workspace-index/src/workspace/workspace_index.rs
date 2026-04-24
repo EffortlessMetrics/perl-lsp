@@ -937,6 +937,26 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+impl SymbolKey {
+    /// Build a stable identity string that can be used as a cache/refactor key.
+    ///
+    /// The output format is intentionally explicit and deterministic:
+    ///
+    /// - `sub:<pkg>::<name>`
+    /// - `pack:<pkg>`
+    /// - `var:<pkg>::<sigil><name>`
+    pub fn stable_id(&self) -> String {
+        match self.kind {
+            SymKind::Sub => format!("sub:{}::{}", self.pkg, self.name),
+            SymKind::Pack => format!("pack:{}", self.pkg),
+            SymKind::Var => {
+                let sigil = self.sigil.unwrap_or('$');
+                format!("var:{}::{}{}", self.pkg, sigil, self.name)
+            }
+        }
+    }
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -1245,7 +1265,13 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
-        for file_index in files.values() {
+        let mut file_keys: Vec<&String> = files.keys().collect();
+        file_keys.sort_unstable();
+
+        for file_key in file_keys {
+            let Some(file_index) = files.get(file_key) else {
+                continue;
+            };
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
             {
@@ -1265,6 +1291,17 @@ impl WorkspaceIndex {
         }
 
         None
+    }
+
+    fn sort_locations_deterministically(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            left.uri
+                .cmp(&right.uri)
+                .then_with(|| left.range.start.line.cmp(&right.range.start.line))
+                .then_with(|| left.range.start.column.cmp(&right.range.start.column))
+                .then_with(|| left.range.end.line.cmp(&right.range.end.line))
+                .then_with(|| left.range.end.column.cmp(&right.range.end.column))
+        });
     }
 
     /// Create a new empty index
@@ -1916,6 +1953,7 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations_deterministically(&mut locations);
         locations
     }
 
@@ -2686,6 +2724,7 @@ impl WorkspaceIndex {
             ))
         });
 
+        Self::sort_locations_deterministically(&mut all_refs);
         all_refs
     }
 }
