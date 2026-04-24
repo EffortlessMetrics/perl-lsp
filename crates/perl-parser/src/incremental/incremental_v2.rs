@@ -361,9 +361,14 @@ impl IncrementalParserV2 {
         // Store analysis results for inspection
         self.last_reuse_analysis = Some(analysis_result);
 
-        // Check if reuse analysis meets our efficiency targets
+        // Use advanced analysis whenever it provides actionable reuse in
+        // batch-edit scenarios, while keeping single-edit quality gates.
         if let Some(ref analysis) = self.last_reuse_analysis {
-            if analysis.meets_efficiency_target(self.reuse_config.min_confidence * 100.0) {
+            let should_use_advanced = analysis
+                .meets_efficiency_target(self.reuse_config.min_confidence * 100.0)
+                || (self.pending_edits.len() > 1 && analysis.reused_nodes > 0);
+
+            if should_use_advanced {
                 // Update statistics based on analysis
                 self.reused_nodes = analysis.reused_nodes;
                 self.reparsed_nodes = analysis.total_new_nodes - analysis.reused_nodes;
@@ -1267,6 +1272,13 @@ mod tests {
         budget
     }
 
+    fn assert_matches_fresh_parse(source: &str, incremental_tree: &Node) -> ParseResult<()> {
+        let mut parser = Parser::new(source);
+        let full_tree = parser.parse()?;
+        assert_eq!(*incremental_tree, full_tree);
+        Ok(())
+    }
+
     #[test]
     fn test_basic_compilation() {
         let parser = IncrementalParserV2::new();
@@ -2122,6 +2134,94 @@ if ($condition) {
         let source2 = "my $x=  42;";
         parser.parse(source2)?;
         assert!(parser.reused_nodes > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_non_overlapping_whitespace_comment_edits_shift_reuse() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $a = 1;\nmy $b = 2;\nmy $c = 3;\n";
+        parser.parse(source1)?;
+
+        // Edit 1: insert extra spacing before $b.
+        let first_insert =
+            source1.find("$b").ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        parser.edit(Edit::new(
+            first_insert,
+            first_insert,
+            first_insert + 2,
+            Position::new(first_insert, 0, 0),
+            Position::new(first_insert, 0, 0),
+            Position::new(first_insert + 2, 0, 0),
+        ));
+
+        let source_after_first =
+            format!("{}  {}", &source1[..first_insert], &source1[first_insert..]);
+
+        // Edit 2: add comment on a separate line region.
+        let second_insert = source_after_first
+            .find("1;")
+            .map(|idx| idx + 2)
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        let comment = " # keep-a";
+        parser.edit(Edit::new(
+            second_insert,
+            second_insert,
+            second_insert + comment.len(),
+            Position::new(second_insert, 0, 0),
+            Position::new(second_insert, 0, 0),
+            Position::new(second_insert + comment.len(), 0, 0),
+        ));
+
+        let source2 = "my $a = 1; # keep-a\nmy   $b = 2;\nmy $c = 3;\n";
+        let tree = parser.parse(source2)?;
+
+        assert!(parser.reused_nodes >= 6);
+        assert!(parser.used_advanced_reuse());
+        assert_matches_fresh_parse(source2, &tree)?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_batch_identifier_and_value_edits_keep_shifted_reuse() -> ParseResult<()> {
+        let mut parser = IncrementalParserV2::new();
+        let source1 = "my $name = 10;\nmy $other = 20;\nmy $third = 30;\n";
+        parser.parse(source1)?;
+
+        // Edit 1: identifier expansion.
+        let id_start = source1
+            .find("$name")
+            .map(|idx| idx + 1)
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        parser.edit(Edit::new(
+            id_start,
+            id_start + 4,
+            id_start + 8,
+            Position::new(id_start, 0, 0),
+            Position::new(id_start + 4, 0, 0),
+            Position::new(id_start + 8, 0, 0),
+        ));
+
+        // Edit 2: value expansion in a separate statement.
+        let source_after_first = source1.replacen("$name", "$name_new", 1);
+        let value_start = source_after_first
+            .rfind("30")
+            .ok_or(perl_parser_core::error::ParseError::UnexpectedEof)?;
+        parser.edit(Edit::new(
+            value_start,
+            value_start + 2,
+            value_start + 4,
+            Position::new(value_start, 0, 0),
+            Position::new(value_start + 2, 0, 0),
+            Position::new(value_start + 4, 0, 0),
+        ));
+
+        let source2 = "my $name_new = 10;\nmy $other = 20;\nmy $third = 3000;\n";
+        let tree = parser.parse(source2)?;
+
+        assert!(parser.reused_nodes >= 6);
+        assert!(parser.reparsed_nodes >= 1);
+        assert_matches_fresh_parse(source2, &tree)?;
         Ok(())
     }
 }
