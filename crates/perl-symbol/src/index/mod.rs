@@ -13,6 +13,10 @@ pub struct SymbolIndex {
     trie: SymbolTrie,
     /// Inverted index for fuzzy matching
     inverted_index: HashMap<String, Vec<String>>,
+    /// Reference count for each symbol across indexed documents.
+    symbol_ref_counts: HashMap<String, usize>,
+    /// Per-document symbol sets for replace/remove updates.
+    document_symbols: HashMap<String, Vec<String>>,
 }
 
 /// Trie data structure for efficient prefix matching
@@ -33,7 +37,12 @@ impl SymbolIndex {
     /// Create a new empty symbol index.
     #[must_use]
     pub fn new() -> Self {
-        Self { trie: SymbolTrie::new(), inverted_index: HashMap::new() }
+        Self {
+            trie: SymbolTrie::new(),
+            inverted_index: HashMap::new(),
+            symbol_ref_counts: HashMap::new(),
+            document_symbols: HashMap::new(),
+        }
     }
 
     /// Add a symbol to the index.
@@ -42,17 +51,35 @@ impl SymbolIndex {
     /// Duplicate calls with the same symbol are idempotent: the symbol is
     /// stored exactly once in both the trie and the inverted index.
     pub fn add_symbol(&mut self, symbol: String) {
-        // Add to trie for prefix matching; returns true only when newly inserted.
-        // Deduplication here prevents the inverted index from accumulating
-        // duplicate entries, which would inflate fuzzy-match scores.
-        if !self.trie.insert(&symbol) {
-            return;
+        self.add_symbol_occurrence(&symbol);
+    }
+
+    /// Replace all symbols for a specific document.
+    ///
+    /// This operation is idempotent and removes stale symbols that no longer
+    /// exist in the latest version of the document.
+    pub fn replace_document_symbols(&mut self, uri: &str, symbols: Vec<String>) {
+        self.remove_document(uri);
+
+        let mut unique_symbols: Vec<String> = Vec::new();
+        for symbol in symbols {
+            if !unique_symbols.contains(&symbol) {
+                self.add_symbol_occurrence(&symbol);
+                unique_symbols.push(symbol);
+            }
         }
 
-        // Add to inverted index for fuzzy matching
-        let tokens = Self::tokenize(&symbol);
-        for token in tokens {
-            self.inverted_index.entry(token).or_default().push(symbol.clone());
+        if !unique_symbols.is_empty() {
+            self.document_symbols.insert(uri.to_string(), unique_symbols);
+        }
+    }
+
+    /// Remove all symbols for a specific document.
+    pub fn remove_document(&mut self, uri: &str) {
+        if let Some(existing) = self.document_symbols.remove(uri) {
+            for symbol in existing {
+                self.remove_symbol_occurrence(&symbol);
+            }
         }
     }
 
@@ -115,6 +142,45 @@ impl SymbolIndex {
 
         tokens
     }
+
+    fn add_symbol_occurrence(&mut self, symbol: &str) {
+        let count = self.symbol_ref_counts.entry(symbol.to_string()).or_insert(0);
+        *count += 1;
+        if *count > 1 {
+            return;
+        }
+
+        self.trie.insert(symbol);
+        let tokens = Self::tokenize(symbol);
+        for token in tokens {
+            self.inverted_index.entry(token).or_default().push(symbol.to_string());
+        }
+    }
+
+    fn remove_symbol_occurrence(&mut self, symbol: &str) {
+        let Some(count) = self.symbol_ref_counts.get_mut(symbol) else {
+            return;
+        };
+
+        if *count > 1 {
+            *count -= 1;
+            return;
+        }
+
+        self.symbol_ref_counts.remove(symbol);
+        self.trie.remove(symbol);
+        let tokens = Self::tokenize(symbol);
+        for token in tokens {
+            let mut should_prune = false;
+            if let Some(symbols) = self.inverted_index.get_mut(&token) {
+                symbols.retain(|candidate| candidate != symbol);
+                should_prune = symbols.is_empty();
+            }
+            if should_prune {
+                self.inverted_index.remove(&token);
+            }
+        }
+    }
 }
 
 impl SymbolTrie {
@@ -162,6 +228,24 @@ impl SymbolTrie {
         results
     }
 
+    fn remove(&mut self, symbol: &str) {
+        let chars: Vec<char> = symbol.chars().collect();
+        self.remove_recursive(&chars, 0, symbol);
+    }
+
+    fn remove_recursive(&mut self, chars: &[char], idx: usize, symbol: &str) -> bool {
+        if idx == chars.len() {
+            self.symbols.retain(|value| value != symbol);
+        } else if let Some(child) = self.children.get_mut(&chars[idx]) {
+            let prune_child = child.remove_recursive(chars, idx + 1, symbol);
+            if prune_child {
+                self.children.remove(&chars[idx]);
+            }
+        }
+
+        self.children.is_empty() && self.symbols.is_empty()
+    }
+
     fn collect_all(node: &SymbolTrie, results: &mut Vec<String>) {
         results.extend(node.symbols.clone());
 
@@ -190,5 +274,35 @@ mod tests {
 
         let fuzzy_results = index.search_fuzzy("user name");
         assert!(fuzzy_results.contains(&"get_user_name".to_string()));
+    }
+
+    #[test]
+    fn replace_document_symbols_removes_stale_entries() {
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["old_name".to_string(), "shared".to_string()],
+        );
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["new_name".to_string(), "shared".to_string()],
+        );
+
+        assert!(index.search_prefix("old").is_empty());
+        assert!(index.search_prefix("new").contains(&"new_name".to_string()));
+        assert!(index.search_prefix("sha").contains(&"shared".to_string()));
+    }
+
+    #[test]
+    fn remove_document_preserves_symbols_from_other_documents() {
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols("file:///a.pl", vec!["shared".to_string(), "only_a".to_string()]);
+        index.replace_document_symbols("file:///b.pl", vec!["shared".to_string(), "only_b".to_string()]);
+        index.remove_document("file:///a.pl");
+
+        let shared = index.search_prefix("shared");
+        assert_eq!(shared, vec!["shared".to_string()]);
+        assert!(index.search_prefix("only_a").is_empty());
+        assert_eq!(index.search_prefix("only_b"), vec!["only_b".to_string()]);
     }
 }
