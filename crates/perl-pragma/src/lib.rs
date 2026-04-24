@@ -6,6 +6,8 @@
 use perl_ast::ast::{Node, NodeKind};
 use std::ops::Range;
 
+const MAX_DISABLED_WARNING_CATEGORIES: usize = 256;
+
 /// Parsed Perl version from a lexical `use v...;` or `use 5.xxx;` pragma.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PerlVersion {
@@ -122,15 +124,15 @@ impl PragmaState {
 /// - developer releases like `5.012_001`
 pub fn parse_perl_version(module: &str) -> Option<PerlVersion> {
     let s = module.strip_prefix('v').unwrap_or(module);
+    let mut parts = s.splitn(3, '.');
 
-    let parts: Vec<&str> = s.splitn(3, '.').collect();
-    let major: u32 = parse_version_component(parts.first()?)?;
-    let minor: u32 = match parts.get(1) {
+    let major = parse_version_component(parts.next()?)?;
+    let minor = match parts.next() {
         Some(part) => parse_version_component(part)?,
         None => 0,
     };
 
-    Some(PerlVersion { major, minor })
+    Some(PerlVersion::new(major, minor))
 }
 
 fn parse_version_component(component: &str) -> Option<u32> {
@@ -354,6 +356,28 @@ fn apply_builtin_imports(state: &mut PragmaState, args: &[String]) {
             }
         }
     }
+}
+
+/// Insert `category` into `state.disabled_warning_categories` if not already present and
+/// within the hard cap of [`MAX_DISABLED_WARNING_CATEGORIES`].
+///
+/// Categories beyond the cap are silently dropped. In valid Perl code this is never reached
+/// (Perl's own warning hierarchy has ~30 leaf categories); the cap is a safety guard against
+/// pathological or adversarial AST input that would otherwise cause O(n²) clone cost.
+fn add_disabled_warning_category(state: &mut PragmaState, category: &str) {
+    if category.is_empty() {
+        return;
+    }
+
+    if state.disabled_warning_categories.iter().any(|c| c == category) {
+        return;
+    }
+
+    if state.disabled_warning_categories.len() >= MAX_DISABLED_WARNING_CATEGORIES {
+        return;
+    }
+
+    state.disabled_warning_categories.push(category.to_string());
 }
 
 fn pragma_arg_items(arg: &str) -> Vec<String> {
@@ -654,6 +678,86 @@ impl PragmaTracker {
                 }
             }
             NodeKind::No { module, args, .. } => {
+                if (module == "if" || module == "unless")
+                    && let Some((conditional_module, conditional_args)) =
+                        conditional_pragma_target(args)
+                {
+                    match conditional_module {
+                        "strict" => {
+                            if conditional_args.is_empty() {
+                                current_state.strict_vars = false;
+                                current_state.strict_subs = false;
+                                current_state.strict_refs = false;
+                            } else {
+                                for arg in conditional_args {
+                                    match normalized_pragma_token(arg) {
+                                        "vars" => current_state.strict_vars = false,
+                                        "subs" => current_state.strict_subs = false,
+                                        "refs" => current_state.strict_refs = false,
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "warnings" => {
+                            if conditional_args.is_empty() {
+                                current_state.warnings = false;
+                                current_state.disabled_warning_categories.clear();
+                            } else {
+                                for arg in conditional_args {
+                                    let category = normalized_pragma_token(arg);
+                                    add_disabled_warning_category(current_state, category);
+                                }
+                            }
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "utf8" => {
+                            current_state.utf8 = false;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "encoding" => {
+                            current_state.encoding = None;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "locale" => {
+                            current_state.locale = false;
+                            current_state.locale_scope = None;
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
+                        "feature" => {
+                            if apply_feature_state(current_state, conditional_args, false) {
+                                ranges.push((
+                                    node.location.start..node.location.end,
+                                    current_state.clone(),
+                                ));
+                            }
+                            return;
+                        }
+                        _ => return,
+                    }
+                }
+
                 // Handle no statements
                 match module.as_str() {
                     "strict" => {
@@ -697,15 +801,7 @@ impl PragmaTracker {
                                 // Strip any surrounding single or double quotes that
                                 // the parser may have left on the argument.
                                 let category = arg.trim_matches('\'').trim_matches('"');
-                                if !current_state
-                                    .disabled_warning_categories
-                                    .iter()
-                                    .any(|c| c == category)
-                                {
-                                    current_state
-                                        .disabled_warning_categories
-                                        .push(category.to_string());
-                                }
+                                add_disabled_warning_category(current_state, category);
                             }
                         }
                         ranges
@@ -784,7 +880,12 @@ impl PragmaTracker {
                     Self::build_scoped_body(continue_block, current_state, ranges);
                 }
             }
-            NodeKind::Eval { block } | NodeKind::Do { block } | NodeKind::Defer { block } => {
+            NodeKind::Eval { block } => {
+                if matches!(block.kind, NodeKind::Block { .. }) {
+                    Self::build_scoped_body(block, current_state, ranges);
+                }
+            }
+            NodeKind::Do { block } | NodeKind::Defer { block } => {
                 Self::build_scoped_body(block, current_state, ranges);
             }
             NodeKind::PhaseBlock { block, .. } => {
