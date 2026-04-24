@@ -1865,6 +1865,7 @@ name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
  "perl-ast",
+ "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "serde_json",
