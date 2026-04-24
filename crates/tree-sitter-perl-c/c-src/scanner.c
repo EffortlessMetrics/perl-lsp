@@ -261,6 +261,39 @@ static void skip_whitespace(TSLexer *lexer) {
   }
 }
 
+static void scan_pod_block(TSLexer *lexer, int32_t *c) {
+  /* Keep going until the linefeed after a line beginning `=cut` */
+  static const char *cut_marker = "=cut";
+  int stage = -1;
+
+  while (!lexer->eof(lexer)) {
+    if (*c == '\r')
+      ; /* ignore */
+    else if (stage < 1 && *c == '\n')
+      stage = 0;
+    else if (stage >= 0 && stage < 4 && *c == cut_marker[stage])
+      stage++;
+    else if (stage == 4 && (*c == ' ' || *c == '\t'))
+      stage = 5;
+    else if (stage == 4 && *c == '\n')
+      stage = 6;
+    else
+      stage = -1;
+
+    if (stage > 4) break;
+
+    lexer->advance(lexer, true);
+    *c = lexer->lookahead;
+  }
+  if (stage < 6)
+    while (!lexer->eof(lexer)) {
+      if (*c == '\n') break;
+
+      lexer->advance(lexer, true);
+      *c = lexer->lookahead;
+    }
+}
+
 static void skip_ws_to_eol(TSLexer *lexer) {
   while (1) {
     int32_t c = lexer->lookahead;
@@ -625,35 +658,7 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
     int column = lexer->get_column(lexer);
     if (column == 0 && c == '=') {
       DEBUG("POD started...\n", 0);
-
-      /* Keep going until the linefeed after a line beginning `=cut` */
-      static const char *cut_marker = "=cut";
-      int stage = -1;
-
-      while (!lexer->eof(lexer)) {
-        if (c == '\r')
-          ; /* ignore */
-        else if (stage < 1 && c == '\n')
-          stage = 0;
-        else if (stage >= 0 && stage < 4 && c == cut_marker[stage])
-          stage++;
-        else if (stage == 4 && (c == ' ' || c == '\t'))
-          stage = 5;
-        else if (stage == 4 && c == '\n')
-          stage = 6;
-        else
-          stage = -1;
-
-        if (stage > 4) break;
-
-        ADVANCE_C;
-      }
-      if (stage < 6)
-        while (!lexer->eof(lexer)) {
-          if (c == '\n') break;
-
-          ADVANCE_C;
-        }
+      scan_pod_block(lexer, &c);
       /* If we got this far then either we reached stage 6, or we're at EOF */
       TOKEN(TOKEN_POD);
     }
@@ -917,7 +922,7 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
 
     // NOTE - TS is annoying about skipping chars after you've hit done
     // mark_end, so we have to do the regular advance so our token actually shows up
-    while (is_tsp_whitespace(c) || c == '#') {
+    while (is_tsp_whitespace(c) || c == '#' || (c == '=' && lexer->get_column(lexer) == 0)) {
       while (is_tsp_whitespace(c)) ADVANCE_C;
       // now we need to skip comments - we get in a funny way if we have a quotelike
       // operator followed by a comment as the quote char
@@ -925,8 +930,12 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
         ADVANCE_C;
         while (lexer->get_column(lexer)) ADVANCE_C;
       }
+      // POD is an extra token in this grammar, so keep autoquote lookahead consistent with
+      // whitespace/comment skipping by scanning the same POD shape we emit as TOKEN_POD.
+      if (c == '=' && lexer->get_column(lexer) == 0) {
+        scan_pod_block(lexer, &c);
+      }
       if (lexer->eof(lexer)) return false;
-      // TODO - in theory there could be POD here that we needa skip over (EYES ROLL)
     }
     c1 = lexer->lookahead;
     ADVANCE_C;
