@@ -473,9 +473,9 @@ fn display_name_literals() {
         (TokenKind::HeredocStart, "heredoc (<<)"),
         (TokenKind::HeredocBody, "heredoc body"),
         (TokenKind::FormatBody, "format body"),
-        (TokenKind::DataMarker, "__DATA__"),
-        (TokenKind::DataBody, "data section"),
-        (TokenKind::UnknownRest, "unparsed content"),
+        (TokenKind::DataMarker, "data marker (__DATA__ or __END__)"),
+        (TokenKind::DataBody, "data section body"),
+        (TokenKind::UnknownRest, "unparsed remainder"),
         (TokenKind::HeredocDepthLimit, "heredoc depth limit"),
     ];
     for (kind, expected) in cases {
@@ -500,7 +500,7 @@ fn display_name_identifiers_and_sigils() {
 
 #[test]
 fn display_name_special() {
-    assert_eq!(TokenKind::Eof.display_name(), "end of input");
+    assert_eq!(TokenKind::Eof.display_name(), "end of input (EOF)");
     assert_eq!(TokenKind::Unknown.display_name(), "unknown token");
 }
 
