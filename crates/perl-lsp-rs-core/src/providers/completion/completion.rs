@@ -122,6 +122,7 @@ use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_semantic_analyzer::type_inference::TypeInferenceEngine;
 use perl_workspace::workspace_index::WorkspaceIndex;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maps module_name -> Set of explicitly imported symbol names.
@@ -170,6 +171,8 @@ pub struct CompletionProvider {
     type_engine: Option<TypeInferenceEngine>,
     workspace_index: Option<Arc<WorkspaceIndex>>,
     import_map: ImportMap,
+    include_roots: Vec<PathBuf>,
+    system_inc_paths: Vec<PathBuf>,
 }
 
 impl CompletionProvider {
@@ -249,6 +252,23 @@ impl CompletionProvider {
         source: &str,
         workspace_index: Option<Arc<WorkspaceIndex>>,
     ) -> Self {
+        Self::new_with_index_source_and_inc_paths(
+            ast,
+            source,
+            workspace_index,
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    /// Create a new completion provider with workspace index and resolved @INC roots.
+    pub fn new_with_index_source_and_inc_paths(
+        ast: &Node,
+        source: &str,
+        workspace_index: Option<Arc<WorkspaceIndex>>,
+        include_roots: Vec<PathBuf>,
+        system_inc_paths: Vec<PathBuf>,
+    ) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
         let class_models = ClassModelBuilder::new().build(ast);
         let type_engine = workspace_index.as_ref().map(|_| {
@@ -258,7 +278,15 @@ impl CompletionProvider {
         });
         let import_map = Self::extract_import_map(ast);
 
-        CompletionProvider { symbol_table, class_models, type_engine, workspace_index, import_map }
+        CompletionProvider {
+            symbol_table,
+            class_models,
+            type_engine,
+            workspace_index,
+            import_map,
+            include_roots,
+            system_inc_paths,
+        }
     }
 
     /// Walk the top-level AST and build an `ImportMap` from `use` statements.
@@ -774,6 +802,8 @@ impl CompletionProvider {
                 &mut completions,
                 &context,
                 &self.workspace_index,
+                &self.include_roots,
+                &self.system_inc_paths,
             );
         } else if self.is_has_type_value_context(source, position) {
             self.add_has_type_completions(&mut completions, &context);
@@ -2147,7 +2177,9 @@ mod tests {
     use perl_parser_core::Parser;
     use perl_tdd_support::{must, must_some};
     use perl_workspace::workspace_index::WorkspaceIndex;
+    use std::fs;
     use std::sync::Arc;
+    use tempfile::tempdir;
     use url::Url;
 
     #[test]
@@ -3556,6 +3588,88 @@ sub helper { }
         assert_eq!(
             myapp_count, 1,
             "Duplicate package declarations should produce exactly one completion"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_completion_includes_configured_include_roots()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let include_root = tempdir()?;
+        let dbix_dir = include_root.path().join("DBIx");
+        fs::create_dir_all(&dbix_dir)?;
+        fs::write(dbix_dir.join("Class.pm"), "package DBIx::Class;\n1;\n")?;
+
+        let code = "use DB";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_source_and_inc_paths(
+            &ast,
+            code,
+            None,
+            vec![include_root.path().to_path_buf()],
+            Vec::new(),
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "DBIx::Class"),
+            "expected include-root module completion for DBIx::Class; got: {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_module_completion_workspace_precedence_and_dedupe()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        index.index_file(
+            Url::parse("file:///workspace/lib/Foo/Bar.pm")?,
+            "package Foo::Bar;\n1;\n".to_string(),
+        )?;
+
+        let include_root = tempdir()?;
+        fs::create_dir_all(include_root.path().join("Foo"))?;
+        fs::write(include_root.path().join("Foo").join("Bar.pm"), "package Foo::Bar;\n1;\n")?;
+        fs::create_dir_all(include_root.path().join("Extra"))?;
+        fs::write(include_root.path().join("Extra").join("One.pm"), "package Extra::One;\n1;\n")?;
+
+        let system_root = tempdir()?;
+        fs::create_dir_all(system_root.path().join("Foo"))?;
+        fs::write(system_root.path().join("Foo").join("Bar.pm"), "package Foo::Bar;\n1;\n")?;
+        fs::create_dir_all(system_root.path().join("Sys"))?;
+        fs::write(system_root.path().join("Sys").join("Mod.pm"), "package Sys::Mod;\n1;\n")?;
+
+        let code = "use ";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_source_and_inc_paths(
+            &ast,
+            code,
+            Some(index),
+            vec![include_root.path().to_path_buf()],
+            vec![system_root.path().to_path_buf()],
+        );
+        let completions = provider.get_completions(code, code.len());
+
+        let foo_entries: Vec<&CompletionItem> =
+            completions.iter().filter(|item| item.label == "Foo::Bar").collect();
+        assert_eq!(foo_entries.len(), 1, "Foo::Bar should be deduped across all sources");
+        assert_eq!(
+            foo_entries.first().and_then(|item| item.detail.as_deref()),
+            Some("module"),
+            "workspace module should win precedence over include/system paths"
+        );
+        assert_eq!(
+            completions.iter().filter(|item| item.label == "Extra::One").count(),
+            1,
+            "module from include roots should appear once"
+        );
+        assert_eq!(
+            completions.iter().filter(|item| item.label == "Sys::Mod").count(),
+            1,
+            "module from system @INC should appear once"
         );
         Ok(())
     }
