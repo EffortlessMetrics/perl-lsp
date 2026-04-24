@@ -861,3 +861,72 @@ fn nearest_rank_p95_uses_corrected_formula() {
     let sorted: Vec<u64> = (1..=20).collect();
     assert_eq!(nearest_rank_percentile(&sorted, 95), 19);
 }
+
+#[test]
+fn token_kind_delimiters_and_specials_return_false_for_all_predicates() {
+    // Delimiter tokens are not keywords, operators, or literals.
+    for kind in [
+        TokenKind::LeftParen,
+        TokenKind::RightParen,
+        TokenKind::LeftBrace,
+        TokenKind::RightBrace,
+        TokenKind::LeftBracket,
+        TokenKind::RightBracket,
+        TokenKind::Semicolon,
+        TokenKind::Comma,
+    ] {
+        assert!(!kind.is_keyword(), "{kind:?} should not be a keyword");
+        assert!(!kind.is_operator(), "{kind:?} should not be an operator");
+        assert!(!kind.is_literal(), "{kind:?} should not be a literal");
+    }
+    // Identifier-class sigils are also uncategorized by the three predicates.
+    for kind in [
+        TokenKind::Identifier,
+        TokenKind::ScalarSigil,
+        TokenKind::ArraySigil,
+        TokenKind::HashSigil,
+        TokenKind::SubSigil,
+        TokenKind::GlobSigil,
+        TokenKind::Eof,
+        TokenKind::Unknown,
+    ] {
+        assert!(!kind.is_keyword(), "{kind:?} should not be a keyword");
+        assert!(!kind.is_operator(), "{kind:?} should not be an operator");
+        assert!(!kind.is_literal(), "{kind:?} should not be a literal");
+    }
+}
+
+#[test]
+fn token_kind_error_sentinel_variants_classified_as_literals() {
+    // UnknownRest and HeredocDepthLimit are error-sentinel variants that carry
+    // literal source content; they should be recognised as literals so callers
+    // that dispatch on is_literal() handle them without a special case.
+    assert!(TokenKind::UnknownRest.is_literal());
+    assert!(!TokenKind::UnknownRest.is_keyword());
+    assert!(!TokenKind::UnknownRest.is_operator());
+
+    assert!(TokenKind::HeredocDepthLimit.is_literal());
+    assert!(!TokenKind::HeredocDepthLimit.is_keyword());
+    assert!(!TokenKind::HeredocDepthLimit.is_operator());
+}
+
+#[test]
+fn nearest_rank_percentile_single_element_returns_that_element() {
+    assert_eq!(nearest_rank_percentile(&[42], 0), 42);
+    assert_eq!(nearest_rank_percentile(&[42], 50), 42);
+    assert_eq!(nearest_rank_percentile(&[42], 95), 42);
+    assert_eq!(nearest_rank_percentile(&[42], 100), 42);
+}
+
+#[test]
+fn nearest_rank_percentile_p100_returns_max() {
+    let sorted = vec![10u64, 20, 30];
+    assert_eq!(nearest_rank_percentile(&sorted, 100), 30);
+}
+
+#[test]
+fn nearest_rank_percentile_pct_above_100_is_clamped_to_max() {
+    let sorted = vec![10u64, 20, 30];
+    assert_eq!(nearest_rank_percentile(&sorted, 200), 30);
+    assert_eq!(nearest_rank_percentile(&sorted, u64::MAX), 30);
+}
