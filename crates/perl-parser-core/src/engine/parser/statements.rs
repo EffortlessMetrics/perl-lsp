@@ -692,7 +692,7 @@ impl<'a> Parser<'a> {
                     }
 
                     if has_parens {
-                        self.expect(TokenKind::RightParen)?;
+                        self.expect_closing_delimiter(TokenKind::RightParen)?;
                     }
 
                     let end = self.previous_position();
