@@ -692,7 +692,7 @@ impl<'a> Parser<'a> {
                     }
 
                     if has_parens {
-                        self.expect(TokenKind::RightParen)?;
+                        self.expect_closing_delimiter(TokenKind::RightParen)?;
                     }
 
                     let end = self.previous_position();
@@ -1038,7 +1038,7 @@ impl<'a> Parser<'a> {
 
             // Handle unclosed block at EOF: emit error but return partial block
             if s.peek_kind() == Some(TokenKind::RightBrace) {
-                s.expect(TokenKind::RightBrace)?;
+                s.expect_closing_delimiter(TokenKind::RightBrace)?;
             } else {
                 // Missing closing brace (EOF or recovery break)
                 let pos = s.current_position();

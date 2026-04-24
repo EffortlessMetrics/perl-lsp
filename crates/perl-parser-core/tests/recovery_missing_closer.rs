@@ -287,6 +287,85 @@ fn missing_paren_at_eof_in_list_assignment_emits_recovered() {
 }
 
 // ---------------------------------------------------------------------------
+// Bucket coverage — nearest syntactic owner
+// ---------------------------------------------------------------------------
+
+/// Declaration-list owner: `tie(my %h, ...)` with missing `)` before `;`.
+#[test]
+fn missing_tie_decl_list_closer_emits_recovered() {
+    let src = "tie(my %h, 'Tie::IxHash', foo => 1; my $after = 1;";
+    let (ast, errors) = parse_errors(src);
+
+    assert!(
+        count_inserted_closer(&errors) >= 1,
+        "Expected InsertedCloser for tie() declaration-list owner in '{}', got: {:?}",
+        src,
+        errors
+    );
+    assert!(
+        statement_count(&ast) >= 2,
+        "Recovery should keep downstream statements alive for '{}'",
+        src
+    );
+}
+
+/// Hash-literal owner: missing `}` before statement terminator stays recoverable.
+#[test]
+fn missing_hash_literal_brace_before_semicolon_emits_recovered() {
+    let src = "my $cfg = { key => 1; my $after = 2;";
+    let (ast, errors) = parse_errors(src);
+
+    let recovered_hash = errors.iter().any(|e| {
+        matches!(
+            e,
+            ParseError::Recovered {
+                site: RecoverySite::HashSubscript,
+                kind: RecoveryKind::InsertedCloser,
+                ..
+            }
+        )
+    });
+    assert!(
+        recovered_hash,
+        "Expected HashSubscript InsertedCloser for hash-literal owner in '{}', got: {:?}",
+        src,
+        errors
+    );
+    assert!(
+        matches!(ast.kind, NodeKind::Program { .. }),
+        "Hash-literal recovery should still produce a Program node for '{}'",
+        src
+    );
+}
+
+/// Postfix-deref owner: missing `}` in `->%{...}` recovers at semicolon.
+#[test]
+fn missing_postfix_deref_brace_before_semicolon_emits_recovered() {
+    let src = "my $v = $obj->%{key; my $after = 3;";
+    let (_ast, errors) = parse_errors(src);
+
+    assert!(
+        count_inserted_closer(&errors) >= 1,
+        "Expected InsertedCloser for postfix deref owner in '{}', got: {:?}",
+        src,
+        errors
+    );
+}
+
+/// Quote-like owner: unclosed `qq{...` remains a syntax diagnostic (not silent clean parse).
+#[test]
+fn unclosed_quote_like_still_reports_diagnostic() {
+    let src = "my $s = qq{hello;";
+    let (_ast, errors) = parse_errors(src);
+
+    assert!(
+        !errors.is_empty(),
+        "Unclosed quote-like input must keep diagnostics for '{}'",
+        src
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Regression: clean-parse inputs must produce zero Recovered errors
 // ---------------------------------------------------------------------------
 

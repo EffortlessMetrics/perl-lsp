@@ -20,7 +20,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            s.expect(TokenKind::RightBrace)?;
+            s.expect_closing_delimiter(TokenKind::RightBrace)?;
             let end = s.previous_position();
 
             // Always return a block node for builtin functions
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
                     statements.push(self.parse_statement()?);
                 }
 
-                self.expect(TokenKind::RightBrace)?;
+                self.expect_closing_delimiter(TokenKind::RightBrace)?;
                 let end = self.previous_position();
 
                 self.exit_recursion();
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            self.expect(TokenKind::RightBrace)?;
+            self.expect_closing_delimiter(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
             self.exit_recursion();
@@ -259,7 +259,7 @@ impl<'a> Parser<'a> {
                 statements.push(self.parse_statement()?);
             }
 
-            self.expect(TokenKind::RightBrace)?;
+            self.expect_closing_delimiter(TokenKind::RightBrace)?;
             let end = self.previous_position();
 
             self.exit_recursion();
