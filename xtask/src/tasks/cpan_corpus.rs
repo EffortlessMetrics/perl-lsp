@@ -634,6 +634,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
         enforce,
         verbose: config.verbose,
         receipt: true,
+        classifications: Some(parser_corpus_sweep::default_classification_manifests("cpan")),
     };
 
     parser_corpus_sweep::run(sweep_config)?;
@@ -678,6 +679,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
                 enforce: true,
                 verbose: config.verbose,
                 receipt: false,
+                classifications: None,
             };
             parser_corpus_sweep::run(manifest_sweep)?;
         }
@@ -723,6 +725,7 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
         enforce: false,
         verbose: true,
         receipt: false,
+        classifications: Some(parser_corpus_sweep::default_classification_manifests("cpan")),
     };
 
     parser_corpus_sweep::run(sweep_config)?;

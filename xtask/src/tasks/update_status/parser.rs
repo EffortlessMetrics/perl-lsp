@@ -89,6 +89,27 @@ fn short_day(timestamp: &str) -> &str {
     timestamp.get(..10).unwrap_or(timestamp)
 }
 
+fn dirty_breakdown(report: &super::super::parser_corpus_sweep::SweepReport) -> String {
+    report.dirty_file_classification.as_ref().map_or_else(
+        || {
+            format!(
+                "`{}` unreadable, `{}` with errors",
+                report.files_unreadable, report.files_with_errors
+            )
+        },
+        |c| {
+            format!(
+                "clean `{}`, parser-gap `{}`, recovery `{}`, invalid `{}`, unreadable `{}`",
+                c.clean_files,
+                c.valid_parser_gaps,
+                c.expected_recovery_only,
+                c.known_invalid,
+                c.unreadable
+            )
+        },
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Generator
 // ---------------------------------------------------------------------------
@@ -100,11 +121,10 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |report| {
             format!(
-                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, `{}` unreadable, `{}` with errors, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
+                "| **Ubuntu system Perl** | {} | Compatibility baseline; Perl `{}`, {}, baseline `{}` | `.ci/parser-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
                 report.perl_version,
-                report.files_unreadable,
-                report.files_with_errors,
+                dirty_breakdown(report),
                 short_day(&report.timestamp),
             )
         },
@@ -116,10 +136,9 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         },
         |report| {
             format!(
-                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; `{}` unreadable, `{}` with errors, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
+                "| **CPAN top 1000** | {} | Ecosystem breadth baseline; {}, cached downloads in `target/cpan-corpus/.cpanm`, baseline `{}` | `.ci/cpan-corpus-baseline.json` |",
                 format_clean_rate(report.clean_files, report.total_files),
-                report.files_unreadable,
-                report.files_with_errors,
+                dirty_breakdown(report),
                 short_day(&report.timestamp),
             )
         },
@@ -370,6 +389,8 @@ mod tests {
             phase_timings: None,
             median_error_density_per_1k_loc: None,
             slowest_files: vec![],
+            dirty_file_classification: None,
+            unreadable_files: vec![],
         };
         let metrics = ParserMetrics {
             syntax_sections: 611,

@@ -1495,6 +1495,11 @@ fn main() -> Result<()> {
         } => {
             let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
             let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
+            let classifications = if manifest.is_none() {
+                Some(parser_corpus_sweep::default_classification_manifests("system"))
+            } else {
+                None
+            };
             parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
                 corpus_profile: None,
                 base_roots,
@@ -1506,6 +1511,7 @@ fn main() -> Result<()> {
                 enforce,
                 verbose,
                 receipt,
+                classifications,
             })
         }
         Commands::CpanCorpus { command } => {
