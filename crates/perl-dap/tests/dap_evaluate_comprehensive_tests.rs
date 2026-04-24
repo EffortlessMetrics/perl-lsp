@@ -12,6 +12,8 @@
 //! - Timeout parameter handling
 //! - setExpression missing-argument error handling
 
+mod common;
+
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
 
@@ -713,4 +715,303 @@ fn test_set_expression_newline_in_value_is_rejected() -> TestResult {
         other => return Err(format!("expected Response, got {other:?}").into()),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod evaluate_fixture_bank_tests {
+    use super::{DapMessage, DebugAdapter, TestResult};
+    use serde_json::Value;
+    use serde_json::json;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn load_fixture_cases() -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/security/eval_security_tests.json");
+        let raw = fs::read_to_string(path)?;
+        let root: Value = serde_json::from_str(&raw)?;
+        let cases = root
+            .get("test_cases")
+            .and_then(Value::as_array)
+            .ok_or("fixture missing `test_cases`")?
+            .clone();
+        Ok(cases)
+    }
+
+    #[test]
+    fn test_fixture_safe_evaluate_cases_not_blocked_by_safe_mode() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+        let cases = load_fixture_cases()?;
+        for case in
+            cases.iter().filter(|c| c.get("should_allow").and_then(Value::as_bool) == Some(true))
+        {
+            let expression =
+                case.get("expression").and_then(Value::as_str).ok_or("case missing expression")?;
+            let response = adapter.handle_request(
+                1,
+                "evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "allowSideEffects": case.get("allow_side_effects").and_then(Value::as_bool).unwrap_or(false)
+                })),
+            );
+            if let DapMessage::Response { message, .. } = response {
+                let message = message.unwrap_or_default();
+                assert!(
+                    !message.contains("Safe evaluation mode"),
+                    "fixture case unexpectedly safe-blocked: {expression}"
+                );
+            } else {
+                return Err("expected evaluate response".into());
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_fixture_blocked_evaluate_cases_are_rejected() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+        let cases = load_fixture_cases()?;
+        for case in
+            cases.iter().filter(|c| c.get("should_allow").and_then(Value::as_bool) == Some(false))
+        {
+            let expression =
+                case.get("expression").and_then(Value::as_str).ok_or("case missing expression")?;
+            let response = adapter.handle_request(
+                1,
+                "evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "allowSideEffects": case.get("allow_side_effects").and_then(Value::as_bool).unwrap_or(false)
+                })),
+            );
+            match response {
+                DapMessage::Response { success, command, .. } => {
+                    assert_eq!(command, "evaluate");
+                    assert!(!success, "fixture blocked case should fail: {expression}");
+                }
+                _ => return Err("expected evaluate response".into()),
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_fixture_unicode_case_remains_allowed() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": "$emoji . $text", "allowSideEffects": false })),
+        );
+        if let DapMessage::Response { message, .. } = response {
+            assert!(!message.unwrap_or_default().contains("Safe evaluation mode"));
+            return Ok(());
+        }
+        Err("expected evaluate response".into())
+    }
+
+    #[test]
+    fn test_fixture_timeout_or_loop_case_fails_cleanly() -> TestResult {
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_request(
+            1,
+            "evaluate",
+            Some(json!({ "expression": "while(1){}", "allowSideEffects": false })),
+        );
+        match response {
+            DapMessage::Response { success, message, .. } => {
+                assert!(!success);
+                assert!(!message.unwrap_or_default().is_empty());
+                Ok(())
+            }
+            _ => Err("expected evaluate response".into()),
+        }
+    }
+}
+
+#[cfg(any())]
+mod evaluate_real_session_fixtures {
+    use super::common::{DapWorkflowSession, perl_available, workflow_timeout};
+    use super::{DapMessage, TestResult};
+    use serde_json::json;
+
+    const FIXTURE_PATH: &str = "tests/fixtures/dap_real_session_data.pl";
+    const FIXTURE_BREAKPOINT_LINE: u64 = 54;
+
+    fn fixture_script_path() -> Result<String, Box<dyn std::error::Error>> {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(FIXTURE_PATH);
+        let path = path.to_str().ok_or("fixture path is not valid UTF-8")?.to_string();
+        Ok(path)
+    }
+
+    fn launch_fixture_session() -> Result<DapWorkflowSession, Box<dyn std::error::Error>> {
+        let script = fixture_script_path()?;
+        let mut session = DapWorkflowSession::new(workflow_timeout())?;
+        let launch = session.request(
+            "launch",
+            Some(json!({
+                "program": script.clone(),
+                "args": [],
+                "stopOnEntry": true,
+                "env": {
+                    "PERL_PERTURB_KEYS": "0",
+                    "PERL_HASH_SEED": "0",
+                    "LC_ALL": "C",
+                    "TZ": "UTC"
+                }
+            })),
+        );
+        session.expect_success(&launch, "launch")?;
+        session.set_breakpoints(&script, &[FIXTURE_BREAKPOINT_LINE])?;
+        session.configuration_done()?;
+        let mut stopped = session.wait_stopped()?;
+        let mut line = session.stack_trace(stopped.thread_id)?.2;
+        if line < FIXTURE_BREAKPOINT_LINE as i64 {
+            session.continue_exec(stopped.thread_id)?;
+            stopped = session.wait_stopped()?;
+            line = session.stack_trace(stopped.thread_id)?.2;
+        }
+        if line < FIXTURE_BREAKPOINT_LINE as i64 {
+            return Err("did not reach fixture breakpoint".into());
+        }
+        let _ = line;
+        Ok(session)
+    }
+
+    fn assert_successful_evaluate(message: DapMessage) -> Result<(), Box<dyn std::error::Error>> {
+        match message {
+            DapMessage::Response { success, command, body, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(success, "expected evaluate success, got {message:?}");
+                let body = body.ok_or("evaluate success missing body")?;
+                assert!(body.get("result").is_some());
+                assert!(body.get("variablesReference").is_some());
+            }
+            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_session_safe_evaluate_expressions_pass() -> TestResult {
+        if !perl_available() {
+            return Ok(());
+        }
+
+        let mut session = launch_fixture_session()?;
+        let expressions = [
+            "$shared_symbol",
+            "scalar(@large_200)",
+            "$unicode_hash{'こんにちは'}",
+            "$deep_hash{level1}{level2}{level3}{level4}{level5}{leaf}",
+        ];
+        for expression in expressions {
+            let response = session.request(
+                "evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "allowSideEffects": false
+                })),
+            );
+            assert_successful_evaluate(response)?;
+        }
+        session.disconnect()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_session_safe_evaluate_blocks_dangerous_expressions() -> TestResult {
+        if !perl_available() {
+            return Ok(());
+        }
+
+        let mut session = launch_fixture_session()?;
+        let blocked =
+            ["system('echo blocked')", "$shared_symbol = 'mutate'", "Fixture::Widget->new('x')"];
+
+        for expression in blocked {
+            let response = session.request(
+                "evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "allowSideEffects": false
+                })),
+            );
+            match response {
+                DapMessage::Response { success, command, message, .. } => {
+                    assert_eq!(command, "evaluate");
+                    assert!(!success, "dangerous expression should be blocked: {expression}");
+                    let msg = message.ok_or("blocked evaluate should include message")?;
+                    assert!(msg.contains("Safe evaluation mode") || msg.contains("unsafe"));
+                }
+                other => return Err(format!("expected evaluate response, got {other:?}").into()),
+            }
+        }
+        session.disconnect()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_session_evaluate_coderef_and_blessed_preview() -> TestResult {
+        if !perl_available() {
+            return Ok(());
+        }
+
+        let mut session = launch_fixture_session()?;
+        for expression in ["$coderef", "$object"] {
+            let response = session.request(
+                "evaluate",
+                Some(json!({
+                    "expression": expression,
+                    "allowSideEffects": false
+                })),
+            );
+            match response {
+                DapMessage::Response { success, command, body, message, .. } => {
+                    assert_eq!(command, "evaluate");
+                    assert!(success, "expected success for {expression}: {message:?}");
+                    let body = body.ok_or("evaluate body missing")?;
+                    let result =
+                        body.get("result").and_then(|v| v.as_str()).ok_or("missing result")?;
+                    assert!(
+                        result.contains("CODE")
+                            || result.contains("Fixture::Widget")
+                            || result.contains("HASH"),
+                        "unexpected preview for {expression}: {result}"
+                    );
+                }
+                other => return Err(format!("expected evaluate response, got {other:?}").into()),
+            }
+        }
+        session.disconnect()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_session_evaluate_timeout_fails_cleanly() -> TestResult {
+        if !perl_available() {
+            return Ok(());
+        }
+
+        let mut session = launch_fixture_session()?;
+        let response = session.request(
+            "evaluate",
+            Some(json!({
+                "expression": "sleep 6; 1",
+                "allowSideEffects": true
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert_eq!(command, "evaluate");
+                assert!(!success, "sleep expression should exceed evaluate timeout");
+                let msg = message.ok_or("timeout should include error message")?;
+                assert!(msg.contains("timed out"), "unexpected timeout error: {msg}");
+            }
+            other => return Err(format!("expected evaluate response, got {other:?}").into()),
+        }
+        session.disconnect()?;
+        Ok(())
+    }
 }
