@@ -770,94 +770,117 @@ impl IncrementalDocument {
     fn cache_subtrees(&mut self) {
         self.subtree_cache.clear();
         let root = self.root.clone();
-        self.cache_node(&root);
+        self.cache_node(&root, 0);
     }
 
-    fn cache_node(&mut self, node: &Node) {
-        // Cache this subtree by range
-        let range = (node.location.start, node.location.end);
-        self.subtree_cache.by_range.insert(range, Arc::new(node.clone()));
-
-        // Cache by content hash for common patterns
-        let hash = self.hash_node(node);
+    fn cache_node(&mut self, node: &Node, depth: usize) {
+        // Avoid caching every subtree root: cloning non-leaf nodes deep-copies
+        // all descendants and can lead to quadratic memory/time growth.
+        // Keep cache entries to the top of the tree, leaf nodes, and explicitly
+        // critical symbols to preserve incremental reuse without quadratic blowup.
         let priority = self.get_symbol_priority(node);
+        if depth <= 1 || priority == SymbolPriority::Critical || self.is_leaf_node(node) {
+            let range = (node.location.start, node.location.end);
+            let hash = self.hash_node(node);
+            let cached_node = Arc::new(node.clone());
 
-        self.subtree_cache.by_content.insert(hash, Arc::new(node.clone()));
-        self.subtree_cache.critical_symbols.insert(hash, priority);
-        self.subtree_cache.lru.push_back(hash);
-        self.subtree_cache.evict_if_needed();
+            self.subtree_cache.by_range.insert(range, cached_node.clone());
+            self.subtree_cache.by_content.insert(hash, cached_node);
+            self.subtree_cache.critical_symbols.insert(hash, priority);
+            self.subtree_cache.lru.push_back(hash);
+            self.subtree_cache.evict_if_needed();
+        }
 
         // Recursively cache children
         match &node.kind {
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
-                    self.cache_node(stmt);
+                    self.cache_node(stmt, depth + 1);
                 }
             }
             NodeKind::Binary { left, right, .. } => {
-                self.cache_node(left);
-                self.cache_node(right);
+                self.cache_node(left, depth + 1);
+                self.cache_node(right, depth + 1);
             }
             NodeKind::Subroutine { body, .. } => {
-                self.cache_node(body);
+                self.cache_node(body, depth + 1);
             }
             NodeKind::ExpressionStatement { expression } => {
-                self.cache_node(expression);
+                self.cache_node(expression, depth + 1);
             }
             NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-                self.cache_node(condition);
-                self.cache_node(then_branch);
+                self.cache_node(condition, depth + 1);
+                self.cache_node(then_branch, depth + 1);
                 for (cond, branch) in elsif_branches {
-                    self.cache_node(cond);
-                    self.cache_node(branch);
+                    self.cache_node(cond, depth + 1);
+                    self.cache_node(branch, depth + 1);
                 }
                 if let Some(else_b) = else_branch {
-                    self.cache_node(else_b);
+                    self.cache_node(else_b, depth + 1);
                 }
             }
             NodeKind::While { condition, body, .. } => {
-                self.cache_node(condition);
-                self.cache_node(body);
+                self.cache_node(condition, depth + 1);
+                self.cache_node(body, depth + 1);
             }
             NodeKind::For { init, condition, update, body, .. } => {
                 if let Some(i) = init {
-                    self.cache_node(i);
+                    self.cache_node(i, depth + 1);
                 }
                 if let Some(c) = condition {
-                    self.cache_node(c);
+                    self.cache_node(c, depth + 1);
                 }
                 if let Some(u) = update {
-                    self.cache_node(u);
+                    self.cache_node(u, depth + 1);
                 }
-                self.cache_node(body);
+                self.cache_node(body, depth + 1);
             }
             NodeKind::Foreach { variable, list, body, continue_block } => {
-                self.cache_node(variable);
-                self.cache_node(list);
-                self.cache_node(body);
+                self.cache_node(variable, depth + 1);
+                self.cache_node(list, depth + 1);
+                self.cache_node(body, depth + 1);
                 if let Some(cb) = continue_block {
-                    self.cache_node(cb);
+                    self.cache_node(cb, depth + 1);
                 }
             }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
-                self.cache_node(variable);
+                self.cache_node(variable, depth + 1);
                 if let Some(init) = initializer {
-                    self.cache_node(init);
+                    self.cache_node(init, depth + 1);
                 }
             }
             NodeKind::VariableListDeclaration { variables, initializer, .. } => {
                 for var in variables {
-                    self.cache_node(var);
+                    self.cache_node(var, depth + 1);
                 }
                 if let Some(init) = initializer {
-                    self.cache_node(init);
+                    self.cache_node(init, depth + 1);
                 }
             }
             NodeKind::Assignment { lhs, rhs, .. } => {
-                self.cache_node(lhs);
-                self.cache_node(rhs);
+                self.cache_node(lhs, depth + 1);
+                self.cache_node(rhs, depth + 1);
             }
             _ => {}
+        }
+    }
+
+    fn is_leaf_node(&self, node: &Node) -> bool {
+        match &node.kind {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                statements.is_empty()
+            }
+            NodeKind::Binary { .. }
+            | NodeKind::Subroutine { .. }
+            | NodeKind::ExpressionStatement { .. }
+            | NodeKind::If { .. }
+            | NodeKind::While { .. }
+            | NodeKind::For { .. }
+            | NodeKind::Foreach { .. }
+            | NodeKind::VariableDeclaration { .. }
+            | NodeKind::VariableListDeclaration { .. }
+            | NodeKind::Assignment { .. } => false,
+            _ => true,
         }
     }
 
