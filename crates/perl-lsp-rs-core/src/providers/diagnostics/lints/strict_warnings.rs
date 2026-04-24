@@ -63,12 +63,8 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     // Using usize::MAX ensures we get the last entry, which reflects the
     // restored top-level state after any eval/sub/block scopes have closed.
     // This avoids the false-negative from .any() which sees eval-interior ranges.
-    // signatures_strict is included to honour `use feature 'signatures'` (#4038).
     let top_level_state = PragmaTracker::state_for_offset(&pragma_map, usize::MAX);
-    let mut has_strict = top_level_state.strict_vars
-        || top_level_state.strict_subs
-        || top_level_state.strict_refs
-        || top_level_state.signatures_strict;
+    let mut has_strict = top_level_state.is_any_strict_active();
     let mut has_warnings = top_level_state.warnings;
 
     // OO frameworks that implicitly provide strict+warnings
@@ -619,6 +615,28 @@ mod tests {
         assert!(
             diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
             "eval-scoped Moose should not suppress missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
+    fn eval_scoped_signatures_does_not_suppress_missing_strict() {
+        let diags = strict_warnings_diags(
+            "eval { use feature 'signatures'; sub inner ($x) { $x } };\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "eval-scoped signatures strictness must not suppress missing-strict (PL100)"
+        );
+    }
+
+    #[test]
+    fn top_level_signatures_after_eval_suppresses_missing_strict() {
+        let diags = strict_warnings_diags(
+            "eval { my $tmp = 1; };\nuse feature 'signatures';\nsub inner ($x) { $x }\n",
+        );
+        assert!(
+            diags.iter().all(|d| d.code.as_deref() != Some("PL100")),
+            "top-level feature signatures after eval should suppress missing-strict"
         );
     }
 

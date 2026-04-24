@@ -99,6 +99,39 @@ impl PragmaState {
         self.warnings && !self.disabled_warning_categories.iter().any(|c| c == category)
     }
 
+    /// Returns `true` if strict `vars` semantics are active in this scope.
+    ///
+    /// This includes both explicit `use strict 'vars'` and implicit strictness
+    /// driven by `use feature 'signatures'`.
+    #[must_use]
+    pub fn is_strict_vars_active(&self) -> bool {
+        self.strict_vars || self.signatures_strict
+    }
+
+    /// Returns `true` if strict `subs` semantics are active in this scope.
+    ///
+    /// This includes both explicit `use strict 'subs'` and implicit strictness
+    /// driven by `use feature 'signatures'`.
+    #[must_use]
+    pub fn is_strict_subs_active(&self) -> bool {
+        self.strict_subs || self.signatures_strict
+    }
+
+    /// Returns `true` if strict `refs` semantics are active in this scope.
+    ///
+    /// This includes both explicit `use strict 'refs'` and implicit strictness
+    /// driven by `use feature 'signatures'`.
+    #[must_use]
+    pub fn is_strict_refs_active(&self) -> bool {
+        self.strict_refs || self.signatures_strict
+    }
+
+    /// Returns `true` when any strict category is active in this scope.
+    #[must_use]
+    pub fn is_any_strict_active(&self) -> bool {
+        self.is_strict_vars_active() || self.is_strict_subs_active() || self.is_strict_refs_active()
+    }
+
     /// Returns `true` if the given feature name is currently enabled.
     #[must_use]
     pub fn has_feature(&self, feature: &str) -> bool {

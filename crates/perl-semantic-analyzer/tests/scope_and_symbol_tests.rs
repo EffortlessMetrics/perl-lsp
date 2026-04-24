@@ -2043,6 +2043,51 @@ sub foo ($x) { $z = 1; }
 }
 
 #[test]
+fn eval_scoped_signatures_does_not_enable_top_level_strict_vars()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+eval { use feature 'signatures'; sub inner ($x) { $x } };
+print $undeclared;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !has_issue(&issues, IssueKind::UndeclaredVariable, "undeclared"),
+        "eval-scoped signatures must not leak strict vars to top-level"
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_no_strict_subs_does_not_leak_outside_block() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+{
+    no strict 'subs';
+    print BAREWORD_INNER_OK;
+}
+print BAREWORD_OUTER_MUST_FAIL;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "BAREWORD_OUTER_MUST_FAIL"
+        }),
+        "no strict 'subs' in nested block must not disable strict subs outside that block"
+    );
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "BAREWORD_INNER_OK"
+        }),
+        "bareword inside nested no strict 'subs' block should remain allowed"
+    );
+    Ok(())
+}
+
+#[test]
 fn signature_parameters_are_registered_as_symbols() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 sub add ($x, $y = 1, @rest) {
