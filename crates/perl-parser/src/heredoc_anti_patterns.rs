@@ -891,6 +891,60 @@ SECOND
     }
 
     #[test]
+    fn test_location_first_byte_is_line_zero_column_zero() {
+        // A match at byte offset 0 must report line=0, column=0.
+        let detector = AntiPatternDetector::new();
+        let code = "use Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            panic!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 0, "first-byte match must be on line 0");
+        assert_eq!(location.column, 0, "first-byte match must be at column 0");
+        assert_eq!(location.offset, 0);
+    }
+
+    #[test]
+    fn test_location_third_line_accurate() {
+        // Three-line file — match on line 2, column 0.
+        let detector = AntiPatternDetector::new();
+        // Line 0: "my $a = 1;\n"  (11 bytes, \n at index 10)
+        // Line 1: "my $b = 2;\n"  (11 bytes, \n at index 21)
+        // Line 2: "use Filter::Simple;\n"
+        let code = "my $a = 1;\nmy $b = 2;\nuse Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            panic!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 2, "match on third line must report line 2");
+        assert_eq!(location.column, 0, "match at start of line must report column 0");
+        assert_eq!(location.offset, 22, "byte offset of third-line start");
+    }
+
+    #[test]
+    fn test_location_mid_line_column_nonzero() {
+        // Match that does not start at column 0 must report the correct column.
+        // Line 0: "# comment\n"      (10 bytes, \n at index 9)
+        // Line 1: "    use Filter::Simple;\n"  — 4 leading spaces, match at column 4
+        let detector = AntiPatternDetector::new();
+        let code = "# comment\n    use Filter::Simple;\n";
+
+        let diagnostics = detector.detect_all(code);
+        // The comment is masked; only SourceFilterHeredoc on line 1 should fire.
+        assert_eq!(diagnostics.len(), 1);
+        let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
+            panic!("expected SourceFilterHeredoc");
+        };
+        assert_eq!(location.line, 1);
+        assert_eq!(location.column, 4, "mid-line match must report correct column");
+        assert_eq!(location.offset, 14, "byte offset = 10 (first line) + 4 spaces");
+    }
+
+    #[test]
     fn test_source_filter_detection_ignores_comments_and_strings() {
         let detector = AntiPatternDetector::new();
         let code = r#"
