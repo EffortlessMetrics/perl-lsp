@@ -52,7 +52,7 @@ pub fn validate_file_content(content: &str, file_path: &Path) -> Result<()> {
     let max_file_size = limits_max_file_size_bytes();
     if content.len() > max_file_size {
         return Err(anyhow!(
-            "File {} too large: {} bytes (max: {} bytes) — adjust perl.limits.maxFileSizeBytes to increase",
+            "File {} too large: {} bytes (max: {} bytes) â€” adjust perl.limits.maxFileSizeBytes to increase",
             file_path.display(),
             content.len(),
             max_file_size
@@ -339,7 +339,42 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// Regression guard: the `untitled:` scheme must still be accepted after the
+    /// allowlist refactor (PR #5649 replaced hardcoded checks with a constant).
     #[test]
+    fn test_validate_lsp_request_valid_untitled_uri_still_accepted() {
+        let method = "textDocument/didOpen";
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": "untitled:Untitled-1",
+                "text": "package Scratch;
+1;
+"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok(), "untitled: URI must be accepted after scheme allowlist refactor");
+    }
+
+    /// Regression guard: the original `file://` scheme must still be accepted.
+    #[test]
+    fn test_validate_lsp_request_valid_file_uri_still_accepted() {
+        let method = "textDocument/didChange";
+        let params = serde_json::json!({
+            "textDocument": {
+                "uri": "file:///home/user/project/lib/My.pm",
+                "text": "package My;
+1;
+"
+            }
+        });
+
+        let result = validate_lsp_request(method, &params);
+        assert!(result.is_ok(), "file:// URI must be accepted after scheme allowlist refactor");
+    }
+
+        #[test]
     fn test_file_size_limit_sourced_from_lsp_limits() {
         // The file size limit must come from perl-lsp-limits, not a local constant.
         // This test documents the expected single source of truth.
