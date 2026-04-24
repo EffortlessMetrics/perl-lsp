@@ -286,7 +286,12 @@ pub fn scan_directory_for_modules(root: &Path, prefix: &str) -> Vec<String> {
             let path = entry.path();
 
             if file_type.is_dir() {
-                if depth < MAX_SCAN_DEPTH && !file_type.is_symlink() {
+                // Use path.is_symlink() rather than file_type.is_symlink() because
+                // DirEntry::file_type() returns the entry's own type: on Unix a
+                // symlinked directory has is_symlink()=true AND is_dir()=false,
+                // so the file_type.is_symlink() guard inside is_dir() would be
+                // dead code. path.is_symlink() correctly detects symlinks via lstat.
+                if depth < MAX_SCAN_DEPTH && !path.is_symlink() {
                     queue.push_back((path, depth + 1));
                 }
                 continue;

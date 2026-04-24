@@ -3736,6 +3736,98 @@ sub helper { }
     }
 
     #[test]
+    fn test_path_to_module_name_top_level_pm() -> Result<(), Box<dyn std::error::Error>> {
+        // DBI.pm directly in root → "DBI" (single-component name, no "::")
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        let module_file = root.join("DBI.pm");
+        fs::write(&module_file, "package DBI;\n1;\n")?;
+
+        let module_name = workspace::path_to_module_name(&root, &module_file);
+        assert_eq!(module_name.as_deref(), Some("DBI"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_path_to_module_name_non_pm_excluded() -> Result<(), Box<dyn std::error::Error>> {
+        // Only .pm files should be mapped; .pl, .pod, .so, no-ext must return None
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+
+        for name in &["Script.pl", "Manual.pod", "XSHelper.so", "README"] {
+            let file = root.join(name);
+            fs::write(&file, "")?;
+            assert!(
+                workspace::path_to_module_name(&root, &file).is_none(),
+                "expected None for {}",
+                name
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_excludes_non_pm_files() -> Result<(), Box<dyn std::error::Error>> {
+        // scan_directory_for_modules must not surface .pl or .pod files
+        let temp = TempDir::new()?;
+        let root = temp.path().join("lib");
+        fs::create_dir_all(&root)?;
+        fs::write(root.join("Good.pm"), "package Good;\n1;\n")?;
+        fs::write(root.join("Bad.pl"), "#!/usr/bin/perl\n")?;
+        fs::write(root.join("Doc.pod"), "=head1 NAME\n")?;
+
+        let modules = workspace::scan_directory_for_modules(&root, "");
+        assert!(modules.contains(&"Good".to_string()), "Good.pm should be included");
+        assert!(!modules.contains(&"Bad".to_string()), "Bad.pl should be excluded");
+        assert!(!modules.contains(&"Doc".to_string()), "Doc.pod should be excluded");
+        Ok(())
+    }
+
+    #[test]
+    fn test_scan_nonexistent_root_returns_empty() {
+        // A path that does not exist must silently return an empty list
+        let modules = workspace::scan_directory_for_modules(
+            std::path::Path::new("/nonexistent/path/that/cannot/exist/12345"),
+            "Module",
+        );
+        assert!(modules.is_empty());
+    }
+
+    #[test]
+    fn test_use_completion_not_triggered_outside_use_statement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Verify that the scan does NOT fire for general variable completion.
+        // If a large include_root were passed and the scan ran unconditionally,
+        // this test would be slow and surface module names for non-use positions.
+        let temp = TempDir::new()?;
+        let include_root = temp.path().join("external");
+        let module_file = include_root.join("SomeMod.pm");
+        fs::create_dir_all(&include_root)?;
+        fs::write(module_file, "package SomeMod;\n1;\n")?;
+
+        // Code that does NOT contain a `use` statement — cursor at a scalar
+        let code = "my $x = 1;\nprint $x";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source_and_paths(
+            &ast,
+            code,
+            Some(Arc::new(WorkspaceIndex::new())),
+            vec![include_root],
+            Vec::new(),
+            false,
+        );
+        let completions = provider.get_completions(code, code.len());
+        assert!(
+            !completions.iter().any(|c| c.label == "SomeMod"),
+            "external module should not appear outside `use` context"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_use_statement_past_semicolon_excluded() -> Result<(), Box<dyn std::error::Error>> {
         // Cursor at the end of `use Module;` — the semicolon guard in
         // is_use_statement_context must suppress module-name completions.
