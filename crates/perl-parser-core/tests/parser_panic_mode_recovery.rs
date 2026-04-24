@@ -3,7 +3,9 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
-use perl_parser_core::{NodeKind, ParseResult, Parser};
+use perl_parser_core::{
+    NodeKind, ParseResult, Parser, RecoverySalvageClass, RecoverySalvageProfile,
+};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
 #[test]
@@ -408,5 +410,21 @@ fn parser_recovery_preserves_good_code() -> ParseResult<()> {
             }
         }
     }
+    Ok(())
+}
+
+#[test]
+fn parser_recovery_profiles_error_nodes_as_accuracy_issue() -> ParseResult<()> {
+    let mut parser = Parser::new("my $x = 1 + ; my $y = 2;");
+    let ast = parser.parse()?;
+    let profile = RecoverySalvageProfile::from_parse(&ast, parser.errors(), false);
+    assert!(
+        matches!(
+            profile.class,
+            RecoverySalvageClass::ErrorNodesPresent | RecoverySalvageClass::StructuredRecoveryOnly
+        ),
+        "recovery profile should classify malformed expression as dirty: {:?}",
+        profile.class
+    );
     Ok(())
 }
