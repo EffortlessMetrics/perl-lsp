@@ -35,7 +35,9 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
+
+static EMPTY_TOKEN_TEXT: LazyLock<Arc<str>> = LazyLock::new(|| Arc::<str>::from(""));
 
 /// Token produced by the lexer and consumed by the parser.
 ///
@@ -67,6 +69,11 @@ impl Token {
     /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
+    }
+
+    /// Create an EOF token that reuses a shared empty text allocation.
+    pub fn eof(start: usize, end: usize) -> Self {
+        Token { kind: TokenKind::Eof, text: Arc::clone(&EMPTY_TOKEN_TEXT), start, end }
     }
 
     /// Return the token span length in bytes.

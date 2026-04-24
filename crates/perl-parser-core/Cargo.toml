@@ -45,6 +45,11 @@ perl-tdd-support = { workspace = true }
 tempfile = { workspace = true }
 proptest = { workspace = true }
 tracing-subscriber = "0.3"
+criterion.workspace = true
+
+[[bench]]
+name = "token_stream_benchmark"
+harness = false
 
 [features]
 default = []
@@ -55,4 +60,3 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [lints]
 workspace = true
-
