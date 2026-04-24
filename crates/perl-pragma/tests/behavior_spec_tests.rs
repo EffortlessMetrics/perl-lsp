@@ -5,7 +5,7 @@
 
 use perl_ast::SourceLocation;
 use perl_ast::ast::{Node, NodeKind};
-use perl_pragma::{PragmaState, PragmaTracker};
+use perl_pragma::{CompileTimeEnvironment, PragmaState, PragmaTracker};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
     SourceLocation { start, end }
@@ -64,6 +64,24 @@ fn program(stmts: Vec<Node>) -> Node {
     Node { kind: NodeKind::Program { statements: stmts }, location: loc(0, end) }
 }
 
+fn eval_node(body_node: Node, start: usize, end: usize) -> Node {
+    Node { kind: NodeKind::Eval { block: Box::new(body_node) }, location: loc(start, end) }
+}
+
+fn function_call(name: &str, args: Vec<Node>, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::FunctionCall { name: name.to_string(), args },
+        location: loc(start, end),
+    }
+}
+
+fn string_node(value: &str, interpolated: bool, start: usize, end: usize) -> Node {
+    Node {
+        kind: NodeKind::String { value: value.to_string(), interpolated },
+        location: loc(start, end),
+    }
+}
+
 #[test]
 fn given_fresh_file_when_no_pragmas_then_default_state_applies() {
     let ast = program(vec![]);
@@ -101,6 +119,58 @@ fn given_use_strict_when_no_strict_refs_in_inner_block_then_refs_is_restored_out
     assert!(outside.strict_subs);
     assert!(outside.strict_refs);
     assert!(outside.warnings);
+}
+
+#[test]
+fn compile_time_environment_query_does_not_leak_inner_no_strict() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 15, 31)], 13, 33),
+        use_node("warnings", &[], 34, 49),
+    ]);
+    let env = CompileTimeEnvironment::from_ast(&ast);
+
+    let inside_query = env.query(25);
+    assert!(!inside_query.state().strict_refs);
+
+    let outside_query = env.query(40);
+    assert!(outside_query.strict_enabled());
+    assert!(outside_query.warnings_enabled());
+}
+
+#[test]
+fn compile_time_environment_query_restores_state_after_eval_block() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        eval_node(block(vec![no_node("strict", &["refs"], 20, 36)], 18, 38), 16, 40),
+        use_node("warnings", &[], 41, 56),
+    ]);
+    let env = CompileTimeEnvironment::from_ast(&ast);
+
+    let eval_query = env.query(30);
+    assert!(!eval_query.state().strict_refs);
+
+    let after_eval_query = env.query(50);
+    assert!(after_eval_query.strict_enabled());
+    assert!(after_eval_query.warnings_enabled());
+}
+
+#[test]
+fn compile_time_environment_query_keeps_string_eval_conservative() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        function_call(
+            "eval",
+            vec![string_node("use warnings; no strict 'refs';", true, 20, 53)],
+            15,
+            54,
+        ),
+    ]);
+    let env = CompileTimeEnvironment::from_ast(&ast);
+
+    let query = env.query(60);
+    assert!(query.strict_enabled());
+    assert!(!query.warnings_enabled());
 }
 
 #[test]

@@ -110,6 +110,100 @@ impl PragmaState {
     pub fn has_builtin_import(&self, name: &str) -> bool {
         self.builtin_imports.iter().any(|import| import == name)
     }
+
+    /// Creates an immutable snapshot of this compile-time pragma state.
+    #[must_use]
+    pub fn snapshot(&self) -> PragmaSnapshot {
+        PragmaSnapshot { state: self.clone() }
+    }
+}
+
+/// Immutable saved pragma state for explicit save/restore operations.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PragmaSnapshot {
+    state: PragmaState,
+}
+
+impl PragmaSnapshot {
+    /// Returns the captured pragma state.
+    #[must_use]
+    pub fn state(&self) -> &PragmaState {
+        &self.state
+    }
+
+    /// Restores the captured state into a mutable target.
+    pub fn restore_into(self, target: &mut PragmaState) {
+        *target = self.state;
+    }
+}
+
+/// Query result for compile-time pragma state at a specific file offset.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PragmaStateQuery {
+    /// Byte offset used for the query.
+    pub offset: usize,
+    state: PragmaState,
+}
+
+impl PragmaStateQuery {
+    /// Returns the full pragma state in effect at this query offset.
+    #[must_use]
+    pub fn state(&self) -> &PragmaState {
+        &self.state
+    }
+
+    /// Returns `true` if all strict categories are active at this query offset.
+    #[must_use]
+    pub fn strict_enabled(&self) -> bool {
+        self.state.strict_vars && self.state.strict_subs && self.state.strict_refs
+    }
+
+    /// Returns `true` if warnings are globally active at this query offset.
+    #[must_use]
+    pub fn warnings_enabled(&self) -> bool {
+        self.state.warnings
+    }
+
+    /// Returns `true` if a feature is active at this query offset.
+    #[must_use]
+    pub fn has_feature(&self, feature: &str) -> bool {
+        self.state.has_feature(feature)
+    }
+}
+
+/// Compile-time lexical pragma environment for a file.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CompileTimeEnvironment {
+    pragma_map: Vec<(Range<usize>, PragmaState)>,
+}
+
+impl CompileTimeEnvironment {
+    /// Builds a compile-time environment from an AST.
+    #[must_use]
+    pub fn from_ast(ast: &Node) -> Self {
+        Self { pragma_map: PragmaTracker::build(ast) }
+    }
+
+    /// Returns an immutable query object for state active at `offset`.
+    #[must_use]
+    pub fn query(&self, offset: usize) -> PragmaStateQuery {
+        PragmaStateQuery {
+            offset,
+            state: PragmaTracker::state_for_offset(&self.pragma_map, offset),
+        }
+    }
+
+    /// Returns the full state in effect at `offset`.
+    #[must_use]
+    pub fn state_at(&self, offset: usize) -> PragmaState {
+        self.query(offset).state
+    }
+
+    /// Returns the recorded internal range transitions.
+    #[must_use]
+    pub fn ranges(&self) -> &[(Range<usize>, PragmaState)] {
+        &self.pragma_map
+    }
 }
 
 /// Parse a Perl version string into a major/minor pair.
@@ -464,9 +558,9 @@ impl PragmaTracker {
         current_state: &mut PragmaState,
         ranges: &mut Vec<(Range<usize>, PragmaState)>,
     ) {
-        let saved_state = current_state.clone();
+        let saved_state = current_state.snapshot();
         Self::build_ranges(body, current_state, ranges);
-        *current_state = saved_state;
+        saved_state.restore_into(current_state);
         ranges.push((body.location.end..body.location.end, current_state.clone()));
     }
 
@@ -740,7 +834,7 @@ impl PragmaTracker {
             }
             NodeKind::Block { statements } => {
                 // Save current state
-                let saved_state = current_state.clone();
+                let saved_state = current_state.snapshot();
 
                 // Process statements in the block
                 for stmt in statements {
@@ -748,7 +842,7 @@ impl PragmaTracker {
                 }
 
                 // Restore state after block
-                *current_state = saved_state;
+                saved_state.restore_into(current_state);
                 ranges.push((node.location.end..node.location.end, current_state.clone()));
             }
             NodeKind::Program { statements } => {
