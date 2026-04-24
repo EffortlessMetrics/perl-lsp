@@ -18,10 +18,21 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// NodeKinds that are intentionally allowlisted as non-representable in deterministic corpus.
+    pub allowlisted: Vec<AllowlistedNodeKind>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// NodeKind explicitly allowlisted from deterministic corpus coverage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name.
+    pub name: String,
+    /// Why this NodeKind is allowlisted.
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -70,14 +81,26 @@ pub fn analyze_nodekind_coverage(
 
     // Get all NodeKinds from the parser
     let all_nodekinds = get_all_nodekinds();
+    let allowlisted = allowlisted_nodekinds();
+    let allowlisted_names: HashSet<&str> =
+        allowlisted.iter().map(|entry| entry.name.as_str()).collect();
     let total_count = all_nodekinds.len();
-    let covered_count = nodekind_counts.len();
+    let covered_count = nodekind_counts.len()
+        + all_nodekinds
+            .iter()
+            .filter(|name| {
+                !nodekind_counts.contains_key(*name) && allowlisted_names.contains(name.as_str())
+            })
+            .count();
     let coverage_percentage =
         if total_count > 0 { (covered_count as f64 / total_count as f64) * 100.0 } else { 0.0 };
 
     // Find never-seen NodeKinds
-    let never_seen: Vec<String> =
-        all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let never_seen: Vec<String> = all_nodekinds
+        .iter()
+        .filter(|nk| !nodekind_counts.contains_key(*nk) && !allowlisted_names.contains(nk.as_str()))
+        .cloned()
+        .collect();
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +125,7 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -146,6 +170,27 @@ fn get_all_nodekinds() -> HashSet<String> {
     perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
+fn allowlisted_nodekinds() -> Vec<AllowlistedNodeKind> {
+    vec![
+        AllowlistedNodeKind {
+            name: "MissingStatement".to_string(),
+            rationale: "Recovery placeholder for malformed statements; deterministic clean corpus avoids malformed sources.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "MissingIdentifier".to_string(),
+            rationale: "Recovery placeholder emitted only when required identifiers are absent; intentionally absent from clean deterministic corpus.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "MissingBlock".to_string(),
+            rationale: "Recovery placeholder for required blocks; deterministic regression corpus tracks valid parse trees, not malformed block placeholders.".to_string(),
+        },
+        AllowlistedNodeKind {
+            name: "UnknownRest".to_string(),
+            rationale: "Represents lexer budget-exhaustion fallback token; deterministic corpus avoids intentionally budget-exhausting inputs.".to_string(),
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +208,17 @@ mod tests {
         assert!(nodekinds.contains("ExpressionStatement"));
         assert!(nodekinds.contains("Binary"));
         assert!(nodekinds.contains("Subroutine"));
+    }
+
+    #[test]
+    fn test_allowlist_contains_known_unrepresentable_nodekinds() {
+        let allowlisted = allowlisted_nodekinds();
+        let names: HashSet<_> = allowlisted.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(allowlisted.len(), 4);
+        assert!(names.contains("MissingStatement"));
+        assert!(names.contains("MissingIdentifier"));
+        assert!(names.contains("MissingBlock"));
+        assert!(names.contains("UnknownRest"));
     }
 
     #[test]

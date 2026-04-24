@@ -256,6 +256,22 @@ fn print_audit_summary(report: &AuditReport) {
         report.nodekind_coverage.coverage_percentage
     );
     println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
+    if !report.nodekind_coverage.never_seen.is_empty() {
+        let mut never_seen = report.nodekind_coverage.never_seen.clone();
+        never_seen.sort();
+        println!("     - {}", never_seen.join(", "));
+    }
+    if !report.nodekind_coverage.allowlisted.is_empty() {
+        println!(
+            "   Allowlisted NodeKinds (intentionally non-representable): {}",
+            report.nodekind_coverage.allowlisted.len()
+        );
+        let mut allowlisted = report.nodekind_coverage.allowlisted.clone();
+        allowlisted.sort_by(|a, b| a.name.cmp(&b.name));
+        for entry in &allowlisted {
+            println!("     - {}: {}", entry.name, entry.rationale);
+        }
+    }
     println!("   At-risk NodeKinds (<5 occurrences): {}", report.nodekind_coverage.at_risk.len());
     println!(
         "   GA features covered: {}/{} ({:.1}%)",
