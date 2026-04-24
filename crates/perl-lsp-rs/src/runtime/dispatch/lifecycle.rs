@@ -101,6 +101,7 @@ impl LspServer {
     ///
     /// Only sends if trace level is "messages" or "verbose".
     /// The verbose field is only included when trace level is "verbose".
+    // Kept for feature-gated trace instrumentation paths that may not be compiled in every target.
     #[allow(dead_code)]
     pub(crate) fn send_log_trace(&self, message: &str, verbose: Option<&str>) {
         let current_level = self.trace_level.lock().clone();
@@ -161,7 +162,11 @@ mod tests {
     #[test]
     fn initialized_can_only_be_sent_once() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(
+            initialize_result.is_ok(),
+            "initialize request should succeed: {initialize_result:?}"
+        );
 
         let first = server.handle_initialized_dispatch();
         let second = server.handle_initialized_dispatch();
@@ -173,7 +178,11 @@ mod tests {
     #[test]
     fn auto_initialize_for_compat_promotes_initialized_state() {
         let server = LspServer::new();
-        server.handle_initialize(None).expect("initialize request should succeed");
+        let initialize_result = server.handle_initialize(None);
+        assert!(
+            initialize_result.is_ok(),
+            "initialize request should succeed: {initialize_result:?}"
+        );
 
         server.auto_initialize_for_compat("textDocument/hover");
 
