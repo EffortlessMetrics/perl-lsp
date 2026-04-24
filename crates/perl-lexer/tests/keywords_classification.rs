@@ -358,7 +358,8 @@ fn comparison_operators_are_disjoint_from_control_flow() {
 
 #[test]
 fn uppercase_keywords_are_phase_blocks_or_dunders() {
-    let uppercase_reserved = ["ADJUST", "AUTOLOAD", "BEGIN", "CHECK", "DESTROY", "END", "INIT", "UNITCHECK"];
+    let uppercase_reserved =
+        ["ADJUST", "AUTOLOAD", "BEGIN", "CHECK", "DESTROY", "END", "INIT", "UNITCHECK"];
     for &kw in KEYWORDS {
         if kw.starts_with("__") {
             continue; // dunder tokens handled separately

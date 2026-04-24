@@ -501,11 +501,7 @@ impl WorkspaceConfig {
     /// returned list contains only `self.include_paths` entries (trimmed and deduplicated).
     pub fn effective_include_paths(&self, perl5lib_paths: &[String]) -> Vec<String> {
         if !self.use_perl5lib || perl5lib_paths.is_empty() {
-            return dedupe_preserve_order(
-                self.include_paths
-                    .iter()
-                    .map(String::as_str),
-            );
+            return dedupe_preserve_order(self.include_paths.iter().map(String::as_str));
         }
         match self.perl5lib_precedence {
             Perl5LibPrecedence::Prepend => dedupe_preserve_order(
