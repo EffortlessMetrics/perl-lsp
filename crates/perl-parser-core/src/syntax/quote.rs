@@ -413,7 +413,8 @@ pub fn extract_transliteration_parts_strict(
     let is_paired = delimiter != closing;
 
     // Parse first body (search).
-    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
     if !search_closed {
         return Err(TransliterationError::MissingClosingDelimiter);
     }
@@ -447,10 +448,7 @@ pub fn extract_transliteration_parts_strict(
 
     // Validate transliteration modifiers strictly.
     let mut modifiers = String::new();
-    for modifier in modifiers_str
-        .chars()
-        .take_while(|c: &char| c.is_ascii_alphanumeric())
-    {
+    for modifier in modifiers_str.chars().take_while(|c: &char| c.is_ascii_alphanumeric()) {
         if matches!(modifier, 'c' | 'd' | 's' | 'r') {
             modifiers.push(modifier);
         } else {
