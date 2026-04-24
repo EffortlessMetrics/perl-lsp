@@ -103,10 +103,7 @@ impl<'a> Parser<'a> {
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
         if let Some(kind) = self.peek_kind() {
-            if matches!(
-                kind,
-                TokenKind::WordNot | TokenKind::WordAnd | TokenKind::WordOr | TokenKind::WordXor
-            ) && self.is_keyword_before_fat_arrow()
+            if kind.is_low_precedence_word_operator() && self.is_keyword_before_fat_arrow()
             {
                 let token = self.tokens.next()?;
                 return Ok(Node::new(

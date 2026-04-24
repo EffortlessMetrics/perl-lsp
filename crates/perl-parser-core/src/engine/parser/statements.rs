@@ -877,12 +877,7 @@ impl<'a> Parser<'a> {
                                 while !self.is_at_statement_end()
                                     && !matches!(
                                         self.peek_kind(),
-                                        Some(
-                                            TokenKind::WordOr
-                                                | TokenKind::WordAnd
-                                                | TokenKind::WordXor
-                                                | TokenKind::WordNot
-                                        )
+                                        Some(kind) if kind.is_low_precedence_word_operator()
                                     )
                                 {
                                     // Skip optional comma or fat arrow

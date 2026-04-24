@@ -114,15 +114,9 @@ impl<'a> Parser<'a> {
     /// the modifier token is being autoquoted before `=>`.
     fn should_continue_bare_call_after_block(&mut self) -> bool {
         match self.peek_kind() {
-            Some(TokenKind::Semicolon)
-            | Some(TokenKind::RightBrace)
-            | Some(TokenKind::RightParen)
-            | Some(TokenKind::RightBracket)
-            | Some(TokenKind::Eof)
-            | None => false,
-            Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
-                false
-            }
+            Some(kind) if kind.is_recovery_boundary() => false,
+            None => false,
+            Some(kind) if kind.is_low_precedence_word_operator() => false,
             Some(kind) if Self::is_stmt_modifier_kind(kind) => self.is_keyword_before_fat_arrow(),
             _ => true,
         }
@@ -618,33 +612,33 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::RightParen)
-                | Some(TokenKind::RightBracket)
-                // Statement-starter keywords cannot serve as an expression RHS.
-                // Treating them as "missing operand" allows declaration parsing
-                // to recover cleanly and resume at the next statement boundary.
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::No)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | Some(TokenKind::Eof)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) => {
+                kind.is_recovery_boundary()
+                    // Statement-starter keywords cannot serve as an expression RHS.
+                    // Treating them as "missing operand" allows declaration parsing
+                    // to recover cleanly and resume at the next statement boundary.
+                    || matches!(
+                        kind,
+                        TokenKind::My
+                            | TokenKind::Our
+                            | TokenKind::State
+                            | TokenKind::Sub
+                            | TokenKind::Package
+                            | TokenKind::Use
+                            | TokenKind::No
+                            | TokenKind::If
+                            | TokenKind::Unless
+                            | TokenKind::Elsif
+                            | TokenKind::Else
+                            | TokenKind::While
+                            | TokenKind::Until
+                            | TokenKind::For
+                            | TokenKind::Foreach
+                    )
+            }
+            None => true,
+        }
     }
 
     /// Returns true when `sub` is followed by tokens that start an anonymous
@@ -739,29 +733,31 @@ impl<'a> Parser<'a> {
     /// token is sticky) so we match it explicitly alongside `None` (which covers
     /// the case where the lexer itself returns an error).
     fn is_delimiter_recovery_point(&mut self) -> bool {
-        matches!(
-            self.peek_kind(),
-            Some(TokenKind::Semicolon)
-                | Some(TokenKind::RightBrace)
-                | Some(TokenKind::LeftBrace)
-                | Some(TokenKind::Eof)
-                | Some(TokenKind::My)
-                | Some(TokenKind::Our)
-                | Some(TokenKind::Local)
-                | Some(TokenKind::State)
-                | Some(TokenKind::Sub)
-                | Some(TokenKind::Package)
-                | Some(TokenKind::Use)
-                | Some(TokenKind::If)
-                | Some(TokenKind::Unless)
-                | Some(TokenKind::Elsif)
-                | Some(TokenKind::Else)
-                | Some(TokenKind::While)
-                | Some(TokenKind::Until)
-                | Some(TokenKind::For)
-                | Some(TokenKind::Foreach)
-                | None
-        )
+        match self.peek_kind() {
+            Some(kind) => {
+                kind.is_recovery_boundary()
+                    || kind == TokenKind::LeftBrace
+                    || matches!(
+                        kind,
+                        TokenKind::My
+                            | TokenKind::Our
+                            | TokenKind::Local
+                            | TokenKind::State
+                            | TokenKind::Sub
+                            | TokenKind::Package
+                            | TokenKind::Use
+                            | TokenKind::If
+                            | TokenKind::Unless
+                            | TokenKind::Elsif
+                            | TokenKind::Else
+                            | TokenKind::While
+                            | TokenKind::Until
+                            | TokenKind::For
+                            | TokenKind::Foreach
+                    )
+            }
+            None => true,
+        }
     }
 
     /// Check if current token is a synchronization point for error recovery
