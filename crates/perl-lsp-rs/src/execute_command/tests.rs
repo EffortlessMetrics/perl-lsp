@@ -628,13 +628,8 @@ fn test_normalize_file_path_uri_handling() {
         assert_eq!(normalized, "/tmp/test.pl", "Should leave regular paths unchanged");
 
         // Test file URI decoding
-        let normalized =
-            provider.normalize_file_path("file:///tmp/path%20with%20spaces/test.pl");
-        assert_eq!(
-            normalized,
-            "/tmp/path with spaces/test.pl",
-            "Should decode file URI path"
-        );
+        let normalized = provider.normalize_file_path("file:///tmp/path%20with%20spaces/test.pl");
+        assert_eq!(normalized, "/tmp/path with spaces/test.pl", "Should decode file URI path");
 
         // Test localhost authority in file URI
         let normalized = provider.normalize_file_path("file://localhost/tmp/test.pl");
