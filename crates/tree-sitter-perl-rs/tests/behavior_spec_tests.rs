@@ -146,3 +146,42 @@ fn when_requesting_grammar_kind_of_variable_with_attributes_then_snake_case_fall
         assert_eq!(gk, "variable_with_attributes", "expected snake_case fallback; got {gk}");
     }
 }
+
+#[test]
+fn when_querying_definition_overlay_at_offset_then_definition_is_returned() {
+    let source = "my $value = 1;\n$value + 2;\n";
+    let tree = parse(source);
+    let overlay = tree.semantic_overlay();
+
+    let offset = must_some(source.find("$value +"));
+    let definition = must_some(overlay.definition_at_offset(offset));
+
+    assert_eq!(definition.name, "value");
+    assert_eq!(definition.start_byte, 3);
+}
+
+#[test]
+fn when_querying_visible_imports_overlay_then_prior_use_statements_are_reported() {
+    let source = "use strict;\nuse warnings;\nmy $x = 1;\n";
+    let tree = parse(source);
+    let overlay = tree.semantic_overlay();
+    let offset = must_some(source.find("my $x"));
+
+    let imports = overlay.visible_imports_at_offset(offset);
+    let import_modules: Vec<_> = imports.iter().map(|import| import.module.as_str()).collect();
+
+    assert_eq!(import_modules, vec!["strict", "warnings"]);
+}
+
+#[test]
+fn when_querying_pragma_state_overlay_then_effective_state_matches_offset() {
+    let source = "no strict;\nuse warnings;\nmy $x = 1;\n";
+    let tree = parse(source);
+    let overlay = tree.semantic_overlay();
+    let offset = must_some(source.find("my $x"));
+
+    let state = overlay.pragma_state_at_offset(offset);
+
+    assert!(!state.strict_refs);
+    assert!(state.warnings);
+}

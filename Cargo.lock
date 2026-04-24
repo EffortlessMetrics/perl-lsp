@@ -3155,8 +3155,11 @@ version = "0.12.4"
 dependencies = [
  "insta",
  "perl-ast",
+ "perl-module",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
  "perl-tdd-support",
 ]
 
