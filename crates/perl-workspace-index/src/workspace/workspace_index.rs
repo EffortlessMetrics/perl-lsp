@@ -937,6 +937,44 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Safe-delete preflight decision for cross-file refactoring checks.
+pub enum SafeDeleteDecision {
+    /// The symbol has no external references and can be deleted safely.
+    Safe,
+    /// The symbol has references in other files and deletion should be blocked.
+    Blocked,
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+/// Structured safe-delete preflight output for later code-action/UI wiring.
+pub struct SafeDeletePreflight {
+    /// Decision for whether deletion is currently safe.
+    pub decision: SafeDeleteDecision,
+    /// URI used as the deletion target scope (typically the definition file).
+    pub target_uri: Option<String>,
+    /// References found in the target file.
+    pub local_references: Vec<Location>,
+    /// References found outside the target file; these block deletion.
+    pub external_references: Vec<Location>,
+}
+
+impl SafeDeletePreflight {
+    /// Number of references found in the target file.
+    #[must_use]
+    pub fn local_reference_count(&self) -> usize {
+        self.local_references.len()
+    }
+
+    /// Number of references found outside the target file.
+    #[must_use]
+    pub fn external_reference_count(&self) -> usize {
+        self.external_references.len()
+    }
+}
+
 /// Normalize a Perl variable name for Index/Analyze workflows.
 ///
 /// Extracts an optional sigil and bare name for consistent symbol indexing.
@@ -2688,6 +2726,35 @@ impl WorkspaceIndex {
 
         all_refs
     }
+
+    /// Preflight safe-delete check for a symbol using cross-file references.
+    ///
+    /// This "plumbing-first" API reports whether references exist outside the
+    /// symbol's definition file. If external references exist, deletion should be
+    /// blocked by higher-level refactoring/code-action layers.
+    #[must_use]
+    pub fn preflight_safe_delete(&self, key: &SymbolKey) -> SafeDeletePreflight {
+        let target_uri = self.find_def(key).map(|def| def.uri);
+        let references = self.find_refs(key);
+
+        let (local_references, external_references) = match target_uri.as_deref() {
+            Some(target) => references.into_iter().partition(|loc| loc.uri == target),
+            None => (Vec::new(), references),
+        };
+
+        let decision = if external_references.is_empty() {
+            SafeDeleteDecision::Safe
+        } else {
+            SafeDeleteDecision::Blocked
+        };
+
+        SafeDeletePreflight {
+            decision,
+            target_uri,
+            local_references,
+            external_references,
+        }
+    }
 }
 
 /// AST visitor for extracting symbols and references
@@ -3972,6 +4039,69 @@ UsageDemo::helper();
             bare_usage_count >= qualified_usage_count,
             "bare-name usage count should include qualified call sites"
         );
+    }
+
+    #[test]
+    fn test_preflight_safe_delete_blocks_when_external_references_exist() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///workspace/lib/My/Feature.pm";
+        let consumer_uri = "file:///workspace/bin/consumer.pl";
+
+        let def_code = r#"
+package My::Feature;
+sub compute { return 1; }
+compute();
+1;
+"#;
+        let consumer_code = r#"
+use My::Feature;
+My::Feature::compute();
+"#;
+
+        must(index.index_file(must(url::Url::parse(def_uri)), def_code.to_string()));
+        must(index.index_file(must(url::Url::parse(consumer_uri)), consumer_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::Feature"),
+            name: Arc::from("compute"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+        let preflight = index.preflight_safe_delete(&key);
+
+        assert_eq!(preflight.decision, SafeDeleteDecision::Blocked);
+        assert_eq!(preflight.target_uri, Some(def_uri.to_string()));
+        assert_eq!(preflight.external_reference_count(), 1);
+        assert_eq!(preflight.local_reference_count(), 1);
+        assert!(
+            preflight.external_references.iter().any(|loc| loc.uri == consumer_uri),
+            "expected external reference in consumer file"
+        );
+    }
+
+    #[test]
+    fn test_preflight_safe_delete_marks_safe_when_no_external_references_exist() {
+        let index = WorkspaceIndex::new();
+        let def_uri = "file:///workspace/lib/My/Solo.pm";
+
+        let def_code = r#"
+package My::Solo;
+sub isolated { return 1; }
+1;
+"#;
+        must(index.index_file(must(url::Url::parse(def_uri)), def_code.to_string()));
+
+        let key = SymbolKey {
+            pkg: Arc::from("My::Solo"),
+            name: Arc::from("isolated"),
+            sigil: None,
+            kind: SymKind::Sub,
+        };
+        let preflight = index.preflight_safe_delete(&key);
+
+        assert_eq!(preflight.decision, SafeDeleteDecision::Safe);
+        assert_eq!(preflight.target_uri, Some(def_uri.to_string()));
+        assert_eq!(preflight.external_reference_count(), 0);
     }
 
     #[test]
