@@ -30,8 +30,12 @@ fn resolve_base_ref(base: &str) -> Result<String> {
     if base != "auto" {
         candidates.push(base.to_string());
     }
+    // NOTE: HEAD is intentionally excluded from the fallback chain.
+    // Using HEAD as a base ref causes `git diff HEAD...HEAD` to return an
+    // empty file list, which silently reports zero changed files and causes
+    // all targeted checks to be skipped — a false-negative worse than an error.
     candidates.extend(
-        ["origin/main", "origin/master", "main", "master", "HEAD~1", "HEAD"]
+        ["origin/main", "origin/master", "main", "master", "HEAD~1"]
             .into_iter()
             .map(str::to_string),
     );
@@ -55,7 +59,8 @@ fn resolve_base_ref(base: &str) -> Result<String> {
     }
 
     Err(eyre!(
-        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, HEAD~1, or HEAD",
+        "Could not resolve a valid base ref from '{}', origin/main, origin/master, main, master, or HEAD~1. \
+         Ensure the repository has at least one commit and the remote is reachable.",
         base
     ))
 }

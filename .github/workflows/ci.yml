@@ -88,8 +88,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
-          # Fetch enough history so ci-scope can diff against origin/master.
-          # 0 = full history; balances correctness vs. clone cost.
+          # Fetch full history so ci-scope can diff against origin/master (auto-detection
+          # resolves this first in the fallback chain). 0 = full history.
           fetch-depth: 0
 
       - name: Install Rust toolchain
