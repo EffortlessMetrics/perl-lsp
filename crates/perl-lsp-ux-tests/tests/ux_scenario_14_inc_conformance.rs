@@ -114,6 +114,18 @@ fn print_conformance(mode: &str, pl701_ok: bool, def_ok: bool, hover_ok: bool) {
     );
 }
 
+/// Check completion items for a module label or insert text matching `module`.
+fn completion_has_module(items: &[serde_json::Value], module: &str) -> bool {
+    items.iter().any(|item| {
+        item.get("label").and_then(|v| v.as_str()).map(|s| s == module).unwrap_or(false)
+            || item
+                .get("insertText")
+                .and_then(|v| v.as_str())
+                .map(|s| s == module)
+                .unwrap_or(false)
+    })
+}
+
 // =============================================================================
 // Fixture 1: workspace-relative includePaths
 // =============================================================================
@@ -172,6 +184,11 @@ fn scenario_14_relative_include_path() {
     let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
+    // completion on `use GreetModule;` near module token.
+    let completion_items =
+        harness.completion("fixture.pl", 2, 8).expect("completion must not error");
+    let completion_resolves = completion_has_module(&completion_items, "GreetModule");
+
     // hover on same position.
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
     // Hover resolving = either non-null result, or at minimum no error.
@@ -189,6 +206,14 @@ fn scenario_14_relative_include_path() {
             defs, diags
         );
     }
+    if completion_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (relative_include_path): completion resolved but PL701 fired.\n\
+             completion: {:?}\n\
+             diagnostics: {:?}",
+            completion_items, diags
+        );
+    }
 
     // The module IS resolvable — at minimum definition should find it.
     assert!(
@@ -196,6 +221,12 @@ fn scenario_14_relative_include_path() {
         "Expected goto-definition to resolve GreetModule via includePaths=['lib'], got empty result.\n\
          diagnostics: {:?}",
         diags
+    );
+    assert!(
+        completion_resolves,
+        "Expected completion to include GreetModule via includePaths=['lib'], got no matching item.\n\
+         completion: {:?}",
+        completion_items
     );
     assert!(
         pl701_absent,
@@ -632,6 +663,11 @@ fn scenario_14_system_inc() {
     let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
     let def_resolves = !defs.is_empty();
 
+    // completion on `use SystemModule;` near module token.
+    let completion_items =
+        harness.completion("fixture.pl", 2, 8).expect("completion must not error");
+    let completion_resolves = completion_has_module(&completion_items, "SystemModule");
+
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
     let hover_ok = true;
 
@@ -646,6 +682,14 @@ fn scenario_14_system_inc() {
             defs, diags
         );
     }
+    if completion_resolves && !pl701_absent {
+        panic!(
+            "Consumer inconsistency (system_inc): completion resolved but PL701 fired.\n\
+             completion: {:?}\n\
+             diagnostics: {:?}",
+            completion_items, diags
+        );
+    }
 
     // Both consumers must agree on resolution outcome (either both resolve or both don't).
     // We log but don't hard-fail if the system_inc mode isn't plumbed end-to-end yet.
@@ -656,6 +700,12 @@ fn scenario_14_system_inc() {
              This is a known gap if usePerl5lib hasn't been applied to this request."
         );
     }
+    assert!(
+        completion_resolves,
+        "Expected completion to include SystemModule when useSystemInc=true and PERL5LIB is set.\n\
+         completion: {:?}",
+        completion_items
+    );
 
     if let Some(hover) = hover_result {
         assert!(hover.get("contents").is_some(), "Hover result must have 'contents': {:?}", hover);
@@ -790,6 +840,11 @@ fn scenario_14_include_path_missing_module_consistency() {
     let defs = harness.definition("fixture.pl", 2, 4).expect("definition must not error");
     let def_empty = defs.is_empty();
 
+    // completion on `use MissingFromInclude;` near module token.
+    let completion_items =
+        harness.completion("fixture.pl", 2, 10).expect("completion must not error");
+    let completion_missing = !completion_has_module(&completion_items, "MissingFromInclude");
+
     let hover_result = harness.hover("fixture.pl", 2, 4).expect("hover must not error");
 
     print_conformance(
@@ -808,6 +863,15 @@ fn scenario_14_include_path_missing_module_consistency() {
             defs, diags
         );
     }
+    if !completion_missing && pl701_fires {
+        panic!(
+            "Consumer inconsistency (include_path_missing_module_consistency): completion resolved \
+             but PL701 fired.\n\
+             completion: {:?}\n\
+             diagnostics: {:?}",
+            completion_items, diags
+        );
+    }
 
     assert!(
         def_empty,
@@ -819,6 +883,12 @@ fn scenario_14_include_path_missing_module_consistency() {
         "Expected PL701 for MissingFromInclude when module does not exist.\n\
          diagnostics: {:?}",
         diags
+    );
+    assert!(
+        completion_missing,
+        "Expected completion to omit MissingFromInclude when module does not exist.\n\
+         completion: {:?}",
+        completion_items
     );
 
     harness.assert_no_crash();
