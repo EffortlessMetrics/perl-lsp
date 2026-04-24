@@ -53,15 +53,19 @@ pub enum PosEnc {
 /// # Returns
 /// Char index clamped to valid rope boundaries
 pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
+    lsp_pos_to_char_with_exactness(rope, pos, enc).0
+}
+
+fn lsp_pos_to_char_with_exactness(rope: &Rope, pos: Position, enc: PosEnc) -> (usize, bool) {
     // Handle edge case: if line is beyond document end, clamp to end
     if pos.line as usize >= rope.len_lines() {
-        return rope.len_chars();
+        return (rope.len_chars(), false);
     }
 
     let line_char0 = rope.line_to_char(pos.line as usize);
     let line_slice = rope.line(pos.line as usize);
 
-    let col_chars = match enc {
+    let (col_chars, exact_match) = match enc {
         PosEnc::Utf8 => {
             // UTF-8: pos.character is byte offset within line
             let mut char_idx = 0usize;
@@ -74,7 +78,7 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
                 bytes = next;
                 char_idx += 1;
             }
-            char_idx
+            (char_idx, bytes == pos.character)
         }
         PosEnc::Utf16 => {
             // UTF-16: pos.character is UTF-16 code unit offset
@@ -90,7 +94,7 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
                 utf16_units = next;
                 char_idx += 1;
             }
-            char_idx
+            (char_idx, utf16_units == pos.character)
         }
     };
 
@@ -99,7 +103,7 @@ pub fn lsp_pos_to_char(rope: &Rope, pos: Position, enc: PosEnc) -> usize {
     let clamped_col = col_chars.min(line_chars);
     let target_char = line_char0 + clamped_col;
 
-    target_char.min(rope.len_chars())
+    (target_char.min(rope.len_chars()), exact_match)
 }
 
 /// Convert LSP position to byte offset with UTF-16/UTF-8 encoding support
@@ -155,11 +159,27 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
     Position { line: line as u32, character }
 }
 
+fn range_is_ordered(range: &Range) -> bool {
+    range.start.line < range.end.line
+        || (range.start.line == range.end.line && range.start.character <= range.end.character)
+}
+
+fn range_to_chars_lossy(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
+    let s = lsp_pos_to_char(rope, range.start, enc);
+    let e = lsp_pos_to_char(rope, range.end, enc);
+    (s.min(rope.len_chars()), e.min(rope.len_chars()))
+}
+
 /// Convert LSP range to char index pair
 ///
 /// Converts both start and end positions of an LSP Range to char indices
 /// for rope operations. Ropey's `remove` and `insert` methods operate on
 /// char indices, not byte offsets.
+///
+/// For parser-facing incremental mapping this function is conservative:
+/// malformed ranges (reversed ordering, out-of-bounds line/column, or
+/// ambiguous multi-byte/surrogate-splitting positions) degrade to a full-
+/// document span so downstream code can safely reparse from scratch.
 ///
 /// # Arguments
 /// * `rope` - The rope containing the document text
@@ -169,8 +189,17 @@ pub fn byte_to_lsp_pos(rope: &Rope, byte: usize, enc: PosEnc) -> Position {
 /// # Returns
 /// Tuple of (start_char, end_char) clamped to rope bounds
 pub fn range_to_chars(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
-    let s = lsp_pos_to_char(rope, range.start, enc);
-    let e = lsp_pos_to_char(rope, range.end, enc);
+    if !range_is_ordered(range) {
+        return (0, rope.len_chars());
+    }
+
+    let (s, start_exact) = lsp_pos_to_char_with_exactness(rope, range.start, enc);
+    let (e, end_exact) = lsp_pos_to_char_with_exactness(rope, range.end, enc);
+
+    if !start_exact || !end_exact || s > e {
+        return (0, rope.len_chars());
+    }
+
     (s.min(rope.len_chars()), e.min(rope.len_chars()))
 }
 
@@ -187,9 +216,8 @@ pub fn range_to_chars(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize)
 /// # Returns
 /// Tuple of (start_byte, end_byte) clamped to rope bounds
 pub fn range_to_bytes(rope: &Rope, range: &Range, enc: PosEnc) -> (usize, usize) {
-    let s = lsp_pos_to_byte(rope, range.start, enc);
-    let e = lsp_pos_to_byte(rope, range.end, enc);
-    (s.min(rope.len_bytes()), e.min(rope.len_bytes()))
+    let (s_chars, e_chars) = range_to_chars(rope, range, enc);
+    (rope.char_to_byte(s_chars), rope.char_to_byte(e_chars))
 }
 
 /// Apply incremental LSP text changes to a Rope-backed document
@@ -216,7 +244,9 @@ pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], 
     for ch in changes {
         if let Some(r) = &ch.range {
             // IMPORTANT: Rope::remove and Rope::insert use char indices, not byte offsets
-            let (s, e) = range_to_chars(&doc.rope, r, enc);
+            // Use lossy clamping semantics for text synchronization so malformed ranges
+            // cannot accidentally replace the entire buffer.
+            let (s, e) = range_to_chars_lossy(&doc.rope, r, enc);
             if s <= e {
                 doc.rope.remove(s..e);
                 doc.rope.insert(s, &ch.text);
@@ -227,6 +257,9 @@ pub fn apply_changes(doc: &mut Doc, changes: &[TextDocumentContentChangeEvent], 
         }
     }
 }
+
+#[cfg(test)]
+mod textdoc_lsp_regression_tests;
 
 #[cfg(test)]
 mod tests {
