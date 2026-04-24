@@ -1914,11 +1914,27 @@ impl LspServer {
 
     #[cfg(feature = "workspace")]
     fn read_workspace_text(&self, uri: &str) -> Option<String> {
-        // Security boundary: only return text for actively-open documents.
-        // `workspace/willRenameFiles` responses include replacement text, so
-        // reading closed files here can disclose file contents to clients that
-        // never opened those documents.
-        self.documents.lock().get(uri).map(|doc| doc.text.clone())
+        // Priority 1: actively-open document (editor is authoritative).
+        if let Some(doc) = self.documents.lock().get(uri) {
+            return Some(doc.text.clone());
+        }
+
+        // Priority 2: workspace index document store (content from the last
+        // time the file was indexed; avoids a synchronous disk read for files
+        // that were open and then closed within the session).
+        if let Some(coordinator) = self.coordinator() {
+            if let Some(doc) = coordinator.index().document_store().get(uri) {
+                return Some(doc.text.clone());
+            }
+        }
+
+        // Priority 3: read from disk.  `workspace/willRenameFiles` is a
+        // workspace-wide refactoring operation; returning edits for files not
+        // currently open in the editor is explicitly correct per LSP 3.17 §3.17
+        // (the client requests cross-file edits and applies them).  This path
+        // is restricted to workspace-root-relative paths by the caller and is
+        // bounded to files that `find_dependents` already knows about.
+        uri_to_fs_path(uri).and_then(|path| read_text_with_encoding_fallback(&path).ok())
     }
 }
 

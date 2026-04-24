@@ -1404,3 +1404,102 @@ fn test_will_rename_files_updates_package_declaration_in_renamed_file()
     );
     Ok(())
 }
+
+/// Regression test: `workspace/willRenameFiles` must return a valid (possibly
+/// empty) response even when the dependent file was opened and then closed before
+/// the rename request.  Closing a file removes it from the dependency index so it
+/// will not appear in the edit response, but the handler must not panic and must
+/// still return edits for files that ARE currently open.
+///
+/// Design note: in production, files indexed from disk during workspace
+/// initialization appear in `find_dependents` but not in `self.documents`.  The
+/// three-tier fallback in `read_workspace_text` (open documents → index document
+/// store → disk) ensures those files receive edits.  This test validates the
+/// open-then-close lifecycle does not break the handler for other open files.
+#[test]
+fn test_will_rename_files_graceful_with_closed_dependent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    // Open the module being renamed so it is indexed.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/OldMod.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package OldMod;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
+
+    // Open a second consumer that stays open — will receive edits.
+    let consumer_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/active.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use OldMod;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(consumer_open));
+
+    // Open an additional dependent and immediately close it.  Closing removes
+    // it from both self.documents and the workspace index, so it will not
+    // appear in find_dependents — this is expected.  The handler must not crash
+    // and must still produce edits for the open files.
+    let dep_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/closed_dep.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use OldMod;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(dep_open));
+
+    let dep_close = json!({
+        "textDocument": { "uri": "file:///test/workspace/closed_dep.pl" }
+    });
+    let _ = make_request(&server, "textDocument/didClose", Some(dep_close));
+
+    // Trigger the rename.
+    let params = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/OldMod.pm",
+            "newUri": "file:///test/workspace/lib/NewMod.pm"
+        }]
+    });
+
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+
+    // active.pl is still open and must receive edits.
+    let active_changes = changes
+        .get("file:///test/workspace/active.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected rename edits for still-open active.pl")?;
+
+    let new_texts: Vec<String> = active_changes
+        .iter()
+        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+
+    assert!(
+        new_texts.iter().any(|t| t.contains("NewMod")),
+        "expected rewritten import in active.pl edits: {new_texts:?}"
+    );
+
+    // closed_dep.pl was removed from the index on close, so it is expected to
+    // be absent.  We just ensure the handler did not crash.
+    Ok(())
+}
