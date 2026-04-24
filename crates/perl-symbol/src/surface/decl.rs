@@ -82,8 +82,16 @@ pub struct SymbolDecl {
 /// | `Method { name, .. }` | `Method` |
 /// | `VariableDeclaration { variable, .. }` | `Variable(VarKind)` |
 /// | `Use { module: "constant", args, .. }` | `Constant` |
+/// | `Format { name, .. }` | `Format` |
+/// | `LabeledStatement { label, .. }` | `Label` |
 ///
 /// Anonymous subroutines (`name: None`) are skipped.
+/// Empty/recovery names for formats and labels are also skipped.
+///
+/// # Deliberately omitted kinds
+///
+/// `Role`, `Import`, and `Export` are currently not projected from raw AST
+/// nodes because they require semantic/module-resolution context to be stable.
 ///
 /// # Package context propagation
 ///
@@ -206,6 +214,40 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
                 declarator: None,
             });
             walk(body, ctx, out);
+        }
+
+        // ── Format declarations ───────────────────────────────────────────
+        NodeKind::Format { name, .. } => {
+            if name.is_empty() {
+                return;
+            }
+            let container = ctx.current_package.clone();
+            out.push(SymbolDecl {
+                kind: SymbolKind::Format,
+                name: name.clone(),
+                qualified_name: ctx.qualify(name),
+                full_span: (node.location.start, node.location.end),
+                anchor_span: None, // Format has no name_span in current AST
+                container,
+                declarator: None,
+            });
+        }
+
+        // ── Labeled statements ────────────────────────────────────────────
+        NodeKind::LabeledStatement { label, statement } => {
+            if !label.is_empty() {
+                let container = ctx.current_package.clone();
+                out.push(SymbolDecl {
+                    kind: SymbolKind::Label,
+                    name: label.clone(),
+                    qualified_name: ctx.qualify(label),
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: None, // Label has no dedicated span in current AST
+                    container,
+                    declarator: None,
+                });
+            }
+            walk(statement, ctx, out);
         }
 
         // ── Variable declarations ──────────────────────────────────────────

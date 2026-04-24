@@ -22,10 +22,10 @@
 
 use perl_ast::{Node, NodeKind, SourceLocation};
 use perl_symbol::cursor::{
-    CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source, get_symbol_range_at_position,
-    is_modchar, is_word_boundary, token_under_cursor,
+    byte_offset_utf16, extract_symbol_from_source, get_symbol_range_at_position, is_modchar,
+    is_word_boundary, token_under_cursor, CursorSymbolKind,
 };
-use perl_symbol::{SymbolDecl, SymbolIndex, SymbolKind, VarKind, extract_symbol_decls};
+use perl_symbol::{extract_symbol_decls, SymbolDecl, SymbolIndex, SymbolKind, VarKind};
 use perl_tdd_support::must_some;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -485,6 +485,44 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
     assert_eq!(d.name, "greet");
     assert_eq!(d.qualified_name, "Foo::greet", "seed package must qualify top-level sub");
     assert_eq!(d.container.as_deref(), Some("Foo"));
+    Ok(())
+}
+
+#[test]
+fn edge_case_surface_empty_format_name_is_skipped_conservatively() -> Result<()> {
+    let format_node =
+        Node::new(NodeKind::Format { name: String::new(), body: "@<<<".to_string() }, loc(0, 12));
+    let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 12));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert!(decls.is_empty(), "empty recovery format names should not produce SymbolDecl");
+    Ok(())
+}
+
+#[test]
+fn edge_case_surface_empty_label_is_skipped_but_nested_statement_is_walked() -> Result<()> {
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(14, 17));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("inner".to_string()),
+            name_span: Some(loc(8, 13)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(body),
+        },
+        loc(4, 17),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: String::new(), statement: Box::new(sub_node) },
+        loc(0, 17),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 17));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert_eq!(decls.len(), 1, "only nested subroutine should be projected");
+    assert_eq!(decls[0].kind, SymbolKind::Subroutine);
+    assert_eq!(decls[0].name, "inner");
     Ok(())
 }
 

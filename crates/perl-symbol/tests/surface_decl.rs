@@ -5,7 +5,7 @@
 //! constants, and classes — without depending on `perl-parser-core`.
 
 use perl_ast::{Node, NodeKind, SourceLocation};
-use perl_symbol::surface::{SymbolDecl, extract_symbol_decls};
+use perl_symbol::surface::{extract_symbol_decls, SymbolDecl};
 use perl_symbol::{SymbolKind, VarKind};
 
 fn loc(start: usize, end: usize) -> SourceLocation {
@@ -501,6 +501,68 @@ fn test_class_produces_symbol_decl() {
     assert_eq!(d.full_span, (0, 15));
     // Class has no name_span field in AST, so anchor_span is None
     assert!(d.anchor_span.is_none());
+}
+
+// ── Format and label declarations ────────────────────────────────────────────
+
+#[test]
+fn test_format_produces_symbol_decl() {
+    // format REPORT =
+    // .
+    let format_node = Node::new(
+        NodeKind::Format { name: "REPORT".to_string(), body: "@<<<".to_string() },
+        loc(0, 18),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![format_node] }, loc(0, 18));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 1);
+    let d = &decls[0];
+    assert_eq!(d.kind, SymbolKind::Format);
+    assert_eq!(d.name, "REPORT");
+    assert_eq!(d.qualified_name, "REPORT");
+    assert_eq!(d.full_span, (0, 18));
+    assert!(d.anchor_span.is_none());
+    assert!(d.declarator.is_none());
+}
+
+#[test]
+fn test_labeled_statement_produces_label_and_nested_subroutine() -> Result<(), String> {
+    // OUTER: sub work { }
+    let sub_body = Node::new(NodeKind::Block { statements: vec![] }, loc(16, 19));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("work".to_string()),
+            name_span: Some(loc(10, 14)),
+            prototype: None,
+            signature: None,
+            attributes: vec![],
+            body: Box::new(sub_body),
+        },
+        loc(6, 19),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement { label: "OUTER".to_string(), statement: Box::new(sub_node) },
+        loc(0, 19),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![labeled] }, loc(0, 19));
+
+    let decls = extract_symbol_decls(&program, None);
+
+    assert_eq!(decls.len(), 2);
+    let label_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("missing label decl")?;
+    assert_eq!(label_decl.name, "OUTER");
+    assert_eq!(label_decl.qualified_name, "OUTER");
+    assert!(label_decl.anchor_span.is_none());
+
+    let sub_decl = decls
+        .iter()
+        .find(|d| d.kind == SymbolKind::Subroutine)
+        .ok_or("missing nested subroutine decl")?;
+    assert_eq!(sub_decl.name, "work");
+    Ok(())
 }
 
 // ── Container tracking ────────────────────────────────────────────────────────
