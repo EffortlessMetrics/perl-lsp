@@ -1100,7 +1100,11 @@ my $outer = 1;
     drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
 
     let lines: Vec<&str> = code.lines().collect();
-    let target_line = lines.iter().position(|l| l.contains("$c")).unwrap_or(0);
+    // Use ends_with("$c") to find the actual completion site, not $config lines.
+    let target_line = lines
+        .iter()
+        .position(|l| l.trim_end().ends_with("$c"))
+        .unwrap_or(0);
     let target_char = lines[target_line].rfind("$c").unwrap_or(0) + 2;
 
     let response = send_request(
