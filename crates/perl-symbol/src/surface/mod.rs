@@ -12,8 +12,8 @@
 //!   the sibling `types` module inside this crate.
 //! - **Single extraction pass** — `extract_symbol_decls` walks the entire tree
 //!   once and returns all declaration sites.
-//! - **MVP scope** — ships `SymbolDecl` only.  `SymbolRef` and
-//!   `CallSite` will follow in later phases.
+//! - **Phased scope** — ships `SymbolDecl` and a narrow phase-1 `SymbolRef`;
+//!   richer `SymbolRef` kinds and `CallSite` will follow in later phases.
 //!
 //! # Quick start
 //!
@@ -28,5 +28,7 @@
 //! ```
 
 pub mod decl;
+pub mod r#ref;
 
 pub use decl::{SymbolDecl, extract_symbol_decls};
+pub use r#ref::{SymbolRef, extract_symbol_refs};
