@@ -6,7 +6,7 @@
 //! - `get_symbol_range_at_position` — range extraction with sigils
 
 use perl_symbol::cursor::{
-    CursorSymbolKind, extract_symbol_from_source, get_symbol_range_at_position,
+    extract_symbol_from_source, get_symbol_range_at_position, CursorSymbolKind,
 };
 use perl_tdd_support::must_some;
 
@@ -139,7 +139,7 @@ fn extract_bare_word_mid_position() -> Result<(), String> {
     let source = "my_func();";
     // cursor in the middle of "my_func"
     let (name, kind) = must_some(extract_symbol_from_source(3, source));
-    assert_eq!(name, "func");
+    assert_eq!(name, "my_func");
     assert_eq!(kind, CursorSymbolKind::Subroutine);
     Ok(())
 }
@@ -365,24 +365,18 @@ fn range_position_at_exact_length_returns_none() {
 #[test]
 fn range_on_whitespace_returns_some_empty_range() {
     let source = "a b";
-    // position 1 is space, no sigil at position 0 (it's 'a' not a sigil)
+    // position 1 is space, which is not tokenizable
     let result = get_symbol_range_at_position(1, source);
-    // start stays at 1, end stays at 1 (space is not alnum/_)
-    assert!(result.is_some());
-    if let Some((start, end)) = result {
-        assert_eq!(start, end);
-    }
+    assert_eq!(result, None);
 }
 
 #[test]
 fn range_cursor_at_start_of_source() -> Result<(), String> {
     let source = "$abc";
-    // position 0 is '$', no sigil before (position > 0 false)
-    // forward scan: '$' is not alnum/_, so end stays at 0
-    // backward loop: start == position so no backward scan
+    // position 0 is '$', and the span includes "$abc"
     let (start, end) = must_some(get_symbol_range_at_position(0, source));
     assert_eq!(start, 0);
-    assert_eq!(end, 0);
+    assert_eq!(end, 4);
     Ok(())
 }
 
@@ -460,13 +454,11 @@ fn extract_numeric_name_after_sigil() -> Result<(), String> {
 // ─── Consecutive sigils ─────────────────────────────────────────────────────
 
 #[test]
-fn extract_dollar_at_treats_first_as_sigil() -> Result<(), String> {
-    // "$$ref" — cursor at position 1 (second $): chars[0] is '$'
-    // so sigil = Scalar, name_start = 1, but chars[1] is '$' (not alnum/_)
-    // end stays at 1, no name → None
+fn extract_dollar_at_treats_second_as_sigil() -> Result<(), String> {
+    // "$$ref" — cursor at position 1 (second $) resolves the sigil/name pair.
     let source = "$$ref";
     let result = extract_symbol_from_source(1, source);
-    assert_eq!(result, None);
+    assert_eq!(result, Some(("ref".to_string(), CursorSymbolKind::Scalar)));
     Ok(())
 }
 

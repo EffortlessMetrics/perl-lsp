@@ -16,79 +16,100 @@ pub enum CursorSymbolKind {
     Subroutine,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TokenSpan {
+    start: usize,
+    name_start: usize,
+    end: usize,
+    sigil: Option<CursorSymbolKind>,
+}
+
+#[inline]
+fn is_identifier_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+#[inline]
+fn is_symbol_sigil(byte: u8) -> bool {
+    matches!(byte, b'$' | b'@' | b'%' | b'&')
+}
+
+#[inline]
+fn sigil_to_kind(byte: u8) -> Option<CursorSymbolKind> {
+    match byte {
+        b'$' => Some(CursorSymbolKind::Scalar),
+        b'@' => Some(CursorSymbolKind::Array),
+        b'%' => Some(CursorSymbolKind::Hash),
+        b'&' => Some(CursorSymbolKind::Subroutine),
+        _ => None,
+    }
+}
+
+fn token_span_at_byte(source: &str, position: usize) -> Option<TokenSpan> {
+    let bytes = source.as_bytes();
+    let current = *bytes.get(position)?;
+
+    if is_symbol_sigil(current) {
+        let name_start = position + 1;
+        let mut end = name_start;
+        while end < bytes.len() && is_identifier_char(bytes[end]) {
+            end += 1;
+        }
+
+        if end == name_start {
+            return None;
+        }
+
+        return Some(TokenSpan { start: position, name_start, end, sigil: sigil_to_kind(current) });
+    }
+
+    if !is_identifier_char(current) {
+        return None;
+    }
+
+    let mut name_start = position;
+    while name_start > 0 && is_identifier_char(bytes[name_start - 1]) {
+        name_start -= 1;
+    }
+
+    let mut end = position;
+    while end < bytes.len() && is_identifier_char(bytes[end]) {
+        end += 1;
+    }
+
+    let (start, sigil) = if name_start > 0 {
+        let before = bytes[name_start - 1];
+        if is_symbol_sigil(before) {
+            (name_start - 1, sigil_to_kind(before))
+        } else {
+            (name_start, None)
+        }
+    } else {
+        (name_start, None)
+    };
+
+    Some(TokenSpan { start, name_start, end, sigil })
+}
+
+fn extract_token_at_byte(source: &str, position: usize) -> Option<(String, CursorSymbolKind)> {
+    let span = token_span_at_byte(source, position)?;
+    let name = source.get(span.name_start..span.end)?.to_string();
+    let kind = span.sigil.unwrap_or(CursorSymbolKind::Subroutine);
+    Some((name, kind))
+}
+
 /// Extract a symbol and its kind from `source` at `position`.
 pub fn extract_symbol_from_source(
     position: usize,
     source: &str,
 ) -> Option<(String, CursorSymbolKind)> {
-    let chars: Vec<char> = source.chars().collect();
-    if position >= chars.len() {
-        return None;
-    }
-
-    let (sigil, name_start) = if position > 0 {
-        match chars.get(position - 1) {
-            Some('$') => (Some(CursorSymbolKind::Scalar), position),
-            Some('@') => (Some(CursorSymbolKind::Array), position),
-            Some('%') => (Some(CursorSymbolKind::Hash), position),
-            Some('&') => (Some(CursorSymbolKind::Subroutine), position),
-            _ => (None, position),
-        }
-    } else {
-        (None, position)
-    };
-
-    let (sigil, name_start) = if sigil.is_none() && position < chars.len() {
-        match chars[position] {
-            '$' => (Some(CursorSymbolKind::Scalar), position + 1),
-            '@' => (Some(CursorSymbolKind::Array), position + 1),
-            '%' => (Some(CursorSymbolKind::Hash), position + 1),
-            '&' => (Some(CursorSymbolKind::Subroutine), position + 1),
-            _ => (sigil, name_start),
-        }
-    } else {
-        (sigil, name_start)
-    };
-
-    let mut end = name_start;
-    while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-        end += 1;
-    }
-
-    if end > name_start {
-        let name: String = chars[name_start..end].iter().collect();
-        let kind = sigil.unwrap_or(CursorSymbolKind::Subroutine);
-        Some((name, kind))
-    } else {
-        None
-    }
+    extract_token_at_byte(source, position)
 }
 
 /// Get symbol range at `position`, including a leading sigil when present.
 pub fn get_symbol_range_at_position(position: usize, source: &str) -> Option<(usize, usize)> {
-    let chars: Vec<char> = source.chars().collect();
-    if position >= chars.len() {
-        return None;
-    }
-
-    let mut start = position;
-    if start > 0 && matches!(chars[start - 1], '$' | '@' | '%' | '&') {
-        start -= 1;
-    }
-
-    let mut end = position;
-    while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
-        end += 1;
-    }
-
-    while start < position
-        && start < chars.len()
-        && (chars[start].is_alphanumeric() || chars[start] == '_')
-    {
-        start -= 1;
-    }
-
-    Some((start, end))
+    let span = token_span_at_byte(source, position)?;
+    Some((span.start, span.end))
 }
 
 /// Return true when `byte` is a module/name character (`[A-Za-z0-9_:]`).
@@ -114,30 +135,45 @@ pub fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
     line_text.len()
 }
 
-/// Extract the module/symbol token under the cursor (UTF-16 aware).
-pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<String> {
-    let line_text = text.lines().nth(line)?;
-    let byte_pos = byte_offset_utf16(line_text, col_utf16);
-    let bytes = line_text.as_bytes();
+fn token_span_with_rules<F>(text: &str, position: usize, is_body_char: F) -> Option<(usize, usize)>
+where
+    F: Fn(u8) -> bool,
+{
+    let bytes = text.as_bytes();
+    let current = *bytes.get(position)?;
 
-    if byte_pos >= bytes.len() {
+    if !is_body_char(current) && !matches!(current, b'$' | b'@' | b'%' | b'&' | b'*') {
         return None;
     }
 
-    let mut start = byte_pos;
-    let mut end = byte_pos;
-
-    while start > 0 && is_modchar(bytes[start - 1]) {
-        start -= 1;
+    let mut start = position;
+    if is_body_char(current) {
+        while start > 0 && is_body_char(bytes[start - 1]) {
+            start -= 1;
+        }
     }
+
     if start > 0 && matches!(bytes[start - 1], b'$' | b'@' | b'%' | b'&' | b'*') {
         start -= 1;
     }
 
-    while end < bytes.len() && is_modchar(bytes[end]) {
+    let mut end = if is_body_char(current) { position } else { position + 1 };
+    while end < bytes.len() && is_body_char(bytes[end]) {
         end += 1;
     }
 
+    if end <= start {
+        return None;
+    }
+
+    Some((start, end))
+}
+
+/// Extract the module/symbol token under the cursor (UTF-16 aware).
+pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<String> {
+    let line_text = text.lines().nth(line)?;
+    let byte_pos = byte_offset_utf16(line_text, col_utf16);
+    let (start, end) = token_span_with_rules(line_text, byte_pos, is_modchar)?;
     Some(line_text[start..end].to_string())
 }
 
