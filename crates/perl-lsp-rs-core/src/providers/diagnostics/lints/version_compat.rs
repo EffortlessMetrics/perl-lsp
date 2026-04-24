@@ -491,3 +491,69 @@ fn make_diagnostic_with_details(
         suggestion,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser::Parser;
+    use perl_tdd_support::must;
+
+    fn version_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diags = Vec::new();
+        check_version_compat(&ast, &mut diags);
+        diags
+    }
+
+    #[test]
+    fn version_bundle_and_explicit_feature_state_are_observable() {
+        let diags = version_diags("use v5.10;\nuse feature 'state';\nstate $x = 1;\nsay 'ok';\n");
+        assert!(
+            diags.is_empty(),
+            "v5.10 bundle + explicit state feature should allow both state/say; got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn explicit_no_feature_disables_bundle_for_downstream_checks() {
+        let diags = version_diags("use v5.10;\nno feature 'say';\nsay 'not allowed';\n");
+        assert!(
+            diags.iter().any(|d| d.message.contains("'say' requires Perl v5.10+")),
+            "no feature 'say' should be visible to version_compat diagnostics; got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn eval_string_feature_toggles_do_not_change_static_version_analysis() {
+        let diags = version_diags("use v5.10;\neval \"no feature 'say'\";\nsay 'still allowed';\n");
+        assert!(
+            diags.is_empty(),
+            "eval STRING feature toggles must not affect static analysis; got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn builtin_imports_and_bundle_have_distinct_version_requirements() {
+        let diags = version_diags(
+            "use v5.36;\nuse builtin 'true';\nbuiltin::true();\nbuiltin::load_module('X');\n",
+        );
+
+        assert!(
+            diags.iter().any(|d| d.message.contains("'builtin::load_module' requires Perl v5.40+")),
+            "non-imported builtin::load_module should still require v5.40; got {diags:?}"
+        );
+        assert!(
+            diags.iter().all(|d| !d.message.contains("'builtin::true'")),
+            "explicit builtin import should suppress builtin::true version warning; got {diags:?}"
+        );
+    }
+
+    #[test]
+    fn builtin_bundle_requirement_is_checked_separately_from_named_imports() {
+        let diags = version_diags("use v5.36;\nuse builtin;\n");
+        assert!(
+            diags.iter().any(|d| d.message.contains("'use builtin' requires Perl v5.40+")),
+            "use builtin bundle should be gated at v5.40 regardless of named-import support; got {diags:?}"
+        );
+    }
+}

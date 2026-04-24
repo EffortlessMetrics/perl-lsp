@@ -660,4 +660,55 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn package_scoped_pragmas_do_not_satisfy_file_level_requirements() {
+        let diags =
+            strict_warnings_diags("package Inner { use strict; use warnings; }\nmy $x = 1;\n");
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "package-scoped strict should not suppress top-level missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "package-scoped warnings should not suppress top-level missing-warnings (PL101)"
+        );
+    }
+
+    #[test]
+    fn top_level_pragmas_restore_after_package_scope_no_pragmas() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\npackage Inner { no strict; no warnings; }\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "no strict/no warnings inside package scope must restore to top-level strict/warnings"
+        );
+    }
+
+    #[test]
+    fn top_level_pragmas_restore_after_phase_scope_no_pragmas() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\nBEGIN { no strict; no warnings; }\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().all(|d| !matches!(d.code.as_deref(), Some("PL100") | Some("PL101"))),
+            "no strict/no warnings inside phase block must restore to top-level strict/warnings"
+        );
+    }
+
+    #[test]
+    fn conditional_no_if_can_disable_file_level_strict_and_warnings() {
+        let diags = strict_warnings_diags(
+            "use strict;\nuse warnings;\nno if 1, 'strict';\nno if 1, 'warnings';\nmy $x = 1;\n",
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL100")),
+            "conditional no-if strict should be observable as missing-strict (PL100)"
+        );
+        assert!(
+            diags.iter().any(|d| d.code.as_deref() == Some("PL101")),
+            "conditional no-if warnings should be observable as missing-warnings (PL101)"
+        );
+    }
 }
