@@ -1225,6 +1225,15 @@ enum MetricsCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Lexer benchmark scorecard summary.
+    LexerStats {
+        /// Path to lexer scorecard JSON (default: target/criterion/lexer_scorecard.json)
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Write output to .ci/metrics/lexer.json
+        #[arg(long)]
+        json: bool,
+    },
     /// LSP editor-intelligence scorecard — fixture inventory and pass rates.
     LspStats {
         /// Write output to .ci/metrics/editor_intelligence.json
@@ -1580,6 +1589,7 @@ fn main() -> Result<()> {
         Commands::CheckTestWiring => check_test_wiring::run(),
         Commands::Metrics { command } => match command {
             MetricsCommand::ParserStats { input, json } => metrics::parser_stats::run(input, json),
+            MetricsCommand::LexerStats { input, json } => metrics::lexer_stats::run(input, json),
             MetricsCommand::LspStats { json } => metrics::lsp_stats::run_with_json(json),
             MetricsCommand::WorkspaceStats => metrics::workspace_stats::run(),
             MetricsCommand::DiagnosticsStats => metrics::diagnostics_stats::run(),

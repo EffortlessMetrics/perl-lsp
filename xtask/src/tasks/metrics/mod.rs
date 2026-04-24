@@ -3,6 +3,7 @@
 //! Each leaf module implements one user-facing subcommand.
 
 pub mod diagnostics_stats;
+pub mod lexer_stats;
 pub mod lsp_stats;
 pub mod memory;
 pub mod parser_stats;
