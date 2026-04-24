@@ -1188,6 +1188,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::RightBrace)
                 | Some(TokenKind::RightParen)
                 | Some(TokenKind::RightBracket)
+                | Some(TokenKind::Question)
                 | Some(TokenKind::If)
                 | Some(TokenKind::Unless)
                 | Some(TokenKind::While)

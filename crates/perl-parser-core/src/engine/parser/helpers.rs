@@ -118,6 +118,7 @@ impl<'a> Parser<'a> {
             | Some(TokenKind::RightBrace)
             | Some(TokenKind::RightParen)
             | Some(TokenKind::RightBracket)
+            | Some(TokenKind::Question)
             | Some(TokenKind::Eof)
             | None => false,
             Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot) => {
