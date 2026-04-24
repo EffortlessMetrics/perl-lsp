@@ -112,6 +112,13 @@ const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
 
+#[derive(Clone, Debug)]
+struct DebuggerOutputLine {
+    line_id: u64,
+    raw: String,
+    normalized: String,
+}
+
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
         .get_or_init(|| {
@@ -416,7 +423,9 @@ pub struct DebugAdapter {
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
     /// Bounded history of debugger output for stack/variable/evaluate parsing
-    recent_output: Arc<Mutex<VecDeque<String>>>,
+    recent_output: Arc<Mutex<VecDeque<DebuggerOutputLine>>>,
+    /// Monotonic line IDs for bounded incremental scans over recent debugger output.
+    recent_output_line_id: Arc<AtomicU64>,
     /// Function breakpoints (`setFunctionBreakpoints`) stored with REPLACE semantics
     function_breakpoints: Arc<Mutex<Vec<String>>>,
     /// Monotonic IDs for function breakpoints
@@ -545,6 +554,7 @@ impl DebugAdapter {
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
             recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
+            recent_output_line_id: Arc::new(AtomicU64::new(1)),
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
             exception_break_on_die: Arc::new(Mutex::new(false)),
@@ -601,7 +611,33 @@ impl DebugAdapter {
     /// Snapshot debugger output history for parsing without holding locks.
     fn snapshot_recent_output_lines(&self) -> Vec<String> {
         let output = lock_or_recover(&self.recent_output, "debug_adapter.recent_output");
-        output.iter().cloned().collect()
+        output.iter().map(|line| line.raw.clone()).collect()
+    }
+
+    #[cfg(test)]
+    fn append_recent_output_line(&self, line: &str) {
+        Self::append_recent_output_line_with_cache(
+            &self.recent_output,
+            &self.recent_output_line_id,
+            line,
+        );
+    }
+
+    fn append_recent_output_line_with_cache(
+        recent_output: &Arc<Mutex<VecDeque<DebuggerOutputLine>>>,
+        recent_output_line_id: &Arc<AtomicU64>,
+        line: &str,
+    ) {
+        let entry = DebuggerOutputLine {
+            line_id: recent_output_line_id.fetch_add(1, Ordering::Relaxed),
+            raw: line.to_string(),
+            normalized: Self::normalize_debugger_output_line(line),
+        };
+        let mut output = lock_or_recover(recent_output, "debug_adapter.recent_output_append");
+        if output.len() >= RECENT_OUTPUT_MAX_LINES {
+            let _ = output.pop_front();
+        }
+        output.push_back(entry);
     }
 
     /// Allocate a unique marker id used for framed debugger output capture.
@@ -650,6 +686,9 @@ impl DebugAdapter {
     ) -> Option<Vec<String>> {
         let deadline =
             Instant::now() + Duration::from_millis(Self::debugger_timeout_budget_ms(timeout_ms));
+        let mut last_scanned_line_id = 0_u64;
+        let mut begin_seen = false;
+        let mut framed_lines = Vec::new();
 
         loop {
             // Check for cancellation before each poll iteration
@@ -658,23 +697,36 @@ impl DebugAdapter {
                 return None;
             }
 
-            let lines = self.snapshot_recent_output_lines();
-            let normalized_lines: Vec<String> =
-                lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
-
-            if let Some(begin_idx) =
-                normalized_lines.iter().rposition(|line| line.contains(begin_marker))
-                && let Some(end_rel) = normalized_lines[begin_idx + 1..]
-                    .iter()
-                    .position(|line| line.contains(end_marker))
             {
-                let end_idx = begin_idx + 1 + end_rel;
-                let framed = normalized_lines[begin_idx + 1..end_idx]
-                    .iter()
-                    .filter(|line| !line.trim().is_empty())
-                    .cloned()
-                    .collect::<Vec<_>>();
-                return Some(framed);
+                let output = lock_or_recover(&self.recent_output, "capture_framed_debugger_output");
+                let mut completed_frame = None;
+                for line in output.iter() {
+                    if line.line_id <= last_scanned_line_id {
+                        continue;
+                    }
+                    last_scanned_line_id = line.line_id;
+                    let normalized = line.normalized.as_str();
+                    if normalized.contains(begin_marker) {
+                        begin_seen = true;
+                        completed_frame = None;
+                        framed_lines.clear();
+                        continue;
+                    }
+                    if !begin_seen {
+                        continue;
+                    }
+                    if normalized.contains(end_marker) {
+                        completed_frame = Some(std::mem::take(&mut framed_lines));
+                        begin_seen = false;
+                        continue;
+                    }
+                    if !normalized.trim().is_empty() {
+                        framed_lines.push(normalized.to_string());
+                    }
+                }
+                if let Some(frame) = completed_frame {
+                    return Some(frame);
+                }
             }
 
             if Instant::now() >= deadline {

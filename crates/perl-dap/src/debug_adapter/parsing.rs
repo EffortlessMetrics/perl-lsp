@@ -352,13 +352,9 @@ mod tests {
     pub(super) fn test_parse_scope_variables_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_scope_variables.recent_output");
-            output.push_back("$foo = 42".to_string());
-            output.push_back("@arr = (1, 2, 3)".to_string());
-            output.push_back("%hash = {a => 1}".to_string());
-        }
+        adapter.append_recent_output_line("$foo = 42");
+        adapter.append_recent_output_line("@arr = (1, 2, 3)");
+        adapter.append_recent_output_line("%hash = {a => 1}");
 
         let (vars, child_cache) = adapter.parse_scope_variables_from_output(11, 0, 20);
         let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
@@ -420,19 +416,13 @@ mod tests {
     pub(super) fn test_capture_framed_debugger_output_isolated_by_marker()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_capture_framed_debugger_output.recent_output",
-            );
-            output.push_back("noise".to_string());
-            output.push_back(r#""DAP_BEGIN_100""#.to_string());
-            output.push_back("$a = 1".to_string());
-            output.push_back(r#""DAP_END_100""#.to_string());
-            output.push_back(r#""DAP_BEGIN_200""#.to_string());
-            output.push_back("$b = 2".to_string());
-            output.push_back(r#""DAP_END_200""#.to_string());
-        }
+        adapter.append_recent_output_line("noise");
+        adapter.append_recent_output_line(r#""DAP_BEGIN_100""#);
+        adapter.append_recent_output_line("$a = 1");
+        adapter.append_recent_output_line(r#""DAP_END_100""#);
+        adapter.append_recent_output_line(r#""DAP_BEGIN_200""#);
+        adapter.append_recent_output_line("$b = 2");
+        adapter.append_recent_output_line(r#""DAP_END_200""#);
 
         let lines = adapter
             .capture_framed_debugger_output("DAP_BEGIN_200", "DAP_END_200", 200)
@@ -442,17 +432,115 @@ mod tests {
     }
 
     #[test]
+    pub(super) fn test_capture_framed_debugger_output_with_partial_arrival_and_interleaving()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        adapter.append_recent_output_line("noise before");
+        adapter.append_recent_output_line(r#""DAP_BEGIN_777""#);
+        adapter.append_recent_output_line("interleaved line");
+        adapter.append_recent_output_line("$inside = 1");
+
+        let recent_output = adapter.recent_output.clone();
+        let recent_output_line_id = adapter.recent_output_line_id.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(15));
+            DebugAdapter::append_recent_output_line_with_cache(
+                &recent_output,
+                &recent_output_line_id,
+                "later data",
+            );
+            DebugAdapter::append_recent_output_line_with_cache(
+                &recent_output,
+                &recent_output_line_id,
+                r#""DAP_END_777""#,
+            );
+        });
+
+        let lines = adapter
+            .capture_framed_debugger_output("DAP_BEGIN_777", "DAP_END_777", 250)
+            .ok_or("expected framed output for marker 777")?;
+        assert_eq!(
+            lines,
+            vec![
+                "interleaved line".to_string(),
+                "$inside = 1".to_string(),
+                "later data".to_string()
+            ]
+        );
+        Ok(())
+    }
+
+    fn capture_framed_debugger_output_legacy(
+        lines: &[String],
+        begin_marker: &str,
+        end_marker: &str,
+    ) -> Option<Vec<String>> {
+        let normalized_lines: Vec<String> =
+            lines.iter().map(|line| DebugAdapter::normalize_debugger_output_line(line)).collect();
+
+        if let Some(begin_idx) =
+            normalized_lines.iter().rposition(|line| line.contains(begin_marker))
+            && let Some(end_rel) =
+                normalized_lines[begin_idx + 1..].iter().position(|line| line.contains(end_marker))
+        {
+            let end_idx = begin_idx + 1 + end_rel;
+            let framed = normalized_lines[begin_idx + 1..end_idx]
+                .iter()
+                .filter(|line| !line.trim().is_empty())
+                .cloned()
+                .collect::<Vec<_>>();
+            return Some(framed);
+        }
+        None
+    }
+
+    #[test]
+    pub(super) fn test_capture_framed_debugger_output_microbenchmark_marker_aware_faster()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        for idx in 0..1800 {
+            adapter.append_recent_output_line(&format!("noise {idx}"));
+        }
+        adapter.append_recent_output_line(r#""DAP_BEGIN_9001""#);
+        for idx in 0..128 {
+            adapter.append_recent_output_line(&format!("value {idx}"));
+        }
+        adapter.append_recent_output_line(r#""DAP_END_9001""#);
+
+        let lines = adapter.snapshot_recent_output_lines();
+
+        let legacy_start = Instant::now();
+        let mut legacy_result = None;
+        for _ in 0..120 {
+            legacy_result =
+                capture_framed_debugger_output_legacy(&lines, "DAP_BEGIN_9001", "DAP_END_9001");
+        }
+        let legacy_elapsed = legacy_start.elapsed();
+
+        let marker_start = Instant::now();
+        let mut marker_result = None;
+        for _ in 0..120 {
+            marker_result =
+                adapter.capture_framed_debugger_output("DAP_BEGIN_9001", "DAP_END_9001", 50);
+        }
+        let marker_elapsed = marker_start.elapsed();
+
+        let legacy_result = legacy_result.ok_or("legacy framing should produce lines")?;
+        let marker_result = marker_result.ok_or("marker-aware framing should produce lines")?;
+        assert_eq!(marker_result, legacy_result);
+        assert!(
+            marker_elapsed < legacy_elapsed,
+            "expected marker-aware framing to be faster (legacy={legacy_elapsed:?}, marker={marker_elapsed:?})",
+        );
+        Ok(())
+    }
+
+    #[test]
     pub(super) fn test_stack_trace_uses_recent_output_when_available()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
-        {
-            let mut output = lock_or_recover(
-                &adapter.recent_output,
-                "test_stack_trace_recent_output.recent_output",
-            );
-            output.push_back("# 0 main::compute at /tmp/script.pl line 20".to_string());
-            output.push_back("# 1 Foo::process called at /tmp/Foo.pm line 15".to_string());
-        }
+        adapter.append_recent_output_line("# 0 main::compute at /tmp/script.pl line 20");
+        adapter.append_recent_output_line("# 1 Foo::process called at /tmp/Foo.pm line 15");
 
         let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
         match response {
@@ -478,11 +566,7 @@ mod tests {
     pub(super) fn test_parse_evaluate_result_from_recent_output()
     -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
-        {
-            let mut output =
-                lock_or_recover(&adapter.recent_output, "test_parse_evaluate_result.recent_output");
-            output.push_back("$result = 123".to_string());
-        }
+        adapter.append_recent_output_line("$result = 123");
 
         let parsed = adapter.parse_evaluate_result_from_output("$result");
         let (value, ty) = parsed.ok_or("expected parsed evaluate result")?;
