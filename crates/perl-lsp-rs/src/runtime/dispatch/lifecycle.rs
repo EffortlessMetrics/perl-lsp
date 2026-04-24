@@ -91,16 +91,19 @@ impl LspServer {
 
     /// Handle $/setTrace notification
     ///
-    /// Updates the server trace level. Valid values: "off", "messages", "verbose".
-    /// Invalid values default to "off" per LSP spec.
+    /// Updates the server trace level. Valid values per LSP 3.18 TraceValue: "off", "messages",
+    /// "verbose". Invalid string values default to "off". If the "value" key is absent or not a
+    /// string the trace level is left unchanged (malformed notification, defensive ignore).
     pub(super) fn handle_set_trace_dispatch(
         &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         if let Some(params) = params {
-            let level = Self::normalize_trace_level(params.get("value").and_then(|v| v.as_str()));
-            tracing::debug!(level, "Trace level set");
-            *self.trace_level.lock() = level.to_string();
+            if let Some(value) = params.get("value").and_then(|v| v.as_str()) {
+                let level = Self::normalize_trace_level(Some(value));
+                tracing::debug!(level, "Trace level set");
+                *self.trace_level.lock() = level.to_string();
+            }
         }
         Ok(None) // Notification, no response
     }
@@ -198,6 +201,57 @@ mod tests {
 
         server.handle_set_trace_dispatch(Some(json!({ "value": "invalid-value" })))?;
         assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF);
+        Ok(())
+    }
+
+    #[test]
+    fn set_trace_missing_value_key_preserves_current_level() -> Result<(), JsonRpcError> {
+        // LSP spec: "value" is required in $/setTrace params. A malformed notification that
+        // omits the key should be silently ignored — server must not reset to "off".
+        let server = LspServer::new();
+        server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_MESSAGES);
+
+        // Malformed: params present but "value" key absent — level must be preserved
+        server.handle_set_trace_dispatch(Some(json!({})))?;
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_MESSAGES,
+            "missing value key must not reset trace level"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_trace_null_params_preserves_current_level() -> Result<(), JsonRpcError> {
+        // params=None (notification with no params) must not mutate trace level.
+        let server = LspServer::new();
+        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
+
+        server.handle_set_trace_dispatch(None)?;
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            TRACE_LEVEL_VERBOSE,
+            "null params must not reset trace level"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn set_trace_all_valid_values_roundtrip() -> Result<(), JsonRpcError> {
+        // Verify each spec-defined TraceValue is accepted and stored exactly.
+        let server = LspServer::new();
+
+        server.handle_set_trace_dispatch(Some(json!({ "value": "off" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_OFF);
+
+        server.handle_set_trace_dispatch(Some(json!({ "value": "messages" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_MESSAGES);
+
+        server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
+        assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
+
         Ok(())
     }
 }
