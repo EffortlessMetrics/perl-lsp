@@ -128,10 +128,7 @@ fn empty_edit_set_is_a_noop() -> ParseResult<()> {
     document.apply_edits(&edits)?;
 
     assert_eq!(document.source, source, "source must be unchanged for empty edit set");
-    assert_eq!(
-        *document.root, root_before,
-        "tree must be unchanged for empty edit set"
-    );
+    assert_eq!(*document.root, root_before, "tree must be unchanged for empty edit set");
 
     Ok(())
 }
@@ -248,7 +245,10 @@ fn same_start_edits_apply_deterministically() -> ParseResult<()> {
     document.apply_edits(&edits)?;
 
     // Both paths (fallback via apply_to_string) should agree.
-    assert_eq!(document.source, expected, "same-start overlapping edits: fallback result must be deterministic");
+    assert_eq!(
+        document.source, expected,
+        "same-start overlapping edits: fallback result must be deterministic"
+    );
 
     Ok(())
 }
