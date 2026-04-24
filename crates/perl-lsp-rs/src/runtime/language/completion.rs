@@ -319,6 +319,17 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let doc_config = self.config_for_doc(uri);
+                let include_paths = self.include_paths_for_doc(uri);
+                let system_inc_paths = if let Some(mut config) = doc_config {
+                    if config.use_system_inc {
+                        config.get_system_inc().to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                };
 
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
@@ -332,15 +343,22 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
 
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     let mut base_completions =
                         provider.get_completions_with_path(&doc.text, offset, Some(uri));
@@ -548,6 +566,17 @@ impl LspServer {
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
                 let offset = self.pos16_to_offset(doc, line, character);
+                let doc_config = self.config_for_doc(uri);
+                let include_paths = self.include_paths_for_doc(uri);
+                let system_inc_paths = if let Some(mut config) = doc_config {
+                    if config.use_system_inc {
+                        config.get_system_inc().to_vec()
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    Vec::new()
+                };
 
                 // Create optimized cancellation callback with reduced frequency
                 // Performance optimization: reduced overhead from 16.66% to <10%
@@ -574,14 +603,21 @@ impl LspServer {
                     };
 
                     #[cfg(feature = "workspace")]
-                    let provider = CompletionProvider::new_with_index_and_source(
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
                         ast,
                         &doc.text,
                         workspace_idx,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
                     );
                     #[cfg(not(feature = "workspace"))]
-                    let provider =
-                        CompletionProvider::new_with_index_and_source(ast, &doc.text, None);
+                    let provider = CompletionProvider::new_with_index_and_source_and_paths(
+                        ast,
+                        &doc.text,
+                        None,
+                        include_paths.clone(),
+                        system_inc_paths.clone(),
+                    );
 
                     // Use cancellable provider method
                     provider.get_completions_with_path_cancellable(
