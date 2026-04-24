@@ -1620,8 +1620,8 @@ impl LspServer {
                     break;
                 }
 
-                let content = match std::fs::read_to_string(&path) {
-                    Ok(c) => c,
+                let content = match std::fs::read(&path) {
+                    Ok(bytes) => decode_workspace_source(bytes),
                     Err(e) => {
                         if is_permission_denied_error(&e) {
                             // ONE-TIME window/showMessage (AtomicBool guard)
@@ -1863,7 +1863,7 @@ impl LspServer {
             }
         }
 
-        uri_to_fs_path(uri).and_then(|path| std::fs::read_to_string(path).ok())
+        uri_to_fs_path(uri).and_then(|path| std::fs::read(path).ok()).map(decode_workspace_source)
     }
 }
 
@@ -2020,6 +2020,20 @@ fn short_uri(uri: &str) -> String {
         .unwrap_or_else(|| uri.to_string())
 }
 
+fn decode_workspace_source(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(source) => source,
+        Err(err) => {
+            let raw = err.into_bytes();
+            let mut decoded = String::with_capacity(raw.len());
+            for byte in raw {
+                decoded.push(char::from(byte));
+            }
+            decoded
+        }
+    }
+}
+
 /// Return `true` if `module_name` appears in `text` as a whole-identifier token.
 ///
 /// This prevents false-positive rename warnings when a short module name (e.g. `"Base"`)
@@ -2078,7 +2092,7 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{LspServer, module_name_appears_in_text};
+    use super::{LspServer, decode_workspace_source, module_name_appears_in_text};
     use serde_json::json;
 
     #[test]
@@ -2156,5 +2170,11 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(server.pending_workspace_configuration_requests.lock().is_empty());
+    }
+
+    #[test]
+    fn decode_workspace_source_falls_back_to_latin1() {
+        let decoded = decode_workspace_source(vec![0x53, 0xE5, 0x72, 0x0A]);
+        assert_eq!(decoded, "Sår\n");
     }
 }
