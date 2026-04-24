@@ -126,6 +126,12 @@ pub const ASSIGNMENT_OPERATORS: &[&str] = &[
     "//=",
 ];
 
+/// Compiled regex for dynamic subroutine dereference (`&{ ... }`).
+pub static DEREF_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| Regex::new(r"&\s*\{"));
+
+/// Compiled regex for glob-like `<*...>` forms.
+pub static GLOB_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| Regex::new(r"<\s*\*"));
+
 /// Compiled regex for dangerous operations
 ///
 /// Pattern matches word boundaries around operation names.

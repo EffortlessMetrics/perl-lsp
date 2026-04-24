@@ -238,6 +238,28 @@ impl DebugAdapter {
         Self::parse_evaluate_result_from_lines(&lines, expression, true)
     }
 
+    /// Extract an explicit evaluate failure message from debugger output lines.
+    pub(super) fn extract_evaluate_error_message(lines: &[String]) -> Option<String> {
+        for line in lines.iter().rev() {
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
+            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+                continue;
+            }
+
+            if error_re().is_some_and(|re| re.is_match(text))
+                || text.contains("Undefined subroutine")
+                || text.contains("Can't locate object method")
+                || text.contains("Not a HASH reference")
+                || text.contains("Not an ARRAY reference")
+            {
+                return Some(format!("evaluate failed: {text}"));
+            }
+        }
+
+        None
+    }
+
     /// Build deterministic placeholder variables used when debugger output is unavailable.
     pub(super) fn fallback_scope_variables(
         variables_ref: i32,
@@ -489,6 +511,17 @@ mod tests {
         assert_eq!(value, "123");
         assert_eq!(ty, "SCALAR");
         Ok(())
+    }
+
+    #[test]
+    pub(super) fn test_extract_evaluate_error_message_from_lines() {
+        let lines = vec![
+            "DB<3> $x = 1".to_string(),
+            "DB<3> Undefined subroutine &main::boom called at /tmp/test.pl line 9.".to_string(),
+        ];
+        let message = DebugAdapter::extract_evaluate_error_message(&lines).unwrap_or_default();
+        assert!(message.contains("evaluate failed:"));
+        assert!(message.contains("Undefined subroutine"));
     }
 
     /// Helper to create a test stack frame

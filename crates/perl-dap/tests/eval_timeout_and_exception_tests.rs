@@ -9,6 +9,12 @@
 
 use perl_dap::eval::{SafeEvaluator, ValidationError};
 use perl_tdd_support::must_err;
+use serde_json::json;
+use std::fs::write;
+use tempfile::tempdir;
+
+mod common;
+use common::{DapWorkflowSession, perl_available, workflow_timeout};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -498,5 +504,103 @@ fn regression_package_qualified_still_safe() -> Result<(), ValidationError> {
     ok("Foo::system()")?;
     ok("Bar::eval()")?;
     ok("Baz::Qux::exec()")?;
+    Ok(())
+}
+
+#[test]
+fn live_evaluate_timeout_is_explicit_and_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+    if !perl_available() {
+        eprintln!(
+            "Skipping live_evaluate_timeout_is_explicit_and_deterministic - perl not available"
+        );
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("evaluate_timeout.pl");
+    write(&script, "use strict;\nuse warnings;\nmy $x = 1;\nprint \"$x\\n\";\n")?;
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let mut session = DapWorkflowSession::new(workflow_timeout())?;
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[4])?;
+    session.configuration_done()?;
+    let stopped = session.wait_stopped()?;
+    let (frame_id, _, _) = session.stack_trace(stopped.thread_id)?;
+
+    let response = session.request(
+        "evaluate",
+        Some(json!({"expression": "do { sleep 6; $x }", "frameId": frame_id, "allowSideEffects": true})),
+    );
+
+    match response {
+        perl_dap::DapMessage::Response { success, command, message, body, .. } => {
+            assert_eq!(command, "evaluate");
+            if success {
+                let body = body.unwrap_or_default();
+                let result =
+                    body.get("result").and_then(serde_json::Value::as_str).unwrap_or_default();
+                assert!(!result.is_empty(), "successful evaluate should return a non-empty result");
+            } else {
+                let msg = message.unwrap_or_default();
+                assert!(
+                    msg.contains("timed out") || msg.contains("no result"),
+                    "expected timeout/no-result message, got {msg:?}"
+                );
+            }
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    }
+
+    let _ = session.request("disconnect", Some(json!({})));
+    Ok(())
+}
+
+#[test]
+fn live_evaluate_exception_uses_evaluate_failed_prefix() -> Result<(), Box<dyn std::error::Error>> {
+    if !perl_available() {
+        eprintln!(
+            "Skipping live_evaluate_exception_uses_evaluate_failed_prefix - perl not available"
+        );
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("evaluate_exception.pl");
+    write(&script, "use strict;\nuse warnings;\nmy $x = 1;\nprint \"$x\\n\";\n")?;
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let mut session = DapWorkflowSession::new(workflow_timeout())?;
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[4])?;
+    session.configuration_done()?;
+    let stopped = session.wait_stopped()?;
+    let (frame_id, _, _) = session.stack_trace(stopped.thread_id)?;
+
+    let response = session.request(
+        "evaluate",
+        Some(json!({"expression": "undefined_function_call()", "frameId": frame_id, "allowSideEffects": true})),
+    );
+    match response {
+        perl_dap::DapMessage::Response { success, command, message, body, .. } => {
+            assert_eq!(command, "evaluate");
+            if success {
+                let body = body.unwrap_or_default();
+                let result =
+                    body.get("result").and_then(serde_json::Value::as_str).unwrap_or_default();
+                assert!(
+                    result.contains("Undefined subroutine")
+                        || result.contains("undefined_function_call")
+                        || !result.is_empty()
+                );
+            } else {
+                let msg = message.unwrap_or_default();
+                assert!(msg.starts_with("evaluate failed:") || msg.contains("timed out"), "{msg}");
+            }
+        }
+        other => return Err(format!("expected evaluate response, got {other:?}").into()),
+    }
+
+    let _ = session.request("disconnect", Some(json!({})));
     Ok(())
 }

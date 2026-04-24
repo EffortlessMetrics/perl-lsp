@@ -4,7 +4,9 @@
 //! operations in Perl expressions during debug evaluation. It does not sandbox
 //! the interpreter.
 
-use super::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
+use super::patterns::{
+    ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, DEREF_RE, GLOB_RE, REGEX_MUTATION_RE,
+};
 
 /// Error type for unsafe expression detection
 #[derive(Debug, Clone, thiserror::Error)]
@@ -83,16 +85,31 @@ impl SafeEvaluator {
             return Err(ValidationError::Backticks);
         }
 
-        // Check for assignment operators
-        for op in ASSIGNMENT_OPERATORS {
-            if expression.contains(op) {
-                return Err(ValidationError::AssignmentOperator(op.to_string()));
-            }
+        // Check for assignment operators with operator-aware matching.
+        if let Some(op) = first_assignment_operator(expression) {
+            return Err(ValidationError::AssignmentOperator(op.to_string()));
         }
 
         // Check for increment/decrement operators
         if expression.contains("++") || expression.contains("--") {
             return Err(ValidationError::IncrementDecrement);
+        }
+
+        // Block dynamic subroutine calls (&{...}) used for execution indirection.
+        if let Some(re) = DEREF_RE.as_ref().ok()
+            && re.is_match(expression)
+        {
+            return Err(ValidationError::DangerousOperation("&{...}".to_string()));
+        }
+
+        // Block glob operations (<*...>) and filehandle reads/globs starting with `<`.
+        if let Some(re) = GLOB_RE.as_ref().ok()
+            && re.is_match(expression)
+        {
+            return Err(ValidationError::DangerousOperation("<*...>".to_string()));
+        }
+        if expression.trim().starts_with('<') {
+            return Err(ValidationError::DangerousOperation("<...>".to_string()));
         }
 
         // Check for dangerous operations using regex
@@ -197,15 +214,49 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
 
 /// Check if a match is preceded by CORE:: (which means it IS dangerous)
 fn is_core_qualified(s: &str, op_start: usize) -> bool {
-    let s_bytes = s.as_bytes();
-    // Check for GLOBAL prefix first
-    if op_start >= 8 && &s_bytes[op_start - 8..op_start] == b"GLOBAL::" {
-        // If GLOBAL, require CORE::GLOBAL::op
-        return op_start >= 14 && &s_bytes[op_start - 14..op_start - 8] == b"CORE::";
+    let bytes = s.as_bytes();
+
+    // Must have :: immediately before op
+    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
+        return false;
     }
 
-    // Check for regular CORE:: prefix
-    op_start >= 6 && &s_bytes[op_start - 6..op_start] == b"CORE::"
+    // Extract identifier before ::
+    let end = op_start - 2;
+    let mut start = end;
+    while start > 0 {
+        let b = bytes[start - 1];
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+
+    let seg = &s[start..end];
+    if seg == "CORE" {
+        return true;
+    }
+    if seg != "GLOBAL" {
+        return false;
+    }
+
+    // Require CORE::GLOBAL::
+    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
+        return false;
+    }
+    let end2 = start - 2;
+    let mut start2 = end2;
+    while start2 > 0 {
+        let b = bytes[start2 - 1];
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            start2 -= 1;
+        } else {
+            break;
+        }
+    }
+
+    &s[start2..end2] == "CORE"
 }
 
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
@@ -298,6 +349,31 @@ fn is_escape_sequence(s: &str, match_start: usize) -> bool {
         return false;
     }
     s.as_bytes()[match_start - 1] == b'\\'
+}
+
+fn first_assignment_operator(expression: &str) -> Option<&'static str> {
+    for op in ASSIGNMENT_OPERATORS.iter().copied().filter(|op| *op != "=") {
+        if expression.contains(op) {
+            return Some(op);
+        }
+    }
+
+    let bytes = expression.as_bytes();
+    for (idx, b) in bytes.iter().enumerate() {
+        if *b != b'=' {
+            continue;
+        }
+        let prev = if idx > 0 { Some(bytes[idx - 1]) } else { None };
+        let next = bytes.get(idx + 1).copied();
+
+        let is_non_assignment = matches!(prev, Some(b'=' | b'!' | b'<' | b'>' | b'~'))
+            || matches!(next, Some(b'=' | b'~' | b'>'));
+        if !is_non_assignment {
+            return Some("=");
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

@@ -1,6 +1,12 @@
 //! REPL and expression evaluation: evaluate, set expression, completions.
 
 use super::*;
+use std::sync::OnceLock;
+
+fn shared_safe_evaluator() -> &'static SafeEvaluator {
+    static EVALUATOR: OnceLock<SafeEvaluator> = OnceLock::new();
+    EVALUATOR.get_or_init(SafeEvaluator::new)
+}
 
 impl DebugAdapter {
     /// Handle evaluate request with policy validation and timeout enforcement.
@@ -73,8 +79,7 @@ impl DebugAdapter {
 
                 // Re-run through microcrate validator to keep evaluation policy aligned
                 // with shared DAP security logic.
-                let evaluator = SafeEvaluator::new();
-                if let Err(error) = evaluator.validate(expression) {
+                if let Err(error) = shared_safe_evaluator().validate(expression) {
                     return DapMessage::Response {
                         seq,
                         request_seq,
@@ -149,32 +154,57 @@ impl DebugAdapter {
             self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
         });
 
-        let parsed = framed_lines
-            .as_ref()
-            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-            .or_else(|| self.parse_evaluate_result_from_output(expression));
+        let parsed = if let Some(lines) = framed_lines.as_ref() {
+            Self::parse_evaluate_result_from_lines(lines, expression, true)
+        } else {
+            self.parse_evaluate_result_from_output(expression)
+        };
 
-        let Some((result, result_type)) = parsed else {
+        if let Some((result, result_type)) = parsed {
+            let eval_body =
+                EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "evaluate".to_string(),
+                body: serde_json::to_value(&eval_body).ok(),
+                message: None,
+            };
+        }
+
+        if let Some(lines) = framed_lines.as_ref()
+            && let Some(message) = Self::extract_evaluate_error_message(lines)
+        {
             return DapMessage::Response {
                 seq,
                 request_seq,
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some(format!("evaluate timed out after {timeout_ms}ms")),
+                message: Some(message),
             };
-        };
+        }
 
-        let eval_body =
-            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+        if framed_lines.is_some() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some(format!("evaluate returned no result for expression '{expression}'")),
+            };
+        }
 
         DapMessage::Response {
             seq,
             request_seq,
-            success: true,
+            success: false,
             command: "evaluate".to_string(),
-            body: serde_json::to_value(&eval_body).ok(),
-            message: None,
+            body: None,
+            message: Some(format!("evaluate timed out after {timeout_ms}ms")),
         }
     }
 
@@ -247,8 +277,7 @@ impl DebugAdapter {
         }
 
         // Validate the VALUE with SafeEvaluator (the value is what gets evaluated)
-        let evaluator = SafeEvaluator::new();
-        if let Err(error) = evaluator.validate(value) {
+        if let Err(error) = shared_safe_evaluator().validate(value) {
             return DapMessage::Response {
                 seq,
                 request_seq,

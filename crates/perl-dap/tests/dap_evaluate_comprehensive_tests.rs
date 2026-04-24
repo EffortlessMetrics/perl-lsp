@@ -14,6 +14,11 @@
 
 use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
 use serde_json::json;
+use std::fs::write;
+use tempfile::tempdir;
+
+mod common;
+use common::{DapWorkflowSession, perl_available, workflow_timeout};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -23,6 +28,26 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn new_adapter() -> DebugAdapter {
     DebugAdapter::new()
+}
+
+fn expect_evaluate_success_result(
+    response: DapMessage,
+) -> Result<(String, Option<String>), Box<dyn std::error::Error>> {
+    match response {
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert_eq!(command, "evaluate");
+            assert!(success, "evaluate should succeed, message={message:?}");
+            let body = body.ok_or("evaluate success missing body")?;
+            let result = body
+                .get("result")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("evaluate body missing result")?
+                .to_string();
+            let ty = body.get("type").and_then(serde_json::Value::as_str).map(ToString::to_string);
+            Ok((result, ty))
+        }
+        other => Err(format!("expected Response, got {other:?}").into()),
+    }
 }
 
 /// Assert that the response is a failed evaluate with a message containing `needle`.
@@ -205,14 +230,14 @@ fn test_evaluate_string_expressions_are_safe() -> TestResult {
 #[test]
 fn test_evaluate_comparison_expressions_are_safe() -> TestResult {
     let mut adapter = new_adapter();
-    // Note: the SafeEvaluator microcrate (perl-dap-eval) does a naive
-    // `contains("=")` check for assignment operators, which means expressions
-    // containing `==`, `!=`, `<=`, `>=` are also blocked even though they are
-    // read-only comparisons.  The evaluate pipeline runs BOTH validators, so
-    // we only test expressions that pass both.
     for expr in [
         "$a < $b",
         "$a > $b",
+        "$a == $b",
+        "$a != $b",
+        "$a <= $b",
+        "$a >= $b",
+        "$a <=> $b",
         "$a eq $b",
         "$a ne $b",
         "$a lt $b",
@@ -220,7 +245,6 @@ fn test_evaluate_comparison_expressions_are_safe() -> TestResult {
         "$a le $b",
         "$a ge $b",
         "$a cmp $b",
-        // Note: <=> contains = so it's blocked by the naive microcrate validator
     ] {
         let response = adapter.handle_request(
             1,
@@ -228,32 +252,6 @@ fn test_evaluate_comparison_expressions_are_safe() -> TestResult {
             Some(json!({ "expression": expr, "allowSideEffects": false })),
         );
         assert_evaluate_not_safe_blocked(response, "Safe evaluation mode")?;
-    }
-    Ok(())
-}
-
-/// Test that the SafeEvaluator microcrate blocks equality operators that contain `=`.
-/// This is a known limitation of the perl-dap-eval crate (naive substring check).
-/// Filed separately for follow-up.
-#[test]
-fn test_evaluate_equality_operators_blocked_by_microcrate_validator() -> TestResult {
-    let mut adapter = new_adapter();
-    // These are read-only comparisons, but the microcrate blocks them due to
-    // substring `=` match.  This test documents the current behavior.
-    for expr in ["$a == $b", "$a != $b", "$a <= $b", "$a >= $b"] {
-        let response = adapter.handle_request(
-            1,
-            "evaluate",
-            Some(json!({ "expression": expr, "allowSideEffects": false })),
-        );
-        // Currently blocked — documents known microcrate limitation.
-        match response {
-            DapMessage::Response { success, command, .. } => {
-                assert_eq!(command, "evaluate");
-                assert!(!success, "expected microcrate to block {expr:?}");
-            }
-            other => return Err(format!("expected Response, got {other:?}").into()),
-        }
     }
     Ok(())
 }
@@ -629,6 +627,92 @@ fn test_evaluate_assignment_ops_blocked_in_safe_mode() -> TestResult {
         );
         assert_evaluate_blocked(response, "Safe evaluation mode")?;
     }
+    Ok(())
+}
+
+#[test]
+fn test_live_session_evaluate_locals_package_globals_and_derefs() -> TestResult {
+    if !perl_available() {
+        eprintln!(
+            "Skipping test_live_session_evaluate_locals_package_globals_and_derefs - perl not available"
+        );
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("evaluate_live.pl");
+    write(
+        &script,
+        "use strict;\nuse warnings;\nour $GLOBAL = 13;\npackage My::Pkg;\nour $VALUE = 21;\npackage main;\nmy $local = 42;\nmy $arr = [11, 22, 33];\nmy $hash = { nested => { answer => 99 } };\nmy $sum = $local + $GLOBAL + $My::Pkg::VALUE;\nprint \"$sum\\n\";\n",
+    )?;
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let mut session = DapWorkflowSession::new(workflow_timeout())?;
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[11])?;
+    session.configuration_done()?;
+    let stopped = session.wait_stopped()?;
+    assert_eq!(stopped.reason, "breakpoint");
+
+    let (frame_id, _, _) = session.stack_trace(stopped.thread_id)?;
+
+    for (expr, expected_substr) in [
+        ("$local", "42"),
+        ("$My::Pkg::VALUE", "21"),
+        ("$GLOBAL", "13"),
+        ("$arr->[1]", "22"),
+        ("$hash->{nested}->{answer}", "99"),
+    ] {
+        let response = session.request(
+            "evaluate",
+            Some(json!({"expression": expr, "frameId": frame_id, "allowSideEffects": false})),
+        );
+        let (result, _) = expect_evaluate_success_result(response)?;
+        assert!(
+            result.contains(expected_substr),
+            "expected {expr:?} to contain {expected_substr:?}, got {result:?}"
+        );
+    }
+
+    session.continue_exec(stopped.thread_id)?;
+    let _ = session.drain_until_event("terminated");
+    session.disconnect()?;
+    Ok(())
+}
+
+#[test]
+fn test_live_session_evaluate_blocks_side_effectful_forms_deterministically() -> TestResult {
+    if !perl_available() {
+        eprintln!(
+            "Skipping test_live_session_evaluate_blocks_side_effectful_forms_deterministically - perl not available"
+        );
+        return Ok(());
+    }
+
+    let workspace = tempdir()?;
+    let script = workspace.path().join("evaluate_blocked_live.pl");
+    write(&script, "use strict;\nuse warnings;\nmy $x = 1;\nprint \"$x\\n\";\n")?;
+    let script_str = script.to_str().ok_or("script path is not valid UTF-8")?.to_string();
+
+    let mut session = DapWorkflowSession::new(workflow_timeout())?;
+    session.launch(&script_str)?;
+    session.set_breakpoints(&script_str, &[4])?;
+    session.configuration_done()?;
+    let stopped = session.wait_stopped()?;
+    assert_eq!(stopped.reason, "breakpoint");
+    let (frame_id, _, _) = session.stack_trace(stopped.thread_id)?;
+
+    for expr in ["system('true')", "push(@ARGV, 'x')", "&{$code_ref}()"] {
+        let response = session.request(
+            "evaluate",
+            Some(json!({"expression": expr, "frameId": frame_id, "allowSideEffects": false})),
+        );
+        assert_evaluate_blocked(response, "Safe evaluation mode")?;
+    }
+
+    session.continue_exec(stopped.thread_id)?;
+    let _ = session.drain_until_event("terminated");
+    session.disconnect()?;
     Ok(())
 }
 
