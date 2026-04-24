@@ -40,21 +40,25 @@ impl DebugAdapter {
 
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                let framed = match serde_json::to_vec(&msg) {
-                    Ok(payload) => frame(&payload),
-                    Err(e) => {
-                        tracing::error!(error = %e, message = ?msg, "Failed to serialize DAP message");
-                        continue;
-                    }
-                };
+                let mut batched = vec![msg];
+                while let Ok(next) = rx.try_recv() {
+                    batched.push(next);
+                }
 
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(&framed) {
-                    tracing::error!(error = %e, "Failed to write DAP frame in event handler");
+                let mut write_failed = false;
+                for event in &batched {
+                    if let Err(e) = Self::write_framed_dap_message(&mut *writer, event) {
+                        tracing::error!(error = %e, message = ?event, "Failed to write DAP frame in event handler");
+                        write_failed = true;
+                        break;
+                    }
+                }
+                if write_failed {
                     continue;
                 }
                 if let Err(e) = writer.flush() {
-                    tracing::error!(error = %e, "Failed to flush DAP frame in event handler");
+                    tracing::error!(error = %e, events = batched.len(), "Failed to flush DAP frame batch");
                 }
             }
             tracing::debug!("Event handler thread terminating - channel closed");
@@ -95,17 +99,8 @@ impl DebugAdapter {
                 };
 
                 let response = self.dispatch_request(seq, &command, arguments);
-                let payload = match serde_json::to_vec(&response) {
-                    Ok(payload) => payload,
-                    Err(e) => {
-                        tracing::error!(error = %e, "Failed to serialize DAP response");
-                        continue;
-                    }
-                };
-
-                let framed = frame(&payload);
                 let mut writer = lock_or_recover(&shared_writer, "response_writer");
-                writer.write_all(&framed)?;
+                Self::write_framed_dap_message(&mut *writer, &response)?;
                 writer.flush()?;
 
                 // DAP requires this event only after initialize response is sent.
@@ -116,5 +111,11 @@ impl DebugAdapter {
                 }
             }
         }
+    }
+
+    fn write_framed_dap_message(writer: &mut impl Write, message: &DapMessage) -> io::Result<()> {
+        let payload = serde_json::to_vec(message).map_err(io::Error::other)?;
+        write!(writer, "Content-Length: {}\r\n\r\n", payload.len())?;
+        writer.write_all(&payload)
     }
 }

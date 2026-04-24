@@ -40,7 +40,7 @@ use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use crate::types::{Source, StackFrame, Variable};
 use crate::variables::{PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer};
 use perl_lexer::DAP_COMPLETION_KEYWORDS;
-use perl_lsp_rs_core::transport::framing::{ContentLengthFramer, frame};
+use perl_lsp_rs_core::transport::framing::ContentLengthFramer;
 use perl_module::path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -609,13 +609,6 @@ impl DebugAdapter {
         self.debugger_output_marker.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// Write a debugger command and flush immediately so output framing remains ordered.
-    fn write_debugger_command(stdin: &mut impl Write, command: &str) -> Result<(), String> {
-        stdin.write_all(command.as_bytes()).map_err(|e| format!("write debugger command: {e}"))?;
-        stdin.flush().map_err(|e| format!("flush debugger command: {e}"))?;
-        Ok(())
-    }
-
     /// Send commands wrapped with unique begin/end markers.
     ///
     /// Returns `(begin_marker, end_marker)` so callers can wait for framed output.
@@ -628,15 +621,24 @@ impl DebugAdapter {
         let begin_marker = format!("DAP_BEGIN_{marker_id}");
         let end_marker = format!("DAP_END_{marker_id}");
 
-        Self::write_debugger_command(stdin, &format!("p \"{begin_marker}\"\n"))?;
+        stdin
+            .write_all(format!("p \"{begin_marker}\"\n").as_bytes())
+            .map_err(|e| format!("write debugger command: {e}"))?;
         for command in commands {
             if command.ends_with('\n') {
-                Self::write_debugger_command(stdin, command)?;
+                stdin
+                    .write_all(command.as_bytes())
+                    .map_err(|e| format!("write debugger command: {e}"))?;
             } else {
-                Self::write_debugger_command(stdin, &format!("{command}\n"))?;
+                stdin
+                    .write_all(format!("{command}\n").as_bytes())
+                    .map_err(|e| format!("write debugger command: {e}"))?;
             }
         }
-        Self::write_debugger_command(stdin, &format!("p \"{end_marker}\"\n"))?;
+        stdin
+            .write_all(format!("p \"{end_marker}\"\n").as_bytes())
+            .map_err(|e| format!("write debugger command: {e}"))?;
+        stdin.flush().map_err(|e| format!("flush debugger command: {e}"))?;
 
         Ok((begin_marker, end_marker))
     }
