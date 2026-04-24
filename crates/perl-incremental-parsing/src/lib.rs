@@ -1,30 +1,7 @@
-//! Incremental parsing support for Perl.
+//! Compatibility shim for incremental parsing APIs.
 //!
-//! This crate provides efficient incremental parsing capabilities for Perl code,
-//! enabling Language Server Protocol features to respond quickly to document edits
-//! by reusing portions of the previous parse tree.
-//!
-//! # Overview
-//!
-//! The incremental parser minimizes re-parsing overhead when documents change by:
-//! - Identifying which portions of the AST are affected by an edit
-//! - Reusing unaffected subtrees from the previous parse
-//! - Only re-parsing the modified regions and their dependent nodes
-//!
-//! # Usage
-//!
-//! ```no_run
-//! use perl_incremental_parsing::incremental;
-//! use perl_parser_core::Parser;
-//!
-//! // Initial parse
-//! let source = "sub foo { return 42; }";
-//! let mut parser = Parser::new(source);
-//! let ast = parser.parse();
-//!
-//! // After edit, incrementally reparse only affected portions
-//! // (specific APIs depend on incremental module implementation)
-//! ```
+//! `perl-parser` is the single source of truth for incremental parsing.
+//! This crate remains as a thin wrapper so existing imports continue to compile.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
@@ -32,45 +9,13 @@
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
-#![allow(
-    clippy::too_many_lines,
-    clippy::module_name_repetitions,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::cast_precision_loss,
-    clippy::cast_possible_wrap,
-    clippy::must_use_candidate,
-    clippy::missing_errors_doc,
-    clippy::missing_panics_doc,
-    clippy::wildcard_imports,
-    clippy::enum_glob_use,
-    clippy::match_same_arms,
-    clippy::if_not_else,
-    clippy::struct_excessive_bools,
-    clippy::items_after_statements,
-    clippy::return_self_not_must_use,
-    clippy::unused_self,
-    clippy::collapsible_match,
-    clippy::collapsible_if,
-    clippy::only_used_in_recursion,
-    clippy::items_after_test_module,
-    clippy::while_let_loop,
-    clippy::single_range_in_vec_init,
-    clippy::arc_with_non_send_sync,
-    clippy::needless_range_loop,
-    clippy::result_large_err,
-    clippy::if_same_then_else,
-    clippy::should_implement_trait,
-    clippy::manual_flatten,
-    clippy::needless_raw_string_hashes,
-    clippy::single_char_pattern,
-    clippy::uninlined_format_args
+
+/// Compatibility alias to incremental parsing APIs owned by `perl-parser`.
+#[deprecated(
+    note = "Incremental parsing is owned by `perl-parser`; depend on `perl-parser` directly when possible"
 )]
+pub use perl_parser::incremental;
 
-pub use perl_parser_core::edit;
-pub use perl_parser_core::{Node, NodeKind, SourceLocation};
-pub use perl_parser_core::{Parser, ast, error, parser, position};
-
-/// Incremental parsing implementation and helpers.
-pub mod incremental;
-pub use incremental::*;
+pub use perl_parser::edit;
+pub use perl_parser::{Node, NodeKind, SourceLocation};
+pub use perl_parser::{Parser, ast, error, parser, position};

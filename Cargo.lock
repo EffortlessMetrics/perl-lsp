@@ -1580,7 +1580,6 @@ dependencies = [
  "perl-lexer",
  "perl-line-index",
  "perl-parser",
- "perl-parser-core",
  "perl-tdd-support",
  "ropey",
  "serde_json",
