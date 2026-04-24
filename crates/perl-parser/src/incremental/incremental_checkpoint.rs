@@ -345,8 +345,22 @@ pub struct IncrementalStats {
     pub left_checkpoint_distance: usize,
     /// Distance from edit end to the right checkpoint (in bytes)
     pub right_checkpoint_distance: usize,
+    /// Running sum of left checkpoint distances across incremental parses.
+    pub total_left_checkpoint_distance: usize,
+    /// Running sum of right checkpoint distances across incremental parses.
+    pub total_right_checkpoint_distance: usize,
+    /// Largest observed left checkpoint distance.
+    pub max_left_checkpoint_distance: usize,
+    /// Largest observed right checkpoint distance.
+    pub max_right_checkpoint_distance: usize,
     /// Total bytes relexed during incremental parsing
     pub bytes_relexed: usize,
+    /// Most recent relex window start byte.
+    pub last_relex_start: usize,
+    /// Most recent relex window end byte.
+    pub last_relex_end: usize,
+    /// Largest observed relex window width.
+    pub max_relex_window: usize,
     /// Count of segments reused before the edit (cache efficiency metric)
     pub segments_reused_before: usize,
     /// Count of segments reused after the edit (cache efficiency metric)
@@ -369,7 +383,25 @@ impl std::fmt::Display for IncrementalStats {
         writeln!(f, "  Cache misses: {}", self.cache_misses)?;
         writeln!(f, "  Left checkpoint distance: {} bytes", self.left_checkpoint_distance)?;
         writeln!(f, "  Right checkpoint distance: {} bytes", self.right_checkpoint_distance)?;
+        writeln!(
+            f,
+            "  Total left checkpoint distance: {} bytes",
+            self.total_left_checkpoint_distance
+        )?;
+        writeln!(
+            f,
+            "  Total right checkpoint distance: {} bytes",
+            self.total_right_checkpoint_distance
+        )?;
+        writeln!(f, "  Max left checkpoint distance: {} bytes", self.max_left_checkpoint_distance)?;
+        writeln!(
+            f,
+            "  Max right checkpoint distance: {} bytes",
+            self.max_right_checkpoint_distance
+        )?;
         writeln!(f, "  Bytes relexed: {}", self.bytes_relexed)?;
+        writeln!(f, "  Last relex window: [{}..{})", self.last_relex_start, self.last_relex_end)?;
+        writeln!(f, "  Max relex window: {} bytes", self.max_relex_window)?;
         writeln!(f, "  Segments reused before edit: {}", self.segments_reused_before)?;
         writeln!(f, "  Segments reused after edit: {}", self.segments_reused_after)?;
         writeln!(f, "  Segments invalidated: {}", self.segments_invalidated)?;
@@ -585,18 +617,35 @@ impl CheckpointedIncrementalParser {
         edit: &SimpleEdit,
     ) -> ParseResult<Node> {
         // Calculate relex bounds using checkpoint positions
-        let relex_start = left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0);
-        let relex_end =
-            right_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(self.source.len());
+        let relex_start =
+            left_checkpoint.as_ref().map(|cp| cp.position).unwrap_or(0).min(self.source.len());
+        let edit_end = edit.start + edit.new_text.len();
+        let relex_end = right_checkpoint
+            .as_ref()
+            .map(|cp| cp.position)
+            .unwrap_or(self.source.len())
+            .max(edit_end)
+            .min(self.source.len());
 
         // Track checkpoint distances for statistics
-        let edit_end = edit.start + edit.new_text.len();
+        self.stats.last_relex_start = relex_start;
+        self.stats.last_relex_end = relex_end;
+        self.stats.max_relex_window = self.stats.max_relex_window.max(relex_end - relex_start);
+        self.stats.left_checkpoint_distance = 0;
+        self.stats.right_checkpoint_distance = 0;
+
         if edit.start >= relex_start {
             self.stats.left_checkpoint_distance = edit.start - relex_start;
         }
         if relex_end >= edit_end {
             self.stats.right_checkpoint_distance = relex_end - edit_end;
         }
+        self.stats.total_left_checkpoint_distance += self.stats.left_checkpoint_distance;
+        self.stats.total_right_checkpoint_distance += self.stats.right_checkpoint_distance;
+        self.stats.max_left_checkpoint_distance =
+            self.stats.max_left_checkpoint_distance.max(self.stats.left_checkpoint_distance);
+        self.stats.max_right_checkpoint_distance =
+            self.stats.max_right_checkpoint_distance.max(self.stats.right_checkpoint_distance);
 
         let mut parser_tokens: Vec<Token> = Vec::new();
 
@@ -631,17 +680,16 @@ impl CheckpointedIncrementalParser {
         }
 
         let mut raw_relexed: Vec<perl_lexer::Token> = Vec::new();
-        let mut bytes_relexed_this_phase = 0usize;
+        let mut relexed_until = relex_start;
 
         loop {
             match lexer.next_token() {
                 Some(token) if matches!(token.token_type, perl_lexer::TokenType::EOF) => break,
                 Some(token) => {
                     let token_end = token.end;
-                    let token_start = token.start;
                     raw_relexed.push(token);
                     self.stats.tokens_relexed += 1;
-                    bytes_relexed_this_phase += token_end - token_start;
+                    relexed_until = relexed_until.max(token_end);
                     if token_end >= relex_end {
                         break;
                     }
@@ -649,7 +697,7 @@ impl CheckpointedIncrementalParser {
                 None => break,
             }
         }
-        self.stats.bytes_relexed += bytes_relexed_this_phase;
+        self.stats.bytes_relexed += relexed_until.saturating_sub(relex_start);
 
         let converted = TokenStream::lexer_tokens_to_parser_tokens(raw_relexed);
         parser_tokens.extend(converted);
@@ -681,13 +729,17 @@ impl CheckpointedIncrementalParser {
             }
             // No cache hit — lex the remainder of the source.
             let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
+            let tail_start = relexed_until;
+            let mut tail_relexed_until = tail_start;
             while let Some(token) = lexer.next_token() {
                 if matches!(token.token_type, perl_lexer::TokenType::EOF) {
                     break;
                 }
+                tail_relexed_until = tail_relexed_until.max(token.end);
                 raw_tail.push(token);
                 self.stats.tokens_relexed += 1;
             }
+            self.stats.bytes_relexed += tail_relexed_until.saturating_sub(tail_start);
             parser_tokens.extend(TokenStream::lexer_tokens_to_parser_tokens(raw_tail));
         }
 
@@ -774,6 +826,11 @@ mod tests {
 
         let stats = parser.stats();
         assert_eq!(stats.incremental_parses, 2);
+        assert!(stats.total_left_checkpoint_distance >= stats.left_checkpoint_distance);
+        assert!(stats.total_right_checkpoint_distance >= stats.right_checkpoint_distance);
+        assert!(
+            stats.max_relex_window >= stats.last_relex_end.saturating_sub(stats.last_relex_start)
+        );
         assert!(
             stats.checkpoints_used > checkpoints_after_first,
             "expected second edit to exercise checkpoint bookkeeping, got {stats:?}"
@@ -862,5 +919,29 @@ mod tests {
             let full_after = full.checkpoint_cache.find_after(query).map(|cp| cp.position);
             assert_eq!(incremental_after, full_after, "mismatched right checkpoint at {query}");
         }
+    }
+
+    #[test]
+    fn test_relex_window_and_byte_metrics_are_bounded() {
+        let mut parser = CheckpointedIncrementalParser::new();
+        let source = "my $v = 1;\n".repeat(120);
+        must(parser.parse(source.clone()));
+
+        let edit = SimpleEdit { start: 6, end: 7, new_text: "123".to_string() };
+        let bytes_before = parser.stats().bytes_relexed;
+
+        must(parser.apply_edit(&edit));
+
+        let stats = parser.stats();
+        let bytes_delta = stats.bytes_relexed - bytes_before;
+        let window_width = stats.last_relex_end.saturating_sub(stats.last_relex_start);
+        let new_edit_end = edit.start + edit.new_text.len();
+
+        assert!(stats.last_relex_start <= edit.start);
+        assert!(stats.last_relex_end >= new_edit_end);
+        assert!(stats.last_relex_end <= parser.source.len());
+        assert!(stats.max_relex_window >= window_width);
+        assert!(bytes_delta >= window_width);
+        assert!(bytes_delta <= parser.source.len(), "relexed more than full source: {stats:?}");
     }
 }
