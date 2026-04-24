@@ -232,20 +232,29 @@ impl LspServer {
                             if let (Some(coordinator), Some(key)) =
                                 (self.coordinator(), symbol_key.as_ref())
                             {
-                                let edits = crate::workspace_rename::build_rename_edit(
+                                match crate::workspace_rename::build_rename_edit_checked(
                                     coordinator.index(),
                                     key,
                                     new_name,
-                                );
-                                if !edits.is_empty() {
-                                    tracing::debug!(
-                                        count = edits.len(),
-                                        reason,
-                                        "Rename: served partial-index workspace edits"
-                                    );
-                                    return Ok(Some(crate::workspace_rename::to_workspace_edit(
-                                        edits,
-                                    )));
+                                ) {
+                                    Ok(edits) if !edits.is_empty() => {
+                                        tracing::debug!(
+                                            count = edits.len(),
+                                            reason,
+                                            "Rename: served partial-index workspace edits"
+                                        );
+                                        return Ok(Some(crate::workspace_rename::to_workspace_edit(
+                                            edits,
+                                        )));
+                                    }
+                                    Ok(_) => {}
+                                    Err(refusal) => {
+                                        return Err(JsonRpcError {
+                                            code: -32602,
+                                            message: refusal.message().to_string(),
+                                            data: None,
+                                        });
+                                    }
                                 }
                             }
                             tracing::debug!(
@@ -263,10 +272,24 @@ impl LspServer {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                let edits = crate::workspace_rename::build_rename_edit_checked(
+                                    idx, key, new_name,
+                                )
+                                .map_err(|refusal| JsonRpcError {
+                                    code: -32602,
+                                    message: refusal.message().to_string(),
+                                    data: None,
+                                })?;
                                 let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
                                 return Ok(Some(ws_edit));
+                            } else {
+                                return Err(JsonRpcError {
+                                    code: -32602,
+                                    message: crate::workspace_rename::RenameRefusal::WeakIdentity
+                                        .message()
+                                        .to_string(),
+                                    data: None,
+                                });
                             }
                         }
                     }

@@ -26,6 +26,29 @@ pub struct RenameEdit {
     pub edits: Vec<TextEdit>,
 }
 
+/// Reasons a workspace rename request is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenameRefusal {
+    /// The symbol at cursor does not have a reliable definition in the workspace index.
+    WeakIdentity,
+    /// Multiple plausible symbols exist and at least one unqualified call site is ambiguous.
+    AmbiguousIdentity,
+}
+
+impl RenameRefusal {
+    /// Human-readable refusal message for LSP errors.
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::WeakIdentity => {
+                "Workspace rename refused: symbol identity is too weak to resolve safely"
+            }
+            Self::AmbiguousIdentity => {
+                "Workspace rename refused: symbol identity is ambiguous across packages"
+            }
+        }
+    }
+}
+
 /// Build a rename edit across the workspace.
 ///
 /// Finds all references to the given symbol and builds text edits to rename them.
@@ -34,6 +57,23 @@ pub fn build_rename_edit(
     key: &SymbolKey,
     new_name_bare: &str,
 ) -> Vec<RenameEdit> {
+    build_rename_edit_checked(idx, key, new_name_bare).unwrap_or_default()
+}
+
+/// Build a rename edit across the workspace, refusing weak or ambiguous identities.
+pub fn build_rename_edit_checked(
+    idx: &WorkspaceIndex,
+    key: &SymbolKey,
+    new_name_bare: &str,
+) -> Result<Vec<RenameEdit>, RenameRefusal> {
+    if idx.find_def(key).is_none() {
+        return Err(RenameRefusal::WeakIdentity);
+    }
+
+    if is_ambiguous_identity(idx, key) {
+        return Err(RenameRefusal::AmbiguousIdentity);
+    }
+
     // 1) Get all references across the workspace
     let mut locs = idx.find_refs(key);
 
@@ -100,7 +140,7 @@ pub fn build_rename_edit(
     }
 
     // Convert to RenameEdit structs
-    grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect()
+    Ok(grouped.into_iter().map(|(uri, edits)| RenameEdit { uri, edits }).collect())
 }
 
 fn package_name_for_line(text: &str, target_line: u32) -> &str {
@@ -184,6 +224,66 @@ fn is_non_target_package_declaration(
 
     let line_text = doc.text.lines().nth(start_line as usize).unwrap_or_default();
     is_sub_declaration_line(line_text, key.name.as_ref())
+}
+
+fn is_ambiguous_identity(idx: &WorkspaceIndex, key: &SymbolKey) -> bool {
+    if key.kind != SymKind::Sub {
+        return false;
+    }
+
+    // Only ambiguous if there are multiple package-level definitions for the same bare name.
+    let def_count = idx
+        .search_symbols(key.name.as_ref())
+        .iter()
+        .filter(|symbol| {
+            symbol.name == key.name.as_ref()
+                && symbol.qualified_name.is_some()
+                && matches!(
+                    symbol.kind,
+                    perl_parser::workspace_index::SymbolKind::Subroutine
+                        | perl_parser::workspace_index::SymbolKind::Method
+                )
+        })
+        .count();
+
+    if def_count <= 1 {
+        return false;
+    }
+
+    // If there are unqualified references outside the defining package, rename is ambiguous.
+    idx.find_refs(key).into_iter().any(|loc| {
+        let Some(doc) = idx.document_store().get(&loc.uri) else {
+            return true;
+        };
+
+        let start_line = loc.range.start.line;
+        let start_char = loc.range.start.column;
+        let end_line = loc.range.end.line;
+        let end_char = loc.range.end.column;
+
+        let original = doc
+            .line_index
+            .position_to_offset(start_line, start_char)
+            .and_then(|start_off| {
+                doc.line_index
+                    .position_to_offset(end_line, end_char)
+                    .and_then(|end_off| doc.text.get(start_off..end_off))
+            })
+            .unwrap_or_default();
+
+        // Qualified references are explicit and therefore not ambiguous.
+        if original.contains("::") {
+            return false;
+        }
+
+        let line_text = doc.text.lines().nth(start_line as usize).unwrap_or_default();
+        if is_sub_declaration_line(line_text, key.name.as_ref()) {
+            return false;
+        }
+
+        let package_at_line = package_name_for_line(&doc.text, start_line);
+        package_at_line != key.pkg.as_ref()
+    })
 }
 
 /// Convert RenameEdit to LSP WorkspaceEdit JSON.

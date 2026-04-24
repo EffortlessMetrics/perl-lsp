@@ -667,6 +667,84 @@ my $bar = Bar::process_data();
 
 #[test]
 #[serial]
+fn bdd_rename_refuses_ambiguous_unqualified_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Rename refuses ambiguous unqualified symbol identity");
+
+    let foo_module = r#"package Foo;
+use strict;
+use warnings;
+
+sub process_data {
+    return "foo";
+}
+
+1;
+"#;
+
+    let bar_module = r#"package Bar;
+use strict;
+use warnings;
+
+sub process_data {
+    return "bar";
+}
+
+1;
+"#;
+
+    let main = r#"use strict;
+use warnings;
+use lib './lib';
+use Foo;
+use Bar;
+
+my $x = process_data();
+"#;
+
+    scenario.given("a workspace with multiple package symbols sharing the same bare name");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/Foo.pm", foo_module),
+        ("lib/Bar.pm", bar_module),
+        ("main.pl", main),
+    ])?;
+
+    let foo_uri = workspace.uri("lib/Foo.pm");
+    let bar_uri = workspace.uri("lib/Bar.pm");
+    let main_uri = workspace.uri("main.pl");
+
+    harness.open(&foo_uri, foo_module)?;
+    harness.open(&bar_uri, bar_module)?;
+    harness.open(&main_uri, main)?;
+
+    harness.wait_for_symbol("process_data", Some(&foo_uri), Duration::from_secs(10))?;
+    harness.wait_for_symbol("process_data", Some(&bar_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("renaming Foo::process_data from its declaration");
+    let (def_line, def_char) = find_position(foo_module, "process_data");
+    let rename_result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": foo_uri },
+            "position": { "line": def_line, "character": def_char },
+            "newName": "process_records"
+        }),
+    );
+
+    scenario.then("the server cleanly refuses due to ambiguous identity");
+    let error_message = rename_result
+        .err()
+        .ok_or("rename should fail for ambiguous unqualified symbol identity")?;
+    assert!(
+        error_message.contains("ambiguous"),
+        "expected ambiguous rename refusal, got: {error_message}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_workspace_symbols_expose_module_api() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Workspace symbol search surfaces module APIs");
 
