@@ -57,8 +57,28 @@ pub use workspace::FakeWorkspace;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
+use url::Url;
+
+/// Canonical cursor position for editor-facing UX requests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CursorPosition {
+    /// Relative file path in the temp workspace.
+    pub relative_path: String,
+    /// 0-based line offset.
+    pub line: u32,
+    /// 0-based UTF-16 code-unit offset.
+    pub character: u32,
+}
+
+impl CursorPosition {
+    /// Create a cursor position at `(line, character)` inside `relative_path`.
+    pub fn new(relative_path: impl Into<String>, line: u32, character: u32) -> Self {
+        Self { relative_path: relative_path.into(), line, character }
+    }
+}
 
 /// Configuration for a UX scenario.
 ///
@@ -190,6 +210,23 @@ impl UxHarness {
         Ok(())
     }
 
+    /// Open a fixture file pre-seeded in `ScenarioConfig.workspace_files`.
+    pub fn open_fixture(&self, relative_path: &str) -> Result<()> {
+        let content = std::fs::read_to_string(self.workspace.path(relative_path))
+            .with_context(|| format!("Fixture file {:?} was not pre-seeded", relative_path))?;
+        self.open_file(relative_path, &content)
+    }
+
+    /// Build a canonical cursor position for subsequent UX requests.
+    pub fn position_cursor(
+        &self,
+        relative_path: impl Into<String>,
+        line: u32,
+        character: u32,
+    ) -> CursorPosition {
+        CursorPosition::new(relative_path, line, character)
+    }
+
     /// Apply a full-document text replacement and send `textDocument/didChange`.
     pub fn change_file_full(&self, relative_path: &str, updated_content: &str) -> Result<()> {
         self.workspace.write(relative_path, updated_content)?;
@@ -260,6 +297,11 @@ impl UxHarness {
                 None => Ok(Vec::new()),
             },
         }
+    }
+
+    /// Request completion at a canonical cursor position.
+    pub fn completion_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
+        self.completion(&cursor.relative_path, cursor.line, cursor.character)
     }
 
     /// Request document formatting.
@@ -461,6 +503,48 @@ impl UxHarness {
         }
     }
 
+    /// Request go-to-definition at a canonical cursor position.
+    pub fn definition_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
+        self.definition(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request references (`textDocument/references`) at a cursor position.
+    pub fn references(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None if resp["result"].is_null() => Ok(Vec::new()),
+            None => Ok(vec![resp["result"].clone()]),
+        }
+    }
+
+    /// Request references at a canonical cursor position.
+    pub fn references_at(
+        &self,
+        cursor: &CursorPosition,
+        include_declaration: bool,
+    ) -> Result<Vec<Value>> {
+        self.references(&cursor.relative_path, cursor.line, cursor.character, include_declaration)
+    }
+
     /// Request go-to-declaration.
     pub fn declaration(
         &self,
@@ -585,6 +669,83 @@ impl UxHarness {
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
     }
+
+    /// Apply a full-document edit and wait for diagnostics from that file.
+    pub fn apply_edit_and_collect_diagnostics(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        timeout: Duration,
+    ) -> Result<Vec<Value>> {
+        self.change_file_full(relative_path, updated_content)?;
+        Ok(self.wait_for_diagnostics(relative_path, timeout))
+    }
+
+    /// Normalize LSP payloads for platform-stable expectations.
+    ///
+    /// - Workspace file URIs are rewritten as `file://$WORKSPACE/<relative-path>`.
+    /// - Directory separators in normalized URIs are always `/`.
+    pub fn normalize_response(&self, payload: &Value) -> Value {
+        normalize_lsp_payload(payload, self.workspace.dir.path())
+    }
+
+    /// Assert that two LSP payloads match after canonical normalization.
+    pub fn assert_normalized_eq(&self, actual: &Value, expected: &Value) {
+        let normalized_actual = self.normalize_response(actual);
+        let normalized_expected = self.normalize_response(expected);
+        assert_eq!(
+            normalized_actual, normalized_expected,
+            "normalized payload mismatch\nactual={:#}\nexpected={:#}",
+            normalized_actual, normalized_expected
+        );
+    }
+}
+
+/// Normalize editor-facing LSP payloads so fixture assertions are OS-stable.
+pub fn normalize_lsp_payload(payload: &Value, workspace_root: &Path) -> Value {
+    match payload {
+        Value::Array(values) => Value::Array(
+            values.iter().map(|entry| normalize_lsp_payload(entry, workspace_root)).collect(),
+        ),
+        Value::Object(map) => {
+            let mut normalized = serde_json::Map::with_capacity(map.len());
+            for (key, value) in map {
+                if matches!(key.as_str(), "uri" | "targetUri" | "workspaceFolderUri") {
+                    if let Some(uri) = value.as_str() {
+                        normalized.insert(
+                            key.clone(),
+                            Value::String(normalize_uri_for_expectations(uri, workspace_root)),
+                        );
+                        continue;
+                    }
+                }
+                normalized.insert(key.clone(), normalize_lsp_payload(value, workspace_root));
+            }
+            Value::Object(normalized)
+        }
+        _ => payload.clone(),
+    }
+}
+
+fn normalize_uri_for_expectations(uri: &str, workspace_root: &Path) -> String {
+    let Ok(parsed) = Url::parse(uri) else {
+        return uri.replace('\\', "/");
+    };
+
+    if parsed.scheme() != "file" {
+        return uri.to_string();
+    }
+
+    let Ok(path) = parsed.to_file_path() else {
+        return uri.replace('\\', "/");
+    };
+
+    if let Ok(relative) = path.strip_prefix(workspace_root) {
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        return format!("file://$WORKSPACE/{}", relative.trim_start_matches('/'));
+    }
+
+    format!("file://{}", path.to_string_lossy().replace('\\', "/"))
 }
 
 /// Outcome of a formatting request.
