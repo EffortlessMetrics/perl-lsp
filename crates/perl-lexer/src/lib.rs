@@ -1290,10 +1290,11 @@ impl<'a> PerlLexer<'a> {
                 if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
+                    let text_arc: Arc<str> = Arc::from(text);
                     self.mode = LexerMode::ExpectOperator;
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1313,10 +1314,11 @@ impl<'a> PerlLexer<'a> {
                 if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
+                    let text_arc: Arc<str> = Arc::from(text);
                     self.mode = LexerMode::ExpectOperator;
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1336,10 +1338,11 @@ impl<'a> PerlLexer<'a> {
                 if pos > digit_start && saw_digit {
                     self.position = pos;
                     let text = &self.input[start..self.position];
+                    let text_arc: Arc<str> = Arc::from(text);
                     self.mode = LexerMode::ExpectOperator;
                     return Some(Token {
-                        token_type: TokenType::Number(Arc::from(text)),
-                        text: Arc::from(text),
+                        token_type: TokenType::Number(text_arc.clone()),
+                        text: text_arc,
                         start,
                         end: self.position,
                     });
@@ -1441,11 +1444,12 @@ impl<'a> PerlLexer<'a> {
 
         // Avoid string slicing for common number cases - use Arc::from directly on slice
         let text = &self.input[start..self.position];
+        let text_arc: Arc<str> = Arc::from(text);
         self.mode = LexerMode::ExpectOperator;
 
         Some(Token {
-            token_type: TokenType::Number(Arc::from(text)),
-            text: Arc::from(text),
+            token_type: TokenType::Number(text_arc.clone()),
+            text: text_arc,
             start,
             end: self.position,
         })
@@ -1495,11 +1499,12 @@ impl<'a> PerlLexer<'a> {
         }
 
         let text = &self.input[start..self.position];
+        let text_arc: Arc<str> = Arc::from(text);
         self.mode = LexerMode::ExpectOperator;
 
         Some(Token {
-            token_type: TokenType::Number(Arc::from(text)),
-            text: Arc::from(text),
+            token_type: TokenType::Number(text_arc.clone()),
+            text: text_arc,
             start,
             end: self.position,
         })
@@ -1964,12 +1969,7 @@ impl<'a> PerlLexer<'a> {
                 // but it can also be the delimiter for quote-like operators (q'..', qq'..', qr'..', m'..').
                 // If we've already read one of those operator words, stop before consuming the quote
                 // so the quote-operator path can handle it.
-                if ch == '\''
-                    && matches!(
-                        &self.input[start..self.position],
-                        "m" | "q" | "qq" | "qw" | "qx" | "qr"
-                    )
-                {
+                if ch == '\'' && is_quote_operator_word(self.input_bytes, start, self.position) {
                     break;
                 }
 
@@ -2203,33 +2203,36 @@ impl<'a> PerlLexer<'a> {
                                 // Not a quote operator here → treat as IDENTIFIER
                                 self.current_quote_op = None;
                                 self.mode = LexerMode::ExpectOperator;
+                                let text_arc: Arc<str> = Arc::from(text);
                                 return Some(Token {
-                                    token_type: TokenType::Identifier(Arc::from(text)),
+                                    token_type: TokenType::Identifier(text_arc.clone()),
                                     start,
                                     end: self.position,
-                                    text: Arc::from(text),
+                                    text: text_arc,
                                 });
                             }
                         } else {
                             // End-of-input after the word → also treat as IDENTIFIER
                             self.current_quote_op = None;
                             self.mode = LexerMode::ExpectOperator;
+                            let text_arc: Arc<str> = Arc::from(text);
                             return Some(Token {
-                                token_type: TokenType::Identifier(Arc::from(text)),
+                                token_type: TokenType::Identifier(text_arc.clone()),
                                 start,
                                 end: self.position,
-                                text: Arc::from(text),
+                                text: text_arc,
                             });
                         }
                         // If we get here but haven't returned, something went wrong
                         // Fall through to treat as identifier
                         self.current_quote_op = None;
                         self.mode = LexerMode::ExpectOperator;
+                        let text_arc: Arc<str> = Arc::from(text);
                         return Some(Token {
-                            token_type: TokenType::Identifier(Arc::from(text)),
+                            token_type: TokenType::Identifier(text_arc.clone()),
                             start,
                             end: self.position,
-                            text: Arc::from(text),
+                            text: text_arc,
                         });
                     }
                     // Format declarations need special handling
@@ -2255,7 +2258,13 @@ impl<'a> PerlLexer<'a> {
             // A keyword/identifier is not a variable; `{` after it is a block opener.
             self.after_var_subscript = false;
             // hash_brace_depth is managed by { and } handlers, not cleared per-token
-            Some(Token { token_type, text: Arc::from(text), start, end: self.position })
+            let text_arc: Arc<str> = Arc::from(text);
+            let token_type = match token_type {
+                TokenType::Keyword(_) => TokenType::Keyword(text_arc.clone()),
+                TokenType::Identifier(_) => TokenType::Identifier(text_arc.clone()),
+                other => other,
+            };
+            Some(Token { token_type, text: text_arc, start, end: self.position })
         } else {
             None
         }
@@ -3630,6 +3639,19 @@ fn is_keyword_fast(word: &str) -> bool {
     // Fast length-based rejection for most cases.
     // Lexer keywords are currently bounded to 1..=9 characters.
     matches!(word.len(), 1..=9) && is_lexer_keyword(word)
+}
+
+#[inline(always)]
+fn is_quote_operator_word(bytes: &[u8], start: usize, end: usize) -> bool {
+    match end.saturating_sub(start) {
+        1 => matches!(bytes[start], b'm' | b'q'),
+        2 => {
+            let first = bytes[start];
+            let second = bytes[start + 1];
+            first == b'q' && matches!(second, b'q' | b'w' | b'x' | b'r')
+        }
+        _ => false,
+    }
 }
 
 #[inline]
