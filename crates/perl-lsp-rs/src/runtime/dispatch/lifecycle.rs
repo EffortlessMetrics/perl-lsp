@@ -254,4 +254,22 @@ mod tests {
             "invalid trace level must be coerced to off"
         );
     }
+
+    #[test]
+    fn set_trace_explicit_off_stores_off() {
+        let server = LspServer::new();
+        // First set to a non-default level so we can verify the write.
+        let r = server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })));
+        assert!(r.is_ok(), "setTrace(verbose) should succeed");
+        assert_eq!(server.trace_level.lock().as_str(), "verbose", "precondition");
+
+        // Explicit "off" must store "off", not be treated as an invalid value.
+        let r = server.handle_set_trace_dispatch(Some(json!({ "value": "off" })));
+        assert!(r.is_ok(), "setTrace(off) should succeed");
+        assert_eq!(
+            server.trace_level.lock().as_str(),
+            "off",
+            "explicit off level must be stored as off"
+        );
+    }
 }
