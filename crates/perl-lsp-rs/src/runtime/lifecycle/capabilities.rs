@@ -206,9 +206,17 @@ impl LspServer {
             }
 
             // Initialize workspace folders
-            if let Some(workspace_folders) =
-                params.get("workspaceFolders").and_then(|f| f.as_array())
-            {
+            let workspace_folders = params
+                .get("workspaceFolders")
+                .and_then(|f| f.as_array())
+                .or_else(|| {
+                    params
+                        .get("initializationOptions")
+                        .and_then(|opts| opts.get("workspaceFolders"))
+                        .and_then(|f| f.as_array())
+                });
+
+            if let Some(workspace_folders) = workspace_folders {
                 let uris = extract_workspace_folder_uris(workspace_folders);
                 if let Some(first_uri) = uris.first() {
                     self.set_root_uri(first_uri);
@@ -431,6 +439,9 @@ mod tests {
     use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
     use serde_json::json;
+    use std::fs;
+    use tempfile::tempdir;
+    use url::Url;
 
     #[test]
     fn apply_disabled_feature_id_zeros_correct_field() {
@@ -510,6 +521,50 @@ mod tests {
             root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
             "root path should come from first workspace folder"
         );
+    }
+
+    #[test]
+    fn initialize_with_init_options_workspace_folders_sets_root_and_loads_project_config()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let workspace = tempdir()?;
+        fs::write(
+            workspace.path().join(".perl-lsp.toml"),
+            "[perl]\ninclude_paths = [\"initopt_lib\"]\n",
+        )?;
+
+        let workspace_uri = Url::from_directory_path(workspace.path())
+            .map_err(|()| "failed to convert workspace directory to file URI")?;
+        let workspace_uri_str = workspace_uri.to_string();
+        let params = json!({
+            "capabilities": {},
+            "initializationOptions": {
+                "workspaceFolders": [
+                    { "uri": workspace_uri_str, "name": "workspace" }
+                ]
+            }
+        });
+
+        let result = server.handle_initialize(Some(params));
+        assert!(result.is_ok(), "initialize should succeed");
+
+        let root_path = server.root_path.lock();
+        assert_eq!(root_path.as_deref(), Some(workspace.path()));
+        drop(root_path);
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "one workspace folder should be registered");
+        assert_eq!(folders[0].uri, workspace_uri.as_str());
+        assert!(
+            folders[0].path.as_ref().is_some_and(|path| path == workspace.path()),
+            "workspace folder path should match the initializationOptions URI"
+        );
+        assert_eq!(
+            folders[0].effective_workspace_config.include_paths,
+            vec!["initopt_lib".to_string()],
+            "workspace folder should pick up include_paths from .perl-lsp.toml"
+        );
+        Ok(())
     }
 
     #[test]
