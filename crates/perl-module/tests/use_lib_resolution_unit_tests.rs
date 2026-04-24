@@ -123,3 +123,19 @@ no lib (\n\
 
     assert!(include_paths.is_empty(), "no lib should cancel multiline use lib");
 }
+
+#[test]
+fn semicolon_inside_comment_does_not_split_statement() {
+    // A `#` comment containing `;` must not trigger a false statement split.
+    let source = "use lib 'mylib'; # do not split; here\nuse lib 'other';\n";
+
+    let ops = extract_use_lib_operations(source);
+    assert_eq!(
+        ops,
+        vec![
+            UseLibAction::Add(vec![UseLibPath { path: "mylib".to_string(), from_findbin: false }]),
+            UseLibAction::Add(vec![UseLibPath { path: "other".to_string(), from_findbin: false }]),
+        ],
+        "comment-embedded semicolon should not create extra use-lib operations"
+    );
+}
