@@ -66,7 +66,7 @@ The workspace contains many crates organized into families. Key crates:
 | Crate | Purpose |
 |-------|---------|
 | `perl-parser` | Main parser (v3 recursive descent) |
-| `perl-lsp` | LSP server binary |
+| `perl-lsp-rs` | LSP server binary |
 | `perl-dap` | Debug Adapter Protocol server |
 | `perl-lexer` | Context-aware tokenizer |
 
