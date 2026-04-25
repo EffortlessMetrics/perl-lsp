@@ -19,6 +19,12 @@ version = "1.0.149"
 [dependencies.perl-lsp-rs-core]
 path = "../crates/perl-lsp-rs-core"
 
+[dependencies.perl-lexer]
+path = "../crates/perl-lexer"
+
+[dependencies.perl-dap]
+path = "../crates/perl-dap"
+
 [[bin]]
 name = "substitution_parsing"
 path = "fuzz_targets/substitution_parsing.rs"
@@ -101,6 +107,27 @@ bench = false
 [[bin]]
 name = "incremental_edit_sequences"
 path = "fuzz_targets/incremental_edit_sequences.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lexer_tokenization"
+path = "fuzz_targets/lexer_tokenization.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dap_eval_validator"
+path = "fuzz_targets/dap_eval_validator.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dap_stack_parser"
+path = "fuzz_targets/dap_stack_parser.rs"
 test = false
 doc = false
 bench = false
