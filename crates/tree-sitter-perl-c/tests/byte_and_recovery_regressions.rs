@@ -46,8 +46,8 @@ fn regression_completely_empty_file_is_valid_and_error_free() -> Result<(), Box<
 }
 
 #[test]
-fn regression_malformed_statement_produces_error_nodes_but_tree_has_multiple_children()
--> Result<(), Box<dyn Error>> {
+fn regression_malformed_statement_produces_error_nodes_but_tree_has_multiple_children(
+) -> Result<(), Box<dyn Error>> {
     // Regression: recovery after a malformed expression must not collapse the rest
     // of the tree. The statement `my $x = ;` is invalid but the subsequent `print`
     // must still appear as a child node (i.e., recovery advances past the bad token).
@@ -80,7 +80,7 @@ fn regression_heredoc_heavy_inline_input_still_parses() -> Result<(), Box<dyn Er
 
 #[test]
 fn regression_quote_like_operator_forms_return_a_tree() -> Result<(), Box<dyn Error>> {
-    let source = "my $a = q{literal};\nmy $b = qq(interpolate $a);\nmy @words = qw/alpha beta gamma/;\nmy $rx = qr{^foo\\d+$};\n";
+    let source = "my $a = q{literal};\nmy $b = qq(interpolate $a);\nmy @words = qw/alpha beta gamma/;\nmy $rx = qr{^foo\d+$};\n";
 
     let tree = parse_perl_code(source)?;
 
