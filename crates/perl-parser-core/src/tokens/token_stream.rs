@@ -45,7 +45,7 @@ use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTo
 pub use perl_token::{Token, TokenKind};
 use std::collections::VecDeque;
 
-/// Backing source for the token stream — either a live lexer or pre-lexed tokens.
+/// Backing source for the token stream â€” either a live lexer or pre-lexed tokens.
 enum TokenStreamInner<'a> {
     /// Live lexer producing tokens on demand from source text.
     Lexer(PerlLexer<'a>),
@@ -93,7 +93,7 @@ impl<'a> TokenStream<'a> {
     ///
     /// # Arguments
     ///
-    /// * `tokens` — Pre-lexed tokens. An `Eof` token does **not** need to be
+    /// * `tokens` â€” Pre-lexed tokens. An `Eof` token does **not** need to be
     ///   included; the stream synthesises one when the buffer is exhausted.
     ///
     /// # Examples
@@ -234,13 +234,13 @@ impl<'a> TokenStream<'a> {
 
     /// Enter format body parsing mode in the lexer.
     ///
-    /// No-op when operating in buffered (pre-lexed) mode — the tokens are
+    /// No-op when operating in buffered (pre-lexed) mode â€” the tokens are
     /// already fully classified.
     pub fn enter_format_mode(&mut self) {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
             lexer.enter_format_mode();
         }
-        // Buffered mode: no-op — tokens are pre-classified.
+        // Buffered mode: no-op â€” tokens are pre-classified.
     }
 
     /// Called at statement boundaries to reset lexer state and clear cached lookahead.
@@ -257,7 +257,7 @@ impl<'a> TokenStream<'a> {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
             lexer.set_mode(LexerMode::ExpectTerm);
         }
-        // Buffered mode: no lexer mode reset needed — tokens are pre-classified.
+        // Buffered mode: no lexer mode reset needed â€” tokens are pre-classified.
     }
 
     /// Re-lex the current peeked token in `ExpectTerm` mode.
@@ -268,7 +268,7 @@ impl<'a> TokenStream<'a> {
     /// switches to `ExpectTerm` mode, and clears the peek cache so the next
     /// `peek()` or `next()` re-lexes it as a regex.
     ///
-    /// In buffered mode the peek cache is cleared but no re-lexing occurs —
+    /// In buffered mode the peek cache is cleared but no re-lexing occurs â€”
     /// token kinds are fixed from the original lex pass.
     pub fn relex_as_term(&mut self) {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
@@ -359,120 +359,15 @@ impl<'a> TokenStream<'a> {
         let kind = match &token.token_type {
             // Keywords
             LexerTokenType::Keyword(kw) => match kw.as_ref() {
-                "my" => TokenKind::My,
-                "our" => TokenKind::Our,
-                "local" => TokenKind::Local,
-                "state" => TokenKind::State,
-                "sub" => TokenKind::Sub,
-                "if" => TokenKind::If,
-                "elsif" => TokenKind::Elsif,
-                "else" => TokenKind::Else,
-                "unless" => TokenKind::Unless,
-                "while" => TokenKind::While,
-                "until" => TokenKind::Until,
-                "for" => TokenKind::For,
-                "foreach" => TokenKind::Foreach,
-                "return" => TokenKind::Return,
-                "package" => TokenKind::Package,
-                "use" => TokenKind::Use,
-                "no" => TokenKind::No,
-                "BEGIN" => TokenKind::Begin,
-                "END" => TokenKind::End,
-                "CHECK" => TokenKind::Check,
-                "INIT" => TokenKind::Init,
-                "UNITCHECK" => TokenKind::Unitcheck,
-                "eval" => TokenKind::Eval,
-                "do" => TokenKind::Do,
-                "given" => TokenKind::Given,
-                "when" => TokenKind::When,
-                "default" => TokenKind::Default,
-                "try" => TokenKind::Try,
-                "catch" => TokenKind::Catch,
-                "field" => TokenKind::Field,
-                "finally" => TokenKind::Finally,
-                "continue" => TokenKind::Continue,
-                "next" => TokenKind::Next,
-                "last" => TokenKind::Last,
-                "redo" => TokenKind::Redo,
-                "goto" => TokenKind::Goto,
-                "class" => TokenKind::Class,
-                "method" => TokenKind::Method,
-                "format" => TokenKind::Format,
-                "undef" => TokenKind::Undef,
-                "defer" => TokenKind::Defer,
-                "and" => TokenKind::WordAnd,
-                "or" => TokenKind::WordOr,
-                "not" => TokenKind::WordNot,
-                "xor" => TokenKind::WordXor,
-                "cmp" => TokenKind::StringCompare,
                 "qw" => TokenKind::Identifier, // Keep as identifier but handle specially
-                _ => TokenKind::Identifier,
+                keyword => TokenKind::from_keyword(keyword).unwrap_or(TokenKind::Identifier),
             },
 
             // Operators
-            LexerTokenType::Operator(op) => match op.as_ref() {
-                "=" => TokenKind::Assign,
-                "+" => TokenKind::Plus,
-                "-" => TokenKind::Minus,
-                "*" => TokenKind::Star,
-                "/" => TokenKind::Slash,
-                "%" => TokenKind::Percent,
-                "**" => TokenKind::Power,
-                "<<" => TokenKind::LeftShift,
-                ">>" => TokenKind::RightShift,
-                "&" => TokenKind::BitwiseAnd,
-                "|" => TokenKind::BitwiseOr,
-                "^" => TokenKind::BitwiseXor,
-                "~" => TokenKind::BitwiseNot,
-                // Compound assignments
-                "+=" => TokenKind::PlusAssign,
-                "-=" => TokenKind::MinusAssign,
-                "*=" => TokenKind::StarAssign,
-                "/=" => TokenKind::SlashAssign,
-                "%=" => TokenKind::PercentAssign,
-                ".=" => TokenKind::DotAssign,
-                "&=" => TokenKind::AndAssign,
-                "|=" => TokenKind::OrAssign,
-                "^=" => TokenKind::XorAssign,
-                "**=" => TokenKind::PowerAssign,
-                "<<=" => TokenKind::LeftShiftAssign,
-                ">>=" => TokenKind::RightShiftAssign,
-                "&&=" => TokenKind::LogicalAndAssign,
-                "||=" => TokenKind::LogicalOrAssign,
-                "//=" => TokenKind::DefinedOrAssign,
-                "==" => TokenKind::Equal,
-                "!=" => TokenKind::NotEqual,
-                "=~" => TokenKind::Match,
-                "!~" => TokenKind::NotMatch,
-                "~~" => TokenKind::SmartMatch,
-                "<" => TokenKind::Less,
-                ">" => TokenKind::Greater,
-                "<=" => TokenKind::LessEqual,
-                ">=" => TokenKind::GreaterEqual,
-                "<=>" => TokenKind::Spaceship,
-                "&&" => TokenKind::And,
-                "||" => TokenKind::Or,
-                "!" => TokenKind::Not,
-                "//" => TokenKind::DefinedOr,
-                "->" => TokenKind::Arrow,
-                "=>" => TokenKind::FatArrow,
-                "." => TokenKind::Dot,
-                ".." => TokenKind::Range,
-                "..." => TokenKind::Ellipsis,
-                "++" => TokenKind::Increment,
-                "--" => TokenKind::Decrement,
-                "::" => TokenKind::DoubleColon,
-                "?" => TokenKind::Question,
-                ":" => TokenKind::Colon,
-                "\\" => TokenKind::Backslash,
-                // Sigils (when used as operators in certain contexts)
-                "$" => TokenKind::ScalarSigil,
-                "@" => TokenKind::ArraySigil,
-                // % is already handled as Percent above
-                // & is already handled as BitwiseAnd above
-                // * is already handled as Star above
-                _ => TokenKind::Unknown,
-            },
+            LexerTokenType::Operator(op) => TokenKind::from_operator(op)
+                // Sigils may be surfaced as operator tokens in some contexts.
+                .or_else(|| TokenKind::from_sigil(op))
+                .unwrap_or(TokenKind::Unknown),
 
             // Arrow tokens
             LexerTokenType::Arrow => TokenKind::Arrow,
@@ -513,15 +408,18 @@ impl<'a> TokenStream<'a> {
 
             // Identifiers
             LexerTokenType::Identifier(text) => {
-                // Check if it's actually a keyword that the lexer didn't recognize
+                // The lexer emits bare sigil characters ('%', '&') as Identifier
+                // tokens in postfix-dereference contexts (e.g. `->%{key}`,
+                // `%{$ref}`). Those must map to sigil kinds, NOT operator kinds,
+                // so we check sigil priority first for the ambiguous cases.
+                // '*' is the exception: as a bare identifier it is multiplication.
                 match text.as_ref() {
-                    "no" => TokenKind::No,
-                    "*" => TokenKind::Star, // Special case: * by itself is multiplication
-                    "$" => TokenKind::ScalarSigil,
-                    "@" => TokenKind::ArraySigil,
                     "%" => TokenKind::HashSigil,
                     "&" => TokenKind::SubSigil,
-                    _ => TokenKind::Identifier,
+                    _ => TokenKind::from_keyword(text)
+                        .or_else(|| TokenKind::from_operator(text))
+                        .or_else(|| TokenKind::from_sigil(text))
+                        .unwrap_or(TokenKind::Identifier),
                 }
             }
 
@@ -532,11 +430,7 @@ impl<'a> TokenStream<'a> {
                     TokenKind::HeredocDepthLimit
                 } else {
                     // Check if it's a brace that the lexer couldn't recognize
-                    match token.text.as_ref() {
-                        "{" => TokenKind::LeftBrace,
-                        "}" => TokenKind::RightBrace,
-                        _ => TokenKind::Unknown,
-                    }
+                    TokenKind::from_delimiter(token.text.as_ref()).unwrap_or(TokenKind::Unknown)
                 }
             }
 
