@@ -3,8 +3,42 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BinaryDownloader } from './downloader';
 
+
 const SERVER_DEBUG_TEST_COMMAND = 'perl.debugTest';
 export const VSCODE_DEBUG_TEST_COMMAND = 'perl-lsp.debugTest';
+
+const SERVER_RUN_TEST_COMMAND = 'perl.runTest';
+export const VSCODE_RUN_TEST_COMMAND = 'perl-lsp.runTests';
+
+const SERVER_TO_EXTENSION_COMMAND_MAP: Record<string, string> = {
+    [SERVER_DEBUG_TEST_COMMAND]: VSCODE_DEBUG_TEST_COMMAND,
+    [SERVER_RUN_TEST_COMMAND]: VSCODE_RUN_TEST_COMMAND,
+};
+
+export function rewriteTestLensCommand<T extends { command?: { command?: string } }>(lens: T): T {
+    if (!lens.command || !lens.command.command) {
+        return lens;
+    }
+
+    const mappedCommand = SERVER_TO_EXTENSION_COMMAND_MAP[lens.command.command];
+    if (mappedCommand) {
+        return {
+            ...lens,
+            command: {
+                ...lens.command,
+                command: mappedCommand,
+            },
+        };
+    }
+
+    return lens;
+}
+
+export interface DebugTestLaunchTarget {
+    label: string;
+    program: string;
+    args: string[];
+}
 
 export interface DebugTestLaunchTarget {
     label: string;
@@ -256,36 +290,7 @@ export function resetDebugConfigPromptFlag(): void {
     _debugConfigPromptShown = false;
 }
 
-const SERVER_RUN_TEST_COMMAND = 'perl.runTest';
-export const VSCODE_RUN_TEST_COMMAND = 'perl-lsp.runTests';
 
-export function rewriteTestLensCommand<T extends { command?: { command?: string } }>(lens: T): T {
-    if (!lens.command) {
-        return lens;
-    }
-
-    if (lens.command.command === SERVER_DEBUG_TEST_COMMAND) {
-        return {
-            ...lens,
-            command: {
-                ...lens.command,
-                command: VSCODE_DEBUG_TEST_COMMAND,
-            },
-        };
-    }
-
-    if (lens.command.command === SERVER_RUN_TEST_COMMAND) {
-        return {
-            ...lens,
-            command: {
-                ...lens.command,
-                command: VSCODE_RUN_TEST_COMMAND,
-            },
-        };
-    }
-
-    return lens;
-}
 
 export function parseDebugTestLaunchTarget(test: unknown): DebugTestLaunchTarget | undefined {
     if (typeof test === 'string') {

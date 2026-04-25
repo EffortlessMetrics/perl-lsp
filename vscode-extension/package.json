@@ -54,7 +54,20 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
-    "onWalkthrough:perl-lsp.gettingStarted"
+    "onWalkthrough:perl-lsp.gettingStarted",
+    "onCommand:perl-lsp.checkSyntax",
+    "onCommand:perl-lsp.runCurrentTest",
+    "onCommand:perl-lsp.runAllTests",
+    "onCommand:perl-lsp.formatDocument",
+    "onCommand:perl-lsp.showIncPaths",
+    "onCommand:perl-lsp.openModule",
+    "onCommand:perl-lsp.showParserAst",
+    "onCommand:perl-lsp.createDebugConfig",
+    "onCommand:perl-lsp.previewPod",
+    "onCommand:perl-lsp.openConfigurationGuide",
+    "onCommand:perl-lsp.reportIssue",
+    "onCommand:perl-lsp.restart",
+    "onCommand:perl-lsp.reinstall"
   ],
   "contributes": {
     "languages": [
@@ -810,7 +823,7 @@
           {
             "id": "configure-settings",
             "title": "Configure Settings",
-            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) — open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) — place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` — module search paths\n- `[diagnostics] perlcritic = true` — enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` — toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
+            "description": "Two ways to configure Perl LSP:\n\n**Editor settings** (personal, not committed) \u2014 open `Settings` and search for `perl-lsp`. Set `perl-lsp.includePaths` if you see _Can't locate Foo/Bar.pm_ errors. [Open Perl LSP Settings](command:perl-lsp.openConfigurationGuide)\n\n**`.perl-lsp.toml`** (team-wide, committed to your repo) \u2014 place this file in your project root, next to `.git/`. Key settings:\n- `[perl] include_paths = [\"lib\", \"local/lib/perl5\"]` \u2014 module search paths\n- `[diagnostics] perlcritic = true` \u2014 enable Perl::Critic linting (requires `perlcritic` on PATH)\n- `[features] inlay_hints = true` \u2014 toggle inlay hints\n\nCopy `.perl-lsp.toml.example` from the repo root to get started. Editor settings always override `.perl-lsp.toml`.",
             "media": {
               "image": "media/walkthrough/configure-settings.svg",
               "altText": "Configure Settings"
