@@ -10,6 +10,7 @@ use lsp_types::LocationLink;
 use lsp_types::{Position as LspPosition, Range as LspRange};
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::workspace_index::WorkspaceIndex;
+use perl_qualified_name::split_qualified_name;
 use std::collections::HashMap;
 
 /// Provider for finding implementations of types and interfaces in Perl code
@@ -33,6 +34,13 @@ use std::collections::HashMap;
 /// - Implementation finding: <100ms for typical inheritance hierarchies
 /// - Memory usage: <5MB for implementation metadata
 /// - Workspace indexing: Leverages cached inheritance relationships
+fn qualified_names_match(name: &str, want_name: &str) -> bool {
+    let (name_pkg, name_bare) = split_qualified_name(name);
+    let (want_pkg, want_bare) = split_qualified_name(want_name);
+    name_bare == want_bare && (name_pkg.is_none() || want_pkg.is_none() || name_pkg == want_pkg)
+}
+
+/// Provider for finding implementations of types and interfaces in Perl code.
 pub struct ImplementationProvider {
     workspace_index: Option<std::sync::Arc<WorkspaceIndex>>,
 }
@@ -315,7 +323,9 @@ impl ImplementationProvider {
         results: &mut Vec<LocationLink>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name), .. } if name == method_name => {
+            NodeKind::Subroutine { name: Some(name), .. }
+                if qualified_names_match(name, method_name) =>
+            {
                 let target_uri = parse_uri(uri);
                 results.push(LocationLink {
                     origin_selection_range: None,
@@ -392,7 +402,7 @@ impl ImplementationProvider {
                     }
                     NodeKind::Subroutine { name: Some(sub_name), .. } => {
                         if current_package.as_deref() == Some(package_name)
-                            && *sub_name == method_name
+                            && qualified_names_match(sub_name, method_name)
                         {
                             let target_uri = parse_uri(uri);
                             results.push(LocationLink {

@@ -362,3 +362,32 @@ fn test_implementation_finds_block_package_methods() -> Result<(), Box<dyn std::
 
     Ok(())
 }
+
+#[test]
+fn test_implementation_finds_qualified_override_definition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let doc_uri = "file:///qualified_impl.pl";
+    harness.open(
+        doc_uri,
+        "
+package Base;
+sub process { 'base' }
+
+package Derived;
+use parent 'Base';
+sub Derived::process { 'derived' }
+",
+    )?;
+
+    let response = harness.implementation(doc_uri, 2, 4)?;
+    let locations = response.as_array().ok_or("Expected array from implementation, got null")?;
+    assert!(
+        locations.iter().any(|loc| loc["targetRange"]["start"]["line"].as_u64() == Some(6)),
+        "expected implementation results to include qualified override at line 6, got {locations:?}"
+    );
+
+    Ok(())
+}
