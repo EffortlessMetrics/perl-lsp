@@ -206,6 +206,22 @@ fn ts_fat_arrow_autoquote_not_substitution() -> Result<(), Box<dyn std::error::E
 }
 
 #[test]
+fn ts_substitution_inside_hash_subscript_not_triggered() -> Result<(), Box<dyn std::error::Error>> {
+    // Inside a hash subscript brace ($h{s}), the bareword `s` must not be
+    // interpreted as the substitution operator.  hash_brace_depth is > 0, so
+    // the s/tr/y detection must be suppressed.
+    let kinds = collect_kinds("$h{s}");
+    // Expected: Scalar variable, opening `{`, bareword key `s`, closing `}`.
+    // There must be NO Substitution token in the stream.
+    assert!(
+        !kinds.contains(&TokenKind::Substitution),
+        "`s` inside {{...}} must remain a bareword, not a substitution operator; got {:?}",
+        kinds
+    );
+    Ok(())
+}
+
+#[test]
 fn ts_qr_angle() -> Result<(), Box<dyn std::error::Error>> {
     let kind = first_kind("qr<pattern>i");
     assert_eq!(kind, TokenKind::Regex, "qr<...> should be Regex");
