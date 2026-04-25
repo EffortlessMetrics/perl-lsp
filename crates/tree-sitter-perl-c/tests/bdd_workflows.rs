@@ -215,10 +215,15 @@ my $replace = qx/echo hi/;
     scenario.when("parse_perl_code is invoked");
     let tree_result = parse_perl_code(source);
 
-    scenario.then("the parser should return a tree without syntax error nodes for valid quote-like operators");
+    scenario.then(
+        "the parser should return a tree without syntax error nodes for valid quote-like operators",
+    );
     let tree = tree_result?;
     assert_eq!(tree.root_node().kind(), "source_file");
-    assert!(!tree.root_node().has_error(), "valid quote-like operators should not produce error nodes");
+    assert!(
+        !tree.root_node().has_error(),
+        "valid quote-like operators should not produce error nodes"
+    );
     Ok(())
 }
 
