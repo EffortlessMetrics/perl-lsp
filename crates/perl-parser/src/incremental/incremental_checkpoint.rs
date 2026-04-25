@@ -31,9 +31,9 @@
 //! 3. Reusing cached tokens from the right checkpoint to the end
 //!
 //! Edge cases are handled gracefully:
-//! - No checkpoint before edit â†’ relex from position 0
-//! - No checkpoint after edit â†’ relex to `source.len()`
-//! - Checkpoint at edit boundary â†’ minimal re-lexing scope
+//! - No checkpoint before edit → relex from position 0
+//! - No checkpoint after edit → relex to `source.len()`
+//! - Checkpoint at edit boundary → minimal re-lexing scope
 //!
 //! # Segment-Level Metrics
 //!
@@ -71,7 +71,7 @@ pub struct CheckpointedIncrementalParser {
     tree: Option<Node>,
     /// Lexer checkpoint cache
     checkpoint_cache: CheckpointCache,
-    /// Token cache for reuse â€” stores **parser** tokens (trivia-filtered, kind-converted).
+    /// Token cache for reuse — stores **parser** tokens (trivia-filtered, kind-converted).
     token_cache: TokenCache,
     /// Statistics
     stats: IncrementalStats,
@@ -209,6 +209,27 @@ impl TokenCache {
     /// * `edit_start` - Start byte position of the edit.
     /// * `old_len` - Length of the removed text.
     /// * `new_len` - Length of the inserted text.
+    /// Adjust segment bounds after an edit.
+    ///
+    /// Only `segment.start` and `segment.end` are shifted; individual token byte
+    /// positions within each segment are intentionally left at their pre-edit
+    /// coordinates.  Phase-3 in `reparse_from_checkpoint_two_sided` applies
+    /// `byte_shift` to each reused token at consumption time, so the shift must
+    /// be applied exactly once.  If `adjust_positions` also shifted token coords,
+    /// Phase-3 would double-shift and produce wrong offsets.
+    ///
+    /// Consequence: `get_tokens_from(position)` and `get_tokens_before(position)`
+    /// must be called with a position expressed in the same pre-edit coordinate
+    /// space as the token offsets, or with `relex_end`/`relex_start` values that
+    /// were computed BEFORE calling `adjust_positions`.  Currently callers use
+    /// checkpoint positions that are updated by `checkpoint_cache.apply_edit`
+    /// before `adjust_positions` is called, meaning the positions are in
+    /// post-edit space while tokens are in pre-edit space.  The resulting
+    /// boundary-position mismatch is bounded in practice (at most one token per
+    /// checkpoint gap) and is tracked as a known limitation; fixing it would
+    /// require either shifting token coords here or computing `relex_end` in
+    /// pre-edit space.  See the `test_adjust_positions_shifts_segment_bounds_not_token_coords`
+    /// test for the invariant this method does guarantee.
     fn adjust_positions(&mut self, edit_start: usize, old_len: usize, new_len: usize) {
         let delta = new_len as isize - old_len as isize;
 
@@ -247,7 +268,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -273,7 +298,11 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() { None } else { Some(all_tokens) }
+        if all_tokens.is_empty() {
+            None
+        } else {
+            Some(all_tokens)
+        }
     }
 
     fn count_segments_with_tokens_before(&self, position: usize) -> usize {
@@ -501,7 +530,7 @@ impl CheckpointedIncrementalParser {
             self.token_cache.cache_tokens(start, end, parser_tokens);
         }
 
-        // Full parse from source â€” this initial parse still uses the lexer
+        // Full parse from source — this initial parse still uses the lexer
         // directly so that context-sensitive constructs (e.g. regex vs division)
         // are correctly disambiguated.
         let mut parser = Parser::new(&self.source);
@@ -661,7 +690,7 @@ impl CheckpointedIncrementalParser {
             } else {
                 self.stats.cache_misses += 1;
                 self.stats.full_tail_fallbacks += 1;
-                // No cache hit â€” lex the remainder of the source.
+                // No cache hit — lex the remainder of the source.
                 let mut raw_tail: Vec<perl_lexer::Token> = Vec::new();
                 let mut tail_bytes = 0usize;
                 while let Some(token) = lexer.next_token() {
@@ -689,7 +718,7 @@ impl CheckpointedIncrementalParser {
             self.token_cache.cache_tokens(start, end, newly_lexed_parser_tokens);
         }
 
-        // Drive the parse from the pre-assembled token stream â€” no re-lexing.
+        // Drive the parse from the pre-assembled token stream — no re-lexing.
         let mut parser = Parser::from_tokens(parser_tokens, &self.source);
         let tree = parser.parse()?;
         self.tree = Some(tree.clone());
@@ -712,8 +741,8 @@ impl CheckpointedIncrementalParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::NodeKind;
     use perl_parser_core::token_stream::TokenKind;
+    use perl_parser_core::NodeKind;
     use perl_tdd_support::must;
 
     #[test]
@@ -918,14 +947,10 @@ mod tests {
         ];
         cache.cache_tokens(0, 20, tokens);
 
-        // Invalidate a range entirely after the cached segment â€” no overlap.
+        // Invalidate a range entirely after the cached segment — no overlap.
         cache.invalidate_range(30, 50);
 
-        assert_eq!(
-            cache.segments.len(),
-            1,
-            "non-overlapping invalidation should leave segment intact"
-        );
+        assert_eq!(cache.segments.len(), 1, "non-overlapping invalidation should leave segment intact");
         assert_eq!(cache.segments[0].start, 0);
         assert_eq!(cache.segments[0].end, 20);
         assert_eq!(cache.segments[0].tokens.len(), 2);
@@ -973,7 +998,7 @@ mod tests {
         cache.cache_tokens(100, 120, tokens);
 
         // Simulate an insertion of 5 bytes before position 50 (before the segment).
-        cache.adjust_positions(50, 0, 5); // old_len=0 new_len=5 â†’ delta=+5
+        cache.adjust_positions(50, 0, 5); // old_len=0 new_len=5 → delta=+5
 
         // Segment bounds must be shifted by +5.
         assert_eq!(cache.segments[0].start, 105, "segment start should shift by +5");
@@ -981,17 +1006,8 @@ mod tests {
 
         // But individual token positions must remain at their original values so
         // Phase-3's byte_shift application later yields the right final position.
-        assert_eq!(
-            cache.segments[0].tokens[0].start, 100,
-            "token start must NOT be shifted by adjust_positions"
-        );
-        assert_eq!(
-            cache.segments[0].tokens[0].end, 110,
-            "token end must NOT be shifted by adjust_positions"
-        );
-        assert_eq!(
-            cache.segments[0].tokens[1].start, 110,
-            "token start must NOT be shifted by adjust_positions"
-        );
+        assert_eq!(cache.segments[0].tokens[0].start, 100, "token start must NOT be shifted by adjust_positions");
+        assert_eq!(cache.segments[0].tokens[0].end, 110, "token end must NOT be shifted by adjust_positions");
+        assert_eq!(cache.segments[0].tokens[1].start, 110, "token start must NOT be shifted by adjust_positions");
     }
 }
