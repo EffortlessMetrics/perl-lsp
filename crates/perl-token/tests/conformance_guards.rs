@@ -1,13 +1,18 @@
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 
 use perl_token::{Token, TokenCategory, TokenKind};
 
 const EXPECTED_TOKEN_KIND_COUNT: usize = 132;
 
+fn crate_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 #[test]
 fn runtime_dependencies_remain_empty() -> Result<(), Box<dyn Error>> {
-    let manifest = fs::read_to_string("Cargo.toml")?;
+    let manifest = fs::read_to_string(crate_root().join("Cargo.toml"))?;
     let mut in_dependencies = false;
 
     for raw_line in manifest.lines() {
@@ -196,8 +201,8 @@ fn tokenkind_metadata_is_complete_and_in_sync() {
 
 #[test]
 fn docs_track_leaf_contract_and_variant_count() -> Result<(), Box<dyn Error>> {
-    let readme = fs::read_to_string("README.md")?;
-    let roadmap = fs::read_to_string("ROADMAP.md")?;
+    let readme = fs::read_to_string(crate_root().join("README.md"))?;
+    let roadmap = fs::read_to_string(crate_root().join("ROADMAP.md"))?;
     let expected_count_line = format!("TokenKind variants: {}", TokenKind::all().len());
 
     for doc in [&readme, &roadmap] {
