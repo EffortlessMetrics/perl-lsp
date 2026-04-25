@@ -301,6 +301,13 @@ fn apply_feature_state(state: &mut PragmaState, args: &[String], enabled: bool) 
 
     for arg in args {
         for item in feature_items(arg) {
+            if enabled && item == ":all" {
+                for feature in features_enabled_by_version(PerlVersion::new(5, 40)) {
+                    changed |= enable_feature_name(state, feature);
+                }
+                continue;
+            }
+
             if !enabled && item == ":all" {
                 let had_features =
                     !state.features.is_empty() || state.unicode_strings || state.signatures_strict;
@@ -378,6 +385,17 @@ fn add_disabled_warning_category(state: &mut PragmaState, category: &str) {
     }
 
     state.disabled_warning_categories.push(category.to_string());
+}
+
+fn remove_builtin_imports(state: &mut PragmaState, args: &[String]) {
+    if args.is_empty() {
+        state.builtin_imports.clear();
+        return;
+    }
+
+    let names_to_remove: Vec<String> =
+        args.iter().flat_map(|arg| builtin_import_names(arg)).collect();
+    state.builtin_imports.retain(|import| !names_to_remove.iter().any(|name| name == import));
 }
 
 fn pragma_arg_items(arg: &str) -> Vec<String> {
@@ -606,17 +624,19 @@ impl PragmaTracker {
                         } else {
                             // Parse specific categories
                             for arg in args {
-                                match arg.as_str() {
-                                    "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = true
+                                for item in pragma_arg_items(arg) {
+                                    match item.as_str() {
+                                        "vars" => {
+                                            current_state.strict_vars = true;
+                                        }
+                                        "subs" => {
+                                            current_state.strict_subs = true;
+                                        }
+                                        "refs" => {
+                                            current_state.strict_refs = true;
+                                        }
+                                        _ => {}
                                     }
-                                    "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = true
-                                    }
-                                    "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = true
-                                    }
-                                    _ => {}
                                 }
                             }
                         }
@@ -754,6 +774,14 @@ impl PragmaTracker {
                             }
                             return;
                         }
+                        "builtin" => {
+                            remove_builtin_imports(current_state, conditional_args);
+                            ranges.push((
+                                node.location.start..node.location.end,
+                                current_state.clone(),
+                            ));
+                            return;
+                        }
                         _ => return,
                     }
                 }
@@ -769,17 +797,19 @@ impl PragmaTracker {
                         } else {
                             // Parse specific categories
                             for arg in args {
-                                match arg.as_str() {
-                                    "vars" | "'vars'" | "\"vars\"" => {
-                                        current_state.strict_vars = false
+                                for item in pragma_arg_items(arg) {
+                                    match item.as_str() {
+                                        "vars" => {
+                                            current_state.strict_vars = false;
+                                        }
+                                        "subs" => {
+                                            current_state.strict_subs = false;
+                                        }
+                                        "refs" => {
+                                            current_state.strict_refs = false;
+                                        }
+                                        _ => {}
                                     }
-                                    "subs" | "'subs'" | "\"subs\"" => {
-                                        current_state.strict_subs = false
-                                    }
-                                    "refs" | "'refs'" | "\"refs\"" => {
-                                        current_state.strict_refs = false
-                                    }
-                                    _ => {}
                                 }
                             }
                         }
@@ -830,6 +860,11 @@ impl PragmaTracker {
                                 current_state.clone(),
                             ));
                         }
+                    }
+                    "builtin" => {
+                        remove_builtin_imports(current_state, args);
+                        ranges
+                            .push((node.location.start..node.location.end, current_state.clone()));
                     }
                     _ => {}
                 }

@@ -1046,8 +1046,7 @@ our @ISA = ('A');
         let mro = provider.c3_mro(&ast, "A");
         // Must not panic, must start with A, must contain all three packages.
         assert_eq!(mro[0], "A", "MRO must start with queried package");
-        let mro_set: std::collections::BTreeSet<&str> =
-            mro.iter().map(String::as_str).collect();
+        let mro_set: std::collections::BTreeSet<&str> = mro.iter().map(String::as_str).collect();
         assert!(mro_set.contains("B"), "B must appear in MRO of 3-cycle");
         assert!(mro_set.contains("C"), "C must appear in MRO of 3-cycle");
     }
@@ -1075,12 +1074,7 @@ our @ISA = ('B', 'C');
         // C3 linearization of diamond: A, B, C, D
         assert_eq!(
             mro,
-            vec![
-                "A".to_string(),
-                "B".to_string(),
-                "C".to_string(),
-                "D".to_string(),
-            ],
+            vec!["A".to_string(), "B".to_string(), "C".to_string(), "D".to_string(),],
             "Diamond MRO must be A, B, C, D with D appearing exactly once"
         );
     }
