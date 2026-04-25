@@ -211,6 +211,58 @@ fn test_subst_space_before_paren() {
     assert_clean_parse(source);
 }
 
+/// Mixed delimiter substitution: paired pattern + slash replacement.
+/// Perl accepts `s{foo}/bar/`, and this must not be misclassified as
+/// missing replacement.
+#[test]
+fn test_subst_mixed_paired_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s{foo}/bar/;"#);
+}
+
+/// Mixed delimiter substitution with all other paired-open delimiter variants.
+/// The fix must work for `[`, `(`, and `<` paired openers, not just `{`.
+#[test]
+fn test_subst_mixed_bracket_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s[foo]/bar/;"#);
+}
+
+#[test]
+fn test_subst_mixed_paren_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s(foo)/bar/;"#);
+}
+
+#[test]
+fn test_subst_mixed_angle_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s<foo>/bar/;"#);
+}
+
+/// Mixed delimiter substitution with a non-slash non-paired replacement.
+/// Perl also accepts `s{foo}!bar!` (any non-alphanumeric, non-whitespace char).
+#[test]
+fn test_subst_mixed_paired_and_pipe_delims() {
+    assert_clean_parse(r#"$x =~ s{foo}|bar|;"#);
+}
+
+/// Missing replacement after paired pattern delimiter must still error.
+/// `s{foo}` with no second part is malformed.
+#[test]
+fn test_subst_paired_pattern_missing_replacement_errors() {
+    assert_has_error(r#"$x =~ s{foo};"#, "Missing");
+}
+
+/// Mixed delimiter transliteration: paired search + slash replacement.
+/// Perl accepts `tr{abc}/xyz/`.
+#[test]
+fn test_transliteration_mixed_paired_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ tr{abc}/xyz/;"#);
+}
+
+/// Mixed delimiter transliteration for bracket and paren paired openers.
+#[test]
+fn test_transliteration_mixed_bracket_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ tr[abc]/xyz/;"#);
+}
+
 // ── Regression: non-paired delimiters after whitespace must be rejected ───────
 
 /// -s $bs — file-size test, not substitution. The original XSLoader.pm regression.
@@ -237,6 +289,20 @@ fn test_file_size_test_in_condition() {
 fn test_comma_delimited_subst_xsloader() {
     let source = r#"$modlibname =~ s,[\\/][^\\/]+$,, while $c--;"#;
     assert_clean_parse(source);
+}
+
+/// Diagnostic preservation: invalid substitution modifiers should remain
+/// reported as errors, even after delimiter-path fixes.
+#[test]
+fn test_invalid_substitution_modifier_still_errors() {
+    assert_has_error(r#"$x =~ s{foo}{bar}z;"#, "Invalid substitution modifier");
+}
+
+/// Diagnostic preservation: unterminated replacement still reports the
+/// missing-closing-delimiter error.
+#[test]
+fn test_missing_substitution_closing_delimiter_still_errors() {
+    assert_has_error(r#"$x =~ s/foo/;"#, "Missing closing delimiter in substitution");
 }
 
 /// XSLoader.pm full content — must parse cleanly (corpus gate regression test).

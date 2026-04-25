@@ -19,15 +19,20 @@ fn transliteration_rejects_invalid_modifiers() {
 }
 
 #[test]
-fn transliteration_strict_handles_malformed_delimiters() {
-    assert_has_error(r#"$x =~ tr{abc}xyz;"#, "invalid transliteration delimiter");
-    assert_has_error(r#"$x =~ tr{abc}{xyz;"#, "missing closing delimiter in transliteration");
-}
-
-#[test]
-fn transliteration_accepts_supported_modifiers() {
+fn transliteration_strict_handles_edge_cases() {
+    assert_clean_parse(r#"$x =~ tr/a\/b/c\/d/;"#);
+    assert_clean_parse(r#"$x =~ tr/αβγ/ΑΒΓ/;"#);
+    assert_clean_parse(r#"$x =~ tr/a/b/cdsr;"#);
+    assert_clean_parse(r#"$x =~ tr{abc}{xyz}r;"#);
+    assert_clean_parse(r#"$x =~ tr[abc]{xyz}r;"#);
     assert_clean_parse(r#"$x =~ tr/a/b/c;"#);
     assert_clean_parse(r#"$x =~ tr/a/b/d;"#);
     assert_clean_parse(r#"$x =~ tr/a/b/s;"#);
     assert_clean_parse(r#"$x =~ tr/a/b/r;"#);
+
+    assert_has_error(r#"$x =~ tr///;"#, "missing search list");
+    assert_has_error(r#"$x =~ tr/a/b/z;"#, "invalid transliteration modifier");
+    assert_has_error(r#"$x =~ tr/a/b;"#, "closing delimiter in transliteration");
+    assert_has_error(r#"$x =~ tr{abc}{xyz;"#, "closing delimiter in transliteration");
+    assert_has_error(r#"$x =~ tr{abc}xyz;"#, "invalid transliteration delimiter");
 }
