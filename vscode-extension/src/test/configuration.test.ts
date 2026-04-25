@@ -204,12 +204,20 @@ describe('package.json contributes', () => {
       expect(pkg.activationEvents).toContain('onLanguage:gherkin');
     });
 
-    test('activates on restart command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.restart');
+    test('extension activates at startup (onStartupFinished covers all commands)', () => {
+      // VSCode >= 1.75 auto-activates on contributed commands; onStartupFinished
+      // makes all commands available at startup without redundant onCommand:* entries.
+      expect(pkg.activationEvents).toContain('onStartupFinished');
     });
 
-    test('activates on reinstall command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.reinstall');
+    test('restart command is registered in contributes.commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.restart');
+    });
+
+    test('reinstall command is registered in contributes.commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.reinstall');
     });
   });
 
@@ -547,8 +555,9 @@ describe('package.json contributes', () => {
       expect(entry.when ?? '').not.toMatch(/editorLangId/);
     });
 
-    test('openConfigurationGuide has an activation event', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.openConfigurationGuide');
+    test('openConfigurationGuide is registered in contributes.commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.openConfigurationGuide');
     });
   });
 
@@ -670,8 +679,9 @@ describe('package.json contributes', () => {
       expect(entry).toBeDefined();
     });
 
-    test('createDebugConfig has an activation event', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.createDebugConfig');
+    test('createDebugConfig is registered in contributes.commands', () => {
+      const commandIds = pkg.contributes.commands.map((c: any) => c.command);
+      expect(commandIds).toContain('perl-lsp.createDebugConfig');
     });
   });
 

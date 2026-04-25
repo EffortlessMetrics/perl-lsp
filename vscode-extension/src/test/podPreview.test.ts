@@ -55,8 +55,9 @@ describe('perl-lsp.previewPod command (issue #2062)', () => {
     expect(entry?.when).toContain('editorLangId == perl');
   });
 
-  test('perl-lsp.previewPod has an activation event', () => {
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.previewPod');
+  test('perl-lsp.previewPod is reachable at startup (onStartupFinished)', () => {
+    // VSCode >= 1.75 auto-activates on contributed commands; onStartupFinished covers this.
+    expect(pkg.activationEvents).toContain('onStartupFinished');
   });
 });
 

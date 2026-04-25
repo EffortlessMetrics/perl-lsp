@@ -45,6 +45,9 @@ describe('BinaryDownloader.getPlatformTarget', () => {
     androidRootBackup = process.env.ANDROID_ROOT;
     androidDataBackup = process.env.ANDROID_DATA;
     termuxVersionBackup = process.env.TERMUX_VERSION;
+    delete process.env.ANDROID_ROOT;
+    delete process.env.ANDROID_DATA;
+    delete process.env.TERMUX_VERSION;
   });
 
   afterEach(() => {
@@ -71,7 +74,7 @@ describe('BinaryDownloader.getPlatformTarget', () => {
 
   test('target contains platform component', () => {
     const target = getPlatformTarget(downloader);
-    expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows)/);
+    expect(target).toMatch(/(apple-darwin|unknown-linux|pc-windows|linux-android)/);
   });
 
   test('detects Android/Termux and returns android target triple', () => {

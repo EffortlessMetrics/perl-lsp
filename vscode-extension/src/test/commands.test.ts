@@ -135,15 +135,15 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
   });
 
   describe('activation events', () => {
-    test('every contributed command has an activation event', () => {
-      for (const command of pkg.contributes.commands) {
-        expect(pkg.activationEvents).toContain(`onCommand:${command.command}`);
-      }
+    test('extension activates at startup via onStartupFinished', () => {
+      // VSCode >= 1.75 auto-activates on contributed commands; onStartupFinished
+      // makes all palette commands available without redundant onCommand:* entries.
+      expect(pkg.activationEvents).toContain('onStartupFinished');
     });
 
     for (const id of NEW_COMMAND_IDS) {
-      test(`activates on ${id} command`, () => {
-        expect(pkg.activationEvents).toContain(`onCommand:${id}`);
+      test(`${id} is reachable (registered in contributes.commands)`, () => {
+        expect(pkg.contributes.commands.map((c: any) => c.command)).toContain(id);
       });
     }
   });
@@ -353,8 +353,9 @@ describe('perl-lsp.createDebugConfig command', () => {
     expect(entry.when).toContain('workspaceFolderCount');
   });
 
-  test('has an activation event', () => {
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.createDebugConfig');
+  test('is reachable at startup (onStartupFinished)', () => {
+    // VSCode >= 1.75 auto-activates on contributed commands; onStartupFinished covers this.
+    expect(pkg.activationEvents).toContain('onStartupFinished');
   });
 });
 

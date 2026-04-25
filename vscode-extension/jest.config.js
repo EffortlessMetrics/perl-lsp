@@ -21,6 +21,7 @@ module.exports = {
         moduleResolution: 'node',
         allowSyntheticDefaultImports: true,
         sourceMap: true,
+        types: ['jest', 'node'],
       },
     }],
   },
