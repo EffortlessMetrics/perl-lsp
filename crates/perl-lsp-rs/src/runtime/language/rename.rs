@@ -10,9 +10,14 @@
 //! - **Building/Degraded state**: Same-file rename only; logs "workspace rename unavailable while index building"
 
 use super::super::*;
-use crate::protocol::{invalid_params, req_position, req_uri};
+use crate::protocol::{req_position, req_uri};
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
+
+/// Returns true if `c` is a Perl variable sigil (`$`, `@`, or `%`).
+fn is_perl_sigil(c: char) -> bool {
+    matches!(c, '$' | '@' | '%')
+}
 
 impl LspServer {
     fn token_span_at(content: &str, offset: usize) -> Option<(usize, usize)> {
@@ -70,6 +75,74 @@ impl LspServer {
         Some((start, end))
     }
 
+    /// Normalize a rename target against the current symbol, validating the sigil and identifier.
+    ///
+    /// If `current_symbol` starts with a sigil, the returned name is sigil-prefixed.
+    /// If `requested_name` is missing its sigil, the current symbol's sigil is applied.
+    /// If `requested_name` has a mismatching sigil, this returns an error.
+    fn normalize_rename_target(
+        &self,
+        current_symbol: Option<&str>,
+        requested_name: &str,
+    ) -> Result<String, JsonRpcError> {
+        if requested_name.is_empty() {
+            return Err(JsonRpcError {
+                code: -32602,
+                message: "Invalid identifier: empty rename target".to_string(),
+                data: None,
+            });
+        }
+
+        let current_sigil =
+            current_symbol.and_then(|symbol| symbol.chars().next()).filter(|c| is_perl_sigil(*c));
+
+        match current_sigil {
+            Some(sigil) => {
+                let mut requested_chars = requested_name.chars();
+                let requested_first = requested_chars.next();
+                let bare_name = if let Some(first) = requested_first {
+                    if is_perl_sigil(first) {
+                        if first != sigil {
+                            return Err(JsonRpcError {
+                                code: -32602,
+                                message: format!(
+                                    "Invalid identifier: sigil '{}' does not match '{}'",
+                                    first, sigil
+                                ),
+                                data: None,
+                            });
+                        }
+                        requested_chars.collect::<String>()
+                    } else {
+                        requested_name.to_string()
+                    }
+                } else {
+                    String::new()
+                };
+
+                if !self.is_valid_identifier(&bare_name) {
+                    return Err(JsonRpcError {
+                        code: -32602,
+                        message: format!("Invalid identifier: {}", requested_name),
+                        data: None,
+                    });
+                }
+
+                Ok(format!("{}{}", sigil, bare_name))
+            }
+            None => {
+                if !self.is_valid_identifier(requested_name) {
+                    return Err(JsonRpcError {
+                        code: -32602,
+                        message: format!("Invalid identifier: {}", requested_name),
+                        data: None,
+                    });
+                }
+                Ok(requested_name.to_string())
+            }
+        }
+    }
+
     /// Handle textDocument/prepareRename request
     pub(crate) fn handle_prepare_rename(
         &self,
@@ -120,73 +193,6 @@ impl LspServer {
         Ok(Some(json!(null)))
     }
 
-    /// Handle textDocument/rename request (single file)
-    #[allow(dead_code)] // Dispatch uses handle_rename_workspace instead
-    pub(crate) fn handle_rename(
-        &self,
-        params: Option<Value>,
-    ) -> Result<Option<Value>, JsonRpcError> {
-        if let Some(params) = params {
-            let uri = req_uri(&params)?;
-            let (line, character) = req_position(&params)?;
-            let new_name = params["newName"]
-                .as_str()
-                .ok_or_else(|| invalid_params("Missing required parameter: newName"))?;
-
-            // Validate the new name
-            if !self.is_valid_identifier(new_name) {
-                return Err(JsonRpcError {
-                    code: -32602,
-                    message: format!("Invalid identifier: {}", new_name),
-                    data: None,
-                });
-            }
-
-            let documents = self.documents_guard();
-            if let Some(doc) = self.get_document(&documents, uri) {
-                if let Some(ref ast) = doc.ast {
-                    let offset = self.pos16_to_offset(doc, line, character);
-
-                    // Create semantic analyzer
-                    let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
-
-                    // Find all references (including definition)
-                    let references = analyzer.find_all_references(offset, true);
-
-                    if !references.is_empty() {
-                        // Create text edits for all references
-                        let mut edits = Vec::new();
-                        for location in references {
-                            let (start_line, start_char) =
-                                self.offset_to_pos16(doc, location.start);
-                            let (end_line, end_char) = self.offset_to_pos16(doc, location.end);
-
-                            edits.push(json!({
-                                "range": {
-                                    "start": { "line": start_line, "character": start_char },
-                                    "end": { "line": end_line, "character": end_char }
-                                },
-                                "newText": new_name
-                            }));
-                        }
-
-                        // Return WorkspaceEdit
-                        return Ok(Some(json!({
-                            "changes": {
-                                uri: edits
-                            }
-                        })));
-                    }
-                }
-            }
-        }
-
-        // Return empty workspace edit if nothing to rename
-        Ok(Some(json!({
-            "changes": {}
-        })))
-    }
-
     /// Handle textDocument/rename request with workspace support
     ///
     /// Uses routing helper for lifecycle-aware behavior:
@@ -203,14 +209,6 @@ impl LspServer {
                 p.get("position").and_then(|p| p.get("character")).and_then(|n| n.as_u64()),
                 p.get("newName").and_then(|s| s.as_str()),
             ) {
-                if !self.is_valid_identifier(new_name) {
-                    return Err(JsonRpcError {
-                        code: -32602,
-                        message: format!("Invalid identifier: {}", new_name),
-                        data: None,
-                    });
-                }
-
                 // Check index access mode using routing helper
                 #[cfg(feature = "workspace")]
                 {
@@ -222,9 +220,29 @@ impl LspServer {
                                 let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
                                 let current_pkg =
                                     crate::declaration::current_package_at(ast, offset);
-                                crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_pkg,
+                                    &doc.text,
+                                )
                             })
                         })
+                    };
+                    let current_symbol = {
+                        let documents = self.documents_guard();
+                        self.get_document(&documents, uri).map(|doc| {
+                            let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                            self.get_token_at_position(&doc.text, offset)
+                        })
+                    };
+                    let normalized_name =
+                        self.normalize_rename_target(current_symbol.as_deref(), new_name)?;
+                    // build_rename_edit re-applies the sigil from key.sigil, so pass the
+                    // bare identifier to avoid double-sigil output like "$$total".
+                    let normalized_bare: &str = match normalized_name.chars().next() {
+                        Some(c) if is_perl_sigil(c) => &normalized_name[c.len_utf8()..],
+                        _ => normalized_name.as_str(),
                     };
 
                     match access_mode {
@@ -235,7 +253,7 @@ impl LspServer {
                                 let edits = crate::workspace_rename::build_rename_edit(
                                     coordinator.index(),
                                     key,
-                                    new_name,
+                                    normalized_bare,
                                 );
                                 if !edits.is_empty() {
                                     tracing::debug!(
@@ -263,8 +281,11 @@ impl LspServer {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, new_name);
+                                let edits = crate::workspace_rename::build_rename_edit(
+                                    idx,
+                                    key,
+                                    normalized_bare,
+                                );
                                 let ws_edit = crate::workspace_rename::to_workspace_edit(edits);
                                 return Ok(Some(ws_edit));
                             }
@@ -277,6 +298,9 @@ impl LspServer {
                 if let Some(doc) = self.get_document(&documents, uri) {
                     if let Some(ref ast) = doc.ast {
                         let offset = self.pos16_to_offset(doc, line as u32, ch as u32);
+                        let current_symbol = self.get_token_at_position(&doc.text, offset);
+                        let normalized_name =
+                            self.normalize_rename_target(Some(current_symbol.as_str()), new_name)?;
 
                         // Create semantic analyzer for same-file rename
                         let analyzer = crate::semantic::SemanticAnalyzer::analyze(ast);
@@ -297,7 +321,7 @@ impl LspServer {
                                         "start": { "line": start_line, "character": start_char },
                                         "end": { "line": end_line, "character": end_char }
                                     },
-                                    "newText": new_name
+                                    "newText": normalized_name
                                 }));
                             }
 
@@ -317,7 +341,6 @@ impl LspServer {
     }
 
     /// Validate if a string is a valid Perl identifier
-    #[allow(dead_code)] // Used by handle_rename which is currently not dispatched
     pub(crate) fn is_valid_identifier(&self, name: &str) -> bool {
         if name.is_empty() {
             return false;
