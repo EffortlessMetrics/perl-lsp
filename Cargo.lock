@@ -1814,7 +1814,6 @@ dependencies = [
 name = "perl-pragma"
 version = "0.12.4"
 dependencies = [
- "criterion",
  "perl-ast",
 ]
 
@@ -1865,9 +1864,7 @@ dependencies = [
 name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
- "anyhow",
  "perl-ast",
- "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -1901,6 +1898,10 @@ name = "perl-token"
 version = "0.12.4"
 dependencies = [
  "criterion",
+ "perl-lexer",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
