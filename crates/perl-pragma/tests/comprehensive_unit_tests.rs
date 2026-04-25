@@ -228,6 +228,33 @@ fn use_strict_mixed_grouped_and_plain_args() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Perl allows `use strict 'refs vars'` (a single quoted string with
+/// space-separated categories), but `pragma_arg_items` does not split on
+/// spaces inside a plain quoted string — only `qw(...)` is split.
+/// This test documents the known limitation: the space-separated form is
+/// silently treated as an unrecognized category and ignored.
+/// Callers that need all three categories should use qw() or separate args.
+#[test]
+fn use_strict_space_separated_in_single_string_is_not_parsed_known_limitation()
+-> Result<(), Box<dyn std::error::Error>> {
+    // In real Perl: `use strict 'refs vars'` enables both refs and vars.
+    // Our pragma_arg_items strips quotes but does not split on whitespace
+    // for plain quoted strings, so the whole "refs vars" token is unrecognized.
+    let ast = program(vec![use_node("strict", &["'refs vars'"], 0, 25)]);
+    let map = PragmaTracker::build(&ast);
+    // No recognized category → no state change → no entry pushed.
+    // This is the known limitation: this form is silently ignored.
+    let state = if map.is_empty() {
+        PragmaState::default()
+    } else {
+        map[0].1.clone()
+    };
+    // Neither category is enabled; document the gap.
+    assert!(!state.strict_refs, "known limitation: 'refs vars' is not split by pragma_arg_items");
+    assert!(!state.strict_vars, "known limitation: 'refs vars' is not split by pragma_arg_items");
+    Ok(())
+}
+
 #[test]
 fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
@@ -610,6 +637,12 @@ fn use_feature_all_enables_known_features() -> Result<(), Box<dyn std::error::Er
     assert!(state.has_feature("class"));
     assert!(state.has_feature("builtin"));
     assert!(state.signatures_strict);
+    // ':all' includes ALL known features, including experimental/deprecated ones
+    // like 'switch' — unlike version bundles which omit switch at v5.38+.
+    assert!(
+        state.has_feature("switch"),
+        "':all' should enable every known feature including experimental 'switch'"
+    );
     Ok(())
 }
 
