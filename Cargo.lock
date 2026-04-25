@@ -1574,17 +1574,13 @@ dependencies = [
 name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
- "anyhow",
  "criterion",
  "lsp-types",
  "perl-lexer",
- "perl-line-index",
  "perl-parser",
- "perl-parser-core",
  "perl-tdd-support",
  "ropey",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1818,6 +1814,7 @@ dependencies = [
 name = "perl-pragma"
 version = "0.12.4"
 dependencies = [
+ "criterion",
  "perl-ast",
 ]
 
@@ -1868,7 +1865,9 @@ dependencies = [
 name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
  "perl-ast",
+ "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -1900,6 +1899,9 @@ version = "0.12.4"
 [[package]]
 name = "perl-token"
 version = "0.12.4"
+dependencies = [
+ "criterion",
+]
 
 [[package]]
 name = "perl-uri"
@@ -3851,6 +3853,7 @@ dependencies = [
  "peak_alloc",
  "perl-corpus",
  "perl-lsp-rs-core",
+ "perl-lsp-ux-tests",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
