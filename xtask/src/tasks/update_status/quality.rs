@@ -2,6 +2,9 @@
 //!
 //! Owns per-crate mutation and test counts, UX scenario receipt, and quality.md generation.
 
+// LazyLock<Regex> initializers use .expect() for known-good patterns — permitted by coding standards.
+#![allow(clippy::expect_used)]
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;

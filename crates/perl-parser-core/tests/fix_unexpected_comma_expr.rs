@@ -144,6 +144,44 @@ fn test_comma_as_sequence_operator() {
     assert_clean_parse(source);
 }
 
+#[test]
+fn test_nullary_builtin_then_comma_return() {
+    // From File::Spec::Win32: nullary `shift` followed by comma operator.
+    // `shift` has no explicit arg here; comma starts the surrounding expr list.
+    let source = r#"sub canonpath { shift, return _canon_cat("/", @_ ) }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_pop_then_comma_expr() {
+    // pop is also a nullary builtin; same path as shift.
+    let source = r#"sub cleanup { pop, return 1 }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_wantarray_then_comma_expr() {
+    // wantarray is nullary — comma after it starts the surrounding list.
+    let source = r#"return wantarray, scalar @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_shift_with_explicit_arg_then_comma() {
+    // shift(@arr) routes through parse_expression (LeftParen guard) —
+    // the Comma addition must NOT suppress the explicit argument.
+    let source = r#"my $x = shift(@arr), 1;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_shift_with_bare_arg_then_comma() {
+    // shift @arr, $extra: @arr is the explicit arg to shift;
+    // the trailing comma separates the outer list, not shift's arg.
+    let source = r#"my $first = shift @arr; my @rest = @arr;"#;
+    assert_clean_parse(source);
+}
+
 // === no warnings with multiple args ===
 
 #[test]
@@ -177,6 +215,42 @@ fn test_core_grep_with_block() {
 fn test_core_grep_with_regex() {
     // CORE::grep /regex/, @list should re-lex / as regex delimiter
     let source = r#"my @matches = CORE::grep /foo/, @list;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_expr_with_trailing_comma() {
+    // Trailing comma before semicolon in block-list builtin (the core fix).
+    let source = r#"my @result = grep defined, @list,;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_trailing_comma_in_parens() {
+    // Trailing comma before ')' — is_at_statement_end() covers RightParen.
+    let source = r#"foo(grep defined, @list,);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_map_trailing_comma_in_block() {
+    // Trailing comma before '}' — is_at_statement_end() covers RightBrace.
+    let source = r#"sub foo { my @r = map uc, @words, }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_block_list_trailing_comma() {
+    // sort with comparator block and trailing comma after list.
+    let source = r#"my @r = sort { $a <=> $b } @list,;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_trailing_comma_then_word_op() {
+    // Trailing comma before word-op: `or` is in is_at_statement_end().
+    // Perl: `my @r = grep defined, @list or die` is `(grep ...) or die`.
+    let source = r#"my @r = grep defined, @list or die "empty";"#;
     assert_clean_parse(source);
 }
 
@@ -273,6 +347,12 @@ fn test_map_with_comma_expr() {
 #[test]
 fn test_sort_with_custom_comparison() {
     let source = r#"my @sorted = sort { $a->{name} cmp $b->{name} } @items;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_subname_list_form() {
+    let source = r#"my @sorted = sort by_name @items;"#;
     assert_clean_parse(source);
 }
 

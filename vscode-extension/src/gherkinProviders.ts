@@ -60,6 +60,9 @@ const STEP_DEFINITION_FILE_GLOBS = [
 ] as const;
 const STEP_DEFINITION_EXCLUDE_GLOB = '{**/node_modules/**,**/blib/**,**/.git/**}';
 const STEP_DEFINITION_FILE_LIMIT = 1000;
+const MAX_MATCH_REGEX_LENGTH = 256;
+const MAX_MATCH_STEP_TEXT_LENGTH = 512;
+const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\)|\[[^\]]+\])[+*{]|\\[1-9]|\(\?<[=!]|(\(\?[!=])/;
 const DELIMITER_PAIRS: Record<string, string> = {
     '{': '}',
     '[': ']',
@@ -519,11 +522,23 @@ function stepTextMatches(stepText: string, matcher: StepMatcher): boolean {
         return matcher.text === stepText;
     }
 
+    if (!isSafeRegexForStepMatching(matcher.source, stepText)) {
+        return false;
+    }
+
     try {
         return new RegExp(matcher.source, normalizeRegexFlags(matcher.flags)).test(stepText);
     } catch {
         return false;
     }
+}
+
+function isSafeRegexForStepMatching(source: string, stepText: string): boolean {
+    if (source.length > MAX_MATCH_REGEX_LENGTH || stepText.length > MAX_MATCH_STEP_TEXT_LENGTH) {
+        return false;
+    }
+
+    return !POTENTIALLY_EXPENSIVE_REGEX_RE.test(source);
 }
 
 function normalizeRegexFlags(flags: string): string {
