@@ -33,6 +33,8 @@ tracing.workspace = true
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+perl-test-generators = { path = "../perl-test-generators" }
+proptest = { workspace = true }
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]

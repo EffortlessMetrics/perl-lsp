@@ -16,6 +16,9 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 thiserror.workspace = true
 
+[dev-dependencies]
+proptest = { workspace = true }
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
