@@ -141,13 +141,14 @@ fn test_v_followed_by_alpha_is_identifier() -> R {
 }
 
 #[test]
-fn test_v_digits_no_dot_is_identifier() -> R {
-    // "v5" without a dot should remain an identifier (conservative approach)
+fn test_v_digits_no_dot_is_vstring() -> R {
+    // Perl treats `v5` as a v-string (chr(5)), not an identifier.
+    // The `v` prefix with trailing digits and no dot is valid: `v5` eq "\x05".
     let toks = significant("v5");
     assert_eq!(toks.len(), 1);
     assert!(
-        matches!(&toks[0].token_type, TokenType::Identifier(_) | TokenType::Keyword(_)),
-        "expected identifier for 'v5', got: {:?}",
+        matches!(&toks[0].token_type, TokenType::Version(v) if v.as_ref() == "v5"),
+        "expected Version(v5) for bare v-string, got: {:?}",
         toks[0].token_type
     );
     Ok(())
