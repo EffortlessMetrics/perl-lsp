@@ -159,7 +159,8 @@ fn utf16_and_source_position_apis_agree_on_symbol_text_after_multibyte_prefix() 
     let line = "my 😀 $value = 1;";
     let text = format!("{line}\n");
 
-    // UTF-16 column that lands on `v` in `$value`.
+    // UTF-16 column 8 in "my 😀 $value": m(0) y(1) ' '(2) 😀(3,4 surrogate pair) ' '(5) $(6) v(7) a(8).
+    // col 8 lands on 'a', not 'v'. token_under_cursor extends backward to include the full $value token.
     let utf16_col_on_v = 8;
     let token = must_some(token_under_cursor(&text, 0, utf16_col_on_v));
 
