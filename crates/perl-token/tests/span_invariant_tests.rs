@@ -64,8 +64,8 @@ fn unknown_at_clamps_inverted_span_to_start() -> Result<(), Box<dyn std::error::
 #[test]
 fn token_span_try_new_rejects_end_before_start() -> Result<(), Box<dyn std::error::Error>> {
     // TokenSpan::try_new is the span-level checked constructor (separate from Token::try_new).
-    let err = TokenSpan::try_new(100, 50)
-        .expect_err("span-level try_new should reject end < start");
+    let err =
+        TokenSpan::try_new(100, 50).expect_err("span-level try_new should reject end < start");
     assert_eq!(err, TokenSpanError::EndBeforeStart { start: 100, end: 50 });
     Ok(())
 }
