@@ -36,13 +36,28 @@ struct TokenPerfMetric {
 
 #[derive(Debug, Clone)]
 pub struct TokenHealthMetrics {
+    /// Total number of `TokenKind` enum variants.
     pub variant_count: usize,
+    /// Number of variants that have a `display_name()` mapping.
+    ///
+    /// Currently identical to `display_name_coverage_count`.  Kept as a
+    /// separate field so the metadata-coverage concept can expand to include
+    /// additional per-variant metadata (e.g., `is_keyword()`, precedence)
+    /// without a breaking struct change.
     pub metadata_coverage_count: usize,
+    /// Number of variants covered by `display_name()` match arms.
     pub display_name_coverage_count: usize,
+    /// `"PASS"`, `"WARN"`, or `"FAIL"` based on coverage vs. the baseline.
     pub metadata_status: &'static str,
+    /// Human-readable summary of category partition health.
     pub category_partition_status: String,
+    /// Human-readable summary of lexer + parser-core token dependency check.
     pub lexer_parser_conformance_status: String,
+    /// Count of non-dev, non-comment lines under `[dependencies]` in
+    /// `crates/perl-token/Cargo.toml`.
     pub runtime_dependency_count: usize,
+    /// Human-readable performance summary row, or `"UNVERIFIED …"` when the
+    /// scorecard JSON is missing.
     pub performance_row: String,
 }
 
@@ -178,6 +193,10 @@ fn token_kind_variants(source: &str) -> Vec<String> {
     let Some(display_start) = source.find("impl TokenKind") else {
         return Vec::new();
     };
+    if display_start <= enum_start {
+        // `impl TokenKind` appears before `pub enum TokenKind` — malformed source.
+        return Vec::new();
+    }
     let enum_body = &source[enum_start..display_start];
     let Ok(re) = Regex::new(r"^\s*([A-Z][A-Za-z0-9]*)\s*,\s*$") else {
         return Vec::new();
@@ -207,6 +226,9 @@ fn token_category_counts(source: &str) -> std::collections::BTreeMap<&'static st
     let Some(display_start) = source.find("impl TokenKind") else {
         return std::collections::BTreeMap::new();
     };
+    if display_start <= enum_start {
+        return std::collections::BTreeMap::new();
+    }
     let enum_body = &source[enum_start..display_start];
     let mut current = "";
     let mut counts = std::collections::BTreeMap::new();
