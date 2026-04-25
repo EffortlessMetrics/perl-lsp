@@ -101,7 +101,10 @@ fn regression_file_parse_with_trailing_junk_keeps_partial_tree() -> Result<(), B
     let _ = fs::remove_file(&file);
 
     assert_eq!(tree.root_node().kind(), "source_file");
-    assert!(tree.root_node().has_error(), "invalid trailing bytes should produce error nodes, not hard failure");
+    assert!(
+        tree.root_node().has_error(),
+        "invalid trailing bytes should produce error nodes, not hard failure"
+    );
 
     Ok(())
 }
