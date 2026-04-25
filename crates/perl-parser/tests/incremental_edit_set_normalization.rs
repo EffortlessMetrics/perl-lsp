@@ -100,3 +100,62 @@ fn optional_no_op_filter_only_removes_empty_zero_width_edit()
 
     Ok(())
 }
+
+// --- edge cases ---
+
+/// `allow_overlaps = true` must succeed even when edits overlap.
+#[test]
+fn normalize_allow_overlaps_succeeds_for_overlapping_edits()
+-> Result<(), IncrementalEditBatchError> {
+    let mut edits = IncrementalEditSet {
+        edits: vec![
+            IncrementalEdit::new(2, 6, "alpha".to_string()),
+            IncrementalEdit::new(4, 8, "beta".to_string()),
+        ],
+    };
+
+    // Must not error even though the two edits overlap.
+    edits.normalize_and_validate(true, false)?;
+
+    // Both edits survive, sorted descending.
+    assert_eq!(edits.edits.len(), 2);
+    assert_eq!(edits.edits[0].start_byte, 4); // higher offset first
+    assert_eq!(edits.edits[1].start_byte, 2);
+
+    Ok(())
+}
+
+/// An empty `IncrementalEditSet` must normalize without error in every
+/// combination of `allow_overlaps` and `filter_no_ops`.
+#[test]
+fn normalize_empty_edit_set_is_always_valid() -> Result<(), IncrementalEditBatchError> {
+    for &allow_overlaps in &[false, true] {
+        for &filter_no_ops in &[false, true] {
+            let mut edits = IncrementalEditSet::new();
+            edits.normalize_and_validate(allow_overlaps, filter_no_ops)?;
+            assert!(edits.edits.is_empty());
+        }
+    }
+    Ok(())
+}
+
+/// Adjacent (touching but non-overlapping) edits must NOT be rejected by the
+/// overlap check.  `overlaps` uses strict inequalities so [2,4) and [4,6) are
+/// disjoint.
+#[test]
+fn normalize_adjacent_edits_are_not_overlapping() -> Result<(), IncrementalEditBatchError> {
+    let mut edits = IncrementalEditSet {
+        edits: vec![
+            IncrementalEdit::new(2, 4, "AB".to_string()),
+            IncrementalEdit::new(4, 6, "CD".to_string()),
+        ],
+    };
+
+    edits.normalize_and_validate(false, false)?;
+
+    // Sorted descending by start_byte.
+    assert_eq!(edits.edits[0].start_byte, 4);
+    assert_eq!(edits.edits[1].start_byte, 2);
+
+    Ok(())
+}

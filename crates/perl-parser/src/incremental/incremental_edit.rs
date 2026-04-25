@@ -9,8 +9,15 @@ use perl_parser_core::position::Position;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IncrementalEditBatchError {
     /// An edit uses a backward range (`start_byte > old_end_byte`).
+    ///
+    /// `index` is the position of the offending edit in the **original,
+    /// unsorted** order at the time `normalize_and_validate` was called.
     BackwardRange { index: usize, start_byte: usize, old_end_byte: usize },
     /// Two normalized edits overlap in the old-source byte space.
+    ///
+    /// `left_index` and `right_index` are positions in the **post-sort**
+    /// order produced by [`IncrementalEditSet::sort_reverse_deterministic`],
+    /// not in the original insertion order.
     OverlappingEdits { left_index: usize, right_index: usize },
 }
 
