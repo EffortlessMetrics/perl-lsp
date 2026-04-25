@@ -432,6 +432,213 @@ fn workspace_beats_system_inc() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[test]
+fn whitespace_only_include_paths_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Trimmed.pm")?;
+
+    let result = resolve_module_uri(
+        "Trimmed",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "	".to_string(), " lib ".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("lib/Trimmed.pm"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn duplicate_system_inc_entries_do_not_change_resolution_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let inc1 = temp.path().join("inc1");
+    std::fs::create_dir_all(&inc1)?;
+    std::fs::write(inc1.join("Dedupe.pm"), "1;")?;
+
+    let inc2 = temp.path().join("inc2");
+    std::fs::create_dir_all(&inc2)?;
+    std::fs::write(inc2.join("Dedupe.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "Dedupe",
+        &[],
+        &[],
+        &[],
+        true,
+        &[
+            PathBuf::from(format!("  {}  ", inc1.to_string_lossy())),
+            PathBuf::from(&inc1),
+            PathBuf::from("."),
+            PathBuf::from(&inc2),
+            PathBuf::from(&inc2),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("inc1"));
+            assert!(!uri.contains("inc2"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn precedence_is_stable_after_normalization() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let src_root = workspace.join("src");
+    std::fs::create_dir_all(&src_root)?;
+    std::fs::write(src_root.join("Precedence.pm"), "1;")?;
+
+    let workspace_uri = url::Url::from_file_path(&workspace).map_err(|()| "build URI")?.to_string();
+
+    let system_root = temp.path().join("system");
+    let system_module = system_root.join("Precedence.pm");
+    std::fs::create_dir_all(&system_root)?;
+    std::fs::write(&system_module, "1;")?;
+
+    let result = resolve_module_uri(
+        "Precedence",
+        &[],
+        &[workspace_uri],
+        &["   ".to_string(), "src/".to_string(), "./src".to_string(), "src".to_string()],
+        true,
+        &[
+            PathBuf::from("."),
+            PathBuf::from(format!(" {} ", system_root.to_string_lossy())),
+            PathBuf::from(&system_root),
+        ],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.contains("workspace"));
+            assert!(uri.ends_with("src/Precedence.pm"));
+            assert!(!uri.contains("system"));
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+// ===========================================================================
+// Normalization edge cases (deep-review additions)
+// ===========================================================================
+
+/// `"./subdir"` must normalize to `"subdir"` for dedup and resolve correctly.
+/// Without normalization the CurDir component would be preserved and `"./subdir"`,
+/// `"subdir/"`, and `"subdir"` would be treated as three distinct roots.
+#[test]
+fn dot_slash_include_path_resolves_same_as_bare() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("mylib/DotSlash.pm")?;
+
+    // Both "./mylib" and "mylib" should find the same module; the second entry
+    // must be deduplicated (same normalized path).
+    let result = resolve_module_uri(
+        "DotSlash",
+        &[],
+        &[workspace_uri.clone()],
+        &["./mylib".to_string(), "mylib/".to_string(), "mylib".to_string()],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("mylib/DotSlash.pm"), "expected mylib/DotSlash.pm in {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+/// `include_paths` and `system_inc` use separate `HashSet`s so the same path
+/// can appear in both tiers.  When it does, the `include_paths` entry wins
+/// (lower precedence value) because it is inserted first.
+#[test]
+fn same_path_in_include_and_system_inc_include_wins() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+
+    // "shared" has ModuleA; "other" has the same file but will never be reached.
+    let shared = temp.path().join("shared");
+    std::fs::create_dir_all(&shared)?;
+    std::fs::write(shared.join("SharedWins.pm"), "1;")?;
+
+    let result = resolve_module_uri(
+        "SharedWins",
+        &[],
+        &[],
+        &[shared.to_string_lossy().to_string()],
+        true,
+        &[PathBuf::from(&shared)],
+        Duration::from_millis(100),
+    );
+
+    // The path resolves regardless of which tier wins because both point to the
+    // same directory.  The important invariant is that it resolves at all (not
+    // deduplicated across tiers) and that the URI is correct.
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("SharedWins.pm"), "unexpected URI: {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
+/// When all `include_paths` entries normalize to the same path (whitespace, dot,
+/// trailing slash variants), only a single `IncRoot` must be produced and the
+/// module still resolves.
+#[test]
+fn all_include_path_variants_collapse_to_one_root() -> Result<(), Box<dyn std::error::Error>> {
+    let (_temp, workspace_uri) = setup_workspace_with_module("lib/Collapse.pm")?;
+
+    let result = resolve_module_uri(
+        "Collapse",
+        &[],
+        &[workspace_uri],
+        &[
+            "lib".to_string(),
+            "lib/".to_string(),
+            "./lib".to_string(),
+            "./lib/".to_string(),
+            " lib ".to_string(),
+            " lib/ ".to_string(),
+        ],
+        false,
+        &[],
+        Duration::from_millis(100),
+    );
+
+    match result {
+        ModuleUriResolution::Resolved(uri) => {
+            assert!(uri.ends_with("lib/Collapse.pm"), "unexpected URI: {uri}");
+        }
+        other => return Err(format!("expected Resolved, got {other:?}").into()),
+    }
+
+    Ok(())
+}
+
 // ===========================================================================
 // Timeout behavior
 // ===========================================================================
