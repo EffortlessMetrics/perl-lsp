@@ -275,11 +275,6 @@ impl Token {
         self.len() == 0
     }
 
-    /// Return the token span as `(start, end)`.
-    pub fn span(&self) -> (usize, usize) {
-        (self.start, self.end)
-    }
-
     /// Return a human-readable display name for this token.
     pub fn display_name(&self) -> &'static str {
         self.kind.display_name()
