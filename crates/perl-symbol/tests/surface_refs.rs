@@ -242,3 +242,74 @@ fn parser_sentinel_names_are_not_emitted_as_refs() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
+    // `sub foo($x, $y = $default, @rest)` — $x, $y, @rest are declaration sites;
+    // only $default (the default-value expression) must be emitted as a ref.
+    let param_x = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+        loc(8, 10),
+    );
+    let mandatory = Node::new(
+        NodeKind::MandatoryParameter { variable: Box::new(param_x) },
+        loc(8, 10),
+    );
+
+    let param_y = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
+        loc(12, 14),
+    );
+    let default_var = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "default".to_string() },
+        loc(17, 25),
+    );
+    let optional = Node::new(
+        NodeKind::OptionalParameter {
+            variable: Box::new(param_y),
+            default_value: Box::new(default_var),
+        },
+        loc(12, 25),
+    );
+
+    let param_rest = Node::new(
+        NodeKind::Variable { sigil: "@".to_string(), name: "rest".to_string() },
+        loc(27, 32),
+    );
+    let slurpy = Node::new(
+        NodeKind::SlurpyParameter { variable: Box::new(param_rest) },
+        loc(27, 32),
+    );
+
+    let sig = Node::new(
+        NodeKind::Signature { parameters: vec![mandatory, optional, slurpy] },
+        loc(7, 33),
+    );
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(34, 36));
+    let sub_node = Node::new(
+        NodeKind::Subroutine {
+            name: Some("foo".to_string()),
+            name_span: None,
+            prototype: None,
+            signature: Some(Box::new(sig)),
+            attributes: vec![],
+            body: Box::new(body),
+        },
+        loc(0, 36),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![sub_node] }, loc(0, 36));
+
+    let refs = extract_symbol_refs(&program);
+
+    // Only $default (the optional-parameter default value) should appear.
+    // $x, $y, @rest are declaration sites and must not be emitted.
+    assert_eq!(
+        refs.len(),
+        1,
+        "only $default should be a ref; got: {:?}",
+        refs.iter().map(|r| &r.name).collect::<Vec<_>>()
+    );
+    assert_eq!(refs[0].kind, SymbolRefKind::Variable(VarKind::Scalar));
+    assert_eq!(refs[0].name, "default");
+    Ok(())
+}
