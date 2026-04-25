@@ -768,6 +768,152 @@ impl TokenKind {
         }
     }
 
+    /// Map a canonical keyword spelling to its [`TokenKind`].
+    ///
+    /// This mapping is case-sensitive and only recognizes canonical Perl
+    /// spellings used by the lexer/parser pipeline.
+    pub fn from_keyword(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "my" => Some(TokenKind::My),
+            "our" => Some(TokenKind::Our),
+            "local" => Some(TokenKind::Local),
+            "state" => Some(TokenKind::State),
+            "sub" => Some(TokenKind::Sub),
+            "if" => Some(TokenKind::If),
+            "elsif" => Some(TokenKind::Elsif),
+            "else" => Some(TokenKind::Else),
+            "unless" => Some(TokenKind::Unless),
+            "while" => Some(TokenKind::While),
+            "until" => Some(TokenKind::Until),
+            "for" => Some(TokenKind::For),
+            "foreach" => Some(TokenKind::Foreach),
+            "return" => Some(TokenKind::Return),
+            "package" => Some(TokenKind::Package),
+            "use" => Some(TokenKind::Use),
+            "no" => Some(TokenKind::No),
+            "BEGIN" => Some(TokenKind::Begin),
+            "END" => Some(TokenKind::End),
+            "CHECK" => Some(TokenKind::Check),
+            "INIT" => Some(TokenKind::Init),
+            "UNITCHECK" => Some(TokenKind::Unitcheck),
+            "eval" => Some(TokenKind::Eval),
+            "do" => Some(TokenKind::Do),
+            "given" => Some(TokenKind::Given),
+            "when" => Some(TokenKind::When),
+            "default" => Some(TokenKind::Default),
+            "try" => Some(TokenKind::Try),
+            "catch" => Some(TokenKind::Catch),
+            "finally" => Some(TokenKind::Finally),
+            "continue" => Some(TokenKind::Continue),
+            "next" => Some(TokenKind::Next),
+            "last" => Some(TokenKind::Last),
+            "redo" => Some(TokenKind::Redo),
+            "goto" => Some(TokenKind::Goto),
+            "class" => Some(TokenKind::Class),
+            "method" => Some(TokenKind::Method),
+            "field" => Some(TokenKind::Field),
+            "format" => Some(TokenKind::Format),
+            "undef" => Some(TokenKind::Undef),
+            "defer" => Some(TokenKind::Defer),
+            // Word operators are emitted as Keyword tokens by the lexer.
+            "and" => Some(TokenKind::WordAnd),
+            "or" => Some(TokenKind::WordOr),
+            "not" => Some(TokenKind::WordNot),
+            "xor" => Some(TokenKind::WordXor),
+            "cmp" => Some(TokenKind::StringCompare),
+            _ => None,
+        }
+    }
+
+    /// Map a canonical operator spelling to its [`TokenKind`].
+    ///
+    /// This mapping is case-sensitive.
+    pub fn from_operator(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "=" => Some(TokenKind::Assign),
+            "+" => Some(TokenKind::Plus),
+            "-" => Some(TokenKind::Minus),
+            "*" => Some(TokenKind::Star),
+            "/" => Some(TokenKind::Slash),
+            "%" => Some(TokenKind::Percent),
+            "**" => Some(TokenKind::Power),
+            "<<" => Some(TokenKind::LeftShift),
+            ">>" => Some(TokenKind::RightShift),
+            "&" => Some(TokenKind::BitwiseAnd),
+            "|" => Some(TokenKind::BitwiseOr),
+            "^" => Some(TokenKind::BitwiseXor),
+            "~" => Some(TokenKind::BitwiseNot),
+            "+=" => Some(TokenKind::PlusAssign),
+            "-=" => Some(TokenKind::MinusAssign),
+            "*=" => Some(TokenKind::StarAssign),
+            "/=" => Some(TokenKind::SlashAssign),
+            "%=" => Some(TokenKind::PercentAssign),
+            ".=" => Some(TokenKind::DotAssign),
+            "&=" => Some(TokenKind::AndAssign),
+            "|=" => Some(TokenKind::OrAssign),
+            "^=" => Some(TokenKind::XorAssign),
+            "**=" => Some(TokenKind::PowerAssign),
+            "<<=" => Some(TokenKind::LeftShiftAssign),
+            ">>=" => Some(TokenKind::RightShiftAssign),
+            "&&=" => Some(TokenKind::LogicalAndAssign),
+            "||=" => Some(TokenKind::LogicalOrAssign),
+            "//=" => Some(TokenKind::DefinedOrAssign),
+            "==" => Some(TokenKind::Equal),
+            "!=" => Some(TokenKind::NotEqual),
+            "=~" => Some(TokenKind::Match),
+            "!~" => Some(TokenKind::NotMatch),
+            "~~" => Some(TokenKind::SmartMatch),
+            "<" => Some(TokenKind::Less),
+            ">" => Some(TokenKind::Greater),
+            "<=" => Some(TokenKind::LessEqual),
+            ">=" => Some(TokenKind::GreaterEqual),
+            "<=>" => Some(TokenKind::Spaceship),
+            "&&" => Some(TokenKind::And),
+            "||" => Some(TokenKind::Or),
+            "!" => Some(TokenKind::Not),
+            "//" => Some(TokenKind::DefinedOr),
+            "->" => Some(TokenKind::Arrow),
+            "=>" => Some(TokenKind::FatArrow),
+            "." => Some(TokenKind::Dot),
+            ".." => Some(TokenKind::Range),
+            "..." => Some(TokenKind::Ellipsis),
+            "++" => Some(TokenKind::Increment),
+            "--" => Some(TokenKind::Decrement),
+            "::" => Some(TokenKind::DoubleColon),
+            "?" => Some(TokenKind::Question),
+            ":" => Some(TokenKind::Colon),
+            "\\" => Some(TokenKind::Backslash),
+            _ => None,
+        }
+    }
+
+    /// Map a delimiter spelling to its [`TokenKind`].
+    pub fn from_delimiter(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "(" => Some(TokenKind::LeftParen),
+            ")" => Some(TokenKind::RightParen),
+            "{" => Some(TokenKind::LeftBrace),
+            "}" => Some(TokenKind::RightBrace),
+            "[" => Some(TokenKind::LeftBracket),
+            "]" => Some(TokenKind::RightBracket),
+            ";" => Some(TokenKind::Semicolon),
+            "," => Some(TokenKind::Comma),
+            _ => None,
+        }
+    }
+
+    /// Map a sigil spelling to its [`TokenKind`].
+    pub fn from_sigil(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "$" => Some(TokenKind::ScalarSigil),
+            "@" => Some(TokenKind::ArraySigil),
+            "%" => Some(TokenKind::HashSigil),
+            "&" => Some(TokenKind::SubSigil),
+            "*" => Some(TokenKind::GlobSigil),
+            _ => None,
+        }
+    }
+
     /// Return a user-friendly display name for this token kind.
     ///
     /// These names appear in parser error messages shown in the editor.
