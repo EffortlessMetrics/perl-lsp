@@ -1323,7 +1323,7 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
 #[test]
 fn test_module_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_module.pl";
     send_notification(
