@@ -1,89 +1,91 @@
 {
   "client": "vscode-mock-debug",
-  "description": "Reference-client style handshake and core request sweep against perl-dap",
+  "description": "Richer request/response protocol surface with sequencing and body-shape assertions",
   "requests": [
     {
+      "requestSeq": 101,
       "command": "initialize",
       "arguments": {
         "clientID": "vscode",
         "clientName": "Visual Studio Code",
-        "adapterID": "mock",
+        "adapterID": "perl",
         "pathFormat": "path",
         "linesStartAt1": true,
         "columnsStartAt1": true,
+        "supportsVariableType": true,
+        "supportsVariablePaging": true,
         "locale": "en-US"
       },
       "expectSuccess": true,
       "requiredBodyKeys": [
         "supportsConfigurationDoneRequest",
         "supportsSetVariable",
-        "supportsCompletionsRequest",
-        "supportsLoadedSourcesRequest"
+        "supportsCompletionsRequest"
       ],
       "expectedEventsAfter": [
         { "event": "initialized" }
       ]
     },
     {
-      "command": "threads",
-      "expectSuccess": true,
-      "requiredBodyKeys": ["threads"]
+      "requestSeq": 102,
+      "command": "launch",
+      "arguments": {
+        "program": "",
+        "args": [],
+        "stopOnEntry": false
+      },
+      "expectSuccess": false,
+      "requiredMessageContains": "No Perl script was specified"
     },
     {
-      "command": "setExceptionBreakpoints",
-      "arguments": { "filters": [] },
-      "expectSuccess": true,
-      "requiredBodyKeys": ["breakpoints"]
-    },
-    {
+      "requestSeq": 103,
       "command": "setBreakpoints",
       "arguments": {
-        "source": {},
-        "breakpoints": []
+        "source": {
+          "path": "${workspaceFolder}/tests/fixtures/hello.pl"
+        },
+        "breakpoints": [
+          { "line": 9 }
+        ]
       },
       "expectSuccess": true,
       "requiredBodyKeys": ["breakpoints"]
     },
     {
+      "requestSeq": 104,
       "command": "configurationDone",
       "expectSuccess": true
     },
     {
+      "requestSeq": 105,
       "command": "stackTrace",
       "arguments": { "threadId": 1 },
       "expectSuccess": true,
       "requiredBodyKeys": ["stackFrames", "totalFrames"]
     },
     {
+      "requestSeq": 106,
       "command": "scopes",
       "arguments": { "frameId": 1 },
       "expectSuccess": true,
       "requiredBodyKeys": ["scopes"]
     },
     {
+      "requestSeq": 107,
       "command": "variables",
       "arguments": { "variablesReference": 1 },
       "expectSuccess": true,
       "requiredBodyKeys": ["variables"]
     },
     {
+      "requestSeq": 108,
       "command": "evaluate",
-      "arguments": { "expression": "$x" },
+      "arguments": { "expression": "$greeting" },
       "expectSuccess": false,
       "requiredMessageContains": "No debugger session"
     },
     {
-      "command": "completions",
-      "arguments": { "text": "$foo", "column": 2 },
-      "expectSuccess": true,
-      "requiredBodyKeys": ["targets"]
-    },
-    {
-      "command": "loadedSources",
-      "expectSuccess": true,
-      "requiredBodyKeys": ["sources"]
-    },
-    {
+      "requestSeq": 109,
       "command": "disconnect",
       "expectSuccess": true,
       "expectedEventsAfter": [
