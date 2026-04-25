@@ -600,4 +600,60 @@ mod tests {
         );
         Ok(())
     }
+
+    /// Verify the TOKEN_HEALTH_TABLE block is rendered correctly from the fixture.
+    ///
+    /// This is the only test that asserts on the TOKEN_HEALTH_TABLE section —
+    /// all other tests use `token_metrics_fixture()` but only check unrelated rows.
+    /// Without this test, a format-string argument transposition in the table
+    /// builder would go undetected.
+    #[test]
+    fn token_health_table_renders_correctly_from_fixture() -> Result<()> {
+        let metrics = ParserMetrics {
+            syntax_sections: 0,
+            system_receipt: None,
+            cpan_receipt: None,
+            project_corpus: None,
+            common_corpus_receipt: None,
+            common_corpus_pinned: 0,
+            performance_scorecard: None,
+            token_metrics: token::token_metrics_fixture(),
+        };
+        let template = "<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
+                        <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
+                        <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
+                        <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
+                        <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
+        let result = generate_parser_status(&metrics, template)?;
+
+        // The fixture has variant_count=132 and metadata_coverage_count=132.
+        // The table row format is: `{count}/{total} ({status})`.
+        assert!(result.contains("132/132"), "TOKEN_HEALTH_TABLE must show 132/132 coverage");
+        assert!(result.contains("PASS"), "TOKEN_HEALTH_TABLE must show PASS status from fixture");
+        // Category partition status from fixture
+        assert!(
+            result.contains("132 tokens partitioned"),
+            "TOKEN_HEALTH_TABLE must show category_partition_status from fixture"
+        );
+        // Lexer+parser conformance status from fixture
+        assert!(
+            result.contains("lexer + parser-core"),
+            "TOKEN_HEALTH_TABLE must show lexer_parser_conformance_status"
+        );
+        // Performance row: fixture returns UNVERIFIED (no scorecard file present)
+        assert!(
+            result.contains("UNVERIFIED"),
+            "TOKEN_HEALTH_TABLE must show UNVERIFIED when no perf scorecard"
+        );
+        // The old marker content must be replaced — the block is not left as "old"
+        assert!(
+            !result.contains(
+                "<!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->"
+            ),
+            "TOKEN_HEALTH_TABLE block must be replaced — replace_block did not fire"
+        );
+        Ok(())
+    }
 }

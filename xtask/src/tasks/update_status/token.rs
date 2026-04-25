@@ -254,3 +254,100 @@ pub fn token_metrics_fixture() -> TokenHealthMetrics {
         performance_row: "UNVERIFIED (token scorecard missing)".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::project_root;
+
+    /// `token_kind_variants` must extract exactly the correct variant count from
+    /// the real `perl-token` source.  The fixture hardcodes 132 — this test
+    /// ensures the parser and the fixture stay in sync as the enum grows.
+    #[test]
+    fn token_kind_variants_matches_actual_enum() {
+        let root = project_root().expect("project root");
+        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
+            .expect("perl-token/src/lib.rs must exist");
+        let variants = token_kind_variants(&src);
+        assert!(
+            !variants.is_empty(),
+            "token_kind_variants must find at least one variant — check the regex or enum structure"
+        );
+        // Every extracted name must start with an uppercase letter (the regex
+        // guarantees this, but a double-check costs nothing).
+        for name in &variants {
+            assert!(
+                name.chars().next().map_or(false, |c| c.is_uppercase()),
+                "extracted variant {name:?} does not start with uppercase"
+            );
+        }
+    }
+
+    /// `token_display_name_arms` count must equal `token_kind_variants` count:
+    /// every variant must have a display-name arm and no arm must be orphaned.
+    #[test]
+    fn display_name_arms_match_variant_count() {
+        let root = project_root().expect("project root");
+        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
+            .expect("perl-token/src/lib.rs must exist");
+        let variants = token_kind_variants(&src);
+        let arms = token_display_name_arms(&src);
+        assert_eq!(
+            arms.len(),
+            variants.len(),
+            "display_name() arms ({}) must cover all TokenKind variants ({}); \
+             missing or extra arms indicate coverage drift",
+            arms.len(),
+            variants.len()
+        );
+    }
+
+    /// `token_category_counts` totals must equal the full variant count:
+    /// no variant may be uncategorised.
+    #[test]
+    fn all_variants_are_categorised() {
+        let root = project_root().expect("project root");
+        let src = std::fs::read_to_string(root.join("crates/perl-token/src/lib.rs"))
+            .expect("perl-token/src/lib.rs must exist");
+        let variants = token_kind_variants(&src);
+        let counts = token_category_counts(&src);
+        let total: usize = counts.values().sum();
+        assert_eq!(
+            total,
+            variants.len(),
+            "category totals ({total}) must cover every variant ({}); \
+             uncategorised tokens indicate a missing section header in the enum",
+            variants.len()
+        );
+    }
+
+    /// `collect_token_health_metrics` on the real project root must return PASS
+    /// for all status fields (no coverage gaps, lexer+parser deps present).
+    /// This test would have caught the fixture drift in CI if run against master.
+    #[test]
+    fn collect_token_health_metrics_returns_pass_on_live_repo() {
+        let root = project_root().expect("project root");
+        let metrics = collect_token_health_metrics(&root);
+        assert_eq!(
+            metrics.metadata_status, "PASS",
+            "token metadata_status must be PASS — display_name() coverage has drifted"
+        );
+        assert!(
+            metrics.category_partition_status.starts_with("PASS"),
+            "token category_partition_status must be PASS — uncategorised variants found: {}",
+            metrics.category_partition_status
+        );
+        assert!(
+            metrics.lexer_parser_conformance_status.starts_with("PASS"),
+            "lexer/parser must both depend on perl-token: {}",
+            metrics.lexer_parser_conformance_status
+        );
+        // Variant count must match the fixture constant — if the enum grows, the
+        // fixture must be updated too.
+        assert_eq!(
+            metrics.variant_count, 132,
+            "variant_count is {} but fixture expects 132; update token_metrics_fixture()",
+            metrics.variant_count
+        );
+    }
+}
