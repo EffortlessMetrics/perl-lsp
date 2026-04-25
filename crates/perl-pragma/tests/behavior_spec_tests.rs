@@ -344,3 +344,39 @@ fn given_monotonic_lookups_when_using_cursor_then_states_match_offset_queries() 
     assert_eq!(s2, PragmaTracker::state_for_offset(&map, 30));
     assert_eq!(s3, PragmaTracker::state_for_offset(&map, 50));
 }
+
+/// The cursor's fallback to binary search must produce the same result as the
+/// static `state_for_offset` when called with a backward (decreasing) offset.
+/// This is important when a caller (e.g., a diagnostic pass) queries nodes out
+/// of source order.
+#[test]
+fn given_backward_lookup_when_cursor_past_end_then_fallback_matches_static_query() {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &["refs"], 20, 36)], 18, 40),
+        use_node("warnings", &[], 42, 57),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    // Advance cursor to the end of the map.
+    let mut cursor = PragmaQueryCursor::new();
+    let _ = cursor.state_for_offset(&map, 50);
+
+    // Now query backward to an earlier offset — must fall back to binary search.
+    let backward = cursor.state_for_offset(&map, 8);
+    assert_eq!(
+        backward,
+        PragmaTracker::state_for_offset(&map, 8),
+        "backward seek must match static query result"
+    );
+}
+
+/// Querying an empty pragma map via the cursor must return the default state,
+/// matching the behavior of the static `state_for_offset`.
+#[test]
+fn given_empty_pragma_map_cursor_returns_default() {
+    let map: Vec<(std::ops::Range<usize>, perl_pragma::PragmaState)> = vec![];
+    let mut cursor = PragmaQueryCursor::new();
+    let state = cursor.state_for_offset(&map, 999);
+    assert_eq!(state, PragmaTracker::state_for_offset(&map, 999));
+}
