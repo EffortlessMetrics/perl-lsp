@@ -24,17 +24,30 @@ pub struct Parser { /* wraps perl-parser-core */ }
 impl Parser {
     pub fn new() -> Self;
     pub fn parse(&mut self, source: &str) -> Option<Tree>;
+    pub fn parse_with_old_tree(&mut self, source: &str, old_tree: &Tree) -> Option<Tree>;
 }
 
 pub struct Tree { /* owns the v3 AST */ }
 impl Tree {
     pub fn root_node(&self) -> Node;
     pub fn source(&self) -> &str;
+    pub fn edit(&mut self, edit: &InputEdit);
+    pub fn walk(&self) -> TreeCursor;
+}
+
+pub struct TreeCursor<'tree> { /* stateful traversal */ }
+impl<'tree> TreeCursor<'tree> {
+    pub fn node(&self) -> Node<'tree>;
+    pub fn goto_first_child(&mut self) -> bool;
+    pub fn goto_next_sibling(&mut self) -> bool;
+    pub fn goto_parent(&mut self) -> bool;
+    pub fn reset(&mut self, node: Node<'tree>);
 }
 
 pub struct Node<'tree> { /* borrows from Tree */ }
 impl<'tree> Node<'tree> {
-    pub fn kind(&self) -> &'static str;        // delegates to NodeKind::kind_name()
+    pub fn kind(&self) -> &'static str;        // v3 internal name, e.g. "Program"
+    pub fn grammar_kind(&self) -> String;      // canonical tree-sitter name, e.g. "source_file"
     pub fn to_sexp(&self) -> String;           // delegates to perl_ast::Node::to_sexp()
     pub fn child_count(&self) -> usize;
     pub fn child(&self, i: usize) -> Option<Node<'tree>>;
@@ -44,6 +57,13 @@ impl<'tree> Node<'tree> {
     pub fn utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>;
     pub fn is_leaf(&self) -> bool;
     pub fn inner(&self) -> &'tree perl_ast::Node;  // escape hatch
+}
+
+pub struct PerlLanguage { /* language descriptor */ }
+impl PerlLanguage {
+    pub fn node_kind_count(&self) -> usize;
+    pub fn node_kind_names(&self) -> &[&'static str];
+    pub fn node_kind_is_named(&self, id: usize) -> bool;
 }
 
 pub use perl_ast::NodeKind as PerlNodeKind;  // for pattern matching without perl-ast dep
@@ -75,8 +95,7 @@ cargo doc -p tree-sitter-perl-rs --open     # View documentation
 
 ## Backlog follow-ups
 
-- Tree cursor / walk API
-- Edit/incremental parsing API
 - Field-name accessors (named children by field name)
-- A `Language` constant compatible with the `tree_sitter::Language` shape
-- Predicate / query API
+- A `LANGUAGE` constant / `language()` function compatible with the `tree_sitter::Language`
+  type (blocked on tree-sitter API stability)
+- Predicate / query API (`Query` + `QueryCursor`)

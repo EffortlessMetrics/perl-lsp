@@ -9,18 +9,16 @@
 - `is_leaf()`, `inner()`, `tree_source()` — utility and escape hatch
 - `PerlNodeKind` re-export for pattern matching without a direct `perl-ast` dependency
 - Snapshot tests for representative Perl constructs
+- `TreeCursor` / `walk()` — streaming traversal without per-call Vec allocation,
+  mirroring `tree_sitter::TreeCursor`
+- `Tree::edit()` and `Parser::parse_with_old_tree()` — incremental re-parsing of
+  changed source regions
+- `PerlLanguage` — language descriptor with `node_kind_count()`, `node_kind_names()`,
+  and `node_kind_is_named()`, compatible with tree-sitter language metadata conventions
+- `grammar_kind()` — returns canonical tree-sitter grammar names (e.g. `"source_file"`,
+  `"sub"`) rather than v3 internal names; complements `kind()`
 
 ## Phase 2 (planned)
-
-### Tree cursor / walk API
-
-A `TreeCursor` type for streaming traversal without per-call Vec allocation.
-Mirrors `tree_sitter::TreeCursor`.
-
-### Edit / incremental parsing
-
-`Tree::edit()` to apply `InputEdit` structures and `Parser::parse_with_old_tree()` for
-incremental re-parsing of changed source regions.
 
 ### Field-name accessors
 
@@ -39,21 +37,14 @@ that expects a language object.
 `Query` and `QueryCursor` types for pattern matching over the AST, analogous to the
 tree-sitter query API.
 
-### `kind()` name remapping
-
-Map v3 internal node kind names (e.g. `"Program"`, `"Subroutine"`) to canonical tree-sitter
-grammar names (e.g. `"source_file"`, `"subroutine_declaration"`). The current `kind()` returns
-v3 internal names; `to_sexp()` already uses grammar-canonical names.
-
 ## Known limitations
 
-- `end_byte()` may return `source.len() + 1` for the root node on some inputs. Callers should
-  clamp to `source.len()` when using it as a slice index.
 - `Node::children()` allocates a `Vec<&AstNode>` internally on each call. Avoid calling it
-  in tight loops; iterate once and collect if you need random access.
+  in tight loops; iterate once and collect if you need random access. Use `Tree::walk()` /
+  `TreeCursor` for allocation-free traversal.
 - `RecursionLimit` / `NestingTooDeep` parse errors from the v3 parser produce `None` from
   `Parser::parse()` rather than a partial tree. In practice this only affects pathologically
   deep nesting.
 - `Node::kind()` returns v3 internal kind names, not tree-sitter grammar node type strings.
-  The root node reports `"Program"` rather than `"source_file"`. Use `to_sexp()` for output
-  that uses canonical grammar names.
+  The root node reports `"Program"` rather than `"source_file"`. Use `grammar_kind()` to get
+  the canonical tree-sitter name, or `to_sexp()` for output that uses grammar names throughout.

@@ -965,6 +965,8 @@ mod tests {
         while cursor.goto_next_sibling() {
             count += 1;
         }
+        // "1; 2; 3;" produces three expression-statement children under source_file.
+        assert_eq!(count, 3, "cursor should visit exactly 3 siblings for '1; 2; 3;'");
         // After last goto_next_sibling returns false, cursor should still be valid
         // and still have a node (the last sibling).
         let node = cursor.node();
