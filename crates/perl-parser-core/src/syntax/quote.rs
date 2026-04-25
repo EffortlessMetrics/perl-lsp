@@ -55,6 +55,8 @@ pub enum SubstitutionError {
 pub enum TransliterationError {
     /// Invalid modifier character found
     InvalidModifier(char),
+    /// Invalid delimiter after `tr`/`y`
+    InvalidDelimiter(char),
     /// Missing delimiter after `tr`/`y`
     MissingDelimiter,
     /// Search list section is missing
@@ -360,12 +362,14 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
 
         (body, &rest1[end_pos..])
     } else if is_paired {
-        if let Some(repl_delimiter) = rest2.chars().next() {
+        if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
+            let repl_closing = get_closing_delimiter(repl_delimiter);
+            extract_delimited_content(rest2, repl_delimiter, repl_closing)
+        } else if let Some(repl_delimiter) = rest2.chars().next() {
             if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
                 (String::new(), rest2)
             } else {
-                let repl_closing = get_closing_delimiter(repl_delimiter);
-                extract_delimited_content(rest2, repl_delimiter, repl_closing)
+                extract_delimited_content(rest2, repl_delimiter, repl_delimiter)
             }
         } else {
             (String::new(), rest2)
@@ -413,7 +417,7 @@ pub fn extract_transliteration_parts_strict(
         None => return Err(TransliterationError::MissingDelimiter),
     };
     if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
-        return Err(TransliterationError::MissingDelimiter);
+        return Err(TransliterationError::InvalidDelimiter(delimiter));
     }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
@@ -442,6 +446,11 @@ pub fn extract_transliteration_parts_strict(
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
             (body, rest, found_closing)
+        } else if let Some(repl_delimiter) = trimmed.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                return Err(TransliterationError::InvalidDelimiter(repl_delimiter));
+            }
+            extract_delimited_content_strict(trimmed, repl_delimiter, repl_delimiter)
         } else {
             return Err(TransliterationError::MissingReplacement);
         }
