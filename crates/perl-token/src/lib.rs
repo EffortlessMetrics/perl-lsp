@@ -37,6 +37,54 @@
 
 use std::sync::Arc;
 
+/// Borrowed view over token data for allocation-sensitive paths.
+///
+/// Unlike [`Token`], this type borrows source text and does not allocate.
+/// Convert to [`Token`] explicitly with [`TokenRef::to_owned_token`] or `From`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenRef<'src> {
+    /// Token classification for parser decision making
+    pub kind: TokenKind,
+    /// Borrowed source text slice
+    pub text: &'src str,
+    /// Starting byte position for error reporting and location tracking
+    pub start: usize,
+    /// Ending byte position for span calculation and navigation
+    pub end: usize,
+}
+
+impl<'src> TokenRef<'src> {
+    /// Create a borrowed token view with the given kind, source text, and byte span.
+    pub fn new(kind: TokenKind, text: &'src str, start: usize, end: usize) -> Self {
+        Self { kind, text, start, end }
+    }
+
+    /// Return the token span length in bytes.
+    pub fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether the token span is empty.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Return the token span as `(start, end)`.
+    pub fn span(self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return a human-readable display name for this token.
+    pub fn display_name(self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Convert this borrowed token view into an owned [`Token`].
+    pub fn to_owned_token(self) -> Token {
+        Token::new(self.kind, self.text, self.start, self.end)
+    }
+}
+
 /// Token produced by the lexer and consumed by the parser.
 ///
 /// Stores the token kind, original source text, and byte span. The text is kept
@@ -98,6 +146,27 @@ impl Token {
     /// ```
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Return the token span as `(start, end)`.
+    pub fn span(&self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return a human-readable display name for this token.
+    pub fn display_name(&self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Return a borrowed token view over this token.
+    pub fn as_ref_token(&self) -> TokenRef<'_> {
+        TokenRef { kind: self.kind, text: self.text.as_ref(), start: self.start, end: self.end }
+    }
+}
+
+impl From<TokenRef<'_>> for Token {
+    fn from(value: TokenRef<'_>) -> Self {
+        value.to_owned_token()
     }
 }
 
