@@ -1126,6 +1126,20 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
 
     // Immediate scope → sort key 'a' → sort_text "1a_scope_inner"
     // PackageLevel (file-scope `my`) → sort key 'c' → sort_text "1c_scope_outer"
+    //
+    // Guard that sortText is actually present in the wire response.  Without
+    // this check the `!outer_sort.starts_with("1a_")` assertion passes vacuously
+    // when sortText is absent (empty string does not start with "1a_").
+    assert!(
+        !inner_sort.is_empty(),
+        "$scope_inner must have a non-empty sortText — check that completion.rs \
+         serializes sort_text to the LSP wire response"
+    );
+    assert!(
+        !outer_sort.is_empty(),
+        "$scope_outer must have a non-empty sortText — check that completion.rs \
+         serializes sort_text to the LSP wire response"
+    );
     assert!(
         inner_sort.starts_with("1a_"),
         "$scope_inner should have Immediate scope sort_text (\"1a_...\"), got: '{inner_sort}'"
