@@ -35,7 +35,119 @@
 //! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
+
+/// Byte span carried by a [`Token`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenSpan {
+    /// Starting byte position.
+    pub start: usize,
+    /// Ending byte position.
+    pub end: usize,
+}
+
+impl TokenSpan {
+    /// Create a span from raw byte positions.
+    pub const fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    /// Create a span, returning an error when `end < start`.
+    pub fn try_new(start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        if end < start {
+            return Err(TokenSpanError::EndBeforeStart { start, end });
+        }
+
+        Ok(Self { start, end })
+    }
+
+    /// Span length in bytes.
+    pub const fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Whether the span length is zero bytes.
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Convert this span to a standard `Range`.
+    pub const fn range(self) -> Range<usize> {
+        self.start..self.end
+    }
+}
+
+/// Error type for checked token/span constructors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TokenSpanError {
+    /// End offset is before start offset.
+    EndBeforeStart { start: usize, end: usize },
+    /// Empty span is only valid for EOF or explicit synthetic tokens.
+    EmptySpanNotAllowed { kind: TokenKind, at: usize },
+}
+
+impl std::fmt::Display for TokenSpanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EndBeforeStart { start, end } => {
+                write!(f, "token span invariant violated: end ({end}) < start ({start})")
+            }
+            Self::EmptySpanNotAllowed { kind, at } => {
+                write!(f, "empty span not allowed for token kind {kind:?} at byte {at}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for TokenSpanError {}
+
+/// Borrowed view over token data for allocation-sensitive paths.
+///
+/// Unlike [`Token`], this type borrows source text and does not allocate.
+/// Convert to [`Token`] explicitly with [`TokenRef::to_owned_token`] or `From`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenRef<'src> {
+    /// Token classification for parser decision making
+    pub kind: TokenKind,
+    /// Borrowed source text slice
+    pub text: &'src str,
+    /// Starting byte position for error reporting and location tracking
+    pub start: usize,
+    /// Ending byte position for span calculation and navigation
+    pub end: usize,
+}
+
+impl<'src> TokenRef<'src> {
+    /// Create a borrowed token view with the given kind, source text, and byte span.
+    pub fn new(kind: TokenKind, text: &'src str, start: usize, end: usize) -> Self {
+        Self { kind, text, start, end }
+    }
+
+    /// Return the token span length in bytes.
+    pub fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+
+    /// Return whether the token span is empty.
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Return the token span as `(start, end)`.
+    pub fn span(self) -> (usize, usize) {
+        (self.start, self.end)
+    }
+
+    /// Return a human-readable display name for this token.
+    pub fn display_name(self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Convert this borrowed token view into an owned [`Token`].
+    pub fn to_owned_token(self) -> Token {
+        Token::new(self.kind, self.text, self.start, self.end)
+    }
+}
 
 /// Token produced by the lexer and consumed by the parser.
 ///
@@ -69,6 +181,69 @@ impl Token {
         Token { kind, text: text.into(), start, end }
     }
 
+    /// Create a token with checked span ordering.
+    ///
+    /// Unlike [`Token::new`], this rejects spans where `end < start`.
+    pub fn try_new(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let span = TokenSpan::try_new(start, end)?;
+        Ok(Self { kind, text: text.into(), start: span.start, end: span.end })
+    }
+
+    /// Create a token while enforcing span invariants.
+    ///
+    /// Rules:
+    /// - `start <= end`
+    /// - zero-length spans are accepted only for EOF tokens
+    pub fn new_checked(
+        kind: TokenKind,
+        text: impl Into<Arc<str>>,
+        start: usize,
+        end: usize,
+    ) -> Result<Self, TokenSpanError> {
+        let token = Self::try_new(kind, text, start, end)?;
+        if token.is_empty() && token.kind != TokenKind::Eof {
+            return Err(TokenSpanError::EmptySpanNotAllowed { kind: token.kind, at: token.start });
+        }
+
+        Ok(token)
+    }
+
+    /// Create an EOF token at `pos`.
+    pub fn eof_at(pos: usize) -> Self {
+        Self::new(TokenKind::Eof, "", pos, pos)
+    }
+
+    /// Create an unknown (synthetic) token at `start..end`.
+    pub fn unknown_at(text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
+        let bounded_end = end.max(start);
+        Self::new(TokenKind::Unknown, text, start, bounded_end)
+    }
+
+    /// Return this token's byte span.
+    pub fn span(&self) -> TokenSpan {
+        TokenSpan::new(self.start, self.end)
+    }
+
+    /// Return this token's byte span as `Range<usize>`.
+    pub fn range(&self) -> Range<usize> {
+        self.span().range()
+    }
+
+    /// Clone this token with a new checked span.
+    pub fn with_span(&self, start: usize, end: usize) -> Result<Self, TokenSpanError> {
+        Self::new_checked(self.kind, self.text.clone(), start, end)
+    }
+
+    /// Clone this token with a new token kind.
+    pub fn with_kind(&self, kind: TokenKind) -> Self {
+        Self::new(kind, self.text.clone(), self.start, self.end)
+    }
+
     /// Return the token span length in bytes.
     ///
     /// This uses saturating subtraction so malformed spans (where `end < start`)
@@ -98,6 +273,22 @@ impl Token {
     /// ```
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Return a human-readable display name for this token.
+    pub fn display_name(&self) -> &'static str {
+        self.kind.display_name()
+    }
+
+    /// Return a borrowed token view over this token.
+    pub fn as_ref_token(&self) -> TokenRef<'_> {
+        TokenRef { kind: self.kind, text: self.text.as_ref(), start: self.start, end: self.end }
+    }
+}
+
+impl From<TokenRef<'_>> for Token {
+    fn from(value: TokenRef<'_>) -> Self {
+        value.to_owned_token()
     }
 }
 
@@ -398,142 +589,329 @@ pub enum TokenKind {
     Unknown,
 }
 
+/// Broad classification used for token metadata and conformance checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenCategory {
+    /// Reserved words and language keywords.
+    Keyword,
+    /// Operators and symbolic/word forms.
+    Operator,
+    /// Grouping and punctuation delimiters.
+    Delimiter,
+    /// Literal-like lexical forms.
+    Literal,
+    /// Identifiers and sigils.
+    Identifier,
+    /// Special sentinel and recovery tokens.
+    Special,
+}
+
+/// Metadata associated with each [`TokenKind`] variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenKindMetadata {
+    /// Stable category used in docs/tests/gates.
+    pub category: TokenCategory,
+    /// User-facing display label for diagnostics.
+    pub display_name: &'static str,
+}
+
 impl TokenKind {
-    /// Return whether this token kind belongs to the keyword category.
-    pub fn is_keyword(self) -> bool {
-        matches!(
-            self,
+    /// Return every [`TokenKind`] variant in stable declaration order.
+    pub const fn all() -> &'static [TokenKind] {
+        &TOKEN_KIND_ALL
+    }
+
+    /// Number of token kinds expected to have metadata coverage.
+    pub const fn metadata_count() -> usize {
+        TOKEN_KIND_ALL.len()
+    }
+
+    /// Return compact metadata for this token kind.
+    pub fn metadata(self) -> TokenKindMetadata {
+        TokenKindMetadata { category: self.category(), display_name: self.display_name() }
+    }
+
+    /// Return the high-level category for this token kind.
+    pub const fn category(self) -> TokenCategory {
+        match self {
             TokenKind::My
-                | TokenKind::Our
-                | TokenKind::Local
-                | TokenKind::State
-                | TokenKind::Sub
-                | TokenKind::If
-                | TokenKind::Elsif
-                | TokenKind::Else
-                | TokenKind::Unless
-                | TokenKind::While
-                | TokenKind::Until
-                | TokenKind::For
-                | TokenKind::Foreach
-                | TokenKind::Return
-                | TokenKind::Package
-                | TokenKind::Use
-                | TokenKind::No
-                | TokenKind::Begin
-                | TokenKind::End
-                | TokenKind::Check
-                | TokenKind::Init
-                | TokenKind::Unitcheck
-                | TokenKind::Eval
-                | TokenKind::Do
-                | TokenKind::Given
-                | TokenKind::When
-                | TokenKind::Default
-                | TokenKind::Try
-                | TokenKind::Catch
-                | TokenKind::Finally
-                | TokenKind::Continue
-                | TokenKind::Next
-                | TokenKind::Last
-                | TokenKind::Redo
-                | TokenKind::Goto
-                | TokenKind::Class
-                | TokenKind::Method
-                | TokenKind::Field
-                | TokenKind::Format
-                | TokenKind::Undef
-                | TokenKind::Defer
-        )
-    }
-
-    /// Return whether this token kind belongs to the operator category.
-    pub fn is_operator(self) -> bool {
-        matches!(
-            self,
+            | TokenKind::Our
+            | TokenKind::Local
+            | TokenKind::State
+            | TokenKind::Sub
+            | TokenKind::If
+            | TokenKind::Elsif
+            | TokenKind::Else
+            | TokenKind::Unless
+            | TokenKind::While
+            | TokenKind::Until
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::Return
+            | TokenKind::Package
+            | TokenKind::Use
+            | TokenKind::No
+            | TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck
+            | TokenKind::Eval
+            | TokenKind::Do
+            | TokenKind::Given
+            | TokenKind::When
+            | TokenKind::Default
+            | TokenKind::Try
+            | TokenKind::Catch
+            | TokenKind::Finally
+            | TokenKind::Continue
+            | TokenKind::Next
+            | TokenKind::Last
+            | TokenKind::Redo
+            | TokenKind::Goto
+            | TokenKind::Class
+            | TokenKind::Method
+            | TokenKind::Field
+            | TokenKind::Format
+            | TokenKind::Undef
+            | TokenKind::Defer => TokenCategory::Keyword,
             TokenKind::Assign
-                | TokenKind::Plus
-                | TokenKind::Minus
-                | TokenKind::Star
-                | TokenKind::Slash
-                | TokenKind::Percent
-                | TokenKind::Power
-                | TokenKind::LeftShift
-                | TokenKind::RightShift
-                | TokenKind::BitwiseAnd
-                | TokenKind::BitwiseOr
-                | TokenKind::BitwiseXor
-                | TokenKind::BitwiseNot
-                | TokenKind::PlusAssign
-                | TokenKind::MinusAssign
-                | TokenKind::StarAssign
-                | TokenKind::SlashAssign
-                | TokenKind::PercentAssign
-                | TokenKind::DotAssign
-                | TokenKind::AndAssign
-                | TokenKind::OrAssign
-                | TokenKind::XorAssign
-                | TokenKind::PowerAssign
-                | TokenKind::LeftShiftAssign
-                | TokenKind::RightShiftAssign
-                | TokenKind::LogicalAndAssign
-                | TokenKind::LogicalOrAssign
-                | TokenKind::DefinedOrAssign
-                | TokenKind::Equal
-                | TokenKind::NotEqual
-                | TokenKind::Match
-                | TokenKind::NotMatch
-                | TokenKind::SmartMatch
-                | TokenKind::Less
-                | TokenKind::Greater
-                | TokenKind::LessEqual
-                | TokenKind::GreaterEqual
-                | TokenKind::Spaceship
-                | TokenKind::StringCompare
-                | TokenKind::And
-                | TokenKind::Or
-                | TokenKind::Not
-                | TokenKind::DefinedOr
-                | TokenKind::WordAnd
-                | TokenKind::WordOr
-                | TokenKind::WordNot
-                | TokenKind::WordXor
-                | TokenKind::Arrow
-                | TokenKind::FatArrow
-                | TokenKind::Dot
-                | TokenKind::Range
-                | TokenKind::Ellipsis
-                | TokenKind::Increment
-                | TokenKind::Decrement
-                | TokenKind::DoubleColon
-                | TokenKind::Question
-                | TokenKind::Colon
-                | TokenKind::Backslash
-        )
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+            | TokenKind::Power
+            | TokenKind::LeftShift
+            | TokenKind::RightShift
+            | TokenKind::BitwiseAnd
+            | TokenKind::BitwiseOr
+            | TokenKind::BitwiseXor
+            | TokenKind::BitwiseNot
+            | TokenKind::PlusAssign
+            | TokenKind::MinusAssign
+            | TokenKind::StarAssign
+            | TokenKind::SlashAssign
+            | TokenKind::PercentAssign
+            | TokenKind::DotAssign
+            | TokenKind::AndAssign
+            | TokenKind::OrAssign
+            | TokenKind::XorAssign
+            | TokenKind::PowerAssign
+            | TokenKind::LeftShiftAssign
+            | TokenKind::RightShiftAssign
+            | TokenKind::LogicalAndAssign
+            | TokenKind::LogicalOrAssign
+            | TokenKind::DefinedOrAssign
+            | TokenKind::Equal
+            | TokenKind::NotEqual
+            | TokenKind::Match
+            | TokenKind::NotMatch
+            | TokenKind::SmartMatch
+            | TokenKind::Less
+            | TokenKind::Greater
+            | TokenKind::LessEqual
+            | TokenKind::GreaterEqual
+            | TokenKind::Spaceship
+            | TokenKind::StringCompare
+            | TokenKind::And
+            | TokenKind::Or
+            | TokenKind::Not
+            | TokenKind::DefinedOr
+            | TokenKind::WordAnd
+            | TokenKind::WordOr
+            | TokenKind::WordNot
+            | TokenKind::WordXor
+            | TokenKind::Arrow
+            | TokenKind::FatArrow
+            | TokenKind::Dot
+            | TokenKind::Range
+            | TokenKind::Ellipsis
+            | TokenKind::Increment
+            | TokenKind::Decrement
+            | TokenKind::DoubleColon
+            | TokenKind::Question
+            | TokenKind::Colon
+            | TokenKind::Backslash => TokenCategory::Operator,
+            TokenKind::LeftParen
+            | TokenKind::RightParen
+            | TokenKind::LeftBrace
+            | TokenKind::RightBrace
+            | TokenKind::LeftBracket
+            | TokenKind::RightBracket
+            | TokenKind::Semicolon
+            | TokenKind::Comma => TokenCategory::Delimiter,
+            TokenKind::Number
+            | TokenKind::String
+            | TokenKind::Regex
+            | TokenKind::Substitution
+            | TokenKind::Transliteration
+            | TokenKind::QuoteSingle
+            | TokenKind::QuoteDouble
+            | TokenKind::QuoteWords
+            | TokenKind::QuoteCommand
+            | TokenKind::HeredocStart
+            | TokenKind::HeredocBody
+            | TokenKind::FormatBody
+            | TokenKind::DataMarker
+            | TokenKind::DataBody
+            | TokenKind::VString
+            | TokenKind::UnknownRest
+            | TokenKind::HeredocDepthLimit => TokenCategory::Literal,
+            TokenKind::Identifier
+            | TokenKind::ScalarSigil
+            | TokenKind::ArraySigil
+            | TokenKind::HashSigil
+            | TokenKind::SubSigil
+            | TokenKind::GlobSigil => TokenCategory::Identifier,
+            TokenKind::Eof | TokenKind::Unknown => TokenCategory::Special,
+        }
     }
 
-    /// Return whether this token kind belongs to the literal category.
-    pub fn is_literal(self) -> bool {
-        matches!(
-            self,
-            TokenKind::Number
-                | TokenKind::String
-                | TokenKind::Regex
-                | TokenKind::Substitution
-                | TokenKind::Transliteration
-                | TokenKind::QuoteSingle
-                | TokenKind::QuoteDouble
-                | TokenKind::QuoteWords
-                | TokenKind::QuoteCommand
-                | TokenKind::HeredocStart
-                | TokenKind::HeredocBody
-                | TokenKind::FormatBody
-                | TokenKind::DataMarker
-                | TokenKind::DataBody
-                | TokenKind::VString
-                | TokenKind::UnknownRest
-                | TokenKind::HeredocDepthLimit
-        )
+    /// Map a canonical keyword spelling to its [`TokenKind`].
+    ///
+    /// This mapping is case-sensitive and only recognizes canonical Perl
+    /// spellings used by the lexer/parser pipeline.
+    pub fn from_keyword(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "my" => Some(TokenKind::My),
+            "our" => Some(TokenKind::Our),
+            "local" => Some(TokenKind::Local),
+            "state" => Some(TokenKind::State),
+            "sub" => Some(TokenKind::Sub),
+            "if" => Some(TokenKind::If),
+            "elsif" => Some(TokenKind::Elsif),
+            "else" => Some(TokenKind::Else),
+            "unless" => Some(TokenKind::Unless),
+            "while" => Some(TokenKind::While),
+            "until" => Some(TokenKind::Until),
+            "for" => Some(TokenKind::For),
+            "foreach" => Some(TokenKind::Foreach),
+            "return" => Some(TokenKind::Return),
+            "package" => Some(TokenKind::Package),
+            "use" => Some(TokenKind::Use),
+            "no" => Some(TokenKind::No),
+            "BEGIN" => Some(TokenKind::Begin),
+            "END" => Some(TokenKind::End),
+            "CHECK" => Some(TokenKind::Check),
+            "INIT" => Some(TokenKind::Init),
+            "UNITCHECK" => Some(TokenKind::Unitcheck),
+            "eval" => Some(TokenKind::Eval),
+            "do" => Some(TokenKind::Do),
+            "given" => Some(TokenKind::Given),
+            "when" => Some(TokenKind::When),
+            "default" => Some(TokenKind::Default),
+            "try" => Some(TokenKind::Try),
+            "catch" => Some(TokenKind::Catch),
+            "finally" => Some(TokenKind::Finally),
+            "continue" => Some(TokenKind::Continue),
+            "next" => Some(TokenKind::Next),
+            "last" => Some(TokenKind::Last),
+            "redo" => Some(TokenKind::Redo),
+            "goto" => Some(TokenKind::Goto),
+            "class" => Some(TokenKind::Class),
+            "method" => Some(TokenKind::Method),
+            "field" => Some(TokenKind::Field),
+            "format" => Some(TokenKind::Format),
+            "undef" => Some(TokenKind::Undef),
+            "defer" => Some(TokenKind::Defer),
+            // Word operators are emitted as Keyword tokens by the lexer.
+            "and" => Some(TokenKind::WordAnd),
+            "or" => Some(TokenKind::WordOr),
+            "not" => Some(TokenKind::WordNot),
+            "xor" => Some(TokenKind::WordXor),
+            "cmp" => Some(TokenKind::StringCompare),
+            _ => None,
+        }
+    }
+
+    /// Map a canonical operator spelling to its [`TokenKind`].
+    ///
+    /// This mapping is case-sensitive.
+    pub fn from_operator(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "=" => Some(TokenKind::Assign),
+            "+" => Some(TokenKind::Plus),
+            "-" => Some(TokenKind::Minus),
+            "*" => Some(TokenKind::Star),
+            "/" => Some(TokenKind::Slash),
+            "%" => Some(TokenKind::Percent),
+            "**" => Some(TokenKind::Power),
+            "<<" => Some(TokenKind::LeftShift),
+            ">>" => Some(TokenKind::RightShift),
+            "&" => Some(TokenKind::BitwiseAnd),
+            "|" => Some(TokenKind::BitwiseOr),
+            "^" => Some(TokenKind::BitwiseXor),
+            "~" => Some(TokenKind::BitwiseNot),
+            "+=" => Some(TokenKind::PlusAssign),
+            "-=" => Some(TokenKind::MinusAssign),
+            "*=" => Some(TokenKind::StarAssign),
+            "/=" => Some(TokenKind::SlashAssign),
+            "%=" => Some(TokenKind::PercentAssign),
+            ".=" => Some(TokenKind::DotAssign),
+            "&=" => Some(TokenKind::AndAssign),
+            "|=" => Some(TokenKind::OrAssign),
+            "^=" => Some(TokenKind::XorAssign),
+            "**=" => Some(TokenKind::PowerAssign),
+            "<<=" => Some(TokenKind::LeftShiftAssign),
+            ">>=" => Some(TokenKind::RightShiftAssign),
+            "&&=" => Some(TokenKind::LogicalAndAssign),
+            "||=" => Some(TokenKind::LogicalOrAssign),
+            "//=" => Some(TokenKind::DefinedOrAssign),
+            "==" => Some(TokenKind::Equal),
+            "!=" => Some(TokenKind::NotEqual),
+            "=~" => Some(TokenKind::Match),
+            "!~" => Some(TokenKind::NotMatch),
+            "~~" => Some(TokenKind::SmartMatch),
+            "<" => Some(TokenKind::Less),
+            ">" => Some(TokenKind::Greater),
+            "<=" => Some(TokenKind::LessEqual),
+            ">=" => Some(TokenKind::GreaterEqual),
+            "<=>" => Some(TokenKind::Spaceship),
+            "&&" => Some(TokenKind::And),
+            "||" => Some(TokenKind::Or),
+            "!" => Some(TokenKind::Not),
+            "//" => Some(TokenKind::DefinedOr),
+            "->" => Some(TokenKind::Arrow),
+            "=>" => Some(TokenKind::FatArrow),
+            "." => Some(TokenKind::Dot),
+            ".." => Some(TokenKind::Range),
+            "..." => Some(TokenKind::Ellipsis),
+            "++" => Some(TokenKind::Increment),
+            "--" => Some(TokenKind::Decrement),
+            "::" => Some(TokenKind::DoubleColon),
+            "?" => Some(TokenKind::Question),
+            ":" => Some(TokenKind::Colon),
+            "\\" => Some(TokenKind::Backslash),
+            _ => None,
+        }
+    }
+
+    /// Map a delimiter spelling to its [`TokenKind`].
+    pub fn from_delimiter(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "(" => Some(TokenKind::LeftParen),
+            ")" => Some(TokenKind::RightParen),
+            "{" => Some(TokenKind::LeftBrace),
+            "}" => Some(TokenKind::RightBrace),
+            "[" => Some(TokenKind::LeftBracket),
+            "]" => Some(TokenKind::RightBracket),
+            ";" => Some(TokenKind::Semicolon),
+            "," => Some(TokenKind::Comma),
+            _ => None,
+        }
+    }
+
+    /// Map a sigil spelling to its [`TokenKind`].
+    pub fn from_sigil(spelling: &str) -> Option<TokenKind> {
+        match spelling {
+            "$" => Some(TokenKind::ScalarSigil),
+            "@" => Some(TokenKind::ArraySigil),
+            "%" => Some(TokenKind::HashSigil),
+            "&" => Some(TokenKind::SubSigil),
+            "*" => Some(TokenKind::GlobSigil),
+            _ => None,
+        }
     }
 
     /// Return a user-friendly display name for this token kind.
@@ -679,11 +1057,11 @@ impl TokenKind {
             TokenKind::HeredocStart => "heredoc (<<)",
             TokenKind::HeredocBody => "heredoc body",
             TokenKind::FormatBody => "format body",
-            TokenKind::DataMarker => "__DATA__",
-            TokenKind::DataBody => "data section",
+            TokenKind::DataMarker => "data marker (__DATA__ or __END__)",
+            TokenKind::DataBody => "data section body",
             TokenKind::VString => "version string",
-            TokenKind::UnknownRest => "unparsed content",
-            TokenKind::HeredocDepthLimit => "heredoc depth limit",
+            TokenKind::UnknownRest => "unparsed remainder",
+            TokenKind::HeredocDepthLimit => "heredoc depth limit exceeded",
 
             // Identifiers and variables
             TokenKind::Identifier => "identifier",
@@ -699,3 +1077,138 @@ impl TokenKind {
         }
     }
 }
+
+const TOKEN_KIND_ALL: [TokenKind; 132] = [
+    TokenKind::My,
+    TokenKind::Our,
+    TokenKind::Local,
+    TokenKind::State,
+    TokenKind::Sub,
+    TokenKind::If,
+    TokenKind::Elsif,
+    TokenKind::Else,
+    TokenKind::Unless,
+    TokenKind::While,
+    TokenKind::Until,
+    TokenKind::For,
+    TokenKind::Foreach,
+    TokenKind::Return,
+    TokenKind::Package,
+    TokenKind::Use,
+    TokenKind::No,
+    TokenKind::Begin,
+    TokenKind::End,
+    TokenKind::Check,
+    TokenKind::Init,
+    TokenKind::Unitcheck,
+    TokenKind::Eval,
+    TokenKind::Do,
+    TokenKind::Given,
+    TokenKind::When,
+    TokenKind::Default,
+    TokenKind::Try,
+    TokenKind::Catch,
+    TokenKind::Finally,
+    TokenKind::Continue,
+    TokenKind::Next,
+    TokenKind::Last,
+    TokenKind::Redo,
+    TokenKind::Goto,
+    TokenKind::Class,
+    TokenKind::Method,
+    TokenKind::Field,
+    TokenKind::Format,
+    TokenKind::Undef,
+    TokenKind::Defer,
+    TokenKind::Assign,
+    TokenKind::Plus,
+    TokenKind::Minus,
+    TokenKind::Star,
+    TokenKind::Slash,
+    TokenKind::Percent,
+    TokenKind::Power,
+    TokenKind::LeftShift,
+    TokenKind::RightShift,
+    TokenKind::BitwiseAnd,
+    TokenKind::BitwiseOr,
+    TokenKind::BitwiseXor,
+    TokenKind::BitwiseNot,
+    TokenKind::PlusAssign,
+    TokenKind::MinusAssign,
+    TokenKind::StarAssign,
+    TokenKind::SlashAssign,
+    TokenKind::PercentAssign,
+    TokenKind::DotAssign,
+    TokenKind::AndAssign,
+    TokenKind::OrAssign,
+    TokenKind::XorAssign,
+    TokenKind::PowerAssign,
+    TokenKind::LeftShiftAssign,
+    TokenKind::RightShiftAssign,
+    TokenKind::LogicalAndAssign,
+    TokenKind::LogicalOrAssign,
+    TokenKind::DefinedOrAssign,
+    TokenKind::Equal,
+    TokenKind::NotEqual,
+    TokenKind::Match,
+    TokenKind::NotMatch,
+    TokenKind::SmartMatch,
+    TokenKind::Less,
+    TokenKind::Greater,
+    TokenKind::LessEqual,
+    TokenKind::GreaterEqual,
+    TokenKind::Spaceship,
+    TokenKind::StringCompare,
+    TokenKind::And,
+    TokenKind::Or,
+    TokenKind::Not,
+    TokenKind::DefinedOr,
+    TokenKind::WordAnd,
+    TokenKind::WordOr,
+    TokenKind::WordNot,
+    TokenKind::WordXor,
+    TokenKind::Arrow,
+    TokenKind::FatArrow,
+    TokenKind::Dot,
+    TokenKind::Range,
+    TokenKind::Ellipsis,
+    TokenKind::Increment,
+    TokenKind::Decrement,
+    TokenKind::DoubleColon,
+    TokenKind::Question,
+    TokenKind::Colon,
+    TokenKind::Backslash,
+    TokenKind::LeftParen,
+    TokenKind::RightParen,
+    TokenKind::LeftBrace,
+    TokenKind::RightBrace,
+    TokenKind::LeftBracket,
+    TokenKind::RightBracket,
+    TokenKind::Semicolon,
+    TokenKind::Comma,
+    TokenKind::Number,
+    TokenKind::String,
+    TokenKind::Regex,
+    TokenKind::Substitution,
+    TokenKind::Transliteration,
+    TokenKind::QuoteSingle,
+    TokenKind::QuoteDouble,
+    TokenKind::QuoteWords,
+    TokenKind::QuoteCommand,
+    TokenKind::HeredocStart,
+    TokenKind::HeredocBody,
+    TokenKind::FormatBody,
+    TokenKind::DataMarker,
+    TokenKind::DataBody,
+    TokenKind::VString,
+    TokenKind::UnknownRest,
+    TokenKind::HeredocDepthLimit,
+    TokenKind::Identifier,
+    TokenKind::ScalarSigil,
+    TokenKind::ArraySigil,
+    TokenKind::HashSigil,
+    TokenKind::SubSigil,
+    TokenKind::GlobSigil,
+    TokenKind::Eof,
+    TokenKind::Unknown,
+];

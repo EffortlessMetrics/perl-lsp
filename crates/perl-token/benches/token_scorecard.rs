@@ -3,12 +3,14 @@ use criterion::{Criterion, criterion_group, criterion_main};
 mod perf_scorecard;
 use perl_lexer::{Token as LexerToken, TokenType};
 use perl_parser_core::tokens::token_stream::TokenStream;
-use perl_token::{Token, TokenKind};
+use perl_token::{Token, TokenKind, TokenRef};
 use std::hint::black_box;
 
 const SHORT_TOKEN_TEXT: &str = "my";
 const LONG_TOKEN_TEXT: &str =
     "ThisIsALongerTokenPayloadToMeasureArcAllocationAndCopyCostsAcrossParserBoundaries";
+const START: usize = 12;
+const END: usize = 18;
 
 fn run_scorecard() {
     perf_scorecard::record_metric(
@@ -101,5 +103,44 @@ fn benchmark_token_scorecard(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_token_scorecard);
+fn bench_borrowed_token_construction(c: &mut Criterion) {
+    c.bench_function("token/borrowed_construction", |b| {
+        b.iter(|| {
+            black_box(TokenRef::new(
+                TokenKind::Identifier,
+                black_box("foobar"),
+                black_box(START),
+                black_box(END),
+            ))
+        });
+    });
+}
+
+fn bench_owned_token_construction(c: &mut Criterion) {
+    c.bench_function("token/owned_construction", |b| {
+        b.iter(|| {
+            black_box(Token::new(
+                TokenKind::Identifier,
+                black_box("foobar"),
+                black_box(START),
+                black_box(END),
+            ))
+        });
+    });
+}
+
+fn bench_borrowed_to_owned_conversion(c: &mut Criterion) {
+    let borrowed = TokenRef::new(TokenKind::Identifier, "foobar", START, END);
+    c.bench_function("token/borrowed_to_owned_conversion", |b| {
+        b.iter(|| black_box(borrowed).to_owned_token());
+    });
+}
+
+criterion_group!(
+    benches,
+    benchmark_token_scorecard,
+    bench_borrowed_token_construction,
+    bench_owned_token_construction,
+    bench_borrowed_to_owned_conversion
+);
 criterion_main!(benches);

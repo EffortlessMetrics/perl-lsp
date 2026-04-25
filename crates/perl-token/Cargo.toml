@@ -16,12 +16,6 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 # No external dependencies for now (Arc is std)
 
-[package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "docsrs"]
-
-[lints]
-workspace = true
-
 [dev-dependencies]
 criterion.workspace = true
 perl-lexer = { workspace = true }
@@ -32,3 +26,9 @@ serde_json.workspace = true
 [[bench]]
 name = "token_scorecard"
 harness = false
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true
