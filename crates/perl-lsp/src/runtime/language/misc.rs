@@ -15,6 +15,7 @@ use super::super::*;
 use crate::protocol::{invalid_params, req_position, req_uri};
 use crate::state::{code_lens_cap, code_lens_resolve_deadline, inlay_hints_cap};
 use perl_module::import::resolve_known_export_tag;
+use perl_qualified_name::split_qualified_name;
 use perl_source_file::is_perl_source_uri;
 use std::borrow::Cow;
 use std::sync::OnceLock;
@@ -277,9 +278,14 @@ impl LspServer {
 
     /// Walk the AST to find a top-level subroutine node with the given name.
     fn find_subroutine_node<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
-        if matches!(&node.kind, NodeKind::Subroutine { name: Some(sub_name), .. } if sub_name == name)
-        {
-            return Some(node);
+        if let NodeKind::Subroutine { name: Some(sub_name), .. } = &node.kind {
+            let (sub_pkg, sub_bare) = split_qualified_name(sub_name);
+            let (target_pkg, target_bare) = split_qualified_name(name);
+            if sub_bare == target_bare
+                && (sub_pkg.is_none() || target_pkg.is_none() || sub_pkg == target_pkg)
+            {
+                return Some(node);
+            }
         }
 
         let mut found = None;
@@ -1861,6 +1867,7 @@ impl LspServer {
 mod tests {
     use super::normalize_document_link_file_path;
     use crate::LspServer;
+    use crate::Parser;
     use crate::state::ClientCapabilities;
     use serde_json::json;
     use std::collections::HashSet;
@@ -2051,6 +2058,20 @@ mod tests {
             Some("Foo::Bar"),
             "baz should resolve through use_module+import alias"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn find_subroutine_node_matches_qualified_call_name() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let source = "package Utils;
+sub format_string { return shift }
+";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse()?;
+
+        let found = LspServer::find_subroutine_node(&ast, "Utils::format_string");
+        assert!(found.is_some(), "expected qualified lookup to find bare definition");
         Ok(())
     }
 
