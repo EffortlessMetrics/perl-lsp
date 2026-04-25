@@ -297,8 +297,14 @@ mod tests {
     #[test]
     fn remove_document_preserves_symbols_from_other_documents() {
         let mut index = SymbolIndex::new();
-        index.replace_document_symbols("file:///a.pl", vec!["shared".to_string(), "only_a".to_string()]);
-        index.replace_document_symbols("file:///b.pl", vec!["shared".to_string(), "only_b".to_string()]);
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["shared".to_string(), "only_a".to_string()],
+        );
+        index.replace_document_symbols(
+            "file:///b.pl",
+            vec!["shared".to_string(), "only_b".to_string()],
+        );
         index.remove_document("file:///a.pl");
 
         let shared = index.search_prefix("shared");
@@ -340,10 +346,7 @@ mod tests {
         // Symbols added via replace_document_symbols must appear in fuzzy results,
         // not only in prefix results. The inverted index must be populated.
         let mut index = SymbolIndex::new();
-        index.replace_document_symbols(
-            "file:///a.pl",
-            vec!["get_user_name".to_string()],
-        );
+        index.replace_document_symbols("file:///a.pl", vec!["get_user_name".to_string()]);
 
         let results = index.search_fuzzy("user name");
         assert!(
