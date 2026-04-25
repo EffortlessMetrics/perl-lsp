@@ -81,16 +81,26 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
         }
 
         NodeKind::FunctionCall { name, args } => {
-            let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
-            out.push(SymbolRef {
-                kind: SymbolRefKind::SubroutineCall,
-                name: bare_name,
-                qualified_name,
-                sigil: None,
-                package_qualifier,
-                full_span: (node.location.start, node.location.end),
-                anchor_span: Some((node.location.start, node.location.end)),
-            });
+            // The parser reuses FunctionCall for a few non-call constructs using
+            // sentinel names that contain non-identifier characters or are reserved
+            // keywords.  Filter them out so consumers never see synthetic nodes:
+            //   "->()": anonymous coderef invocation `$ref->(args)` — no sub name
+            //   "&{}":  coderef dereference
+            //   "field": Perl 5.38+ OOP `field $x => accessor` form — a declaration,
+            //            not a call; must not be reported as a SubroutineCall ref.
+            let is_sentinel = matches!(name.as_str(), "->()" | "&{}" | "field");
+            if !is_sentinel {
+                let (package_qualifier, bare_name, qualified_name) = split_qualified_name(name);
+                out.push(SymbolRef {
+                    kind: SymbolRefKind::SubroutineCall,
+                    name: bare_name,
+                    qualified_name,
+                    sigil: None,
+                    package_qualifier,
+                    full_span: (node.location.start, node.location.end),
+                    anchor_span: Some((node.location.start, node.location.end)),
+                });
+            }
 
             for arg in args {
                 walk(arg, out);

@@ -207,3 +207,38 @@ fn function_call_args_are_walked_for_refs() -> Result<()> {
     assert_eq!(refs[1].name, "n");
     Ok(())
 }
+
+#[test]
+fn parser_sentinel_names_are_not_emitted_as_refs() -> Result<()> {
+    // The parser uses synthetic FunctionCall names for constructs that are not real
+    // subroutine calls: "->()"/\&{}\" for coderef invocations, "field" for OOP
+    // Perl 5.38+ field declarations.  None of these should appear as SubroutineCall refs.
+    let coderef_call =
+        Node::new(NodeKind::FunctionCall { name: "->()".to_string(), args: vec![] }, loc(0, 6));
+    let ampersand_deref =
+        Node::new(NodeKind::FunctionCall { name: "&{}".to_string(), args: vec![] }, loc(7, 11));
+    let field_var = Node::new(
+        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+        loc(19, 21),
+    );
+    let field_decl = Node::new(
+        NodeKind::FunctionCall { name: "field".to_string(), args: vec![field_var] },
+        loc(13, 21),
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![coderef_call, ampersand_deref, field_decl] },
+        loc(0, 21),
+    );
+
+    let refs = extract_symbol_refs(&program);
+    // Only the $x variable inside the field args should appear (as a variable ref).
+    // The three sentinel FunctionCall nodes must not produce SubroutineCall refs.
+    let sub_refs: Vec<_> =
+        refs.iter().filter(|r| r.kind == SymbolRefKind::SubroutineCall).collect();
+    assert!(
+        sub_refs.is_empty(),
+        "sentinel FunctionCall names must not be emitted as SubroutineCall refs: {:?}",
+        sub_refs,
+    );
+    Ok(())
+}
