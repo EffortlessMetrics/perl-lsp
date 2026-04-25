@@ -48,13 +48,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "release-history" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -63,13 +65,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
-# Compile-only gate: catches integration-test and benchmark bit-rot without
-# incurring full test runtime (~30-45 s). Matches the workspace excludes used
-# by the rest of the CI gates (tree-sitter-perl, fuzz, archive are excluded
-# from the workspace Cargo.toml so --workspace picks only the 134 crates).
+# Compile-only gate: catches integration-test/benchmark bit-rot and also
+# validates feature-gated code paths without incurring full test runtime.
+# Matches the workspace excludes used by the rest of the CI gates
+# (tree-sitter-perl, fuzz, archive are excluded from Cargo.toml workspace).
 check-all-targets:
-    @echo "Compiling all targets (lib, bins, tests, benches) — bit-rot check..."
+    @echo "Compiling all targets (default features) — bit-rot check..."
     cargo check --workspace --all-targets --locked
+    @echo "Compiling all targets (all features) — deep verification check..."
+    cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
 # Fail if README.md has duplicate level-2 headings. Helps catch accidental
@@ -820,6 +824,7 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just ci-release-history && \
     just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
@@ -844,7 +849,8 @@ ci-gate:
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
-    just ci-published-crate-count
+    just ci-published-crate-count && \
+    just ci-release-history-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -852,6 +858,10 @@ ci-gate:
 gates tier='merge-gate' *args='':
     @echo "🧾 Running gate runner (tier: {{tier}})..."
     cargo xtask gates --tier {{tier}} --receipt {{args}}
+
+# Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
+ci-release-history:
+    bash scripts/check_release_history.sh
 
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':
@@ -958,6 +968,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Release-history drift check: tags, notes, ledger, changelog
+ci-release-history-check:
+    @echo "📚 Checking release-history surface drift..."
+    bash scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
 ci-publish-manifest-check:

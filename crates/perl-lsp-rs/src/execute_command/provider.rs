@@ -2,6 +2,7 @@
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use serde_json::{Value, json};
+use std::borrow::Cow;
 #[cfg(windows)]
 use std::ffi::OsString;
 #[cfg(windows)]
@@ -10,6 +11,7 @@ use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use url::Url;
 
 /// Strip the Windows extended-length path prefix (`\\?\`) before passing a path
 /// to an external command such as `perl`, `prove`, or `yath`.
@@ -338,12 +340,13 @@ impl ExecuteCommandProvider {
     #[allow(deprecated)]
     pub(crate) fn run_critic(&self, file_path: &str) -> Result<Value, String> {
         let normalized_path = self.normalize_file_path(file_path);
-        let path = Path::new(normalized_path);
+        let path = Path::new(normalized_path.as_ref());
 
         if !path.exists() {
-            return Ok(
-                self.format_critic_error(format!("File not found: {}", normalized_path), "none")
-            );
+            return Ok(self.format_critic_error(
+                format!("File not found: {}", normalized_path.as_ref()),
+                "none",
+            ));
         }
 
         if command_exists("perlcritic") {
@@ -845,8 +848,18 @@ impl ExecuteCommandProvider {
 
     #[deprecated(since = "0.8.9", note = "Use resolve_path_from_args for secure path resolution")]
     #[allow(dead_code)]
-    pub(crate) fn normalize_file_path<'a>(&self, file_path: &'a str) -> &'a str {
-        file_path.strip_prefix("file://").unwrap_or(file_path)
+    pub(crate) fn normalize_file_path<'a>(&self, file_path: &'a str) -> Cow<'a, str> {
+        if !file_path.starts_with("file://") {
+            return Cow::Borrowed(file_path);
+        }
+
+        if let Ok(url) = Url::parse(file_path)
+            && let Ok(path) = url.to_file_path()
+        {
+            return Cow::Owned(path.to_string_lossy().into_owned());
+        }
+
+        Cow::Borrowed(file_path.strip_prefix("file://").unwrap_or(file_path))
     }
 
     pub(crate) fn format_violation(

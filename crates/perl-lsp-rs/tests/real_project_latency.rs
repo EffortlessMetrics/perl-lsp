@@ -445,6 +445,36 @@ fn measure_workspace_symbol(fixture: &ProjectFixture, entry_content: &str) -> Ve
     samples
 }
 
+/// Build a synthetic Catalyst-style app with at least `target_lines` lines.
+fn synthetic_catalyst_app(target_lines: usize) -> String {
+    let mut content = String::from(
+        "package MyApp;\n\
+         use strict;\n\
+         use warnings;\n\
+         use Catalyst qw/-Debug ConfigLoader Static::Simple/;\n\
+         extends 'Catalyst';\n\n",
+    );
+
+    let mut line_count = content.lines().count();
+    let mut i = 0usize;
+    while line_count < target_lines.saturating_sub(2) {
+        let block = format!(
+            "sub action_{i} : Path('/route_{i}') Args(1) {{\n\
+             \x20\x20my ($self, $c, $arg) = @_;\n\
+             \x20\x20my $value = $c->req->params->{{value}} // $arg;\n\
+             \x20\x20$c->stash->{{result}} = uc($value);\n\
+             \x20\x20$c->response->body($c->stash->{{result}});\n\
+             }}\n\n"
+        );
+        line_count += block.lines().count();
+        content.push_str(&block);
+        i += 1;
+    }
+
+    content.push_str("__PACKAGE__->setup();\n1;\n");
+    content
+}
+
 // ---- JSON output --------------------------------------------------------------
 
 /// Serialise a LatencySummary to a serde_json Value.
@@ -736,4 +766,49 @@ fn real_project_latency_full_suite() {
     }
     write_baseline(&results);
     eprintln!("\nBaseline written to {OUTPUT_PATH}");
+}
+
+/// User-facing SLO guard:
+/// first publishDiagnostics for a 5,000-line Catalyst app should arrive in <5s.
+///
+/// Run with:
+/// ```bash
+/// cargo test -p perl-lsp-rs --test real_project_latency first_diagnostics_5000_line_catalyst -- --include-ignored --nocapture
+/// ```
+#[test]
+#[ignore = "nightly/perf lane — synthetic 5k-line fixture and wall-clock budget"]
+fn first_diagnostics_5000_line_catalyst() -> Result<(), Box<dyn std::error::Error>> {
+    let app = synthetic_catalyst_app(5000);
+    let lines = app.lines().count();
+    assert!(lines >= 5000, "Synthetic Catalyst fixture must be >=5000 lines, got {lines}");
+
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis();
+    let temp_path = std::env::temp_dir().join(format!("perl_lsp_real_perf_{unique}.pm"));
+    fs::write(&temp_path, &app)?;
+
+    let uri = file_uri(&temp_path);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let start = Instant::now();
+    open_document(&server, &uri, &app);
+
+    let notification = common::read_notification_method(
+        &server,
+        "textDocument/publishDiagnostics",
+        Duration::from_secs(6),
+    );
+    let elapsed = start.elapsed().as_millis() as u64;
+
+    let _ = fs::remove_file(&temp_path);
+
+    assert!(
+        notification.is_some(),
+        "No publishDiagnostics received within 6s for 5000-line Catalyst app (elapsed={elapsed}ms)"
+    );
+    assert!(
+        elapsed < 5000,
+        "SLO breach: first diagnostics took {elapsed}ms for 5000-line Catalyst app (target <5000ms)"
+    );
+    Ok(())
 }

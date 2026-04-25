@@ -11,6 +11,11 @@
     "module_resolution_workflow_success_rate",
     "multi_root_workspace_navigation_success_rate"
   ],
+  "confidence_signals": [
+    "manual_editor_smoke",
+    "first_five_minutes_harness",
+    "issue_burndown_regression_guard"
+  ],
   "workflows": [
     {
       "id": "simple_file_smoke",
@@ -26,6 +31,10 @@
         "server starts cleanly",
         "hover returns useful structure or empty without crashing",
         "completion request succeeds"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -41,6 +50,10 @@
       "expected_outcomes": [
         "format request degrades gracefully",
         "server stays responsive"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -56,6 +69,10 @@
       "expected_outcomes": [
         "server starts in degraded mode",
         "hover or completion remain available where possible"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -71,6 +88,10 @@
       "expected_outcomes": [
         "diagnostics degrade gracefully",
         "no crash or panic-style messaging"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -86,6 +107,10 @@
       "expected_outcomes": [
         "invalid config does not crash the server",
         "user-visible feedback is actionable"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -97,11 +122,15 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "p95_time_to_first_useful_result_ms"
+        "p95_time_to_first_useful_result_ms",
+        "multi_root_workspace_navigation_success_rate"
       ],
       "expected_outcomes": [
         "large files do not crash the server",
         "large-file workflow stays within latency budget"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness"
       ]
     },
     {
@@ -112,11 +141,17 @@
       "user_journey": "open multiple files in a workspace and navigate across them",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate",
+        "module_resolution_workflow_success_rate"
       ],
       "expected_outcomes": [
         "cross-file definition request completes without error",
         "workspace interactions remain stable"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -131,6 +166,10 @@
       ],
       "expected_outcomes": [
         "languageId-perl files without extensions still behave like Perl"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -146,6 +185,10 @@
       "expected_outcomes": [
         "encoding edge cases do not crash the server",
         "user workflow remains intact"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -156,11 +199,17 @@
       "user_journey": "run goto-definition inside a representative file",
       "measures": [
         "workflow_pass_rate",
-        "workflow_stability_rate"
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "definition request returns a location or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -176,6 +225,11 @@
       "expected_outcomes": [
         "hover request returns useful structure or clean empty result",
         "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -191,6 +245,11 @@
       "expected_outcomes": [
         "publishDiagnostics arrives",
         "diagnostic payload shape stays valid"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -206,6 +265,10 @@
       "expected_outcomes": [
         "document symbols return valid structure",
         "rich files surface known sub names"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke"
       ]
     },
     {
@@ -217,10 +280,16 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "module_resolution_workflow_success_rate"
+        "module_resolution_workflow_success_rate",
+        "cross_file_definition_success_rate"
       ],
       "expected_outcomes": [
         "PL701, hover, and goto-definition agree across supported modes"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -232,11 +301,17 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "multi_root_workspace_navigation_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
         "workspace/symbol returns same-named symbols from multiple roots",
         "results include workspaceFolderUri"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -248,10 +323,16 @@
       "measures": [
         "workflow_pass_rate",
         "workflow_stability_rate",
-        "multi_root_workspace_navigation_success_rate"
+        "multi_root_workspace_navigation_success_rate",
+        "p95_time_to_first_useful_result_ms"
       ],
       "expected_outcomes": [
         "removed folder symbols disappear from search results"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     },
     {
@@ -268,6 +349,112 @@
       "expected_outcomes": [
         "deleted symbols disappear from workspace/symbol",
         "definition no longer resolves to deleted targets"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "goto_declaration_core",
+      "scenario_file": "ux_scenario_18_goto_declaration.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "run goto-declaration inside a representative file",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "declaration request returns a location or clean empty result",
+        "request does not error"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "template_language_mode_resilience",
+      "scenario_file": "ux_scenario_22_template_language_mode.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "open a template file in html mode and continue navigating in neighboring Perl files",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "cross_file_definition_success_rate"
+      ],
+      "expected_outcomes": [
+        "template-like html mode file does not emit Perl parse diagnostics",
+        "goto-definition in adjacent Perl files remains functional"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "diagnostics_after_edit_refresh",
+      "scenario_file": "ux_scenario_18_diagnostics_after_edit.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "pr",
+      "user_journey": "open a file, edit it, and verify diagnostics republish for the updated content",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "didChange full-document edit succeeds",
+        "publishDiagnostics republish occurs after edit",
+        "updated diagnostic payload remains valid"
+      ],
+      "confidence_signals": [
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "real_repo_first_diagnostics_budget",
+      "scenario_file": "ux_scenario_18_real_repo_perf.rs",
+      "subsystem_owner": "diagnostics",
+      "ci_tier": "nightly",
+      "user_journey": "open a representative 5000+ line Catalyst-like app fixture and observe first diagnostics latency",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "p95_time_to_first_useful_result_ms"
+      ],
+      "expected_outcomes": [
+        "first publishDiagnostics arrives within 5 seconds",
+        "real-repo fixture parsing remains crash-free"
+      ],
+      "confidence_signals": [
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
+    },
+    {
+      "id": "rename_workflow_core",
+      "scenario_file": "ux_scenario_23_rename_workflow.rs",
+      "subsystem_owner": "editor_intelligence",
+      "ci_tier": "pr",
+      "user_journey": "rename a symbol in a representative file and validate workspace edit output",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate"
+      ],
+      "expected_outcomes": [
+        "prepareRename and rename do not error",
+        "rename returns clean null or valid workspace edit for the opened file"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
       ]
     }
   ]
