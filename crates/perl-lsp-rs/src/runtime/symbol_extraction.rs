@@ -314,7 +314,7 @@ impl LspServer {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                if symbol_kind == "subroutine" && name == symbol_name {
+                if symbol_kind == "subroutine" && perl_parser::qualified_name::split_qualified_name(name).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
                     count += 1;
                 }
                 for arg in args {
@@ -323,7 +323,7 @@ impl LspServer {
             }
 
             NodeKind::MethodCall { object, method, args } => {
-                if symbol_kind == "subroutine" && method == symbol_name {
+                if symbol_kind == "subroutine" && perl_parser::qualified_name::split_qualified_name(method).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
                     count += 1;
                 }
                 count += self.count_references(object, symbol_name, symbol_kind);
@@ -333,13 +333,13 @@ impl LspServer {
             }
 
             NodeKind::Use { module, .. } => {
-                if symbol_kind == "package" && module == symbol_name {
+                if symbol_kind == "package" && perl_parser::qualified_name::split_qualified_name(module).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
                     count += 1;
                 }
             }
 
             NodeKind::Identifier { name } => {
-                if symbol_kind == "package" && name == symbol_name {
+                if symbol_kind == "package" && perl_parser::qualified_name::split_qualified_name(name).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
                     count += 1;
                 }
             }
@@ -385,7 +385,7 @@ impl LspServer {
                 // Check if this is a reference to a subroutine (\&function)
                 if op == "\\" && symbol_kind == "subroutine" {
                     if let NodeKind::Identifier { name } = &operand.kind {
-                        if name == symbol_name {
+                        if perl_parser::qualified_name::split_qualified_name(name).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
                             count += 1;
                         }
                     }
