@@ -228,6 +228,24 @@ fn use_strict_mixed_grouped_and_plain_args() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// `use strict qw()` — empty qw list should be a no-op, not enable-all.
+/// The empty qw expands to zero items, so no categories are toggled.
+#[test]
+fn use_strict_empty_qw_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw()"], 0, 18)]);
+    let map = PragmaTracker::build(&ast);
+    // No recognized category → no state change → no entry pushed (or default state).
+    let state = if map.is_empty() {
+        PragmaState::default()
+    } else {
+        map[0].1.clone()
+    };
+    assert!(!state.strict_vars, "empty qw() must not enable strict_vars");
+    assert!(!state.strict_subs, "empty qw() must not enable strict_subs");
+    assert!(!state.strict_refs, "empty qw() must not enable strict_refs");
+    Ok(())
+}
+
 /// Perl allows `use strict 'refs vars'` (a single quoted string with
 /// space-separated categories), but `pragma_arg_items` does not split on
 /// spaces inside a plain quoted string — only `qw(...)` is split.
