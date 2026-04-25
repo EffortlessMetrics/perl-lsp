@@ -1333,3 +1333,41 @@ fn substitution_with_block_form_and_whitespace() -> R {
     );
     Ok(())
 }
+
+/// Regression test: `tr 'a' 'b'` with whitespace before `'` should tokenize as Transliteration.
+/// The whitespace_allowed simplification must not regress tr/y with quote delimiters.
+#[test]
+fn transliteration_with_whitespace_before_quote_delimiter() -> R {
+    let input = "tr 'aeiou' 'AEIOU'";
+    let sig = significant(input);
+
+    let tr_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Transliteration))
+        .collect();
+    assert!(
+        !tr_tokens.is_empty(),
+        "Expected Transliteration token for tr with whitespace before quote delimiter, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+/// Regression test: `y 'a' 'b'` with whitespace before `'` should tokenize as Transliteration.
+/// y is a synonym for tr and must be handled identically.
+#[test]
+fn y_synonym_with_whitespace_before_quote_delimiter() -> R {
+    let input = "y 'abc' 'xyz'";
+    let sig = significant(input);
+
+    let tr_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Transliteration))
+        .collect();
+    assert!(
+        !tr_tokens.is_empty(),
+        "Expected Transliteration token for y with whitespace before quote delimiter, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
