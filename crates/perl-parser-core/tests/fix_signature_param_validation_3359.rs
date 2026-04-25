@@ -165,3 +165,44 @@ fn test_empty_signature_no_diagnostics() {
     let errors = parse_and_collect_errors("sub foo () { }");
     assert!(errors.is_empty(), "Unexpected diagnostics for empty signature, got: {:?}", errors);
 }
+
+#[test]
+fn test_method_invocant_separator_is_accepted() {
+    let errors = parse_and_collect_errors("method run ($self: $arg) { }");
+    assert!(
+        errors.is_empty(),
+        "Unexpected diagnostics for valid invocant signature, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn test_sub_signature_invocant_separator_is_accepted() {
+    let errors = parse_and_collect_errors("sub run ($class: $arg, $opt = 1) { }");
+    assert!(
+        errors.is_empty(),
+        "Unexpected diagnostics for valid invocant separator in sub signature, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn test_invocant_only_signature_is_accepted() {
+    // Invocant with no additional params — edge case for the guard reset.
+    let errors = parse_and_collect_errors("method run ($self:) { }");
+    assert!(
+        errors.is_empty(),
+        "Unexpected diagnostics for invocant-only signature, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn test_double_invocant_separator_is_rejected() {
+    // A second `:` in the same signature is a syntax error — the flag must block it.
+    let errors = parse_and_collect_errors("sub bad ($a: $b: $c) { }");
+    assert!(
+        !errors.is_empty(),
+        "Expected a syntax error for double invocant separator, got no diagnostics",
+    );
+}
