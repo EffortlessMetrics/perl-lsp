@@ -256,9 +256,6 @@ fn print_audit_summary(report: &AuditReport) {
         report.nodekind_coverage.coverage_percentage
     );
     println!("   Never-seen NodeKinds: {}", report.nodekind_coverage.never_seen.len());
-    if !report.nodekind_coverage.never_seen.is_empty() {
-        println!("     Names: {}", report.nodekind_coverage.never_seen.join(", "));
-    }
     if !report.nodekind_coverage.allowlisted_never_seen.is_empty() {
         println!(
             "   Allowlisted never-seen NodeKinds: {}",
