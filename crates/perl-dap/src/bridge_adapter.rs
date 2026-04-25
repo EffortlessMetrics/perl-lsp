@@ -195,8 +195,9 @@ impl BridgeAdapter {
             Ok::<(), anyhow::Error>(())
         });
 
-        tokio::pin!(client_to_server);
-        tokio::pin!(server_to_client);
+        // JoinHandle<T> is already Unpin; no pin! macro needed here.
+        let mut client_to_server = client_to_server;
+        let mut server_to_client = server_to_client;
 
         let mut client_result: Option<Result<()>> = None;
         let mut server_result: Option<Result<()>> = None;
@@ -216,11 +217,11 @@ impl BridgeAdapter {
                         .is_some()
                     {
                         if client_result.is_none() {
-                            client_to_server.as_mut().abort();
+                            client_to_server.abort();
                             client_result = Some(Ok(()));
                         }
                         if server_result.is_none() {
-                            server_to_client.as_mut().abort();
+                            server_to_client.abort();
                             server_result = Some(Ok(()));
                         }
                     }
@@ -228,11 +229,17 @@ impl BridgeAdapter {
             }
         }
 
-        if let Some(result) = client_result {
-            result?;
-        }
-        if let Some(result) = server_result {
-            result?;
+        // Propagate errors from both directions; log the secondary error so it isn't silently lost.
+        let client_err = client_result.and_then(|r| r.err());
+        let server_err = server_result.and_then(|r| r.err());
+        match (client_err, server_err) {
+            (Some(ce), Some(se)) => {
+                tracing::warn!(error = %se, "proxy server->client also failed");
+                return Err(ce);
+            }
+            (Some(ce), None) => return Err(ce),
+            (None, Some(se)) => return Err(se),
+            (None, None) => {}
         }
 
         Ok(())
@@ -387,8 +394,12 @@ mod tests {
     #[tokio::test]
     async fn proxy_returns_error_when_child_already_exited() -> Result<()> {
         let mut adapter = BridgeAdapter::new();
-        adapter.child_process = Some(spawn_short_lived_child().await?);
-        tokio::time::sleep(Duration::from_millis(40)).await;
+        let mut child = spawn_short_lived_child().await?;
+        // Wait for the process to actually exit before handing it to the adapter.
+        // A sleep-based approach is flaky on slow CI (cmd.exe on Windows can take >40ms).
+        // child.wait() guarantees the exit status is available before try_wait() is called.
+        let _ = child.wait().await?;
+        adapter.child_process = Some(child);
 
         let result =
             tokio::time::timeout(Duration::from_millis(500), adapter.proxy_messages()).await;
