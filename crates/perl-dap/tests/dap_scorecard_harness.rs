@@ -59,12 +59,6 @@ struct BinaryMetric {
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct MemoryMetric {
-    status: &'static str,
-    detail: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 struct ScorecardReceipt {
     perl_available: bool,
     launch: RateMetric,
@@ -72,7 +66,7 @@ struct ScorecardReceipt {
     variables: BinaryMetric,
     evaluate: BinaryMetric,
     deep_pagination: BinaryMetric,
-    memory: MemoryMetric,
+    memory: BinaryMetric,
 }
 
 fn wait_for_event(
@@ -355,17 +349,17 @@ fn linux_rss_kb_best_effort() -> Option<u64> {
     Some(kb)
 }
 
-fn memory_metric() -> MemoryMetric {
+fn memory_metric() -> BinaryMetric {
     let adapter_size = std::mem::size_of::<DebugAdapter>();
     match linux_rss_kb_best_effort() {
-        Some(rss_kb) => MemoryMetric {
+        Some(rss_kb) => BinaryMetric {
             status: "MEASURED",
             detail: format!(
                 "debug_adapter_struct_size={} bytes; best_effort_process_rss={} KiB",
                 adapter_size, rss_kb
             ),
         },
-        None => MemoryMetric {
+        None => BinaryMetric {
             status: "BEST_EFFORT",
             detail: format!(
                 "debug_adapter_struct_size={} bytes; process RSS unavailable on this platform",
@@ -522,8 +516,11 @@ fn scorecard_launch_success_rate() -> TestResult {
         launch_results.push(FixtureResult { name, elapsed_ms, error });
     }
 
+    // Run 5 attach probes so the 80 % threshold (div_ceil(5 * 80 / 100) = 4) is
+    // meaningful: exactly 1 failure is tolerated.  With n < 5 the ceil rounding
+    // makes the effective threshold 100 %, defeating the intent.
     let mut attach_results: Vec<FixtureResult> = Vec::new();
-    for _attempt in 0..3 {
+    for _attempt in 0..5 {
         let (elapsed_ms, error) = match probe_attach(launch_timeout()) {
             Ok(()) => (None, None),
             Err(err) => (None, Some(err)),
