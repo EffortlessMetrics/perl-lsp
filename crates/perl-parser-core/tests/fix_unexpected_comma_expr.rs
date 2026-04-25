@@ -182,7 +182,37 @@ fn test_core_grep_with_regex() {
 
 #[test]
 fn test_grep_expr_with_trailing_comma() {
+    // Trailing comma before semicolon in block-list builtin (the core fix).
     let source = r#"my @result = grep defined, @list,;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_trailing_comma_in_parens() {
+    // Trailing comma before ')' — is_at_statement_end() covers RightParen.
+    let source = r#"foo(grep defined, @list,);"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_map_trailing_comma_in_block() {
+    // Trailing comma before '}' — is_at_statement_end() covers RightBrace.
+    let source = r#"sub foo { my @r = map uc, @words, }"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_sort_block_list_trailing_comma() {
+    // sort with comparator block and trailing comma after list.
+    let source = r#"my @r = sort { $a <=> $b } @list,;"#;
+    assert_clean_parse(source);
+}
+
+#[test]
+fn test_grep_trailing_comma_then_word_op() {
+    // Trailing comma before word-op: `or` is in is_at_statement_end().
+    // Perl: `my @r = grep defined, @list or die` is `(grep ...) or die`.
+    let source = r#"my @r = grep defined, @list or die "empty";"#;
     assert_clean_parse(source);
 }
 
