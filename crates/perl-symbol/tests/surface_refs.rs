@@ -247,14 +247,10 @@ fn parser_sentinel_names_are_not_emitted_as_refs() -> Result<()> {
 fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
     // `sub foo($x, $y = $default, @rest)` — $x, $y, @rest are declaration sites;
     // only $default (the default-value expression) must be emitted as a ref.
-    let param_x = Node::new(
-        NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-        loc(8, 10),
-    );
-    let mandatory = Node::new(
-        NodeKind::MandatoryParameter { variable: Box::new(param_x) },
-        loc(8, 10),
-    );
+    let param_x =
+        Node::new(NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() }, loc(8, 10));
+    let mandatory =
+        Node::new(NodeKind::MandatoryParameter { variable: Box::new(param_x) }, loc(8, 10));
 
     let param_y = Node::new(
         NodeKind::Variable { sigil: "$".to_string(), name: "y".to_string() },
@@ -276,10 +272,8 @@ fn signature_parameters_are_not_emitted_as_refs() -> Result<()> {
         NodeKind::Variable { sigil: "@".to_string(), name: "rest".to_string() },
         loc(27, 32),
     );
-    let slurpy = Node::new(
-        NodeKind::SlurpyParameter { variable: Box::new(param_rest) },
-        loc(27, 32),
-    );
+    let slurpy =
+        Node::new(NodeKind::SlurpyParameter { variable: Box::new(param_rest) }, loc(27, 32));
 
     let sig = Node::new(
         NodeKind::Signature { parameters: vec![mandatory, optional, slurpy] },
