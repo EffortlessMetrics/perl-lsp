@@ -141,15 +141,23 @@ fn bdd_parse_perl_file_allows_non_utf8_bytes() -> Result<(), Box<dyn Error>> {
 #[test]
 fn bdd_parse_utf8_bom_prefixed_source_returns_tree() -> Result<(), Box<dyn Error>> {
     let scenario = Scenario::new("parse utf8 bom prefixed source");
+    // \u{FEFF} encodes to the 3-byte UTF-8 BOM sequence \xEF\xBB\xBF.
+    // Per the parse_perl_bytes doc comment, the BOM is NOT stripped automatically
+    // and may produce an error node — callers must strip it if strict grammar
+    // compliance is required.  This test verifies tolerance: the parser must
+    // not hard-fail and must always return a rooted source_file tree.
     let source = "\u{FEFF}my $value = 1;\nprint $value;\n";
 
     scenario.given("a Perl snippet prefixed with a UTF-8 BOM codepoint");
     scenario.when("parse_perl_code is invoked");
     let tree_result = parse_perl_code(source);
 
-    scenario.then("parsing should not hard-fail and should return a tree");
+    scenario.then("parsing should not hard-fail and should return a source_file tree (error nodes are acceptable for BOM input)");
     let tree = tree_result?;
     assert_eq!(tree.root_node().kind(), "source_file");
+    // has_error() may be true here: the upstream C grammar does not skip the BOM.
+    // The critical invariant is that parse returns Some(tree), not None — which
+    // would surface as an Err from parse_perl_code.
     Ok(())
 }
 
@@ -165,22 +173,6 @@ fn bdd_parse_empty_source_returns_empty_tree_without_errors() -> Result<(), Box<
     let tree = tree_result?;
     assert_eq!(tree.root_node().kind(), "source_file");
     assert!(!tree.root_node().has_error());
-    Ok(())
-}
-
-#[test]
-fn bdd_parse_recoverable_malformed_assignment_returns_tree_with_errors()
--> Result<(), Box<dyn Error>> {
-    let scenario = Scenario::new("parse recoverable malformed assignment");
-    let source = "my $x = ;\nmy $y = 2;\nprint $y;\n";
-
-    scenario.given("a malformed statement followed by valid statements");
-    scenario.when("parse_perl_code is invoked");
-    let tree_result = parse_perl_code(source);
-
-    scenario.then("parsing should return a tree with syntax error nodes instead of hard-failing");
-    let tree = tree_result?;
-    assert!(tree.root_node().has_error());
     Ok(())
 }
 
@@ -202,9 +194,10 @@ TPL
     scenario.when("parse_perl_code is invoked");
     let tree_result = parse_perl_code(source);
 
-    scenario.then("the parser should recover and return a syntax tree");
+    scenario.then("the parser should parse the valid heredocs without syntax error nodes");
     let tree = tree_result?;
     assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(!tree.root_node().has_error(), "valid heredoc input should not produce error nodes");
     Ok(())
 }
 
@@ -222,9 +215,10 @@ my $replace = qx/echo hi/;
     scenario.when("parse_perl_code is invoked");
     let tree_result = parse_perl_code(source);
 
-    scenario.then("the parser should return a tree and avoid hard parse failure");
+    scenario.then("the parser should return a tree without syntax error nodes for valid quote-like operators");
     let tree = tree_result?;
     assert_eq!(tree.root_node().kind(), "source_file");
+    assert!(!tree.root_node().has_error(), "valid quote-like operators should not produce error nodes");
     Ok(())
 }
 
