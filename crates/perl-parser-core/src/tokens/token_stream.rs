@@ -45,7 +45,7 @@ use perl_lexer::{LexerMode, PerlLexer, Token as LexerToken, TokenType as LexerTo
 pub use perl_token::{Token, TokenKind};
 use std::collections::VecDeque;
 
-/// Backing source for the token stream — either a live lexer or pre-lexed tokens.
+/// Backing source for the token stream â€” either a live lexer or pre-lexed tokens.
 enum TokenStreamInner<'a> {
     /// Live lexer producing tokens on demand from source text.
     Lexer(PerlLexer<'a>),
@@ -93,7 +93,7 @@ impl<'a> TokenStream<'a> {
     ///
     /// # Arguments
     ///
-    /// * `tokens` — Pre-lexed tokens. An `Eof` token does **not** need to be
+    /// * `tokens` â€” Pre-lexed tokens. An `Eof` token does **not** need to be
     ///   included; the stream synthesises one when the buffer is exhausted.
     ///
     /// # Examples
@@ -234,13 +234,13 @@ impl<'a> TokenStream<'a> {
 
     /// Enter format body parsing mode in the lexer.
     ///
-    /// No-op when operating in buffered (pre-lexed) mode — the tokens are
+    /// No-op when operating in buffered (pre-lexed) mode â€” the tokens are
     /// already fully classified.
     pub fn enter_format_mode(&mut self) {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
             lexer.enter_format_mode();
         }
-        // Buffered mode: no-op — tokens are pre-classified.
+        // Buffered mode: no-op â€” tokens are pre-classified.
     }
 
     /// Called at statement boundaries to reset lexer state and clear cached lookahead.
@@ -257,7 +257,7 @@ impl<'a> TokenStream<'a> {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
             lexer.set_mode(LexerMode::ExpectTerm);
         }
-        // Buffered mode: no lexer mode reset needed — tokens are pre-classified.
+        // Buffered mode: no lexer mode reset needed â€” tokens are pre-classified.
     }
 
     /// Re-lex the current peeked token in `ExpectTerm` mode.
@@ -268,7 +268,7 @@ impl<'a> TokenStream<'a> {
     /// switches to `ExpectTerm` mode, and clears the peek cache so the next
     /// `peek()` or `next()` re-lexes it as a regex.
     ///
-    /// In buffered mode the peek cache is cleared but no re-lexing occurs —
+    /// In buffered mode the peek cache is cleared but no re-lexing occurs â€”
     /// token kinds are fixed from the original lex pass.
     pub fn relex_as_term(&mut self) {
         if let TokenStreamInner::Lexer(ref mut lexer) = self.inner {
@@ -408,11 +408,19 @@ impl<'a> TokenStream<'a> {
 
             // Identifiers
             LexerTokenType::Identifier(text) => {
-                // Check if it's actually a keyword that the lexer didn't recognize
-                TokenKind::from_keyword(text)
-                    .or_else(|| TokenKind::from_operator(text))
-                    .or_else(|| TokenKind::from_sigil(text))
-                    .unwrap_or(TokenKind::Identifier)
+                // The lexer emits bare sigil characters ('%', '&') as Identifier
+                // tokens in postfix-dereference contexts (e.g. `->%{key}`,
+                // `%{$ref}`). Those must map to sigil kinds, NOT operator kinds,
+                // so we check sigil priority first for the ambiguous cases.
+                // '*' is the exception: as a bare identifier it is multiplication.
+                match text.as_ref() {
+                    "%" => TokenKind::HashSigil,
+                    "&" => TokenKind::SubSigil,
+                    _ => TokenKind::from_keyword(text)
+                        .or_else(|| TokenKind::from_operator(text))
+                        .or_else(|| TokenKind::from_sigil(text))
+                        .unwrap_or(TokenKind::Identifier),
+                }
             }
 
             // Handle error tokens that might be valid syntax
