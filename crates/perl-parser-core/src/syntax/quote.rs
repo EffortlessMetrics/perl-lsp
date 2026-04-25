@@ -439,18 +439,17 @@ pub fn extract_transliteration_parts_strict(
     } else {
         let trimmed = rest1.trim_start();
         if let Some(repl_delimiter) = trimmed.chars().next() {
+            // After a paired search delimiter (e.g. `{...}`), the replacement must
+            // also start with a valid non-alphanumeric, non-whitespace delimiter.
+            // An alphanumeric character here (e.g. `tr{abc}xyz`) is an invalid
+            // delimiter, not merely a missing replacement section.
             if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
-                return Err(TransliterationError::MissingReplacement);
+                return Err(TransliterationError::InvalidDelimiter(repl_delimiter));
             }
             let repl_closing = get_closing_delimiter(repl_delimiter);
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
             (body, rest, found_closing)
-        } else if let Some(repl_delimiter) = trimmed.chars().next() {
-            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
-                return Err(TransliterationError::InvalidDelimiter(repl_delimiter));
-            }
-            extract_delimited_content_strict(trimmed, repl_delimiter, repl_delimiter)
         } else {
             return Err(TransliterationError::MissingReplacement);
         }
