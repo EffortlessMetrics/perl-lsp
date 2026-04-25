@@ -69,8 +69,6 @@ pub fn run(
     let raw_measurements = load_measurements_raw(&input_path)?;
     let scenarios = load_measurements(&raw_measurements);
     let scorecard = aggregate_editor_ux_scorecard(&scenarios);
-    let symbol_correctness_pct =
-        percent_true(raw_measurements.iter().filter_map(|s| s.symbol_correct));
     let latencies = compute_latency_percentiles(&raw_measurements);
 
     let mut rows = BTreeMap::new();
@@ -92,7 +90,7 @@ pub fn run(
     );
     rows.insert(
         "symbol_correctness_pct".to_string(),
-        PercentMetric { value: symbol_correctness_pct },
+        PercentMetric { value: scorecard.symbol_correctness_pct },
     );
     rows.insert(
         "cross_file_success_pct".to_string(),
@@ -143,6 +141,7 @@ fn load_measurements(raw: &[ScenarioMeasurement]) -> Vec<ScenarioScore> {
             completion_top1_correct: m.completion_top1_correct,
             completion_top5_correct: m.completion_top5_correct,
             definition_exact_hit: m.definition_exact_hit,
+            symbol_correct: m.symbol_correct,
             cross_file_success: m.cross_file_success,
             mean_latency_ms: BTreeMap::new(),
         })
@@ -221,21 +220,6 @@ fn percentile(samples: &[u64], pct: f64) -> Option<f64> {
     samples.get(rank).map(|value| *value as f64)
 }
 
-fn percent_true<I>(iter: I) -> Option<f64>
-where
-    I: Iterator<Item = bool>,
-{
-    let mut total = 0usize;
-    let mut success = 0usize;
-    for v in iter {
-        total += 1;
-        if v {
-            success += 1;
-        }
-    }
-    if total == 0 { None } else { Some((success as f64 / total as f64) * 100.0) }
-}
-
 fn maybe_embed_receipt_block(root: &Path, artifact: &UxScorecardArtifact) -> Result<()> {
     let receipt_path = root.join("target/receipts/receipt.json");
     if !receipt_path.exists() {
@@ -246,15 +230,16 @@ fn maybe_embed_receipt_block(root: &Path, artifact: &UxScorecardArtifact) -> Res
     let mut json_value: serde_json::Value = serde_json::from_str(&raw)
         .with_context(|| format!("parsing {}", receipt_path.display()))?;
     if let Some(object) = json_value.as_object_mut() {
+        let row = |k: &str| artifact.rows.get(k).and_then(|m| m.value);
         object.insert(
             "ux_scorecard".to_string(),
             json!({
-                "hover_correctness_pct": artifact.rows.get("hover_correctness_pct").and_then(|m| m.value),
-                "completion_top1_pct": artifact.rows.get("completion_top1_pct").and_then(|m| m.value),
-                "completion_top5_pct": artifact.rows.get("completion_top5_pct").and_then(|m| m.value),
-                "definition_exact_hit_pct": artifact.rows.get("definition_exact_hit_pct").and_then(|m| m.value),
-                "symbol_correctness_pct": artifact.rows.get("symbol_correctness_pct").and_then(|m| m.value),
-                "cross_file_success_pct": artifact.rows.get("cross_file_success_pct").and_then(|m| m.value)
+                "hover_correctness_pct": row("hover_correctness_pct"),
+                "completion_top1_pct": row("completion_top1_pct"),
+                "completion_top5_pct": row("completion_top5_pct"),
+                "definition_exact_hit_pct": row("definition_exact_hit_pct"),
+                "symbol_correctness_pct": row("symbol_correctness_pct"),
+                "cross_file_success_pct": row("cross_file_success_pct"),
             }),
         );
     }
@@ -306,102 +291,161 @@ fn path_relative_to_root(root: &Path, path: &Path) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn computes_percentiles() {
-        let rows = vec![ScenarioMeasurement {
-            scenario_id: "s1".to_string(),
-            hover_correct: Some(true),
-            completion_top1_correct: Some(true),
-            completion_top5_correct: Some(true),
-            definition_exact_hit: Some(true),
-            symbol_correct: Some(true),
-            cross_file_success: Some(true),
-            latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30, 40])]),
-        }];
+    fn percent_true<I: Iterator<Item = bool>>(iter: I) -> Option<f64> {
+        let mut total = 0usize;
+        let mut success = 0usize;
+        for v in iter {
+            total += 1;
+            if v { success += 1; }
+        }
+        if total == 0 { None } else { Some((success as f64 / total as f64) * 100.0) }
+    }
 
-        let latency = compute_latency_percentiles(&rows);
-        let hover = latency.get("hover");
-        assert!(hover.is_some());
-        if let Some(metrics) = hover {
-            assert_eq!(metrics.p50_ms, Some(30.0));
-            assert_eq!(metrics.p95_ms, Some(40.0));
+    fn measurement(
+        id: &str,
+        hover: Option<bool>,
+        top1: Option<bool>,
+        top5: Option<bool>,
+        def: Option<bool>,
+        sym: Option<bool>,
+        cross: Option<bool>,
+        latency: &[(&str, Vec<u64>)],
+    ) -> ScenarioMeasurement {
+        ScenarioMeasurement {
+            scenario_id: id.to_string(),
+            hover_correct: hover,
+            completion_top1_correct: top1,
+            completion_top5_correct: top5,
+            definition_exact_hit: def,
+            symbol_correct: sym,
+            cross_file_success: cross,
+            latency_ms_by_request: latency
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), v.clone()))
+                .collect(),
         }
     }
 
-    /// Verifies the full measurement→rows→latency pipeline produces consistent
-    /// values and that the artifact serialization round-trips without data loss.
+    #[test]
+    fn computes_percentiles() {
+        let rows =
+            vec![measurement("s1", None, None, None, None, None, None, &[("hover", vec![10, 20, 30, 40])])];
+
+        let latency = compute_latency_percentiles(&rows);
+        let hover = latency.get("hover").expect("hover present");
+        assert_eq!(hover.p50_ms, Some(30.0));
+        assert_eq!(hover.p95_ms, Some(40.0));
+    }
+
+    #[test]
+    fn single_sample_latency_p50_equals_p95() {
+        let rows = vec![measurement(
+            "single", None, None, None, None, None, None,
+            &[("definition", vec![42])],
+        )];
+        let latency = compute_latency_percentiles(&rows);
+        let def = latency.get("definition").expect("definition present");
+        assert_eq!(def.p50_ms, Some(42.0));
+        assert_eq!(def.p95_ms, Some(42.0));
+    }
+
+    #[test]
+    fn two_sample_latency_percentiles() {
+        // [10, 90]: p50 rank=(2-1)*0.5=0.5→1, samples[1]=90; p95 rank=(2-1)*0.95=0.95→1, samples[1]=90
+        let rows = vec![measurement(
+            "two", None, None, None, None, None, None,
+            &[("hover", vec![10, 90])],
+        )];
+        let latency = compute_latency_percentiles(&rows);
+        let h = latency.get("hover").expect("hover present");
+        assert_eq!(h.p50_ms, Some(90.0));
+        assert_eq!(h.p95_ms, Some(90.0));
+    }
+
+    #[test]
+    fn compute_latency_percentiles_empty_input_returns_empty_map() {
+        let latency = compute_latency_percentiles(&[]);
+        assert!(latency.is_empty());
+    }
+
+    #[test]
+    fn compute_latency_percentiles_merges_multiple_scenarios() {
+        // Two scenarios each contributing to "hover".
+        // Combined: [10, 30] sorted → p50: samples[1]=30, p95: samples[1]=30.
+        let rows = vec![
+            measurement("a", None, None, None, None, None, None, &[("hover", vec![10])]),
+            measurement("b", None, None, None, None, None, None, &[("hover", vec![30])]),
+        ];
+        let latency = compute_latency_percentiles(&rows);
+        let h = latency.get("hover").expect("hover present");
+        assert_eq!(h.p50_ms, Some(30.0));
+        assert_eq!(h.p95_ms, Some(30.0));
+    }
+
+    #[test]
+    fn percent_true_returns_none_on_empty_iterator() {
+        assert_eq!(percent_true(std::iter::empty::<bool>()), None);
+    }
+
+    #[test]
+    fn percent_true_all_false_returns_zero() {
+        assert_eq!(percent_true([false, false].iter().copied()), Some(0.0));
+    }
+
+    #[test]
+    fn percent_true_all_true_returns_100() {
+        assert_eq!(percent_true([true, true, true].iter().copied()), Some(100.0));
+    }
+
     #[test]
     fn pipeline_round_trip_produces_correct_rows() {
         let raw = vec![
-            ScenarioMeasurement {
-                scenario_id: "hover_test".to_string(),
-                hover_correct: Some(true),
-                completion_top1_correct: None,
-                completion_top5_correct: None,
-                definition_exact_hit: None,
-                symbol_correct: Some(true),
-                cross_file_success: None,
-                latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30])]),
-            },
-            ScenarioMeasurement {
-                scenario_id: "completion_test".to_string(),
-                hover_correct: Some(false),
-                completion_top1_correct: Some(true),
-                completion_top5_correct: Some(true),
-                definition_exact_hit: None,
-                symbol_correct: Some(false),
-                cross_file_success: Some(true),
-                latency_ms_by_request: BTreeMap::from([
-                    ("completion".to_string(), vec![5, 15, 25]),
-                    ("hover".to_string(), vec![50, 60, 70]),
-                ]),
-            },
+            measurement(
+                "hover_test",
+                Some(true), None, None, None, Some(true), None,
+                &[("hover", vec![10, 20, 30])],
+            ),
+            measurement(
+                "completion_test",
+                Some(false), Some(true), Some(true), None, Some(false), Some(true),
+                &[("completion", vec![5, 15, 25]), ("hover", vec![50, 60, 70])],
+            ),
         ];
 
-        // Correctness metrics via the ScenarioScore → aggregate path.
         let scenarios = load_measurements(&raw);
         let scorecard = aggregate_editor_ux_scorecard(&scenarios);
 
-        // hover_correct: true, false → 50%
         assert_eq!(scorecard.hover_correctness_pct, Some(50.0));
-        // completion_top1: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top1_pct, Some(100.0));
-        // completion_top5: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top5_pct, Some(100.0));
-        // definition_exact_hit: neither scenario measured → None
         assert_eq!(scorecard.definition_exact_hit_pct, None);
-        // cross_file_success: only scenario 2 measured → 100%
+        // symbol_correct now flows through the library: true, false → 50%
+        assert_eq!(scorecard.symbol_correctness_pct, Some(50.0));
         assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
 
-        // symbol_correct via the direct raw path.
-        let symbol_pct = percent_true(raw.iter().filter_map(|s| s.symbol_correct));
-        // true, false → 50%
-        assert_eq!(symbol_pct, Some(50.0));
-
-        // Latency via compute_latency_percentiles.
         let latencies = compute_latency_percentiles(&raw);
 
-        // "hover" samples combined: [10, 20, 30, 50, 60, 70] sorted.
-        // p50: rank = (6-1)*0.50 = 2.5 → 3, samples[3]=50
-        // p95: rank = (6-1)*0.95 = 4.75 → 5, samples[5]=70
+        // "hover" combined: [10, 20, 30, 50, 60, 70] sorted.
+        // p50: rank=(6-1)*0.50=2.5→3, samples[3]=50; p95: rank=(6-1)*0.95=4.75→5, samples[5]=70
         let hover_lat = latencies.get("hover").expect("hover latency present");
         assert_eq!(hover_lat.p50_ms, Some(50.0));
         assert_eq!(hover_lat.p95_ms, Some(70.0));
 
-        // "completion" samples: [5, 15, 25] sorted.
-        // p50: rank = (3-1)*0.50 = 1.0 → 1, samples[1]=15
-        // p95: rank = (3-1)*0.95 = 1.9 → 2, samples[2]=25
+        // "completion": [5, 15, 25]; p50→15, p95→25
         let comp_lat = latencies.get("completion").expect("completion latency present");
         assert_eq!(comp_lat.p50_ms, Some(15.0));
         assert_eq!(comp_lat.p95_ms, Some(25.0));
 
-        // Verify the artifact serialization round-trips: JSON → value → back.
+        // Artifact serialization round-trip.
         let mut rows = BTreeMap::new();
         rows.insert(
             "hover_correctness_pct".to_string(),
             PercentMetric { value: scorecard.hover_correctness_pct },
         );
-        rows.insert("symbol_correctness_pct".to_string(), PercentMetric { value: symbol_pct });
+        rows.insert(
+            "symbol_correctness_pct".to_string(),
+            PercentMetric { value: scorecard.symbol_correctness_pct },
+        );
 
         let artifact = UxScorecardArtifact {
             schema_version: 1,
@@ -420,38 +464,81 @@ mod tests {
 
         assert_eq!(parsed["schema_version"], 1);
         assert_eq!(parsed["subsystem"], "editor_ux");
-        // PercentMetric serializes as {"value": <f64>}.
         assert_eq!(parsed["rows"]["hover_correctness_pct"]["value"], serde_json::json!(50.0));
         assert_eq!(parsed["rows"]["symbol_correctness_pct"]["value"], serde_json::json!(50.0));
-        // Latency is serialized nested under latency_by_request_class.
         assert!(parsed["latency_by_request_class"]["hover"]["p50_ms"].is_number());
         assert!(parsed["latency_by_request_class"]["completion"]["p95_ms"].is_number());
     }
 
-    /// Ensures percent_true returns None when all metric observations are absent
-    /// (no scenario measured the metric at all).
     #[test]
-    fn percent_true_returns_none_on_empty_iterator() {
-        let result = percent_true(std::iter::empty::<bool>());
-        assert_eq!(result, None);
+    fn load_measurements_maps_symbol_correct_into_scenario_score() {
+        let raw = vec![
+            measurement("sym-true", None, None, None, None, Some(true), None, &[]),
+            measurement("sym-false", None, None, None, None, Some(false), None, &[]),
+            measurement("sym-none", None, None, None, None, None, None, &[]),
+        ];
+
+        let scenarios = load_measurements(&raw);
+        assert_eq!(scenarios[0].symbol_correct, Some(true));
+        assert_eq!(scenarios[1].symbol_correct, Some(false));
+        assert_eq!(scenarios[2].symbol_correct, None);
+
+        let scorecard = aggregate_editor_ux_scorecard(&scenarios);
+        // 1 true out of 2 measured = 50%
+        assert_eq!(scorecard.symbol_correctness_pct, Some(50.0));
     }
 
-    /// Ensures a single-element latency vec produces identical p50 and p95.
     #[test]
-    fn single_sample_latency_p50_equals_p95() {
-        let rows = vec![ScenarioMeasurement {
-            scenario_id: "single".to_string(),
-            hover_correct: None,
-            completion_top1_correct: None,
-            completion_top5_correct: None,
-            definition_exact_hit: None,
-            symbol_correct: None,
-            cross_file_success: None,
-            latency_ms_by_request: BTreeMap::from([("definition".to_string(), vec![42])]),
-        }];
-        let latency = compute_latency_percentiles(&rows);
-        let def = latency.get("definition").expect("definition present");
-        assert_eq!(def.p50_ms, Some(42.0));
-        assert_eq!(def.p95_ms, Some(42.0));
+    fn render_status_markdown_has_correct_section_headers() {
+        let mut rows = BTreeMap::new();
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
+        rows.insert("symbol_correctness_pct".to_string(), PercentMetric { value: Some(75.0) });
+
+        let mut latency = BTreeMap::new();
+        latency.insert(
+            "hover".to_string(),
+            LatencyPercentiles { p50_ms: Some(24.0), p95_ms: Some(31.0) },
+        );
+
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 3,
+            rows,
+            latency_by_request_class: latency,
+            provenance: serde_json::json!({}),
+        };
+
+        let md = render_status_markdown(&artifact);
+
+        assert!(md.contains("# Editor UX Scorecard"), "missing h1");
+        assert!(md.contains("## Correctness"), "missing Correctness section");
+        assert!(md.contains("## Latency (ms)"), "missing Latency section");
+        assert!(md.contains("## Ratchet policy"), "missing Ratchet section");
+        assert!(md.contains("100.00%"), "hover correctness row missing");
+        assert!(md.contains("75.00%"), "symbol correctness row missing");
+        assert!(md.contains("24.00"), "hover p50 missing");
+        assert!(md.contains("31.00"), "hover p95 missing");
+        assert!(md.contains("Scenarios: `3`"), "scenario count missing");
+    }
+
+    #[test]
+    fn render_status_markdown_shows_na_for_missing_values() {
+        let mut rows = BTreeMap::new();
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: None });
+
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 0,
+            rows,
+            latency_by_request_class: BTreeMap::new(),
+            provenance: serde_json::json!({}),
+        };
+
+        let md = render_status_markdown(&artifact);
+        assert!(md.contains("n/a"), "missing n/a for absent metric");
     }
 }

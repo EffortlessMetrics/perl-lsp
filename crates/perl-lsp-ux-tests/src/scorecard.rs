@@ -15,6 +15,8 @@ pub struct ScenarioScore {
     pub completion_top5_correct: Option<bool>,
     /// Go-to-definition landed on exact expected location.
     pub definition_exact_hit: Option<bool>,
+    /// Symbol query returned the expected symbol.
+    pub symbol_correct: Option<bool>,
     /// Cross-file workflow succeeded.
     pub cross_file_success: Option<bool>,
     /// Mean latency per request class in milliseconds for this scenario.
@@ -32,6 +34,7 @@ pub struct EditorUxScorecard {
     pub completion_top1_pct: Option<f64>,
     pub completion_top5_pct: Option<f64>,
     pub definition_exact_hit_pct: Option<f64>,
+    pub symbol_correctness_pct: Option<f64>,
     pub cross_file_success_pct: Option<f64>,
     pub mean_latency_ms_by_request: BTreeMap<String, f64>,
 }
@@ -48,6 +51,7 @@ impl EditorUxScorecard {
                 "completion_top1_pct": self.completion_top1_pct,
                 "completion_top5_pct": self.completion_top5_pct,
                 "definition_exact_hit_pct": self.definition_exact_hit_pct,
+                "symbol_correctness_pct": self.symbol_correctness_pct,
                 "cross_file_success_pct": self.cross_file_success_pct,
                 "mean_latency_ms_by_request": self.mean_latency_ms_by_request,
             }
@@ -64,6 +68,8 @@ pub fn aggregate_editor_ux_scorecard(scenarios: &[ScenarioScore]) -> EditorUxSco
         percent_true(scenarios.iter().filter_map(|s| s.completion_top5_correct));
     let definition_exact_hit_pct =
         percent_true(scenarios.iter().filter_map(|s| s.definition_exact_hit));
+    let symbol_correctness_pct =
+        percent_true(scenarios.iter().filter_map(|s| s.symbol_correct));
     let cross_file_success_pct =
         percent_true(scenarios.iter().filter_map(|s| s.cross_file_success));
 
@@ -87,6 +93,7 @@ pub fn aggregate_editor_ux_scorecard(scenarios: &[ScenarioScore]) -> EditorUxSco
         completion_top1_pct,
         completion_top5_pct,
         definition_exact_hit_pct,
+        symbol_correctness_pct,
         cross_file_success_pct,
         mean_latency_ms_by_request,
     }
@@ -115,46 +122,56 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{ScenarioScore, aggregate_editor_ux_scorecard};
+    use super::{ScenarioScore, aggregate_editor_ux_scorecard, percent_true};
     use anyhow::Result;
     use std::collections::BTreeMap;
 
+    fn make_score(
+        id: &str,
+        hover: Option<bool>,
+        top1: Option<bool>,
+        top5: Option<bool>,
+        def: Option<bool>,
+        sym: Option<bool>,
+        cross: Option<bool>,
+        latency: &[(&str, f64)],
+    ) -> ScenarioScore {
+        ScenarioScore {
+            scenario_id: id.to_string(),
+            hover_correct: hover,
+            completion_top1_correct: top1,
+            completion_top5_correct: top5,
+            definition_exact_hit: def,
+            symbol_correct: sym,
+            cross_file_success: cross,
+            mean_latency_ms: latency
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), *v))
+                .collect(),
+        }
+    }
+
     #[test]
     fn aggregate_editor_ux_scorecard_computes_expected_rows() -> Result<()> {
-        let scenario_1 = ScenarioScore {
-            scenario_id: "hover-and-def".to_string(),
-            hover_correct: Some(true),
-            completion_top1_correct: Some(false),
-            completion_top5_correct: Some(true),
-            definition_exact_hit: Some(true),
-            cross_file_success: Some(true),
-            mean_latency_ms: BTreeMap::from([
-                ("hover".to_string(), 12.0),
-                ("completion".to_string(), 20.0),
-                ("definition".to_string(), 30.0),
-            ]),
-        };
-        let scenario_2 = ScenarioScore {
-            scenario_id: "completion-and-cross-file".to_string(),
-            hover_correct: Some(false),
-            completion_top1_correct: Some(true),
-            completion_top5_correct: Some(true),
-            definition_exact_hit: Some(false),
-            cross_file_success: Some(true),
-            mean_latency_ms: BTreeMap::from([
-                ("hover".to_string(), 8.0),
-                ("completion".to_string(), 40.0),
-                ("workspace_symbols".to_string(), 50.0),
-            ]),
-        };
+        let s1 = make_score(
+            "hover-and-def",
+            Some(true), Some(false), Some(true), Some(true), Some(true), Some(true),
+            &[("hover", 12.0), ("completion", 20.0), ("definition", 30.0)],
+        );
+        let s2 = make_score(
+            "completion-and-cross-file",
+            Some(false), Some(true), Some(true), Some(false), Some(false), Some(true),
+            &[("hover", 8.0), ("completion", 40.0), ("workspace_symbols", 50.0)],
+        );
 
-        let scorecard = aggregate_editor_ux_scorecard(&[scenario_1, scenario_2]);
+        let scorecard = aggregate_editor_ux_scorecard(&[s1, s2]);
 
         assert_eq!(scorecard.scenario_count, 2);
         assert_eq!(scorecard.hover_correctness_pct, Some(50.0));
         assert_eq!(scorecard.completion_top1_pct, Some(50.0));
         assert_eq!(scorecard.completion_top5_pct, Some(100.0));
         assert_eq!(scorecard.definition_exact_hit_pct, Some(50.0));
+        assert_eq!(scorecard.symbol_correctness_pct, Some(50.0));
         assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
         assert_eq!(scorecard.mean_latency_ms_by_request.get("hover"), Some(&10.0));
         assert_eq!(scorecard.mean_latency_ms_by_request.get("completion"), Some(&30.0));
@@ -165,31 +182,175 @@ mod tests {
         assert_eq!(payload["schema_version"], 1);
         assert_eq!(payload["subsystem"], "editor_ux");
         assert_eq!(payload["rows"]["completion_top5_pct"], 100.0);
+        assert_eq!(payload["rows"]["symbol_correctness_pct"], 50.0);
 
         Ok(())
     }
 
     #[test]
     fn aggregate_editor_ux_scorecard_uses_none_when_metric_not_measured() -> Result<()> {
-        let scenario = ScenarioScore {
-            scenario_id: "symbols-only".to_string(),
-            hover_correct: None,
-            completion_top1_correct: None,
-            completion_top5_correct: None,
-            definition_exact_hit: None,
-            cross_file_success: None,
-            mean_latency_ms: BTreeMap::from([("document_symbols".to_string(), 18.0)]),
-        };
+        let s = make_score(
+            "symbols-only",
+            None, None, None, None, None, None,
+            &[("document_symbols", 18.0)],
+        );
 
-        let scorecard = aggregate_editor_ux_scorecard(&[scenario]);
+        let scorecard = aggregate_editor_ux_scorecard(&[s]);
 
         assert_eq!(scorecard.hover_correctness_pct, None);
         assert_eq!(scorecard.completion_top1_pct, None);
         assert_eq!(scorecard.completion_top5_pct, None);
         assert_eq!(scorecard.definition_exact_hit_pct, None);
+        assert_eq!(scorecard.symbol_correctness_pct, None);
         assert_eq!(scorecard.cross_file_success_pct, None);
         assert_eq!(scorecard.mean_latency_ms_by_request.get("document_symbols"), Some(&18.0));
 
+        let payload = scorecard.to_json();
+        assert!(payload["rows"]["symbol_correctness_pct"].is_null());
+
         Ok(())
+    }
+
+    #[test]
+    fn empty_scenarios_produces_zero_count_and_all_none() -> Result<()> {
+        let scorecard = aggregate_editor_ux_scorecard(&[]);
+
+        assert_eq!(scorecard.scenario_count, 0);
+        assert_eq!(scorecard.hover_correctness_pct, None);
+        assert_eq!(scorecard.completion_top1_pct, None);
+        assert_eq!(scorecard.completion_top5_pct, None);
+        assert_eq!(scorecard.definition_exact_hit_pct, None);
+        assert_eq!(scorecard.symbol_correctness_pct, None);
+        assert_eq!(scorecard.cross_file_success_pct, None);
+        assert!(scorecard.mean_latency_ms_by_request.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn all_false_correctness_produces_zero_pct() -> Result<()> {
+        let s = make_score(
+            "all-fail",
+            Some(false), Some(false), Some(false), Some(false), Some(false), Some(false),
+            &[],
+        );
+
+        let scorecard = aggregate_editor_ux_scorecard(&[s]);
+
+        assert_eq!(scorecard.hover_correctness_pct, Some(0.0));
+        assert_eq!(scorecard.completion_top1_pct, Some(0.0));
+        assert_eq!(scorecard.completion_top5_pct, Some(0.0));
+        assert_eq!(scorecard.definition_exact_hit_pct, Some(0.0));
+        assert_eq!(scorecard.symbol_correctness_pct, Some(0.0));
+        assert_eq!(scorecard.cross_file_success_pct, Some(0.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn single_scenario_all_true_produces_100_pct() -> Result<()> {
+        let s = make_score(
+            "all-pass",
+            Some(true), Some(true), Some(true), Some(true), Some(true), Some(true),
+            &[("hover", 15.0), ("completion", 25.0)],
+        );
+
+        let scorecard = aggregate_editor_ux_scorecard(&[s]);
+
+        assert_eq!(scorecard.scenario_count, 1);
+        assert_eq!(scorecard.hover_correctness_pct, Some(100.0));
+        assert_eq!(scorecard.completion_top1_pct, Some(100.0));
+        assert_eq!(scorecard.completion_top5_pct, Some(100.0));
+        assert_eq!(scorecard.definition_exact_hit_pct, Some(100.0));
+        assert_eq!(scorecard.symbol_correctness_pct, Some(100.0));
+        assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
+        assert_eq!(scorecard.mean_latency_ms_by_request.get("hover"), Some(&15.0));
+        assert_eq!(scorecard.mean_latency_ms_by_request.get("completion"), Some(&25.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn symbol_correctness_aggregates_across_scenarios() -> Result<()> {
+        // 3 scenarios: true, true, false → 66.666...%
+        let scenarios: Vec<ScenarioScore> = vec![
+            make_score("s1", None, None, None, None, Some(true), None, &[]),
+            make_score("s2", None, None, None, None, Some(true), None, &[]),
+            make_score("s3", None, None, None, None, Some(false), None, &[]),
+        ];
+
+        let scorecard = aggregate_editor_ux_scorecard(&scenarios);
+
+        let pct = scorecard.symbol_correctness_pct;
+        assert!(pct.is_some_and(|v| (v - 66.666_666).abs() < 0.01), "expected ~66.67%, got {pct:?}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn latency_aggregation_with_no_latency_data_is_empty() -> Result<()> {
+        let s = make_score("no-latency", Some(true), None, None, None, None, None, &[]);
+
+        let scorecard = aggregate_editor_ux_scorecard(&[s]);
+
+        assert!(scorecard.mean_latency_ms_by_request.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn latency_averages_across_same_request_class() -> Result<()> {
+        let s1 = make_score("a", None, None, None, None, None, None, &[("hover", 10.0)]);
+        let s2 = make_score("b", None, None, None, None, None, None, &[("hover", 30.0)]);
+        let s3 = make_score("c", None, None, None, None, None, None, &[("hover", 20.0)]);
+
+        let scorecard = aggregate_editor_ux_scorecard(&[s1, s2, s3]);
+
+        // mean of 10 + 30 + 20 = 20.0
+        assert_eq!(scorecard.mean_latency_ms_by_request.get("hover"), Some(&20.0));
+
+        Ok(())
+    }
+
+    #[test]
+    fn to_json_schema_version_and_subsystem_are_correct() {
+        let scorecard = aggregate_editor_ux_scorecard(&[]);
+        let payload = scorecard.to_json();
+
+        assert_eq!(payload["schema_version"], 1);
+        assert_eq!(payload["subsystem"], "editor_ux");
+        assert_eq!(payload["scenario_count"], 0);
+    }
+
+    #[test]
+    fn percent_true_returns_none_on_empty_iterator() {
+        assert_eq!(percent_true(std::iter::empty::<bool>()), None);
+    }
+
+    #[test]
+    fn percent_true_all_false_returns_zero() {
+        assert_eq!(percent_true([false, false, false].iter().copied()), Some(0.0));
+    }
+
+    #[test]
+    fn percent_true_all_true_returns_100() {
+        assert_eq!(percent_true([true, true, true].iter().copied()), Some(100.0));
+    }
+
+    #[test]
+    fn percent_true_single_true_returns_100() {
+        assert_eq!(percent_true([true].iter().copied()), Some(100.0));
+    }
+
+    #[test]
+    fn percent_true_single_false_returns_zero() {
+        assert_eq!(percent_true([false].iter().copied()), Some(0.0));
+    }
+
+    #[test]
+    fn percent_true_mixed_returns_correct_ratio() {
+        // 2 true out of 5 = 40%
+        let result = percent_true([true, false, true, false, false].iter().copied());
+        assert_eq!(result, Some(40.0));
     }
 }
