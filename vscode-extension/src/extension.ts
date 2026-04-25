@@ -978,40 +978,75 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         return userPath;
     }
     
-    // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
     const binaryNames = platform === 'win32'
         ? ['perllsp.exe', 'perl-lsp.exe']
         : ['perllsp', 'perl-lsp'];
 
-    for (const binaryName of binaryNames) {
-        const bundledPath = path.join(
-            context.extensionPath,
-            'bin',
-            `${platform}-${arch}`,
-            binaryName
-        );
+    const findInPath = (): string | null => {
+        const pathDirs = process.env.PATH?.split(path.delimiter) || [];
+        for (const dir of pathDirs) {
+            for (const binaryName of binaryNames) {
+                const fullPath = path.join(dir, binaryName);
+                if (fs.existsSync(fullPath)) {
+                    outputChannel.appendLine(`Found Perl LSP binary in PATH: ${fullPath}`);
+                    return fullPath;
+                }
+            }
+        }
+        return null;
+    };
 
-        if (fs.existsSync(bundledPath)) {
+    const findBundled = (): string | null => {
+        for (const binaryName of binaryNames) {
+            const bundledPath = path.join(
+                context.extensionPath,
+                'bin',
+                `${platform}-${arch}`,
+                binaryName
+            );
+
+            if (!fs.existsSync(bundledPath)) {
+                continue;
+            }
+
             outputChannel.appendLine(`Using bundled Perl LSP binary: ${bundledPath}`);
             if (platform !== 'win32') {
-                fs.chmodSync(bundledPath, 0o755);
+                try {
+                    fs.chmodSync(bundledPath, 0o755);
+                } catch (chmodError: unknown) {
+                    const msg = chmodError instanceof Error ? chmodError.message : String(chmodError);
+                    outputChannel.appendLine(
+                        `[startup] Could not update executable permissions for bundled binary: ${msg}`
+                    );
+                }
             }
             return bundledPath;
         }
-    }
-    
-    // Try to find in PATH
-    const pathDirs = process.env.PATH?.split(path.delimiter) || [];
-    for (const dir of pathDirs) {
-        for (const binaryName of binaryNames) {
-            const fullPath = path.join(dir, binaryName);
-            if (fs.existsSync(fullPath)) {
-                outputChannel.appendLine(`Found Perl LSP binary in PATH: ${fullPath}`);
-                return fullPath;
-            }
+        return null;
+    };
+
+    // Firebase Studio (and IDX) run in remote containers where extension install
+    // paths may be mounted read-only or noexec. Prefer PATH there so users can
+    // provide perllsp from their workspace/toolchain.
+    const remoteName = vscode.env.remoteName?.toLowerCase() ?? '';
+    const preferPathBeforeBundled = remoteName.includes('firebase') || remoteName.includes('idx');
+    if (preferPathBeforeBundled) {
+        const pathCandidate = findInPath();
+        if (pathCandidate) {
+            return pathCandidate;
         }
+    }
+
+    const bundledCandidate = findBundled();
+    if (bundledCandidate) {
+        return bundledCandidate;
+    }
+
+    const pathCandidate = findInPath();
+    if (pathCandidate) {
+        return pathCandidate;
     }
     
     // Check if auto-download is enabled
