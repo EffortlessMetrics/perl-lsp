@@ -223,9 +223,18 @@ mod tests {
         // All 6 members of RECOVERY_KIND_NAMES must appear in the allowlist.
         assert!(allowlist.contains_key("Error"), "allowlist should contain Error");
         assert!(allowlist.contains_key("MissingBlock"), "allowlist should contain MissingBlock");
-        assert!(allowlist.contains_key("MissingExpression"), "allowlist should contain MissingExpression");
-        assert!(allowlist.contains_key("MissingIdentifier"), "allowlist should contain MissingIdentifier");
-        assert!(allowlist.contains_key("MissingStatement"), "allowlist should contain MissingStatement");
+        assert!(
+            allowlist.contains_key("MissingExpression"),
+            "allowlist should contain MissingExpression"
+        );
+        assert!(
+            allowlist.contains_key("MissingIdentifier"),
+            "allowlist should contain MissingIdentifier"
+        );
+        assert!(
+            allowlist.contains_key("MissingStatement"),
+            "allowlist should contain MissingStatement"
+        );
         assert!(allowlist.contains_key("UnknownRest"), "allowlist should contain UnknownRest");
         // The allowlist must have exactly as many entries as RECOVERY_KIND_NAMES (no extras, no dups).
         assert_eq!(
@@ -265,7 +274,11 @@ mod tests {
         let allowlisted_set: HashSet<&str> = allowlisted.iter().map(|s| s.as_str()).collect();
         let actionable_set: HashSet<&str> = actionable.iter().map(|s| s.as_str()).collect();
         let overlap: Vec<&&str> = allowlisted_set.intersection(&actionable_set).collect();
-        assert!(overlap.is_empty(), "allowlisted and actionable must be disjoint; overlap: {:?}", overlap);
+        assert!(
+            overlap.is_empty(),
+            "allowlisted and actionable must be disjoint; overlap: {:?}",
+            overlap
+        );
         // Recovery kinds must all land in the allowlisted bucket.
         for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
             assert!(

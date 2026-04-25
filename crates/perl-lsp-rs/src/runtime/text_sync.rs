@@ -1821,8 +1821,8 @@ mod tests {
     }
 
     #[test]
-    fn test_did_change_replaces_document_symbols_in_index()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_change_replaces_document_symbols_in_index() -> Result<(), Box<dyn std::error::Error>>
+    {
         let server = LspServer::new();
         let uri = "file:///test_symbol_reindex.pl";
 
@@ -1835,9 +1835,7 @@ mod tests {
             }
         }))?;
 
-        assert!(
-            server.symbol_index.lock().search_prefix("old_").contains(&"old_name".to_string())
-        );
+        assert!(server.symbol_index.lock().search_prefix("old_").contains(&"old_name".to_string()));
 
         server.handle_did_change(Some(json!({
             "textDocument": { "uri": uri, "version": 2 },
@@ -1852,8 +1850,8 @@ mod tests {
     }
 
     #[test]
-    fn test_did_close_removes_document_symbols_from_index()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn std::error::Error>>
+    {
         let server = LspServer::new();
         let uri = "file:///test_symbol_close.pl";
 
