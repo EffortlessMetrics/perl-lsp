@@ -281,6 +281,34 @@ fn use_if_encoding_targets_encoding_not_argument() -> Result<(), Box<dyn std::er
 }
 
 #[test]
+fn no_if_strict_conditionally_disables_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("if", &["$cond", "'strict'"], 13, 33),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 25);
+
+    assert!(!state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(!state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn no_unless_feature_conditionally_disables_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("feature", &["'say'"], 0, 20),
+        no_node("unless", &["$cond", "feature", "'say'"], 21, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 40);
+
+    assert!(!state.has_feature("say"));
+    Ok(())
+}
+
+#[test]
 fn no_strict_disables_all() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("strict", &[], 0, 12), no_node("strict", &[], 13, 23)]);
     let map = PragmaTracker::build(&ast);
@@ -911,6 +939,19 @@ fn eval_string_call_is_handled_conservatively() -> Result<(), Box<dyn std::error
     Ok(())
 }
 
+#[test]
+fn eval_string_expression_is_handled_conservatively() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        eval_node(use_node("warnings", &[], 20, 32), 15, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = PragmaTracker::state_for_offset(&map, 30);
+
+    assert!(!state.warnings, "eval STRING should not be interpreted as a lexical pragma scope");
+    Ok(())
+}
+
 // ===========================================================================
 // state_for_offset edge cases
 // ===========================================================================
@@ -1081,6 +1122,66 @@ fn no_warnings_multiple_categories_all_recorded() -> Result<(), Box<dyn std::err
     assert!(!state.is_warning_active("uninitialized"));
     assert!(!state.is_warning_active("redefine"));
     assert!(state.is_warning_active("deprecated"));
+    Ok(())
+}
+
+#[test]
+fn no_warnings_category_tracking_is_bounded() -> Result<(), Box<dyn std::error::Error>> {
+    let mut statements = Vec::new();
+    statements.push(use_node("warnings", &[], 0, 15));
+
+    for i in 0..300 {
+        let category = format!("cat{i}");
+        statements.push(no_node("warnings", &[&category], 16 + i, 17 + i));
+    }
+
+    let ast = program(statements);
+    let map = PragmaTracker::build(&ast);
+    let state =
+        &map.last().ok_or("expected non-empty pragma map after building warning statements")?.1;
+
+    assert_eq!(state.disabled_warning_categories.len(), 256);
+    assert!(!state.is_warning_active("cat255"));
+    assert!(state.is_warning_active("cat299"), "categories beyond the cap should remain active");
+    // Tightest boundary: cat256 is the first rejected entry (cap is 256, 0-indexed 0..=255).
+    assert!(state.is_warning_active("cat256"), "first item beyond cap must remain active");
+    Ok(())
+}
+
+#[test]
+fn use_warnings_resets_fully_capped_disabled_list() -> Result<(), Box<dyn std::error::Error>> {
+    // Fill the cap (256 categories), then `use warnings` must clear the list entirely
+    // so fresh categories can be recorded after the reset.
+    let mut statements = Vec::new();
+    statements.push(use_node("warnings", &[], 0, 15));
+
+    for i in 0..300 {
+        let category = format!("cat{i}");
+        statements.push(no_node("warnings", &[&category], 16 + i, 17 + i));
+    }
+
+    // Reset with `use warnings` then disable a new category.
+    let reset_start = 316;
+    statements.push(use_node("warnings", &[], reset_start, reset_start + 15));
+    statements.push(no_node("warnings", &["fresh"], reset_start + 16, reset_start + 30));
+
+    let ast = program(statements);
+    let map = PragmaTracker::build(&ast);
+    let state =
+        &map.last().ok_or("expected non-empty pragma map after building warning statements")?.1;
+
+    assert!(state.warnings, "warnings must still be on after reset");
+    assert_eq!(
+        state.disabled_warning_categories.len(),
+        1,
+        "use warnings must clear the full cap; only 'fresh' should remain"
+    );
+    assert!(
+        state.disabled_warning_categories.contains(&"fresh".to_string()),
+        "'fresh' category must be recorded after the reset"
+    );
+    assert!(!state.is_warning_active("fresh"), "fresh must be disabled");
+    assert!(state.is_warning_active("cat0"), "cat0 must be active again after use warnings reset");
     Ok(())
 }
 
@@ -1285,6 +1386,14 @@ fn parse_perl_version_accepts_single_component_major_only() -> Result<(), Box<dy
 {
     let parsed = perl_pragma::parse_perl_version("v5");
     assert_eq!(parsed, Some(PerlVersion::new(5, 0)));
+    Ok(())
+}
+
+#[test]
+fn parse_perl_version_accepts_developer_release_notation() -> Result<(), Box<dyn std::error::Error>>
+{
+    let parsed = perl_pragma::parse_perl_version("5.012_001");
+    assert_eq!(parsed, Some(PerlVersion::new(5, 12)));
     Ok(())
 }
 

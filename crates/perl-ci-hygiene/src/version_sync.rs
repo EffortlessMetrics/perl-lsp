@@ -36,9 +36,29 @@ pub struct VersionSite {
 /// Semantic version X.Y.Z validation regex. Keep in sync with bump's CLI
 /// validation — they must accept the same shape.
 pub fn validate_version_format(version: &str) -> Result<()> {
-    if !SEMVER_EXACT_RE.is_match(version) {
+    let mut parts = version.split('.');
+
+    let major = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+    let minor = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+    let patch = parts
+        .next()
+        .ok_or_else(|| eyre!("invalid version format: {version:?} (expected X.Y.Z)"))?;
+
+    if parts.next().is_some()
+        || major.is_empty()
+        || minor.is_empty()
+        || patch.is_empty()
+        || !major.chars().all(|ch| ch.is_ascii_digit())
+        || !minor.chars().all(|ch| ch.is_ascii_digit())
+        || !patch.chars().all(|ch| ch.is_ascii_digit())
+    {
         bail!("invalid version format: {version:?} (expected X.Y.Z)");
     }
+
     Ok(())
 }
 
@@ -248,7 +268,6 @@ fn rewrite_version_in_line(line: &str, old: &str, new: &str) -> String {
 // Collectors
 // ---------------------------------------------------------------------------
 
-static SEMVER_EXACT_RE: LazyLock<Regex> = LazyLock::new(|| compile_regex(r"^\d+\.\d+\.\d+$"));
 static BARE_VERSION_RE: LazyLock<Regex> =
     LazyLock::new(|| compile_regex(r#"^\s*version\s*=\s*"(\d+\.\d+\.\d+)""#));
 static WORKSPACE_DEP_WITH_VERSION_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -597,6 +616,18 @@ fn collect_single_line_doc_site(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_repo_dir(label: &str) -> Result<PathBuf> {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| eyre!("system clock before unix epoch: {e}"))?
+            .as_nanos();
+        let dir = std::env::temp_dir()
+            .join(format!("perl-ci-hygiene-{label}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).map_err(|e| eyre!("creating {}: {e}", dir.display()))?;
+        Ok(dir)
+    }
 
     #[test]
     fn rewrite_version_in_line_replaces_only_target() {
@@ -632,5 +663,107 @@ mod tests {
         assert!(validate_version_format("0.12").is_err());
         assert!(validate_version_format("0.12.2-rc1").is_err());
         assert!(validate_version_format("").is_err());
+        assert!(validate_version_format("1..2").is_err());
+        assert!(validate_version_format("1.2.3.4").is_err());
+        assert!(validate_version_format("1.two.3").is_err());
+    }
+
+    #[test]
+    fn rewrite_version_in_line_updates_only_first_match() {
+        let line = r#"version = "0.12.2" # historical "0.12.2""#;
+        let updated = rewrite_version_in_line(line, "0.12.2", "0.13.0");
+        assert_eq!(updated, r#"version = "0.13.0" # historical "0.12.2""#);
+    }
+
+    #[test]
+    fn trailing_newline_suffix_preserves_expected_shape() {
+        assert_eq!(trailing_newline_suffix("a"), "");
+        assert_eq!(trailing_newline_suffix("a\n"), "\n");
+        assert_eq!(trailing_newline_suffix("a\n\n"), "\n");
+    }
+
+    #[test]
+    fn collect_vscode_sites_ignores_transitive_lockfile_versions() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("lockfile-scan")?;
+        let vscode_dir = repo_root.join("vscode-extension");
+        fs::create_dir_all(&vscode_dir)
+            .map_err(|e| eyre!("creating {}: {e}", vscode_dir.display()))?;
+
+        let package_json = r#"{
+  "name": "perl-lsp",
+  "version": "0.42.0"
+}"#;
+        fs::write(vscode_dir.join("package.json"), package_json)
+            .map_err(|e| eyre!("writing package.json: {e}"))?;
+
+        let package_lock = r#"{
+  "name": "perl-lsp",
+  "version": "0.42.0",
+  "packages": {
+    "": {
+      "version": "0.42.0"
+    },
+    "node_modules/x": {
+      "version": "9.9.9"
+    }
+  }
+}"#;
+        fs::write(vscode_dir.join("package-lock.json"), package_lock)
+            .map_err(|e| eyre!("writing package-lock.json: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_vscode_sites(&repo_root, &mut sites)?;
+
+        let versions: Vec<String> = sites.iter().map(|site| site.found.clone()).collect();
+        assert_eq!(
+            versions,
+            vec!["0.42.0".to_string(), "0.42.0".to_string(), "0.42.0".to_string()]
+        );
+        assert!(
+            !versions.iter().any(|version| version == "9.9.9"),
+            "transitive lockfile versions must not be collected"
+        );
+
+        fs::remove_dir_all(&repo_root)
+            .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
+        Ok(())
+    }
+
+    #[test]
+    fn collect_crate_cargo_toml_sites_scans_all_dependency_sections() -> Result<()> {
+        let repo_root = unique_temp_repo_dir("deps-sections")?;
+        let crate_dir = repo_root.join("crates/example-crate");
+        fs::create_dir_all(&crate_dir).map_err(|e| eyre!("creating crate dir: {e}"))?;
+
+        let cargo_toml = r#"[package]
+name = "example-crate"
+version = "0.42.0"
+
+[dependencies]
+perl-lexer = { path = "../perl-lexer", version = "0.42.0" }
+
+[target.'cfg(unix)'.dependencies]
+perl-parser = { path = "../perl-parser", version = "0.42.0" }
+
+[build-dependencies]
+perl-token = { path = "../perl-token", version = "0.42.0" }
+"#;
+        fs::write(crate_dir.join("Cargo.toml"), cargo_toml)
+            .map_err(|e| eyre!("writing test Cargo.toml: {e}"))?;
+
+        let mut sites = Vec::new();
+        collect_crate_cargo_toml_sites(&repo_root, &mut sites)?;
+
+        let dep_sites =
+            sites.iter().filter(|site| site.description.contains("dependency on")).count();
+        assert_eq!(dep_sites, 3, "all dependency sections must be discovered");
+        assert!(
+            sites.iter().any(|site| site.description.contains("[package] version")),
+            "package version should also be discovered"
+        );
+
+        fs::remove_dir_all(&repo_root)
+            .map_err(|e| eyre!("cleanup {}: {e}", repo_root.display()))?;
+        Ok(())
     }
 }

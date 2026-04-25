@@ -491,3 +491,67 @@ fn test_local_as_assignment_rhs() {
         parser.errors()
     );
 }
+
+#[test]
+fn test_recovery_unclosed_qw() {
+    let code = "my @items = qw(one two three print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed qw()");
+    let ast = must(result);
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 1, "Should have recovered statements after unclosed qw");
+    }
+    assert!(!parser.errors().is_empty(), "Should record unclosed delimiter error");
+}
+
+#[test]
+fn test_recovery_unclosed_q_brace() {
+    let code = "my $str = q{ hello world print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed q braces");
+    let ast = must(result);
+    if let NodeKind::Program { statements } = &ast.kind {
+        assert!(statements.len() >= 1, "Should have recovered statements");
+    }
+    assert!(!parser.errors().is_empty(), "Should record unclosed brace error");
+}
+
+#[test]
+fn test_recovery_unclosed_qq() {
+    let code = "my $name = \"unknown; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed qq string");
+    assert!(!parser.errors().is_empty(), "Should record unclosed quote error");
+}
+
+#[test]
+fn test_recovery_nested_qw_paren_mismatch() {
+    let code = "my @list = qw(one (two three) print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from nested paren in qw");
+    assert!(!parser.errors().is_empty(), "Should record delimiter mismatch error");
+}
+
+#[test]
+fn test_recovery_unclosed_s_slash() {
+    // `s/pattern` with no replacement or closing delimiter
+    let code = "my $x = s/pattern; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from unclosed s///");
+    assert!(!parser.errors().is_empty(), "Should record unclosed s delimiter error");
+}
+
+#[test]
+fn test_recovery_unclosed_s_replacement() {
+    // Pattern closes but replacement delimiter is never opened
+    let code = "s/find/; print 1;";
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should recover from s/ with unclosed replacement");
+    assert!(!parser.errors().is_empty(), "Should record unclosed s delimiter error");
+}
