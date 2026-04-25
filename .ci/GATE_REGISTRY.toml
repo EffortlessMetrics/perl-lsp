@@ -171,6 +171,22 @@ cost_tier = "low"
 failure_impact = "medium"
 
 [[gate]]
+id = "perl-token-leaf-contract"
+name = "perl-token Leaf Contract"
+type = "governance"
+blocking = true
+timeout_seconds = 120
+command = "cargo test -p perl-token --test conformance_guards --locked"
+evidence_pattern = "test result: ok"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Protects perl-token leaf status: no runtime deps, stable Token/TokenKind contract, complete metadata coverage"
+docs_url = "crates/perl-token/README.md#stability-contract"
+cost_tier = "low"
+failure_impact = "high"
+
+[[gate]]
 id = "no-nested-lock"
 name = "Nested Lockfile Check"
 type = "hygiene"
