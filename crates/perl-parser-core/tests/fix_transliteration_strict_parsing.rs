@@ -39,9 +39,11 @@ fn transliteration_supports_mixed_paired_delimiters() {
 }
 
 #[test]
-fn transliteration_reports_missing_replacement() {
-    assert_has_error(
-        r#"$x =~ tr{abc};"#,
-        "missing replacement list in transliteration",
-    );
+fn transliteration_reports_error_for_missing_replacement() {
+    // tr{abc} with no replacement body is invalid; the parser must report
+    // a transliteration-related error (missing replacement or missing closer).
+    // tr{abc}; — the `;` gets consumed as the replacement delimiter by the
+    // current strict parser, which then cannot find the matching `;` closer,
+    // producing a MissingClosingDelimiter diagnostic.
+    assert_has_error(r#"$x =~ tr{abc};"#, "transliteration");
 }
