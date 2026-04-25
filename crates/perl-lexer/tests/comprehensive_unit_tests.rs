@@ -638,6 +638,20 @@ fn binary_literal() -> R {
 }
 
 #[test]
+fn prefixed_number_with_underscores_only_falls_back_to_zero() -> R {
+    for input in ["0x_", "0x__", "0b_", "0b___", "0o_", "0o__"] {
+        let toks = significant(input);
+        assert!(matches!(toks.first().map(|t| &t.token_type), Some(TokenType::Number(_))));
+        assert_eq!(toks.first().map(|t| t.text.as_ref()), Some("0"), "input: {input}");
+        assert!(
+            matches!(toks.get(1).map(|t| &t.token_type), Some(TokenType::Identifier(_))),
+            "expected identifier after fallback for input: {input}, got {toks:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn underscored_number() -> R {
     let tok = first_token("1_000_000").ok_or("no token")?;
     assert!(matches!(tok.token_type, TokenType::Number(_)));
@@ -698,6 +712,48 @@ fn interpolated_string_preserves_complex_tails() -> R {
             vec![
                 StringPart::Variable(Arc::from("$obj")),
                 StringPart::MethodCall(Arc::from("->{key}")),
+            ],
+        ),
+        (
+            r#""$hash{incomplete""#,
+            vec![
+                StringPart::Variable(Arc::from("$hash")),
+                StringPart::Expression(Arc::from("{incomplete")),
+            ],
+        ),
+        (
+            r#""$array[0""#,
+            vec![
+                StringPart::Variable(Arc::from("$array")),
+                StringPart::ArraySlice(Arc::from("[0")),
+            ],
+        ),
+        (
+            r#""$obj->{field""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->{field")),
+            ],
+        ),
+        (
+            r#""$array[$i""#,
+            vec![
+                StringPart::Variable(Arc::from("$array")),
+                StringPart::ArraySlice(Arc::from("[$i")),
+            ],
+        ),
+        (
+            r#""$obj->method(arg""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->method(arg")),
+            ],
+        ),
+        (
+            r#""$obj->(incomplete""#,
+            vec![
+                StringPart::Variable(Arc::from("$obj")),
+                StringPart::MethodCall(Arc::from("->(incomplete")),
             ],
         ),
     ];

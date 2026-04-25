@@ -112,16 +112,79 @@ impl IncrementalEditSet {
             return source.to_string();
         }
 
-        // Sort edits in reverse order to apply from end to start
+        // Sort edits in reverse order to apply from end to start.
+        // Secondary sort by old_end_byte (descending) makes the order deterministic
+        // for edits with the same start_byte, matching normalize_for_source's sort.
         let mut sorted_edits = self.edits.clone();
-        sorted_edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
+        sorted_edits.sort_by(|a, b| {
+            b.start_byte.cmp(&a.start_byte).then_with(|| b.old_end_byte.cmp(&a.old_end_byte))
+        });
 
         let mut result = source.to_string();
         for edit in &sorted_edits {
-            result.replace_range(edit.start_byte..edit.old_end_byte, &edit.new_text);
+            let start = edit.start_byte.min(result.len());
+            let end = edit.old_end_byte.min(result.len());
+
+            if start > end {
+                continue;
+            }
+
+            if !result.is_char_boundary(start) || !result.is_char_boundary(end) {
+                continue;
+            }
+
+            result.replace_range(start..end, &edit.new_text);
         }
 
         result
+    }
+
+    /// Validate and normalize edits for deterministic reverse-order application.
+    ///
+    /// Returns `None` when any edit is not safely mappable for the given source
+    /// (backwards range, out-of-bounds range, or non-UTF-8 boundaries), or when
+    /// non-empty ranges overlap.
+    pub fn normalize_for_source(&self, source: &str) -> Option<Vec<IncrementalEdit>> {
+        let mut indexed = Vec::with_capacity(self.edits.len());
+        for (index, edit) in self.edits.iter().enumerate() {
+            if !Self::is_edit_mappable(source, edit) {
+                return None;
+            }
+            indexed.push((index, edit.clone()));
+        }
+
+        indexed.sort_by(|(_, left), (_, right)| {
+            right
+                .start_byte
+                .cmp(&left.start_byte)
+                .then_with(|| right.old_end_byte.cmp(&left.old_end_byte))
+        });
+
+        let mut previous_non_empty: Option<&IncrementalEdit> = None;
+        for (_, edit) in &indexed {
+            if edit.start_byte == edit.old_end_byte {
+                continue;
+            }
+
+            if let Some(previous) = previous_non_empty {
+                if edit.old_end_byte > previous.start_byte {
+                    return None;
+                }
+            }
+            previous_non_empty = Some(edit);
+        }
+
+        Some(indexed.into_iter().map(|(_, edit)| edit).collect())
+    }
+
+    fn is_edit_mappable(source: &str, edit: &IncrementalEdit) -> bool {
+        if edit.start_byte > edit.old_end_byte {
+            return false;
+        }
+        if edit.old_end_byte > source.len() {
+            return false;
+        }
+        source.is_char_boundary(edit.start_byte) && source.is_char_boundary(edit.old_end_byte)
     }
 }
 
@@ -166,5 +229,37 @@ mod tests {
         let source = "hello world";
         let result = edits.apply_to_string(source);
         assert_eq!(result, "Hello Perl");
+    }
+
+    #[test]
+    fn test_normalize_for_source_rejects_backwards_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(4, 2, "x".to_string()));
+
+        assert!(edits.normalize_for_source("abcdef").is_none());
+    }
+
+    #[test]
+    fn test_normalize_for_source_rejects_overlapping_non_empty_ranges() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(1, 4, "x".to_string()));
+        edits.add(IncrementalEdit::new(3, 5, "y".to_string()));
+
+        assert!(edits.normalize_for_source("abcdef").is_none());
+    }
+
+    #[test]
+    fn test_normalize_for_source_preserves_zero_width_insertions() {
+        let mut edits = IncrementalEditSet::new();
+        edits.add(IncrementalEdit::new(2, 2, "X".to_string()));
+        edits.add(IncrementalEdit::new(2, 2, "Y".to_string()));
+
+        let normalized = edits.normalize_for_source("abcd");
+        assert!(normalized.is_some());
+        if let Some(normalized) = normalized {
+            assert_eq!(normalized.len(), 2);
+            assert_eq!(normalized[0].start_byte, 2);
+            assert_eq!(normalized[1].start_byte, 2);
+        }
     }
 }

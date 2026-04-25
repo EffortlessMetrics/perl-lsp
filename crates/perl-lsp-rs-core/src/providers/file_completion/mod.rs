@@ -121,10 +121,11 @@ pub fn complete_file_paths(
             text_edit_range: Some((context.prefix_start, context.position)),
             commit_characters: None,
         });
+    }
 
-        if completions.len() >= 50 {
-            break;
-        }
+    completions.sort_by(|left, right| left.label.cmp(&right.label));
+    if completions.len() > 50 {
+        completions.truncate(50);
     }
 
     completions
@@ -144,23 +145,133 @@ pub fn complete_file_paths(
 fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String>) {
     let file_type = entry.file_type();
     if file_type.is_dir() {
-        ("directory".to_string(), Some("Directory".to_string()))
+        let directory_name = entry.file_name().to_string_lossy();
+        if matches!(directory_name.to_ascii_lowercase().as_str(), "docs" | "doc" | "documentation")
+        {
+            ("documentation directory".to_string(), Some("Documentation directory".to_string()))
+        } else {
+            ("directory".to_string(), Some("Directory".to_string()))
+        }
     } else if file_type.is_file() {
         let extension = entry.path().extension().and_then(|ext| ext.to_str()).unwrap_or("");
+        let file_name = entry.file_name().to_string_lossy();
         let file_type_desc = match extension.to_ascii_lowercase().as_str() {
             "pl" | "pm" | "t" => "Perl file",
             "rs" => "Rust source file",
             "js" => "JavaScript file",
             "py" => "Python file",
             "txt" => "Text file",
-            "md" => "Markdown file",
+            "md" | "mdx" | "rst" | "adoc" | "asciidoc" | "pod" => "Documentation file",
             "json" => "JSON file",
             "yaml" | "yml" => "YAML file",
             "toml" => "TOML file",
+            _ if matches!(
+                file_name.to_ascii_lowercase().as_str(),
+                "readme" | "changelog" | "contributing" | "license"
+            ) =>
+            {
+                "Project documentation file"
+            }
             _ => "file",
         };
         (file_type_desc.to_string(), None)
     } else {
         ("file".to_string(), None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FileCompletionContext, complete_file_paths};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::{LazyLock, Mutex},
+    };
+    use tempfile::tempdir;
+
+    static CWD_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct CurrentDirGuard {
+        previous: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn change_to(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+            let previous = std::env::current_dir()?;
+            std::env::set_current_dir(path)?;
+            Ok(Self { previous })
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.previous);
+        }
+    }
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn file_completion_labels_are_sorted() -> TestResult {
+        let _cwd_guard = CWD_LOCK.lock()?;
+        let temp = tempdir()?;
+        let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+        fs::create_dir_all("fixtures")?;
+        fs::write("fixtures/z-last.pm", "1;")?;
+        fs::write("fixtures/a-first.pm", "1;")?;
+        fs::create_dir_all("fixtures/m-middle-dir")?;
+
+        let context = FileCompletionContext::new("fixtures/", 0, "fixtures/".len());
+        let completions = complete_file_paths(&context, &|| false);
+        let labels: Vec<&str> = completions.iter().map(|item| item.label.as_str()).collect();
+
+        assert_eq!(
+            labels,
+            vec!["fixtures/a-first.pm", "fixtures/m-middle-dir/", "fixtures/z-last.pm"]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn file_completion_marks_docs_as_documentation() -> TestResult {
+        let _cwd_guard = CWD_LOCK.lock()?;
+        let temp = tempdir()?;
+        let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+        fs::create_dir_all("docs")?;
+        fs::write("docs/guide.mdx", "# Guide")?;
+
+        let context = FileCompletionContext::new("docs/g", 0, "docs/g".len());
+        let completions = complete_file_paths(&context, &|| false);
+        let guide = completions
+            .iter()
+            .find(|item| item.label == "docs/guide.mdx")
+            .ok_or("docs/guide.mdx completion missing")?;
+
+        assert_eq!(guide.detail.as_deref(), Some("Documentation file"));
+        Ok(())
+    }
+
+    #[test]
+    fn file_completion_marks_docs_directory() -> TestResult {
+        let _cwd_guard = CWD_LOCK.lock()?;
+        let temp = tempdir()?;
+        let _dir_guard = CurrentDirGuard::change_to(temp.path())?;
+
+        fs::create_dir_all("docs")?;
+
+        let context = FileCompletionContext::new("d", 0, "d".len());
+        let completions = complete_file_paths(&context, &|| false);
+        let docs_dir = completions
+            .iter()
+            .find(|item| item.label == "docs/")
+            .ok_or("docs/ completion missing")?;
+
+        assert_eq!(docs_dir.detail.as_deref(), Some("documentation directory"));
+        assert_eq!(docs_dir.documentation.as_deref(), Some("Documentation directory"));
+        Ok(())
     }
 }

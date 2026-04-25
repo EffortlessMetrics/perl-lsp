@@ -46,15 +46,39 @@
 
 pub mod client;
 pub mod env;
+pub mod scorecard;
 pub mod workspace;
 
 pub use client::{LspEvent, UxClient};
 pub use env::{PathGuard, RestrictedPath};
+pub use scorecard::{EditorUxScorecard, ScenarioScore, aggregate_editor_ux_scorecard};
 pub use workspace::FakeWorkspace;
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Mutex;
 use std::time::Duration;
+use url::Url;
+
+/// Canonical cursor position for editor-facing UX requests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CursorPosition {
+    /// Relative file path in the temp workspace.
+    pub relative_path: String,
+    /// 0-based line offset.
+    pub line: u32,
+    /// 0-based UTF-16 code-unit offset.
+    pub character: u32,
+}
+
+impl CursorPosition {
+    /// Create a cursor position at `(line, character)` inside `relative_path`.
+    pub fn new(relative_path: impl Into<String>, line: u32, character: u32) -> Self {
+        Self { relative_path: relative_path.into(), line, character }
+    }
+}
 
 /// Configuration for a UX scenario.
 ///
@@ -150,6 +174,7 @@ pub struct UxHarness {
     pub client: UxClient,
     pub workspace: FakeWorkspace,
     config: ScenarioConfig,
+    document_versions: Mutex<HashMap<String, i32>>,
 }
 
 impl UxHarness {
@@ -171,7 +196,7 @@ impl UxHarness {
         let client = UxClient::spawn(&binary_path, &workspace, &config)
             .context("Failed to spawn LSP server")?;
 
-        Ok(Self { client, workspace, config })
+        Ok(Self { client, workspace, config, document_versions: Mutex::new(HashMap::new()) })
     }
 
     /// Open a file in the LSP server (textDocument/didOpen).
@@ -180,7 +205,54 @@ impl UxHarness {
     pub fn open_file(&self, relative_path: &str, content: &str) -> Result<()> {
         self.workspace.write(relative_path, content)?;
         let uri = self.workspace.uri(relative_path);
-        self.client.did_open(&uri, content)
+        self.client.did_open(&uri, content)?;
+        self.document_versions.lock().unwrap_or_else(|e| e.into_inner()).insert(uri, 1);
+        Ok(())
+    }
+
+    /// Open a fixture file pre-seeded in `ScenarioConfig.workspace_files`.
+    pub fn open_fixture(&self, relative_path: &str) -> Result<()> {
+        let content = std::fs::read_to_string(self.workspace.path(relative_path))
+            .with_context(|| format!("Fixture file {:?} was not pre-seeded", relative_path))?;
+        self.open_file(relative_path, &content)
+    }
+
+    /// Build a canonical cursor position for subsequent UX requests.
+    pub fn position_cursor(
+        &self,
+        relative_path: impl Into<String>,
+        line: u32,
+        character: u32,
+    ) -> CursorPosition {
+        CursorPosition::new(relative_path, line, character)
+    }
+
+    /// Apply a full-document text replacement and send `textDocument/didChange`.
+    pub fn change_file_full(&self, relative_path: &str, updated_content: &str) -> Result<()> {
+        self.workspace.write(relative_path, updated_content)?;
+        let uri = self.workspace.uri(relative_path);
+        let version = {
+            let mut versions = self.document_versions.lock().unwrap_or_else(|e| e.into_inner());
+            let entry = versions.entry(uri.clone()).or_insert(1);
+            *entry += 1;
+            *entry
+        };
+        self.client.did_change_full(&uri, version, updated_content)
+    }
+
+    /// Open a file in the LSP server with an explicit language identifier.
+    ///
+    /// Useful for UX regressions where the editor mode intentionally differs
+    /// from the file extension (for example, opening `*.html.ep` as HTML).
+    pub fn open_file_with_language_id(
+        &self,
+        relative_path: &str,
+        content: &str,
+        language_id: &str,
+    ) -> Result<()> {
+        self.workspace.write(relative_path, content)?;
+        let uri = self.workspace.uri(relative_path);
+        self.client.did_open_with_language_id(&uri, content, language_id)
     }
 
     /// Request hover information at `(line, character)` (0-indexed UTF-16).
@@ -225,6 +297,11 @@ impl UxHarness {
                 None => Ok(Vec::new()),
             },
         }
+    }
+
+    /// Request completion at a canonical cursor position.
+    pub fn completion_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
+        self.completion(&cursor.relative_path, cursor.line, cursor.character)
     }
 
     /// Request document formatting.
@@ -426,6 +503,80 @@ impl UxHarness {
         }
     }
 
+    /// Request go-to-definition at a canonical cursor position.
+    pub fn definition_at(&self, cursor: &CursorPosition) -> Result<Vec<Value>> {
+        self.definition(&cursor.relative_path, cursor.line, cursor.character)
+    }
+
+    /// Request references (`textDocument/references`) at a cursor position.
+    pub fn references(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+        include_declaration: bool,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/references",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character },
+                "context": { "includeDeclaration": include_declaration }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("references returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None if resp["result"].is_null() => Ok(Vec::new()),
+            None => Ok(vec![resp["result"].clone()]),
+        }
+    }
+
+    /// Request references at a canonical cursor position.
+    pub fn references_at(
+        &self,
+        cursor: &CursorPosition,
+        include_declaration: bool,
+    ) -> Result<Vec<Value>> {
+        self.references(&cursor.relative_path, cursor.line, cursor.character, include_declaration)
+    }
+
+    /// Request go-to-declaration.
+    pub fn declaration(
+        &self,
+        relative_path: &str,
+        line: u32,
+        character: u32,
+    ) -> Result<Vec<Value>> {
+        let uri = self.workspace.uri(relative_path);
+        let resp = self.client.request(
+            "textDocument/declaration",
+            json!({
+                "textDocument": { "uri": uri },
+                "position": { "line": line, "character": character }
+            }),
+            self.config.timeout,
+        )?;
+        if resp.get("error").is_some() {
+            return Err(anyhow!("declaration returned error: {}", resp["error"]));
+        }
+        match resp["result"].as_array() {
+            Some(locs) => Ok(locs.clone()),
+            None => {
+                if resp["result"].is_null() {
+                    Ok(Vec::new())
+                } else {
+                    // Single location object
+                    Ok(vec![resp["result"].clone()])
+                }
+            }
+        }
+    }
+
     /// Drain any pending server-initiated messages (window/showMessage, etc.)
     /// and return them. Non-blocking — returns what's already buffered.
     ///
@@ -518,6 +669,93 @@ impl UxHarness {
     pub fn root_uri(&self) -> &str {
         &self.workspace.root_uri
     }
+
+    /// Apply a full-document edit and wait for diagnostics from that file.
+    pub fn apply_edit_and_collect_diagnostics(
+        &self,
+        relative_path: &str,
+        updated_content: &str,
+        timeout: Duration,
+    ) -> Result<Vec<Value>> {
+        self.change_file_full(relative_path, updated_content)?;
+        Ok(self.wait_for_diagnostics(relative_path, timeout))
+    }
+
+    /// Normalize LSP payloads for platform-stable expectations.
+    ///
+    /// - Workspace file URIs are rewritten as `file://$WORKSPACE/<relative-path>`.
+    /// - Directory separators in normalized URIs are always `/`.
+    pub fn normalize_response(&self, payload: &Value) -> Value {
+        normalize_lsp_payload(payload, self.workspace.dir.path())
+    }
+
+    /// Assert that two LSP payloads match after canonical normalization.
+    pub fn assert_normalized_eq(&self, actual: &Value, expected: &Value) {
+        let normalized_actual = self.normalize_response(actual);
+        let normalized_expected = self.normalize_response(expected);
+        assert_eq!(
+            normalized_actual, normalized_expected,
+            "normalized payload mismatch\nactual={:#}\nexpected={:#}",
+            normalized_actual, normalized_expected
+        );
+    }
+}
+
+/// Normalize editor-facing LSP payloads so fixture assertions are OS-stable.
+pub fn normalize_lsp_payload(payload: &Value, workspace_root: &Path) -> Value {
+    match payload {
+        Value::Array(values) => Value::Array(
+            values.iter().map(|entry| normalize_lsp_payload(entry, workspace_root)).collect(),
+        ),
+        Value::Object(map) => {
+            let mut normalized = serde_json::Map::with_capacity(map.len());
+            for (key, value) in map {
+                if matches!(key.as_str(), "uri" | "targetUri" | "workspaceFolderUri") {
+                    if let Some(uri) = value.as_str() {
+                        normalized.insert(
+                            key.clone(),
+                            Value::String(normalize_uri_for_expectations(uri, workspace_root)),
+                        );
+                        continue;
+                    }
+                }
+                normalized.insert(key.clone(), normalize_lsp_payload(value, workspace_root));
+            }
+            Value::Object(normalized)
+        }
+        _ => payload.clone(),
+    }
+}
+
+fn normalize_uri_for_expectations(uri: &str, workspace_root: &Path) -> String {
+    // Short-circuit: sentinel tokens already contain "$WORKSPACE" and must be returned
+    // verbatim.  On Windows the url crate interprets "$WORKSPACE" as a UNC host and
+    // Url::to_file_path() succeeds, producing a mangled path like `\\$workspace\foo`.
+    // Checking up-front is both correct and cheaper than parsing.
+    if uri.contains("$WORKSPACE") {
+        return uri.to_string();
+    }
+
+    let Ok(parsed) = Url::parse(uri) else {
+        return uri.replace('\\', "/");
+    };
+
+    if parsed.scheme() != "file" {
+        return uri.to_string();
+    }
+
+    let Ok(path) = parsed.to_file_path() else {
+        return uri.replace('\\', "/");
+    };
+
+    if let Ok(relative) = path.strip_prefix(workspace_root) {
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        return format!("file://$WORKSPACE/{}", relative.trim_start_matches('/'));
+    }
+
+    // Non-workspace file URI: return the url crate's canonical form, which already
+    // handles Windows drive letters correctly (file:///C:/...) without reconstruction.
+    parsed.to_string()
 }
 
 /// Outcome of a formatting request.
@@ -554,9 +792,14 @@ impl FormatResult {
 ///
 /// Resolution order:
 /// 1. `PERL_LSP_BIN` env var (explicit override).
-/// 2. `CARGO_BIN_EXE_perl-lsp` compile-time constant (set by Cargo during tests).
-/// 3. `perl-lsp` in PATH.
-/// 4. `cargo run -p perl-lsp-rs` fallback (slow but always works).
+/// 2. Runtime walk from `current_exe()` — finds `target/debug/perl-lsp[.exe]` by
+///    traversing parent directories. Avoids the `option_env!` compile-time approach
+///    which strips backslashes on Windows CI (OS error 3 / path not found).
+/// 3. `CARGO_TARGET_DIR` env var — if set, probe its `debug/` and `release/` subdirs.
+/// 4. `CARGO_MANIFEST_DIR`-relative workspace root walk — same approach used by
+///    `perl-lsp-rs` integration tests.
+/// 5. `perl-lsp` / `perllsp` in PATH.
+/// 6. Error with actionable message.
 pub fn resolve_binary() -> Result<String> {
     // 1. Explicit override
     if let Ok(p) = std::env::var("PERL_LSP_BIN") {
@@ -565,12 +808,44 @@ pub fn resolve_binary() -> Result<String> {
         }
     }
 
-    // 2. Compile-time constant (only available when tests run via `cargo test`)
-    if let Some(p) = option_env!("CARGO_BIN_EXE_perl-lsp") {
-        return Ok(p.to_string());
+    // 2. Runtime walk from current_exe() — robust on all platforms including
+    //    Windows where option_env! bakes paths with backslashes stripped.
+    //
+    //    Test binaries live at:
+    //      <workspace>/target/debug/deps/<test-binary-name>[.exe]
+    //    The LSP server lives at:
+    //      <workspace>/target/debug/perl-lsp[.exe]
+    //      <workspace>/target/release/perl-lsp[.exe]
+    //
+    //    We walk up from current_exe() until we find a `target` directory
+    //    whose parent contains `Cargo.lock` (the workspace root).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(binary) = find_binary_near_exe(&exe) {
+            return Ok(binary);
+        }
     }
 
-    // 3. PATH lookup
+    // 3. CARGO_TARGET_DIR — if set, look directly in its debug/release subdirs.
+    //    This covers custom target directories (e.g. agent worktrees using
+    //    CARGO_TARGET_DIR=/tmp/agent-...).
+    if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
+        if let Some(binary) = find_binary_in_target(std::path::Path::new(&target_dir)) {
+            return Ok(binary);
+        }
+    }
+
+    // 4. CARGO_MANIFEST_DIR walk — find workspace root via Cargo.lock, then
+    //    check target/{debug,release}/perl-lsp[.exe].
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let crate_dir = std::path::Path::new(&manifest_dir);
+        let workspace_root =
+            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
+        if let Some(binary) = find_binary_in_target(workspace_root) {
+            return Ok(binary);
+        }
+    }
+
+    // 5. PATH lookup
     if let Ok(p) = which::which("perl-lsp") {
         return Ok(p.to_string_lossy().to_string());
     }
@@ -578,12 +853,51 @@ pub fn resolve_binary() -> Result<String> {
         return Ok(p.to_string_lossy().to_string());
     }
 
-    // 4. cargo run fallback — we return the cargo invocation as a string
-    // handled specially by UxClient::spawn.
+    // 6. No binary found — actionable error message.
     Err(anyhow!(
         "perl-lsp binary not found. \
         Set PERL_LSP_BIN=/path/to/perl-lsp or run: cargo build -p perl-lsp-rs"
     ))
+}
+
+/// Walk up from the test binary's path to locate `perl-lsp[.exe]` in the
+/// nearest `target/debug` or `target/release` directory.
+///
+/// Test binaries are placed in `<workspace>/target/<profile>/deps/`, so we
+/// ascend until we find a directory named `target` whose parent has a
+/// `Cargo.lock` file, then probe `<profile>/perl-lsp[.exe]`.
+fn find_binary_near_exe(exe: &std::path::Path) -> Option<String> {
+    // Walk up the ancestor chain looking for a `target` directory.
+    for ancestor in exe.ancestors() {
+        if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
+            let workspace_root = ancestor.parent()?;
+            if workspace_root.join("Cargo.lock").exists() {
+                return find_binary_in_target(workspace_root);
+            }
+        }
+    }
+    None
+}
+
+/// Given a workspace root, probe `target/debug` and `target/release` for
+/// the `perl-lsp` binary (with `.exe` extension on Windows).
+fn find_binary_in_target(workspace_root: &std::path::Path) -> Option<String> {
+    let bin_name = if cfg!(windows) { "perl-lsp.exe" } else { "perl-lsp" };
+    let alt_bin_name = if cfg!(windows) { "perllsp.exe" } else { "perllsp" };
+
+    // Prefer debug (matches `cargo test` default profile) over release.
+    let profiles = ["debug", "release"];
+    for profile in profiles {
+        let candidate = workspace_root.join("target").join(profile).join(bin_name);
+        if candidate.exists() {
+            return Some(candidate.to_string_lossy().into_owned());
+        }
+        let alt_candidate = workspace_root.join("target").join(profile).join(alt_bin_name);
+        if alt_candidate.exists() {
+            return Some(alt_candidate.to_string_lossy().into_owned());
+        }
+    }
+    None
 }
 
 /// Utility: find `perl` on PATH, returning its path or `None`.
@@ -599,4 +913,175 @@ pub fn find_perltidy() -> Option<String> {
 /// Utility: find `perlcritic` on PATH, returning its path or `None`.
 pub fn find_perlcritic() -> Option<String> {
     which::which("perlcritic").ok().map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod normalize_tests {
+    use super::{normalize_lsp_payload, normalize_uri_for_expectations};
+    use serde_json::{Value, json};
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    // ── normalize_uri_for_expectations ────────────────────────────────────────
+
+    #[test]
+    fn non_file_uri_passes_through_unchanged() {
+        let root = Path::new("/tmp/workspace");
+        let result = normalize_uri_for_expectations("untitled:foo.pl", root);
+        assert_eq!(result, "untitled:foo.pl");
+    }
+
+    #[test]
+    fn malformed_uri_has_backslashes_replaced() {
+        let root = Path::new("/tmp/workspace");
+        // Not a valid URI — Url::parse will fail, so backslash-replace branch runs.
+        let result = normalize_uri_for_expectations("not a uri \\path", root);
+        assert_eq!(result, "not a uri /path");
+    }
+
+    #[test]
+    fn workspace_file_uri_becomes_dollar_workspace_token() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("lib/Foo.pm")).unwrap().to_string();
+        let result = normalize_uri_for_expectations(&file_uri, root);
+        assert_eq!(result, "file://$WORKSPACE/lib/Foo.pm");
+    }
+
+    #[test]
+    fn workspace_root_uri_itself_becomes_dollar_workspace_slash() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let root_uri = url::Url::from_file_path(root).unwrap().to_string();
+        let result = normalize_uri_for_expectations(&root_uri, root);
+        // strip_prefix of root against itself gives "" -> "file://$WORKSPACE/"
+        assert_eq!(result, "file://$WORKSPACE/");
+    }
+
+    #[test]
+    fn non_workspace_file_uri_preserved_with_forward_slashes() {
+        let root = Path::new("/tmp/workspace");
+        // A system path outside the workspace should not be rewritten as $WORKSPACE.
+        let result = normalize_uri_for_expectations("file:///usr/share/perl5/strict.pm", root);
+        assert_eq!(result, "file:///usr/share/perl5/strict.pm");
+    }
+
+    #[test]
+    fn directory_uri_with_trailing_slash_normalizes_correctly() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        // Url::from_directory_path produces a trailing slash.
+        // to_file_path() strips it, so strip_prefix sees "svc-a" (no slash).
+        // The result must NOT have a trailing slash in the sentinel form.
+        let dir_uri = url::Url::from_directory_path(root.join("svc-a")).unwrap().to_string();
+        assert!(dir_uri.ends_with('/'), "directory URI should end with /");
+        let result = normalize_uri_for_expectations(&dir_uri, root);
+        assert_eq!(result, "file://$WORKSPACE/svc-a");
+    }
+
+    // ── normalize_lsp_payload ─────────────────────────────────────────────────
+
+    #[test]
+    fn null_value_passes_through() {
+        let dir = TempDir::new().unwrap();
+        let result = normalize_lsp_payload(&Value::Null, dir.path());
+        assert_eq!(result, Value::Null);
+    }
+
+    #[test]
+    fn scalar_values_pass_through() {
+        let dir = TempDir::new().unwrap();
+        assert_eq!(normalize_lsp_payload(&json!(42), dir.path()), json!(42));
+        assert_eq!(normalize_lsp_payload(&json!(true), dir.path()), json!(true));
+        assert_eq!(normalize_lsp_payload(&json!("hello"), dir.path()), json!("hello"));
+    }
+
+    #[test]
+    fn uri_key_in_object_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("foo.pl")).unwrap().to_string();
+        let payload =
+            json!({ "uri": file_uri, "range": { "start": { "line": 0, "character": 0 } } });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+        // Range should be preserved unchanged.
+        assert_eq!(result["range"]["start"]["line"], 0);
+    }
+
+    #[test]
+    fn target_uri_key_in_object_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("bar.pm")).unwrap().to_string();
+        let payload = json!({ "targetUri": file_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["targetUri"], "file://$WORKSPACE/bar.pm");
+    }
+
+    #[test]
+    fn workspace_folder_uri_key_is_normalized() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let folder_uri = url::Url::from_directory_path(root.join("svc-a")).unwrap().to_string();
+        let payload = json!({ "workspaceFolderUri": folder_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        // The value should start with file://$WORKSPACE/svc-a regardless of trailing slash.
+        let normalized = result["workspaceFolderUri"].as_str().unwrap();
+        assert!(
+            normalized.starts_with("file://$WORKSPACE/svc-a"),
+            "Expected svc-a token, got: {normalized}"
+        );
+    }
+
+    #[test]
+    fn non_uri_key_string_value_is_not_rewritten() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("foo.pl")).unwrap().to_string();
+        // A key named "someOtherField" holding a file URI should NOT be normalized.
+        let payload = json!({ "someOtherField": file_uri });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["someOtherField"].as_str().unwrap(), file_uri.as_str());
+    }
+
+    #[test]
+    fn array_of_locations_normalizes_each_entry() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let uri_a = url::Url::from_file_path(root.join("a.pl")).unwrap().to_string();
+        let uri_b = url::Url::from_file_path(root.join("b.pm")).unwrap().to_string();
+        let payload = json!([
+            { "uri": uri_a },
+            { "uri": uri_b },
+        ]);
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result[0]["uri"], "file://$WORKSPACE/a.pl");
+        assert_eq!(result[1]["uri"], "file://$WORKSPACE/b.pm");
+    }
+
+    #[test]
+    fn nested_uri_in_object_is_normalized_recursively() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let file_uri = url::Url::from_file_path(root.join("deep.pl")).unwrap().to_string();
+        // URI nested inside a non-uri-keyed wrapper should still be normalized.
+        let payload = json!({ "location": { "uri": file_uri } });
+        let result = normalize_lsp_payload(&payload, root);
+        assert_eq!(result["location"]["uri"], "file://$WORKSPACE/deep.pl");
+    }
+
+    #[test]
+    fn dollar_workspace_token_in_expected_passes_through_unchanged() {
+        // assert_normalized_eq normalizes BOTH sides. A literal "$WORKSPACE" token
+        // in the expected side must survive the round-trip unchanged, so it can
+        // match the normalized actual side.
+        let dir = TempDir::new().unwrap();
+        let root = dir.path();
+        let expected_payload = json!({ "uri": "file://$WORKSPACE/foo.pl" });
+        let result = normalize_lsp_payload(&expected_payload, root);
+        // Url::parse("file://$WORKSPACE/foo.pl") treats $WORKSPACE as host and
+        // to_file_path() fails -> backslash-replace branch returns string unchanged.
+        assert_eq!(result["uri"], "file://$WORKSPACE/foo.pl");
+    }
 }

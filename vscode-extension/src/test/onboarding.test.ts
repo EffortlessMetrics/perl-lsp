@@ -18,6 +18,8 @@ import {
   HealthCheckResult,
   HealthCheckStatus,
   selectWindowsCommandCandidate,
+  resolveUnixShellInvocationFallback,
+  toPosixShellCommand,
   classifyStartupFailure,
 } from '../onboarding';
 
@@ -115,7 +117,10 @@ describe('OnboardingManager.checkPerlInstalled', () => {
     );
     const result = await mgr.checkPerlInstalled();
     expect(result.ok).toBe(false);
-    expect(result.detail).toBeTruthy();
+    expect(result.detail).toContain('strawberryperl.com');
+    expect(result.detail).toContain('brew install perl');
+    expect(result.detail).toContain('package manager');
+    expect(result.detail).not.toContain('command not found');
   });
 });
 
@@ -160,6 +165,58 @@ describe('selectWindowsCommandCandidate', () => {
 
   test('returns null for empty where output', () => {
     expect(selectWindowsCommandCandidate(' \r\n \r\n')).toBeNull();
+  });
+});
+
+describe('toPosixShellCommand', () => {
+  test('quotes command and arguments for safe shell execution', () => {
+    const command = toPosixShellCommand(
+      'perl',
+      ['-e', "print q{can't fail}"],
+    );
+
+    expect(command).toBe("'perl' '-e' 'print q{can'\\''t fail}'");
+  });
+});
+
+describe('resolveUnixShellInvocationFallback', () => {
+  const originalPlatform = process.platform;
+  const originalShell = process.env.SHELL;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+    if (originalShell === undefined) {
+      delete process.env.SHELL;
+    } else {
+      process.env.SHELL = originalShell;
+    }
+  });
+
+  test('returns shell fallback invocation on unix ENOENT errors', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    process.env.SHELL = '/bin/zsh';
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toEqual({
+      command: '/bin/zsh',
+      args: ['-lc', "'perl' '-e' 'print $]'"],
+    });
+  });
+
+  test('returns null when no shell is available', () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' });
+    delete process.env.SHELL;
+
+    const fallback = resolveUnixShellInvocationFallback(
+      { command: 'perl', args: ['-e', 'print $]'] },
+      { code: 'ENOENT' },
+    );
+
+    expect(fallback).toBeNull();
   });
 });
 
@@ -349,6 +406,9 @@ describe('classifyStartupFailure', () => {
     const msg = classifyStartupFailure(results);
     expect(msg).toContain('Perl');
     expect(msg).toContain('5.10');
+    expect(msg).toContain('strawberryperl.com');
+    expect(msg).toContain('brew install perl');
+    expect(msg).toContain('package manager');
     expect(msg).toMatch(/install|Install/);
     // Should NOT show the generic "restart" message when root cause is known
     expect(msg).not.toContain('Restart the server');
