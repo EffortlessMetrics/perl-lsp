@@ -50,6 +50,38 @@ fn unknown_at_supports_synthetic_empty_spans() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+fn unknown_at_clamps_inverted_span_to_start() -> Result<(), Box<dyn std::error::Error>> {
+    // unknown_at uses end.max(start) to silently clamp inverted spans.
+    // This is the intentional escape hatch for synthetic tokens that bypasses
+    // try_new/new_checked validation.
+    let unknown = Token::unknown_at("<inverted>", 20, 10);
+    assert_eq!(unknown.start, 20);
+    assert_eq!(unknown.end, 20, "inverted end should be clamped to start");
+    assert!(unknown.is_empty());
+    Ok(())
+}
+
+#[test]
+fn token_span_try_new_rejects_end_before_start() -> Result<(), Box<dyn std::error::Error>> {
+    // TokenSpan::try_new is the span-level checked constructor (separate from Token::try_new).
+    let err = TokenSpan::try_new(100, 50)
+        .expect_err("span-level try_new should reject end < start");
+    assert_eq!(err, TokenSpanError::EndBeforeStart { start: 100, end: 50 });
+    Ok(())
+}
+
+#[test]
+fn token_span_try_new_allows_equal_start_end() -> Result<(), Box<dyn std::error::Error>> {
+    // Equal start and end is a zero-length span — valid for EOF/synthetic uses.
+    let span = TokenSpan::try_new(42, 42)?;
+    assert_eq!(span.start, 42);
+    assert_eq!(span.end, 42);
+    assert!(span.is_empty());
+    assert_eq!(span.len(), 0);
+    Ok(())
+}
+
+#[test]
 fn span_helpers_use_byte_offsets() -> Result<(), Box<dyn std::error::Error>> {
     let tok = Token::new(TokenKind::Identifier, "foo", 5, 8);
     let span = tok.span();
