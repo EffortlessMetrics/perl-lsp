@@ -1,4 +1,4 @@
-use perl_token::{Token, TokenKind, TokenRef};
+use perl_token::{Token, TokenKind, TokenRef, TokenSpan};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -25,7 +25,7 @@ fn token_ref_to_owned_token_is_explicit() -> TestResult {
 
     assert_eq!(owned.kind, TokenKind::Identifier);
     assert_eq!(&*owned.text, "value");
-    assert_eq!(owned.span(), (8, 13));
+    assert_eq!(owned.span(), TokenSpan::new(8, 13));
     assert_eq!(owned.display_name(), "identifier");
     Ok(())
 }
@@ -47,7 +47,7 @@ fn token_as_ref_token_roundtrips_without_changing_span() -> TestResult {
 
     assert_eq!(borrowed.kind, TokenKind::String);
     assert_eq!(borrowed.text, "\"abc\"");
-    assert_eq!(borrowed.span(), token.span());
+    assert_eq!(borrowed.span(), (token.start, token.end));
 
     let rebuilt = borrowed.to_owned_token();
     assert_eq!(rebuilt, token);

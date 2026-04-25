@@ -1645,6 +1645,10 @@ impl<'a> PerlLexer<'a> {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
+                        // A bare sigil token used for dereference (`${...}`, `@{...}`,
+                        // `%{...}`) must still allow the following `{` to be treated as
+                        // the dereference opener, not a block opener.
+                        self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
 
                         return Some(Token {
                             token_type: TokenType::Identifier(Arc::from(text)),
@@ -1721,6 +1725,8 @@ impl<'a> PerlLexer<'a> {
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
+                            // Preserve `{` as dereference opener for $, @, % sigils.
+                            self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
 
                             return Some(Token {
                                 token_type: TokenType::Identifier(Arc::from(text)),
@@ -3433,8 +3439,11 @@ impl<'a> PerlLexer<'a> {
         })
     }
 
-    /// Read content between delimiters
-    fn read_delimited_body(&mut self, delim: char) -> String {
+    /// Read content between delimiters.
+    ///
+    /// Returns `(body, closed)` where `closed` is `true` if the closing
+    /// delimiter was found before EOF, and `false` if EOF was reached first.
+    fn read_delimited_body(&mut self, delim: char) -> (String, bool) {
         let paired = quote_handler::paired_close(delim);
         let close = paired.unwrap_or(delim);
         let mut body = String::new();
@@ -3463,13 +3472,13 @@ impl<'a> PerlLexer<'a> {
                     depth -= 1;
                     if depth == 0 {
                         self.advance();
-                        break;
+                        return (body, true);
                     }
                     body.push(ch);
                     self.advance();
                 } else {
                     self.advance();
-                    break;
+                    return (body, true);
                 }
                 continue;
             }
@@ -3478,7 +3487,8 @@ impl<'a> PerlLexer<'a> {
             self.advance();
         }
 
-        body
+        // EOF reached without finding the closing delimiter
+        (body, false)
     }
 
     /// Parse a quote operator after we've seen the delimiter
@@ -3487,11 +3497,11 @@ impl<'a> PerlLexer<'a> {
         let start = info.start_pos;
         let operator = info.operator.clone();
 
-        // Parse based on operator type
-        match operator.as_str() {
+        // Parse based on operator type; track whether all delimiters were closed.
+        let closed = match operator.as_str() {
             "s" => {
                 // Substitution: two bodies
-                let _pattern = self.read_delimited_body(delimiter);
+                let (_pattern, first_closed) = self.read_delimited_body(delimiter);
 
                 // For paired delimiters, skip whitespace between bodies
                 if quote_handler::paired_close(delimiter).is_some() {
@@ -3508,14 +3518,15 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
 
-                let _replacement = self.read_delimited_body(delimiter);
+                let (_replacement, second_closed) = self.read_delimited_body(delimiter);
 
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::S_SPEC);
+                first_closed && second_closed
             }
             "tr" | "y" => {
                 // Transliteration: two bodies
-                let _from = self.read_delimited_body(delimiter);
+                let (_from, first_closed) = self.read_delimited_body(delimiter);
 
                 // For paired delimiters, skip whitespace between bodies
                 if quote_handler::paired_close(delimiter).is_some() {
@@ -3532,31 +3543,49 @@ impl<'a> PerlLexer<'a> {
                     }
                 }
 
-                let _to = self.read_delimited_body(delimiter);
+                let (_to, second_closed) = self.read_delimited_body(delimiter);
 
                 // Parse modifiers
                 self.parse_regex_modifiers(&quote_handler::TR_SPEC);
+                first_closed && second_closed
             }
             "qr" => {
-                let _pattern = self.read_delimited_body(delimiter);
+                let (_pattern, body_closed) = self.read_delimited_body(delimiter);
                 self.parse_regex_modifiers(&quote_handler::QR_SPEC);
+                body_closed
             }
             "m" => {
-                let _pattern = self.read_delimited_body(delimiter);
+                let (_pattern, body_closed) = self.read_delimited_body(delimiter);
                 self.parse_regex_modifiers(&quote_handler::M_SPEC);
+                body_closed
             }
             _ => {
                 // q, qq, qw, qx - no modifiers
-                let _body = self.read_delimited_body(delimiter);
+                let (_body, body_closed) = self.read_delimited_body(delimiter);
+                body_closed
             }
-        }
+        };
 
         let text = &self.input[start..self.position];
-        let token_type = quote_handler::get_quote_token_type(&operator);
 
         self.mode = LexerMode::ExpectOperator;
         self.current_quote_op = None;
 
+        if !closed {
+            // EOF reached before finding the closing delimiter — emit an error
+            // token so the parser's recovery mechanism records a diagnostic.
+            return Some(Token {
+                token_type: TokenType::Error(Arc::from(format!(
+                    "unclosed {} delimiter '{}'",
+                    operator, delimiter
+                ))),
+                text: Arc::from(text),
+                start,
+                end: self.position,
+            });
+        }
+
+        let token_type = quote_handler::get_quote_token_type(&operator);
         Some(Token { token_type, text: Arc::from(text), start, end: self.position })
     }
 

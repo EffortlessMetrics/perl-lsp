@@ -40,10 +40,39 @@ fn test_deeply_nested_subscripts_with_regex_key() {
     assert_clean_parse(r#"my $x = $h{a}{b}{m};"#);
 }
 
-// Edge case: hash ref dereference then subscript with regex key
+// Edge case: hash ref dereference then subscript with regex key (`$` sigil)
 #[test]
 fn test_deref_hash_subscript_regex_key() {
     assert_clean_parse(r#"my $x = ${$ref}{m};"#);
+}
+
+// Edge case: array ref dereference then hash slice with regex key (`@` sigil)
+// The `@{$ref}` bare-sigil path must set after_var_subscript so `{m}` is a
+// subscript opener, not the start of a quote-like `m//` operator.
+#[test]
+fn test_array_deref_hash_slice_regex_key() {
+    assert_clean_parse(r#"my @v = @{$ref}{m, s};"#);
+}
+
+// Edge case: hash ref dereference then subscript with regex key (`%` sigil)
+// `%{$ref}{m}` is a hash slice on a dereffed hashref — same fix path as `@`.
+#[test]
+fn test_hash_deref_slice_regex_key() {
+    assert_clean_parse(r#"my %slice = %{$ref}{m};"#);
+}
+
+// Edge case: code ref dereference `&{$coderef}(...)` — `&` sigil must NOT set
+// after_var_subscript, so a following `{` is never treated as a hash subscript.
+#[test]
+fn test_code_deref_call_not_subscript() {
+    assert_clean_parse(r#"&{$coderef}();"#);
+}
+
+// Edge case: typeglob dereference `*{$glob}` — `*` sigil excluded from fix,
+// verify it still parses as a single typeglob token (no subscript confusion).
+#[test]
+fn test_typeglob_deref_not_subscript() {
+    assert_clean_parse(r#"*{$glob} = \&other_sub;"#);
 }
 
 // Edge case: regex-op key in ternary context
@@ -62,4 +91,11 @@ fn test_regex_key_as_argument() {
 #[test]
 fn test_arrow_subscript_regex_key_at_end() {
     assert_clean_parse(r#"$ref->{m}"#); // No trailing semicolon
+}
+
+// Regression: plain `{` after non-sigil expression is still a block opener,
+// not a hash subscript.  The after_var_subscript flag must NOT be set here.
+#[test]
+fn test_plain_brace_after_expression_is_block() {
+    assert_clean_parse(r#"if (1) { m/foo/; }"#);
 }
