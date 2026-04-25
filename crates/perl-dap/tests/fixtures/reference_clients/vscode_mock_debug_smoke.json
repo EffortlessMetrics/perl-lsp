@@ -1,0 +1,88 @@
+{
+  "client": "vscode-mock-debug",
+  "description": "Reference-client style handshake and core request sweep against perl-dap",
+  "requests": [
+    {
+      "command": "initialize",
+      "arguments": {
+        "clientID": "vscode",
+        "clientName": "Visual Studio Code",
+        "adapterID": "mock",
+        "pathFormat": "path",
+        "linesStartAt1": true,
+        "columnsStartAt1": true,
+        "locale": "en-US"
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": [
+        "supportsConfigurationDoneRequest",
+        "supportsSetVariable",
+        "supportsCompletionsRequest",
+        "supportsLoadedSourcesRequest"
+      ]
+    },
+    {
+      "command": "threads",
+      "expectSuccess": true,
+      "requiredBodyKeys": ["threads"]
+    },
+    {
+      "command": "setExceptionBreakpoints",
+      "arguments": { "filters": [] },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "command": "setBreakpoints",
+      "arguments": {
+        "source": {},
+        "breakpoints": []
+      },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["breakpoints"]
+    },
+    {
+      "command": "configurationDone",
+      "expectSuccess": true
+    },
+    {
+      "command": "stackTrace",
+      "arguments": { "threadId": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["stackFrames", "totalFrames"]
+    },
+    {
+      "command": "scopes",
+      "arguments": { "frameId": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["scopes"]
+    },
+    {
+      "command": "variables",
+      "arguments": { "variablesReference": 1 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["variables"]
+    },
+    {
+      "command": "evaluate",
+      "arguments": { "expression": "$x" },
+      "expectSuccess": false,
+      "requiredMessageContains": "No debugger session"
+    },
+    {
+      "command": "completions",
+      "arguments": { "text": "$foo", "column": 2 },
+      "expectSuccess": true,
+      "requiredBodyKeys": ["targets"]
+    },
+    {
+      "command": "loadedSources",
+      "expectSuccess": true,
+      "requiredBodyKeys": ["sources"]
+    },
+    {
+      "command": "disconnect",
+      "expectSuccess": true
+    }
+  ]
+}
