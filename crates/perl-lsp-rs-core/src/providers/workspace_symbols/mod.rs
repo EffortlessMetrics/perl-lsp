@@ -113,6 +113,8 @@ struct SymbolInfo {
 pub struct WorkspaceSymbolsProvider {
     /// Map of document URI to its extracted symbols.
     documents: HashMap<String, Vec<SymbolInfo>>,
+    /// Fast lookup map from symbol name to symbol occurrences.
+    symbols_by_name: HashMap<String, Vec<(String, SymbolInfo)>>,
 }
 
 impl Default for WorkspaceSymbolsProvider {
@@ -125,7 +127,7 @@ impl WorkspaceSymbolsProvider {
     /// Creates a new empty workspace symbols provider.
     #[must_use]
     pub fn new() -> Self {
-        Self { documents: HashMap::new() }
+        Self { documents: HashMap::new(), symbols_by_name: HashMap::new() }
     }
 
     /// Indexes all symbols from a parsed document.
@@ -133,6 +135,8 @@ impl WorkspaceSymbolsProvider {
     /// Extracts symbols from the AST and stores them for later search queries.
     /// Replaces any previously indexed symbols for the same URI.
     pub fn index_document(&mut self, uri: &str, ast: &Node, source: &str) {
+        self.remove_document(uri);
+
         let extractor = SymbolExtractor::new_with_source(source);
         let table = extractor.extract(ast);
 
@@ -152,6 +156,13 @@ impl WorkspaceSymbolsProvider {
             }
         }
 
+        for symbol in &symbols {
+            self.symbols_by_name
+                .entry(symbol.name.clone())
+                .or_default()
+                .push((uri.to_string(), symbol.clone()));
+        }
+
         self.documents.insert(uri.to_string(), symbols);
     }
 
@@ -160,6 +171,10 @@ impl WorkspaceSymbolsProvider {
     /// Called when a file is deleted or closed in the workspace.
     pub fn remove_document(&mut self, uri: &str) {
         self.documents.remove(uri);
+        self.symbols_by_name.retain(|_, entries| {
+            entries.retain(|(entry_uri, _)| entry_uri != uri);
+            !entries.is_empty()
+        });
     }
 
     /// Returns all indexed symbols as LSP WorkspaceSymbols.
@@ -203,24 +218,15 @@ impl WorkspaceSymbolsProvider {
         candidates: &[String],
     ) -> Vec<WorkspaceSymbol> {
         let mut results = Vec::new();
-
-        // Create a set of candidate names for fast lookup
-        let candidate_set: std::collections::HashSet<_> =
-            candidates.iter().map(|s| s.to_lowercase()).collect();
-
-        for (uri, symbols) in &self.documents {
-            // Get source for this document to convert offsets
-            let source = match source_map.get(uri) {
-                Some(s) => s,
-                None => continue,
-            };
-
-            for symbol in symbols {
-                // Check if this symbol is in our candidate set
-                if candidate_set.contains(&symbol.name.to_lowercase())
-                    && matches_query(&symbol.name, query)
-                {
-                    results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
+        for candidate in candidates {
+            if let Some(entries) = self.symbols_by_name.get(candidate) {
+                for (uri, symbol) in entries {
+                    if matches_query(&symbol.name, query) {
+                        let Some(source) = source_map.get(uri) else {
+                            continue;
+                        };
+                        results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
+                    }
                 }
             }
         }

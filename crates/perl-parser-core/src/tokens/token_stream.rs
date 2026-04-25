@@ -59,6 +59,7 @@ enum TokenStreamInner<'a> {
 /// and statement-boundary state management used by the recursive-descent parser.
 pub struct TokenStream<'a> {
     inner: TokenStreamInner<'a>,
+    buffered_eof_pos: usize,
     peeked: Option<Token>,
     peeked_second: Option<Token>,
     peeked_third: Option<Token>,
@@ -69,6 +70,7 @@ impl<'a> TokenStream<'a> {
     pub fn new(input: &'a str) -> Self {
         TokenStream {
             inner: TokenStreamInner::Lexer(PerlLexer::new(input)),
+            buffered_eof_pos: input.len(),
             peeked: None,
             peeked_second: None,
             peeked_third: None,
@@ -107,8 +109,14 @@ impl<'a> TokenStream<'a> {
     /// assert!(matches!(stream.peek(), Ok(t) if t.kind == TokenKind::My));
     /// ```
     pub fn from_vec(tokens: Vec<Token>) -> Self {
+        let buffered_eof_pos = tokens
+            .last()
+            .map(|token| if token.kind == TokenKind::Eof { token.start } else { token.end })
+            .unwrap_or(0);
+
         TokenStream {
             inner: TokenStreamInner::Buffered(VecDeque::from(tokens)),
+            buffered_eof_pos,
             peeked: None,
             peeked_second: None,
             peeked_third: None,
@@ -298,7 +306,9 @@ impl<'a> TokenStream<'a> {
     fn next_token(&mut self) -> ParseResult<Token> {
         match &mut self.inner {
             TokenStreamInner::Lexer(lexer) => Self::next_token_from_lexer(lexer),
-            TokenStreamInner::Buffered(buf) => Self::next_token_from_buf(buf),
+            TokenStreamInner::Buffered(buf) => {
+                Self::next_token_from_buf(buf, &mut self.buffered_eof_pos)
+            }
         }
     }
 
@@ -327,13 +337,18 @@ impl<'a> TokenStream<'a> {
     }
 
     /// Return the next token from the pre-lexed buffer.
-    fn next_token_from_buf(buf: &mut VecDeque<Token>) -> ParseResult<Token> {
+    fn next_token_from_buf(
+        buf: &mut VecDeque<Token>,
+        buffered_eof_pos: &mut usize,
+    ) -> ParseResult<Token> {
         match buf.pop_front() {
-            Some(token) => Ok(token),
-            // Synthesise an EOF at position 0 when the buffer is exhausted.
-            // The caller (parser) makes EOF sticky so position doesn't matter
-            // for correctness; using 0 is safe.
-            None => Ok(Token { kind: TokenKind::Eof, text: "".into(), start: 0, end: 0 }),
+            Some(token) => {
+                *buffered_eof_pos =
+                    if token.kind == TokenKind::Eof { token.start } else { token.end };
+                Ok(token)
+            }
+            // Synthesise EOF at the most recently known source position.
+            None => Ok(Token::eof_at(*buffered_eof_pos)),
         }
     }
 
