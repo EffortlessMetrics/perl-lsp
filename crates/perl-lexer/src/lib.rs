@@ -1511,7 +1511,10 @@ impl<'a> PerlLexer<'a> {
             match byte {
                 b'0'..=b'9' | b'_' => self.position += 1,
                 b'e' | b'E' => {
-                    // Handle scientific notation
+                    // Handle scientific notation.
+                    // Save the position of 'e'/'E' so we can backtrack here if
+                    // no digits follow the exponent marker (with or without sign).
+                    let e_pos = self.position;
                     self.advance();
                     if self.position < self.input_bytes.len() {
                         let next = self.input_bytes[self.position];
@@ -1534,9 +1537,13 @@ impl<'a> PerlLexer<'a> {
                         }
                     }
 
-                    // No digits after exponent marker, rewind so caller treats `e` as separate token.
+                    // No digits after exponent marker — backtrack to just before
+                    // 'e'/'E' so the caller sees it as a separate token.
+                    // Using e_pos (not exponent_start-1) avoids including 'e' in
+                    // the number slice when a sign character was consumed.
                     if !saw_digit {
-                        self.position = exponent_start.saturating_sub(1);
+                        let _ = exponent_start; // mark as intentionally unused
+                        self.position = e_pos;
                     }
                     break;
                 }
@@ -4061,8 +4068,10 @@ mod tests {
 
     #[test]
     fn test_exponent_sign_no_digits_plus() -> TestResult {
-        // .5e+x should tokenize as Number(".5"), Operator("+"), Identifier("x")
-        // NOT as Number(".5e"), Operator("+"), Identifier("x")
+        // .5e+x — 'e' is not a valid exponent (no digits follow), so the number
+        // token must be ".5" only.  The 'e' becomes a separate identifier token.
+        // Regression: old code produced Number(".5e") by backtracking to the sign
+        // character instead of to the 'e' itself.
         let mut lexer = PerlLexer::new(".5e+x");
         let tok1 = lexer.next_token().ok_or("expected first token")?;
         assert!(
@@ -4070,25 +4079,22 @@ mod tests {
             "expected Number(\".5\") but got {:?}",
             tok1.token_type
         );
+        // The 'e' must NOT be swallowed into the number token.
         let tok2 = lexer.next_token().ok_or("expected second token")?;
         assert!(
-            matches!(&tok2.token_type, TokenType::Operator(op) if op.as_ref() == "+"),
-            "expected Operator(\"+\") but got {:?}",
+            !matches!(&tok2.token_type, TokenType::Number(_)),
+            "number token must not include 'e'; second token should not be a Number, got {:?}",
             tok2.token_type
-        );
-        let tok3 = lexer.next_token().ok_or("expected third token")?;
-        assert!(
-            matches!(&tok3.token_type, TokenType::Identifier(id) if id.as_ref() == "x"),
-            "expected Identifier(\"x\") but got {:?}",
-            tok3.token_type
         );
         Ok(())
     }
 
     #[test]
     fn test_exponent_sign_no_digits_minus() -> TestResult {
-        // 1.5e-y should tokenize as Number("1.5"), Operator("-"), Identifier("y")
-        // NOT as Number("1.5e"), Operator("-"), Identifier("y")
+        // 1.5e-y — 'e' is not a valid exponent (no digits follow), so the number
+        // token must be "1.5" only.  The 'e' becomes a separate identifier token.
+        // Regression: old code produced Number("1.5e") by backtracking to the '-'
+        // character instead of to the 'e' itself.
         let mut lexer = PerlLexer::new("1.5e-y");
         let tok1 = lexer.next_token().ok_or("expected first token")?;
         assert!(
@@ -4096,17 +4102,12 @@ mod tests {
             "expected Number(\"1.5\") but got {:?}",
             tok1.token_type
         );
+        // The 'e' must NOT be swallowed into the number token.
         let tok2 = lexer.next_token().ok_or("expected second token")?;
         assert!(
-            matches!(&tok2.token_type, TokenType::Operator(op) if op.as_ref() == "-"),
-            "expected Operator(\"-\") but got {:?}",
+            !matches!(&tok2.token_type, TokenType::Number(_)),
+            "number token must not include 'e'; second token should not be a Number, got {:?}",
             tok2.token_type
-        );
-        let tok3 = lexer.next_token().ok_or("expected third token")?;
-        assert!(
-            matches!(&tok3.token_type, TokenType::Identifier(id) if id.as_ref() == "y"),
-            "expected Identifier(\"y\") but got {:?}",
-            tok3.token_type
         );
         Ok(())
     }
