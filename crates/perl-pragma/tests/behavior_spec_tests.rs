@@ -406,3 +406,33 @@ fn given_cursor_when_offset_is_before_first_pragma_then_default_state_is_returne
     assert_eq!(s, PragmaTracker::state_for_offset(&map, 5));
     assert!(!s.strict_vars, "no pragma has started at offset 5");
 }
+
+/// `final_state` must return the restored top-level state even when the last
+/// entry in the sorted pragma map is a scope-exit restore point (an entry
+/// pushed by `build_scoped_body` at `body.end..body.end`).
+///
+/// In a file where a subroutine is the last thing and it overrides strict,
+/// `final_state` should return the state AFTER the sub (restored to outer),
+/// not the in-sub state.
+#[test]
+fn given_sub_last_in_file_when_querying_final_state_then_outer_state_is_returned() {
+    // use strict; sub foo { no strict; }
+    // After `sub foo` closes, state is restored to strict=true.
+    // The pragma map's last entry is the restore point at end-of-sub,
+    // which has strict_vars = true.
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        block(vec![no_node("strict", &[], 14, 24)], 13, 25),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let final_state = PragmaTracker::final_state(&map);
+    assert!(
+        final_state.strict_vars,
+        "final_state must reflect outer (restored) strict=true after a scoped block"
+    );
+    assert!(
+        final_state.strict_subs,
+        "final_state must reflect outer (restored) strict=true after a scoped block"
+    );
+}
