@@ -219,6 +219,15 @@ mod unix_quoting {
         let result = format_command_args(&args);
         assert_eq!(result[0], "'line1\nline2'");
     }
+
+    #[test]
+    fn tab_without_space_is_quoted() {
+        // Tab is whitespace (char::is_whitespace) and must be quoted so the shell
+        // does not split it into a separate token.
+        let args = vec!["col1\tcol2".to_string()];
+        let result = format_command_args(&args);
+        assert_eq!(result[0], "'col1\tcol2'");
+    }
 }
 
 // ── Many arguments ──────────────────────────────────────────────────
