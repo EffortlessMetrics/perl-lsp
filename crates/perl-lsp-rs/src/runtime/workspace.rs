@@ -21,6 +21,7 @@ use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
+use std::collections::HashSet;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
@@ -435,50 +436,48 @@ impl LspServer {
         query: &str,
         cap: usize,
     ) -> Result<Option<Value>, JsonRpcError> {
-        let mut all_symbols = Vec::new();
-
-        // Collect lightweight snapshots without holding lock during iteration.
-        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
-        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
         let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
             documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        // Pre-compute lowercased query once, outside the document loop
-        let query_lower = query.to_lowercase();
+        let mut provider =
+            perl_lsp_rs_core::providers::workspace_symbols::WorkspaceSymbolsProvider::new();
+        let mut source_map = std::collections::HashMap::new();
+        let mut text_fallback_symbols = Vec::new();
 
         for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
-            // Cooperative yield every 8 documents
             if i & 0x7 == 0 {
                 std::thread::yield_now();
             }
-
-            // Early exit if we've hit the result cap
-            if all_symbols.len() >= cap {
-                break;
-            }
-
+            source_map.insert(uri.clone(), text.clone());
             if let Some(ast) = ast {
-                let doc_symbols = self.extract_document_symbols(ast, text, uri);
-
-                for sym in doc_symbols {
-                    if sym.name.to_lowercase().contains(&query_lower) {
-                        all_symbols.push(sym);
-                        if all_symbols.len() >= cap {
-                            break;
-                        }
-                    }
-                }
+                provider.index_document(uri, ast, text);
             } else {
-                // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(text, uri, query);
-                let remaining = cap.saturating_sub(all_symbols.len());
-                all_symbols.extend(text_symbols.into_iter().take(remaining));
+                text_fallback_symbols.extend(self.extract_text_based_symbols(text, uri, query));
             }
         }
 
-        // Truncate to cap in case we went slightly over
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut provider_results = provider.search_with_candidates(query, &source_map, &candidates);
+        if provider_results.is_empty() && !query.is_empty() {
+            provider_results = provider.search(query, &source_map);
+        }
+        let mut all_symbols: Vec<Value> = provider_results
+            .into_iter()
+            .filter_map(|symbol| serde_json::to_value(symbol).ok())
+            .collect();
+        all_symbols.extend(
+            text_fallback_symbols
+                .into_iter()
+                .filter_map(|symbol| serde_json::to_value(symbol).ok()),
+        );
         all_symbols.truncate(cap);
         tracing::debug!(
             count = all_symbols.len(),
@@ -528,7 +527,17 @@ impl LspServer {
             source_map.insert(uri.clone(), text.clone());
         }
 
-        let mut symbols = provider.search(query, &source_map);
+        let mut candidates = self.symbol_index.lock().search_prefix(query);
+        if candidates.is_empty() && !query.is_empty() {
+            candidates = self.symbol_index.lock().search_fuzzy(query);
+        }
+        let mut dedup = HashSet::new();
+        candidates.retain(|candidate| dedup.insert(candidate.clone()));
+
+        let mut symbols = provider.search_with_candidates(query, &source_map, &candidates);
+        if symbols.is_empty() && !query.is_empty() {
+            symbols = provider.search(query, &source_map);
+        }
         symbols.truncate(cap);
 
         tracing::debug!(count = symbols.len(), cap, "Found symbols total");

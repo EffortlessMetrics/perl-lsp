@@ -29,7 +29,9 @@ perl-ast = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 perl-ast = { workspace = true }
+perl-parser-core = { workspace = true }
 perl-tdd-support = { workspace = true }
 serde_json = { workspace = true }
 
