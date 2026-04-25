@@ -316,7 +316,9 @@ fn canonical_lexeme(kind: TokenKind) -> Option<&'static str> {
 }
 
 fn render_table() -> String {
-    let mut out = String::from("| TokenKind | display_name | category | canonical lexeme |\n|---|---|---|---|\n");
+    let mut out = String::from(
+        "| TokenKind | display_name | category | canonical lexeme |\n|---|---|---|---|\n",
+    );
     for kind in all_token_kinds() {
         let canonical = canonical_lexeme(kind).unwrap_or("-");
         out.push_str(&format!(
