@@ -382,4 +382,74 @@ mod tests {
         let kind = classifier.classify(&error, source);
         assert_eq!(kind, ParseErrorKind::MissingSemicolon);
     }
+
+    // ── classify_recovery_salvage unit tests ─────────────────────────────────
+
+    fn make_error_node(message: &str, start: usize, end: usize) -> Node {
+        Node::new(
+            NodeKind::Error {
+                message: message.to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation { start, end },
+        )
+    }
+
+    fn make_program_node(children: Vec<Node>) -> Node {
+        Node::new(NodeKind::Program { statements: children }, SourceLocation { start: 0, end: 100 })
+    }
+
+    #[test]
+    fn clean_parse_produces_zero_metrics() {
+        // A clean AST with no Error nodes and no diagnostics is not dirty.
+        let root = make_program_node(vec![]);
+        let metrics = classify_recovery_salvage(&root, &[]);
+        assert_eq!(metrics.recovered_node_count, 0);
+        assert_eq!(metrics.unrecovered_diagnostic_count, 0);
+        assert_eq!(metrics.error_node_count, 0);
+        assert!(metrics.first_unrecovered_error_node.is_none());
+        assert!(!metrics.is_dirty());
+        assert!(!metrics.is_structured_recovery_only());
+    }
+
+    #[test]
+    fn error_node_without_diagnostics_is_dirty_but_not_structured_recovery() {
+        // Edge case: parser inserts an Error node but emits no diagnostic.
+        // is_dirty() must return true; is_structured_recovery_only() must be false.
+        let error = make_error_node("unexpected token", 5, 10);
+        let root = make_program_node(vec![error]);
+        let metrics = classify_recovery_salvage(&root, &[]);
+
+        assert_eq!(metrics.error_node_count, 1);
+        assert_eq!(metrics.recovered_node_count, 0);
+        assert_eq!(metrics.unrecovered_diagnostic_count, 0);
+        assert!(metrics.is_dirty(), "error node alone makes result dirty");
+        assert!(
+            !metrics.is_structured_recovery_only(),
+            "no recovery diagnostics — not structured-recovery-only"
+        );
+        assert_eq!(
+            metrics.first_unrecovered_error_node.as_deref(),
+            Some("unexpected token")
+        );
+    }
+
+    #[test]
+    fn multiple_error_nodes_reports_earliest_by_start_offset() {
+        // When multiple Error nodes are present, the first one by start offset
+        // should be captured as first_unrecovered_error_node.
+        let later = make_error_node("later error", 50, 60);
+        let earlier = make_error_node("earlier error", 10, 20);
+        let root = make_program_node(vec![later, earlier]);
+        let metrics = classify_recovery_salvage(&root, &[]);
+
+        assert_eq!(metrics.error_node_count, 2);
+        assert_eq!(
+            metrics.first_unrecovered_error_node.as_deref(),
+            Some("earlier error"),
+            "earliest by start offset must win"
+        );
+    }
 }
