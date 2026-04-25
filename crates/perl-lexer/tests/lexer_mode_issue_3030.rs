@@ -288,3 +288,37 @@ fn mode_transitions_after_builtin_identifier_to_expect_term() -> R {
     assert!(has_regex, "after bare builtin 'print' the slash must start a regex");
     Ok(())
 }
+
+#[test]
+fn mode_transitions_after_do_keyword_to_expect_term() -> R {
+    // `do /file/` is valid Perl — run a file whose name matches a regex.
+    // The slash must be a regex, not division.
+    let mut lexer = PerlLexer::new("do /config\\.pl/");
+    let tokens: Vec<_> = lexer
+        .collect_tokens()
+        .into_iter()
+        .filter(|t| {
+            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+        })
+        .collect();
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "after 'do' keyword the slash must start a regex");
+    Ok(())
+}
+
+#[test]
+fn mode_transitions_after_eval_keyword_to_expect_term() -> R {
+    // `eval /pattern/` is unusual but valid Perl — eval with a regex as
+    // the expression (regex stringifies).  The slash must be a regex.
+    let mut lexer = PerlLexer::new("eval /expr/");
+    let tokens: Vec<_> = lexer
+        .collect_tokens()
+        .into_iter()
+        .filter(|t| {
+            !matches!(t.token_type, TokenType::Whitespace | TokenType::Newline | TokenType::EOF)
+        })
+        .collect();
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "after 'eval' keyword the slash must start a regex");
+    Ok(())
+}
