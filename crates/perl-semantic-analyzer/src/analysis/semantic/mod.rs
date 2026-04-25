@@ -19,6 +19,7 @@ mod builtins;
 mod hover;
 mod model;
 mod node_analysis;
+mod query_facade;
 mod references;
 mod tokens;
 
@@ -30,6 +31,10 @@ pub use builtins::{
 };
 pub use hover::HoverInfo;
 pub use model::SemanticModel;
+pub use query_facade::{
+    DefinitionLocation, EffectivePragmaState, ParentChain, ResolvedSymbol, SemanticQueryFacade,
+    VisibleImport,
+};
 pub use tokens::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::SourceLocation;
@@ -313,6 +318,21 @@ impl SemanticAnalyzer {
         }
 
         None
+    }
+
+    /// Resolve the ordered parent chain for a class in same-file class models.
+    ///
+    /// Returns ancestors in configured method-resolution order, excluding `receiver_class`.
+    pub fn resolve_parent_chain(&self, receiver_class: &str) -> Option<Vec<String>> {
+        let models_by_name: HashMap<&str, &ClassModel> =
+            self.class_models.iter().map(|model| (model.name.as_str(), model)).collect();
+        let receiver_model = models_by_name.get(receiver_class).copied()?;
+
+        let chain = match receiver_model.mro {
+            MethodResolutionOrder::Dfs => self.dfs_ancestor_order(receiver_class, &models_by_name),
+            MethodResolutionOrder::C3 => self.c3_ancestor_order(receiver_class, &models_by_name),
+        };
+        Some(chain)
     }
 
     fn resolve_inherited_method_hover_ordered(
@@ -1014,6 +1034,30 @@ my $documented = 42;
                 byte_offset
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_analyzer_find_definition_goto_label() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "START: while (1) {\n    goto START;\n}\n";
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let ref_pos = code.find("START;\n").ok_or("could not find goto label")?;
+
+        let symbol = analyzer
+            .find_definition(ref_pos)
+            .ok_or("definition not found for goto label reference")?;
+
+        assert_eq!(symbol.name, "START");
+        assert_eq!(symbol.kind, SymbolKind::Label);
+        assert!(
+            symbol.location.start < ref_pos,
+            "Label definition {:?} should precede goto reference at byte {}",
+            symbol.location.start,
+            ref_pos
+        );
         Ok(())
     }
 

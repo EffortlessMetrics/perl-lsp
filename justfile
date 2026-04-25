@@ -55,7 +55,8 @@ pr-fast: _check-tools-basic
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -848,7 +849,8 @@ ci-gate:
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
-    just ci-published-crate-count
+    just ci-published-crate-count && \
+    just ci-release-history-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -966,6 +968,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Release-history drift check: tags, notes, ledger, changelog
+ci-release-history-check:
+    @echo "📚 Checking release-history surface drift..."
+    bash scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
 ci-publish-manifest-check:
