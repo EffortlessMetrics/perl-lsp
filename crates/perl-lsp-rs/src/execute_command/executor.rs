@@ -1,3 +1,5 @@
+//! Execute-command request executor with JSON-RPC error translation.
+
 use crate::protocol::JsonRpcError;
 use serde_json::{Value, json};
 use std::path::PathBuf;

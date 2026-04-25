@@ -1,3 +1,5 @@
+//! Integration-style unit tests for execute-command provider behaviors.
+
 use super::get_supported_commands;
 use super::provider::{ExecuteCommandProvider, TestRunner, select_test_runner};
 use super::test_support::mock_status;
