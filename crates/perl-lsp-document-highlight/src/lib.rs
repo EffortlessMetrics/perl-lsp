@@ -4,6 +4,7 @@
 //! Distinguishes between read and write access.
 
 use perl_ast::{Node, NodeKind, SourceLocation};
+use perl_qualified_name::split_qualified_name;
 
 /// Types of symbol highlights
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +28,12 @@ pub struct DocumentHighlight {
 
 /// Document Highlight Provider
 pub struct DocumentHighlightProvider;
+
+fn qualified_names_match(name: &str, want_name: &str) -> bool {
+    let (name_pkg, name_bare) = split_qualified_name(name);
+    let (want_pkg, want_bare) = split_qualified_name(want_name);
+    name_bare == want_bare && (name_pkg.is_none() || want_pkg.is_none() || name_pkg == want_pkg)
+}
 
 impl Default for DocumentHighlightProvider {
     fn default() -> Self {
@@ -537,7 +544,7 @@ impl DocumentHighlightProvider {
         // Emit highlight for subroutine definition name_span
         if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } = &node.kind
         {
-            if target.is_function && sub_name == &target.name {
+            if target.is_function && qualified_names_match(sub_name, &target.name) {
                 highlights.push(DocumentHighlight {
                     location: *span,
                     kind: DocumentHighlightKind::Write,
@@ -686,8 +693,12 @@ impl DocumentHighlightProvider {
             NodeKind::Identifier { name } => {
                 !target.is_method && target.sigil.is_none() && name == &target.name
             }
-            NodeKind::FunctionCall { name, .. } => target.is_function && name == &target.name,
-            NodeKind::MethodCall { method, .. } => target.is_method && method == &target.name,
+            NodeKind::FunctionCall { name, .. } => {
+                target.is_function && qualified_names_match(name, &target.name)
+            }
+            NodeKind::MethodCall { method, .. } => {
+                target.is_method && qualified_names_match(method, &target.name)
+            }
             _ => {
                 // Check source text as fallback
                 if let Some(target_sigil) = &target.sigil {

@@ -284,3 +284,21 @@ fn test_highlight_statement_modifier() -> Result<(), Box<dyn std::error::Error>>
     );
     Ok(())
 }
+
+#[test]
+fn qualified_call_highlights_bare_definition() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"package Utils;
+sub format_string { return shift }
+my $x = Utils::format_string("hi");
+"#;
+    let call_offset = code.find("Utils::format_string").ok_or("test setup")? + "Utils::".len();
+    let def_offset = code.find("format_string {").ok_or("test setup")?;
+
+    let highlights = highlights_at(code, call_offset)?;
+
+    assert!(
+        highlights.iter().any(|h| h.location.start == def_offset),
+        "expected qualified call to highlight bare definition, got {highlights:?}"
+    );
+    Ok(())
+}

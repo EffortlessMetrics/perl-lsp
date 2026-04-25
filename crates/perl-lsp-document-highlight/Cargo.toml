@@ -22,6 +22,7 @@ include = [
 
 [dependencies]
 perl-ast = { workspace = true }
+perl-qualified-name = { workspace = true }
 
 [dev-dependencies]
 perl-parser = { workspace = true }
