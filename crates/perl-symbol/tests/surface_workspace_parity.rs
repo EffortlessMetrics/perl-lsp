@@ -54,6 +54,14 @@ fn surface_bank_covers_representative_workspace_parity_constructs() -> Result<()
             src: "use Readonly; Readonly my $NAME => 'n';",
             expected_names: &["NAME"],
         },
+        SurfaceCase {
+            // `state` is a Perl 5.10+ declarator (like `my` but lexically
+            // scoped to the sub across invocations). extract_symbol_decls
+            // must recognise it as a variable declaration.
+            label: "state variable",
+            src: "use feature 'state'; sub counter { state $count = 0; $count }",
+            expected_names: &["count"],
+        },
     ];
 
     for case in cases {
