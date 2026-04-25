@@ -4058,4 +4058,56 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_exponent_sign_no_digits_plus() -> TestResult {
+        // .5e+x should tokenize as Number(".5"), Operator("+"), Identifier("x")
+        // NOT as Number(".5e"), Operator("+"), Identifier("x")
+        let mut lexer = PerlLexer::new(".5e+x");
+        let tok1 = lexer.next_token().ok_or("expected first token")?;
+        assert!(
+            matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == ".5"),
+            "expected Number(\".5\") but got {:?}",
+            tok1.token_type
+        );
+        let tok2 = lexer.next_token().ok_or("expected second token")?;
+        assert!(
+            matches!(&tok2.token_type, TokenType::Operator(op) if op.as_ref() == "+"),
+            "expected Operator(\"+\") but got {:?}",
+            tok2.token_type
+        );
+        let tok3 = lexer.next_token().ok_or("expected third token")?;
+        assert!(
+            matches!(&tok3.token_type, TokenType::Identifier(id) if id.as_ref() == "x"),
+            "expected Identifier(\"x\") but got {:?}",
+            tok3.token_type
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_exponent_sign_no_digits_minus() -> TestResult {
+        // 1.5e-y should tokenize as Number("1.5"), Operator("-"), Identifier("y")
+        // NOT as Number("1.5e"), Operator("-"), Identifier("y")
+        let mut lexer = PerlLexer::new("1.5e-y");
+        let tok1 = lexer.next_token().ok_or("expected first token")?;
+        assert!(
+            matches!(&tok1.token_type, TokenType::Number(n) if n.as_ref() == "1.5"),
+            "expected Number(\"1.5\") but got {:?}",
+            tok1.token_type
+        );
+        let tok2 = lexer.next_token().ok_or("expected second token")?;
+        assert!(
+            matches!(&tok2.token_type, TokenType::Operator(op) if op.as_ref() == "-"),
+            "expected Operator(\"-\") but got {:?}",
+            tok2.token_type
+        );
+        let tok3 = lexer.next_token().ok_or("expected third token")?;
+        assert!(
+            matches!(&tok3.token_type, TokenType::Identifier(id) if id.as_ref() == "y"),
+            "expected Identifier(\"y\") but got {:?}",
+            tok3.token_type
+        );
+        Ok(())
+    }
 }
