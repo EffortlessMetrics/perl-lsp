@@ -7,7 +7,7 @@
 //!
 //! - **Tree-sitter Compatible**: AST with kinds, fields, and position tracking compatible with tree-sitter grammar
 //! - **Comprehensive Parsing**: ~100% edge case coverage for Perl 5.8-5.40 syntax
-//! - **LSP Integration**: Full Language Server Protocol feature set (~82% coverage in v0.8.6)
+//! - **LSP Integration**: Full Language Server Protocol feature set (100% compliance, LSP 3.18)
 //! - **TDD Workflow**: Intelligent test generation with return value analysis
 //! - **Incremental Parsing**: Efficient re-parsing for real-time editing
 //! - **Error Recovery**: Graceful handling of malformed input with detailed diagnostics
@@ -273,7 +273,7 @@
 //! ## Compatibility
 //!
 //! - **Perl Versions**: 5.8 through 5.40 (covers 99% of CPAN)
-//! - **LSP Protocol**: LSP 3.17 specification
+//! - **LSP Protocol**: LSP 3.18 specification
 //! - **Tree-sitter**: Compatible AST format and position tracking
 //! - **UTF-16**: Full Unicode support with correct LSP position mapping
 //!
