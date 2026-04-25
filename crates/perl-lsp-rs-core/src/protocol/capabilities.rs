@@ -226,9 +226,16 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             kinds.push(CodeActionKind::SOURCE_ORGANIZE_IMPORTS);
         }
 
+        // Advertise generic `refactor` plus concrete sub-kinds so clients can
+        // surface the full refactoring menu and send precise `context.only`
+        // filters (for example `refactor.inline` and `refactor.rewrite`).
+        kinds.push(CodeActionKind::REFACTOR);
+
         // REFACTOR_EXTRACT is implemented in code_actions_enhanced.rs
         // Tests verified in lsp_code_actions_tests.rs (Issue #181)
         kinds.push(CodeActionKind::REFACTOR_EXTRACT);
+        kinds.push(CodeActionKind::REFACTOR_INLINE);
+        kinds.push(CodeActionKind::REFACTOR_REWRITE);
 
         // SOURCE_FIX_ALL aggregates every safe `quickfix` action into a
         // single invocation. Implemented in

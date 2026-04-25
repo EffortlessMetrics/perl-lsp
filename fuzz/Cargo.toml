@@ -12,6 +12,7 @@ libfuzzer-sys = "0.4"
 
 [dependencies.perl-parser]
 path = "../crates/perl-parser"
+features = ["incremental"]
 
 [dependencies.serde_json]
 version = "1.0.149"
@@ -93,6 +94,13 @@ bench = false
 [[bin]]
 name = "symbol_query_ranking"
 path = "fuzz_targets/symbol_query_ranking.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "incremental_edit_sequences"
+path = "fuzz_targets/incremental_edit_sequences.rs"
 test = false
 doc = false
 bench = false

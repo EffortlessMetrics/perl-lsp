@@ -3,7 +3,7 @@
 //! This binary provides custom automation tasks for building, testing,
 //! and maintaining the tree-sitter-perl project.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use color_eyre::eyre::{Result, eyre};
 use std::path::PathBuf;
 
@@ -16,6 +16,7 @@ use tasks::gates::{GateTier, OutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
+use tasks::ux_scorecard::UxScorecardFormat;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -31,6 +32,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Print all available top-level xtask commands.
+    #[command(name = "list-commands")]
+    List,
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -276,6 +281,13 @@ enum Commands {
         /// Check formatting without making changes
         #[arg(long)]
         check: bool,
+
+        /// Restrict formatting to one or more package names.
+        ///
+        /// Accepts repeated flags (`--package xtask --package perl-parser`) or
+        /// a comma-delimited list (`--package xtask,perl-parser`).
+        #[arg(long, short = 'p', value_delimiter = ',')]
+        package: Option<Vec<String>>,
     },
 
     /// Run corpus tests
@@ -952,6 +964,25 @@ enum Commands {
         command: MetricsCommand,
     },
 
+    /// Publish structured editor UX scorecard artifact/status from harness fixtures.
+    UxScorecard {
+        /// Output format for stdout.
+        #[arg(long, value_enum, default_value = "human")]
+        format: UxScorecardOutputFormat,
+        /// Optional path to scenario measurements JSON.
+        #[arg(long)]
+        input: Option<PathBuf>,
+        /// Optional path to emitted scorecard JSON artifact.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Optional path to generated status markdown.
+        #[arg(long)]
+        status_md: Option<PathBuf>,
+        /// Enforce regression-only ratchet against committed baseline.
+        #[arg(long)]
+        ratchet_check: bool,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -1278,12 +1309,22 @@ enum PrepCratesMode {
     All,
 }
 
+#[derive(ValueEnum, Clone)]
+enum UxScorecardOutputFormat {
+    Human,
+    Json,
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::List => {
+            print_top_level_commands();
+            Ok(())
+        }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
@@ -1353,7 +1394,7 @@ fn main() -> Result<()> {
         ),
         Commands::Doc { open, all_features } => doc::run(open, all_features),
         Commands::Check { clippy, fmt, all } => check::run(clippy, fmt, all),
-        Commands::Fmt { check } => fmt::run(check),
+        Commands::Fmt { check, package } => fmt::run(check, package),
         #[cfg(feature = "legacy")]
         Commands::Corpus { path, scanner, diagnose, test } => {
             corpus::run(path, scanner, diagnose, test)
@@ -1582,6 +1623,13 @@ fn main() -> Result<()> {
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
+        Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
+            let format = match format {
+                UxScorecardOutputFormat::Human => UxScorecardFormat::Human,
+                UxScorecardOutputFormat::Json => UxScorecardFormat::Json,
+            };
+            ux_scorecard::run(format, input, output, status_md, ratchet_check)
+        }
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
             e2e_validate::run(e2e_validate::E2eConfig {
@@ -1638,5 +1686,17 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+    }
+}
+
+fn print_top_level_commands() {
+    let mut command_names = Cli::command()
+        .get_subcommands()
+        .map(|subcommand| subcommand.get_name().to_string())
+        .collect::<Vec<_>>();
+    command_names.sort_unstable();
+
+    for command_name in command_names {
+        println!("{command_name}");
     }
 }

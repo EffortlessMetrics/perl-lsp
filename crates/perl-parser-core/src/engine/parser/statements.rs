@@ -347,7 +347,26 @@ impl<'a> Parser<'a> {
             | TokenKind::End
             | TokenKind::Check
             | TokenKind::Init
-            | TokenKind::Unitcheck => self.parse_phase_block(),
+            | TokenKind::Unitcheck
+                if self
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::LeftBrace)
+                    .unwrap_or(false) =>
+            {
+                self.parse_phase_block()
+            }
+
+            // Phase keywords can also be used as barewords/sub names in normal
+            // statement position (e.g. `CHECK();` from CPAN code).  If there is
+            // no `{` after the keyword, parse as a regular expression statement
+            // instead of forcing phase-block syntax.
+            TokenKind::Begin
+            | TokenKind::End
+            | TokenKind::Check
+            | TokenKind::Init
+            | TokenKind::Unitcheck => self.parse_expression_statement(),
 
             // Data sections
             TokenKind::DataMarker => self.parse_data_section(),
@@ -553,7 +572,13 @@ impl<'a> Parser<'a> {
     ) -> ParseResult<Node> {
         let omit_optional_arg = allow_no_args
             && (self.peek_kind().is_some_and(Self::is_binary_operator)
-                || self.peek_kind() == Some(TokenKind::Slash));
+                || self.peek_kind() == Some(TokenKind::Slash)
+                // Nullary/named-unary builtins at statement start may be
+                // followed by a comma operator:
+                //   shift, return ...
+                // In that form `shift` has no explicit argument; the comma
+                // belongs to the surrounding expression list.
+                || self.peek_kind() == Some(TokenKind::Comma));
 
         // String comparison operators (ne, eq, lt, le, gt, ge) are tokenized as
         // Identifier tokens, so `is_binary_operator` won't catch them. When a
@@ -870,6 +895,11 @@ impl<'a> Parser<'a> {
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
                                     }
+                                    // Allow optional trailing separator in list-builtin
+                                    // argument lists (e.g. `grep defined, @list,;`).
+                                    if self.is_at_statement_end() {
+                                        break;
+                                    }
                                     args.push(self.parse_assignment()?);
                                 }
                             } else {
@@ -1083,8 +1113,18 @@ impl<'a> Parser<'a> {
 
         self.mark_not_stmt_start();
 
-        // Check for optional label
-        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+        // Check for optional label.
+        // Labels may be ordinary identifiers, and phase keywords are also
+        // valid labels when used in labeled-loop control (`last CHECK`).
+        let label = if matches!(
+            self.peek_kind(),
+            Some(TokenKind::Identifier)
+                | Some(TokenKind::Begin)
+                | Some(TokenKind::End)
+                | Some(TokenKind::Check)
+                | Some(TokenKind::Init)
+                | Some(TokenKind::Unitcheck)
+        ) {
             let label_token = self.consume_token()?;
             Some(label_token.text.to_string())
         } else {

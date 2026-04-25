@@ -4,7 +4,7 @@
 //! timeout enforced by polling child process state. When the timeout
 //! expires, the child process is terminated.
 
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -16,18 +16,19 @@ use std::time::{Duration, Instant};
 pub fn run_command_with_timeout(mut cmd: Command, timeout_secs: u64) -> Result<Output, String> {
     let timeout = Duration::from_secs(timeout_secs);
     let start = Instant::now();
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|error| format!("command failed to start: {error}"))?;
 
     loop {
         // Check completion before the deadline so a process that finishes
         // exactly at the deadline boundary is never reported as timed out.
-        match child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))? {
-            Some(_status) => {
-                return child
-                    .wait_with_output()
-                    .map_err(|error| format!("failed collecting command output: {error}"));
-            }
-            None => {}
+        if let Some(_status) =
+            child.try_wait().map_err(|error| format!("failed waiting for command: {error}"))?
+        {
+            return child
+                .wait_with_output()
+                .map_err(|error| format!("failed collecting command output: {error}"));
         }
 
         if start.elapsed() >= timeout {

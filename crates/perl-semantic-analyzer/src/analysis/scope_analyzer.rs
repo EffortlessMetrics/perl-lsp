@@ -51,8 +51,10 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -357,19 +359,25 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
+    imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
     current_package: RefCell<String>,
 }
 
 impl<'a> AnalysisContext<'a> {
-    fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
+    fn new(ast: &Node, code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
         Self {
             code,
             pragma_map,
+            imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
+    }
+
+    fn has_imported_bareword(&self, name: &str) -> bool {
+        self.imported_barewords.contains(name)
     }
 
     fn get_line(&self, offset: usize) -> usize {
@@ -558,7 +566,7 @@ impl ScopeAnalyzer {
         // Use a vector as a stack for ancestors to avoid O(N) HashMap allocation
         let mut ancestors: Vec<&Node> = Vec::new();
 
-        let context = AnalysisContext::new(code, pragma_map);
+        let context = AnalysisContext::new(ast, code, pragma_map);
 
         self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, &context);
 
@@ -978,6 +986,7 @@ impl ScopeAnalyzer {
                     && !self.is_in_hash_key_context(node, ancestors, 1)
                     && !is_known_function(name)
                     && !pragma_state.has_builtin_import(name)
+                    && !context.has_imported_bareword(name)
                     && !self.is_in_hash_key_context(node, ancestors, 10)
                 {
                     issues.push(ScopeIssue {
@@ -1071,7 +1080,7 @@ impl ScopeAnalyzer {
                 let sub_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 // Check for duplicate parameters and shadowing
-                let mut param_names = std::collections::HashSet::new();
+                let mut param_names = HashSet::new();
 
                 // Extract parameters from signature if present
                 // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
@@ -1831,6 +1840,144 @@ impl ScopeAnalyzer {
             })
             .collect()
     }
+}
+
+fn collect_imported_barewords(ast: &Node) -> HashSet<String> {
+    fn push_symbol(imported: &mut HashSet<String>, module: &str, token: &str) {
+        let symbol = token.trim().trim_matches('\'').trim_matches('"').trim();
+        if symbol.is_empty() || symbol == "," {
+            return;
+        }
+
+        if symbol.starts_with(':') {
+            if let Some(expanded) = resolve_known_export_tag(module, symbol) {
+                imported.extend(expanded.iter().map(|name| (*name).to_string()));
+            }
+            return;
+        }
+
+        let is_bareword = symbol.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            && symbol
+                .as_bytes()
+                .first()
+                .is_some_and(|first| first.is_ascii_alphabetic() || *first == b'_');
+        if is_bareword {
+            imported.insert(symbol.to_string());
+        }
+    }
+
+    fn require_module_name(node: &Node) -> Option<String> {
+        let NodeKind::FunctionCall { name, args } = &node.kind else {
+            return None;
+        };
+        if name != "require" {
+            return None;
+        }
+        let first = args.first()?;
+        match &first.kind {
+            NodeKind::Identifier { name } => Some(name.clone()),
+            NodeKind::String { value, .. } => {
+                let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+                if cleaned.is_empty() {
+                    return None;
+                }
+                Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+            }
+            _ => None,
+        }
+    }
+
+    fn maybe_record_manual_imports(
+        node: &Node,
+        required_modules: &HashSet<String>,
+        imported: &mut HashSet<String>,
+    ) {
+        let NodeKind::MethodCall { object, method, args } = &node.kind else {
+            return;
+        };
+        if method != "import" {
+            return;
+        }
+        let NodeKind::Identifier { name: module } = &object.kind else {
+            return;
+        };
+        if !required_modules.contains(module) {
+            return;
+        }
+        for arg in args {
+            match &arg.kind {
+                NodeKind::String { value, .. } => push_symbol(imported, module, value),
+                NodeKind::Identifier { name } => {
+                    if name.starts_with("qw") {
+                        let content = name
+                            .trim_start_matches("qw")
+                            .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                            .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                        for token in content.split_whitespace() {
+                            push_symbol(imported, module, token);
+                        }
+                    } else {
+                        push_symbol(imported, module, name);
+                    }
+                }
+                NodeKind::ArrayLiteral { elements } => {
+                    for el in elements {
+                        if let NodeKind::String { value, .. } = &el.kind {
+                            push_symbol(imported, module, value);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Unwrap an `ExpressionStatement` node to its inner expression, or return
+    /// the node itself if it is not an expression statement.
+    fn inner_node(stmt: &Node) -> &Node {
+        if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+            expression.as_ref()
+        } else {
+            stmt
+        }
+    }
+
+    fn visit(node: &Node, imported: &mut HashSet<String>) {
+        if let NodeKind::Use { module, args, .. } = &node.kind {
+            for arg in args {
+                if arg.starts_with("qw") {
+                    let content = arg
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    for token in content.split_whitespace() {
+                        push_symbol(imported, module, token);
+                    }
+                } else {
+                    push_symbol(imported, module, arg);
+                }
+            }
+        } else if let NodeKind::Program { statements } | NodeKind::Block { statements } = &node.kind
+        {
+            let required_modules: HashSet<String> = statements
+                .iter()
+                .filter_map(|stmt| require_module_name(inner_node(stmt)))
+                .collect();
+            if !required_modules.is_empty() {
+                for stmt in statements {
+                    maybe_record_manual_imports(inner_node(stmt), &required_modules, imported);
+                }
+            }
+        }
+
+        for child in node.children() {
+            visit(child, imported);
+        }
+    }
+
+    let mut imported = HashSet::new();
+    visit(ast, &mut imported);
+    imported
 }
 
 /// Returns true if `name` (without sigil) is a numbered capture variable.

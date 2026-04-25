@@ -4,6 +4,13 @@
 //! declarations across a Perl workspace. Provides incremental update, a
 //! document store for open files, and coordinates cross-file operations
 //! such as workspace-wide rename and symbol search.
+//!
+//! # Module guide
+//!
+//! - [`api`] — curated, conflict-free re-exports for workspace bootstrap flows.
+//! - [`discovery`] / [`folder`] / [`ignore`] — workspace root/file discovery helpers.
+//! - [`monitoring`], [`slo`], [`state_machine`] — lifecycle policy + observability.
+//! - [`workspace`] — indexing engine, caches, coordinator, and rename support.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]

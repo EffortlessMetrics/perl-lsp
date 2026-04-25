@@ -87,10 +87,9 @@ fn is_file_uri_false_for_plain_path() {
 }
 
 #[test]
-fn is_file_uri_case_sensitive() {
-    // file:// check is case-sensitive via starts_with
-    assert!(!is_file_uri("FILE:///tmp/test.pl"));
-    assert!(!is_file_uri("File:///tmp/test.pl"));
+fn is_file_uri_case_insensitive_for_file_scheme_prefix() {
+    assert!(is_file_uri("FILE:///tmp/test.pl"));
+    assert!(is_file_uri("File:///tmp/test.pl"));
 }
 
 // ── is_special_scheme ───────────────────────────────────────────────
@@ -109,6 +108,11 @@ fn is_special_scheme_detects_git() {
 #[test]
 fn is_special_scheme_detects_vscode_notebook() {
     assert!(is_special_scheme("vscode-notebook:cell-id"));
+}
+
+#[test]
+fn is_special_scheme_detects_vscode_notebook_cell() {
+    assert!(is_special_scheme("vscode-notebook-cell:/path/to/notebook.ipynb#cell-1"));
 }
 
 #[test]
@@ -171,8 +175,8 @@ fn uri_extension_handles_multiple_dots() {
 
 #[test]
 fn uri_extension_hidden_file_no_ext() {
-    // .gitignore → extension is "gitignore" (after the single dot)
-    assert_eq!(uri_extension("file:///tmp/.gitignore"), Some("gitignore"));
+    // Dotfiles like `.gitignore` are treated as extensionless.
+    assert_eq!(uri_extension("file:///tmp/.gitignore"), None);
 }
 
 #[test]
@@ -189,6 +193,11 @@ fn uri_extension_empty_string() {
 fn uri_extension_non_file_uri() {
     assert_eq!(uri_extension("https://example.com/test.pl"), Some("pl"));
     assert_eq!(uri_extension("untitled:Untitled-1.pl"), Some("pl"));
+}
+
+#[test]
+fn uri_extension_windows_style_path() {
+    assert_eq!(uri_extension(r"C:\Users\dev\script.pl"), Some("pl"));
 }
 
 #[test]

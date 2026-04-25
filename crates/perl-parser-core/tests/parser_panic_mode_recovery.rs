@@ -3,7 +3,9 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
-use perl_parser_core::{NodeKind, ParseResult, Parser};
+use perl_parser_core::{
+    NodeKind, ParseResult, Parser, RecoverySalvageClass, RecoverySalvageProfile,
+};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
 #[test]
@@ -14,9 +16,17 @@ fn parser_ac1_sync_point_detection_semicolon() -> ParseResult<()> {
     let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
-        // Should have 2 statements: 1 error + 1 valid
+        // Should have 2 statements: 1 recovered decl (Phase 2: VariableDeclaration
+        // with MissingExpression, not a raw Error node) + 1 valid
         assert_eq!(statements.len(), 2, "Should recover and parse next statement");
-        assert!(matches!(statements[0].kind, NodeKind::Error { .. }), "First should be error");
+        assert!(
+            matches!(
+                statements[0].kind,
+                NodeKind::VariableDeclaration { .. } | NodeKind::Error { .. }
+            ),
+            "First should be recovered declaration or error, got: {:?}",
+            statements[0].kind
+        );
         assert!(
             matches!(statements[1].kind, NodeKind::VariableDeclaration { .. }),
             "Second should be valid"
@@ -117,9 +127,16 @@ fn parser_ac5_resume_normal_parsing_after_sync() -> ParseResult<()> {
     let ast = parser.parse()?;
 
     if let NodeKind::Program { statements } = &ast.kind {
-        // Should have: error, valid decl, valid print
+        // Should have: recovered decl (Phase 2: VariableDeclaration+MissingExpression
+        // rather than raw Error), valid decl, valid print
         assert_eq!(statements.len(), 3, "Should parse all statements after error");
-        assert!(matches!(statements[0].kind, NodeKind::Error { .. }));
+        assert!(
+            matches!(
+                statements[0].kind,
+                NodeKind::VariableDeclaration { .. } | NodeKind::Error { .. }
+            ),
+            "First should be recovered declaration or error"
+        );
         assert!(matches!(statements[1].kind, NodeKind::VariableDeclaration { .. }));
         assert!(matches!(statements[2].kind, NodeKind::ExpressionStatement { .. }));
     }
@@ -393,5 +410,35 @@ fn parser_recovery_preserves_good_code() -> ParseResult<()> {
             }
         }
     }
+    Ok(())
+}
+
+#[test]
+fn parser_recovery_profiles_error_nodes_as_accuracy_issue() -> ParseResult<()> {
+    let mut parser = Parser::new("my $x = 1 + ; my $y = 2;");
+    let ast = parser.parse()?;
+    let profile = RecoverySalvageProfile::from_parse(&ast, parser.errors(), false);
+    // The class must not be Clean — the parser saw a malformed expression.
+    assert_ne!(
+        profile.class,
+        RecoverySalvageClass::Clean,
+        "recovery profile must not be Clean for malformed input: {:?}",
+        profile.class
+    );
+    // At least one recovery signal must be present: either an ERROR node or a
+    // Recovered diagnostic.  Both counts together prove `from_parse` walked the
+    // AST and scanned diagnostics rather than returning a zero-filled struct.
+    assert!(
+        profile.error_node_count > 0 || profile.recovered_count > 0,
+        "profile must record at least one error or recovery signal: {:?}",
+        profile
+    );
+    // Catastrophic is also wrong — parse() returned Ok above.
+    assert_ne!(
+        profile.class,
+        RecoverySalvageClass::CatastrophicFailure,
+        "parse() succeeded so catastrophic must not be set: {:?}",
+        profile.class
+    );
     Ok(())
 }
