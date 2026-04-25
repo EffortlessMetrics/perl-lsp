@@ -470,9 +470,17 @@ impl<'a> Parser<'a> {
         let declarator = declarator_token.text.to_string();
 
         // `local(...)` can contain arbitrary lvalue expressions (e.g. local($ENV{PATH})).
-        // Treat the parenthesized payload as one lvalue expression rather than
-        // forcing list-declaration parsing, which only accepts plain variables.
-        if declarator == "local" && self.peek_kind() == Some(TokenKind::LeftParen) {
+        // Only use the single-lvalue path when the content is a complex lvalue
+        // (the token after the first variable sigil is a subscript operator like `{`, `[`, `->`)
+        // so that plain-variable lists like `local($x, $y)` fall through to the
+        // VariableListDeclaration path which correctly handles the comma-separated form.
+        let local_has_complex_lvalue = declarator == "local"
+            && self.peek_kind() == Some(TokenKind::LeftParen)
+            && matches!(
+                self.tokens.peek_third().ok().map(|t| t.kind),
+                Some(TokenKind::LeftBrace | TokenKind::LeftBracket | TokenKind::Arrow)
+            );
+        if local_has_complex_lvalue {
             self.consume_token()?; // consume (
             let variable = self.parse_assignment()?;
             self.expect_closing_delimiter(TokenKind::RightParen)?;

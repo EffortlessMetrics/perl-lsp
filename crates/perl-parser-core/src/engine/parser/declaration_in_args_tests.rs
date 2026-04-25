@@ -177,4 +177,31 @@ mod tests {
         assert!(sexp.contains("(variable $ a)"), "Expected variable $a in sexp, got: {sexp}",);
         assert!(sexp.contains("(variable $ b)"), "Expected variable $b in sexp, got: {sexp}",);
     }
+
+    // ---------------------------------------------------------------
+    // Regression: local($x, $y) multi-variable form must not regress
+    // to single-var path (would only localize $x and fail on the comma)
+    // ---------------------------------------------------------------
+    #[test]
+    fn local_list_in_call_args() {
+        let code = "foo(local($x, $y), $z);";
+        assert_no_errors(code);
+
+        let stmt = first_stmt(code);
+        let sexp = stmt.to_sexp();
+        // Both $x and $y must appear in the local declaration
+        assert!(
+            sexp.contains("(variable $ x)"),
+            "Expected localized $x in sexp, got: {sexp}",
+        );
+        assert!(
+            sexp.contains("(variable $ y)"),
+            "Expected localized $y in sexp, got: {sexp}",
+        );
+        // $z must be a separate argument, not inside the local()
+        assert!(
+            sexp.contains("(variable $ z)"),
+            "Expected trailing $z as separate arg, got: {sexp}",
+        );
+    }
 }
