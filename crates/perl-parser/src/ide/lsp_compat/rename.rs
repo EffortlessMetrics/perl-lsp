@@ -272,8 +272,11 @@ impl RenameProvider {
             return Err("New name cannot start with a digit".to_string());
         }
         
-        if !new_name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            return Err("New name can only contain alphanumeric characters and underscores".to_string());
+        if !is_valid_perl_symbol_name(new_name) {
+            return Err(
+                "New name can only contain ASCII letters/digits, underscores, and package separators (::)"
+                    .to_string(),
+            );
         }
         
         // Check for Perl keywords
@@ -401,6 +404,35 @@ impl RenameProvider {
     }
 }
 
+fn is_valid_perl_symbol_name(new_name: &str) -> bool {
+    if new_name.contains('\'') {
+        // Reject Perl's historical package separator — the canonical `::` form must be used.
+        return false;
+    }
+
+    let mut has_any_segment = false;
+    for segment in new_name.split("::") {
+        if segment.is_empty() {
+            return false;
+        }
+        has_any_segment = true;
+
+        // Perl identifiers must not start with a digit.
+        if segment.starts_with(|c: char| c.is_ascii_digit()) {
+            return false;
+        }
+
+        if !segment
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return false;
+        }
+    }
+
+    has_any_segment
+}
+
 impl Default for RenameProvider {
     fn default() -> Self {
         Self::new()
@@ -442,12 +474,21 @@ mod tests {
         assert!(provider.validate_new_name("valid_name").is_ok());
         assert!(provider.validate_new_name("_underscore").is_ok());
         assert!(provider.validate_new_name("name123").is_ok());
+        assert!(provider.validate_new_name("My::Package").is_ok());
+        assert!(provider.validate_new_name("My::Package_2").is_ok());
         
         // Invalid names
         assert!(provider.validate_new_name("").is_err());
         assert!(provider.validate_new_name("123invalid").is_err());
         assert!(provider.validate_new_name("invalid-name").is_err());
+        assert!(provider.validate_new_name("My:::Package").is_err());
+        assert!(provider.validate_new_name("My::").is_err());
+        assert!(provider.validate_new_name("::My").is_err());
+        assert!(provider.validate_new_name("My'Package").is_err());
+        assert!(provider.validate_new_name("naïve").is_err());
         assert!(provider.validate_new_name("if").is_err()); // Keyword
+        assert!(provider.validate_new_name("My::0Module").is_err()); // segment starts with digit
+        assert!(provider.validate_new_name("0::Start").is_err());    // first segment starts with digit
     }
 
     #[test]
