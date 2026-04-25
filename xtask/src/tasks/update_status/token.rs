@@ -190,14 +190,30 @@ fn token_kind_variants(source: &str) -> Vec<String> {
     let Some(enum_start) = source.find("pub enum TokenKind") else {
         return Vec::new();
     };
-    let Some(display_start) = source.find("impl TokenKind") else {
+    // Find the closing `}` of the `pub enum TokenKind` block by tracking
+    // brace depth from the opening `{`.  This avoids including variants from
+    // adjacent types (`TokenCategory`, `TokenKindMetadata`, …) that appear
+    // between the enum's closing brace and `impl TokenKind`.
+    let enum_header_end = source[enum_start..].find('{').map(|i| enum_start + i + 1);
+    let Some(body_start) = enum_header_end else {
         return Vec::new();
     };
-    if display_start <= enum_start {
-        // `impl TokenKind` appears before `pub enum TokenKind` — malformed source.
-        return Vec::new();
+    let mut depth = 1usize;
+    let mut enum_end = body_start;
+    for (i, ch) in source[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    enum_end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
     }
-    let enum_body = &source[enum_start..display_start];
+    let enum_body = &source[body_start..enum_end];
     let Ok(re) = Regex::new(r"^\s*([A-Z][A-Za-z0-9]*)\s*,\s*$") else {
         return Vec::new();
     };
@@ -210,10 +226,47 @@ fn token_kind_variants(source: &str) -> Vec<String> {
 }
 
 fn token_display_name_arms(source: &str) -> Vec<String> {
+    // Locate the `display_name` method inside `impl TokenKind` (not
+    // `impl Token` or `impl TokenRef`, which also have a `display_name`
+    // delegating method).  We anchor on `impl TokenKind` first so we always
+    // scan the canonical coverage match, not a delegation wrapper.
+    let Some(impl_start) = source.find("impl TokenKind") else {
+        return Vec::new();
+    };
+    let impl_tail = &source[impl_start..];
+
+    // Find `fn display_name` within the impl block.
+    let Some(fn_rel) = impl_tail.find("fn display_name(self)") else {
+        return Vec::new();
+    };
+    let fn_start = impl_start + fn_rel;
+
+    // Advance to the opening `{` of the function body.
+    let body_start_offset = source[fn_start..].find('{').map(|i| fn_start + i + 1);
+    let Some(body_start) = body_start_offset else {
+        return Vec::new();
+    };
+    let mut depth = 1usize;
+    let mut body_end = body_start;
+    for (i, ch) in source[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    body_end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let fn_body = &source[body_start..body_end];
     let Ok(re) = Regex::new(r"TokenKind::([A-Z][A-Za-z0-9]*)\s*=>") else {
         return Vec::new();
     };
-    re.captures_iter(source)
+    re.captures_iter(fn_body)
         .filter_map(|caps| caps.get(1))
         .map(|m| m.as_str().to_string())
         .collect()
@@ -223,13 +276,28 @@ fn token_category_counts(source: &str) -> std::collections::BTreeMap<&'static st
     let Some(enum_start) = source.find("pub enum TokenKind") else {
         return std::collections::BTreeMap::new();
     };
-    let Some(display_start) = source.find("impl TokenKind") else {
+    // Mirror the same brace-tracking boundary used in `token_kind_variants`
+    // so the two functions stay in sync as the source file evolves.
+    let enum_header_end = source[enum_start..].find('{').map(|i| enum_start + i + 1);
+    let Some(body_start) = enum_header_end else {
         return std::collections::BTreeMap::new();
     };
-    if display_start <= enum_start {
-        return std::collections::BTreeMap::new();
+    let mut depth = 1usize;
+    let mut enum_end = body_start;
+    for (i, ch) in source[body_start..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    enum_end = body_start + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
     }
-    let enum_body = &source[enum_start..display_start];
+    let enum_body = &source[body_start..enum_end];
     let mut current = "";
     let mut counts = std::collections::BTreeMap::new();
     let Ok(variant_re) = Regex::new(r"^\s*([A-Z][A-Za-z0-9]*)\s*,\s*$") else {
@@ -295,12 +363,31 @@ mod tests {
             !variants.is_empty(),
             "token_kind_variants must find at least one variant — check the regex or enum structure"
         );
+        // The fixture constant is 132.  If the enum grows or shrinks, update the
+        // fixture too.  This assertion catches the boundary-overcount bug (including
+        // TokenCategory variants) as well as genuine enum changes.
+        assert_eq!(
+            variants.len(),
+            132,
+            "token_kind_variants returned {} variants but expected 132; \
+             check that the enum boundary is computed correctly (only TokenKind variants, \
+             not TokenCategory or other adjacent types)",
+            variants.len()
+        );
         // Every extracted name must start with an uppercase letter (the regex
         // guarantees this, but a double-check costs nothing).
         for name in &variants {
             assert!(
                 name.chars().next().map_or(false, |c| c.is_uppercase()),
                 "extracted variant {name:?} does not start with uppercase"
+            );
+        }
+        // Spot-check: known TokenCategory variants must NOT appear in the list.
+        // These were incorrectly included before the brace-tracking boundary fix.
+        for spurious in &["Keyword", "Operator", "Delimiter", "Literal", "Identifier", "Special"] {
+            assert!(
+                !variants.iter().any(|v| v == spurious),
+                "TokenCategory variant {spurious:?} must not appear in TokenKind variant list"
             );
         }
     }
