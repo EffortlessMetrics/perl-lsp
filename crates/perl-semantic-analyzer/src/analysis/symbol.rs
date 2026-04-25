@@ -964,8 +964,21 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+            NodeKind::Untie { variable } => {
                 self.visit_node(variable);
+            }
+
+            NodeKind::Goto { target } => {
+                if let NodeKind::Identifier { name } = &target.kind {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Label,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                self.visit_node(target);
             }
 
             // Regex related nodes - we recurse into expression
