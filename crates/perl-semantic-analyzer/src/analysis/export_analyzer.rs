@@ -559,10 +559,7 @@ our @EXPORT = qw(legacy_func);
 1;
 "#;
         let info = parse_and_extract(code);
-        assert!(
-            info.is_some(),
-            "Should detect bare `use Exporter;` as Exporter-based module"
-        );
+        assert!(info.is_some(), "Should detect bare `use Exporter;` as Exporter-based module");
         let info = info.unwrap();
         assert!(
             info.default_export.contains("legacy_func"),
