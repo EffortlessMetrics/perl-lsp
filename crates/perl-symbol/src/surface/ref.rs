@@ -14,6 +14,9 @@
 //! - Method calls (`$obj->method(...)`, `NodeKind::MethodCall`) — method name is not a
 //!   `Node`, so extraction requires a dedicated `MethodCallRef` kind (future phase)
 //! - Indirect-object calls (`new Class @args`, `NodeKind::IndirectCall`) — same reason
+//! - Subroutine signature parameter bindings (`MandatoryParameter`, `SlurpyParameter`,
+//!   `NamedParameter`) — these are declaration sites, not reference sites.  Optional
+//!   parameter *default values* are still walked because they are expressions.
 
 use crate::types::VarKind;
 use perl_ast::{Node, NodeKind};
@@ -63,6 +66,19 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
             if let Some(init) = initializer {
                 walk(init, out);
             }
+        }
+
+        // Signature parameter nodes bind variables — skip the variable (it is a
+        // declaration site), but walk the default-value expression for optional
+        // parameters because it is evaluated in the caller's scope.
+        NodeKind::MandatoryParameter { .. }
+        | NodeKind::SlurpyParameter { .. }
+        | NodeKind::NamedParameter { .. } => {
+            // Nothing to walk: the bound variable is a declaration, not a ref.
+        }
+        NodeKind::OptionalParameter { default_value, .. } => {
+            // The default expression may reference other variables.
+            walk(default_value, out);
         }
 
         NodeKind::Variable { sigil, name } => {
