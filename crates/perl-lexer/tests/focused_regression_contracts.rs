@@ -131,3 +131,25 @@ fn unterminated_quote_command_degrades_gracefully() -> TestResult {
     assert!(token.end <= "qx{unterminated".len());
     Ok(())
 }
+
+#[test]
+fn y_alias_for_tr_is_transliteration_token() -> TestResult {
+    // `y///` is the historical alias for `tr///`; both must lex as Transliteration.
+    let input = "y/a-z/A-Z/";
+    let mut lexer = PerlLexer::new(input);
+    let token = next_non_trivia(&mut lexer).ok_or("expected transliteration")?;
+    assert_eq!(token.token_type, TokenType::Transliteration);
+    assert_eq!(token.text.as_ref(), input);
+    Ok(())
+}
+
+#[test]
+fn qr_with_modifier_flag_is_quote_regex_token() -> TestResult {
+    // `qr//i` — regex with ignore-case flag; modifier must be part of the token.
+    let input = "qr/hello world/i";
+    let mut lexer = PerlLexer::new(input);
+    let token = next_non_trivia(&mut lexer).ok_or("expected qr token")?;
+    assert_eq!(token.token_type, TokenType::QuoteRegex);
+    assert_eq!(token.text.as_ref(), input, "modifier 'i' must be included in token text");
+    Ok(())
+}
