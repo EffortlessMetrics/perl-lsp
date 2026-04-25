@@ -16,9 +16,20 @@ pub enum CursorSymbolKind {
     Subroutine,
 }
 
+/// Controls how `token_span_at_byte` walks when the cursor lands on an
+/// identifier character (not on a sigil).
 #[derive(Debug, Clone, Copy)]
 struct ScanOptions {
+    /// When true, walk backward from the cursor through leading identifier
+    /// characters to find the token start (used by range and completion
+    /// callers that want the full token). When false, treat the cursor
+    /// position as the token start (used by symbol-kind callers that only
+    /// need the trailing portion after a sigil).
     include_leading_identifier: bool,
+    /// When true, a cursor landing directly on a sigil character initiates
+    /// a forward scan for the following name. When false, a sigil under the
+    /// cursor returns `None` (used by range callers that want to skip
+    /// standalone sigils).
     allow_cursor_on_sigil: bool,
 }
 
@@ -93,22 +104,12 @@ fn token_span_at_byte(
     Some((start, name_start, end))
 }
 
-#[inline]
-fn extract_token_at_byte(
-    source: &str,
-    byte_pos: usize,
-    is_token_char: fn(u8) -> bool,
-    is_sigil: fn(u8) -> bool,
-    options: ScanOptions,
-) -> Option<(usize, &str)> {
-    let bytes = source.as_bytes();
-    let (_start, name_start, end) = token_span_at_byte(bytes, byte_pos, is_token_char, is_sigil, options)?;
-    Some((name_start, &source[name_start..end]))
-}
 
 /// Extract a symbol and its kind from `source` at `position`.
 ///
-/// `position` uses byte offsets.
+/// `position` uses byte offsets. Returns the symbol name (without sigil) and
+/// the sigil-derived kind. When the cursor is on or directly after a sigil,
+/// the kind is inferred from that sigil; otherwise defaults to `Subroutine`.
 pub fn extract_symbol_from_source(
     position: usize,
     source: &str,
@@ -118,10 +119,8 @@ pub fn extract_symbol_from_source(
         include_leading_identifier: false,
         allow_cursor_on_sigil: true,
     };
-    let (start, name_start, _end) =
+    let (start, name_start, end) =
         token_span_at_byte(bytes, position, is_cursor_ident_char, is_symbol_sigil, options)?;
-    let (_, name) =
-        extract_token_at_byte(source, position, is_cursor_ident_char, is_symbol_sigil, options)?;
 
     let kind = if start < name_start {
         match bytes[start] {
@@ -134,7 +133,9 @@ pub fn extract_symbol_from_source(
         CursorSymbolKind::Subroutine
     };
 
-    Some((name.to_string(), kind))
+    // name_start..end is a valid UTF-8 substring: all chars in the identifier
+    // range are ASCII, so slicing by byte index is safe.
+    Some((source[name_start..end].to_string(), kind))
 }
 
 /// Get symbol range at `position`, including a leading sigil when present.
