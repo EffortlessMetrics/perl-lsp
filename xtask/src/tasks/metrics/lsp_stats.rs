@@ -251,10 +251,10 @@ fn load_observed_rates(path: &Path) -> Option<ObservedUxRates> {
     // where pass-rate data is inside `metrics` as individual rates.
     // Prefer `last_run` when available because it carries numerator/denominator
     // data and avoids rounding loss.
-    if let Some(last) = doc.get("last_run") {
-        if let Ok(parsed) = serde_json::from_value::<LastRunMetrics>(last.clone()) {
-            return Some(ObservedUxRates::from_last_run(&parsed));
-        }
+    if let Some(last) = doc.get("last_run")
+        && let Ok(parsed) = serde_json::from_value::<LastRunMetrics>(last.clone())
+    {
+        return Some(ObservedUxRates::from_last_run(&parsed));
     }
 
     let metrics = doc.get("metrics")?;
