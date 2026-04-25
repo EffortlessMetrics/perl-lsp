@@ -598,7 +598,7 @@ module.exports = grammar({
     // perl.y calls this `termeqop`
     equality_expression: $ =>
       choice(
-        prec.left(TERMPREC.CHEQOP, binop(choice('==', '!=', 'eq', '===', 'equ', 'eqr', 'ne'), $._term)), // _CHEQOP
+        prec.left(TERMPREC.CHEQOP, binop(choice('==', '!=', 'eq', 'ne'), $._term)), // _CHEQOP
         prec.right(TERMPREC.CHEQOP, binop.nonassoc($, choice('<=>', 'cmp', '~~'), $._term)), // _NCEQOP
       ),
 
