@@ -1262,6 +1262,66 @@ fn no_warnings_multiple_categories_all_recorded() -> Result<(), Box<dyn std::err
 }
 
 #[test]
+fn no_warnings_category_tracking_is_bounded() -> Result<(), Box<dyn std::error::Error>> {
+    let mut statements = Vec::new();
+    statements.push(use_node("warnings", &[], 0, 15));
+
+    for i in 0..300 {
+        let category = format!("cat{i}");
+        statements.push(no_node("warnings", &[&category], 16 + i, 17 + i));
+    }
+
+    let ast = program(statements);
+    let map = PragmaTracker::build(&ast);
+    let state =
+        &map.last().ok_or("expected non-empty pragma map after building warning statements")?.1;
+
+    assert_eq!(state.disabled_warning_categories.len(), 256);
+    assert!(!state.is_warning_active("cat255"));
+    assert!(state.is_warning_active("cat299"), "categories beyond the cap should remain active");
+    // Tightest boundary: cat256 is the first rejected entry (cap is 256, 0-indexed 0..=255).
+    assert!(state.is_warning_active("cat256"), "first item beyond cap must remain active");
+    Ok(())
+}
+
+#[test]
+fn use_warnings_resets_fully_capped_disabled_list() -> Result<(), Box<dyn std::error::Error>> {
+    // Fill the cap (256 categories), then `use warnings` must clear the list entirely
+    // so fresh categories can be recorded after the reset.
+    let mut statements = Vec::new();
+    statements.push(use_node("warnings", &[], 0, 15));
+
+    for i in 0..300 {
+        let category = format!("cat{i}");
+        statements.push(no_node("warnings", &[&category], 16 + i, 17 + i));
+    }
+
+    // Reset with `use warnings` then disable a new category.
+    let reset_start = 316;
+    statements.push(use_node("warnings", &[], reset_start, reset_start + 15));
+    statements.push(no_node("warnings", &["fresh"], reset_start + 16, reset_start + 30));
+
+    let ast = program(statements);
+    let map = PragmaTracker::build(&ast);
+    let state =
+        &map.last().ok_or("expected non-empty pragma map after building warning statements")?.1;
+
+    assert!(state.warnings, "warnings must still be on after reset");
+    assert_eq!(
+        state.disabled_warning_categories.len(),
+        1,
+        "use warnings must clear the full cap; only 'fresh' should remain"
+    );
+    assert!(
+        state.disabled_warning_categories.contains(&"fresh".to_string()),
+        "'fresh' category must be recorded after the reset"
+    );
+    assert!(!state.is_warning_active("fresh"), "fresh must be disabled");
+    assert!(state.is_warning_active("cat0"), "cat0 must be active again after use warnings reset");
+    Ok(())
+}
+
+#[test]
 fn use_warnings_after_no_warnings_category_resets_disabled_list()
 -> Result<(), Box<dyn std::error::Error>> {
     // use warnings; no warnings 'X'; use warnings;
