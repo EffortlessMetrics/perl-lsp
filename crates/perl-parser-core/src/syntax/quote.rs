@@ -302,19 +302,23 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -409,11 +413,15 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return Err(TransliterationError::MissingDelimiter);
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
     // Parse first body (search).
-    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
     if !search_closed {
         return Err(TransliterationError::MissingClosingDelimiter);
     }
@@ -447,10 +455,7 @@ pub fn extract_transliteration_parts_strict(
 
     // Validate transliteration modifiers strictly.
     let mut modifiers = String::new();
-    for modifier in modifiers_str
-        .chars()
-        .take_while(|c: &char| c.is_ascii_alphanumeric())
-    {
+    for modifier in modifiers_str.chars().take_while(|c: &char| c.is_ascii_alphanumeric()) {
         if matches!(modifier, 'c' | 'd' | 's' | 'r') {
             modifiers.push(modifier);
         } else {
