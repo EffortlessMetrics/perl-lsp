@@ -2072,16 +2072,15 @@ impl<'a> PerlLexer<'a> {
                 if let Some(next) = candidate {
                     // `s => 1` should remain a fat-arrow hash key, not quote op.
                     let is_fat_arrow = next == '=' && char_after_next == Some('>');
-                    let substitution_disallows_whitespace = text == "s" && has_whitespace;
 
-                    // Perl allows optional whitespace before quote-like delimiters for
-                    // quote-like operators, including arbitrary non-alnum delimiters.
-                    // Keep `s` strict to avoid mis-tokenizing `-s 'file'` file-test usage.
-                    let whitespace_allowed = !has_whitespace || text != "s";
+                    // For `s`, whitespace is allowed ONLY before paired delimiters like { [ ( <
+                    // For other operators (tr, y), whitespace is always allowed.
+                    let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                    let whitespace_allowed = !has_whitespace || text != "s" || is_paired_delim;
+
                     let is_valid_delim = Self::is_quote_delim(next)
                         && !is_fat_arrow
-                        && whitespace_allowed
-                        && !substitution_disallows_whitespace;
+                        && whitespace_allowed;
 
                     if is_valid_delim {
                         match text {
@@ -2145,11 +2144,11 @@ impl<'a> PerlLexer<'a> {
                             // not a valid substitution delimiter. Treat as identifier.
                             let is_fat_arrow = next == '=' && char_after_next == Some('>');
 
-                            // Perl allows optional whitespace before quote-like delimiters,
-                            // including arbitrary non-alnum delimiters.
-                            // Keep `s` strict to avoid mis-tokenizing `-s 'filename'` as
-                            // substitution rather than file-test.
-                            let whitespace_allowed = !has_whitespace || op != "s";
+                            // Perl allows optional whitespace before quote-like delimiters.
+                            // For `s`, whitespace is allowed ONLY before paired delimiters like { [ ( <
+                            // to avoid mis-tokenizing `-s 'filename'` as substitution rather than file-test.
+                            let is_paired_delim = matches!(next, '{' | '[' | '(' | '<');
+                            let whitespace_allowed = !has_whitespace || op != "s" || is_paired_delim;
                             let is_valid_delim =
                                 Self::is_quote_delim(next) && !is_fat_arrow && whitespace_allowed;
 

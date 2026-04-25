@@ -1314,3 +1314,22 @@ fn sub_forward_declaration_does_not_leak() -> R {
     );
     Ok(())
 }
+
+/// Regression test: `s { old } { new }g` with whitespace before `{` should tokenize as Substitution.
+/// This tests the fix for the whitespace_allowed condition that was rejecting paired delimiters.
+#[test]
+fn substitution_with_block_form_and_whitespace() -> R {
+    let input = "s { old } { new }g";
+    let sig = significant(input);
+
+    let sub_tokens: Vec<_> = sig
+        .iter()
+        .filter(|t| matches!(t.token_type, TokenType::Substitution))
+        .collect();
+    assert!(
+        !sub_tokens.is_empty(),
+        "Expected Substitution token for block-form s with whitespace before {{, got tokens: {:?}",
+        sig.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}
