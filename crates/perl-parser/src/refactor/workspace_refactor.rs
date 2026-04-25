@@ -1542,4 +1542,42 @@ use JSON; # Duplicate
         assert_eq!(edited_files, 2, "Should edit only Foo package files");
         Ok(())
     }
+
+
+    #[test]
+    fn inline_variable_all_uses_definition_site_package_not_file_first_package()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // A file with two packages: `package Bar` at the top, then `package Foo` with the
+        // variable definition. The fix ensures we use the package at the definition's line
+        // (Foo), not the file's first package declaration (Bar).
+        let (_dir, index, paths) = setup_index(vec![
+            ("multi.pl", "package Bar;
+sub bar {}
+package Foo;
+my $x = 42;
+print $x;
+"),
+            ("foo_user.pl", "package Foo;
+print $x;
+"),
+            ("bar_user.pl", "package Bar;
+print $x;
+"),
+        ])?;
+        let refactor = WorkspaceRefactor::new(index);
+        // Definition is in multi.pl at the `my $x = 42` line (inside `package Foo`)
+        let result = refactor.inline_variable_all("$x", &paths[0], (0, 0))?;
+
+        let edited_uris: Vec<_> = result.file_edits.keys().collect();
+        // Only the Foo-package files should be edited; bar_user.pl (Bar) must be skipped
+        assert!(
+            edited_uris.iter().any(|p| p.to_string_lossy().contains("foo_user")),
+            "foo_user.pl should be edited (same package Foo)"
+        );
+        assert!(
+            !edited_uris.iter().any(|p| p.to_string_lossy().contains("bar_user")),
+            "bar_user.pl must NOT be edited (different package Bar)"
+        );
+        Ok(())
+    }
 }
