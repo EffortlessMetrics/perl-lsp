@@ -262,11 +262,7 @@ fn use_strict_space_separated_in_single_string_is_not_parsed_known_limitation()
     let map = PragmaTracker::build(&ast);
     // No recognized category → no state change → no entry pushed.
     // This is the known limitation: this form is silently ignored.
-    let state = if map.is_empty() {
-        PragmaState::default()
-    } else {
-        map[0].1.clone()
-    };
+    let state = if map.is_empty() { PragmaState::default() } else { map[0].1.clone() };
     // Neither category is enabled; document the gap.
     assert!(!state.strict_refs, "known limitation: 'refs vars' is not split by pragma_arg_items");
     assert!(!state.strict_vars, "known limitation: 'refs vars' is not split by pragma_arg_items");
