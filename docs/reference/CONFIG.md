@@ -882,6 +882,31 @@ inlayHints.enabled = true
 }
 ```
 
+#### Claude Code (plugin `.lsp.json`)
+
+```json
+{
+  "perl-lsp": {
+    "command": "perllsp",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".pl": "perl",
+      ".pm": "perl",
+      ".t": "perl",
+      ".psgi": "perl"
+    },
+    "initializationOptions": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5"],
+          "useSystemInc": false
+        }
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## See Also
