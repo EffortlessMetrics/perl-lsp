@@ -83,7 +83,7 @@ fn test_must_panic_message_contains_error_debug_repr() {
 }
 
 #[test]
-#[should_panic(expected = "unexpected Err: \"detailed error message\"")]
+#[should_panic(expected = "unexpected Err<alloc::string::String>: \"detailed error message\"")]
 fn test_must_panic_message_includes_string_error() {
     let val: Result<i32, String> = Err("detailed error message".to_string());
     let _ = must(val);
@@ -96,7 +96,8 @@ fn test_must_panic_message_includes_string_error() {
 #[test]
 fn test_must_some_with_unit_type() -> Result<(), Box<dyn std::error::Error>> {
     let val: Option<()> = Some(());
-    must_some(val);
+    #[allow(clippy::let_unit_value)]
+    let _ = must_some(val);
     Ok(())
 }
 
@@ -142,7 +143,8 @@ fn test_must_some_panic_message_is_exact() {
 #[test]
 fn test_must_err_with_unit_error() -> Result<(), Box<dyn std::error::Error>> {
     let val: Result<i32, ()> = Err(());
-    must_err(val);
+    #[allow(clippy::let_unit_value)]
+    let _ = must_err(val);
     Ok(())
 }
 
@@ -165,7 +167,7 @@ fn test_must_err_with_tuple_error() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[should_panic(expected = "expected Err, got Ok")]
+#[should_panic(expected = "expected Err<&str>, got Ok<alloc::vec::Vec<i32>>([1, 2, 3])")]
 fn test_must_err_panic_message_contains_ok_debug() {
     let val: Result<Vec<i32>, &str> = Ok(vec![1, 2, 3]);
     let _ = must_err(val);
@@ -179,7 +181,7 @@ fn test_must_err_panic_message_shows_ok_value() {
 }
 
 #[test]
-#[should_panic(expected = "expected Err, got Ok(42)")]
+#[should_panic(expected = "expected Err<&str>, got Ok<i32>(42)")]
 fn test_must_err_panic_message_shows_numeric_ok() {
     let val: Result<i32, &str> = Ok(42);
     let _ = must_err(val);
@@ -202,7 +204,7 @@ fn test_must_track_caller_reports_test_file_location() {
 fn test_must_some_track_caller_reports_test_file_location() {
     let result = std::panic::catch_unwind(|| {
         let val: Option<i32> = None;
-        must_some(val);
+        let _ = must_some(val);
     });
     assert!(result.is_err());
 }
@@ -211,7 +213,7 @@ fn test_must_some_track_caller_reports_test_file_location() {
 fn test_must_err_track_caller_reports_test_file_location() {
     let result = std::panic::catch_unwind(|| {
         let val: Result<i32, &str> = Ok(99);
-        must_err(val);
+        let _ = must_err(val);
     });
     assert!(result.is_err());
 }
