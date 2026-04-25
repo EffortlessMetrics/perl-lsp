@@ -31,6 +31,7 @@ perllsp --health
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -102,6 +103,11 @@ Perl source files.
 
 Register a Perl language-server client that launches `perllsp --stdio`, then
 restart the client after changing workspace settings or include paths.
+
+### Claude Code
+
+Create a plugin with `.lsp.json` that maps Perl extensions to a server entry
+using `command: "perllsp"` and `args: ["--stdio"]`.
 
 ## When Setup Fails
 

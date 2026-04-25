@@ -152,7 +152,7 @@ pub fn add_workspace_symbol_completions(
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
-                    commit_characters: None,
+                    commit_characters: Some(vec![":".to_string(), ";".to_string()]),
                 });
             }
             WsSymbolKind::Constant => {
@@ -390,7 +390,7 @@ pub fn add_use_module_completions(
                     filter_text: Some(name),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),
-                    commit_characters: None,
+                    commit_characters: Some(vec![":".to_string(), ";".to_string()]),
                 });
             }
         }

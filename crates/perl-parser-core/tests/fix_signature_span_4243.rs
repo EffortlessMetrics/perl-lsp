@@ -100,6 +100,26 @@ fn test_method_signature_span_covers_parens() -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
+#[test]
+fn test_method_invocant_signature_span_covers_parens() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "class Foo { method greet ($self: $name) { } }";
+    let ast = parse(source);
+    let sig =
+        find_node_by_kind(&ast, "Signature").ok_or("no Signature node found in method AST")?;
+
+    let expected = "($self: $name)";
+    let sliced = source.get(sig.location.start..sig.location.end).ok_or_else(|| {
+        format!("span {}..{} out of bounds", sig.location.start, sig.location.end)
+    })?;
+
+    assert_eq!(
+        sliced, expected,
+        "Method Signature span should cover '($self: $name)', got {:?}",
+        sliced
+    );
+    Ok(())
+}
+
 // ----- Prototype (bonus fix) -----
 
 #[test]
