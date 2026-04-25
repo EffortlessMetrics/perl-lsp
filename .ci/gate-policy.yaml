@@ -171,6 +171,21 @@ gates:
       - test
       - unit
 
+  - name: perl_token_leaf_contract
+    tier: pr_fast
+    description: "Ratchet perl-token leaf-crate dependency and API/metadata stability"
+    required: true
+    command: cargo test -p perl-token --test conformance_guards --locked
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - test
+      - conformance
+      - perl-token
+
   # ===========================================================================
   # Tier: merge_gate
   # ===========================================================================

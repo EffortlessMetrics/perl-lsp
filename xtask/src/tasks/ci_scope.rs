@@ -279,10 +279,10 @@ pub struct WidenerRule {
 /// All architectural widener rules. The order matters for lane generation
 /// (earlier rules fire first), but deduplication ensures idempotent output.
 pub static WIDENER_RULES: &[WidenerRule] = &[
-    // Rule 1: parser / lexer / parser-core → semantic, workspace-index, LSP, DAP
+    // Rule 1: parser / lexer / parser-core → semantic, workspace, LSP, DAP
     WidenerRule {
         trigger_prefixes: &["perl-parser", "perl-lexer", "perl-parser-core"],
-        targets: &["perl-semantic-analyzer", "perl-workspace-index", "perl-lsp-rs", "perl-dap"],
+        targets: &["perl-semantic-analyzer", "perl-workspace", "perl-lsp-rs", "perl-dap"],
         rule: "parser → DAP downstream smoke",
         lanes: &["lsp_smoke"],
         lane_reason: "architectural_widener",
@@ -290,13 +290,7 @@ pub static WIDENER_RULES: &[WidenerRule] = &[
     // Rule 2: semantic-analyzer / workspace-index → LSP providers
     WidenerRule {
         trigger_prefixes: &["perl-semantic-analyzer", "perl-workspace-index"],
-        targets: &[
-            "perl-lsp-definition",
-            "perl-lsp-references",
-            "perl-lsp-rename",
-            "perl-lsp-workspace",
-            "perl-lsp-rs",
-        ],
+        targets: &["perl-lsp-rs-core", "perl-lsp-rs"],
         rule: "semantic → LSP definition/references/rename",
         lanes: &["lsp_providers"],
         lane_reason: "architectural_widener",

@@ -31,7 +31,10 @@ fn is_embedded_template_uri(uri: &str) -> bool {
 }
 
 fn is_perl_language_id(language_id: &str) -> bool {
-    matches!(language_id.to_ascii_lowercase().as_str(), "perl" | "perl5" | "perl-cpanfile")
+    matches!(
+        language_id.to_ascii_lowercase().as_str(),
+        "perl" | "perl5" | "perl-cpanfile" | "embedded-perl" | "mojolicious"
+    )
 }
 
 #[cfg(feature = "incremental")]
@@ -84,6 +87,17 @@ fn build_incremental_edit_set(
 }
 
 impl LspServer {
+    fn reindex_document_symbols(&self, uri: &str, ast: &Node, source: &str) {
+        let extractor = crate::symbol::SymbolExtractor::new_with_source(source);
+        let table = extractor.extract(ast);
+        let symbols = table.symbols.keys().cloned().collect::<Vec<_>>();
+        self.symbol_index.lock().replace_document_symbols(uri, symbols);
+    }
+
+    fn clear_document_symbols(&self, uri: &str) {
+        self.symbol_index.lock().remove_document(uri);
+    }
+
     /// Handle textDocument/didOpen notification.
     ///
     /// Delegates to [`Self::handle_did_open_with_cancellation`] with no token.
@@ -160,6 +174,7 @@ impl LspServer {
                 ) {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -207,6 +222,7 @@ impl LspServer {
                 ) {
                     tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -262,6 +278,7 @@ impl LspServer {
                         e
                     );
                 }
+                self.clear_document_symbols(uri);
 
                 return Ok(());
             }
@@ -369,32 +386,8 @@ impl LspServer {
                 },
             );
 
-            // Index symbols for workspace search
-            // Note: Indexing is a MUTATION operation - use coordinator.index() directly
-            // This must happen BEFORE notify_parse_complete to keep work inside the tracking window
-            if let Some(ref _ast) = ast_arc {
-                // Update the fast symbol index with symbols from workspace index
-                #[cfg(feature = "workspace")]
-                if let Some(coordinator) = self.coordinator() {
-                    let workspace_index = coordinator.index();
-                    let index_symbols = workspace_index.find_symbols("");
-                    let symbols = index_symbols
-                        .into_iter()
-                        .filter(|s| s.uri == uri)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>();
-
-                    let mut index = self.symbol_index.lock();
-                    for symbol in symbols {
-                        index.add_symbol(symbol);
-                    }
-                }
-                #[cfg(not(feature = "workspace"))]
-                {
-                    let _index = self.symbol_index.lock();
-                    // Just ensure the index exists even without workspace feature
-                }
-
+            if let Some(ref ast) = ast_arc {
+                self.reindex_document_symbols(uri, ast, text);
                 // Update the workspace-wide index for cross-file features.
                 // Indexing runs in a background task so the handler returns
                 // immediately without blocking on file I/O or symbol extraction.
@@ -454,6 +447,8 @@ impl LspServer {
                         return Ok(());
                     }
                 }
+            } else {
+                self.clear_document_symbols(uri);
             }
 
             // Notify coordinator that all work (parse + index) is complete (may trigger recovery)
@@ -659,6 +654,7 @@ impl LspServer {
                     ) {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -704,6 +700,7 @@ impl LspServer {
                     ) {
                         tracing::warn!("Failed to publish diagnostics for {}: {}", uri, e);
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -757,6 +754,7 @@ impl LspServer {
                             e
                         );
                     }
+                    self.clear_document_symbols(uri);
 
                     return Ok(());
                 }
@@ -962,6 +960,12 @@ impl LspServer {
                 // Must drop the lock before calling publish_diagnostics
                 drop(documents);
 
+                if let Some(ref ast) = ast_arc {
+                    self.reindex_document_symbols(uri, ast, &text);
+                } else {
+                    self.clear_document_symbols(uri);
+                }
+
                 // Index symbols for workspace search.
                 // Indexing runs in a background task so the handler returns
                 // immediately; `notify_parse_complete` is called inside the task.
@@ -1072,6 +1076,8 @@ impl LspServer {
             if let Some(coordinator) = self.coordinator() {
                 coordinator.index().clear_file(uri);
             }
+
+            self.clear_document_symbols(uri);
 
             // Notify coordinator that cleanup is complete
             #[cfg(feature = "workspace")]
@@ -1814,6 +1820,60 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_did_change_replaces_document_symbols_in_index() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let uri = "file:///test_symbol_reindex.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub old_name { 1 }\n"
+            }
+        }))?;
+
+        assert!(server.symbol_index.lock().search_prefix("old_").contains(&"old_name".to_string()));
+
+        server.handle_did_change(Some(json!({
+            "textDocument": { "uri": uri, "version": 2 },
+            "contentChanges": [{ "text": "sub new_name { 2 }\n" }]
+        })))?;
+
+        let index = server.symbol_index.lock();
+        assert!(index.search_prefix("old_").is_empty());
+        assert!(index.search_prefix("new_").contains(&"new_name".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_did_close_removes_document_symbols_from_index() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let server = LspServer::new();
+        let uri = "file:///test_symbol_close.pl";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub close_me { 1 }\n"
+            }
+        }))?;
+
+        assert!(
+            server.symbol_index.lock().search_prefix("close_").contains(&"close_me".to_string())
+        );
+
+        server.handle_did_close(Some(json!({"textDocument": {"uri": uri}})))?;
+
+        assert!(server.symbol_index.lock().search_prefix("close_").is_empty());
+        Ok(())
+    }
+
     /// didClose must clear diagnostics using the client-provided URI string.
     ///
     /// This preserves exact URI identity for clients that key diagnostics by
@@ -2089,6 +2149,51 @@ mod tests {
             "template should remain in no-parse mode after didChange"
         );
         assert!(doc.ast.is_none(), "template should continue skipping parse on didChange");
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_embedded_perl_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/welcome.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "embedded-perl",
+                "version": 1,
+                "text": "<%= my $name = 'world'; %>"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(
+            doc.ast.is_some(),
+            "template with embedded-perl languageId should be parsed as Perl"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_template_file_guard_parses_mojolicious_language_id()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let uri = "file:///app/templates/index.html.ep";
+
+        server.did_open(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "mojolicious",
+                "version": 1,
+                "text": "% my $title = 'Hello';"
+            }
+        }))?;
+
+        let docs = server.documents.lock();
+        let doc = docs.get(uri).ok_or("template document not stored after didOpen")?;
+        assert!(doc.ast.is_some(), "template with mojolicious languageId should be parsed as Perl");
         Ok(())
     }
 
