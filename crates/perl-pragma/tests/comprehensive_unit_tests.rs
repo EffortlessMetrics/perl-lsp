@@ -647,6 +647,31 @@ fn use_feature_all_enables_known_features() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
+fn use_feature_all_sets_unicode_strings_bool_field() -> Result<(), Box<dyn std::error::Error>> {
+    // Verify that ':all' toggles the dedicated unicode_strings bool field
+    // (not just the named-feature list) via enable_feature_name.
+    let ast = program(vec![use_node("feature", &["':all'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.unicode_strings, "':all' must set unicode_strings bool");
+    assert!(state.signatures_strict, "':all' must set signatures_strict bool");
+    Ok(())
+}
+
+#[test]
+fn no_feature_all_clears_unicode_strings_bool_field() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("feature", &["':all'"], 0, 24),
+        no_node("feature", &["':all'"], 25, 43),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.unicode_strings, "no feature ':all' must clear unicode_strings");
+    assert!(!state.signatures_strict, "no feature ':all' must clear signatures_strict");
+    Ok(())
+}
+
+#[test]
 fn feature_bundle_can_be_reenabled_after_no_feature_all() -> Result<(), Box<dyn std::error::Error>>
 {
     let ast = program(vec![
