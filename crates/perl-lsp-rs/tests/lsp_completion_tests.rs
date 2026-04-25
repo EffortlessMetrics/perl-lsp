@@ -1054,6 +1054,98 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that completion ranking respects lexical scope distance.
+///
+/// The server sorts completions internally by scope-distance tier before sending
+/// the response (`deduplicate_and_sort` runs with sort_key 'a'=Immediate <
+/// 'b'=Parent < 'c'=PackageLevel < 'd'=Workspace). The list position in the
+/// response is therefore the observable ranking signal.
+///
+/// Uses **distinct** variable names with **reversed alphabetical order** so that
+/// the test is non-vacuous: `$scope_zzz_inner` (immediate, 'a' tier) would sort
+/// AFTER `$scope_aaa_outer` (file scope, 'c' tier) alphabetically. Only correct
+/// scope-distance ranking can put the inner variable first. If `compute_scope_distance`
+/// is broken and returns the same tier for both, the alphabetical tiebreaker
+/// promotes `aaa_outer` — which flips the assertion and the test fails.
+#[test]
+fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_scope_ranking.pl";
+    // $scope_aaa_outer at file scope → ScopeDistance::PackageLevel (sort key 'c')
+    // $scope_zzz_inner in inner block → ScopeDistance::Immediate   (sort key 'a')
+    //
+    // Alphabetical tiebreak: "aaa" < "zzz", so if both got the same scope tier,
+    // $scope_aaa_outer would appear first — opposite of the correct ranking.
+    // Only a working scope-distance implementation can pass this assertion.
+    let code = "my $scope_aaa_outer = 1;\n{\n    my $scope_zzz_inner = 2;\n    my $x = $scope\n}\n";
+
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": code
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    // Line 3 (0-indexed): "    my $x = $scope" — cursor at character 18 (end of "$scope")
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 3, "character": 18 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    // Find list positions — position encodes the server's sort order since the
+    // server pre-sorts by scope-distance tier and does not echo sortText back.
+    let inner_pos = items
+        .iter()
+        .position(|item| item["label"].as_str().map(|s| s == "$scope_zzz_inner").unwrap_or(false));
+    let outer_pos = items
+        .iter()
+        .position(|item| item["label"].as_str().map(|s| s == "$scope_aaa_outer").unwrap_or(false));
+
+    assert!(
+        inner_pos.is_some(),
+        "$scope_zzz_inner should appear in completions (cursor is inside its declaring block)"
+    );
+    assert!(
+        outer_pos.is_some(),
+        "$scope_aaa_outer should appear in completions (file-scope `my` variable)"
+    );
+
+    let inner_pos = inner_pos.unwrap();
+    let outer_pos = outer_pos.unwrap();
+
+    // Immediate scope (sort key 'a') must sort before PackageLevel (sort key 'c').
+    // Alphabetically, "aaa" < "zzz", so without scope-distance ranking $scope_aaa_outer
+    // would come first. Only correct ranking flips this — inner must be at a lower index.
+    assert!(
+        inner_pos < outer_pos,
+        "$scope_zzz_inner (immediate scope, index {inner_pos}) must sort before \
+         $scope_aaa_outer (file scope, index {outer_pos}) in the completion list"
+    );
+
+    Ok(())
+}
+
 /// Test completion with incremental typing
 #[test]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
