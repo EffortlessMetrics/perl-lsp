@@ -346,6 +346,10 @@ fuzz-bounded:
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
+    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
+    @cargo +nightly fuzz run lexer_tokenization -- -max_total_time=60 || echo "  Lexer tokenization fuzzing complete"
+    @cargo +nightly fuzz run dap_eval_validator -- -max_total_time=60 || echo "  DAP eval validator fuzzing complete"
+    @cargo +nightly fuzz run dap_stack_parser -- -max_total_time=60 || echo "  DAP stack parser fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
 # `bench` is the canonical benchmark target; keep this as a compatibility alias.
