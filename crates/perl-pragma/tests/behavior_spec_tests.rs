@@ -380,3 +380,29 @@ fn given_empty_pragma_map_cursor_returns_default() {
     let state = cursor.state_for_offset(&map, 999);
     assert_eq!(state, PragmaTracker::state_for_offset(&map, 999));
 }
+
+#[test]
+fn given_empty_pragma_map_when_querying_final_state_then_default_state_is_returned() {
+    // PragmaTracker::final_state must not panic on an empty map and must return
+    // the same all-false default that state_for_offset returns for an empty map.
+    let state = PragmaTracker::final_state(&[]);
+    assert!(!state.strict_vars);
+    assert!(!state.strict_refs);
+    assert!(!state.strict_subs);
+    assert!(!state.warnings);
+}
+
+#[test]
+fn given_cursor_when_offset_is_before_first_pragma_then_default_state_is_returned() {
+    // Query an offset before the first pragma range; cursor must return default
+    // state just as state_for_offset does (exercises the index=0 with start>offset
+    // branch that calls partition_point returning 0).
+    let ast = program(vec![use_node("strict", &[], 10, 22)]);
+    let map = PragmaTracker::build(&ast);
+
+    let mut cursor = PragmaQueryCursor::new();
+    let s = cursor.state_for_offset(&map, 5);
+
+    assert_eq!(s, PragmaTracker::state_for_offset(&map, 5));
+    assert!(!s.strict_vars, "no pragma has started at offset 5");
+}
