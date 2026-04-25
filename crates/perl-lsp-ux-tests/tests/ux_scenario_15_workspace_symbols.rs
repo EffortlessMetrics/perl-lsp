@@ -8,7 +8,7 @@
 //! disambiguatable via `workspaceFolderUri`.
 
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
 
@@ -36,8 +36,19 @@ sub run {\n\
 1;\n\
 ";
 
-fn matching_run_symbols(symbols: &[Value]) -> Vec<&Value> {
-    symbols.iter().filter(|symbol| symbol["name"].as_str() == Some("run")).collect()
+fn matching_run_symbols(symbols: &[Value]) -> Vec<Value> {
+    symbols.iter().filter(|symbol| symbol["name"].as_str() == Some("run")).cloned().collect()
+}
+
+fn normalized_folder_uris(harness: &UxHarness, symbols: &[Value]) -> BTreeSet<String> {
+    symbols
+        .iter()
+        .filter_map(|symbol| symbol.get("workspaceFolderUri"))
+        .map(|uri| harness.normalize_response(&json!({ "workspaceFolderUri": uri })))
+        .filter_map(|normalized| {
+            normalized.get("workspaceFolderUri").and_then(|uri| uri.as_str()).map(ToOwned::to_owned)
+        })
+        .collect()
 }
 
 #[test]
@@ -66,15 +77,12 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
             .expect("workspace/symbol must not return an error in multi-root mode");
 
         let run_symbols = matching_run_symbols(&latest_symbols);
-        let folder_uris: BTreeSet<&str> = run_symbols
-            .iter()
-            .filter_map(|symbol| symbol.get("workspaceFolderUri").and_then(|uri| uri.as_str()))
-            .collect();
+        let folder_uris = normalized_folder_uris(&harness, &run_symbols);
 
         if run_symbols.len() >= 2
             && folder_uris.len() >= 2
-            && folder_uris.iter().any(|uri| uri.contains("/svc-a/"))
-            && folder_uris.iter().any(|uri| uri.contains("/svc-b/"))
+            && folder_uris.contains("file://$WORKSPACE/svc-a")
+            && folder_uris.contains("file://$WORKSPACE/svc-b")
         {
             break;
         }
@@ -90,10 +98,7 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
         latest_symbols
     );
 
-    let folder_uris: BTreeSet<&str> = run_symbols
-        .iter()
-        .filter_map(|symbol| symbol.get("workspaceFolderUri").and_then(|uri| uri.as_str()))
-        .collect();
+    let folder_uris = normalized_folder_uris(&harness, &run_symbols);
 
     assert!(
         folder_uris.len() >= 2,
@@ -102,12 +107,12 @@ fn scenario_15_workspace_symbol_multi_root_disambiguation() {
         latest_symbols
     );
     assert!(
-        folder_uris.iter().any(|uri| uri.contains("/svc-a/")),
+        folder_uris.contains("file://$WORKSPACE/svc-a"),
         "Expected one workspace symbol to point at svc-a, got: {:?}",
         folder_uris
     );
     assert!(
-        folder_uris.iter().any(|uri| uri.contains("/svc-b/")),
+        folder_uris.contains("file://$WORKSPACE/svc-b"),
         "Expected one workspace symbol to point at svc-b, got: {:?}",
         folder_uris
     );

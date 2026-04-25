@@ -5,6 +5,8 @@
 //! architecture and enables comparison with other implementations.
 
 use criterion::{Criterion, criterion_group, criterion_main};
+#[path = "support/perf_scorecard.rs"]
+mod perf_scorecard;
 use perl_parser::{Parser, ScopeAnalyzer};
 use std::hint::black_box;
 
@@ -101,6 +103,23 @@ fn benchmark_ast_generation(c: &mut Criterion) {
 }
 
 fn benchmark_isolated_components(c: &mut Criterion) {
+    let lexer_metric = perf_scorecard::sample_metric(40, || {
+        use perl_lexer::{PerlLexer, TokenType};
+
+        let mut lexer = PerlLexer::new(black_box(COMPLEX_SCRIPT));
+        let mut count = 0usize;
+
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+            count += 1;
+        }
+
+        black_box(count);
+    });
+    perf_scorecard::record_metric("lexer_only", lexer_metric);
+
     // Benchmark just the lexer phase
     c.bench_function("lexer_only", |b| {
         use perl_lexer::{PerlLexer, TokenType};
@@ -129,6 +148,11 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![];
+
+    let scope_metric = perf_scorecard::sample_metric(40, || {
+        analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+    });
+    perf_scorecard::record_metric("scope_analysis", scope_metric);
 
     c.bench_function("scope_analysis", |b| {
         b.iter(|| {

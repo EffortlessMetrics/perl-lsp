@@ -305,7 +305,7 @@ fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
     }
 
     match String::from_utf8(bytes) {
-        Ok(source) => Ok(source),
+        Ok(source) => Ok(repair_common_mojibake(source)),
         Err(err) => {
             let raw = err.into_bytes();
             let mut decoded = String::with_capacity(raw.len());
@@ -343,6 +343,32 @@ fn decode_utf16_with_bom(bytes: &[u8]) -> Option<String> {
     }
 
     Some(String::from_utf16_lossy(&words))
+}
+
+fn repair_common_mojibake(source: String) -> String {
+    if mojibake_score(&source) == 0 {
+        return source;
+    }
+
+    let mut latin1_bytes = Vec::with_capacity(source.len());
+    for ch in source.chars() {
+        let codepoint = u32::from(ch);
+        if codepoint > u32::from(u8::MAX) {
+            return source;
+        }
+        latin1_bytes.push(codepoint as u8);
+    }
+
+    match String::from_utf8(latin1_bytes) {
+        Ok(repaired) if mojibake_score(&repaired) < mojibake_score(&source) => repaired,
+        _ => source,
+    }
+}
+
+fn mojibake_score(text: &str) -> usize {
+    // Common mojibake marker characters produced by decoding UTF-8 as Latin-1/CP-1252.
+    const MARKERS: [char; 4] = ['Ã', 'Â', 'â', '\u{FFFD}'];
+    text.chars().filter(|ch| MARKERS.contains(ch)).count()
 }
 
 fn decode_byte_as_windows_1252(byte: u8) -> char {
@@ -524,6 +550,14 @@ mod tests {
     }
 
     #[test]
+    fn read_source_bytes_repairs_utf8_mojibake() -> Result<(), Box<dyn std::error::Error>> {
+        // `cafÃ©` is mojibake for `café` after a UTF-8 -> Latin-1 decode/encode cycle.
+        let decoded = read_source_bytes("cafÃ©\n".as_bytes().to_vec())?;
+        assert_eq!(decoded, "café\n");
+        Ok(())
+    }
+
+    #[test]
     fn read_source_bytes_decodes_utf16_le_bom() -> Result<(), Box<dyn std::error::Error>> {
         let bytes = vec![
             0xFF, 0xFE, // UTF-16LE BOM
@@ -682,6 +716,13 @@ mod tests {
         // maps 0xFF through the `_` arm to U+00FF ('ÿ').
         let decoded = read_source_bytes(vec![0xFF])?;
         assert_eq!(decoded, "\u{00FF}");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_keeps_valid_non_mojibake_text() -> Result<(), Box<dyn std::error::Error>> {
+        let decoded = read_source_bytes("Ångström\n".as_bytes().to_vec())?;
+        assert_eq!(decoded, "Ångström\n");
         Ok(())
     }
 }
