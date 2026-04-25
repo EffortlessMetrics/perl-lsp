@@ -421,4 +421,62 @@ mod tests {
 
         Ok(())
     }
+
+    /// Verify the poll-arm path: proxy_messages() must not hang when the child
+    /// process exits *during* active proxying (after the pre-flight liveness check
+    /// has already passed but while the I/O copy tasks are still running).
+    ///
+    /// We use a child that sleeps briefly then exits on its own, bypassing the
+    /// pre-flight check (which only fires when the child is already dead at call
+    /// time). The select! poll arm is responsible for detecting this mid-proxy
+    /// exit and aborting the I/O tasks within PROXY_EXIT_POLL_MS + margin.
+    #[tokio::test]
+    async fn proxy_completes_when_child_exits_during_proxy() -> Result<()> {
+        // Spawn a child that stays alive briefly, then exits.
+        // We need it to survive the pre-flight try_wait() call (so it must be alive
+        // at proxy_messages() entry), then exit during the poll loop.
+        #[cfg(unix)]
+        let child = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg("sleep 0.1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        #[cfg(windows)]
+        let child = tokio::process::Command::new("cmd")
+            .arg("/C")
+            // ping with -n 1 exits after ~0ms; -w 100 waits 100ms for the reply
+            // (it will fail, but the process exits after the timeout).
+            .arg("ping -n 1 -w 100 127.0.0.1 >NUL")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+
+        let mut adapter = BridgeAdapter::new();
+        adapter.child_process = Some(child);
+
+        // Give the runtime a yield so the child can be scheduled; the child
+        // should still be alive at this point (it sleeps 100ms on Unix,
+        // 100ms ping timeout on Windows).
+        tokio::task::yield_now().await;
+
+        // proxy_messages() must return without hanging. Allow up to 5 seconds:
+        // 100ms child lifetime + PROXY_EXIT_POLL_MS (25ms) + generous CI margin.
+        let result = tokio::time::timeout(Duration::from_secs(5), adapter.proxy_messages()).await;
+
+        assert!(
+            result.is_ok(),
+            "proxy_messages should not hang when child exits mid-proxy; timed out"
+        );
+        // The function should return Ok(()) -- the child exited cleanly and the
+        // poll arm aborted the I/O tasks without an I/O error.
+        let proxy_result = result?;
+        assert!(
+            proxy_result.is_ok(),
+            "proxy_messages should return Ok(()) when child exits cleanly mid-proxy, got: {proxy_result:?}"
+        );
+
+        Ok(())
+    }
 }
