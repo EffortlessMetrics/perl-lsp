@@ -2916,7 +2916,22 @@ impl IndexVisitor {
             };
 
             let symbol_name = symbol_decl_name(&decl.kind, &decl.name);
-            let qualified_name = (!decl.qualified_name.is_empty()).then_some(decl.qualified_name);
+
+            // Suppress qualified_name for lexically-scoped variables (my, state): they
+            // are not package-visible and must not be found by a qualified lookup such
+            // as `Foo::x`.  `our` and `local` variables keep the qualified name because
+            // they participate in the package namespace.
+            let qualified_name = match &decl.declarator {
+                Some(d) if d == "my" || d == "state" => None,
+                _ => (!decl.qualified_name.is_empty()).then_some(decl.qualified_name),
+            };
+
+            // Top-level package declarations have no containing package; suppress the
+            // spurious "main" container that comes from the walker's initial context.
+            let container_name = match decl.kind {
+                SymbolKind::Package => None,
+                _ => decl.container,
+            };
 
             file_index.symbols.push(WorkspaceSymbol {
                 name: symbol_name.clone(),
@@ -2925,7 +2940,7 @@ impl IndexVisitor {
                 range,
                 qualified_name,
                 documentation: None,
-                container_name: decl.container,
+                container_name,
                 has_body: true,
                 workspace_folder_uri: self.workspace_folder_uri.clone(),
             });
@@ -4017,6 +4032,54 @@ my $var = 42;
         assert!(symbols.iter().any(|s| s.name == "MyPackage" && s.kind == SymbolKind::Package));
         assert!(symbols.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
         assert!(symbols.iter().any(|s| s.name == "$var" && s.kind.is_variable()));
+    }
+
+    #[test]
+    fn test_package_symbol_has_no_container_name() {
+        // Regression: project_symbol_declarations used to set container_name = Some("main")
+        // for top-level package declarations because the IndexVisitor starts with
+        // current_package = Some("main").  Package symbols are top-level declarations
+        // and must have container_name = None.
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Foo.pm";
+        let code = "package Foo;\nsub bar { }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        let pkg_sym = symbols.iter().find(|s| s.name == "Foo" && s.kind == SymbolKind::Package);
+        assert!(pkg_sym.is_some(), "Package symbol not found");
+        assert_eq!(
+            pkg_sym.unwrap().container_name,
+            None,
+            "Package symbol must not carry a container (was 'main')"
+        );
+    }
+
+    #[test]
+    fn test_my_variable_has_no_qualified_name() {
+        // Regression: project_symbol_declarations used to set qualified_name = Some("Foo::x")
+        // for `my $x` inside `package Foo`, making `find_definition("Foo::x")` return the
+        // lexical variable.  `my` variables are not package-visible and must have
+        // qualified_name = None so qualified lookups don't match them.
+        let index = WorkspaceIndex::new();
+        let uri = "file:///lib/Foo.pm";
+        let code = "package Foo;\nsub bar { my $x = 1; }\n";
+        must(index.index_file(must(url::Url::parse(uri)), code.to_string()));
+
+        let symbols = index.file_symbols(uri);
+        let var_sym = symbols.iter().find(|s| s.name == "$x" && s.kind.is_variable());
+        assert!(var_sym.is_some(), "$x variable not indexed");
+        assert_eq!(
+            var_sym.unwrap().qualified_name,
+            None,
+            "my variable must not have a qualified_name"
+        );
+
+        // `find_definition("Foo::x")` must not accidentally resolve to a lexical variable.
+        assert!(
+            index.find_definition("Foo::x").is_none(),
+            "find_definition(\"Foo::x\") must not return a lexical my variable"
+        );
     }
 
     #[test]

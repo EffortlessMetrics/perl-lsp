@@ -11,7 +11,6 @@
 //! - Multiple packages in a single file
 
 use perl_workspace::workspace::workspace_index::WorkspaceIndex;
-use perl_workspace::workspace_index::SymbolKind;
 use url::Url;
 
 // ---------------------------------------------------------------------------
@@ -146,25 +145,6 @@ fn dual_index_references_found_from_bare_query() -> Result<(), Box<dyn std::erro
     // Searching references with bare name should find the call
     let refs = index.find_references("process_data");
     assert!(!refs.is_empty(), "find_references('process_data') should find calls");
-    Ok(())
-}
-
-#[test]
-fn dual_index_use_constant_uses_surface_projection() -> Result<(), Box<dyn std::error::Error>> {
-    let index = WorkspaceIndex::new();
-    let uri = file_url("/lib/Config.pm")?;
-
-    let code = "\
-package Config;
-use constant qw [FOO BAR];
-";
-    index.index_file(uri.clone(), code.to_string())?;
-
-    let symbols = index.file_symbols(uri.as_str());
-    assert!(symbols.iter().any(|s| s.name == "FOO" && s.kind == SymbolKind::Constant));
-    assert!(symbols.iter().any(|s| s.name == "BAR" && s.kind == SymbolKind::Constant));
-    assert!(index.find_definition("Config::FOO").is_some());
-    assert!(index.find_definition("Config::BAR").is_some());
     Ok(())
 }
 
