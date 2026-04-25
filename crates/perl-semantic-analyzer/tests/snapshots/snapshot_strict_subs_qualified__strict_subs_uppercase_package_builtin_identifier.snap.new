@@ -1,6 +1,0 @@
----
-source: crates/perl-semantic-analyzer/tests/snapshot_strict_subs_qualified.rs
-assertion_line: 156
-expression: output
----
-no issues
