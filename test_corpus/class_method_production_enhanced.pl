@@ -552,7 +552,7 @@ $order->add_item('P002', 1, 49.99);
 $order->add_item('P003', 3, 5.99);
 
 print "Order created with " . scalar(@{$order->items}) . " items\n";
-print "Total: $" . sprintf('%.2f', $order->total) . "\n";
+print "Total: \$" . sprintf('%.2f', $order->total) . "\n";
 
 $order->mark_paid();
 $order->mark_shipped();
