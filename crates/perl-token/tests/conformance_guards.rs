@@ -219,3 +219,20 @@ fn docs_track_leaf_contract_and_variant_count() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[test]
+fn token_kind_all_has_no_duplicate_variants() {
+    // TOKEN_KIND_ALL is a hand-maintained array, not derived from the enum.
+    // This test guards against the same variant appearing twice (which would
+    // silently under-count distinct kinds while keeping the length at 132).
+    let all = TokenKind::all();
+    let mut seen = std::collections::HashSet::new();
+    for kind in all {
+        let debug_name = format!("{kind:?}");
+        assert!(
+            seen.insert(debug_name.clone()),
+            "duplicate variant in TOKEN_KIND_ALL: {debug_name}"
+        );
+    }
+    assert_eq!(seen.len(), all.len());
+}
