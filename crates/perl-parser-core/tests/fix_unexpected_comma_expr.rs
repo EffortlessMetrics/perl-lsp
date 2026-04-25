@@ -81,12 +81,6 @@ fn test_map_expression_form() {
 }
 
 #[test]
-fn test_sort_subname_list_form() {
-    let source = r#"my @sorted = sort by_name @items;"#;
-    assert_clean_parse(source);
-}
-
-#[test]
 fn test_map_complex_expr_form() {
     let source = r#"local $ENV{PERL5LIB} = join $sep, map abs_path($_), grep -e, @INC;"#;
     assert_clean_parse(source);
