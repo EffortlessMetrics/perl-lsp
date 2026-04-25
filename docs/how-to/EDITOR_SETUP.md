@@ -109,6 +109,13 @@ restart the client after changing workspace settings or include paths.
 Create a plugin with `.lsp.json` that maps Perl extensions to a server entry
 using `command: "perllsp"` and `args: ["--stdio"]`.
 
+### Codex CLI
+
+Configure an MCP LSP bridge that launches `perllsp --stdio`, then verify the
+bridge appears in Codex via `/mcp`. See
+[docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for a full
+example config and troubleshooting flow.
+
 ## When Setup Fails
 
 - If the server is not found, re-run `perllsp --version` in a shell and fix
