@@ -1198,6 +1198,7 @@ impl<'a> Parser<'a> {
                 | Some(TokenKind::WordOr)
                 | Some(TokenKind::WordXor)
                 | Some(TokenKind::WordNot)
+                | Some(TokenKind::Question)
                 | Some(TokenKind::DataMarker)
                 | Some(TokenKind::Eof)
                 | None
@@ -1214,18 +1215,27 @@ impl<'a> Parser<'a> {
     /// Contrast: `qw(a b)` has `qw` followed by `(`, so it returns `false`
     /// and the normal `parse_expression` path handles it as a `qw(...)` literal.
     fn peek_is_quote_op_bareword(&mut self) -> bool {
-        if self.peek_kind() == Some(TokenKind::Identifier) {
-            if let Ok(first) = self.tokens.peek() {
-                let is_quote_op_name = matches!(
-                    first.text.as_ref(),
-                    "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
-                );
-                if is_quote_op_name {
-                    // Only treat as a bareword key if the NEXT token is `}` or `,`
-                    // (meaning there is no delimiter to start a real quote expression).
-                    if let Ok(second) = self.tokens.peek_second() {
-                        return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
-                    }
+        // We do NOT require `peek_kind() == Some(TokenKind::Identifier)` here.
+        // Inside a hash subscript (`hash_brace_depth > 0`), the lexer bypasses
+        // the quote-operator expansion path and emits quote-op names (`m`, `s`,
+        // `tr`, etc.) as `TokenType::Keyword`.  The token-stream converter maps
+        // those through `TokenKind::from_keyword`, which returns `None` for all
+        // quote-op names, so they fall back to `TokenKind::Identifier` — meaning
+        // the kind check was always satisfied.  We now match on text directly to
+        // make the intent explicit and avoid a redundant kind predicate.
+        // The real guard is the second-token check below (`}` or `,`): a
+        // quote-op followed by a delimiter would not stop at `}` or `,`, so
+        // false positives are structurally impossible.
+        if let Ok(first) = self.tokens.peek() {
+            let is_quote_op_name = matches!(
+                first.text.as_ref(),
+                "m" | "s" | "q" | "qq" | "qw" | "qr" | "qx" | "tr" | "y"
+            );
+            if is_quote_op_name {
+                // Only treat as a bareword key if the NEXT token is `}` or `,`
+                // (meaning there is no delimiter to start a real quote expression).
+                if let Ok(second) = self.tokens.peek_second() {
+                    return matches!(second.kind, TokenKind::RightBrace | TokenKind::Comma);
                 }
             }
         }
