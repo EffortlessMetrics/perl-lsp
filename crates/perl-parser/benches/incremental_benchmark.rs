@@ -1,4 +1,6 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+#[path = "support/perf_scorecard.rs"]
+mod perf_scorecard;
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
@@ -34,6 +36,19 @@ process_data($items);
 
     let start = must_some(source.find("transform"));
     let old_end = start + "transform".len();
+
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        let edit = Edit {
+            start_byte: start,
+            old_end_byte: old_end,
+            new_end_byte: start + "process".len(),
+            new_text: "process".to_string(),
+        };
+        must(apply_edits(&mut state, &[edit]));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("incremental_small_edit", metric);
 
     c.bench_function("incremental small edit", |b| {
         b.iter_batched(
@@ -79,6 +94,12 @@ my $items = [1, 2, 3, 4, 5];
 process_data($items);
 "#
     .to_string();
+
+    let metric = perf_scorecard::sample_metric(30, || {
+        let state = IncrementalState::new(black_box(source.clone()));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("cold_parse", metric);
 
     c.bench_function("full reparse", |b| {
         b.iter(|| {
@@ -131,6 +152,13 @@ process_data($items);
 "#
     .to_string();
 
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        must(apply_edits(&mut state, &[]));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("warm_reparse", metric);
+
     c.bench_function("warm reparse", |b| {
         b.iter_batched(
             || IncrementalState::new(source.clone()),
@@ -156,6 +184,27 @@ print "$x $y $z\n";
 
     let pos_1 = must_some(source.find("= 1")) + 2;
     let pos_2 = must_some(source.find("= 2")) + 2;
+
+    let metric = perf_scorecard::sample_metric(35, || {
+        let mut state = IncrementalState::new(source.clone());
+        let edits = vec![
+            Edit {
+                start_byte: pos_1,
+                old_end_byte: pos_1 + 1,
+                new_end_byte: pos_1 + 2,
+                new_text: "10".to_string(),
+            },
+            Edit {
+                start_byte: pos_2,
+                old_end_byte: pos_2 + 1,
+                new_end_byte: pos_2 + 2,
+                new_text: "20".to_string(),
+            },
+        ];
+        must(apply_edits(&mut state, &edits));
+        black_box(&state.ast);
+    });
+    perf_scorecard::record_metric("incremental_multiple_edits", metric);
 
     c.bench_function("incremental multiple edits", |b| {
         b.iter_batched(

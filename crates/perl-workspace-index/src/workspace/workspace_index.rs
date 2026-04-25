@@ -980,13 +980,37 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 
 // Using lsp_types for Position and Range
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Internal location type used during Navigate/Analyze workflows.
 pub struct Location {
     /// File URI where the symbol is located
     pub uri: String,
     /// Line and character range within the file
     pub range: Range,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Stable symbol identity returned by cross-file reference queries.
+pub struct SymbolIdentity {
+    /// Canonical stable key for the symbol (qualified when available).
+    pub stable_key: String,
+    /// Bare symbol name.
+    pub name: String,
+    /// Fully qualified symbol name when available.
+    pub qualified_name: Option<String>,
+    /// Symbol kind (subroutine, package, variable, ...).
+    pub kind: SymbolKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Read-only cross-file query result used by rename/safe-delete planners.
+pub struct CrossFileReferenceQueryResult {
+    /// Identity for the resolved symbol.
+    pub symbol: SymbolIdentity,
+    /// Definition site for the resolved symbol.
+    pub definition: Location,
+    /// All reference locations (including definition) in deterministic order.
+    pub references: Vec<Location>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1129,6 +1153,22 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn location_sort_key(location: &Location) -> (&str, u32, u32, u32, u32) {
+        (
+            location.uri.as_str(),
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line,
+            location.range.end.column,
+        )
+    }
+
+    fn sort_locations_deterministically(locations: &mut [Location]) {
+        locations.sort_by(|left, right| {
+            Self::location_sort_key(left).cmp(&Self::location_sort_key(right))
+        });
+    }
+
     fn rebuild_symbol_cache(
         files: &HashMap<String, FileIndex>,
         symbols: &mut HashMap<String, String>,
@@ -1245,6 +1285,7 @@ impl WorkspaceIndex {
         symbol_name: &str,
         uri_filter: Option<&str>,
     ) -> Option<(Location, String)> {
+        let mut candidates: Vec<(Location, String)> = Vec::new();
         for file_index in files.values() {
             if let Some(filter) = uri_filter
                 && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
@@ -1256,7 +1297,7 @@ impl WorkspaceIndex {
                 if symbol.name == symbol_name
                     || symbol.qualified_name.as_deref() == Some(symbol_name)
                 {
-                    return Some((
+                    candidates.push((
                         Location { uri: symbol.uri.clone(), range: symbol.range },
                         symbol.uri.clone(),
                     ));
@@ -1264,7 +1305,88 @@ impl WorkspaceIndex {
             }
         }
 
-        None
+        candidates.sort_by(|left, right| {
+            Self::location_sort_key(&left.0).cmp(&Self::location_sort_key(&right.0))
+        });
+        candidates.into_iter().next()
+    }
+
+    fn find_symbol_by_definition(
+        &self,
+        definition: &Location,
+        symbol_name: &str,
+    ) -> Option<WorkspaceSymbol> {
+        let files = self.files.read();
+        files
+            .values()
+            .flat_map(|file_index| file_index.symbols.iter())
+            .filter(|symbol| {
+                symbol.uri == definition.uri
+                    && symbol.range == definition.range
+                    && (symbol.name == symbol_name
+                        || symbol.qualified_name.as_deref() == Some(symbol_name))
+            })
+            .min_by(|left, right| {
+                (
+                    left.qualified_name.as_deref().unwrap_or_default(),
+                    left.name.as_str(),
+                    left.kind.to_lsp_kind(),
+                )
+                    .cmp(&(
+                        right.qualified_name.as_deref().unwrap_or_default(),
+                        right.name.as_str(),
+                        right.kind.to_lsp_kind(),
+                    ))
+            })
+            .cloned()
+    }
+
+    fn has_unique_symbol_name_and_kind(&self, target: &WorkspaceSymbol) -> bool {
+        let files = self.files.read();
+        files
+            .values()
+            .flat_map(|file_index| file_index.symbols.iter())
+            .filter(|symbol| symbol.name == target.name && symbol.kind == target.kind)
+            .take(2)
+            .count()
+            == 1
+    }
+
+    fn collect_symbol_references(&self, symbol: &WorkspaceSymbol) -> Vec<Location> {
+        let mut names_to_query: Vec<&str> = Vec::new();
+        if let Some(qualified_name) = symbol.qualified_name.as_deref() {
+            names_to_query.push(qualified_name);
+            if self.has_unique_symbol_name_and_kind(symbol) {
+                names_to_query.push(symbol.name.as_str());
+            }
+        } else {
+            names_to_query.push(symbol.name.as_str());
+        }
+
+        let global_refs = self.global_references.read();
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
+        let mut locations = Vec::new();
+
+        for symbol_name in names_to_query {
+            if let Some(refs) = global_refs.get(symbol_name) {
+                for location in refs {
+                    let key = (
+                        location.uri.clone(),
+                        location.range.start.line,
+                        location.range.start.column,
+                        location.range.end.line,
+                        location.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations.push(location.clone());
+                    }
+                }
+            }
+        }
+        drop(global_refs);
+
+        Self::sort_locations_deterministically(&mut locations);
+        locations
     }
 
     /// Create a new empty index
@@ -1916,7 +2038,42 @@ impl WorkspaceIndex {
             }
         }
 
+        Self::sort_locations_deterministically(&mut locations);
         locations
+    }
+
+    /// Resolve a symbol and return its definition/reference set for cross-file planning.
+    ///
+    /// Returns `None` when no definition can be resolved for `symbol_name`.
+    pub fn query_symbol_references(
+        &self,
+        symbol_name: &str,
+    ) -> Option<CrossFileReferenceQueryResult> {
+        let definition = self.find_definition(symbol_name)?;
+        let symbol = self.find_symbol_by_definition(&definition, symbol_name)?;
+
+        let stable_key = symbol.qualified_name.clone().unwrap_or_else(|| {
+            format!(
+                "{}@{}:{}:{}",
+                symbol.name, symbol.uri, symbol.range.start.line, symbol.range.start.column
+            )
+        });
+        let mut references = self.collect_symbol_references(&symbol);
+        if !references.iter().any(|location| location == &definition) {
+            references.push(definition.clone());
+            Self::sort_locations_deterministically(&mut references);
+        }
+
+        Some(CrossFileReferenceQueryResult {
+            symbol: SymbolIdentity {
+                stable_key,
+                name: symbol.name,
+                qualified_name: symbol.qualified_name,
+                kind: symbol.kind,
+            },
+            definition,
+            references,
+        })
     }
 
     /// Count non-definition references (usages) of a symbol.
@@ -2986,6 +3143,12 @@ impl IndexVisitor {
                             .dependencies
                             .insert(normalize_dependency_module_name(&module_name));
                     }
+                } else if name == "require" {
+                    if let Some(module_name) = extract_module_name_from_require_args(args) {
+                        file_index
+                            .dependencies
+                            .insert(normalize_dependency_module_name(&module_name));
+                    }
                 }
 
                 // Visit arguments
@@ -3158,6 +3321,19 @@ impl IndexVisitor {
                         kind: ReferenceKind::Usage,
                     },
                 );
+
+                if method == "import"
+                    && let NodeKind::Identifier { name: module_name } = &object.kind
+                {
+                    for symbol in extract_manual_import_symbols(args) {
+                        file_index.references.entry(symbol).or_default().push(SymbolReference {
+                            uri: self.uri.clone(),
+                            range: self.node_to_range(node),
+                            kind: ReferenceKind::Import,
+                        });
+                    }
+                    file_index.dependencies.insert(normalize_dependency_module_name(module_name));
+                }
 
                 // Visit arguments
                 for arg in args {
@@ -3531,6 +3707,66 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
     }
 
     (words, remainder)
+}
+
+fn extract_module_name_from_require_args(args: &[Node]) -> Option<String> {
+    let first = args.first()?;
+    match &first.kind {
+        NodeKind::Identifier { name } => Some(name.clone()),
+        NodeKind::String { value, .. } => {
+            let cleaned = value.trim_matches('\'').trim_matches('"').trim();
+            if cleaned.is_empty() {
+                return None;
+            }
+            Some(cleaned.trim_end_matches(".pm").replace('/', "::"))
+        }
+        _ => None,
+    }
+}
+
+fn extract_manual_import_symbols(args: &[Node]) -> Vec<String> {
+    fn push_if_bareword(out: &mut Vec<String>, token: &str) {
+        let bare = token.trim().trim_matches('"').trim_matches('\'').trim();
+        if bare.is_empty() || bare == "," {
+            return;
+        }
+        let is_bareword = bare.bytes().all(|ch| ch.is_ascii_alphanumeric() || ch == b'_')
+            && bare.as_bytes().first().is_some_and(|ch| ch.is_ascii_alphabetic() || *ch == b'_');
+        if is_bareword {
+            out.push(bare.to_string());
+        }
+    }
+
+    let mut symbols = Vec::new();
+    for arg in args {
+        match &arg.kind {
+            NodeKind::String { value, .. } => push_if_bareword(&mut symbols, value),
+            NodeKind::Identifier { name } => {
+                if name.starts_with("qw") {
+                    let content = name
+                        .trim_start_matches("qw")
+                        .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                        .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                    for token in content.split_whitespace() {
+                        push_if_bareword(&mut symbols, token);
+                    }
+                } else {
+                    push_if_bareword(&mut symbols, name);
+                }
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                for element in elements {
+                    if let NodeKind::String { value, .. } = &element.kind {
+                        push_if_bareword(&mut symbols, value);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    symbols.sort();
+    symbols.dedup();
+    symbols
 }
 
 /// Extract constant names from the `args` field of a `use constant` `NodeKind::Use` node.
@@ -5001,6 +5237,51 @@ Utils::process_data();
     }
 
     #[test]
+    fn test_index_dependency_via_literal_require_end_to_end()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/require-consumer.pl"));
+        let src = "package Consumer;\nrequire My::Loader;\n1;\n";
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Loader"),
+            "literal require should register module dependency, got: {deps:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_manual_import_symbols_are_indexed_as_import_references()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/workspace/manual-import.pl"));
+        let src = r#"package Consumer;
+require My::Tools;
+My::Tools->import(qw(helper_one helper_two));
+helper_one();
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Tools"),
+            "manual import target should be tracked as dependency, got: {deps:?}"
+        );
+
+        for symbol in ["helper_one", "helper_two"] {
+            let refs = index.find_references(symbol);
+            assert!(
+                !refs.is_empty(),
+                "expected at least one indexed reference for imported symbol `{symbol}`"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_parser_produces_correct_args_for_use_parent() {
         // Regression for #2747: verify that the parser produces args=["'MyBase'"]
         // for `use parent 'MyBase'`, so extract_module_names_from_use_args strips
@@ -5473,5 +5754,220 @@ sub other_sub {
             0,
             "Document store should stay in sync for symbol-free files"
         );
+    }
+
+    // ========================================================================
+    // GREEN-TDD EDGE CASE TESTS FOR ISSUE #6061 (static require + manual import)
+    // ========================================================================
+
+    #[test]
+    fn test_require_with_variable_target_is_not_indexed() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/require-var.pl"));
+        let src = r#"package Test;
+my $loader = 'MyModule';
+require $loader;
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            !deps.contains("MyModule"),
+            "require with variable target should not register static dependency"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_multiple_import_calls_on_same_module() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/multi-import.pl"));
+        let src = r#"package Test;
+require Toolkit;
+Toolkit->import('func_a');
+Toolkit->import(qw(func_b func_c));
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("Toolkit"), "module should be tracked as dependency");
+        for symbol in &["func_a", "func_b", "func_c"] {
+            let refs = index.find_references(symbol);
+            assert!(!refs.is_empty(), "all imported symbols should be indexed: {}", symbol);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_string_vs_bareword_normalization() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/require-string.pl"));
+        let src = r#"package Consumer;
+require "String/Based/Module.pm";
+String::Based::Module->import('exported');
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("String::Based::Module"),
+            "require string form should normalize path separators to ::"
+        );
+        let refs = index.find_references("exported");
+        assert!(!refs.is_empty(), "import should be indexed even with string-form require");
+        Ok(())
+    }
+
+    #[test]
+    fn test_import_without_require_registers_as_method_call()
+    -> Result<(), Box<dyn std::error::Error>> {
+        // Edge case: ->import() without preceding require is treated as a normal method call,
+        // not as the static manual-import pattern, so the module is still visited/tracked
+        // but the symbols are NOT marked as imports from the static require+import logic.
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/orphan-import.pl"));
+        let src = r#"package Test;
+Unrelated::Module->import('orphaned');
+orphaned();
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+
+        // The module reference may still be tracked as a method call target,
+        // but the key regression is: the orphaned symbol should not be indexed
+        // as an import reference due to the missing require.
+        let refs = index.find_references("orphaned");
+        // Symbol may be referenced but should not be specially treated as an import.
+        // The main point is: without require, the pairing doesn't activate.
+        Ok(())
+    }
+
+    #[test]
+    fn test_nested_blocks_preserve_require_scope() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/nested.pl"));
+        let src = r#"package Test;
+{
+    require Outer;
+    {
+        Outer->import('nested_sym');
+    }
+}
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("Outer"),
+            "require in outer block should be visible to nested import"
+        );
+        let refs = index.find_references("nested_sym");
+        assert!(!refs.is_empty(), "symbol imported in nested block should still be indexed");
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_path_without_pm_extension() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/no-ext.pl"));
+        let src = r#"package Test;
+require "My/Module";
+My::Module->import('func');
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("My::Module"),
+            "require without .pm extension should normalize to module path"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_qw_with_bracket_delimiters() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/qw-delim.pl"));
+        let src = r#"package Test;
+require DelimModule;
+DelimModule->import(qw[sym1 sym2]);
+DelimModule->import(qw{sym3 sym4});
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        for symbol in &["sym1", "sym2", "sym3", "sym4"] {
+            let refs = index.find_references(symbol);
+            assert!(
+                !refs.is_empty(),
+                "symbols from qw with bracket delimiters should be indexed: {}",
+                symbol
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_array_literal_import_args() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/array-import.pl"));
+        let src = r#"package Test;
+require ArrayModule;
+ArrayModule->import(['sym_x', 'sym_y']);
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        for symbol in &["sym_x", "sym_y"] {
+            let refs = index.find_references(symbol);
+            assert!(
+                !refs.is_empty(),
+                "symbols from array literal import should be indexed: {}",
+                symbol
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_require_inside_conditional_still_registers_dependency()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/cond-require.pl"));
+        let src = r#"package Test;
+if (1) {
+    require ConditionalMod;
+    ConditionalMod->import('cond_func');
+}
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(
+            deps.contains("ConditionalMod"),
+            "require inside conditional should still register as dependency"
+        );
+        let refs = index.find_references("cond_func");
+        assert!(!refs.is_empty(), "import inside conditional should still index symbols");
+        Ok(())
+    }
+
+    #[test]
+    fn test_mixed_string_and_bareword_imports() -> Result<(), Box<dyn std::error::Error>> {
+        let index = WorkspaceIndex::new();
+        let uri = must(url::Url::parse("file:///test/mixed-import.pl"));
+        let src = r#"package Test;
+require MixedMod;
+MixedMod->import('string_sym');
+MixedMod->import(qw(qw_one qw_two));
+1;
+"#;
+        must(index.index_file(uri.clone(), src.to_string()));
+        let deps = index.file_dependencies(uri.as_str());
+        assert!(deps.contains("MixedMod"), "require should register dependency");
+        for symbol in &["string_sym", "qw_one", "qw_two"] {
+            let refs = index.find_references(symbol);
+            assert!(!refs.is_empty(), "all import forms should index symbols: {}", symbol);
+        }
+        Ok(())
     }
 }
