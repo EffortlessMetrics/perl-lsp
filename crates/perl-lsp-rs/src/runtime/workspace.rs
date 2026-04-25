@@ -9,7 +9,6 @@
 //! - **Building/Degraded state**: Open document search only (partial results)
 
 use super::*;
-use std::collections::HashSet;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
@@ -22,6 +21,7 @@ use perl_parser_core::source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace::folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace::ignore::is_skipped_dir_name;
+use std::collections::HashSet;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 use std::sync::Arc;
