@@ -27,7 +27,7 @@ pub struct WorkspaceFolderChange {
 /// interpreted as a path fallback.
 #[must_use]
 pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
-    if has_file_uri_prefix(workspace_folder) {
+    if has_file_uri_scheme(workspace_folder) {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = uri_to_fs_path(workspace_folder) {
             return path;
@@ -37,14 +37,23 @@ pub fn workspace_folder_to_path(workspace_folder: &str) -> PathBuf {
             return path;
         }
 
-        return PathBuf::from(&workspace_folder[7..]);
+        return PathBuf::from(trim_file_uri_prefix(workspace_folder));
     }
 
     PathBuf::from(workspace_folder)
 }
 
+fn has_file_uri_scheme(value: &str) -> bool {
+    value.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:"))
+}
+
 fn has_file_uri_prefix(value: &str) -> bool {
     value.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+}
+
+fn trim_file_uri_prefix(value: &str) -> &str {
+    let suffix = &value[5..];
+    suffix.strip_prefix("//").unwrap_or(suffix)
 }
 
 fn parse_file_uri_fallback(workspace_folder: &str) -> Option<PathBuf> {
@@ -76,7 +85,11 @@ pub fn extract_workspace_folder_uris(workspace_folders: &[Value]) -> Vec<String>
     workspace_folders
         .iter()
         .filter_map(|folder| {
-            folder.get("uri").and_then(Value::as_str).map(std::string::ToString::to_string)
+            folder
+                .get("uri")
+                .and_then(Value::as_str)
+                .map(std::string::ToString::to_string)
+                .or_else(|| folder.get("path").and_then(Value::as_str).map(root_path_to_file_uri))
         })
         .collect()
 }
@@ -156,6 +169,20 @@ mod tests {
         assert!(parsed.to_string_lossy().contains("project"));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn parses_single_slash_file_uri_when_possible() {
+        let parsed = workspace_folder_to_path("file:/tmp/project");
+        assert_eq!(parsed, PathBuf::from("/tmp/project"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn parses_uppercase_single_slash_file_uri_when_possible() {
+        let parsed = workspace_folder_to_path("FILE:/tmp/project");
+        assert_eq!(parsed, PathBuf::from("/tmp/project"));
+    }
+
     #[test]
     fn parses_localhost_file_uri_without_leaking_host_component() {
         let parsed = workspace_folder_to_path("file://localhost/tmp/project");
@@ -170,10 +197,11 @@ mod tests {
         let entries = vec![
             json!({"uri": "file:///one"}),
             json!({"uri": "file:///two"}),
+            json!({"path": "/three"}),
             json!({"name": "invalid"}),
         ];
         let uris = extract_workspace_folder_uris(&entries);
-        assert_eq!(uris, vec!["file:///one", "file:///two"]);
+        assert_eq!(uris, vec!["file:///one", "file:///two", "file:///three"]);
     }
 
     #[test]
