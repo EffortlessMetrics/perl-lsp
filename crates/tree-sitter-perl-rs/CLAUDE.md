@@ -30,21 +30,35 @@ pub struct Tree { /* owns the v3 AST */ }
 impl Tree {
     pub fn root_node(&self) -> Node;
     pub fn source(&self) -> &str;
+    pub fn edit(&mut self, edit: &InputEdit);
+    pub fn walk(&self) -> TreeCursor<'_>;
 }
 
 pub struct Node<'tree> { /* borrows from Tree */ }
 impl<'tree> Node<'tree> {
-    pub fn kind(&self) -> &'static str;        // delegates to NodeKind::kind_name()
+    pub fn kind(&self) -> &'static str;        // v3 internal name (e.g. "Program")
+    pub fn grammar_kind(&self) -> String;      // tree-sitter grammar name (e.g. "source_file")
     pub fn to_sexp(&self) -> String;           // delegates to perl_ast::Node::to_sexp()
     pub fn child_count(&self) -> usize;
     pub fn child(&self, i: usize) -> Option<Node<'tree>>;
     pub fn children(&self) -> impl Iterator<Item = Node<'tree>>;
+    pub fn walk(&self) -> TreeCursor<'tree>;
     pub fn start_byte(&self) -> usize;
     pub fn end_byte(&self) -> usize;
     pub fn utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>;
     pub fn is_leaf(&self) -> bool;
     pub fn inner(&self) -> &'tree perl_ast::Node;  // escape hatch
 }
+
+pub struct PerlLanguage { /* node kind descriptor, NOT tree_sitter::Language */ }
+impl PerlLanguage {
+    pub fn node_kind_count(&self) -> usize;
+    pub fn node_kind_names(&self) -> &[&'static str];
+    pub fn node_kind_is_named(&self, kind: &str) -> bool;
+}
+
+pub fn language() -> PerlLanguage;
+pub static LANGUAGE: PerlLanguage;
 
 pub use perl_ast::NodeKind as PerlNodeKind;  // for pattern matching without perl-ast dep
 ```
@@ -75,8 +89,6 @@ cargo doc -p tree-sitter-perl-rs --open     # View documentation
 
 ## Backlog follow-ups
 
-- Tree cursor / walk API
-- Edit/incremental parsing API
-- Field-name accessors (named children by field name)
-- A `Language` constant compatible with the `tree_sitter::Language` shape
-- Predicate / query API
+- Field-name accessors (named children by field name, as in `node.child_by_field_name("body")`)
+- Predicate / query API (pattern matching over the AST)
+- True incremental re-parsing (skipping unchanged regions in `Parser::parse_with_old_tree`)

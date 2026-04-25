@@ -47,17 +47,24 @@ if let Some(tree) = parser.parse("my $x = 42;") {
 | `Parser::parse(&mut self, source: &str) -> Option<Tree>` | Parse Perl source; `None` only on complete failure |
 | `Tree::root_node() -> Node<'_>` | Get the root of the syntax tree |
 | `Tree::source() -> &str` | Source text this tree was built from |
-| `Node::kind() -> &'static str` | Node type name (e.g. `"Program"`, `"Subroutine"`) |
+| `Parser::parse_with_old_tree(&mut self, source: &str, old_tree: &Tree) -> Option<Tree>` | Re-parse with incremental hint (API-compatible; full re-parse in current impl) |
+| `Tree::edit(&mut self, edit: &InputEdit)` | Record a source edit for incremental re-parsing |
+| `Tree::walk() -> TreeCursor<'_>` | Cursor for stateful tree traversal |
+| `Node::kind() -> &'static str` | Node type name (v3 internal name, e.g. `"Program"`, `"Subroutine"`) |
+| `Node::grammar_kind() -> String` | Tree-sitter grammar-canonical name (e.g. `"source_file"`, `"sub"`) |
 | `Node::to_sexp() -> String` | Tree-sitter-compatible S-expression for this subtree |
 | `Node::child_count() -> usize` | Number of direct children |
 | `Node::child(i: usize) -> Option<Node>` | `i`-th direct child |
 | `Node::children() -> impl Iterator<Item = Node>` | Iterator over direct children |
+| `Node::walk() -> TreeCursor<'_>` | Cursor rooted at this node |
 | `Node::start_byte() -> usize` | Start byte offset in source (inclusive) |
 | `Node::end_byte() -> usize` | End byte offset in source (exclusive) |
 | `Node::utf8_text<'a>(&self, source: &'a [u8]) -> Result<&'a str, Utf8Error>` | Source slice for this node |
 | `Node::is_leaf() -> bool` | `true` if the node has no children |
 | `Node::inner() -> &perl_ast::Node` | Escape hatch to the v3 AST |
 | `PerlNodeKind` | Re-export of `perl_ast::NodeKind` for pattern matching |
+| `language() -> PerlLanguage` | Returns the `PerlLanguage` descriptor |
+| `LANGUAGE: PerlLanguage` | Static `PerlLanguage` constant |
 
 ## Error tolerance
 
@@ -67,22 +74,21 @@ The v3 parser is highly error-tolerant. `Parser::parse()` returns `Option<Tree>`
 
 This means you can pipe any Perl source through this parser and rely on getting a tree back.
 
-## Known limitations (Phase 1)
+## Known limitations
 
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
-- `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.
+- `Node::kind()` returns v3 internal PascalCase names (e.g. `"Program"`). Use `Node::grammar_kind()` for the tree-sitter grammar-canonical name (e.g. `"source_file"`), or `Node::to_sexp()` for full S-expression output.
+- `Parser::parse_with_old_tree()` accepts the old tree for API compatibility but currently performs a full re-parse; true incremental region-skipping is a planned optimization.
+- `PerlLanguage` is not a `tree_sitter::Language` — it cannot be passed to `tree_sitter::Parser::set_language`. Use `tree-sitter-perl-c` for C ecosystem compatibility.
 
 ## Backlog roadmap
 
 The following APIs are not yet implemented and remain on the backlog:
 
-- Tree cursor / walk API (streaming traversal without per-call allocation)
-- Edit / incremental parsing API
 - Field-name accessors (named children by field name, as in `node.child_by_field_name("body")`)
-- A `Language` constant compatible with the `tree_sitter::Language` shape
 - Predicate / query API (pattern matching over the AST)
-- `kind()` name remapping to canonical tree-sitter grammar names
+- True incremental re-parsing (skipping unchanged regions in `parse_with_old_tree`)
 
 ## License
 
