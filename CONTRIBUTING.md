@@ -28,6 +28,43 @@ just ci-gate
 - **Nix** (recommended) for a fully reproducible dev environment — `nix develop` drops you into a shell with all tools present
 - **just** — task runner used for all build/test/lint commands (`cargo install just` or via Nix)
 
+### First-Time Setup Checklist
+
+Run through these five steps once after cloning. Each step has a clear success signal — if you see something different, check the note below it.
+
+**1. Clone and enter the repository**
+```bash
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
+```
+
+**2. Enter the dev environment**
+```bash
+nix develop          # Recommended: pins Rust 1.92 + all tools
+# No Nix? Install rustup and then: cargo install just
+```
+Success: your shell prompt changes (or you see the nix shellHook banner listing available commands).
+
+**3. Verify the environment**
+```bash
+just doctor
+```
+Success: every line shows ✅. If you see ❌, the output explains what's missing and how to install it. ⚠️ lines are optional tools — safe to skip for basic contribution work.
+
+**4. Validate everything compiles and tests pass**
+```bash
+just pr-fast         # ~1-2 min
+```
+Success: ends with `PR-fast gate complete` and no `FAILED` lines.
+
+**5. Install the pre-push git hook**
+```bash
+bash scripts/install-githooks.sh
+```
+Success: prints `Installed pre-push hook`. The hook runs `just pr-fast` automatically before every `git push`.
+
+Once all five steps succeed, you're ready to make changes.
+
 ### Setup
 
 ```bash
