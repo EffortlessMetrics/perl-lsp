@@ -54,6 +54,13 @@ fn bucket_heredoc_argument_boundary_is_clean() {
     assert_clean_parse("foo(<<END, $x);\nline\nEND\n");
 }
 
+// nested hash subscript — inner } consumed by inner expect_closing_delimiter,
+// outer } consumed by outer expect_closing_delimiter; no InsertedCloser emitted
+#[test]
+fn bucket_nested_hash_subscript_is_clean() {
+    assert_clean_parse(r#"my $v = $outer{$inner{key}};"#);
+}
+
 // malformed-input recovery-only guards
 #[test]
 fn malformed_missing_quote_like_closer_still_reports_error() {
@@ -63,4 +70,10 @@ fn malformed_missing_quote_like_closer_still_reports_error() {
 #[test]
 fn malformed_missing_call_paren_still_reports_error() {
     assert_has_error(r#"my $x = func($a, $b;"#, "insertedcloser");
+}
+
+// missing inner } in nested hash — InsertedCloser must fire for inner site
+#[test]
+fn malformed_missing_inner_hash_brace_in_nested_subscript_reports_error() {
+    assert_has_error(r#"my $v = $outer{$inner{key;"#, "insertedcloser");
 }
