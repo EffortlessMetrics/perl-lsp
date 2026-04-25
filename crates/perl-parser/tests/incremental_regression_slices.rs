@@ -8,15 +8,7 @@ fn token_signatures(state: &IncrementalState) -> Vec<String> {
     state
         .tokens
         .iter()
-        .map(|token| {
-            format!(
-                "{:?}|{}|{}|{}",
-                token.token_type,
-                token.start,
-                token.end,
-                token.text
-            )
-        })
+        .map(|token| format!("{:?}|{}|{}|{}", token.token_type, token.start, token.end, token.text))
         .collect()
 }
 
@@ -37,13 +29,15 @@ fn assert_equivalent_to_full_parse(state: &IncrementalState) {
 }
 
 fn replace_first_edit(source: &str, from: &str, to: &str) -> Result<(Edit, String), String> {
-    let start = source
-        .find(from)
-        .ok_or_else(|| format!("missing pattern '{from}' in source"))?;
+    let start = source.find(from).ok_or_else(|| format!("missing pattern '{from}' in source"))?;
     let old_end = start + from.len();
     let updated = format!("{}{}{}", &source[..start], to, &source[old_end..]);
-    let edit =
-        Edit { start_byte: start, old_end_byte: old_end, new_end_byte: start + to.len(), new_text: to.to_string() };
+    let edit = Edit {
+        start_byte: start,
+        old_end_byte: old_end,
+        new_end_byte: start + to.len(),
+        new_text: to.to_string(),
+    };
     Ok((edit, updated))
 }
 
@@ -55,7 +49,12 @@ fn large_deletion_falls_back_and_matches_full_parse() -> TestResult {
     let old_end = start + removed.len();
 
     let mut state = IncrementalState::new(source);
-    let edit = Edit { start_byte: start, old_end_byte: old_end, new_end_byte: start, new_text: String::new() };
+    let edit = Edit {
+        start_byte: start,
+        old_end_byte: old_end,
+        new_end_byte: start,
+        new_text: String::new(),
+    };
     let result = apply_edits(&mut state, &[edit])?;
 
     // Verify full-reparse fallback fired (touched_bytes = 1500 > 1024 threshold).
