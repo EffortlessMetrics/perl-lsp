@@ -80,7 +80,11 @@ fn regression_heredoc_heavy_inline_input_still_parses() -> Result<(), Box<dyn Er
 
 #[test]
 fn regression_quote_like_operator_forms_return_a_tree() -> Result<(), Box<dyn Error>> {
-    let source = "my $a = q{literal};\nmy $b = qq(interpolate $a);\nmy @words = qw/alpha beta gamma/;\nmy $rx = qr{^foo\d+$};\n";
+    let source = r#"my $a = q{literal};
+my $b = qq(interpolate $a);
+my @words = qw/alpha beta gamma/;
+my $rx = qr{^food+$};
+"#;
 
     let tree = parse_perl_code(source)?;
 
