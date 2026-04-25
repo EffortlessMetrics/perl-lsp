@@ -219,11 +219,48 @@ fn test_subst_mixed_paired_and_slash_delims() {
     assert_clean_parse(r#"$x =~ s{foo}/bar/;"#);
 }
 
+/// Mixed delimiter substitution with all other paired-open delimiter variants.
+/// The fix must work for `[`, `(`, and `<` paired openers, not just `{`.
+#[test]
+fn test_subst_mixed_bracket_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s[foo]/bar/;"#);
+}
+
+#[test]
+fn test_subst_mixed_paren_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s(foo)/bar/;"#);
+}
+
+#[test]
+fn test_subst_mixed_angle_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ s<foo>/bar/;"#);
+}
+
+/// Mixed delimiter substitution with a non-slash non-paired replacement.
+/// Perl also accepts `s{foo}!bar!` (any non-alphanumeric, non-whitespace char).
+#[test]
+fn test_subst_mixed_paired_and_pipe_delims() {
+    assert_clean_parse(r#"$x =~ s{foo}|bar|;"#);
+}
+
+/// Missing replacement after paired pattern delimiter must still error.
+/// `s{foo}` with no second part is malformed.
+#[test]
+fn test_subst_paired_pattern_missing_replacement_errors() {
+    assert_has_error(r#"$x =~ s{foo};"#, "Missing");
+}
+
 /// Mixed delimiter transliteration: paired search + slash replacement.
 /// Perl accepts `tr{abc}/xyz/`.
 #[test]
 fn test_transliteration_mixed_paired_and_slash_delims() {
     assert_clean_parse(r#"$x =~ tr{abc}/xyz/;"#);
+}
+
+/// Mixed delimiter transliteration for bracket and paren paired openers.
+#[test]
+fn test_transliteration_mixed_bracket_and_slash_delims() {
+    assert_clean_parse(r#"$x =~ tr[abc]/xyz/;"#);
 }
 
 // ── Regression: non-paired delimiters after whitespace must be rejected ───────
