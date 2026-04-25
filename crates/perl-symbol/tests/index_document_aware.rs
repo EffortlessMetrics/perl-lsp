@@ -4,8 +4,8 @@ use perl_symbol::index::SymbolIndex;
 fn removing_document_removes_only_its_symbols() {
     let mut index = SymbolIndex::new();
 
-    index.replace_document_symbols("doc-a", ["alpha::one".to_string(), "shared::name".to_string()]);
-    index.replace_document_symbols("doc-b", ["beta::two".to_string(), "shared::name".to_string()]);
+    index.replace_document_symbols("doc-a", vec!["alpha::one".to_string(), "shared::name".to_string()]);
+    index.replace_document_symbols("doc-b", vec!["beta::two".to_string(), "shared::name".to_string()]);
 
     index.remove_document("doc-a");
 
@@ -23,9 +23,9 @@ fn removing_document_removes_only_its_symbols() {
 fn replacing_document_symbols_drops_stale_entries() {
     let mut index = SymbolIndex::new();
 
-    index.replace_document_symbols("doc-a", ["OldThing".to_string(), "StillHere".to_string()]);
+    index.replace_document_symbols("doc-a", vec!["OldThing".to_string(), "StillHere".to_string()]);
 
-    index.replace_document_symbols("doc-a", ["StillHere".to_string(), "NewThing".to_string()]);
+    index.replace_document_symbols("doc-a", vec!["StillHere".to_string(), "NewThing".to_string()]);
 
     assert!(index.search_prefix("Old").is_empty());
     assert_eq!(index.search_prefix("New"), vec!["NewThing".to_string()]);
@@ -37,8 +37,8 @@ fn replacing_document_symbols_drops_stale_entries() {
 fn duplicate_symbols_across_documents_remain_until_last_document_removed() {
     let mut index = SymbolIndex::new();
 
-    index.replace_document_symbols("doc-a", ["common_symbol".to_string()]);
-    index.replace_document_symbols("doc-b", ["common_symbol".to_string()]);
+    index.replace_document_symbols("doc-a", vec!["common_symbol".to_string()]);
+    index.replace_document_symbols("doc-b", vec!["common_symbol".to_string()]);
 
     index.remove_document("doc-a");
     assert_eq!(index.search_prefix("common"), vec!["common_symbol".to_string()]);
