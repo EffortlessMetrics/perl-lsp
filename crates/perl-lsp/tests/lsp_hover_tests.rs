@@ -967,3 +967,41 @@ fn hover_compile_time_constant_sub() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn test_hover_on_qualified_call_finds_bare_definition() -> TestResult {
+    let doc = r#"
+package Utils;
+sub format_string {
+    my ($input) = @_;
+    return uc($input);
+}
+
+my $result = Utils::format_string("hello");
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///qualified_hover.pl", doc)?;
+
+    let result = harness
+        .request(
+            "textDocument/hover",
+            json!({
+                "textDocument": {"uri": "file:///qualified_hover.pl"},
+                "position": {"line": 7, "character": 21}
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    assert!(!result.is_null(), "expected hover on qualified user function call");
+    let value = result["contents"]["value"].as_str().unwrap_or_default();
+    assert!(
+        value.contains("format_string")
+            && (value.contains("User-defined function")
+                || value.contains("sub Utils::format_string")
+                || value.contains("**Subroutine**")),
+        "expected qualified call hover to resolve user function signature, got: {result}"
+    );
+    Ok(())
+}

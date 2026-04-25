@@ -5,11 +5,18 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
+use perl_qualified_name::split_qualified_name;
 
 /// Intermediate result from phase-1 hover extraction (under document lock).
 ///
 /// The document lock must be released before calling module resolution to avoid
 /// deadlock, so we extract what we need first and resolve afterwards.
+fn qualified_names_match(name: &str, want_name: &str) -> bool {
+    let (name_pkg, name_bare) = split_qualified_name(name);
+    let (want_pkg, want_bare) = split_qualified_name(want_name);
+    name_bare == want_bare && (name_pkg.is_none() || want_pkg.is_none() || name_pkg == want_pkg)
+}
+
 enum HoverExtracted {
     /// Hover content fully built (symbol, builtin, or token hover).
     Complete(Value),
@@ -1716,13 +1723,15 @@ impl LspServer {
     fn find_subroutine_definition<'a>(&self, node: &'a Node, name: &str) -> Option<&'a Node> {
         match &node.kind {
             NodeKind::Subroutine { name: sub_name, .. } => {
-                if let Some(sub_name) = sub_name {
-                    if sub_name == name {
-                        return Some(node);
-                    }
+                if let Some(sub_name) = sub_name
+                    && qualified_names_match(sub_name, name)
+                {
+                    return Some(node);
                 }
             }
-            NodeKind::Method { name: method_name, .. } if method_name == name => {
+            NodeKind::Method { name: method_name, .. }
+                if qualified_names_match(method_name, name) =>
+            {
                 return Some(node);
             }
             NodeKind::Class { body, .. } => {
