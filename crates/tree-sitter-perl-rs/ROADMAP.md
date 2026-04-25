@@ -4,23 +4,16 @@
 
 - `Parser` / `Tree` / `Node<'tree>` types with tree-sitter-compatible API shape
 - `to_sexp()` — tree-sitter-compatible S-expression output
-- `kind()`, `child_count()`, `child()`, `children()` — tree traversal
-- `start_byte()`, `end_byte()`, `utf8_text()` — source location and extraction
+- `kind()`, `grammar_kind()`, `child_count()`, `child()`, `children()` — tree traversal
+- `start_byte()`, `end_byte()`, `start_position()`, `end_position()`, `utf8_text()` — source location and extraction
 - `is_leaf()`, `inner()`, `tree_source()` — utility and escape hatch
+- `TreeCursor` — zero-allocation streaming traversal (`walk()`, `goto_first_child()`, `goto_next_sibling()`, `goto_parent()`)
+- `Tree::edit()` / `Parser::parse_with_old_tree()` / `InputEdit` — incremental re-parsing
+- `PerlLanguage` descriptor, `language()` function, and `LANGUAGE` constant for Rust-native tooling
 - `PerlNodeKind` re-export for pattern matching without a direct `perl-ast` dependency
 - Snapshot tests for representative Perl constructs
 
 ## Phase 2 (planned)
-
-### Tree cursor / walk API
-
-A `TreeCursor` type for streaming traversal without per-call Vec allocation.
-Mirrors `tree_sitter::TreeCursor`.
-
-### Edit / incremental parsing
-
-`Tree::edit()` to apply `InputEdit` structures and `Parser::parse_with_old_tree()` for
-incremental re-parsing of changed source regions.
 
 ### Field-name accessors
 
@@ -28,22 +21,10 @@ incremental re-parsing of changed source regions.
 `Node::children_by_field_name(name: &str) -> impl Iterator<Item = Node>` to address named
 child slots (e.g. `"body"`, `"condition"`, `"name"`).
 
-### `Language` constant
-
-A `LANGUAGE` constant or `language()` function returning a type compatible with
-`tree_sitter::Language` (if API stability permits), enabling use with tree-sitter tooling
-that expects a language object.
-
 ### Predicate / query API
 
 `Query` and `QueryCursor` types for pattern matching over the AST, analogous to the
 tree-sitter query API.
-
-### `kind()` name remapping
-
-Map v3 internal node kind names (e.g. `"Program"`, `"Subroutine"`) to canonical tree-sitter
-grammar names (e.g. `"source_file"`, `"subroutine_declaration"`). The current `kind()` returns
-v3 internal names; `to_sexp()` already uses grammar-canonical names.
 
 ## Known limitations
 
