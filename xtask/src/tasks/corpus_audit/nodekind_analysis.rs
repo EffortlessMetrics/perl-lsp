@@ -18,10 +18,25 @@ pub struct NodeKindStats {
     pub coverage_percentage: f64,
     /// NodeKinds that were never seen
     pub never_seen: Vec<String>,
+    /// Never-seen NodeKinds that are intentionally excluded from strict coverage.
+    #[serde(default)]
+    pub allowlisted_never_seen: Vec<AllowlistedNodeKind>,
+    /// Never-seen NodeKinds that still need fixture/generator coverage.
+    #[serde(default)]
+    pub actionable_never_seen: Vec<String>,
     /// NodeKinds with low coverage (<5 occurrences)
     pub at_risk: Vec<AtRiskNodeKind>,
     /// Frequency of each NodeKind
     pub frequency: HashMap<String, usize>,
+}
+
+/// A never-seen NodeKind that is intentionally allowlisted with rationale.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowlistedNodeKind {
+    /// NodeKind name
+    pub name: String,
+    /// Why this NodeKind is intentionally allowlisted.
+    pub rationale: String,
 }
 
 /// A NodeKind with low coverage
@@ -78,6 +93,19 @@ pub fn analyze_nodekind_coverage(
     // Find never-seen NodeKinds
     let never_seen: Vec<String> =
         all_nodekinds.iter().filter(|nk| !nodekind_counts.contains_key(*nk)).cloned().collect();
+    let allowlist = recovery_kind_allowlist();
+    let mut allowlisted_never_seen = Vec::new();
+    let mut actionable_never_seen = Vec::new();
+    for name in &never_seen {
+        if let Some(rationale) = allowlist.get(name.as_str()) {
+            allowlisted_never_seen.push(AllowlistedNodeKind {
+                name: name.clone(),
+                rationale: (*rationale).to_string(),
+            });
+        } else {
+            actionable_never_seen.push(name.clone());
+        }
+    }
 
     // Find at-risk NodeKinds (low coverage)
     let at_risk: Vec<AtRiskNodeKind> = nodekind_counts
@@ -102,6 +130,8 @@ pub fn analyze_nodekind_coverage(
         covered_count,
         coverage_percentage,
         never_seen,
+        allowlisted_never_seen,
+        actionable_never_seen,
         at_risk,
         frequency: nodekind_counts,
     }
@@ -146,23 +176,34 @@ fn get_all_nodekinds() -> HashSet<String> {
     perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
+fn recovery_kind_allowlist() -> HashMap<&'static str, &'static str> {
+    let mut allowlist = HashMap::new();
+    for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
+        allowlist.insert(
+            kind,
+            "Synthetic recovery node emitted by parse_with_recovery() on malformed input, not expected in strict clean-corpus parses.",
+        );
+    }
+    allowlist
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_risk_level_ord() {
-        assert!(RiskLevel::Critical < RiskLevel::High);
-        assert!(RiskLevel::High < RiskLevel::Medium);
+        assert!(RiskLevel::Critical < RiskLevel::High, "Critical must be less than High");
+        assert!(RiskLevel::High < RiskLevel::Medium, "High must be less than Medium");
     }
 
     #[test]
     fn test_get_all_nodekinds() {
         let nodekinds = get_all_nodekinds();
-        assert!(nodekinds.len() > 50);
-        assert!(nodekinds.contains("ExpressionStatement"));
-        assert!(nodekinds.contains("Binary"));
-        assert!(nodekinds.contains("Subroutine"));
+        assert!(nodekinds.len() > 50, "should have more than 50 NodeKinds");
+        assert!(nodekinds.contains("ExpressionStatement"), "should contain ExpressionStatement");
+        assert!(nodekinds.contains("Binary"), "should contain Binary");
+        assert!(nodekinds.contains("Subroutine"), "should contain Subroutine");
     }
 
     #[test]
@@ -172,7 +213,65 @@ mod tests {
         writeln!(tmp, "my $x = 1;\nprint $x;\nsub foo {{ return 42; }}")?;
         let path = PathBuf::from(tmp.path());
         let nodekinds = extract_nodekinds_from_content(&path);
-        assert!(!nodekinds.is_empty());
+        assert!(!nodekinds.is_empty(), "should extract at least one NodeKind");
         Ok(())
+    }
+
+    #[test]
+    fn test_recovery_allowlist_contains_known_kinds() {
+        let allowlist = recovery_kind_allowlist();
+        // All 6 members of RECOVERY_KIND_NAMES must appear in the allowlist.
+        assert!(allowlist.contains_key("Error"), "allowlist should contain Error");
+        assert!(allowlist.contains_key("MissingBlock"), "allowlist should contain MissingBlock");
+        assert!(allowlist.contains_key("MissingExpression"), "allowlist should contain MissingExpression");
+        assert!(allowlist.contains_key("MissingIdentifier"), "allowlist should contain MissingIdentifier");
+        assert!(allowlist.contains_key("MissingStatement"), "allowlist should contain MissingStatement");
+        assert!(allowlist.contains_key("UnknownRest"), "allowlist should contain UnknownRest");
+        // The allowlist must have exactly as many entries as RECOVERY_KIND_NAMES (no extras, no dups).
+        assert_eq!(
+            allowlist.len(),
+            perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES.len(),
+            "allowlist size must equal RECOVERY_KIND_NAMES.len()"
+        );
+    }
+
+    #[test]
+    fn test_allowlist_classification_partition() {
+        // Verify that allowlisted_never_seen and actionable_never_seen form an
+        // exact partition of never_seen: no element is in both, all are in one.
+        let allowlist = recovery_kind_allowlist();
+        let all_nodekinds = get_all_nodekinds();
+        // Simulate a corpus where nothing was seen.
+        let never_seen: Vec<String> = {
+            let mut v: Vec<String> = all_nodekinds.iter().cloned().collect();
+            v.sort();
+            v
+        };
+        let mut allowlisted: Vec<String> = Vec::new();
+        let mut actionable: Vec<String> = Vec::new();
+        for name in &never_seen {
+            if allowlist.contains_key(name.as_str()) {
+                allowlisted.push(name.clone());
+            } else {
+                actionable.push(name.clone());
+            }
+        }
+        assert_eq!(
+            allowlisted.len() + actionable.len(),
+            never_seen.len(),
+            "allowlisted + actionable must equal never_seen (partition invariant)"
+        );
+        // No overlap between the two sub-lists.
+        let allowlisted_set: HashSet<&str> = allowlisted.iter().map(|s| s.as_str()).collect();
+        let actionable_set: HashSet<&str> = actionable.iter().map(|s| s.as_str()).collect();
+        let overlap: Vec<&&str> = allowlisted_set.intersection(&actionable_set).collect();
+        assert!(overlap.is_empty(), "allowlisted and actionable must be disjoint; overlap: {:?}", overlap);
+        // Recovery kinds must all land in the allowlisted bucket.
+        for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
+            assert!(
+                allowlisted_set.contains(kind),
+                "recovery kind '{kind}' should be in allowlisted bucket"
+            );
+        }
     }
 }
