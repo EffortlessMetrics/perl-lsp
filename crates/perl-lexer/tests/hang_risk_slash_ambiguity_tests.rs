@@ -984,3 +984,33 @@ fn lexer_slash_comment_adjacent_division_and_defined_or() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn lexer_slash_expression_keyword_contexts_stay_expect_term() -> TestResult {
+    // `return /re/`, `die /re/`, `warn /re/`, `eval /re/` are all
+    // valid Perl and must produce a RegexMatch token, not a Division token.
+    let cases = [
+        "return /ok/",
+        "die /ok/",
+        "warn /ok/",
+        "eval /ok/",
+    ];
+
+    for code in cases {
+        let mut lexer = PerlLexer::new(code);
+        let mut saw_regex = false;
+        while let Some(tok) = lexer.next_token() {
+            if matches!(tok.token_type, TokenType::RegexMatch) {
+                saw_regex = true;
+                break;
+            }
+            if matches!(tok.token_type, TokenType::EOF) {
+                break;
+            }
+        }
+
+        assert!(saw_regex, "Expected regex token after expression keyword in '{code}'");
+    }
+
+    Ok(())
+}

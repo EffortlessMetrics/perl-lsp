@@ -2108,7 +2108,11 @@ impl<'a> PerlLexer<'a> {
                 // Check for special keywords that affect lexer mode
                 match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
-                    | "sort" | "split" | "and" | "or" | "xor" | "not" => {
+                    | "sort" | "split" | "and" | "or" | "xor" | "not"
+                    // These keywords introduce an expression, so a following `/` is a
+                    // regex, not division.  `return /re/`, `die /re/`, `warn /re/`,
+                    // `do /file/`, and `eval /re/` are all valid Perl.
+                    | "return" | "die" | "warn" | "do" | "eval" => {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
