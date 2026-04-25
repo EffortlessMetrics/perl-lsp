@@ -1959,16 +1959,8 @@ impl<'a> PerlLexer<'a> {
             }
         }
 
-        // Require at least one dot segment to distinguish from a bare `v5` identifier.
-        // A bare `v` followed by digits but no dots (like `v5`) could be a variable
-        // name in some contexts. However, Perl treats `v5` as a v-string too, so we
-        // require the minimum: `v` + digits (which Perl interprets as chr(5)).
-        // But to avoid breaking existing identifier parsing for things like subroutine
-        // names that happen to match `v\d+`, we require at least one dot.
+        // `v5` (no dots) is a valid Perl v-string meaning chr(5).
         let text = &self.input[start..pos];
-        if !text.contains('.') {
-            return None;
-        }
 
         self.position = pos;
         self.mode = LexerMode::ExpectOperator;
