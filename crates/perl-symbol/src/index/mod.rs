@@ -334,4 +334,29 @@ mod tests {
         index.replace_document_symbols("file:///a.pl", vec!["new_sub".to_string()]);
         assert!(index.search_prefix("new_sub").contains(&"new_sub".to_string()));
     }
+
+    #[test]
+    fn document_symbols_are_fuzzy_searchable_after_replace() {
+        // Symbols added via replace_document_symbols must appear in fuzzy results,
+        // not only in prefix results. The inverted index must be populated.
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["get_user_name".to_string()],
+        );
+
+        let results = index.search_fuzzy("user name");
+        assert!(
+            results.contains(&"get_user_name".to_string()),
+            "document symbols must be fuzzy-searchable"
+        );
+
+        // After replacing the document, the old symbol must not appear in fuzzy results.
+        index.replace_document_symbols("file:///a.pl", vec!["set_password".to_string()]);
+        let results = index.search_fuzzy("user name");
+        assert!(
+            !results.contains(&"get_user_name".to_string()),
+            "replaced symbol must be removed from fuzzy index"
+        );
+    }
 }
