@@ -58,3 +58,39 @@ fn delimiter_error_recovery_uses_shared_delimiter_mapping() {
     let kinds = parser_kinds_for("{ }");
     assert_eq!(kinds, vec![TokenKind::LeftBrace, TokenKind::RightBrace]);
 }
+#[test]
+fn hash_and_sub_sigils_as_identifier_tokens_keep_sigil_kind() {
+    // The lexer emits bare '%' and '&' as Identifier tokens when they appear
+    // as postfix-dereference sigils (e.g. ->%{key} or %{$ref}).  The token-stream
+    // conversion must produce HashSigil/SubSigil, NOT Percent/BitwiseAnd.
+    // This test constructs the Identifier path directly via lexer_tokens_to_parser_tokens
+    // to avoid lexer mode ambiguity.
+    use perl_lexer::Token as LexerToken;
+    use perl_lexer::TokenType as LexerTokenType;
+    use std::sync::Arc;
+
+    let raw = vec![
+        LexerToken {
+            token_type: LexerTokenType::Identifier(Arc::from("%")),
+            text: Arc::from("%"),
+            start: 0,
+            end: 1,
+        },
+        LexerToken {
+            token_type: LexerTokenType::Identifier(Arc::from("&")),
+            text: Arc::from("&"),
+            start: 2,
+            end: 3,
+        },
+    ];
+    let kinds = TokenStream::lexer_tokens_to_parser_tokens(raw)
+        .into_iter()
+        .map(|t| t.kind)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kinds,
+        vec![TokenKind::HashSigil, TokenKind::SubSigil],
+        "bare %/& as Identifier tokens must map to sigil kinds, not operator kinds"
+    );
+}
+
