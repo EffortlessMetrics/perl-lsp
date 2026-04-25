@@ -57,6 +57,22 @@ fn symbol_index_accessible() {
 }
 
 #[test]
+fn symbol_index_document_api_accessible() {
+    // replace_document_symbols, remove_document, and search_fuzzy must be
+    // callable at the documented paths on SymbolIndex.
+    let mut idx = SymbolIndex::new();
+    idx.replace_document_symbols(
+        "file:///a.pl",
+        vec!["get_user".to_string(), "set_user".to_string()],
+    );
+    assert!(!idx.search_prefix("get_").is_empty());
+    assert!(!idx.search_fuzzy("user").is_empty());
+
+    idx.remove_document("file:///a.pl");
+    assert!(idx.search_prefix("get_").is_empty());
+}
+
+#[test]
 fn surface_decl_accessible() {
     // SymbolDecl and extract_symbol_decls must be callable at perl_symbol
     // (crate-root re-export) and at perl_symbol::surface (module path).
