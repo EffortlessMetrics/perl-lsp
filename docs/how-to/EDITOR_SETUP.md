@@ -32,6 +32,7 @@ perllsp --health
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
+| Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -108,6 +109,13 @@ restart the client after changing workspace settings or include paths.
 
 Create a plugin with `.lsp.json` that maps Perl extensions to a server entry
 using `command: "perllsp"` and `args: ["--stdio"]`.
+
+### Codex CLI
+
+Configure an MCP LSP bridge that launches `perllsp --stdio`, then verify the
+bridge appears in Codex via `/mcp`. See
+[docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for a full
+example config and troubleshooting flow.
 
 ## When Setup Fails
 
