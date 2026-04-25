@@ -89,9 +89,14 @@ fn run(cli_args: CliArgs) -> Result<i32, String> {
     }
 
     if has_error {
-        eprintln!(
-            "parse completed but contains syntax errors; re-run with --sexp for detailed triage"
-        );
+        // Only emit the hint when no triage flag already surfaces the error
+        // state; --has-error already prints to stdout, so the hint would be
+        // redundant noise for scripted callers.
+        if !cli_args.options.show_has_error {
+            eprintln!(
+                "parse completed but contains syntax errors; re-run with --sexp for detailed triage"
+            );
+        }
         Ok(1)
     } else {
         Ok(0)
@@ -125,7 +130,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::{CliError, parse_args};
+    use super::{CliError, CliOptions, parse_args};
 
     #[test]
     fn parse_args_accepts_all_output_flags() -> Result<(), String> {
@@ -177,5 +182,54 @@ mod tests {
             Ok(_) => Err(String::from("expected unknown-flag error")),
             Err(error) => Err(format!("unexpected error: {error}")),
         }
+    }
+
+    #[test]
+    fn parse_args_bare_filename_defaults_all_flags_off() -> Result<(), String> {
+        // The most common usage: just a filename with no flags.
+        let args = vec![String::from("input.pl")];
+        let parsed = parse_args(args).map_err(|error| error.to_string())?;
+
+        if parsed.filename.to_string_lossy() != "input.pl" {
+            return Err(String::from("expected input.pl"));
+        }
+
+        let CliOptions { show_root_kind, show_has_error, show_sexp } = parsed.options;
+        if show_root_kind || show_has_error || show_sexp {
+            return Err(String::from("expected all flags to default to false"));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_args_rejects_second_positional_as_unexpected() -> Result<(), String> {
+        // Two bare filenames: the second should be rejected as UnexpectedArgument.
+        let args = vec![String::from("a.pl"), String::from("b.pl")];
+
+        match parse_args(args) {
+            Err(CliError::UnexpectedArgument(arg)) if arg == "b.pl" => Ok(()),
+            Ok(_) => Err(String::from("expected unexpected-argument error for second file")),
+            Err(error) => Err(format!("unexpected error: {error}")),
+        }
+    }
+
+    #[test]
+    fn parse_args_flags_are_independent() -> Result<(), String> {
+        // Each flag sets exactly one bit; enabling --sexp must not enable the others.
+        let args = vec![String::from("--sexp"), String::from("f.pl")];
+        let parsed = parse_args(args).map_err(|error| error.to_string())?;
+
+        if parsed.options.show_root_kind {
+            return Err(String::from("--sexp must not enable --root-kind"));
+        }
+        if parsed.options.show_has_error {
+            return Err(String::from("--sexp must not enable --has-error"));
+        }
+        if !parsed.options.show_sexp {
+            return Err(String::from("expected --sexp to be enabled"));
+        }
+
+        Ok(())
     }
 }
