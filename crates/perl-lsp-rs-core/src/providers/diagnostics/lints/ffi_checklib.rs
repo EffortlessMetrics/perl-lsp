@@ -28,6 +28,11 @@ const QUALIFIED_CHECKLIB_CALLS: &[&str] = &[
     "FFI::Platypus::Bundle::check_lib_or_exit",
 ];
 
+/// Walk `node` and append diagnostics for suspicious `FFI::CheckLib` call patterns.
+///
+/// Checks literal `lib` and `libpath` arguments against the filesystem and
+/// emits a warning when a named library cannot be found in the given search
+/// paths or common fallback directories.
 pub fn check_ffi_checklib(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     let has_support_module = has_checklib_support_module(node);
 
