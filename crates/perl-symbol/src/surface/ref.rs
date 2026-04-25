@@ -1,10 +1,19 @@
 //! `SymbolRef` — a projected symbol *reference/use* site from the Perl AST.
 //!
 //! This phase intentionally targets a narrow, high-confidence subset:
-//! - variable references (`$x`, `@items`, `%opts`)
-//! - subroutine call references (`foo(...)` / bareword calls)
+//! - variable references (`$x`, `@items`, `%opts`, `$#array`)
+//! - subroutine call references (`foo(...)` / bareword calls via `NodeKind::FunctionCall`)
 //! - package-qualified forms where the AST encodes them directly
 //!   (`$Pkg::var`, `Pkg::func(...)`)
+//!
+//! # Phase-1 Intentional Exclusions
+//!
+//! The following reference types are **not** emitted in this phase:
+//! - `&foo` / `\&foo` code-reference variables (sigil `&`) — `VarKind` has no `CodeRef` variant
+//! - `*foo` typeglob variables (sigil `*`) — reserved for a future phase
+//! - Method calls (`$obj->method(...)`, `NodeKind::MethodCall`) — method name is not a
+//!   `Node`, so extraction requires a dedicated `MethodCallRef` kind (future phase)
+//! - Indirect-object calls (`new Class @args`, `NodeKind::IndirectCall`) — same reason
 
 use crate::types::VarKind;
 use perl_ast::{Node, NodeKind};
@@ -27,7 +36,8 @@ pub struct SymbolRef {
     pub name: String,
     /// Package-qualified name when syntactically explicit, else bare `name`.
     pub qualified_name: String,
-    /// Variable sigil (`$`, `@`, `%`, `&`, `*`) for variable refs.
+    /// Variable sigil (`$`, `@`, `%`) for variable refs.  `&` and `*` sigils are
+    /// not emitted in phase-1 (see module-level exclusion list).
     pub sigil: Option<String>,
     /// Explicit package qualifier from syntax (for example `Some("Pkg")` for
     /// `Pkg::func` or `$Pkg::var`).
@@ -93,6 +103,11 @@ fn walk(node: &Node, out: &mut Vec<SymbolRef>) {
     }
 }
 
+/// Split a potentially package-qualified name into `(qualifier, bare, full)`.
+///
+/// Returns `(Some("Pkg::Sub"), "baz", "Pkg::Sub::baz")` for `"Pkg::Sub::baz"`.
+/// Returns `(None, name, name)` for bare names and for degenerate forms like
+/// `"Foo::"` (trailing `::`, empty bare component) or `"::bar"` (empty package).
 fn split_qualified_name(name: &str) -> (Option<String>, String, String) {
     if let Some((package, bare)) = name.rsplit_once("::")
         && !package.is_empty()
@@ -107,8 +122,11 @@ fn split_qualified_name(name: &str) -> (Option<String>, String, String) {
 fn var_kind_from_sigil(sigil: &str) -> Option<VarKind> {
     match sigil {
         "$" => Some(VarKind::Scalar),
+        // `$#array` is the last-index sigil; the value is a scalar integer.
+        "$#" => Some(VarKind::Scalar),
         "@" => Some(VarKind::Array),
         "%" => Some(VarKind::Hash),
+        // `&` (code reference) and `*` (typeglob) are phase-1 exclusions.
         _ => None,
     }
 }
