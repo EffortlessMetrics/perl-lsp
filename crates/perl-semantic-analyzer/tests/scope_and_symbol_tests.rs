@@ -2152,6 +2152,27 @@ sub foo ($x) {
 }
 
 #[test]
+fn signatures_feature_alone_activates_strict_subs_check()
+-> Result<(), Box<dyn std::error::Error>> {
+    // Positive control: without no feature the unquoted bareword must be flagged.
+    // This ensures signatures_lexical_no_feature_disables_strict_subs_checks is non-vacuous.
+    let code = r#"
+use feature 'signatures';
+sub foo ($x) {
+    print INSIDE_STRICT;
+}
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|i| {
+            matches!(i.kind, IssueKind::UnquotedBareword) && i.variable_name == "INSIDE_STRICT"
+        }),
+        "use feature signatures must activate strict subs mode for bareword checks"
+    );
+    Ok(())
+}
+
+#[test]
 fn signatures_lexical_no_feature_disables_strict_vars_checks()
 -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
