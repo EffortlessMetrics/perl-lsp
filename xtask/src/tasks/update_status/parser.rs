@@ -11,6 +11,10 @@ use regex::Regex;
 use serde::Deserialize;
 
 use super::replace_block;
+use super::token::TokenHealthMetrics;
+
+#[cfg(test)]
+use super::token;
 
 // ---------------------------------------------------------------------------
 // Parser metrics struct
@@ -26,6 +30,7 @@ pub(super) struct ParserMetrics {
     /// Number of pinned modules in `.ci/common-corpus-manifest.txt`.
     pub common_corpus_pinned: usize,
     pub performance_scorecard: Option<ParserPerformanceScorecard>,
+    pub token_metrics: TokenHealthMetrics,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -58,6 +63,7 @@ pub(super) fn collect_parser_metrics(root: &Path) -> ParserMetrics {
         common_corpus_receipt,
         common_corpus_pinned,
         performance_scorecard: read_parser_performance_scorecard(root),
+        token_metrics: super::token::collect_token_health_metrics(root),
     }
 }
 
@@ -279,6 +285,27 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         |scorecard| format!("epoch {} (UTC seconds)", scorecard.generated_at_epoch_s),
     );
 
+    let token = &metrics.token_metrics;
+    let token_table = format!(
+        "| **TokenKind variants** | {} | enum size in `perl-token` | `crates/perl-token/src/lib.rs` |\n\
+         | **Token metadata coverage** | {}/{} ({}) | `display_name()` mappings for all variants | `crates/perl-token/src/lib.rs` + `.ci/metrics/baselines/token.json` |\n\
+         | **Category partition** | {} | keywords/operators/delimiters/literals/identifiers/special | `crates/perl-token/src/lib.rs` |\n\
+         | **Display-name coverage** | {}/{} | user-facing token labels present | `crates/perl-token/src/lib.rs` |\n\
+         | **Lexer/parser conformance** | {} | integration through shared token crate | `crates/perl-lexer/Cargo.toml` + `crates/perl-parser-core/Cargo.toml` |\n\
+         | **Token perf (p50/p95)** | {} | key token operations benchmark health | `docs/project/status/token_performance_scorecard.json` |\n\
+         | **Runtime dependencies** | {} | non-dev deps in `perl-token` | `crates/perl-token/Cargo.toml` |",
+        token.variant_count,
+        token.metadata_coverage_count,
+        token.variant_count,
+        token.metadata_status,
+        token.category_partition_status,
+        token.display_name_coverage_count,
+        token.variant_count,
+        token.lexer_parser_conformance_status,
+        token.performance_row,
+        token.runtime_dependency_count,
+    );
+
     let tracking_table = [system_row, cpan_row, project_row].join("\n");
 
     let parser_coverage_bullets = format!(
@@ -310,6 +337,12 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
         "<!-- BEGIN: PARSER_METRICS_BULLETS -->",
         "<!-- END: PARSER_METRICS_BULLETS -->",
         &parser_coverage_bullets,
+    )?;
+    text = replace_block(
+        &text,
+        "<!-- BEGIN: TOKEN_HEALTH_TABLE -->",
+        "<!-- END: TOKEN_HEALTH_TABLE -->",
+        &token_table,
     )?;
     text = replace_block(
         &text,
@@ -390,13 +423,15 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_metrics: token::token_metrics_fixture(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("65/69"), "nodekind row missing 65/69");
         assert!(result.contains("94.2"), "nodekind row missing 94.2%");
@@ -419,13 +454,15 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_metrics: token::token_metrics_fixture(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(
             result.contains("10 modules (unverified)"),
@@ -476,6 +513,7 @@ mod tests {
             common_corpus_receipt: None,
             common_corpus_pinned: 10,
             performance_scorecard: Some(scorecard),
+            token_metrics: token::token_metrics_fixture(),
         };
 
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
@@ -483,7 +521,8 @@ mod tests {
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
 
         let result = generate_parser_status(&metrics, template)?;
 
@@ -543,13 +582,15 @@ mod tests {
             common_corpus_receipt: Some(receipt),
             common_corpus_pinned: 10,
             performance_scorecard: None,
+            token_metrics: token::token_metrics_fixture(),
         };
         let template = "h\n<!-- BEGIN: PARSER_TRACKING_TABLE -->\nold\n<!-- END: PARSER_TRACKING_TABLE -->\n\
                         <!-- BEGIN: PARSER_NODEKIND_ROW -->\nold\n<!-- END: PARSER_NODEKIND_ROW -->\n\
                         <!-- BEGIN: PARSER_RELIABILITY_ROW -->\nold\n<!-- END: PARSER_RELIABILITY_ROW -->\n\
                         <!-- BEGIN: PARSER_STRICT_CLEAN_ROW -->\nold\n<!-- END: PARSER_STRICT_CLEAN_ROW -->\n\
                         <!-- BEGIN: PARSER_PERFORMANCE_TABLE -->\nold\n<!-- END: PARSER_PERFORMANCE_TABLE -->\n\
-                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n";
+                        <!-- BEGIN: PARSER_METRICS_BULLETS -->\nold\n<!-- END: PARSER_METRICS_BULLETS -->\n\
+                        <!-- BEGIN: TOKEN_HEALTH_TABLE -->\nold\n<!-- END: TOKEN_HEALTH_TABLE -->\n";
         let result = generate_parser_status(&metrics, template)?;
         assert!(result.contains("10/10"), "strict-clean row missing 10/10");
         assert!(result.contains("100%"), "strict-clean row missing 100%");
