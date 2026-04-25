@@ -807,16 +807,7 @@ impl WorkspaceRefactor {
             RefactorError::DocumentNotIndexed(def_file_path.display().to_string())
         })?;
 
-        let package_name =
-            find_package_declaration(&def_doc.text).unwrap_or_else(|| "main".to_string());
-
         let (sigil, bare) = normalize_var(var_name);
-        let key = SymbolKey {
-            pkg: Arc::from(package_name.clone()),
-            name: Arc::from(bare.to_string()),
-            sigil,
-            kind: SymKind::Var,
-        };
 
         let def_line_idx = def_doc
             .text
@@ -826,6 +817,22 @@ impl WorkspaceRefactor {
                 symbol: var_name.to_string(),
                 file: def_file_path.display().to_string(),
             })?;
+
+        // Compute the byte offset of the definition line to find the active package at that point.
+        // This correctly handles files with multiple `package` declarations by using the last
+        // `package` statement before the definition, rather than the first one in the file.
+        let def_line_byte_offset =
+            def_doc.text.lines().take(def_line_idx).map(|l| l.len() + 1).sum::<usize>();
+        let package_name =
+            find_package_at_offset(&def_doc.text, def_line_byte_offset)
+                .unwrap_or_else(|| "main".to_string());
+
+        let key = SymbolKey {
+            pkg: Arc::from(package_name.clone()),
+            name: Arc::from(bare.to_string()),
+            sigil,
+            kind: SymKind::Var,
+        };
 
         let def_line = def_doc.text.lines().nth(def_line_idx).unwrap_or("");
 
