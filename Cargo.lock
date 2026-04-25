@@ -1837,6 +1837,7 @@ dependencies = [
 name = "perl-regex"
 version = "0.12.4"
 dependencies = [
+ "proptest",
  "thiserror",
 ]
 
@@ -1848,7 +1849,9 @@ dependencies = [
  "perl-parser-core",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-test-generators",
  "perl-workspace",
+ "proptest",
  "regex",
  "rustc-hash",
  "tracing",
