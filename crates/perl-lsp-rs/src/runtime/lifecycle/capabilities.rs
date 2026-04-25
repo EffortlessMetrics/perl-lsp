@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 impl LspServer {
     /// Handle initialize request
@@ -79,21 +79,32 @@ impl LspServer {
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // Check if client supports snippet syntax in completion items
+                // Check if client supports snippet syntax in completion items.
+                //
+                // Spec-compliant clients send this under
+                // textDocument.completion.completionItem.*, but some generic
+                // clients flatten these booleans directly onto
+                // textDocument.completion. Support both shapes.
                 caps.snippet_support = params
                     .get("capabilities")
                     .and_then(|c| c.get("textDocument"))
                     .and_then(|td| td.get("completion"))
-                    .and_then(|comp| comp.get("completionItem"))
-                    .and_then(|ci| ci.get("snippetSupport"))
+                    .and_then(|comp| {
+                        comp.get("completionItem")
+                            .and_then(|ci| ci.get("snippetSupport"))
+                            .or_else(|| comp.get("snippetSupport"))
+                    })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
                 caps.completion_commit_characters_support = params
                     .get("capabilities")
                     .and_then(|c| c.get("textDocument"))
                     .and_then(|td| td.get("completion"))
-                    .and_then(|comp| comp.get("completionItem"))
-                    .and_then(|ci| ci.get("commitCharactersSupport"))
+                    .and_then(|comp| {
+                        comp.get("completionItem")
+                            .and_then(|ci| ci.get("commitCharactersSupport"))
+                            .or_else(|| comp.get("commitCharactersSupport"))
+                    })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
@@ -417,8 +428,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
+    use crate::protocol::capabilities::BuildFlags;
     use serde_json::json;
 
     #[test]
@@ -515,5 +526,49 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+    }
+
+    #[test]
+    fn initialize_parses_completion_item_capabilities_from_spec_shape() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true,
+                            "commitCharactersSupport": true
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(caps.snippet_support);
+        assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_parses_completion_item_capabilities_from_flattened_shape() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "snippetSupport": true,
+                        "commitCharactersSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(caps.snippet_support);
+        assert!(caps.completion_commit_characters_support);
     }
 }

@@ -160,7 +160,8 @@ fn parse_package_declaration_with_trailing_separator() -> Result<(), Box<dyn std
 }
 
 #[test]
-fn parse_package_declaration_with_trailing_separator_and_block() -> Result<(), Box<dyn std::error::Error>> {
+fn parse_package_declaration_with_trailing_separator_and_block()
+-> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("package My::App:: { my $x = 1; }");
     let ast = must(parser.parse());
 
