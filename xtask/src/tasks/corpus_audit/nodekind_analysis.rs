@@ -220,9 +220,58 @@ mod tests {
     #[test]
     fn test_recovery_allowlist_contains_known_kinds() {
         let allowlist = recovery_kind_allowlist();
-        assert!(allowlist.contains_key("MissingStatement"), "allowlist should contain MissingStatement");
-        assert!(allowlist.contains_key("MissingIdentifier"), "allowlist should contain MissingIdentifier");
+        // All 6 members of RECOVERY_KIND_NAMES must appear in the allowlist.
+        assert!(allowlist.contains_key("Error"), "allowlist should contain Error");
         assert!(allowlist.contains_key("MissingBlock"), "allowlist should contain MissingBlock");
+        assert!(allowlist.contains_key("MissingExpression"), "allowlist should contain MissingExpression");
+        assert!(allowlist.contains_key("MissingIdentifier"), "allowlist should contain MissingIdentifier");
+        assert!(allowlist.contains_key("MissingStatement"), "allowlist should contain MissingStatement");
         assert!(allowlist.contains_key("UnknownRest"), "allowlist should contain UnknownRest");
+        // The allowlist must have exactly as many entries as RECOVERY_KIND_NAMES (no extras, no dups).
+        assert_eq!(
+            allowlist.len(),
+            perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES.len(),
+            "allowlist size must equal RECOVERY_KIND_NAMES.len()"
+        );
+    }
+
+    #[test]
+    fn test_allowlist_classification_partition() {
+        // Verify that allowlisted_never_seen and actionable_never_seen form an
+        // exact partition of never_seen: no element is in both, all are in one.
+        let allowlist = recovery_kind_allowlist();
+        let all_nodekinds = get_all_nodekinds();
+        // Simulate a corpus where nothing was seen.
+        let never_seen: Vec<String> = {
+            let mut v: Vec<String> = all_nodekinds.iter().cloned().collect();
+            v.sort();
+            v
+        };
+        let mut allowlisted: Vec<String> = Vec::new();
+        let mut actionable: Vec<String> = Vec::new();
+        for name in &never_seen {
+            if allowlist.contains_key(name.as_str()) {
+                allowlisted.push(name.clone());
+            } else {
+                actionable.push(name.clone());
+            }
+        }
+        assert_eq!(
+            allowlisted.len() + actionable.len(),
+            never_seen.len(),
+            "allowlisted + actionable must equal never_seen (partition invariant)"
+        );
+        // No overlap between the two sub-lists.
+        let allowlisted_set: HashSet<&str> = allowlisted.iter().map(|s| s.as_str()).collect();
+        let actionable_set: HashSet<&str> = actionable.iter().map(|s| s.as_str()).collect();
+        let overlap: Vec<&&str> = allowlisted_set.intersection(&actionable_set).collect();
+        assert!(overlap.is_empty(), "allowlisted and actionable must be disjoint; overlap: {:?}", overlap);
+        // Recovery kinds must all land in the allowlisted bucket.
+        for &kind in perl_parser::ast::NodeKind::RECOVERY_KIND_NAMES {
+            assert!(
+                allowlisted_set.contains(kind),
+                "recovery kind '{kind}' should be in allowlisted bucket"
+            );
+        }
     }
 }
