@@ -572,7 +572,13 @@ impl<'a> Parser<'a> {
     ) -> ParseResult<Node> {
         let omit_optional_arg = allow_no_args
             && (self.peek_kind().is_some_and(Self::is_binary_operator)
-                || self.peek_kind() == Some(TokenKind::Slash));
+                || self.peek_kind() == Some(TokenKind::Slash)
+                // Nullary/named-unary builtins at statement start may be
+                // followed by a comma operator:
+                //   shift, return ...
+                // In that form `shift` has no explicit argument; the comma
+                // belongs to the surrounding expression list.
+                || self.peek_kind() == Some(TokenKind::Comma));
 
         // String comparison operators (ne, eq, lt, le, gt, ge) are tokenized as
         // Identifier tokens, so `is_binary_operator` won't catch them. When a

@@ -16,6 +16,13 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 # No external dependencies for now (Arc is std)
 
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "token_scorecard"
+harness = false
+
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"]
 
