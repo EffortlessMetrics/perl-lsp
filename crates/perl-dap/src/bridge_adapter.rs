@@ -39,6 +39,7 @@ use tokio::time::sleep;
 
 const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
 const PLS_SHUTDOWN_POLL_MS: u64 = 25;
+const PROXY_EXIT_POLL_MS: u64 = 25;
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
@@ -109,6 +110,15 @@ impl BridgeAdapter {
             .spawn()
             .context("Failed to spawn Perl::LanguageServer DAP process")?;
 
+        let mut child = child;
+        if let Some(status) =
+            child.try_wait().context("Failed to check Perl::LanguageServer startup status")?
+        {
+            anyhow::bail!(
+                "Perl::LanguageServer DAP process exited immediately with status: {status}"
+            );
+        }
+
         self.child_process = Some(child);
         Ok(())
     }
@@ -144,6 +154,15 @@ impl BridgeAdapter {
             anyhow::bail!("Child process not spawned. Call spawn_pls_dap() first.");
         };
 
+        if let Some(status) = child
+            .try_wait()
+            .context("Failed to check Perl::LanguageServer process state before proxying")?
+        {
+            anyhow::bail!(
+                "Perl::LanguageServer DAP process exited before proxying with status: {status}"
+            );
+        }
+
         // Get handles to child stdin/stdout
         let mut child_stdin = child.stdin.take().context("Failed to capture child stdin")?;
         let mut child_stdout = child.stdout.take().context("Failed to capture child stdout")?;
@@ -158,31 +177,63 @@ impl BridgeAdapter {
 
         // Create bidirectional copy tasks
         // Task 1: Client (Parent Stdin) -> Server (Child Stdin)
-        let client_to_server = async move {
+        let client_to_server = tokio::spawn(async move {
             tokio::io::copy(&mut parent_stdin, &mut child_stdin)
                 .await
                 .context("Error copying from client to server")?;
             // Shut down child_stdin to signal EOF to the server
             let _ = child_stdin.shutdown().await;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
         // Task 2: Server (Child Stdout) -> Client (Parent Stdout)
-        let server_to_client = async move {
+        let server_to_client = tokio::spawn(async move {
             tokio::io::copy(&mut child_stdout, &mut parent_stdout)
                 .await
                 .context("Error copying from server to client")?;
             parent_stdout.flush().await.context("Error flushing to client")?;
             Ok::<(), anyhow::Error>(())
-        };
+        });
 
-        // Run both tasks concurrently and wait for both to finish.
-        // We use join instead of select to ensure graceful shutdown:
-        // if the client closes its input, we want to continue proxying
-        // any remaining output from the server.
-        let (res1, res2) = tokio::join!(client_to_server, server_to_client);
-        res1?;
-        res2?;
+        tokio::pin!(client_to_server);
+        tokio::pin!(server_to_client);
+
+        let mut client_result: Option<Result<()>> = None;
+        let mut server_result: Option<Result<()>> = None;
+
+        while client_result.is_none() || server_result.is_none() {
+            tokio::select! {
+                join_result = &mut client_to_server, if client_result.is_none() => {
+                    client_result = Some(Self::join_result_to_anyhow(join_result, "client->server"));
+                }
+                join_result = &mut server_to_client, if server_result.is_none() => {
+                    server_result = Some(Self::join_result_to_anyhow(join_result, "server->client"));
+                }
+                _ = sleep(Duration::from_millis(PROXY_EXIT_POLL_MS)) => {
+                    if child
+                        .try_wait()
+                        .context("Failed polling Perl::LanguageServer process during proxy")?
+                        .is_some()
+                    {
+                        if client_result.is_none() {
+                            client_to_server.as_mut().abort();
+                            client_result = Some(Ok(()));
+                        }
+                        if server_result.is_none() {
+                            server_to_client.as_mut().abort();
+                            server_result = Some(Ok(()));
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(result) = client_result {
+            result?;
+        }
+        if let Some(result) = server_result {
+            result?;
+        }
 
         Ok(())
     }
@@ -243,6 +294,19 @@ impl BridgeAdapter {
 
         false
     }
+
+    fn join_result_to_anyhow(
+        join_result: std::result::Result<Result<()>, tokio::task::JoinError>,
+        direction: &'static str,
+    ) -> Result<()> {
+        match join_result {
+            Ok(inner) => inner,
+            Err(join_error) if join_error.is_cancelled() => Ok(()),
+            Err(join_error) => Err(anyhow::anyhow!(
+                "Proxy task {direction} panicked or failed to join: {join_error}"
+            )),
+        }
+    }
 }
 
 impl Default for BridgeAdapter {
@@ -261,5 +325,89 @@ impl Drop for BridgeAdapter {
         if let Some(mut child) = self.child_process.take() {
             let _ = child.start_kill();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BridgeAdapter;
+    use anyhow::Result;
+    use std::process::Stdio;
+    use std::time::Duration;
+    use tokio::process::Command;
+
+    async fn spawn_short_lived_child() -> Result<tokio::process::Child> {
+        #[cfg(unix)]
+        {
+            let child = Command::new("sh")
+                .arg("-c")
+                .arg("exit 0")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            Ok(child)
+        }
+
+        #[cfg(windows)]
+        {
+            let child = Command::new("cmd")
+                .arg("/C")
+                .arg("exit 0")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            Ok(child)
+        }
+    }
+
+    async fn spawn_long_running_child() -> Result<tokio::process::Child> {
+        #[cfg(unix)]
+        {
+            let child = Command::new("sh")
+                .arg("-c")
+                .arg("sleep 30")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            Ok(child)
+        }
+
+        #[cfg(windows)]
+        {
+            let child = Command::new("cmd")
+                .arg("/C")
+                .arg("timeout /T 30 /NOBREAK >NUL")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            Ok(child)
+        }
+    }
+
+    #[tokio::test]
+    async fn proxy_returns_error_when_child_already_exited() -> Result<()> {
+        let mut adapter = BridgeAdapter::new();
+        adapter.child_process = Some(spawn_short_lived_child().await?);
+        tokio::time::sleep(Duration::from_millis(40)).await;
+
+        let result =
+            tokio::time::timeout(Duration::from_millis(500), adapter.proxy_messages()).await;
+        assert!(result.is_ok(), "proxy_messages should complete quickly for exited child");
+        let proxy_result = result?;
+        assert!(proxy_result.is_err(), "proxy_messages should error for exited child");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn shutdown_terminates_running_child() -> Result<()> {
+        let mut adapter = BridgeAdapter::new();
+        adapter.child_process = Some(spawn_long_running_child().await?);
+
+        let result = tokio::time::timeout(Duration::from_secs(2), adapter.shutdown()).await;
+        assert!(result.is_ok(), "shutdown should not hang for a running child process");
+        result??;
+
+        Ok(())
     }
 }
