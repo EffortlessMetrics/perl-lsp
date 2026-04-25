@@ -91,6 +91,15 @@ pub struct SymbolDecl {
 /// the current AST does not expose those declaration categories with stable
 /// declaration-site semantics.
 ///
+/// ## Label scoping note
+///
+/// Perl labels (`LOOP:`, `OUTER:`) are lexically scoped and are **not**
+/// stored in the package stash.  `goto LOOP` resolves in the enclosing
+/// lexical scope, never as `Foo::LOOP`.  Therefore `Label` declarations
+/// always have `qualified_name == name`, even when emitted inside a
+/// package block.  The `container` field still records the enclosing
+/// package for informational purposes.
+///
 /// # Package context propagation
 ///
 /// The walker tracks the innermost `package` declaration linearly (statement
@@ -229,12 +238,16 @@ fn walk(node: &Node, ctx: &mut WalkCtx, out: &mut Vec<SymbolDecl>) {
         }
 
         // ── Labels ────────────────────────────────────────────────────────
+        // Note: Perl labels are lexically scoped (not stored in the package
+        // stash), so `qualified_name` is always the bare label name regardless
+        // of the current package context.  `goto LOOP` never resolves via
+        // `Foo::LOOP`; the label must be visible in the enclosing lexical scope.
         NodeKind::LabeledStatement { label, statement } => {
             let container = ctx.current_package.clone();
             out.push(SymbolDecl {
                 kind: SymbolKind::Label,
                 name: label.clone(),
-                qualified_name: ctx.qualify(label),
+                qualified_name: label.clone(), // labels are lexically scoped — never package-qualified
                 full_span: (node.location.start, node.location.end),
                 anchor_span: None, // LabeledStatement has no label span in current AST
                 container,

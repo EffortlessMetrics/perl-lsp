@@ -563,6 +563,47 @@ fn test_labeled_statement_produces_label_decl_and_walks_inner_statement() -> Res
     Ok(())
 }
 
+#[test]
+fn test_label_inside_package_is_not_package_qualified() -> Result<(), String> {
+    // Perl labels are lexically scoped, not stored in the package stash.
+    // `goto LOOP` never resolves as `Foo::LOOP`.
+    // package Foo; LOOP: while (1) { last LOOP; }
+    let body = Node::new(NodeKind::Block { statements: vec![] }, loc(30, 32));
+    let while_node = Node::new(
+        NodeKind::While {
+            condition: Box::new(Node::new(NodeKind::Number { value: "1".to_string() }, loc(25, 26))),
+            body: Box::new(body),
+            continue_block: None,
+        },
+        loc(20, 32),
+    );
+    let labeled = Node::new(
+        NodeKind::LabeledStatement {
+            label: "LOOP".to_string(),
+            statement: Box::new(while_node),
+        },
+        loc(14, 32),
+    );
+    let pkg_node = Node::new(
+        NodeKind::Package { name: "Foo".to_string(), name_span: loc(8, 11), block: None },
+        loc(0, 14),
+    );
+    let program = Node::new(
+        NodeKind::Program { statements: vec![pkg_node, labeled] },
+        loc(0, 32),
+    );
+
+    let decls = extract_symbol_decls(&program, None);
+
+    let label_decl =
+        decls.iter().find(|d| d.kind == SymbolKind::Label).ok_or("expected label decl")?;
+    assert_eq!(label_decl.name, "LOOP");
+    // Labels are lexically scoped — qualified_name must NOT be "Foo::LOOP"
+    assert_eq!(label_decl.qualified_name, "LOOP", "label must not be package-qualified");
+    assert_eq!(label_decl.container.as_deref(), Some("Foo"), "container should reflect enclosing package");
+    Ok(())
+}
+
 // ── Container tracking ────────────────────────────────────────────────────────
 
 #[test]
