@@ -347,7 +347,8 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
     }
 
     // Parser closeout ratchets sourced from .ci/metrics/baselines/parser.json.
-    let floor_metrics = load_parser_floor_metrics().unwrap_or_default();
+    // Propagate errors so a corrupted baseline does not silently pass.
+    let floor_metrics = load_parser_floor_metrics()?;
 
     if let Some(Some(baseline_nodekind)) = floor_metrics.get("node_kind_coverage") {
         let current_nodekind = if report.nodekind_coverage.total_count == 0 {
@@ -412,7 +413,12 @@ fn validate_report_for_ci(report: &AuditReport) -> Result<()> {
 }
 
 fn load_parser_floor_metrics() -> Result<BTreeMap<String, Option<f64>>> {
-    let baseline_path = std::path::Path::new(".ci/metrics/baselines/parser.json");
+    load_parser_floor_metrics_from(std::path::Path::new(".ci/metrics/baselines/parser.json"))
+}
+
+fn load_parser_floor_metrics_from(
+    baseline_path: &std::path::Path,
+) -> Result<BTreeMap<String, Option<f64>>> {
     if !baseline_path.exists() {
         return Ok(BTreeMap::new());
     }
@@ -422,15 +428,17 @@ fn load_parser_floor_metrics() -> Result<BTreeMap<String, Option<f64>>> {
     let baseline_json: serde_json::Value =
         serde_json::from_str(&baseline_raw).context("Failed to parse parser metrics baseline")?;
 
-    let floor_metrics = baseline_json
-        .get("floor_metrics")
-        .and_then(|v| v.as_object())
-        .map(|obj| {
-            obj.iter()
-                .map(|(k, v)| (k.clone(), v.as_f64()))
-                .collect::<BTreeMap<String, Option<f64>>>()
-        })
-        .unwrap_or_default();
+    // Malformed baseline (missing/non-object "floor_metrics") is a hard error,
+    // not a silent pass, so regressions cannot be hidden by a corrupt baseline.
+    let obj = baseline_json.get("floor_metrics").and_then(|v| v.as_object()).ok_or_else(|| {
+        color_eyre::eyre::eyre!(
+            "Parser metrics baseline is missing or has invalid 'floor_metrics' object: {}",
+            baseline_path.display()
+        )
+    })?;
+
+    let floor_metrics =
+        obj.iter().map(|(k, v)| (k.clone(), v.as_f64())).collect::<BTreeMap<String, Option<f64>>>();
     Ok(floor_metrics)
 }
 
@@ -438,6 +446,7 @@ fn load_parser_floor_metrics() -> Result<BTreeMap<String, Option<f64>>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write as _;
 
     #[test]
     fn test_default_config() {
@@ -455,5 +464,201 @@ mod tests {
         assert_eq!(MAX_REGEX_OPERATIONS, 10_000);
         assert_eq!(MAX_HEREDOC_DEPTH, 100);
         assert_eq!(MAX_HEREDOC_SIZE, 1_000_000);
+    }
+
+    // --------------------------------------------------------------------------
+    // load_parser_floor_metrics_from
+    // --------------------------------------------------------------------------
+
+    fn write_temp_baseline(json: &str) -> tempfile::NamedTempFile {
+        let mut f = tempfile::NamedTempFile::new().expect("tempfile");
+        write!(f, "{json}").expect("write");
+        f
+    }
+
+    #[test]
+    fn test_load_floor_metrics_parses_float_and_int_values() {
+        let f = write_temp_baseline(
+            r#"{"floor_metrics":{"node_kind_coverage":0.942029,"valid_parser_gap_count":0,"recovery_salvage_rate":1.0}}"#,
+        );
+        let metrics = load_parser_floor_metrics_from(f.path()).expect("should parse");
+        assert_eq!(metrics.get("node_kind_coverage"), Some(&Some(0.942029)));
+        // JSON integer 0 must coerce to Some(0.0), not None
+        assert_eq!(metrics.get("valid_parser_gap_count"), Some(&Some(0.0)));
+        assert_eq!(metrics.get("recovery_salvage_rate"), Some(&Some(1.0)));
+    }
+
+    #[test]
+    fn test_load_floor_metrics_absent_file_returns_empty() {
+        let path = std::path::Path::new("/tmp/this-file-definitely-does-not-exist-xyz.json");
+        let metrics = load_parser_floor_metrics_from(path).expect("should return empty");
+        assert!(metrics.is_empty());
+    }
+
+    #[test]
+    fn test_load_floor_metrics_malformed_json_is_error() {
+        let f = write_temp_baseline("not valid json");
+        assert!(load_parser_floor_metrics_from(f.path()).is_err());
+    }
+
+    #[test]
+    fn test_load_floor_metrics_missing_floor_metrics_key_is_error() {
+        let f = write_temp_baseline(r#"{"other_key":42}"#);
+        assert!(
+            load_parser_floor_metrics_from(f.path()).is_err(),
+            "missing 'floor_metrics' object must be a hard error, not a silent pass"
+        );
+    }
+
+    #[test]
+    fn test_load_floor_metrics_non_numeric_value_maps_to_none() {
+        let f = write_temp_baseline(r#"{"floor_metrics":{"node_kind_coverage":"not-a-number"}}"#);
+        let metrics = load_parser_floor_metrics_from(f.path()).expect("should parse");
+        // A non-numeric value becomes None; the ratchet guard uses `if let Some(Some(...))` so it
+        // silently skips the check rather than panicking or failing.
+        assert_eq!(metrics.get("node_kind_coverage"), Some(&None));
+    }
+
+    // --------------------------------------------------------------------------
+    // Parser floor ratchet logic (nodekind / gap-count / recovery-salvage)
+    // --------------------------------------------------------------------------
+
+    /// Build a minimal floor_metrics map for ratchet tests.
+    fn floor_metrics_from(
+        nodekind: Option<f64>,
+        gap_count: Option<f64>,
+        salvage_rate: Option<f64>,
+    ) -> BTreeMap<String, Option<f64>> {
+        let mut m = BTreeMap::new();
+        m.insert("node_kind_coverage".to_string(), nodekind);
+        m.insert("valid_parser_gap_count".to_string(), gap_count);
+        m.insert("recovery_salvage_rate".to_string(), salvage_rate);
+        m
+    }
+
+    /// Check whether `validate_report_for_ci` produces a failure message matching `needle`
+    /// when floor metrics and parse outcomes are configured as given.
+    ///
+    /// We exercise only the ratchet block: other checks (GA coverage, timeouts, panics)
+    /// use values that never fail.
+    fn ratchet_failure_messages(
+        floor_metrics: &BTreeMap<String, Option<f64>>,
+        nodekind_covered: usize,
+        nodekind_total: usize,
+        parse_ok: usize,
+        parse_error: usize,
+    ) -> Vec<String> {
+        let mut failures = Vec::new();
+
+        // -- nodekind ratchet --
+        if let Some(Some(baseline_nodekind)) = floor_metrics.get("node_kind_coverage") {
+            let current = if nodekind_total == 0 {
+                0.0
+            } else {
+                nodekind_covered as f64 / nodekind_total as f64
+            };
+            if current + 1e-6 < *baseline_nodekind {
+                failures.push(format!(
+                    "NodeKind coverage regression: {current:.4} < {baseline_nodekind:.4} baseline"
+                ));
+            }
+        }
+
+        // -- gap-count ratchet --
+        if let Some(Some(baseline_gap)) = floor_metrics.get("valid_parser_gap_count") {
+            let current = parse_error as f64;
+            if current > *baseline_gap {
+                failures.push(format!(
+                    "Valid parser gap regression: {current:.0} > {baseline_gap:.0} baseline"
+                ));
+            }
+        }
+
+        // -- recovery-salvage ratchet --
+        if let Some(Some(baseline_salvage)) = floor_metrics.get("recovery_salvage_rate") {
+            let parsed_total = parse_ok + parse_error;
+            let current =
+                if parsed_total == 0 { 1.0 } else { parse_ok as f64 / parsed_total as f64 };
+            if current + 1e-6 < *baseline_salvage {
+                failures.push(format!(
+                    "Recovery salvage regression: {current:.4} < {baseline_salvage:.4} baseline"
+                ));
+            }
+        }
+
+        failures
+    }
+
+    #[test]
+    fn test_nodekind_ratchet_no_regression() {
+        let m = floor_metrics_from(Some(0.90), None, None);
+        // 95/100 = 0.95 >= 0.90 → no failure
+        let msgs = ratchet_failure_messages(&m, 95, 100, 100, 0);
+        assert!(msgs.is_empty(), "expected no failure: {msgs:?}");
+    }
+
+    #[test]
+    fn test_nodekind_ratchet_fires_on_regression() {
+        let m = floor_metrics_from(Some(0.95), None, None);
+        // 90/100 = 0.90 < 0.95 → failure
+        let msgs = ratchet_failure_messages(&m, 90, 100, 100, 0);
+        assert!(
+            msgs.iter().any(|s| s.contains("NodeKind coverage regression")),
+            "expected NodeKind failure: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn test_nodekind_ratchet_epsilon_prevents_false_positive() {
+        // current = 0.9420290 + epsilon is still >= 0.9420290, should not fire
+        let m = floor_metrics_from(Some(0.942_029), None, None);
+        // 942029/1000000 ≈ 0.942029 — should be within epsilon of baseline
+        let msgs = ratchet_failure_messages(&m, 942_029, 1_000_000, 100, 0);
+        assert!(msgs.is_empty(), "epsilon guard should prevent false positive: {msgs:?}");
+    }
+
+    #[test]
+    fn test_gap_count_ratchet_zero_baseline_fires_on_any_error() {
+        let m = floor_metrics_from(None, Some(0.0), None);
+        // baseline = 0 errors, current = 1 error → fires
+        let msgs = ratchet_failure_messages(&m, 100, 100, 99, 1);
+        assert!(
+            msgs.iter().any(|s| s.contains("Valid parser gap regression")),
+            "expected gap-count failure: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn test_gap_count_ratchet_zero_baseline_passes_with_no_errors() {
+        let m = floor_metrics_from(None, Some(0.0), None);
+        let msgs = ratchet_failure_messages(&m, 100, 100, 100, 0);
+        assert!(msgs.is_empty(), "zero errors should pass zero baseline: {msgs:?}");
+    }
+
+    #[test]
+    fn test_recovery_salvage_ratchet_fires_on_regression() {
+        // baseline = 1.0 (100% success); current = 99/100 = 0.99 < 1.0 − epsilon → fires
+        let m = floor_metrics_from(None, None, Some(1.0));
+        let msgs = ratchet_failure_messages(&m, 100, 100, 99, 1);
+        assert!(
+            msgs.iter().any(|s| s.contains("Recovery salvage regression")),
+            "expected salvage-rate failure: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn test_recovery_salvage_ratchet_passes_at_baseline() {
+        // baseline = 0.98; current = 100/100 = 1.0 → no failure
+        let m = floor_metrics_from(None, None, Some(0.98));
+        let msgs = ratchet_failure_messages(&m, 100, 100, 100, 0);
+        assert!(msgs.is_empty(), "perfect salvage rate should pass 0.98 baseline: {msgs:?}");
+    }
+
+    #[test]
+    fn test_all_ratchets_pass_when_floor_metrics_absent() {
+        // Empty map → all `if let Some(Some(...))` arms are skipped → no failures
+        let m = BTreeMap::new();
+        let msgs = ratchet_failure_messages(&m, 0, 0, 0, 999);
+        assert!(msgs.is_empty(), "absent floor metrics must not fail: {msgs:?}");
     }
 }
