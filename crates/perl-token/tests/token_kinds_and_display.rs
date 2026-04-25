@@ -1158,3 +1158,58 @@ fn display_name_returns_static_str() {
         );
     }
 }
+
+// ===========================================================================
+// eof_at / eof_with_span: shared empty Arc optimization
+// ===========================================================================
+
+#[test]
+fn eof_at_reuses_shared_empty_arc() {
+    // The key optimization guarantee: both calls must share the SAME Arc allocation
+    // (same pointer), proving EMPTY_TEXT_ARC is actually reused.
+    let a = Token::eof_at(0);
+    let b = Token::eof_at(42);
+    assert!(
+        Arc::ptr_eq(&a.text, &b.text),
+        "eof_at must reuse the shared empty Arc — allocation churn defeats the purpose"
+    );
+}
+
+#[test]
+fn eof_with_span_reuses_shared_empty_arc() {
+    let a = Token::eof_with_span(0, 0);
+    let b = Token::eof_with_span(5, 10);
+    assert!(
+        Arc::ptr_eq(&a.text, &b.text),
+        "eof_with_span must reuse the shared empty Arc"
+    );
+}
+
+#[test]
+fn eof_at_produces_correct_fields() {
+    let tok = Token::eof_at(99);
+    assert_eq!(tok.kind, TokenKind::Eof);
+    assert_eq!(&*tok.text, "");
+    assert_eq!(tok.start, 99);
+    assert_eq!(tok.end, 99);
+}
+
+#[test]
+fn eof_with_span_produces_correct_fields() {
+    let tok = Token::eof_with_span(10, 15);
+    assert_eq!(tok.kind, TokenKind::Eof);
+    assert_eq!(&*tok.text, "");
+    assert_eq!(tok.start, 10);
+    assert_eq!(tok.end, 15);
+}
+
+#[test]
+fn eof_helpers_share_arc_with_each_other() {
+    // Across both constructors — same static backing
+    let via_at = Token::eof_at(0);
+    let via_span = Token::eof_with_span(0, 0);
+    assert!(
+        Arc::ptr_eq(&via_at.text, &via_span.text),
+        "eof_at and eof_with_span must share the same static Arc"
+    );
+}
