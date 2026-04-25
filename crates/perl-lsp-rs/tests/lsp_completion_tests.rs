@@ -1054,6 +1054,95 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that completion ranking respects lexical scope distance.
+///
+/// Variables defined closer to the cursor (immediate scope, then parent
+/// scope, then package/global) are returned earlier in the completion
+/// list. This proves the scope-distance ranking from `variables.rs`
+/// flows end-to-end through the LSP response, which is sorted by
+/// `sort_text` server-side via `deduplicate_and_sort`.
+#[test]
+fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    // Three distinct variables share the prefix `pre` but live at
+    // different scope depths. With cursor inside the innermost block:
+    //   $prefix_inner  -> Immediate scope     (sort_key 'a')
+    //   $prefix_outer  -> Parent block scope  (sort_key 'b')
+    //   $prefix_global -> Global/package      (sort_key 'c')
+    let uri = "file:///test_scope_distance.pl";
+    let text = concat!(
+        "my $prefix_global = 1;\n",
+        "{\n",
+        "    my $prefix_outer = 2;\n",
+        "    {\n",
+        "        my $prefix_inner = 3;\n",
+        "        my $x = $pre\n",
+        "    }\n",
+        "}\n",
+    );
+
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": text,
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    // Cursor sits at the end of "$pre" on line 5 (0-indexed):
+    //   "        my $x = $pre"
+    //    8 spaces + "my $x = $pre" = 20 characters
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 5, "character": 20 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    // Locate each prefix_* variable's index in the response. The server
+    // sorts by sort_text via `deduplicate_and_sort`, so the response order
+    // reflects scope-distance ranking.
+    let position_of = |label: &str| -> Option<usize> {
+        items.iter().position(|item| item["label"].as_str() == Some(label))
+    };
+
+    let inner_pos = position_of("$prefix_inner")
+        .ok_or("expected $prefix_inner in completions (immediate scope)")?;
+    let outer_pos = position_of("$prefix_outer")
+        .ok_or("expected $prefix_outer in completions (parent scope)")?;
+    let global_pos = position_of("$prefix_global")
+        .ok_or("expected $prefix_global in completions (package/global scope)")?;
+
+    assert!(
+        inner_pos < outer_pos,
+        "immediate-scope $prefix_inner (idx {inner_pos}) should rank before parent-scope $prefix_outer (idx {outer_pos})"
+    );
+    assert!(
+        outer_pos < global_pos,
+        "parent-scope $prefix_outer (idx {outer_pos}) should rank before package/global $prefix_global (idx {global_pos})"
+    );
+
+    Ok(())
+}
+
 /// Test completion with incremental typing
 #[test]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
