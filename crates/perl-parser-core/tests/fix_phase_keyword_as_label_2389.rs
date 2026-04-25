@@ -44,10 +44,31 @@ fn test_unitcheck_as_label() {
 #[test]
 fn test_check_label_with_last() {
     // Labels are commonly used with `last LABEL` / `next LABEL`.
-    // Note: `last CHECK` would require loop-control to also accept keyword
-    // tokens as label names (a separate issue); test with `next` on a regular
-    // flow to verify the label statement itself parses correctly.
     assert_clean_parse("CHECK: while (1) { last; }");
+}
+
+#[test]
+fn test_check_label_targeted_by_last_keyword_label() {
+    // Loop control can target the CHECK label as a bareword.
+    assert_clean_parse("CHECK: while (1) { last CHECK; }");
+}
+
+#[test]
+fn test_check_label_targeted_by_next_keyword_label() {
+    // `next LABEL` must also resolve phase-keyword labels — same parse_loop_control path.
+    assert_clean_parse("CHECK: while (1) { next CHECK; }");
+}
+
+#[test]
+fn test_check_label_targeted_by_redo_keyword_label() {
+    // `redo LABEL` must also resolve phase-keyword labels — same parse_loop_control path.
+    assert_clean_parse("CHECK: while (1) { redo CHECK; }");
+}
+
+#[test]
+fn test_begin_label_targeted_by_last() {
+    // BEGIN is a valid label — exercise the full set to avoid regressions.
+    assert_clean_parse("BEGIN: while (1) { last BEGIN; }");
 }
 
 #[test]
