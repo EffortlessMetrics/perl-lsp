@@ -179,7 +179,10 @@ fn surface_workspace_parity_bank() -> Result<()> {
             );
             continue;
         }
-        let rhs = rhs.expect("rhs existence already checked");
+        let rhs = match rhs {
+            Some(r) => r,
+            None => continue,
+        };
 
         let core_fields_match = lhs.name == rhs.name
             && lhs.qualified_name == rhs.qualified_name
