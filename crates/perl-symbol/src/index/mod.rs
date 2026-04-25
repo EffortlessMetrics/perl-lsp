@@ -3,7 +3,7 @@
 //! This module has one responsibility: indexing symbol names for fast lookup
 //! across prefix and fuzzy query styles.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Symbol index for fast lookups.
 ///
@@ -61,9 +61,10 @@ impl SymbolIndex {
     pub fn replace_document_symbols(&mut self, uri: &str, symbols: Vec<String>) {
         self.remove_document(uri);
 
+        let mut seen: HashSet<String> = HashSet::new();
         let mut unique_symbols: Vec<String> = Vec::new();
         for symbol in symbols {
-            if !unique_symbols.contains(&symbol) {
+            if seen.insert(symbol.clone()) {
                 self.add_symbol_occurrence(&symbol);
                 unique_symbols.push(symbol);
             }
@@ -304,5 +305,33 @@ mod tests {
         assert_eq!(shared, vec!["shared".to_string()]);
         assert!(index.search_prefix("only_a").is_empty());
         assert_eq!(index.search_prefix("only_b"), vec!["only_b".to_string()]);
+    }
+
+    #[test]
+    fn trie_remove_preserves_symbols_with_shared_prefix() {
+        // Removing "foo" must not evict "foobar" from the trie.
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols(
+            "file:///a.pl",
+            vec!["foo".to_string(), "foobar".to_string()],
+        );
+        index.replace_document_symbols("file:///a.pl", vec!["foobar".to_string()]);
+
+        assert!(index.search_prefix("foo").contains(&"foobar".to_string()));
+        assert!(!index.search_prefix("foo").contains(&"foo".to_string()));
+    }
+
+    #[test]
+    fn replace_with_empty_list_clears_document_symbols() {
+        // A file edited to contain no symbols must have its prior symbols removed.
+        let mut index = SymbolIndex::new();
+        index.replace_document_symbols("file:///a.pl", vec!["old_sub".to_string()]);
+        index.replace_document_symbols("file:///a.pl", vec![]);
+
+        assert!(index.search_prefix("old_sub").is_empty());
+
+        // A subsequent replace with real symbols must work correctly.
+        index.replace_document_symbols("file:///a.pl", vec!["new_sub".to_string()]);
+        assert!(index.search_prefix("new_sub").contains(&"new_sub".to_string()));
     }
 }
