@@ -42,6 +42,77 @@ fn findbin_dot_segment_is_normalized_inside_workspace() -> Result<(), Box<dyn st
 }
 
 #[test]
+fn absolute_use_lib_path_outside_workspace_is_rejected() -> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let outside = temp.path().join("outside-lib");
+    std::fs::create_dir_all(&workspace)?;
+    std::fs::create_dir_all(&outside)?;
+
+    let outside_path = outside.to_string_lossy().to_string();
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: outside_path, from_findbin: false }],
+        &workspace,
+        None,
+    );
+
+    assert!(resolved.is_empty(), "absolute outside-workspace paths should be dropped");
+    Ok(())
+}
+
+#[test]
+fn absolute_use_lib_path_inside_workspace_is_normalized_to_relative()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    let inside = workspace.join("lib").join("Nested");
+    std::fs::create_dir_all(&inside)?;
+
+    let inside_path = inside.to_string_lossy().to_string();
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: inside_path, from_findbin: false }],
+        &workspace,
+        None,
+    );
+
+    assert_eq!(resolved, vec!["lib/Nested".to_string()]);
+    Ok(())
+}
+
+#[test]
+fn absolute_use_lib_path_with_embedded_dotdot_is_rejected() -> Result<(), Box<dyn std::error::Error>>
+{
+    // Regression guard: `Path::strip_prefix` is purely lexical.  An absolute path
+    // like `<workspace>/../sibling` strips the `<workspace>` prefix lexically but
+    // the remainder is `../sibling`, which would escape the workspace.  The guard in
+    // `path_to_relative_string` must detect any `ParentDir` component in the
+    // stripped result and return `None`.
+    let temp = tempfile::tempdir()?;
+    let workspace = temp.path().join("workspace");
+    std::fs::create_dir_all(&workspace)?;
+
+    // Construct a truly absolute path that lexically starts with the workspace
+    // prefix but contains an embedded `..` that escapes it.
+    let bypass_path = format!(
+        "{}{}..{}sibling",
+        workspace.display(),
+        std::path::MAIN_SEPARATOR,
+        std::path::MAIN_SEPARATOR
+    );
+
+    let resolved = resolve_use_lib_paths(
+        &[UseLibPath { path: bypass_path.clone(), from_findbin: false }],
+        &workspace,
+        None,
+    );
+    assert!(
+        resolved.is_empty(),
+        "absolute path with embedded `..` must be rejected; bypass_path={bypass_path:?} got: {resolved:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn use_and_no_lib_operations_are_extracted_in_order() {
     let source = "\
 use lib 'first';\n\

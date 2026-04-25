@@ -1814,6 +1814,7 @@ dependencies = [
 name = "perl-pragma"
 version = "0.12.4"
 dependencies = [
+ "criterion",
  "perl-ast",
 ]
 
@@ -1897,6 +1898,9 @@ version = "0.12.4"
 [[package]]
 name = "perl-token"
 version = "0.12.4"
+dependencies = [
+ "criterion",
+]
 
 [[package]]
 name = "perl-uri"
