@@ -5,6 +5,13 @@
 //! workspace/symbol, and related features.
 
 use super::*;
+use perl_qualified_name::split_qualified_name;
+
+fn qualified_names_match(name: &str, want_name: &str) -> bool {
+    let (name_pkg, name_bare) = split_qualified_name(name);
+    let (want_pkg, want_bare) = split_qualified_name(want_name);
+    name_bare == want_bare && (name_pkg.is_none() || want_pkg.is_none() || name_pkg == want_pkg)
+}
 
 #[allow(dead_code)]
 impl LspServer {
@@ -314,7 +321,7 @@ impl LspServer {
             }
 
             NodeKind::FunctionCall { name, args } => {
-                if symbol_kind == "subroutine" && name == symbol_name {
+                if symbol_kind == "subroutine" && qualified_names_match(name, symbol_name) {
                     count += 1;
                 }
                 for arg in args {
@@ -323,7 +330,7 @@ impl LspServer {
             }
 
             NodeKind::MethodCall { object, method, args } => {
-                if symbol_kind == "subroutine" && method == symbol_name {
+                if symbol_kind == "subroutine" && qualified_names_match(method, symbol_name) {
                     count += 1;
                 }
                 count += self.count_references(object, symbol_name, symbol_kind);
@@ -385,7 +392,7 @@ impl LspServer {
                 // Check if this is a reference to a subroutine (\&function)
                 if op == "\\" && symbol_kind == "subroutine" {
                     if let NodeKind::Identifier { name } = &operand.kind {
-                        if name == symbol_name {
+                        if qualified_names_match(name, symbol_name) {
                             count += 1;
                         }
                     }
@@ -450,5 +457,18 @@ impl LspServer {
         }
 
         count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::qualified_names_match;
+
+    #[test]
+    fn qualified_names_match_allows_bare_and_qualified_subroutine_names() {
+        assert!(qualified_names_match("Utils::format_string", "format_string"));
+        assert!(qualified_names_match("format_string", "Utils::format_string"));
+        assert!(qualified_names_match("Utils::format_string", "Utils::format_string"));
+        assert!(!qualified_names_match("Other::format_string", "Utils::format_string"));
     }
 }
