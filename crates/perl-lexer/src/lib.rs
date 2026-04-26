@@ -2131,11 +2131,16 @@ impl<'a> PerlLexer<'a> {
                 // Check for special keywords that affect lexer mode
                 match text {
                     "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
-                    | "sort" | "split" => {
+                    | "sort" | "split" | "and" | "or" | "xor" | "not"
+                    // These keywords introduce an expression, so a following `/` is a
+                    // regex, not division.  `return /re/`, `die /re/`, `warn /re/`,
+                    // `do /file/`, and `eval /re/` are all valid Perl.
+                    | "return" | "die" | "warn" | "do" | "eval" => {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
                         self.after_sub = true;
+                        self.mode = LexerMode::ExpectTerm;
                     }
                     // Quote operators expect a delimiter next.
                     // Skip if after '->' -- these are method names, not operators.
@@ -2260,7 +2265,13 @@ impl<'a> PerlLexer<'a> {
                         // We'll need to check for the = after the format name
                         // For now, just mark that we saw format
                     }
-                    _ => {}
+                    _ if is_builtin_function(text) => {
+                        // Bare builtins are term-introducing in Perl.
+                        self.mode = LexerMode::ExpectTerm;
+                    }
+                    _ => {
+                        self.mode = LexerMode::ExpectOperator;
+                    }
                 }
                 TokenType::Keyword(Arc::from(text))
             } else {
