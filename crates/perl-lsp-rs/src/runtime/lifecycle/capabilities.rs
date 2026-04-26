@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 impl LspServer {
     /// Handle initialize request
@@ -438,8 +438,8 @@ pub(crate) fn apply_disabled_feature_id(
 #[cfg(test)]
 mod tests {
     use super::apply_disabled_feature_id;
-    use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
+    use crate::protocol::capabilities::BuildFlags;
     use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
 
@@ -615,11 +615,7 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         let folders = server.workspace_folders.lock();
-        assert_eq!(
-            folders.len(),
-            1,
-            "must create exactly one workspace folder from rootUri"
-        );
+        assert_eq!(folders.len(), 1, "must create exactly one workspace folder from rootUri");
         assert_eq!(
             folders[0].uri, "file:///explicit-workspace",
             "cwd fallback must not override an explicitly provided rootUri"
