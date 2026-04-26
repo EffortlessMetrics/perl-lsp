@@ -1,0 +1,14 @@
+{
+  "now": "2026-04-26T12:00:00Z",
+  "leases": [
+    {
+      "worktree_id": "pr6853-1",
+      "lease_expiry": "2026-04-25T12:00:00Z"
+    },
+    {
+      "worktree_id": "pr7000-1",
+      "lease_expiry": "2026-04-27T12:00:00Z"
+    }
+  ],
+  "expected_stale_ids": ["pr6853-1"]
+}

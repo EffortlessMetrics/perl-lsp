@@ -1,0 +1,14 @@
+{
+  "requested_branch": "agent/pr-6853",
+  "worktrees": [
+    {
+      "path": "/repo",
+      "branch": "master"
+    },
+    {
+      "path": "/repo/.claude/worktrees/pr7000-1",
+      "branch": "agent/pr-7000"
+    }
+  ],
+  "expected_duplicate": false
+}
