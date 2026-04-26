@@ -60,7 +60,9 @@
   "activationEvents": [
     "onLanguage:perl",
     "onLanguage:gherkin",
-    "onWalkthrough:perl-lsp.gettingStarted"
+    "onWalkthrough:perl-lsp.gettingStarted",
+    "onDebugResolve:perl",
+    "onDebugInitialConfigurations"
   ],
   "contributes": {
     "languages": [
