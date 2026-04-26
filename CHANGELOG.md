@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **First-run error messaging now surfaces to users instead of silent logging** — When
+  workspace root is not detected (e.g., opening a single file without opening a folder),
+  perl-lsp now sends a `window/showMessage` notification with actionable guidance:
+  "perl-lsp: workspace root not detected — module resolution disabled. To enable: open
+  the project folder in your editor (File > Open Folder) rather than individual files.
+  This warning appears once per server session." Previously this was logged to the server
+  log only and users saw nothing. (#4178)
+
+- **DAP debugger now shows actionable error when Perl is not on PATH** — When launching
+  the debugger and `perl` cannot be found, the error message is now: "Perl interpreter
+  not found on PATH. Ensure 'perl' is installed and on your system PATH." Previously
+  users saw the raw I/O error "No such file or directory: 'perl'" with no remediation
+  guidance. (#4178)
+
 ### Internal
 
 - **`cargo xtask published-crate-count`** — new ratchet gate that monitors the

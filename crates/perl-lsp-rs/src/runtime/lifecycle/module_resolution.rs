@@ -12,7 +12,7 @@ use perl_module::resolution::{
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 /// A single resolution scope representing a workspace folder's search context.
@@ -40,13 +40,6 @@ pub struct ResolutionContext {
     /// Ordered search scopes (current folder first, then others)
     pub search_scopes: Vec<ResolutionScope>,
 }
-
-/// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
-///
-/// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
-/// because both sites indicate the same underlying problem: no workspace root was
-/// provided by the LSP client (single-file mode with no open folder).
-static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
@@ -210,13 +203,14 @@ impl LspServer {
         let root = match resolution_root(self, None) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -248,13 +242,14 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -380,13 +375,14 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };

@@ -295,6 +295,14 @@ pub struct LspServer {
     /// by this flag — it repeats for every affected file.
     #[cfg(feature = "workspace")]
     permission_denied_shown: Arc<AtomicBool>,
+    /// One-time guard for the `window/showMessage` workspace-root-undetected warning.
+    ///
+    /// Set to `true` after the first module resolution attempt when no workspace
+    /// root is configured, so the user is warned once per server session rather
+    /// than on every resolution call.  Uses an instance-level flag (not a
+    /// process-level `Once`) so that each `LspServer` instance tracks its own
+    /// session independently.
+    pub(crate) root_undetected_shown: Arc<AtomicBool>,
     /// Shared Perl::Critic analyzer for the diagnostic pipeline.
     ///
     /// Lazily initialized on first use and reused across diagnostic cycles so
