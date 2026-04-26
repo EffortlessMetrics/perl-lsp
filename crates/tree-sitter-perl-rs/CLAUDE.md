@@ -59,7 +59,7 @@ impl<'tree> TreeCursor<'tree> {
     pub fn goto_first_child(&mut self) -> bool;
     pub fn goto_next_sibling(&mut self) -> bool;
     pub fn goto_parent(&mut self) -> bool;
-    pub fn reset(&mut self, node: Node<'tree>);
+    pub fn reset(&mut self);  // resets to root node (no argument)
 }
 
 pub use perl_parser_core::edit::Edit as InputEdit;
