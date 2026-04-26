@@ -428,7 +428,6 @@ impl Drop for TempDir {
 mod tests {
     use super::*;
     use color_eyre::Result;
-    use std::os::unix::fs::PermissionsExt;
 
     fn unique_path(suffix: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -489,41 +488,47 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn run_lsp_smoke_reports_nonzero_exit() -> Result<()> {
-        let temp_root = unique_path("nonzero");
-        fs::create_dir_all(&temp_root)?;
-        let script = temp_root.join("fake_perllsp.sh");
-        fs::write(&script, "#!/usr/bin/env bash\necho crash >&2\nexit 7\n")?;
-        let mut perms = fs::metadata(&script)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script, perms)?;
+    #[cfg(unix)]
+    mod unix_tests {
+        use super::*;
+        use std::os::unix::fs::PermissionsExt;
 
-        let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
-        assert!(!passed);
-        let message = detail.unwrap_or_default();
-        assert!(message.contains("status"));
-        assert!(message.contains("crash"));
+        #[test]
+        fn run_lsp_smoke_reports_nonzero_exit() -> Result<()> {
+            let temp_root = unique_path("nonzero");
+            fs::create_dir_all(&temp_root)?;
+            let script = temp_root.join("fake_perllsp.sh");
+            fs::write(&script, "#!/usr/bin/env bash\necho crash >&2\nexit 7\n")?;
+            let mut perms = fs::metadata(&script)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script, perms)?;
 
-        fs::remove_dir_all(temp_root)?;
-        Ok(())
-    }
+            let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
+            assert!(!passed);
+            let message = detail.unwrap_or_default();
+            assert!(message.contains("status"));
+            assert!(message.contains("crash"));
 
-    #[test]
-    fn run_lsp_smoke_treats_running_process_as_success() -> Result<()> {
-        let temp_root = unique_path("long-running");
-        fs::create_dir_all(&temp_root)?;
-        let script = temp_root.join("fake_perllsp.sh");
-        fs::write(&script, "#!/usr/bin/env bash\nsleep 5\n")?;
-        let mut perms = fs::metadata(&script)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&script, perms)?;
+            fs::remove_dir_all(temp_root)?;
+            Ok(())
+        }
 
-        let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
-        assert!(passed);
-        assert!(detail.is_none());
+        #[test]
+        fn run_lsp_smoke_treats_running_process_as_success() -> Result<()> {
+            let temp_root = unique_path("long-running");
+            fs::create_dir_all(&temp_root)?;
+            let script = temp_root.join("fake_perllsp.sh");
+            fs::write(&script, "#!/usr/bin/env bash\nsleep 5\n")?;
+            let mut perms = fs::metadata(&script)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script, perms)?;
 
-        fs::remove_dir_all(temp_root)?;
-        Ok(())
+            let (passed, detail) = run_lsp_smoke(&script, &temp_root)?;
+            assert!(passed);
+            assert!(detail.is_none());
+
+            fs::remove_dir_all(temp_root)?;
+            Ok(())
+        }
     }
 }
