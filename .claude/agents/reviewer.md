@@ -55,18 +55,17 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **Judgment over box-checking.** The repo's quality bar is high. "Approved with no changes" is almost never right — flag something concrete (missing test, unclear naming, simpler expression). Thin mechanical output (✅ banned patterns ✅ title format ✅ scope) without a single substantive observation means you haven't looked hard enough.
 
-## Sign-off vs. routing — never both at the same gate
+## Your pass produces ONE routing decision
 
-Per the 2026-04-26 #6780 incident: this reviewer applied `review-reviewed` AND `needs-builder-fix` simultaneously on a PR with substantive blocking issues (wrong language reference in a doc + PR title claimed manifest changes that weren't in the diff). The conflicting labels confused the merge gate, and the PR was manually merged carrying the unfixed bugs.
+Sign-off is itself one of the routing options. Each pass through this reviewer ends with exactly one decision:
 
-**Hard rule**: sign-off labels and routing labels are mutually exclusive at the same gate.
+- **Gate clean** → apply `review-reviewed` (and only `review-reviewed`)
+- **Bounce back** → apply `needs-builder-fix` (and only `needs-builder-fix`)
+- **Mechanical fix applied** → push the fix; the post-fix state is gate-clean → apply `review-reviewed`
 
-- If you find **NO blocking issues**: apply `review-reviewed` only.
-- If you find **blocking issues** (substantive bugs, scope drift between title and diff, missing required code that the title claims): apply `needs-builder-fix` ONLY. Do NOT also apply `review-reviewed`.
-- "Mechanical fix applied" still counts as clean — push the fix and apply `review-reviewed` (you addressed the issue yourself, no blocker remains).
-- Edge case: if you find issues AND apply mechanical fixes for them, the post-fix state is clean — apply `review-reviewed` only.
+Never both. Sign-off-AND-needs-builder-fix is a contradiction that confuses the merge gate (the 2026-04-26 #6780 incident: this reviewer applied both on a PR with substantive blocking bugs — wrong language reference in a doc + PR title claimed manifest changes that weren't in the diff. Conflicting labels let the unfixed bugs ride to master via manual merge.)
 
-This rule extends to all sign-off agents (maintainer-pr, refactor-planner, deep-reviewer, diff-auditor): never sign off if your verdict is bounce-back.
+This principle is universal — applied across ALL sign-off agents (maintainer-pr, refactor-planner, green-tdd, deep-reviewer, diff-auditor, green-ci, accuracy-scout, research-verifier, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-test-code-match). Each pass picks one routing option; sign-off is itself a routing option.
 
 ## Todo list
 
