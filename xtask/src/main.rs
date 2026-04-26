@@ -1122,6 +1122,40 @@ enum Commands {
     /// Validate workspace exclusion strategy and dependency invariants.
     ValidateWorkspaceExclusions,
 
+    /// Aggregate subreceipts into a stable final check receipt.
+    AggregateReceipts {
+        /// Stable check name emitted by the final job.
+        #[arg(long)]
+        check: String,
+
+        /// Directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+
+        /// Output path for the aggregated receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+
+        /// Event name recorded in the receipt.
+        #[arg(long, default_value = "pull_request")]
+        event: String,
+
+        /// Allow selected=false required jobs to be treated as no-op success.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+
+        /// Advisory subreceipt handling mode (pass/warn/fail).
+        #[arg(long, value_enum, default_value = "warn")]
+        advisory_mode: aggregate_receipts::AdvisoryMode,
+    },
+
+    /// Finalize a stable check result from an aggregated receipt.
+    FinalizeCheck {
+        /// Path to an aggregated receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+
     /// Generate a build-timing receipt JSON with workspace duration metrics.
     BuildTimingReceipt {
         /// Measure clean build with `cargo build --workspace --locked`.
@@ -1680,6 +1714,17 @@ fn main() -> Result<()> {
         Commands::PopulateBook => populate_book::run(),
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
+        Commands::AggregateReceipts { check, inputs, output, event, allow_noop, advisory_mode } => {
+            aggregate_receipts::run(aggregate_receipts::AggregateReceiptsConfig {
+                check,
+                inputs,
+                output,
+                event,
+                allow_noop,
+                advisory_mode,
+            })
+        }
+        Commands::FinalizeCheck { receipt } => finalize_check::run(receipt),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
             build_timing::run_receipt(clean, incremental, tests, output, baseline)
         }
