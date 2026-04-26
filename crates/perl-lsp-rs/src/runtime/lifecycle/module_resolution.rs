@@ -425,7 +425,11 @@ impl LspServer {
             Vec::new()
         };
 
-        let perl5lib_set: HashSet<String> = perl5lib_paths.iter().cloned().collect();
+        let perl5lib_set: HashSet<String> = if config.use_perl5lib {
+            perl5lib_paths.iter().cloned().collect()
+        } else {
+            HashSet::new()
+        };
         let effective_inc =
             build_effective_inc_roots(&include_paths, &perl5lib_set, &lexical_paths, &system_paths);
 
@@ -553,6 +557,20 @@ mod tests {
         assert_eq!(roots[1].path, PathBuf::from("lib"));
         assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
         assert_eq!(roots[1].source, "workspace-include-paths");
+    }
+
+    #[test]
+    fn build_effective_inc_roots_empty_perl5lib_set_does_not_reclassify_workspace_paths() {
+        // Regression: when use_perl5lib=false the caller passes an empty set.
+        // A configured path like "lib" must remain WorkspaceRelative even if
+        // it coincidentally appears in $PERL5LIB.
+        let include_paths = vec!["lib".to_string()];
+        let empty_perl5lib: HashSet<String> = HashSet::new();
+        let roots = build_effective_inc_roots(&include_paths, &empty_perl5lib, &[], &[]);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[0].source, "workspace-include-paths");
     }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
