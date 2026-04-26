@@ -14,8 +14,10 @@ use proptest::prelude::*;
 /// A generator for printable ASCII strings (no NUL bytes), keeping lengths
 /// short so shrinking stays fast.
 fn ascii_pattern() -> impl Strategy<Value = String> {
+    // bytes are constrained to printable ASCII, so we can build the String
+    // directly without any fallible UTF-8 validation step
     prop::collection::vec(0x20u8..0x7fu8, 0..128)
-        .prop_map(|bytes| String::from_utf8(bytes).unwrap())
+        .prop_map(|bytes| bytes.into_iter().map(|b| b as char).collect())
 }
 
 /// A generator for typical regex modifier strings.
