@@ -200,6 +200,30 @@ fn heredoc_with_trailing_whitespace_on_terminator() -> R {
     Ok(())
 }
 
+#[test]
+fn heredoc_indented_terminator_with_tabs() -> R {
+    let input = "<<~EOF\n\t\tpayload\n\tEOF\n";
+    assert_terminates(input);
+    let sig = significant(input);
+    assert!(
+        sig.iter().any(|t| matches!(t.token_type, TokenType::HeredocStart)),
+        "expected HeredocStart"
+    );
+    Ok(())
+}
+
+#[test]
+fn heredoc_quoted_label_requires_exact_terminator() -> R {
+    let input = "<<'EOF'\nbody\neof\n";
+    assert_terminates(input);
+    let toks = tokens(input);
+    assert!(
+        toks.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        "expected UnknownRest when quoted label terminator differs by case"
+    );
+    Ok(())
+}
+
 // ===========================================================================
 // 2. Regex delimiters
 // ===========================================================================
@@ -654,6 +678,45 @@ fn q_with_escaped_delimiter() -> R {
         first.token_type
     );
     assert_eq!(first.text.as_ref(), r"q|hello \| world|");
+    Ok(())
+}
+
+#[test]
+fn quote_like_optional_whitespace_before_paired_delimiter() -> R {
+    let input = "qq {hello {nested} world}";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::QuoteDouble),
+        "Expected QuoteDouble for qq {{...}}, got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "qq {hello {nested} world}");
+    Ok(())
+}
+
+#[test]
+fn substitution_with_whitespace_and_mixed_paired_delimiters() -> R {
+    let input = "s {old} [new]ge";
+    assert_terminates(input);
+    let sig = significant(input);
+    let first = sig.first().ok_or("no tokens")?;
+    assert!(
+        matches!(first.token_type, TokenType::Substitution),
+        "Expected Substitution for s {{...}} [...], got {:?}",
+        first.token_type
+    );
+    assert_eq!(first.text.as_ref(), "s {old} [new]ge");
+    Ok(())
+}
+
+#[test]
+fn malformed_quote_like_constructs_do_not_panic() -> R {
+    let cases = ["q{unterminated", "s{a}{b", "tr{a}[b", "qr{foo"];
+    for case in cases {
+        assert_terminates(case);
+    }
     Ok(())
 }
 

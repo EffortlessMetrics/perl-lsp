@@ -461,6 +461,10 @@ Every public release **must** update three surfaces. See [RELEASE_HISTORY.md](RE
   - Asset count and summary
   - Channel outcomes (crates.io, VS Code Marketplace, Open VSX, Docker)
 
+### Release PR template
+
+Use [`.github/pull_request_template_release.md`](.github/pull_request_template_release.md) for release-only PRs so the release-history surface checks are visible during review.
+
 ### Verification
 
 ```bash
