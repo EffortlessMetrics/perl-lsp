@@ -34,6 +34,7 @@ perllsp --health
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
+| Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -140,3 +141,9 @@ example config and troubleshooting flow.
   and confirm the workspace root is correct.
 - If completions or diagnostics are missing, move to
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the next steps.
+
+
+### Codex Desktop
+
+Configure a custom Perl language server process that runs `perllsp --stdio`.
+See the dedicated guide for the exact fields and verification steps.
