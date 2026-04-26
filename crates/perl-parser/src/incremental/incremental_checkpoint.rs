@@ -209,6 +209,9 @@ impl TokenCache {
     /// * `edit_start` - Start byte position of the edit.
     /// * `old_len` - Length of the removed text.
     /// * `new_len` - Length of the inserted text.
+    ///
+    /// # Implementation notes
+    ///
     /// Adjust segment bounds after an edit.
     ///
     /// Only `segment.start` and `segment.end` are shifted; individual token byte
