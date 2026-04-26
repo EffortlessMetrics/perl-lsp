@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/merge-readiness.schema.json",
+  "title": "Merge Readiness Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check", "selected"],
+      "properties": {
+        "check": { "const": "merge-readiness" },
+        "selected": { "type": "boolean" },
+        "selection_reason": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  ]
+}
