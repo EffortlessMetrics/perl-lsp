@@ -16,7 +16,7 @@
 
 use perl_diagnostics::codes::DiagnosticCode;
 use perl_parser_core::ast::{Node, NodeKind};
-use perl_pragma::{parse_perl_version, PerlVersion, PragmaQueryCursor, PragmaTracker};
+use perl_pragma::{PerlVersion, PragmaQueryCursor, PragmaTracker, parse_perl_version};
 
 use super::super::internal_types::Diagnostic;
 use super::super::walker::walk_node;
