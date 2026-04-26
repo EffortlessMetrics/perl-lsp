@@ -13,8 +13,8 @@ mod incremental_tests {
         use perl_parser_core::{Node, NodeKind};
         fn visit(node: &Node) -> bool {
             match node.kind {
-                NodeKind::Variable => true,
-                _ => node.children.iter().any(visit),
+                NodeKind::Variable { .. } => true,
+                _ => node.children().iter().any(|n| visit(n)),
             }
         }
         visit(ast)
@@ -39,7 +39,7 @@ print $x + $y;
 
         // Verify initial AST
         let ast1 = doc.ast().ok_or("Failed to get initial AST")?;
-        assert!(ast_contains_variable(ast1), "AST does not contain a Variable node");
+        assert!(ast_contains_variable(&ast1), "AST does not contain a Variable node");
 
         // Apply incremental edit (change 42 to 99)
         let changes = vec![json!({
@@ -60,7 +60,7 @@ print $x + $y;
         // Verify updated AST
         let ast2 = doc.ast().ok_or("Failed to get updated AST")?;
         assert!(doc.content().contains("99"));
-        assert!(ast_contains_variable(ast2), "AST does not contain a Variable node");
+        assert!(ast_contains_variable(&ast2), "AST does not contain a Variable node");
 
         // Check incremental parsing metrics
         if let Some(metrics) = doc.metrics() {
