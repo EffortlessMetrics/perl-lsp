@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/label-projection.schema.json",
+  "title": "label-projection-receipt",
+  "type": "object",
+  "required": [
+    "current_labels",
+    "projected_apply",
+    "projected_remove",
+    "skipped",
+    "dry_run",
+    "verdict"
+  ],
+  "properties": {
+    "current_labels": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "projected_apply": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "projected_remove": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skipped": { "type": "boolean" },
+    "reason": {
+      "type": ["string", "null"]
+    },
+    "dry_run": { "type": "boolean" },
+    "verdict": {
+      "type": "string",
+      "enum": ["dry-run", "pending-apply", "applied", "refused"]
+    }
+  },
+  "additionalProperties": false
+}

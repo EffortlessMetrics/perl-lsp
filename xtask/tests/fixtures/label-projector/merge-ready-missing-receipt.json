@@ -1,0 +1,11 @@
+{
+  "canonical_state": "MERGE_READY",
+  "current_labels": ["ci-green"],
+  "pr": {
+    "number": 6853,
+    "repo": "EffortlessMetrics/perl-lsp"
+  },
+  "merge_ready_receipt": {
+    "valid": false
+  }
+}

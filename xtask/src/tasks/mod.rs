@@ -55,6 +55,7 @@ pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
 pub mod intent_diff_gate;
+pub mod label_projector;
 pub mod layer_check;
 pub mod merge_ready;
 pub mod methodology_gate;

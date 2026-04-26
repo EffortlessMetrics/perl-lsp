@@ -1272,6 +1272,12 @@ enum Commands {
         format: swarm_summary::SwarmSummaryOutputFormat,
     },
 
+    /// Queue-state derived automation tasks.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Populate mdBook source directory from `docs/`.
     PopulateBook,
 
@@ -1351,6 +1357,32 @@ enum ParserRatchetCommand {
         head_metrics: PathBuf,
         #[arg(long)]
         receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Project GitHub labels from canonical queue state.
+    ProjectLabels {
+        /// Path to the canonical queue-state JSON receipt.
+        #[arg(long)]
+        state: PathBuf,
+
+        /// Explicit dry-run mode (default behavior unless --apply is passed).
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Apply projected label changes against GitHub (requires GH_TOKEN).
+        #[arg(long)]
+        apply: bool,
+
+        /// Optional output path for the projection receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Projection rules TOML path.
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
 }
 
@@ -2209,6 +2241,20 @@ fn main() -> Result<()> {
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::ProjectLabels { state, dry_run, apply, receipt, config } => {
+                if apply && dry_run {
+                    return Err(eyre!("--dry-run and --apply are mutually exclusive"));
+                }
+                label_projector::run(label_projector::LabelProjectorConfig {
+                    state_path: state,
+                    dry_run_flag: dry_run,
+                    apply,
+                    receipt_path: receipt,
+                    projection_path: config,
+                })
+            }
+        },
         Commands::PopulateBook => populate_book::run(),
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
