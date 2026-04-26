@@ -400,6 +400,12 @@ enum Commands {
         format: String,
     },
 
+    /// Enforce ownership rules for generated files.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1303,6 +1309,26 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// Check changed generated files for matching generator receipts.
+    Check {
+        /// Output path for the generated ownership receipt.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Optional fixture JSON for tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Explicitly allow manual edits without a generator receipt.
+        #[arg(long)]
+        allow_override: bool,
+    },
+    /// List generated-file ownership rules.
+    List,
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1462,6 +1488,12 @@ fn main() -> Result<()> {
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
         }
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::Check { receipt, fixture, allow_override } => {
+                generated_files::check(receipt, fixture, allow_override)
+            }
+            GeneratedFilesCommand::List => generated_files::list(),
+        },
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
         Commands::SecurityHardening => hardening::security_hardening(),

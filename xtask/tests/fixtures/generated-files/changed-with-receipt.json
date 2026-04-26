@@ -1,0 +1,13 @@
+{
+  "changed_files": [
+    "docs/project/status/parser.md"
+  ],
+  "generator_receipts": [
+    {
+      "owner": "status-docs",
+      "files": [
+        "docs/project/status/parser.md"
+      ]
+    }
+  ]
+}
