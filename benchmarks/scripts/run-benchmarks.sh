@@ -77,6 +77,27 @@ log() {
     fi
 }
 
+# Convert Criterion timing values to integer nanoseconds.
+# Uses awk for floating-point arithmetic to avoid requiring `bc`.
+to_nanoseconds() {
+    local value=$1
+    local unit=$2
+    local multiplier=1
+
+    case $unit in
+        ns) multiplier=1 ;;
+        us) multiplier=1000 ;;
+        ms) multiplier=1000000 ;;
+        s)  multiplier=1000000000 ;;
+        *)
+            echo ""
+            return 1
+            ;;
+    esac
+
+    awk -v value="$value" -v mult="$multiplier" 'BEGIN { printf "%.0f\n", value * mult }'
+}
+
 # Function to run benchmarks and extract results
 run_criterion_bench() {
     local crate=$1
@@ -94,34 +115,28 @@ run_criterion_bench() {
         # Parse criterion output for timing
         # Example: "parse_simple_script  time:   [45.123 us 45.234 us 45.345 us]"
         while IFS= read -r line; do
-            if [[ $line =~ ([a-z_]+)[[:space:]]+time:[[:space:]]+\[([0-9.]+)[[:space:]]+(ns|us|ms|s)[[:space:]]+([0-9.]+)[[:space:]]+(ns|us|ms|s)[[:space:]]+([0-9.]+)[[:space:]]+(ns|us|ms|s)\] ]]; then
+            if [[ $line =~ ([A-Za-z0-9_/-]+)[[:space:]]+time:[[:space:]]+\[([0-9.]+)[[:space:]]+(ns|us|ms|s)[[:space:]]+([0-9.]+)[[:space:]]+(ns|us|ms|s)[[:space:]]+([0-9.]+)[[:space:]]+(ns|us|ms|s)\] ]]; then
                 local bench_name="${BASH_REMATCH[1]}"
                 local low="${BASH_REMATCH[2]}"
+                local low_unit="${BASH_REMATCH[3]}"
                 local mean="${BASH_REMATCH[4]}"
-                local unit="${BASH_REMATCH[5]}"
+                local mean_unit="${BASH_REMATCH[5]}"
                 local high="${BASH_REMATCH[6]}"
-
-                # Convert to nanoseconds
-                local multiplier=1
-                case $unit in
-                    us) multiplier=1000 ;;
-                    ms) multiplier=1000000 ;;
-                    s)  multiplier=1000000000 ;;
-                esac
+                local high_unit="${BASH_REMATCH[7]}"
 
                 local mean_ns
-                mean_ns=$(echo "$mean * $multiplier" | bc | cut -d'.' -f1)
+                mean_ns=$(to_nanoseconds "$mean" "$mean_unit") || continue
                 local low_ns
-                low_ns=$(echo "$low * $multiplier" | bc | cut -d'.' -f1)
+                low_ns=$(to_nanoseconds "$low" "$low_unit") || continue
                 local high_ns
-                high_ns=$(echo "$high * $multiplier" | bc | cut -d'.' -f1)
+                high_ns=$(to_nanoseconds "$high" "$high_unit") || continue
 
                 echo "      \"$bench_name\": {"
                 echo "        \"mean_ns\": $mean_ns,"
                 echo "        \"low_ns\": $low_ns,"
                 echo "        \"high_ns\": $high_ns,"
-                echo "        \"unit\": \"$unit\","
-                echo "        \"display\": \"$mean $unit\""
+                echo "        \"unit\": \"$mean_unit\","
+                echo "        \"display\": \"$mean $mean_unit\""
                 echo "      },"
             fi
         done < "$temp_output"

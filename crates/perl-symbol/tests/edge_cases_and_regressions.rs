@@ -25,7 +25,10 @@ use perl_symbol::cursor::{
     CursorSymbolKind, byte_offset_utf16, extract_symbol_from_source, get_symbol_range_at_position,
     is_modchar, is_word_boundary, token_under_cursor,
 };
-use perl_symbol::{SymbolDecl, SymbolIndex, SymbolKind, VarKind, extract_symbol_decls};
+use perl_symbol::{
+    SymbolDecl, SymbolIndex, SymbolKind, SymbolRef, SymbolRefKind, VarKind, extract_symbol_decls,
+    extract_symbol_refs,
+};
 use perl_tdd_support::must_some;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -57,6 +60,9 @@ fn api_regression_every_documented_name_is_reachable_at_crate_root() -> Result<(
     // surface — crate-root re-export of both the type and the function
     let _sd_size = std::mem::size_of::<SymbolDecl>(); // SymbolDecl at crate root
     let _f7: fn(&Node, Option<&str>) -> Vec<SymbolDecl> = extract_symbol_decls;
+    let _sr_size = std::mem::size_of::<SymbolRef>();
+    let _f8: fn(&Node) -> Vec<SymbolRef> = extract_symbol_refs;
+    let _rk = SymbolRefKind::SubroutineCall;
 
     Ok(())
 }
@@ -74,8 +80,8 @@ fn api_regression_every_documented_name_is_reachable_at_crate_root() -> Result<(
 /// public name requires deliberately updating this list *and*
 /// `facade_api_completeness.rs` — a deliberate act, not an accident.
 #[test]
-fn api_regression_crate_root_exposes_exactly_eight_reexported_items() -> Result<()> {
-    // The eight names re-exported at the crate root (from `api.rs`):
+fn api_regression_crate_root_exposes_exactly_eleven_reexported_items() -> Result<()> {
+    // The eleven names re-exported at the crate root (from `api.rs`):
     //   SymbolKind, VarKind                          — types
     //   CursorSymbolKind, byte_offset_utf16,
     //   extract_symbol_from_source,
@@ -83,7 +89,8 @@ fn api_regression_crate_root_exposes_exactly_eight_reexported_items() -> Result<
     //   is_modchar, is_word_boundary,
     //   token_under_cursor                           — cursor
     //   SymbolIndex                                  — index
-    //   SymbolDecl, extract_symbol_decls             — surface
+    //   SymbolDecl, extract_symbol_decls, SymbolRef, SymbolRefKind, extract_symbol_refs
+    //                                                — surface
     //
     // Bind each name to assert it resolves; if `api.rs` is narrowed, the
     // missing binding fails to compile. If someone switches to a wildcard
@@ -99,11 +106,13 @@ fn api_regression_crate_root_exposes_exactly_eight_reexported_items() -> Result<
     let _ = std::any::type_name::<perl_symbol::CursorSymbolKind>();
     let _ = std::any::type_name::<perl_symbol::SymbolIndex>();
     let _ = std::any::type_name::<perl_symbol::SymbolDecl>();
+    let _ = std::any::type_name::<perl_symbol::SymbolRef>();
     let _byte: fn(&str, usize) -> usize = perl_symbol::byte_offset_utf16;
     let _esfs: fn(usize, &str) -> Option<(String, perl_symbol::CursorSymbolKind)> =
         perl_symbol::extract_symbol_from_source;
     let _esd: fn(&perl_ast::Node, Option<&str>) -> Vec<perl_symbol::SymbolDecl> =
         perl_symbol::extract_symbol_decls;
+    let _esr: fn(&perl_ast::Node) -> Vec<perl_symbol::SymbolRef> = perl_symbol::extract_symbol_refs;
     let _gsp: fn(usize, &str) -> Option<(usize, usize)> = perl_symbol::get_symbol_range_at_position;
     let _im: fn(u8) -> bool = perl_symbol::is_modchar;
     let _iwb: fn(&[u8], usize, usize) -> bool = perl_symbol::is_word_boundary;
@@ -485,6 +494,33 @@ fn edge_case_surface_seed_package_qualifies_top_level_subs() -> Result<()> {
     assert_eq!(d.name, "greet");
     assert_eq!(d.qualified_name, "Foo::greet", "seed package must qualify top-level sub");
     assert_eq!(d.container.as_deref(), Some("Foo"));
+    Ok(())
+}
+
+#[test]
+fn edge_case_surface_conservatively_skips_non_ast_native_decl_kinds() -> Result<()> {
+    // `use`/`no` statements are module-loading forms and do not encode
+    // declaration-site semantics for SymbolKind::Import / ::Export / ::Role.
+    let use_node = Node::new(
+        NodeKind::Use {
+            module: "strict".to_string(),
+            args: vec!["subs".to_string()],
+            has_filter_risk: false,
+        },
+        loc(0, 16),
+    );
+    let no_node = Node::new(
+        NodeKind::No {
+            module: "warnings".to_string(),
+            args: vec!["once".to_string()],
+            has_filter_risk: false,
+        },
+        loc(17, 36),
+    );
+    let program = Node::new(NodeKind::Program { statements: vec![use_node, no_node] }, loc(0, 36));
+
+    let decls = extract_symbol_decls(&program, None);
+    assert!(decls.is_empty());
     Ok(())
 }
 
