@@ -36,20 +36,27 @@ Classify and act:
    ```
 
 2. Filter for merge candidates:
-   - MERGEABLE + CLEAN or UNSTABLE (CI may be running)
+   - **mergeStateStatus = CLEAN** (NOT UNSTABLE, NOT UNKNOWN, NOT DIRTY). UNSTABLE means non-required check failing or in flight — wait, don't merge.
    - Not a draft (or promote with `gh pr ready` if appropriate)
    - reviewDecision: APPROVED or no review required
+   - **No active `needs-*` routing label** (per the 2026-04-26 sign-off-as-routing rule). Filter out PRs with any of: `needs-builder-fix`, `needs-ci-fix`, `needs-diff-fix`, `needs-spec-fix`, `needs-red-tdd-fix`. Sign-off and routing labels are mutually exclusive at the same gate; presence of `needs-*` means the gate has not actually cleared.
 
-3. Check CI on each candidate:
+   Filter command (post-Step-1 list narrowing):
    ```bash
-   gh pr view <number> --json statusCheckRollup --jq '[.statusCheckRollup[] | select(.conclusion == "FAILURE") | (.context // .name)]'
+   gh pr list --state open --label merge-ready --limit 50 --json number,labels,mergeStateStatus,isDraft -q '[.[] | select(.isDraft | not) | select(.mergeStateStatus == "CLEAN") | select(.labels | map(.name) | (contains(["needs-builder-fix"]) or contains(["needs-ci-fix"]) or contains(["needs-diff-fix"]) or contains(["needs-spec-fix"]) or contains(["needs-red-tdd-fix"])) | not)] | .[].number'
+   ```
+
+3. Check CI on each candidate using **latest-per-check filter** (per `feedback_status_check_rollup_stale_entries.md`):
+   ```bash
+   gh pr view <number> --json statusCheckRollup --jq '.statusCheckRollup | group_by(.name // .context) | map(sort_by(.completedAt // .startedAt) | last) | [.[] | select(.conclusion == "FAILURE") | (.context // .name)]'
    ```
 
 4. Classify:
-   - **MERGE NOW**: MERGEABLE + CI green + `just pre-merge-check <number>` passes
-   - **WAIT**: CI still running
-   - **BLOCKED**: CI failures — note which check failed
-   - **NEEDS REBASE**: CONFLICTING
+   - **MERGE NOW**: CLEAN + latest CI all green + no `needs-*` + `just pre-merge-check <number>` passes
+   - **WAIT**: CI still running (mergeStateStatus = UNSTABLE / UNKNOWN)
+   - **BLOCKED**: CI failures on latest run — note which check failed
+   - **NEEDS REBASE**: CONFLICTING / DIRTY
+   - **CONTRADICTORY**: has `merge-ready` AND a `needs-*` label — strip `merge-ready` and route to the appropriate fixer
 
 ## Output
 
