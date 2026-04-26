@@ -1,0 +1,11 @@
+{
+  "name": "parser crate change",
+  "changed_files": [
+    "crates/perl-parser/src/parser.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "matched path: crates/perl-parser/**"
+  }
+}

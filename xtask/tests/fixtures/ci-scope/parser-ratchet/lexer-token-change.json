@@ -1,0 +1,12 @@
+{
+  "name": "lexer/token change",
+  "changed_files": [
+    "crates/perl-lexer/src/tokenize.rs",
+    "crates/perl-token/src/kinds.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "matched path: crates/perl-lexer/**"
+  }
+}

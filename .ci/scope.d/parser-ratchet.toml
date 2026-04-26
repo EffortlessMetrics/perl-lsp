@@ -1,0 +1,58 @@
+# Parser Ratchet scope selection (Issue #6847)
+#
+# Policy intent:
+# - Always produce a receipt for Parser Ratchet.
+# - Only run expensive parser corpus/ratchet work when parser behavior is plausibly affected.
+# - This file defines *selection only* (not execution strategy, comparator logic, or corpus wiring).
+
+[id]
+name = "parser-ratchet"
+kind = "selection-only"
+
+[selection]
+mode = "any"
+
+# Select when any changed path matches one of these patterns.
+path_globs = [
+  "crates/perl-parser/**",
+  "crates/perl-parser-core/**",
+  "crates/perl-lexer/**",
+  "crates/perl-token/**",
+  "crates/tree-sitter-perl-rs/**",
+  "crates/tree-sitter-perl-c/**",
+  "xtask/src/tasks/*parser*",
+  "xtask/src/tasks/*corpus*",
+  "xtask/src/tasks/ci_scope.rs",
+  "xtask/src/tasks/gates.rs",
+  "xtask/src/tasks/ratchet*.rs",
+  ".ci/scope.d/**",
+  ".ci/gates.d/**",
+  ".ci/parser-ratchet/**",
+  ".github/workflows/**",
+  "tests/parser/**",
+  "tests/perl-corpus/**",
+]
+
+# Cargo.lock is selected only when parser-relevant deps change.
+# (This remains a policy marker for now; lockfile package diffing is future work.)
+cargo_lock = "parser_relevant_deps_only"
+
+# Select when any of these risk tags are present.
+risk_tags_any = [
+  "parser",
+  "lexer",
+  "token",
+  "corpus",
+  "incremental",
+  "tree-sitter",
+  "parser-recovery",
+  "parser-accuracy",
+]
+
+# When nothing matches, selection must be false and still emit a receipt.
+default_reason = "no parser-relevant paths or risk tags detected"
+
+[receipt]
+selected_true_field = "selection_reason"
+selected_false_field = "reason"
+always_emit = true
