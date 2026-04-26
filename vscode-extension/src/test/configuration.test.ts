@@ -196,20 +196,26 @@ describe('package.json contributes', () => {
   });
 
   describe('activation events', () => {
-    test('activates on perl language', () => {
-      expect(pkg.activationEvents).toContain('onLanguage:perl');
+    test('uses only lazy activation events required by the extension', () => {
+      expect(pkg.activationEvents).toEqual([
+        'onLanguage:perl',
+        'onLanguage:gherkin',
+        'onWalkthrough:perl-lsp.gettingStarted',
+        'onDebugResolve:perl',
+        'onDebugInitialConfigurations',
+      ]);
     });
 
-    test('activates on gherkin language', () => {
-      expect(pkg.activationEvents).toContain('onLanguage:gherkin');
+    test('does not activate after VS Code startup', () => {
+      expect(pkg.activationEvents).not.toContain('onStartupFinished');
     });
 
-    test('activates on restart command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.restart');
-    });
+    test('does not declare redundant command activation events', () => {
+      const commandActivationEvents = pkg.activationEvents.filter((event: string) =>
+        event.startsWith('onCommand:')
+      );
 
-    test('activates on reinstall command', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.reinstall');
+      expect(commandActivationEvents).toEqual([]);
     });
   });
 
@@ -546,10 +552,6 @@ describe('package.json contributes', () => {
       // Should be available globally (no when clause restricting to perl)
       expect(entry.when ?? '').not.toMatch(/editorLangId/);
     });
-
-    test('openConfigurationGuide has an activation event', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.openConfigurationGuide');
-    });
   });
 
   describe('debugger configuration', () => {
@@ -668,10 +670,6 @@ describe('package.json contributes', () => {
       const palette = pkg.contributes.menus.commandPalette;
       const entry = palette.find((e: any) => e.command === 'perl-lsp.createDebugConfig');
       expect(entry).toBeDefined();
-    });
-
-    test('createDebugConfig has an activation event', () => {
-      expect(pkg.activationEvents).toContain('onCommand:perl-lsp.createDebugConfig');
     });
   });
 
