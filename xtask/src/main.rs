@@ -1389,7 +1389,6 @@ enum MergeReadyCommand {
     },
 }
 
-
 #[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
@@ -1830,8 +1829,7 @@ fn main() -> Result<()> {
             MergeReadyCommand::Emit { pr, receipt } => merge_ready::emit(pr, receipt),
             MergeReadyCommand::Verify { pr, fixture } => merge_ready::verify(pr, fixture),
             MergeReadyCommand::Reconcile { apply, dry_run } => {
-                let run_dry = if apply { false } else { true };
-                let run_dry = if dry_run { true } else { run_dry };
+                let run_dry = !apply || dry_run;
                 merge_ready::reconcile(run_dry)
             }
         },

@@ -337,3 +337,181 @@ fn fnv1a64_hex(bytes: &[u8]) -> String {
     }
     format!("fnv1a64:{hash:016x}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_receipt(
+        head_sha: &str,
+        base_sha: &str,
+        gate_graph_version: &str,
+        verdict: &str,
+        blocker_labels_absent: bool,
+    ) -> MergeReadinessReceipt {
+        MergeReadinessReceipt {
+            check: CHECK_NAME.to_string(),
+            schema_version: SCHEMA_VERSION,
+            event: "pull_request".to_string(),
+            pr: 1,
+            head_sha: head_sha.to_string(),
+            base_sha: base_sha.to_string(),
+            gate_graph_version: gate_graph_version.to_string(),
+            required_checks: vec!["build".to_string()],
+            review_evidence: vec!["reviewed-deep".to_string()],
+            blocker_labels_absent,
+            verdict: verdict.to_string(),
+            expires_when: "on_new_commit_or_base_or_policy_change".to_string(),
+        }
+    }
+
+    const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const SHA_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const SHA_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
+    const GATE_V1: &str = "fnv1a64:0000000000000001";
+    const GATE_V2: &str = "fnv1a64:0000000000000002";
+
+    #[test]
+    fn test_verify_returns_valid_for_current_receipt() {
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        let status = evaluate_receipt(&receipt, SHA_A, SHA_B, GATE_V1);
+        assert_eq!(status, VerifyStatus::Valid);
+    }
+
+    #[test]
+    fn test_verify_returns_stale_head() {
+        // Receipt was emitted against SHA_A, but current head is SHA_C
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        let status = evaluate_receipt(&receipt, SHA_C, SHA_B, GATE_V1);
+        assert_eq!(status, VerifyStatus::StaleHead);
+    }
+
+    #[test]
+    fn test_verify_returns_stale_base() {
+        // Receipt base matches SHA_B, but master has advanced to SHA_C
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        let status = evaluate_receipt(&receipt, SHA_A, SHA_C, GATE_V1);
+        assert_eq!(status, VerifyStatus::StaleBase);
+    }
+
+    #[test]
+    fn test_verify_returns_stale_gate_graph() {
+        // Gate policy changed: GATE_V1 receipt vs GATE_V2 current
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        let status = evaluate_receipt(&receipt, SHA_A, SHA_B, GATE_V2);
+        assert_eq!(status, VerifyStatus::StaleGateGraph);
+    }
+
+    #[test]
+    fn test_verify_returns_blocked_when_needs_label_present() {
+        // blocker_labels_absent = false indicates a needs-* label is set
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", false);
+        let status = evaluate_receipt(&receipt, SHA_A, SHA_B, GATE_V1);
+        assert_eq!(status, VerifyStatus::Blocked);
+    }
+
+    #[test]
+    fn test_verify_returns_blocked_when_verdict_is_blocked() {
+        // verdict = "blocked" takes priority even if all SHAs match
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "blocked", true);
+        let status = evaluate_receipt(&receipt, SHA_A, SHA_B, GATE_V1);
+        assert_eq!(status, VerifyStatus::Blocked);
+    }
+
+    #[test]
+    fn test_verify_returns_missing_when_no_receipt_file() -> color_eyre::eyre::Result<()> {
+        // Write receipt to a temp file, then delete it and pass the path to verify()
+        let tmp = tempfile::NamedTempFile::new()?;
+        let path = tmp.path().to_path_buf();
+        // Drop the file so it no longer exists on disk
+        drop(tmp);
+
+        // verify() should output "missing" and bail
+        let result = verify(None, Some(path));
+        assert!(result.is_err(), "verify should return Err for missing receipt");
+        Ok(())
+    }
+
+    #[test]
+    fn test_verify_status_as_str_covers_all_variants() {
+        assert_eq!(VerifyStatus::Valid.as_str(), "valid");
+        assert_eq!(VerifyStatus::StaleHead.as_str(), "stale_head");
+        assert_eq!(VerifyStatus::StaleBase.as_str(), "stale_base");
+        assert_eq!(VerifyStatus::StaleGateGraph.as_str(), "stale_gate_graph");
+        assert_eq!(VerifyStatus::Blocked.as_str(), "blocked");
+        assert_eq!(VerifyStatus::Missing.as_str(), "missing");
+    }
+
+    #[test]
+    fn test_evaluate_receipt_checks_blocked_before_staleness() {
+        // If blocked, should return Blocked even if head/base are mismatched
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "blocked", true);
+        // Different head and base to confirm Blocked is checked first
+        let status = evaluate_receipt(&receipt, SHA_C, SHA_C, GATE_V2);
+        assert_eq!(status, VerifyStatus::Blocked);
+    }
+
+    #[test]
+    fn test_resolve_runtime_token_substitutes_current_head() {
+        let result = resolve_runtime_token("$CURRENT_HEAD", SHA_A, SHA_B, GATE_V1);
+        assert_eq!(result, SHA_A);
+    }
+
+    #[test]
+    fn test_resolve_runtime_token_substitutes_current_base() {
+        let result = resolve_runtime_token("$CURRENT_BASE", SHA_A, SHA_B, GATE_V1);
+        assert_eq!(result, SHA_B);
+    }
+
+    #[test]
+    fn test_resolve_runtime_token_substitutes_gate_graph() {
+        let result = resolve_runtime_token("$CURRENT_GATE_GRAPH", SHA_A, SHA_B, GATE_V1);
+        assert_eq!(result, GATE_V1);
+    }
+
+    #[test]
+    fn test_resolve_runtime_token_returns_literal_for_unknown_token() {
+        let literal = "abc1234def5678";
+        let result = resolve_runtime_token(literal, SHA_A, SHA_B, GATE_V1);
+        assert_eq!(result, literal);
+    }
+
+    #[test]
+    fn test_write_and_load_receipt_round_trip() -> color_eyre::eyre::Result<()> {
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        let tmp = tempfile::NamedTempFile::new()?;
+        write_receipt(tmp.path(), &receipt)?;
+        let loaded = load_receipt(tmp.path())?;
+        assert_eq!(loaded.head_sha, SHA_A);
+        assert_eq!(loaded.base_sha, SHA_B);
+        assert_eq!(loaded.gate_graph_version, GATE_V1);
+        assert_eq!(loaded.verdict, "valid");
+        assert!(loaded.blocker_labels_absent);
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_receipt_creates_parent_dirs() -> color_eyre::eyre::Result<()> {
+        let tmp_dir = tempfile::tempdir()?;
+        let nested_path = tmp_dir.path().join("nested").join("dirs").join("receipt.json");
+        let receipt = make_receipt(SHA_A, SHA_B, GATE_V1, "valid", true);
+        write_receipt(&nested_path, &receipt)?;
+        assert!(nested_path.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn test_fnv1a64_hex_is_deterministic() {
+        let h1 = fnv1a64_hex(b"hello");
+        let h2 = fnv1a64_hex(b"hello");
+        assert_eq!(h1, h2);
+        assert!(h1.starts_with("fnv1a64:"));
+    }
+
+    #[test]
+    fn test_fnv1a64_hex_differs_on_different_input() {
+        let h1 = fnv1a64_hex(b"hello");
+        let h2 = fnv1a64_hex(b"world");
+        assert_ne!(h1, h2);
+    }
+}

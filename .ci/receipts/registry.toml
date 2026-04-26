@@ -19,6 +19,8 @@ description = "Aggregates multiple gate receipts into a control-plane summary."
 check = "merge-readiness"
 schema = ".ci/receipts/schemas/merge-readiness.schema.json"
 description = "Represents merge readiness derivation from upstream receipts."
+producer = "cargo xtask merge-ready emit"
+required_fields = ["head_sha", "base_sha", "gate_graph_version", "verdict"]
 
 [[receipt]]
 check = "fmt"

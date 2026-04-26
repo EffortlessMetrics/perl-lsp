@@ -40,6 +40,10 @@ struct RegistryEntry {
     schema: String,
     #[serde(default)]
     description: Option<String>,
+    #[serde(default)]
+    producer: Option<String>,
+    #[serde(default)]
+    required_fields: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -47,6 +51,10 @@ struct ListItem {
     check: String,
     schema: String,
     description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    producer: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    required_fields: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -68,6 +76,8 @@ pub fn list(format: OutputFormat) -> Result<()> {
             check: entry.check.clone(),
             schema: entry.schema.clone(),
             description: entry.description.clone(),
+            producer: entry.producer.clone(),
+            required_fields: entry.required_fields.clone(),
         })
         .collect::<Vec<_>>();
 
@@ -79,6 +89,12 @@ pub fn list(format: OutputFormat) -> Result<()> {
                     println!("- {} => {} ({description})", item.check, item.schema);
                 } else {
                     println!("- {} => {}", item.check, item.schema);
+                }
+                if let Some(producer) = &item.producer {
+                    println!("    producer: {producer}");
+                }
+                if !item.required_fields.is_empty() {
+                    println!("    required_fields: {}", item.required_fields.join(", "));
                 }
             }
         }
