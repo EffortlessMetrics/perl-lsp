@@ -29,6 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
       - name: Run workflow policy lint
         run: cargo xtask workflow-policy-lint --receipt target/receipts/workflow-policy.json
       - name: Upload workflow policy receipt
