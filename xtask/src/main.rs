@@ -349,6 +349,17 @@ enum Commands {
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
 
+    /// Lint GitHub workflow security policy invariants.
+    WorkflowPolicyLint {
+        /// Write a JSON receipt artifact for CI consumption.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single workflow fixture instead of repository workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
     /// Measure CI lane runtimes and emit timing artifacts.
     CiMeasure,
 
@@ -1483,6 +1494,12 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::WorkflowPolicyLint { receipt, fixture } => {
+            workflow_policy_lint::run(workflow_policy_lint::WorkflowPolicyLintConfig {
+                receipt,
+                fixture,
+            })
+        }
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {

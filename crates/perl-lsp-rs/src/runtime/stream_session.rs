@@ -37,6 +37,7 @@ pub struct StreamSession {
 }
 
 impl StreamSession {
+    /// Create a new session with the given ID and replacement-range start position.
     pub fn new(session_id: String, line: u64, character: u64) -> Self {
         Self {
             session_id,
@@ -48,14 +49,19 @@ impl StreamSession {
         }
     }
 
+    /// Signal the stream to stop; subsequent `$/progress` chunks will not be sent.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
     }
 
+    /// Return `true` if [`cancel`] has been called on this session.
+    ///
+    /// [`cancel`]: StreamSession::cancel
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::Acquire)
     }
 
+    /// Atomically increment and return the next sequence number.
     pub fn next_sequence(&self) -> u64 {
         self.sequence.fetch_add(1, Ordering::Relaxed)
     }
@@ -68,6 +74,7 @@ pub struct StreamSessionManager {
 }
 
 impl StreamSessionManager {
+    /// Create a new, empty session manager.
     pub fn new() -> Self {
         Self { sessions: std::sync::Mutex::new(HashMap::new()), generation: AtomicU64::new(0) }
     }
