@@ -95,7 +95,9 @@ fn derive_state(pr: &PullRequestSnapshot, receipts: Vec<InputReceipt>) -> PrQueu
     let mut has_reviewed_receipt = false;
 
     for receipt in receipts {
-        if let Some(head_sha) = receipt.head_sha.as_ref() && head_sha != &pr.head_sha {
+        if let Some(head_sha) = receipt.head_sha.as_ref()
+            && head_sha != &pr.head_sha
+        {
             stale_receipts.push(receipt.kind.clone());
         }
         if receipt.kind == "merge-readiness"
