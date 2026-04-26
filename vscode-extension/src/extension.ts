@@ -978,40 +978,75 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
         return userPath;
     }
     
-    // Check bundled binary
     const platform = process.platform;
     const arch = process.arch;
     const binaryNames = platform === 'win32'
         ? ['perllsp.exe', 'perl-lsp.exe']
         : ['perllsp', 'perl-lsp'];
 
-    for (const binaryName of binaryNames) {
-        const bundledPath = path.join(
-            context.extensionPath,
-            'bin',
-            `${platform}-${arch}`,
-            binaryName
-        );
+    const findInPath = (): string | null => {
+        const pathDirs = process.env.PATH?.split(path.delimiter) || [];
+        for (const dir of pathDirs) {
+            for (const binaryName of binaryNames) {
+                const fullPath = path.join(dir, binaryName);
+                if (fs.existsSync(fullPath)) {
+                    outputChannel.appendLine(`Found Perl LSP binary in PATH: ${fullPath}`);
+                    return fullPath;
+                }
+            }
+        }
+        return null;
+    };
 
-        if (fs.existsSync(bundledPath)) {
+    const findBundled = (): string | null => {
+        for (const binaryName of binaryNames) {
+            const bundledPath = path.join(
+                context.extensionPath,
+                'bin',
+                `${platform}-${arch}`,
+                binaryName
+            );
+
+            if (!fs.existsSync(bundledPath)) {
+                continue;
+            }
+
             outputChannel.appendLine(`Using bundled Perl LSP binary: ${bundledPath}`);
             if (platform !== 'win32') {
-                fs.chmodSync(bundledPath, 0o755);
+                try {
+                    fs.chmodSync(bundledPath, 0o755);
+                } catch (chmodError: unknown) {
+                    const msg = chmodError instanceof Error ? chmodError.message : String(chmodError);
+                    outputChannel.appendLine(
+                        `[startup] Could not update executable permissions for bundled binary: ${msg}`
+                    );
+                }
             }
             return bundledPath;
         }
-    }
-    
-    // Try to find in PATH
-    const pathDirs = process.env.PATH?.split(path.delimiter) || [];
-    for (const dir of pathDirs) {
-        for (const binaryName of binaryNames) {
-            const fullPath = path.join(dir, binaryName);
-            if (fs.existsSync(fullPath)) {
-                outputChannel.appendLine(`Found Perl LSP binary in PATH: ${fullPath}`);
-                return fullPath;
-            }
+        return null;
+    };
+
+    // Firebase Studio (and IDX) run in remote containers where extension install
+    // paths may be mounted read-only or noexec. Prefer PATH there so users can
+    // provide perllsp from their workspace/toolchain.
+    const remoteName = vscode.env.remoteName?.toLowerCase() ?? '';
+    const preferPathBeforeBundled = remoteName.includes('firebase') || remoteName.includes('idx');
+    if (preferPathBeforeBundled) {
+        const pathCandidate = findInPath();
+        if (pathCandidate) {
+            return pathCandidate;
         }
+    }
+
+    const bundledCandidate = findBundled();
+    if (bundledCandidate) {
+        return bundledCandidate;
+    }
+
+    const pathCandidate = findInPath();
+    if (pathCandidate) {
+        return pathCandidate;
     }
     
     // Check if auto-download is enabled
@@ -1545,10 +1580,39 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
         return;
     }
 
+    const isWithinBasePath = (basePath: string, targetPath: string): boolean => {
+        const relative = path.relative(basePath, targetPath);
+        return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    };
+
+    const hasSafeExistingAncestor = (workspaceRealPath: string, candidatePath: string): boolean => {
+        let current = candidatePath;
+        while (!fs.existsSync(current)) {
+            const parent = path.dirname(current);
+            if (parent === current) {
+                return false;
+            }
+            current = parent;
+        }
+
+        try {
+            const ancestorRealPath = fs.realpathSync(current);
+            return isWithinBasePath(workspaceRealPath, ancestorRealPath);
+        } catch {
+            return false;
+        }
+    };
+
     for (const folder of workspaceFolders) {
         const cacheKey = `perl-lsp.includePathsWarning.${encodeURIComponent(folder.uri.toString())}`;
         const config = vscode.workspace.getConfiguration('perl-lsp', folder.uri);
         const includePaths: string[] = config.get('includePaths', ['lib', 'local/lib/perl5']);
+        let workspaceRealPath: string;
+        try {
+            workspaceRealPath = fs.realpathSync(folder.uri.fsPath);
+        } catch {
+            continue;
+        }
         const missingPaths = includePaths.filter(includePath => {
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             return !fs.existsSync(resolved);
@@ -1580,7 +1644,11 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             }
             const resolved = path.resolve(folder.uri.fsPath, includePath);
             const relative = path.relative(folder.uri.fsPath, resolved);
-            return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+            if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+                return false;
+            }
+
+            return hasSafeExistingAncestor(workspaceRealPath, resolved);
         });
         const actions = ['Open Settings'];
         if (creatablePaths.length > 0) {
@@ -1601,7 +1669,7 @@ export async function validateIncludePaths(context: vscode.ExtensionContext): Pr
             const createdPaths: string[] = [];
             for (const includePath of creatablePaths) {
                 const resolved = path.resolve(folder.uri.fsPath, includePath);
-                if (!fs.existsSync(resolved)) {
+                if (!fs.existsSync(resolved) && hasSafeExistingAncestor(workspaceRealPath, resolved)) {
                     fs.mkdirSync(resolved, { recursive: true });
                     createdPaths.push(includePath);
                 }
