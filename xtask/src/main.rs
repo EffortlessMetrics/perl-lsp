@@ -825,6 +825,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Parser corpus utilities for ratchet manifests.
+    ParserCorpus {
+        #[command(subcommand)]
+        command: ParserCorpusCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1220,6 +1226,24 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserCorpusCommand {
+    /// Build a parser corpus manifest from repo and ambient system Perl files.
+    Manifest {
+        /// Corpus profile (for example: pr).
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Output path for generated manifest JSON.
+        #[arg(long, default_value = "target/parser-ratchet/corpus-manifest.json")]
+        out: PathBuf,
+
+        /// Optional receipt JSON path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1534,6 +1558,15 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserCorpus { command } => match command {
+            ParserCorpusCommand::Manifest { profile, out, receipt } => {
+                parser_corpus_manifest::run(parser_corpus_manifest::ParserCorpusManifestConfig {
+                    profile,
+                    out,
+                    receipt,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
