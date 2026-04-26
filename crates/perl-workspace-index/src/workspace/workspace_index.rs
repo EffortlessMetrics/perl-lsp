@@ -5778,7 +5778,7 @@ orphaned();
         // The module reference may still be tracked as a method call target,
         // but the key regression is: the orphaned symbol should not be indexed
         // as an import reference due to the missing require.
-        let refs = index.find_references("orphaned");
+        let _refs = index.find_references("orphaned");
         // Symbol may be referenced but should not be specially treated as an import.
         // The main point is: without require, the pairing doesn't activate.
         Ok(())
