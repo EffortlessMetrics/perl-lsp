@@ -2128,10 +2128,9 @@ sub foo ($x) { $z = 1; }
     Ok(())
 }
 
-
 #[test]
-fn signatures_feature_alone_activates_strict_vars_check()
--> Result<(), Box<dyn std::error::Error>> {
+fn signatures_feature_alone_activates_strict_vars_check() -> Result<(), Box<dyn std::error::Error>>
+{
     // Positive control: without no feature the undeclared var must be flagged.
     // This ensures the two disable-tests below are non-vacuous.
     let code = r#"
@@ -2151,8 +2150,8 @@ sub foo ($x) {
 }
 
 #[test]
-fn signatures_feature_alone_activates_strict_subs_check()
--> Result<(), Box<dyn std::error::Error>> {
+fn signatures_feature_alone_activates_strict_subs_check() -> Result<(), Box<dyn std::error::Error>>
+{
     // Positive control: without no feature the unquoted bareword must be flagged.
     // This ensures signatures_lexical_no_feature_disables_strict_subs_checks is non-vacuous.
     let code = r#"
