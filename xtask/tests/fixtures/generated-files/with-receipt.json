@@ -1,0 +1,11 @@
+{
+  "changed_files": [
+    "docs/project/status/tests.md"
+  ],
+  "generator_receipts": [
+    {
+      "owner": "status-docs",
+      "command": "cargo xtask status-docs"
+    }
+  ]
+}

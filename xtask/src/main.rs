@@ -923,6 +923,12 @@ enum Commands {
         only: Option<update_status::StatusSubsystem>,
     },
 
+    /// Generated-file ownership policy checks.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+
     /// Generate SRP microcrate inventory and split-candidate report
     SrpMicrocrates {
         /// Optional output path (default: docs/SRP_MICROCRATES.md)
@@ -1303,6 +1309,24 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// Check changed generated files for required generator receipts.
+    Check {
+        /// Path to write check receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        /// Optional fixture JSON for tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Explicit override to allow missing receipts.
+        #[arg(long)]
+        allow_missing_receipt: bool,
+    },
+    /// List generated-file ownership rules from the manifest.
+    List,
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1599,6 +1623,12 @@ fn main() -> Result<()> {
             FeaturesCommand::Report => features::report(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::Check { receipt, fixture, allow_missing_receipt } => {
+                generated_files::check(receipt, fixture, allow_missing_receipt)
+            }
+            GeneratedFilesCommand::List => generated_files::list(),
+        },
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::UnwiredScan { json, check, lsp_crate } => {
             unwired_scan::run(UnwiredScanConfig { lsp_crate, json, check })
