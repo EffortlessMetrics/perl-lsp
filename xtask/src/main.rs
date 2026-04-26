@@ -825,6 +825,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Parser corpus manifest tasks for parser-ratchet workflows
+    ParserCorpus {
+        #[command(subcommand)]
+        command: ParserCorpusCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1220,6 +1226,29 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserCorpusCommand {
+    /// Discover corpus files and write deterministic parser-ratchet manifest
+    Manifest {
+        /// Discovery profile
+        #[arg(long, value_enum)]
+        profile: ParserCorpusProfile,
+
+        /// Output path for the manifest JSON
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional receipt path
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(ValueEnum, Clone, Copy)]
+enum ParserCorpusProfile {
+    Pr,
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1534,6 +1563,18 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserCorpus { command } => match command {
+            ParserCorpusCommand::Manifest { profile, out, receipt } => {
+                let profile = match profile {
+                    ParserCorpusProfile::Pr => parser_corpus_manifest::Profile::Pr,
+                };
+                parser_corpus_manifest::run(parser_corpus_manifest::ManifestConfig {
+                    profile,
+                    out,
+                    receipt,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
