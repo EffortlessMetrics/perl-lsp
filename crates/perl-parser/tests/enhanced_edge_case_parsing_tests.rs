@@ -80,7 +80,7 @@ fn test_complex_subroutine_signatures() -> TestResult {
 
         // Verify subroutine structure is captured
         assert!(
-            sexp.contains("sub") || sexp.contains("subroutine"),
+            sexp.contains("Subroutine") || sexp.contains("SubroutineDeclaration"),
             "Subroutine not found in AST for: {}",
             input
         );
