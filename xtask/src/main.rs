@@ -1152,6 +1152,39 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Manage control-plane gate receipts.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
+    /// Run methodology gate checks.
+    MethodologyGate,
+
+    /// Aggregate control-plane receipts.
+    AggregateReceipts,
+
+    /// Finalize gate check state from receipts.
+    FinalizeCheck,
+
+    /// Lint workflow trigger discipline.
+    WorkflowTriggerLint,
+
+    /// Check merge-ready state and receipt bindings.
+    MergeReady,
+
+    /// Classify CI failures for queue/fix-forward flow.
+    FailureClassifier,
+
+    /// Queue control-plane utilities.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
+    /// Follow up fix-forward actions from queue state.
+    FixForward,
 }
 
 #[derive(Subcommand)]
@@ -1301,6 +1334,25 @@ enum MetricsCommand {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List known gate receipts (stub).
+    List,
+    /// Validate a gate receipt path (stub).
+    Validate {
+        /// Path to the receipt file or directory to validate.
+        path: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Show queue state summary (stub).
+    State,
+    /// Project queue labels from receipts (stub).
+    ProjectLabels,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1686,6 +1738,21 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommand::List => gate_receipts::list(),
+            GateReceiptsCommand::Validate { path } => gate_receipts::validate(path),
+        },
+        Commands::MethodologyGate => methodology_gate::run(),
+        Commands::AggregateReceipts => aggregate_receipts::run(),
+        Commands::FinalizeCheck => finalize_check::run(),
+        Commands::WorkflowTriggerLint => workflow_trigger_lint::run(),
+        Commands::MergeReady => merge_ready::run(),
+        Commands::FailureClassifier => failure_classifier::run(),
+        Commands::Queue { command } => match command {
+            QueueCommand::State => queue_state::run(),
+            QueueCommand::ProjectLabels => label_projector::run(),
+        },
+        Commands::FixForward => fix_forward::run(),
     }
 }
 

@@ -1,5 +1,6 @@
 //! Task implementations for xtask automation
 
+pub mod aggregate_receipts;
 pub mod bench;
 pub mod benchmarks;
 #[cfg(feature = "parser-tasks")]
@@ -35,10 +36,14 @@ pub mod doc;
 pub mod doc_claims;
 pub mod e2e_validate;
 pub mod edge_cases;
+pub mod failure_classifier;
 pub mod features;
+pub mod finalize_check;
+pub mod fix_forward;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
+pub mod gate_receipts;
 pub mod gates;
 pub mod github;
 pub mod hardening;
@@ -47,7 +52,10 @@ pub mod highlight;
 pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
+pub mod label_projector;
 pub mod layer_check;
+pub mod merge_ready;
+pub mod methodology_gate;
 pub mod metrics;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
@@ -59,6 +67,7 @@ pub mod publish;
 pub mod publish_closure;
 pub mod publish_manifest_check;
 pub mod publish_receipts;
+pub mod queue_state;
 pub mod receipts;
 pub mod release;
 pub mod release_notes;
@@ -73,4 +82,5 @@ pub mod update_homebrew;
 pub mod update_status;
 pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
+pub mod workflow_trigger_lint;
 pub mod worktrees;
