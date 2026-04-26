@@ -12,7 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
-use tasks::gates::{GateTier, OutputFormat};
+use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
@@ -906,6 +906,12 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Manage gate receipt schema registry and validate receipt payloads.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
     /// Show technical debt report from debt ledger
     ///
     /// Reads `.ci/debt-ledger.yaml` and reports on quarantined tests,
@@ -1072,7 +1078,7 @@ enum Commands {
 
         /// Output format (default: human)
         #[arg(long, short, value_enum, default_value = "human")]
-        format: OutputFormat,
+        format: GatesOutputFormat,
 
         /// Emit receipt JSON (also writes to target/receipts/receipt.json)
         #[arg(long, short)]
@@ -1257,6 +1263,38 @@ enum CpanCorpusCommand {
         #[arg(long)]
         install_dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate a single receipt JSON file.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Root directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GateReceiptsFormat {
+    Human,
+    Json,
 }
 
 #[derive(Subcommand)]
@@ -1724,6 +1762,20 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommand::List { format } => {
+                gate_receipts::list(convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+            GateReceiptsCommand::Validate { path, format } => {
+                gate_receipts::validate(&path, convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+            GateReceiptsCommand::ValidateAll { dir, format } => {
+                gate_receipts::validate_all(&dir, convert_gate_receipts_format(format))
+                    .map_err(|error| eyre!(error.to_string()))
+            }
+        },
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand
@@ -1759,5 +1811,12 @@ fn print_top_level_commands() {
 
     for command_name in command_names {
         println!("{command_name}");
+    }
+}
+
+fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::OutputFormat {
+    match format {
+        GateReceiptsFormat::Human => gate_receipts::OutputFormat::Human,
+        GateReceiptsFormat::Json => gate_receipts::OutputFormat::Json,
     }
 }
