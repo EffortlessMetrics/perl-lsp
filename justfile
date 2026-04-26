@@ -105,6 +105,7 @@ merge-gate: _check-tools-basic pr-fast
     START=$(date +%s)
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
+    just _timed "check-all-targets" "just check-all-targets" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
     just _timed "lsp-bdd" "just ci-lsp-bdd" && \
@@ -328,19 +329,25 @@ mutation-regression:
     @cargo test -p perl-parser --test mutation_hardening_tests
     @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
     @cargo test -p perl-lsp-rs --test mutation_survivors_elimination
+    @cargo test -p perl-parser-core --test path_security_mutation_hardening
+    @cargo test -p perl-parser-core --test path_normalize_mutation_hardening
+    @cargo test -p perl-parser-core --test qualified_name_mutation_hardening
     @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
     @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
     @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
+    @cargo +nightly fuzz run declaration_parsing -- -max_total_time=60 || echo "  Declaration parsing fuzzing complete"
     @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
+    @cargo +nightly fuzz run incremental_edit_sequences -- -max_total_time=60 || echo "  Incremental edit sequences fuzzing complete"
     @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
     @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
     @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
+    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
@@ -350,6 +357,33 @@ benchmarks: bench
 # ============================================================================
 # CI Aliases and Convenience Targets
 # ============================================================================
+
+# Print the decision tree for which command to run and when
+quick-ref:
+    @echo ""
+    @echo "  perl-lsp development quick reference"
+    @echo "  ====================================="
+    @echo ""
+    @echo "  WHEN                          COMMAND                          TIME"
+    @echo "  Every change / before push    just pr-fast                     ~1-2 min"
+    @echo "  Before merge to master        nix develop -c just ci-gate      ~3-5 min"
+    @echo "  New machine / after clone     just doctor                      ~10 sec"
+    @echo "  One-off lint check            just check                       ~30 sec"
+    @echo "  Reformat all code             cargo xtask fmt                  ~20 sec"
+    @echo "  Run tests only                cargo test --workspace --lib     ~1 min"
+    @echo "  Nightly / mutation / fuzz     just ci-full                     ~15-30 min"
+    @echo ""
+    @echo "  TIP: install the pre-push hook so pr-fast runs automatically:"
+    @echo "       bash scripts/install-githooks.sh"
+    @echo ""
+
+# Lint all crates — treated as errors, same as CI (alias for cargo clippy)
+check:
+    cargo clippy --workspace -- -D warnings
+
+# Auto-fix clippy warnings where possible
+fix:
+    cargo clippy --workspace --fix --allow-dirty
 
 # Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
@@ -831,6 +865,7 @@ ci-gate:
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
+    just check-all-targets && \
     just common-corpus-check && \
     just ci-policy && \
     just ci-v2-bundle-sync && \
@@ -2021,13 +2056,16 @@ fuzz-check-crashes:
 fuzz-regression duration='30':
     @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
     @just fuzz builtin_functions {{duration}} || true
+    @just fuzz declaration_parsing {{duration}} || true
     @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz incremental_edit_sequences {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
     @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz utf16_roundtrip {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"
