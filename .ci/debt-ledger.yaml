@@ -56,7 +56,23 @@ budgets:
 #   3. Set appropriate quarantine duration
 #   4. Run `just debt-report` to verify
 
-flaky_tests: []
+flaky_tests:
+  - name: "security_audit"
+    added: "2026-04-26"
+    issue: null
+    tier: "quarantine"
+    quarantine_days: 30
+    expires: "2026-05-26"
+    owner: null
+    notes: |
+      cargo-audit ecosystem breakage: all installable versions (<=0.20.x) fail to parse CVSS 4.0
+      advisories (RUSTSEC-2026-0041); versions that can parse them (>=0.21) can't be installed
+      because abscissa_core >=0.8 requires secrecy ^0.10 which has been fully yanked from crates.io.
+      Unquarantine once a working cargo-audit release ships.
+    failure_pattern: "unsupported CVSS version: 4.0"
+    affected_platforms:
+      - "all"
+
   # Example entry:
   # - name: "lsp::test_completion_timeout"
   #   added: "2026-01-24"

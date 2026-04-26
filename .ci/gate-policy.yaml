@@ -353,13 +353,16 @@ gates:
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"
     required: true
-    # cargo-audit must be installed; CI installs it if missing
-    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 2>/dev/null || cargo install cargo-audit --locked && cargo audit --deny warnings --ignore RUSTSEC-2023-0089
+    # Quarantined: cargo-audit ecosystem breakage as of 2026-04-26.
+    # - cargo-audit >= 0.21: can't install (abscissa_core ^0.8 requires secrecy ^0.10, all 0.10.x yanked)
+    # - cargo-audit <= 0.20: installs but can't parse CVSS 4.0 advisories (RUSTSEC-2026-0041)
+    # Unquarantine when a working cargo-audit release is available. See debt-ledger.yaml.
+    command: cargo audit --deny warnings --ignore RUSTSEC-2023-0089 2>/dev/null || cargo install cargo-audit && cargo audit --deny warnings --ignore RUSTSEC-2023-0089
     timeout_seconds: 300
     retry_count: 1
     budgets:
       max_duration_ms: 240000
-    quarantine: false
+    quarantine: true  # See debt-ledger.yaml: cargo-audit-broken-install-2026-04-26
     tags:
       - security
       - dependencies
