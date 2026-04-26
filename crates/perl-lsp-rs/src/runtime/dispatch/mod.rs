@@ -56,7 +56,7 @@ pub(crate) use cancellation::enhanced_cancelled_response;
 
 use super::*;
 use crate::cancellation::{
-    PerlLspCancellationToken, ProviderCleanupContext, GLOBAL_CANCELLATION_REGISTRY,
+    GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken, ProviderCleanupContext,
 };
 use std::time::Instant;
 
@@ -424,9 +424,7 @@ mod tests {
 
         let initialize = server.handle_request(request(2, "initialize", Some(json!({}))));
         assert!(
-            initialize
-                .as_ref()
-                .is_some_and(|response| response.error.is_none()),
+            initialize.as_ref().is_some_and(|response| response.error.is_none()),
             "initialize request should succeed"
         );
 

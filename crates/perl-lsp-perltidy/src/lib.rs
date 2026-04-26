@@ -256,8 +256,9 @@ impl PerlTidyFormatter {
         end_line: u32,
     ) -> Result<String, String> {
         if start_line > end_line {
-            return Err("Invalid line range: start line must be less than or equal to end line"
-                .to_string());
+            return Err(
+                "Invalid line range: start line must be less than or equal to end line".to_string()
+            );
         }
 
         let lines: Vec<&str> = code.lines().collect();
@@ -374,8 +375,7 @@ impl BuiltInFormatter {
             // We already decremented by leading_closers before printing, so add them
             // back to avoid double-counting: the net change for the *next* line is
             // delta + leading_closers (leading closers cancel in the net formula).
-            indent_level =
-                (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
+            indent_level = (indent_level + net_delimiter_delta(trimmed) + leading_closers).max(0);
         }
 
         result

@@ -139,8 +139,8 @@ mod tests {
     fn parse_perlcritic_line_accepts_severity_boundaries() {
         for sev in 1u8..=5 {
             let line = format!("lib/Foo.pm:1:1:{sev}:TestingAndDebugging::RequireUseStrict:msg");
-            let parsed = parse_perlcritic_line(&line)
-                .unwrap_or_else(|| panic!("severity {sev} must parse"));
+            let parsed =
+                parse_perlcritic_line(&line).unwrap_or_else(|| panic!("severity {sev} must parse"));
             assert_eq!(parsed.severity, sev);
         }
     }
@@ -174,8 +174,7 @@ mod tests {
     fn parse_perlcritic_output_handles_crlf_separated_input() {
         // Whole output in CRLF — str::lines() already splits, but each line still
         // carries a trailing `\r` that must be trimmed.
-        let output =
-            "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg1\r\n\
+        let output = "lib/Foo.pm:1:1:5:TestingAndDebugging::RequireUseStrict:msg1\r\n\
              lib/Bar.pm:2:2:3:TestingAndDebugging::RequireUseWarnings:msg2\r\n";
         let parsed = parse_perlcritic_output(output);
         assert_eq!(parsed.len(), 2);
@@ -239,9 +238,15 @@ mod tests {
     fn parse_perlcritic_line_rejects_truncated_line() {
         // Missing message and/or policy.
         assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3").is_none());
-        assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict").is_none());
+        assert!(
+            parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict")
+                .is_none()
+        );
         // Empty message.
-        assert!(parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:").is_none());
+        assert!(
+            parse_perlcritic_line("lib/Foo.pm:1:1:3:TestingAndDebugging::RequireUseStrict:")
+                .is_none()
+        );
     }
 
     #[test]

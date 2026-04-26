@@ -42,8 +42,7 @@ pub fn uri_key(uri: &str) -> String {
 /// Check if a URI uses the `file://` scheme.
 #[must_use]
 pub fn is_file_uri(uri: &str) -> bool {
-    uri.get(..7)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+    uri.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
 }
 
 /// Check if a URI uses a special scheme (not `file://`).

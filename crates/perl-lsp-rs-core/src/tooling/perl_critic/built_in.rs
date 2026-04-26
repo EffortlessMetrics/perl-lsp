@@ -1,6 +1,6 @@
-use super::{built_in_quick_fix, insertion_range, QuickFix, Severity, Violation};
-use perl_parser_core::position::{Position, Range};
+use super::{QuickFix, Severity, Violation, built_in_quick_fix, insertion_range};
 use perl_parser_core::Node;
+use perl_parser_core::position::{Position, Range};
 
 /// Built-in policy analyzer that works without external perlcritic
 pub struct BuiltInAnalyzer {

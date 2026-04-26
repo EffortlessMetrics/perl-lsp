@@ -146,10 +146,8 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
     let file_type = entry.file_type();
     if file_type.is_dir() {
         let directory_name = entry.file_name().to_string_lossy();
-        if matches!(
-            directory_name.to_ascii_lowercase().as_str(),
-            "docs" | "doc" | "documentation"
-        ) {
+        if matches!(directory_name.to_ascii_lowercase().as_str(), "docs" | "doc" | "documentation")
+        {
             ("documentation directory".to_string(), Some("Documentation directory".to_string()))
         } else {
             ("directory".to_string(), Some("Directory".to_string()))
@@ -169,10 +167,7 @@ fn file_completion_metadata(entry: &walkdir::DirEntry) -> (String, Option<String
             "toml" => "TOML file",
             _ if matches!(
                 file_name.to_ascii_lowercase().as_str(),
-                "readme"
-                    | "changelog"
-                    | "contributing"
-                    | "license"
+                "readme" | "changelog" | "contributing" | "license"
             ) =>
             {
                 "Project documentation file"
