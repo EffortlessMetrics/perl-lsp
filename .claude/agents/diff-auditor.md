@@ -75,6 +75,26 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **File-path over title.** Similar PR titles with different file sets = layer diversity. Only `same-file + overlapping-lines` is a real dup.
 
+**Cross-PR source-file contamination (not just `.hermes/`).** Sibling external-agent runs (Codex bursts, diffguard-bot work streams, etc.) sometimes leak orphan source/test files into a PR — files that belong to a SIBLING work stream's scope but ended up in this PR's branch through messy git history. Per the 2026-04-26 #5870 incident: 2043 of 2063 lines were cross-PR contamination from sibling work-43c756db (CLOSED PR #4495 ADRs) and work-afb1f466 (orphan tests for `perl-lsp-rs-core/` in a PR for `perl-lsp-diagnostics/`). The 2026-04-25 audit-trail-dirs harden patch only watched `.hermes/` paths and missed regular source/test contamination.
+
+Detection heuristic — for every file in the diff, ask: "does this file's path/content align with the PR's stated scope (title + body + linked issue)?"
+
+- If the diff adds tests for crate X but the PR title is about crate Y (and those tests aren't named in the spec): flag as CONTAMINATION
+- If the diff adds ADRs whose work-id doesn't match this PR's branch work-id: flag as CONTAMINATION
+- Tell-tale: PR title claims a small change but `--stat` shows >100 lines outside the named scope. Diff bulk shouldn't be unrelated to the title.
+- Mechanical check: `gh pr diff <num> --stat` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+
+When found, route to `needs-diff-fix` with a `git rm` list. Don't let a 22-of-2063-line legitimate change ride a 2043-line contaminated diff into master.
+
+## Master-green guard (HARD requirement before CLEAN verdict)
+
+Per the 2026-04-26 directive: **keep master green and require green to merge.** A PR that compiles per-crate but breaks the workspace fmt/clippy/build cascade WILL break master after merge — exactly the pattern that caused 3 fmt-cascade fixes (#6789, #6803, #6807) in one session.
+
+Before adding `diff-audited`:
+- Verify the PR's CI includes a **workspace-wide** fmt + check, not just per-crate (look for `Compile All Targets (bit-rot guard)` SUCCESS, `PR Smoke (Fast Feedback)` SUCCESS, and ideally a workspace fmt step)
+- If `PR Smoke` failed and the failure is fmt drift in a file the PR touches OR in a file recently merged that the PR's branch hasn't picked up: flag as `needs-ci-fix` with cascade-update instruction; do NOT add `diff-audited`
+- Skipped CI Nightly checks are fine; required PR-side checks must be SUCCESS
+
 **Judgment over box-checking.** "CLEAN, nothing to flag" on a 500+ line diff is almost never right. If you can't name a specific concrete observation (a regression risk, an artifact, a test gap, a sketchy commit), you haven't looked hard enough. The repo's quality bar is high; an honest skeptical pass is always superior to a mechanical LGTM.
 
 ## Verdicts
