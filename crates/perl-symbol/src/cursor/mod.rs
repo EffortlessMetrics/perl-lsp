@@ -102,10 +102,14 @@ pub fn is_modchar(byte: u8) -> bool {
 pub fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
     let mut units = 0;
     for (i, ch) in line_text.char_indices() {
-        if units == col_utf16 {
+        if units >= col_utf16 {
             return i;
         }
-        units += if ch as u32 >= 0x10000 { 2 } else { 1 };
+        let ch_units = if ch as u32 >= 0x10000 { 2 } else { 1 };
+        units += ch_units;
+        if units > col_utf16 {
+            return i;
+        }
     }
     line_text.len()
 }
@@ -172,6 +176,7 @@ mod tests {
         let line = "A😀B";
         assert_eq!(byte_offset_utf16(line, 0), 0);
         assert_eq!(byte_offset_utf16(line, 1), 1);
+        assert_eq!(byte_offset_utf16(line, 2), 1);
         assert_eq!(byte_offset_utf16(line, 3), 5);
         assert_eq!(byte_offset_utf16(line, 4), 6);
     }
