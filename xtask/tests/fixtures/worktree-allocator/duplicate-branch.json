@@ -1,0 +1,15 @@
+{
+  "leases": [
+    {
+      "worktree_id": "wt-existing",
+      "path": "/repo/.claude/worktrees/agent-pr-6853-123",
+      "agent_task_id": "task-a",
+      "pr": 6853,
+      "branch": "agent/pr-6853-123",
+      "base_sha": "1234567890abcdef1234567890abcdef12345678",
+      "owner": "agent-a",
+      "lease_expiry_epoch_secs": 1700001000,
+      "last_heartbeat_epoch_secs": 1700000000
+    }
+  ]
+}

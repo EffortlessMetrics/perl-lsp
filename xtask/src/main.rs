@@ -1097,6 +1097,12 @@ enum Commands {
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
+    /// Local agent orchestration helpers.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -1216,6 +1222,48 @@ enum CpanCorpusCommand {
         /// Local install directory containing CPAN modules
         #[arg(long)]
         install_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Manage leased agent worktrees.
+    Worktree {
+        #[command(subcommand)]
+        command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentWorktreeCommand {
+    /// Acquire a leased agent worktree.
+    Acquire {
+        #[arg(long)]
+        pr: u64,
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+        #[arg(long, default_value = "local-agent")]
+        owner: String,
+        #[arg(long, default_value = "task-unknown")]
+        task: String,
+    },
+    /// Release a leased agent worktree by id.
+    Release {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        force: bool,
+    },
+    /// List active worktree leases.
+    List,
+    /// Garbage-collect stale leases.
+    Gc {
+        #[arg(long)]
+        stale: bool,
+        #[arg(long)]
+        apply: bool,
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -1674,6 +1722,20 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::Agent { command } => match command {
+            AgentCommand::Worktree { command } => match command {
+                AgentWorktreeCommand::Acquire { pr, base, owner, task } => {
+                    worktree_allocator::acquire(pr, base, owner, task)
+                }
+                AgentWorktreeCommand::Release { id, force } => {
+                    worktree_allocator::release(id, force)
+                }
+                AgentWorktreeCommand::List => worktree_allocator::list(),
+                AgentWorktreeCommand::Gc { stale, apply, force } => {
+                    worktree_allocator::gc(stale, apply, force)
+                }
+            },
+        },
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
