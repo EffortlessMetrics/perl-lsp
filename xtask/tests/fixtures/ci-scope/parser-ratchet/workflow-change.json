@@ -1,0 +1,11 @@
+{
+  "name": "workflow-change",
+  "changed_files": [
+    ".github/workflows/ci.yml"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "workflow policy change can affect parser ratchet execution"
+  }
+}

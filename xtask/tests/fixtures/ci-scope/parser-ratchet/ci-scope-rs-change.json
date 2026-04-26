@@ -1,0 +1,11 @@
+{
+  "name": "ci-scope-rs-change",
+  "changed_files": [
+    "xtask/src/tasks/ci_scope.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "scope-meta change affected parser selection policy"
+  }
+}

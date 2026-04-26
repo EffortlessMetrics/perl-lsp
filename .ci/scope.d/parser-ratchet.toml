@@ -1,0 +1,50 @@
+# Parser Ratchet scope selection policy.
+# Scope-selection only: this policy decides when parser ratchet work is selected.
+
+schema_version = 1
+name = "parser-ratchet"
+always_report = true
+
+[rule]
+mode = "any"
+
+# File changes that should select parser ratchet.
+include_paths = [
+  "crates/perl-parser/**",
+  "crates/perl-parser-core/**",
+  "crates/perl-lexer/**",
+  "crates/perl-token/**",
+  "crates/tree-sitter-perl-rs/**",
+  "crates/tree-sitter-perl-c/**",
+  "xtask/src/tasks/*parser*",
+  "xtask/src/tasks/*corpus*",
+  "xtask/src/tasks/ci_scope.rs",
+  "xtask/src/tasks/gates.rs",
+  "xtask/src/tasks/ratchet*.rs",
+  ".ci/scope.d/**",
+  ".ci/gates.d/**",
+  ".ci/parser-ratchet/**",
+  ".github/workflows/**",
+  "tests/parser/**",
+  "tests/perl-corpus/**",
+]
+
+# Cargo.lock is parser-relevant when paired with parser signals (path or risk tag).
+conditional_paths = ["Cargo.lock"]
+conditional_requires = ["parser", "lexer", "token", "tree-sitter", "dep_change"]
+
+# Risk tags that should force parser-ratchet selection even if path matching is ambiguous.
+include_risk_tags = [
+  "parser",
+  "lexer",
+  "token",
+  "corpus",
+  "incremental",
+  "tree-sitter",
+  "parser-recovery",
+  "parser-accuracy",
+]
+
+# Always provide deterministic receipt reasons.
+selected_reason = "parser-ratchet scope matched parser-related paths or risk tags"
+not_selected_reason = "parser-ratchet scope not matched (non-parser diff)"

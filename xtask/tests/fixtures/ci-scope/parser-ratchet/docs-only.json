@@ -1,0 +1,11 @@
+{
+  "name": "docs-only-non-parser",
+  "changed_files": [
+    "docs/ci/LOCAL_CI_PROTOCOL.md"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": false,
+    "reason": "non-parser docs-only change"
+  }
+}
