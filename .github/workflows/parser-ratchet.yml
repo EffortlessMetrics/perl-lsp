@@ -1,0 +1,160 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PARSER_RATCHET_MODE: ${{ vars.PARSER_RATCHET_MODE || 'canary' }}
+      PARSER_RATCHET_PROFILE: .ci/parser-ratchet/profiles/pr.toml
+      # Optional simulation knob for rollout validation drills.
+      # Values: hard_regression, warn_regression, pass
+      PARSER_RATCHET_SIMULATE: ${{ vars.PARSER_RATCHET_SIMULATE || '' }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          cache-on-failure: true
+          shared-key: parser-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run parser ratchet (mode-aware)
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
+          from datetime import datetime, timezone
+
+          mode = os.environ.get("PARSER_RATCHET_MODE", "canary").strip()
+          profile_path = pathlib.Path(os.environ["PARSER_RATCHET_PROFILE"])
+          simulate = os.environ.get("PARSER_RATCHET_SIMULATE", "").strip()
+
+          if mode not in {"scaffold", "canary", "enforce"}:
+              raise SystemExit(f"Unsupported PARSER_RATCHET_MODE={mode!r}")
+
+          with profile_path.open("rb") as f:
+              profile = tomllib.load(f)
+
+          receipt_path = pathlib.Path(profile.get("receipt", "target/receipts/parser-ratchet.json"))
+          receipt_path.parent.mkdir(parents=True, exist_ok=True)
+          log_path = pathlib.Path("target/receipts/parser-ratchet.log")
+
+          selected = mode in {"canary", "enforce"}
+          verdict = "pass"
+          classification = "none"
+          command = profile.get("command", "")
+          command_exit = 0
+          final_exit = 0
+
+          hard_codes = set(profile.get("hard_regression_exit_codes", [1]))
+          warn_codes = set(profile.get("warn_exit_codes", []))
+
+          stdout = ""
+          stderr = ""
+
+          if selected:
+              if simulate == "hard_regression":
+                  command_exit = 1
+                  stderr = "simulated hard regression"
+              elif simulate == "warn_regression":
+                  command_exit = 2
+                  stderr = "simulated warn regression"
+              elif simulate in {"", "pass"}:
+                  proc = subprocess.run(command, shell=True, text=True, capture_output=True)
+                  command_exit = proc.returncode
+                  stdout = proc.stdout
+                  stderr = proc.stderr
+              else:
+                  raise SystemExit(f"Unsupported PARSER_RATCHET_SIMULATE={simulate!r}")
+
+              if command_exit == 0:
+                  verdict = "pass"
+              else:
+                  if command_exit in hard_codes:
+                      classification = "hard_regression"
+                      if mode == "canary":
+                          verdict = "would_fail"
+                          final_exit = 0
+                      else:
+                          verdict = "fail"
+                          final_exit = 1
+                  elif command_exit in warn_codes:
+                      classification = "warn"
+                      verdict = "warn"
+                      final_exit = 0
+                  else:
+                      classification = "warn"
+                      verdict = "warn"
+                      final_exit = 0
+          else:
+              verdict = "pass"
+
+          log_path.write_text(
+              "=== parser-ratchet stdout ===\n"
+              + stdout
+              + "\n=== parser-ratchet stderr ===\n"
+              + stderr,
+              encoding="utf-8",
+          )
+
+          receipt = {
+              "schema_version": 1,
+              "gate": "parser-ratchet",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "event": os.environ.get("GITHUB_EVENT_NAME", ""),
+              "ref": os.environ.get("GITHUB_REF", ""),
+              "sha": os.environ.get("GITHUB_SHA", ""),
+              "mode": mode,
+              "selected": selected,
+              "profile": str(profile_path),
+              "verdict": verdict,
+              "classification": classification,
+              "command": command,
+              "command_exit_code": command_exit,
+              "final_exit_code": final_exit,
+              "simulate": simulate,
+          }
+          receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+
+          print(json.dumps(receipt, indent=2))
+          if final_exit != 0:
+              sys.exit(final_exit)
+          PY
+
+      - name: Upload parser-ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parser-ratchet-${{ github.sha }}
+          path: |
+            target/receipts/parser-ratchet.json
+            target/receipts/parser-ratchet.log
+            target/receipts/parser-ratchet-sweep.json
+          if-no-files-found: warn
+          retention-days: 14

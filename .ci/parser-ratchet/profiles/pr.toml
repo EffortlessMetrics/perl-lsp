@@ -1,0 +1,7 @@
+# Parser Ratchet PR profile (system/common corpus only).
+# Intentionally excludes CPAN top-N corpus to keep PR runs bounded.
+name = "pr"
+command = "cargo xtask parser-corpus-sweep --manifest .ci/common-corpus-manifest.txt --enforce --receipt --output target/receipts/parser-ratchet-sweep.json"
+hard_regression_exit_codes = [1]
+warn_exit_codes = []
+receipt = "target/receipts/parser-ratchet.json"
