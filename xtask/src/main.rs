@@ -901,6 +901,12 @@ enum Commands {
         command: FeaturesCommand,
     },
 
+    /// Enforce generated-file ownership policy.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1232,6 +1238,31 @@ enum FeaturesCommand {
 
     /// Generate compliance report
     Report,
+}
+
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// Check whether generated files were changed without matching receipts.
+    Check {
+        /// Optional path to generated-files manifest.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// Path where the check receipt JSON will be written.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Explicit override that permits manual edits for this run.
+        #[arg(long)]
+        allow_manual_edits: bool,
+        /// Fixture JSON (tests only): bypass git discovery with canned inputs.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Print configured generated-file ownership rules.
+    List {
+        /// Optional path to generated-files manifest.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1597,6 +1628,12 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Invariants => features::invariants(),
             FeaturesCommand::Report => features::report(),
+        },
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::Check { manifest, receipt, allow_manual_edits, fixture } => {
+                generated_files::check(manifest, receipt, allow_manual_edits, fixture)
+            }
+            GeneratedFilesCommand::List { manifest } => generated_files::list(manifest),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),

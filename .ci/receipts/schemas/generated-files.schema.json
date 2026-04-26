@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/generated-files.schema.json",
+  "title": "Generated File Ownership Receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "verdict",
+    "changed_files",
+    "expected_command",
+    "missing_receipts"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expected_command": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "missing_receipts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}
