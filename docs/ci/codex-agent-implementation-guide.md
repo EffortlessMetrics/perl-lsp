@@ -21,8 +21,8 @@ This guide defines how implementation agents contribute to the receipt-driven CI
 ## Receipt locations
 
 - Generated runtime receipts: `target/receipts/*.json`
-- Committed schemas: `.ci/receipts/schemas/*.schema.json`
-- Registry: `.ci/receipts/registry.toml`
+- Committed schemas: `.ci/schemas/*.schema.{json,yaml}`
+- Registry: `.ci/GATE_REGISTRY.toml`
 
 When adding new receipt types, update schema + registry in the same scoped PR.
 
