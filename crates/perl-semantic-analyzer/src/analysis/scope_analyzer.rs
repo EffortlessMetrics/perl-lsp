@@ -50,7 +50,7 @@
 //! ```
 
 use crate::ast::{Node, NodeKind};
-use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use crate::pragma_tracker::{PragmaQueryCursor, PragmaState};
 use perl_module::import::resolve_known_export_tag;
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
@@ -359,6 +359,7 @@ enum ExtractedName<'a> {
 struct AnalysisContext<'a> {
     code: &'a str,
     pragma_map: &'a [(Range<usize>, PragmaState)],
+    pragma_cursor: RefCell<PragmaQueryCursor>,
     imported_barewords: HashSet<String>,
     line_starts: RefCell<Option<Vec<usize>>>,
     /// Current package name, updated as `package` statements are traversed.
@@ -370,10 +371,15 @@ impl<'a> AnalysisContext<'a> {
         Self {
             code,
             pragma_map,
+            pragma_cursor: RefCell::new(PragmaQueryCursor::new()),
             imported_barewords: collect_imported_barewords(ast),
             line_starts: RefCell::new(None),
             current_package: RefCell::new("main".to_string()),
         }
+    }
+
+    fn pragma_state_for_offset(&self, offset: usize) -> PragmaState {
+        self.pragma_cursor.borrow_mut().state_for_offset(self.pragma_map, offset)
     }
 
     fn has_imported_bareword(&self, name: &str) -> bool {
@@ -585,7 +591,7 @@ impl ScopeAnalyzer {
         context: &AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
+        let pragma_state = context.pragma_state_for_offset(node.location.start);
         let strict_vars_mode = pragma_state.strict_vars || pragma_state.signatures_strict;
         let strict_subs_mode = pragma_state.strict_subs || pragma_state.signatures_strict;
         match &node.kind {

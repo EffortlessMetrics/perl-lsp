@@ -14,7 +14,7 @@ mod cpan_test_helpers;
 use cpan_test_helpers::*;
 
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
-use perl_parser_core::{Parser, RecoverySalvageClass, RecoverySalvageProfile};
+use perl_parser_core::{Parser, classify_recovery_salvage};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -25,21 +25,6 @@ fn parse_errors(source: &str) -> Vec<ParseError> {
     let mut parser = Parser::new(source);
     let _ = parser.parse(); // ignore Ok/Err — we want errors()
     parser.errors().to_vec()
-}
-
-fn classify(source: &str) -> RecoverySalvageProfile {
-    let mut parser = Parser::new(source);
-    let (ast, catastrophic) = match parser.parse() {
-        Ok(ast) => (ast, false),
-        Err(_) => (
-            perl_parser_core::Node::new(
-                perl_parser_core::NodeKind::Program { statements: vec![] },
-                perl_parser_core::SourceLocation { start: 0, end: 0 },
-            ),
-            true,
-        ),
-    };
-    RecoverySalvageProfile::from_parse(&ast, parser.errors(), catastrophic)
 }
 
 /// Assert at least one `ParseError::Recovered` with the given site+kind.
@@ -193,6 +178,43 @@ fn truncated_arrow_chain_at_eof_does_not_crash() {
     assert!(result.is_ok(), "Parser must not crash on truncated method chain at EOF");
 }
 
+#[test]
+fn missing_rhs_classifies_as_structured_recovery_only() {
+    let mut parser = Parser::new("my $x = $a +;");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Unexpected catastrophic parse failure for recoverable input");
+    let Ok(ast) = result else {
+        return;
+    };
+    let metrics = classify_recovery_salvage(&ast, parser.errors());
+    assert!(
+        metrics.is_structured_recovery_only(),
+        "Expected structured recovery only: {metrics:?}"
+    );
+    assert_eq!(metrics.error_node_count, 0, "No unrecovered ERROR nodes expected");
+}
+
+/// When a file has BOTH structured recovery diagnostics AND unrecovered ERROR
+/// nodes, it must NOT be classified as `structured_recovery_only`. It must be
+/// dirty (`is_dirty = true`) and have `error_node_count > 0`.
+#[test]
+fn mixed_recovery_and_error_node_is_not_structured_recovery_only() {
+    // `} my $x = $a +;` has two problems:
+    //  1. A stray `}` that the parser cannot match to an opening brace,
+    //     likely producing an Error node.
+    //  2. A truncated infix `+;` that should produce a Recovered diagnostic.
+    // Together they should NOT be classified as structured-recovery-only.
+    let code = "} my $x = $a +;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().expect("parser should not catastrophically fail");
+    let metrics = classify_recovery_salvage(&ast, parser.errors());
+
+    assert!(metrics.is_dirty(), "file with Error node and recovery is dirty: {metrics:?}");
+    assert!(
+        !metrics.is_structured_recovery_only(),
+        "file with Error nodes must not be structured-recovery-only: {metrics:?}"
+    );
+}
 // ──────────────────────────────────────────────────────────────
 // Regression: clean Perl must NOT emit InfixRhs or TruncatedChain
 // ──────────────────────────────────────────────────────────────
@@ -231,14 +253,6 @@ fn clean_hash_subscript_does_not_emit_recovered() {
 fn clean_chained_methods_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $obj->foo->bar->baz;");
     assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
-}
-
-#[test]
-fn missing_rhs_classifies_as_structured_recovery_only() {
-    let profile = classify("my $x = $a +;");
-    assert_eq!(profile.class, RecoverySalvageClass::StructuredRecoveryOnly);
-    assert_eq!(profile.error_node_count, 0);
-    assert!(profile.recovered_count >= 1);
 }
 
 #[test]
