@@ -148,7 +148,10 @@ pub use position::{LineEnding, PositionMapper};
 /// Core AST types re-exported for convenience.
 pub use ast::{Node, NodeKind, SourceLocation};
 /// Parse error, budget, and output types.
-pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};
+pub use error::{
+    BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult, RecoverySalvageClass,
+    RecoverySalvageProfile,
+};
 
 /// Builtin function signature lookup tables.
 pub use builtins::builtin_signatures;
