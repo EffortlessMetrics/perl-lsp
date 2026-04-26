@@ -941,6 +941,12 @@ enum Commands {
         command: FeaturesCommand,
     },
 
+    /// Agent lease + receipt primitives for disconnected orchestration.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1343,6 +1349,52 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Lease lifecycle commands.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Receipt commands.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Acquire a lease from a typed task JSON.
+    Acquire {
+        /// Path to task JSON.
+        #[arg(long)]
+        task: PathBuf,
+        /// Path to write lease JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify lease against current snapshot state.
+    Verify {
+        /// Path to lease JSON.
+        #[arg(long)]
+        lease: PathBuf,
+        /// Path to current snapshot JSON.
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate a receipt against its lease and mutation rules.
+    Validate {
+        /// Path to receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1658,6 +1710,17 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Invariants => features::invariants(),
             FeaturesCommand::Report => features::report(),
+        },
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Acquire { task, out } => agent_lease::acquire(&task, &out),
+                AgentLeaseCommand::Verify { lease, current } => {
+                    agent_lease::verify(&lease, &current)
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
+            },
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
