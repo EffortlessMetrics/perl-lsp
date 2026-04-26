@@ -1,0 +1,14 @@
+{
+  "master_sha": "3333333",
+  "master_ci": {
+    "status": "red",
+    "pending_checks": 0,
+    "running_checks": 0
+  },
+  "failure_classifier": {
+    "summary": "shared infrastructure blocker"
+  },
+  "gate_policy": {
+    "ruleset_name": "merge-gate-v1"
+  }
+}

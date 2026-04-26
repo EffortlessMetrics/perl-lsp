@@ -853,6 +853,12 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Queue orchestration helpers.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1303,6 +1309,19 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Compute queue health mode (GREEN/PENDING/RED) from CI state inputs.
+    Health {
+        /// Optional path to write queue-health receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        /// Fixture JSON path to supply master CI inputs.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1579,6 +1598,9 @@ fn main() -> Result<()> {
                 test_threads,
             })
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::Health { receipt, fixture } => queue_health::run_health(receipt, fixture),
+        },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }

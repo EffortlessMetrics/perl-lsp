@@ -1,0 +1,11 @@
+{
+  "master_sha": "2222222",
+  "master_ci": {
+    "status": "pending",
+    "pending_checks": 2,
+    "running_checks": 1
+  },
+  "gate_policy": {
+    "ruleset_name": "merge-gate-v1"
+  }
+}
