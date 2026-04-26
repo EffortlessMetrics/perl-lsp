@@ -13,6 +13,7 @@ mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::merge_ready::MergeReadyCommand;
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
@@ -964,6 +965,12 @@ enum Commands {
         command: MetricsCommand,
     },
 
+    /// Emit, verify, and reconcile merge-readiness receipts.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
     /// Publish structured editor UX scorecard artifact/status from harness fixtures.
     UxScorecard {
         /// Output format for stdout.
@@ -1623,6 +1630,7 @@ fn main() -> Result<()> {
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
         },
+        Commands::MergeReady { command } => merge_ready::run(command),
         Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
             let format = match format {
                 UxScorecardOutputFormat::Human => UxScorecardFormat::Human,

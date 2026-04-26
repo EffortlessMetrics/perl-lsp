@@ -1,0 +1,20 @@
+{
+  "check": "merge-readiness",
+  "schema_version": "1",
+  "event": "pull_request",
+  "pr": 6859,
+  "head_sha": "1111111",
+  "base_sha": "2222222",
+  "gate_graph_version": "fnv1a64:deadbeef",
+  "required_checks": [
+    { "name": "merge-gate / merge-gate", "status": "COMPLETED", "conclusion": "FAILURE" }
+  ],
+  "review_evidence": { "approved": true, "approvals": 1 },
+  "blocker_labels_absent": false,
+  "verdict": "blocked",
+  "expires_when": {
+    "head_sha_changes": true,
+    "base_sha_changes": true,
+    "gate_graph_version_changes": true
+  }
+}

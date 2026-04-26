@@ -1,0 +1,10 @@
+required_checks = [
+  "PR Smoke / PR Smoke",
+  "merge-gate / merge-gate",
+]
+
+blocker_labels = [
+  "needs-ci-fix",
+  "needs-diff-fix",
+  "needs-builder-fix",
+]

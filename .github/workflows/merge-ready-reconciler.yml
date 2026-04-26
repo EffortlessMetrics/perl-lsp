@@ -1,0 +1,37 @@
+name: Merge Ready Reconciler
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply label removals (default false = advisory dry-run)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Advisory reconcile (dry-run)
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.apply }}
+        run: cargo xtask merge-ready reconcile --dry-run
+
+      - name: Apply reconcile
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply }}
+        run: cargo xtask merge-ready reconcile --apply

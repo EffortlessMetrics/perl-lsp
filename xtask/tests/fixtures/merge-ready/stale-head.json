@@ -1,0 +1,20 @@
+{
+  "check": "merge-readiness",
+  "schema_version": "1",
+  "event": "pull_request",
+  "pr": 6859,
+  "head_sha": "3333333",
+  "base_sha": "2222222",
+  "gate_graph_version": "fnv1a64:deadbeef",
+  "required_checks": [
+    { "name": "PR Smoke / PR Smoke", "status": "COMPLETED", "conclusion": "SUCCESS" }
+  ],
+  "review_evidence": { "approved": true, "approvals": 1 },
+  "blocker_labels_absent": true,
+  "verdict": "stale_head",
+  "expires_when": {
+    "head_sha_changes": true,
+    "base_sha_changes": true,
+    "gate_graph_version_changes": true
+  }
+}
