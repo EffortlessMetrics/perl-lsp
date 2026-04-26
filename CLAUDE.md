@@ -67,7 +67,6 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
 | `architecture-reviewed` | architecture-reviewer | Design fits microcrate layering and dependency contracts |
 | `maintainer-issue-reviewed` | maintainer-issue | Issue aligns with project goals, roadmap, user base |
-| `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
 | `review-reviewed` | reviewer | Standards check passed (banned patterns, scope) |
 | `maintainer-pr-reviewed` | maintainer-pr | PR implementation fits project direction and quality bar |
 | `pr-responded` | pr-responder | Bot comments and CI failures addressed |
