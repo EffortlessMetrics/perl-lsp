@@ -17,6 +17,7 @@ use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::ux_scorecard::UxScorecardFormat;
+use tasks::worktree_allocator::AgentWorktreeCommand;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -1361,6 +1362,11 @@ enum AgentCommand {
         #[command(subcommand)]
         command: AgentReceiptCommand,
     },
+    /// Manage leased local worktrees for agent orchestration.
+    Worktree {
+        #[command(subcommand)]
+        command: AgentWorktreeCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1721,6 +1727,7 @@ fn main() -> Result<()> {
             AgentCommand::Receipt { command } => match command {
                 AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
             },
+            AgentCommand::Worktree { command } => worktree_allocator::run(command),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
