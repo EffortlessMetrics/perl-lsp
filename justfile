@@ -358,6 +358,33 @@ benchmarks: bench
 # CI Aliases and Convenience Targets
 # ============================================================================
 
+# Print the decision tree for which command to run and when
+quick-ref:
+    @echo ""
+    @echo "  perl-lsp development quick reference"
+    @echo "  ====================================="
+    @echo ""
+    @echo "  WHEN                          COMMAND                          TIME"
+    @echo "  Every change / before push    just pr-fast                     ~1-2 min"
+    @echo "  Before merge to master        nix develop -c just ci-gate      ~3-5 min"
+    @echo "  New machine / after clone     just doctor                      ~10 sec"
+    @echo "  One-off lint check            just check                       ~30 sec"
+    @echo "  Reformat all code             cargo xtask fmt                  ~20 sec"
+    @echo "  Run tests only                cargo test --workspace --lib     ~1 min"
+    @echo "  Nightly / mutation / fuzz     just ci-full                     ~15-30 min"
+    @echo ""
+    @echo "  TIP: install the pre-push hook so pr-fast runs automatically:"
+    @echo "       bash scripts/install-githooks.sh"
+    @echo ""
+
+# Lint all crates — treated as errors, same as CI (alias for cargo clippy)
+check:
+    cargo clippy --workspace -- -D warnings
+
+# Auto-fix clippy warnings where possible
+fix:
+    cargo clippy --workspace --fix --allow-dirty
+
 # Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
     @echo "Running merge gate via Nix shell..."

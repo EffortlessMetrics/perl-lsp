@@ -278,11 +278,13 @@ my $val = try {
 ---
 
 (source_file
-  (use_statement)
-  (try_catch_statement)
-  (try_catch_statement)
-  (statement
-    (assignment)))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (try_statement)
+  (try_statement)
+  (expression_statement))
 
 ==================
 Builtin functions
@@ -445,11 +447,14 @@ method set_value(Num $val :optional) {
 ---
 
 (source_file
-  (use_statement)
-  (subroutine_declaration)
-  (subroutine_declaration)
-  (subroutine_declaration)
-  (method_declaration))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement)
+  (subroutine_declaration_statement)
+  (subroutine_declaration_statement)
+  (method_declaration_statement))
 
 ==================
 Field declarations with attributes
