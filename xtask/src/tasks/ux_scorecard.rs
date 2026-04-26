@@ -182,10 +182,7 @@ fn write_json(path: &Path, artifact: &UxScorecardArtifact) -> Result<()> {
     fs::write(path, format!("{payload}\n")).with_context(|| format!("writing {}", path.display()))
 }
 
-fn render_status_markdown(
-    artifact: &UxScorecardArtifact,
-    raw: &[ScenarioMeasurement],
-) -> String {
+fn render_status_markdown(artifact: &UxScorecardArtifact, raw: &[ScenarioMeasurement]) -> String {
     let mut text = String::new();
 
     // Header
@@ -577,7 +574,10 @@ mod tests {
         assert_eq!(parsed["workflow_pass_rate"], serde_json::json!(50.0));
         assert_eq!(parsed["rows"]["hover_correctness_pct"]["value"], serde_json::json!(50.0));
         assert_eq!(parsed["rows"]["rename_success_pct"]["value"], serde_json::json!(100.0));
-        assert_eq!(parsed["rows"]["diagnostics_correctness_pct"]["value"], serde_json::json!(100.0));
+        assert_eq!(
+            parsed["rows"]["diagnostics_correctness_pct"]["value"],
+            serde_json::json!(100.0)
+        );
         assert!(parsed["latency_by_request_class"]["hover"]["p50_ms"].is_number());
         assert!(parsed["latency_by_request_class"]["completion"]["p95_ms"].is_number());
     }
@@ -625,10 +625,7 @@ mod tests {
         let latencies = compute_latency_percentiles(&raw);
         let wpr = compute_workflow_pass_rate(&raw);
         let mut rows = BTreeMap::new();
-        rows.insert(
-            "hover_correctness_pct".to_string(),
-            PercentMetric { value: Some(100.0) },
-        );
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
         let artifact = UxScorecardArtifact {
             schema_version: 1,
             measured_at: "2026-01-01T00:00:00Z".to_string(),
