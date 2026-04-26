@@ -27,6 +27,12 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // Runs only when .github/workflows/, the workflow_policy_lint xtask, or its
     // fixtures/schema change.
     "workflow-policy.yml",
+    // methodology-gate.yml is advisory-only (read-only label detector).
+    // The single job runs `cargo xtask methodology-gate` which is cheap
+    // (no tests, no compilation beyond xtask itself). Adding an `if:` gate
+    // would prevent it from detecting label contradictions on the PRs that
+    // most need detection.
+    "methodology-gate.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
