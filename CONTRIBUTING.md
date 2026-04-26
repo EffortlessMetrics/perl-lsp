@@ -46,6 +46,26 @@ Install the pre-push git hook so the gate runs automatically before every push:
 bash scripts/install-githooks.sh
 ```
 
+### Codex Desktop workflow (agent contributors)
+
+If you are contributing from the Codex desktop app, use this repo-specific startup
+sequence to match CI and avoid platform gotchas:
+
+1. Open the repository root as the workspace.
+2. Run checks through a POSIX shell (`bash`) even on Windows.
+3. Prefer the fast gate while iterating, then run the full local gate before PR.
+
+```bash
+# Fast inner-loop validation
+just pr-fast
+
+# Canonical pre-PR gate (matches merge expectations)
+nix develop -c just ci-gate
+```
+
+If your desktop environment does not use Nix, run `just ci-gate` directly.
+For stale toolchains or workspace drift, run `just doctor`.
+
 ### Build and Test
 
 ```bash
