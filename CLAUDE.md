@@ -22,6 +22,7 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 | **Plan-review** (sonnet) | Improve the plan | Fill gaps, correct root cause, add edge cases | Yes — complete the spec yourself |
 | **Spec-planner** (haiku) | Implementation roadmap | Create `impl/` branch, write `.spec/` files (checklist, acceptance, context) | No — plans, doesn't implement |
 | **Red-TDD** (haiku) | Write failing tests | Commit red tests to impl branch; define "done" before builder starts | No — tests only, no implementation |
+| **Spec-Test-Code-Match** (haiku) | Three-way grid walk | After red-tdd, before builder: walk acceptance.md rows, resolve each named file/symbol/test, catch API hallucination and grid drift mechanically | No — bounces to red-tdd or spec-planner if drift |
 | **Build** (sonnet) | Make tests green | Check out impl branch (spec + red tests), implement, verify, PR | Yes — adapt if plan-reviewed; bump back if not |
 | **Green-TDD** (haiku) | Harden tests | Add edge case, boundary, regression tests after builder implements | No — tests only, flags bugs for reviewer |
 | **Review** (haiku) | Standards check | Banned patterns, scope, formatting — push fixes directly | Yes — always fix forward |
@@ -62,6 +63,7 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `plan-reviewed` | plan-reviewer | Spec refined and approved |
 | `spec-reviewed` | spec-planner | Impl branch created with `.spec/` files |
 | `red-tdd-reviewed` | red-tdd | Failing tests committed on impl branch |
+| `spec-match-reviewed` | spec-test-code-match | Grid rows resolve, test API references valid, acceptance assertions covered |
 | `green-tdd-reviewed` | green-tdd | Edge case and regression tests added |
 | `architecture-reviewed` | architecture-reviewer | Design fits microcrate layering and dependency contracts |
 | `maintainer-issue-reviewed` | maintainer-issue | Issue aligns with project goals, roadmap, user base |
@@ -92,6 +94,8 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 | `needs-plan-review` | scout | Entry to verification pipeline |
 | `needs-deep-review` | reviewer | Standards done, deep review needed |
 | `needs-builder-fix` | green-tdd | Edge case test found bug — route back to builder |
+| `needs-red-tdd-fix` | spec-test-code-match | Test API references hallucinated or acceptance rows uncovered — route back to red-tdd |
+| `needs-spec-fix` | spec-test-code-match | Acceptance.md rows don't resolve — route back to spec-planner |
 | `needs-ci-fix` | green-ci | CI check failed or stale — route to pr-responder |
 | `needs-diff-fix` | diff-auditor | Diff has artifacts, regressions, or scope drift — route to pr-responder |
 
@@ -128,9 +132,12 @@ them out of order wastes tokens and produces worse results.
 ```
 Missing spec-reviewed?          → spawn spec-planner
 Missing red-tdd-reviewed?       → spawn red-tdd (after spec-planner)
-Both present?                  → spawn builder
+Missing spec-match-reviewed?    → spawn spec-test-code-match (after red-tdd, mechanical grid walk)
+needs-red-tdd-fix set?          → route back to red-tdd (test API hallucination or coverage gap)
+needs-spec-fix set?             → route back to spec-planner (acceptance row doesn't resolve)
+All three present?              → spawn builder
 ```
-These are sequential — red-tdd needs the branch from spec-planner.
+These are sequential — red-tdd needs the branch from spec-planner; spec-test-code-match reads the red-tdd commit. Spec-test-code-match runs cheap (~$0.001 per check, haiku-mechanical) and prevents API hallucination from reaching builder. See `docs/forensics/2026-04-25-bdd-grid-as-architectural-pattern.md` for the architectural rationale.
 
 **Post-build hardening** (issue has `in-build`, PR exists):
 ```
@@ -175,6 +182,20 @@ gh pr list --search "label:merge-ready"              # ready to merge
 - **Research** -> explore agent: `Agent(subagent_type: "Explore", prompt: "...")`
 - **Multiple changes** -> parallel worktree agents, one per crate. Microcrate architecture prevents conflicts.
   - Reserve 10 agent slots for late-cycle routing. Use SendMessage to repurpose idle agents.
+
+### Periodic and on-trigger agents
+
+Agents that don't fit the per-PR pipeline because they run periodically or on specific triggers, not as part of every change's flow.
+
+| Agent | Trigger | Purpose | Frequency |
+|-------|---------|---------|-----------|
+| **tooling-debt-scout** (haiku) | Operator dispatch when recurring friction is identified | Scans forensics + memory for recurring tooling friction; files issues to fix the underlying tools instead of routing around them at PR-level | On-demand |
+| **memory-recalibrator** (haiku) | Substrate-shift signal (new model version, new upstream-research source, plan family activated) OR every ~50 sessions / ~30 days | GC for the prompt-fragment cache; flags stale calibrations, broken cross-references, consolidation candidates | Triggered + periodic |
+
+See:
+- `.claude/agents/tooling-debt-scout.md` and `docs/forensics/2026-04-25-methodology-blind-spots-conways-law.md`
+- `.claude/agents/memory-recalibrator.md` and `docs/forensics/2026-04-25-substrate-shift-and-two-timescale-calibration.md`
+- `docs/forensics/dispatch-index.toml` — machine-loadable index mapping situation_id → relevant fragment paths for prompt-loadable consumption
 
 ### Merge Queue Protocol
 
