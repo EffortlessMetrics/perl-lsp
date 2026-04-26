@@ -45,6 +45,161 @@ impl<'a> Parser<'a> {
         self.with_recursion_guard(|s| s.parse_primary_inner())
     }
 
+    fn record_unclosed_interpolation_delimiter(&mut self, text: &str, token_start: usize) {
+        if let Some(delim) = Self::find_unclosed_interpolation_delimiter(text) {
+            self.record_error(ParseError::syntax(
+                format!(
+                    "Unclosed {} delimiter in interpolated string before closing quote",
+                    delim
+                ),
+                token_start,
+            ));
+        }
+    }
+
+    fn find_unclosed_interpolation_delimiter(text: &str) -> Option<char> {
+        let bytes = text.as_bytes();
+        if bytes.len() < 2 || bytes.first() != Some(&b'"') {
+            return None;
+        }
+
+        let mut i = 1usize;
+        let quote_end = bytes.len() - 1;
+        while i < quote_end {
+            let ch = bytes[i] as char;
+            if ch == '\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+
+            if ch == '$' {
+                i += 1;
+                if i >= quote_end {
+                    break;
+                }
+
+                if bytes[i] == b'{' {
+                    if !Self::consume_balanced_in_interpolated_string(bytes, i, b'{', b'}', quote_end)
+                    {
+                        return Some('{');
+                    }
+                    continue;
+                }
+
+                if Self::is_identifier_start(bytes[i]) {
+                    i += 1;
+                    while i < quote_end && Self::is_identifier_continue(bytes[i]) {
+                        i += 1;
+                    }
+
+                    if i + 1 < quote_end && bytes[i] == b'-' && bytes[i + 1] == b'>' {
+                        i += 2;
+                        if i < quote_end && bytes[i] == b'{' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'{', b'}', quote_end,
+                            ) {
+                                return Some('{');
+                            }
+                            continue;
+                        }
+                        if i < quote_end && bytes[i] == b'[' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'[', b']', quote_end,
+                            ) {
+                                return Some('[');
+                            }
+                            continue;
+                        }
+                        if i < quote_end && bytes[i] == b'(' {
+                            if !Self::consume_balanced_in_interpolated_string(
+                                bytes, i, b'(', b')', quote_end,
+                            ) {
+                                return Some('(');
+                            }
+                            continue;
+                        }
+                        // bare method name: $obj->method(...) — scan the name, then check for (
+                        if i < quote_end && Self::is_identifier_start(bytes[i]) {
+                            while i < quote_end && Self::is_identifier_continue(bytes[i]) {
+                                i += 1;
+                            }
+                            if i < quote_end && bytes[i] == b'(' {
+                                if !Self::consume_balanced_in_interpolated_string(
+                                    bytes, i, b'(', b')', quote_end,
+                                ) {
+                                    return Some('(');
+                                }
+                                continue;
+                            }
+                        }
+                    }
+
+                    if i < quote_end && bytes[i] == b'{' {
+                        if !Self::consume_balanced_in_interpolated_string(
+                            bytes, i, b'{', b'}', quote_end,
+                        ) {
+                            return Some('{');
+                        }
+                        continue;
+                    }
+
+                    if i < quote_end && bytes[i] == b'[' {
+                        if !Self::consume_balanced_in_interpolated_string(
+                            bytes, i, b'[', b']', quote_end,
+                        ) {
+                            return Some('[');
+                        }
+                        continue;
+                    }
+
+                    continue;
+                }
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    fn consume_balanced_in_interpolated_string(
+        bytes: &[u8],
+        start: usize,
+        open: u8,
+        close: u8,
+        quote_end: usize,
+    ) -> bool {
+        let mut i = start + 1;
+        let mut depth = 1usize;
+
+        while i < quote_end {
+            let b = bytes[i];
+            if b == b'\\' {
+                i = i.saturating_add(2);
+                continue;
+            }
+            if b == open {
+                depth += 1;
+            } else if b == close {
+                depth -= 1;
+                if depth == 0 {
+                    return true;
+                }
+            }
+            i += 1;
+        }
+
+        false
+    }
+
+    fn is_identifier_start(byte: u8) -> bool {
+        byte.is_ascii_alphabetic() || byte == b'_'
+    }
+
+    fn is_identifier_continue(byte: u8) -> bool {
+        byte.is_ascii_alphanumeric() || byte == b'_'
+    }
+
     /// Inner implementation of parse_primary (called under recursion guard)
     fn parse_primary_inner(&mut self) -> ParseResult<Node> {
         let token = self.tokens.peek()?;
@@ -71,6 +226,9 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Check if it's a double-quoted string (interpolated)
                 let interpolated = token.text.starts_with('"');
+                if interpolated {
+                    self.record_unclosed_interpolation_delimiter(&token.text, token.start);
+                }
                 Ok(Node::new(
                     NodeKind::String { value: token.text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
@@ -105,8 +263,42 @@ impl<'a> Parser<'a> {
                 let token = self.tokens.next()?;
                 // Quote operators produce strings
                 let interpolated = matches!(token.kind, TokenKind::QuoteDouble);
+                let text = token.text.as_ref();
+
+                // Detect unclosed bracket-style delimiters in operator strings
+                // (e.g. q{...}, qq[...], q(...), q<...>).  Normal 'x' / "x" strings
+                // are already handled by the lexer's own unterminated-string detection.
+                let op_len = if text.starts_with("qq") {
+                    2
+                } else if text.starts_with('q') {
+                    1
+                } else {
+                    0
+                };
+                if op_len > 0 {
+                    let after_op = &text[op_len..];
+                    if let Some(open) = after_op.chars().next() {
+                        let close = match open {
+                            '(' => ')',
+                            '[' => ']',
+                            '{' => '}',
+                            '<' => '>',
+                            c => c, // symmetric delimiter closes with itself
+                        };
+                        if !after_op.ends_with(close) {
+                            self.record_error(ParseError::syntax(
+                                format!(
+                                    "Unclosed {} delimiter in string operator before end of file",
+                                    open
+                                ),
+                                token.start,
+                            ));
+                        }
+                    }
+                }
+
                 Ok(Node::new(
-                    NodeKind::String { value: token.text.to_string(), interpolated },
+                    NodeKind::String { value: text.to_string(), interpolated },
                     SourceLocation { start: token.start, end: token.end },
                 ))
             }
@@ -118,22 +310,37 @@ impl<'a> Parser<'a> {
 
                 // Parse qw(...) to extract words
                 if let Some(content) = text.strip_prefix("qw") {
-                    // Find the delimiter and extract content
-                    let (content_str, _delimiter) = if let Some(rest) = content.strip_prefix('(') {
-                        (rest.strip_suffix(')').unwrap_or(rest), '(')
-                    } else if let Some(rest) = content.strip_prefix('[') {
-                        (rest.strip_suffix(']').unwrap_or(rest), '[')
-                    } else if let Some(rest) = content.strip_prefix('{') {
-                        (rest.strip_suffix('}').unwrap_or(rest), '{')
-                    } else if let Some(rest) = content.strip_prefix('<') {
-                        (rest.strip_suffix('>').unwrap_or(rest), '<')
-                    } else {
-                        // Other delimiter - find matching pair
-                        let delim = content.chars().next().unwrap_or(' ');
-                        let inner = &content[delim.len_utf8()..];
-                        let trimmed = inner.trim_end_matches(delim);
-                        (trimmed, delim)
-                    };
+                    // Find the delimiter and extract content.
+                    // Track whether the closing delimiter was present so we can record an error
+                    // when the qw() is unclosed (e.g. qw(one two three at EOF).
+                    let (content_str, _delimiter, delim_closed) =
+                        if let Some(rest) = content.strip_prefix('(') {
+                            let closed = rest.strip_suffix(')').is_some();
+                            (rest.strip_suffix(')').unwrap_or(rest), '(', closed)
+                        } else if let Some(rest) = content.strip_prefix('[') {
+                            let closed = rest.strip_suffix(']').is_some();
+                            (rest.strip_suffix(']').unwrap_or(rest), '[', closed)
+                        } else if let Some(rest) = content.strip_prefix('{') {
+                            let closed = rest.strip_suffix('}').is_some();
+                            (rest.strip_suffix('}').unwrap_or(rest), '{', closed)
+                        } else if let Some(rest) = content.strip_prefix('<') {
+                            let closed = rest.strip_suffix('>').is_some();
+                            (rest.strip_suffix('>').unwrap_or(rest), '<', closed)
+                        } else {
+                            // Other delimiter - find matching pair
+                            let delim = content.chars().next().unwrap_or(' ');
+                            let inner = &content[delim.len_utf8()..];
+                            let trimmed = inner.trim_end_matches(delim);
+                            let closed = trimmed.len() < inner.len();
+                            (trimmed, delim, closed)
+                        };
+
+                    if !delim_closed {
+                        self.record_error(ParseError::syntax(
+                            "Unclosed qw() delimiter: missing closing delimiter before end of file",
+                            start,
+                        ));
+                    }
 
                     // Split into words, stripping # line comments first (perlop).
                     let cleaned = strip_qw_comments(content_str);
@@ -233,7 +440,40 @@ impl<'a> Parser<'a> {
             TokenKind::Transliteration => {
                 let token = self.tokens.next()?;
                 let (search, replace, modifiers) =
-                    quote_parser::extract_transliteration_parts(&token.text);
+                    quote_parser::extract_transliteration_parts_strict(&token.text).map_err(
+                        |e| {
+                            let message = match e {
+                                quote_parser::TransliterationError::InvalidModifier(c) => {
+                                    format!(
+                                        "Invalid transliteration modifier '{}'. Valid modifiers are: c, d, s, r",
+                                        c
+                                    )
+                                }
+                                quote_parser::TransliterationError::InvalidDelimiter(c) => {
+                                    format!(
+                                        "Invalid transliteration delimiter '{}'. Delimiter must be a non-alphanumeric, non-whitespace character",
+                                        c
+                                    )
+                                }
+                                quote_parser::TransliterationError::MissingDelimiter => {
+                                    "Missing delimiter after transliteration operator".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingSearch => {
+                                    "Missing search list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingReplacement => {
+                                    "Missing replacement list in transliteration".to_string()
+                                }
+                                quote_parser::TransliterationError::MissingClosingDelimiter => {
+                                    "Missing closing delimiter in transliteration".to_string()
+                                }
+                            };
+                            ParseError::SyntaxError {
+                                message,
+                                location: token.start,
+                            }
+                        },
+                    )?;
 
                 // Transliteration as a standalone expression (will be used with =~ later)
                 Ok(Node::new(

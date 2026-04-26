@@ -1,4 +1,4 @@
-use perl_parser_core::token_stream::TokenStream;
+use perl_parser_core::token_stream::{Token, TokenKind, TokenStream};
 use perl_tdd_support::must;
 
 #[test]
@@ -54,5 +54,21 @@ fn stream_processes_multiple_tokens() -> Result<(), Box<dyn std::error::Error>> 
         }
     }
     assert!(count >= 4, "should have at least 4 tokens, got {}", count);
+    Ok(())
+}
+
+#[test]
+fn buffered_stream_synthesizes_eof_at_last_token_end() -> Result<(), Box<dyn std::error::Error>> {
+    let mut stream = TokenStream::from_vec(vec![
+        Token::new(TokenKind::My, "my", 0, 2),
+        Token::new(TokenKind::Identifier, "x", 3, 4),
+    ]);
+
+    let _ = must(stream.next());
+    let _ = must(stream.next());
+    let eof = must(stream.next());
+    assert_eq!(eof.kind, TokenKind::Eof);
+    assert_eq!(eof.start, 4);
+    assert_eq!(eof.end, 4);
     Ok(())
 }
