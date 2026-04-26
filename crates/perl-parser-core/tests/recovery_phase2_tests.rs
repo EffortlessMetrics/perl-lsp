@@ -15,6 +15,7 @@ use cpan_test_helpers::*;
 
 use perl_parser_core::Parser;
 use perl_parser_core::error::{ParseError, RecoveryKind, RecoverySite};
+use perl_parser_core::{RecoverySalvageClass, RecoverySalvageProfile};
 
 // ──────────────────────────────────────────────────────────────
 // Helpers
@@ -25,6 +26,21 @@ fn parse_errors(source: &str) -> Vec<ParseError> {
     let mut parser = Parser::new(source);
     let _ = parser.parse(); // ignore Ok/Err — we want errors()
     parser.errors().to_vec()
+}
+
+fn classify(source: &str) -> RecoverySalvageProfile {
+    let mut parser = Parser::new(source);
+    let (ast, catastrophic) = match parser.parse() {
+        Ok(ast) => (ast, false),
+        Err(_) => (
+            perl_parser_core::Node::new(
+                perl_parser_core::NodeKind::Program { statements: vec![] },
+                perl_parser_core::SourceLocation { start: 0, end: 0 },
+            ),
+            true,
+        ),
+    };
+    RecoverySalvageProfile::from_parse(&ast, parser.errors(), catastrophic)
 }
 
 /// Assert at least one `ParseError::Recovered` with the given site+kind.
@@ -216,6 +232,14 @@ fn clean_hash_subscript_does_not_emit_recovered() {
 fn clean_chained_methods_does_not_emit_recovered() {
     let errors = parse_errors("my $x = $obj->foo->bar->baz;");
     assert_not_recovered(&errors, RecoverySite::PostfixChain, RecoveryKind::TruncatedChain);
+}
+
+#[test]
+fn missing_rhs_classifies_as_structured_recovery_only() {
+    let profile = classify("my $x = $a +;");
+    assert_eq!(profile.class, RecoverySalvageClass::StructuredRecoveryOnly);
+    assert_eq!(profile.error_node_count, 0);
+    assert!(profile.recovered_count >= 1);
 }
 
 #[test]

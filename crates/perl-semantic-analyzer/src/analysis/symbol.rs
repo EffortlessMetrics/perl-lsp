@@ -964,8 +964,21 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+            NodeKind::Untie { variable } => {
                 self.visit_node(variable);
+            }
+
+            NodeKind::Goto { target } => {
+                if let NodeKind::Identifier { name } = &target.kind {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Label,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                self.visit_node(target);
             }
 
             // Regex related nodes - we recurse into expression
@@ -1226,7 +1239,7 @@ impl SymbolExtractor {
         {
             let modifier_name = name.as_str();
             let method_names: Vec<String> =
-                args.first().map(Self::collect_symbol_names).unwrap_or_default();
+                args.iter().flat_map(Self::collect_symbol_names).collect();
             if !method_names.is_empty() {
                 let scope_id = self.table.current_scope();
                 let package = self.table.current_package.clone();
