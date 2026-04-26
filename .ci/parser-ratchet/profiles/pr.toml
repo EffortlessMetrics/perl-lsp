@@ -1,0 +1,20 @@
+# Parser Ratchet PR profile (canary rollout).
+# This profile intentionally excludes CPAN top-N corpus inputs.
+profile = "pr"
+selected = false
+include_cpan_top_n = false
+
+[inputs]
+baseline = ".ci/parser-corpus-baseline.json"
+manifest = ".ci/common-corpus-manifest.txt"
+
+[classification]
+hard_regression = [
+  "clean_rate_regression",
+  "catastrophic_parse_failure",
+  "bucket_regression",
+]
+soft_signal = [
+  "new_bucket_observed",
+  "timeout_budget_warning",
+]

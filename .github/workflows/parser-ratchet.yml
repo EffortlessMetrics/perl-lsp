@@ -1,0 +1,133 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # Rollout knob: scaffold | canary | enforce
+      PARSER_RATCHET_MODE: ${{ vars.PARSER_RATCHET_MODE || 'scaffold' }}
+      # Selection override: auto | true | false
+      PARSER_RATCHET_SELECTED: ${{ vars.PARSER_RATCHET_SELECTED || 'auto' }}
+      # Fixture knob for CI self-validation: none | regression
+      PARSER_RATCHET_FIXTURE: ${{ vars.PARSER_RATCHET_FIXTURE || 'none' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run parser ratchet rollout harness
+        id: ratchet
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/parser-ratchet
+
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+          import tomllib
+
+          mode = os.getenv("PARSER_RATCHET_MODE", "scaffold").strip().lower()
+          selected_override = os.getenv("PARSER_RATCHET_SELECTED", "auto").strip().lower()
+          fixture = os.getenv("PARSER_RATCHET_FIXTURE", "none").strip().lower()
+
+          if mode not in {"scaffold", "canary", "enforce"}:
+              mode = "scaffold"
+
+          profile = tomllib.loads(pathlib.Path(".ci/parser-ratchet/profiles/pr.toml").read_text())
+          selected_default = bool(profile.get("selected", False))
+          include_cpan_top_n = bool(profile.get("include_cpan_top_n", True))
+
+          # rollout wiring: scaffold=no-op by default, canary/enforce selected by default.
+          if selected_override in {"true", "false"}:
+              selected = selected_override == "true"
+          else:
+              selected = selected_default if mode == "scaffold" else True
+
+          hard_regression = fixture == "regression"
+          soft_signal = fixture == "warn"
+          verdict = "pass"
+          exit_code = 0
+
+          if not selected:
+              verdict = "pass"
+          elif mode == "canary":
+              if hard_regression:
+                  verdict = "would_fail"
+              elif soft_signal:
+                  verdict = "warn"
+          elif mode == "enforce":
+              if hard_regression:
+                  verdict = "fail"
+                  exit_code = 1
+              elif soft_signal:
+                  verdict = "warn"
+
+          receipt = {
+              "schema_version": 1,
+              "event": os.getenv("GITHUB_EVENT_NAME"),
+              "sha": os.getenv("GITHUB_SHA"),
+              "mode": mode,
+              "profile": "pr",
+              "selected": selected,
+              "fixture": fixture,
+              "classification": {
+                  "hard_regression": hard_regression,
+                  "soft_signal": soft_signal,
+              },
+              "include_cpan_top_n": include_cpan_top_n,
+              "verdict": verdict,
+              "enforced": mode == "enforce" and selected,
+          }
+
+          out_path = pathlib.Path("target/parser-ratchet/receipt.json")
+          out_path.write_text(json.dumps(receipt, indent=2) + "\n")
+
+          summary = pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"])
+          summary.write_text(
+              "\n".join(
+                  [
+                      "## Parser Ratchet",
+                      f"- Mode: `{mode}`",
+                      f"- Profile: `pr`",
+                      f"- Selected: `{selected}`",
+                      f"- Fixture: `{fixture}`",
+                      f"- Selection override: `{selected_override}`",
+                      f"- Verdict: `{verdict}`",
+                      f"- Enforcement active: `{mode == 'enforce' and selected}`",
+                  ]
+              )
+              + "\n"
+          )
+
+          with pathlib.Path(os.environ["GITHUB_OUTPUT"]).open("a") as fh:
+              fh.write(f"mode={mode}\n")
+              fh.write(f"selected={str(selected).lower()}\n")
+              fh.write(f"verdict={verdict}\n")
+
+          sys.exit(exit_code)
+          PY
+
+      - name: Upload parser ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parser-ratchet-receipt-${{ github.sha }}
+          path: target/parser-ratchet/receipt.json
+          if-no-files-found: error
