@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "kind": "agent_task",
+  "task_id": "task-6854-green-ci-abc123",
+  "snapshot_id": "gh-snapshot-2026-04-26T18:40:00Z",
+  "lane": "green_ci",
+  "pr": 6854,
+  "head_sha": "abc123",
+  "base_sha": "def456",
+  "canonical_state": "NEEDS_CI_REVIEW",
+  "allowed_mutations": ["emit_receipt", "comment"],
+  "forbidden_mutations": ["merge", "apply_labels", "push_branch"],
+  "required_output_schema": "review.schema.json",
+  "expires_at": "2099-04-26T19:10:00Z"
+}

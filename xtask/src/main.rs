@@ -51,6 +51,12 @@ enum Commands {
         doctor: bool,
     },
 
+    /// Capture a GitHub PR queue snapshot for disconnected maintainership.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Build project with various configurations
     Build {
         /// Build in release mode
@@ -1389,6 +1395,20 @@ enum MetricsCommand {
 }
 
 #[derive(Subcommand)]
+enum QueueCommand {
+    /// Capture the open PR queue into a stable JSON snapshot document.
+    Snapshot {
+        /// Output file for the generated snapshot JSON.
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional fixture JSON to parse instead of live GitHub data.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum AgentCommand {
     /// Lease lifecycle commands.
     Lease {
@@ -1464,6 +1484,9 @@ fn main() -> Result<()> {
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
+        Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
+        },
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
         }
