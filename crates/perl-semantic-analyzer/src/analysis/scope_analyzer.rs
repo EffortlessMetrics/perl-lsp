@@ -58,27 +58,43 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::rc::Rc;
 
+/// Category of scope-related issue detected during analysis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IssueKind {
+    /// A variable declared in an inner scope shadows one in an outer scope.
     VariableShadowing,
+    /// A declared variable is never read.
     UnusedVariable,
+    /// A variable is used without a prior declaration (`my`/`our`/`local`).
     UndeclaredVariable,
+    /// The same variable name is declared twice in the same scope.
     VariableRedeclaration,
+    /// A subroutine parameter name appears more than once in the signature.
     DuplicateParameter,
+    /// A parameter name shadows a package-level (`our`) variable.
     ParameterShadowsGlobal,
+    /// A subroutine parameter is never used inside the body.
     UnusedParameter,
+    /// A bareword was used where a string or identifier was expected.
     UnquotedBareword,
+    /// A variable was accessed before any initializing assignment.
     UninitializedVariable,
     /// Capture variable (`$1`, `$2`, etc.) used with no preceding regex match in scope.
     CaptureVarWithoutRegexMatch,
 }
 
+/// A single scope-analysis finding with location and human-readable description.
 #[derive(Debug, Clone)]
 pub struct ScopeIssue {
+    /// The category of scope problem detected.
     pub kind: IssueKind,
+    /// The bare variable name (without sigil) involved in the issue.
     pub variable_name: String,
+    /// Zero-based line number of the first token of the offending construct.
     pub line: usize,
+    /// Byte offset range `(start, end)` of the offending construct.
     pub range: (usize, usize),
+    /// Human-readable explanation of the issue.
     pub description: String,
 }
 
@@ -450,6 +466,11 @@ impl<'a> ExtractedName<'a> {
     }
 }
 
+/// Analyzes an AST for scope-related issues such as unused variables and shadowing.
+///
+/// Produces a list of [`ScopeIssue`]s that can be surfaced as LSP diagnostics
+/// or used by the refactoring engine.  The analyzer is stateless and may be
+/// reused across multiple invocations.
 pub struct ScopeAnalyzer;
 
 impl Default for ScopeAnalyzer {
@@ -459,6 +480,7 @@ impl Default for ScopeAnalyzer {
 }
 
 impl ScopeAnalyzer {
+    /// Create a new scope analyzer instance.
     pub fn new() -> Self {
         Self
     }
@@ -560,6 +582,9 @@ impl ScopeAnalyzer {
         })
     }
 
+    /// Analyze `ast` for scope issues, using `pragma_map` to honour `use strict` regions.
+    ///
+    /// Returns all detected issues sorted by byte offset.
     pub fn analyze(
         &self,
         ast: &Node,
@@ -1803,6 +1828,7 @@ impl ScopeAnalyzer {
         false
     }
 
+    /// Return one human-readable fix suggestion per issue.
     pub fn get_suggestions(&self, issues: &[ScopeIssue]) -> Vec<String> {
         issues
             .iter()

@@ -61,6 +61,7 @@ pub struct IncrementalState {
 }
 
 impl IncrementalState {
+    /// Initialize incremental state by doing a full parse of `source`.
     pub fn new(source: String) -> Self {
         let rope = Rope::from_str(&source);
         let line_index = LineIndex::new(&source);
