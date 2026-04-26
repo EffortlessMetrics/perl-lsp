@@ -46,6 +46,10 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
+- **Master must stay green; merge requires green** (2026-04-26 directive). Per-crate green is necessary but not sufficient — workspace-wide xtask fmt and clippy cascades break master if a single PR's drift goes unchecked. Verify workspace-wide CI before merging; route to fmt/clippy fix if not.
+- **Sign-off and routing labels are mutually exclusive at the same gate.** If an agent finds blocking issues, it does NOT also sign off (per the 2026-04-26 #6780 incident: applying both `review-reviewed` and `needs-builder-fix` confused the merge gate and let unfixed bugs ride to master). Sign off OR bounce, never both.
+- **No `needs-*` label on a PR may merge.** Even with `merge-ready`, presence of any `needs-builder-fix` / `needs-ci-fix` / `needs-diff-fix` / `needs-spec-fix` / `needs-red-tdd-fix` label MUST block ops merge. The presence of an active routing label means the PR has unaddressed work.
+- **External-source PRs (claude-burst, codex-burst, diffguard-bot, etc.) require the same gate set as internal PRs.** Don't shortcut review on third-party PRs; they're frequently the source of cross-PR contamination, hallucinated APIs, and scope drift between title and diff.
 
 ### Pipeline State Labels
 

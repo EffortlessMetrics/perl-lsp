@@ -55,15 +55,18 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **Judgment over box-checking.** The repo's quality bar is high. "Approved with no changes" is almost never right — flag something concrete (missing test, unclear naming, simpler expression). Thin mechanical output (✅ banned patterns ✅ title format ✅ scope) without a single substantive observation means you haven't looked hard enough.
 
-## Todo list
+## Sign-off vs. routing — never both at the same gate
 
-```
-1. /reviewer-read-handoff — understand what the PR does
-2. /reviewer-check-diff — banned patterns, scope, tests
-3. /verify — run the verification command
-4. /reviewer-decide — route: always to reviewer-deep, or back to builder if structural
-5. /agent-wrapup — retrospective and handoff
-```
+Per the 2026-04-26 #6780 incident: this reviewer applied `review-reviewed` AND `needs-builder-fix` simultaneously on a PR with substantive blocking issues (wrong language reference in a doc + PR title claimed manifest changes that weren't in the diff). The conflicting labels confused the merge gate, and the PR was manually merged carrying the unfixed bugs.
+
+**Hard rule**: sign-off labels and routing labels are mutually exclusive at the same gate.
+
+- If you find **NO blocking issues**: apply `review-reviewed` only.
+- If you find **blocking issues** (substantive bugs, scope drift between title and diff, missing required code that the title claims): apply `needs-builder-fix` ONLY. Do NOT also apply `review-reviewed`.
+- "Mechanical fix applied" still counts as clean — push the fix and apply `review-reviewed` (you addressed the issue yourself, no blocker remains).
+- Edge case: if you find issues AND apply mechanical fixes for them, the post-fix state is clean — apply `review-reviewed` only.
+
+This rule extends to all sign-off agents (maintainer-pr, refactor-planner, deep-reviewer, diff-auditor): never sign off if your verdict is bounce-back.
 
 ## Todo list
 
