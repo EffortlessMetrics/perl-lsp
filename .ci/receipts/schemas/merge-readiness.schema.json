@@ -1,18 +1,78 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/merge-readiness.schema.json",
+  "$id": "https://effortlessmetrics.dev/schemas/merge-readiness.schema.json",
   "title": "Merge Readiness Receipt",
-  "allOf": [
-    { "$ref": "./common-gate-receipt.schema.json" },
-    {
-      "type": "object",
-      "required": ["check", "selected"],
-      "properties": {
-        "check": { "const": "merge-readiness" },
-        "selected": { "type": "boolean" },
-        "selection_reason": { "type": "string" }
-      },
-      "additionalProperties": true
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "pr",
+    "head_sha",
+    "base_sha",
+    "gate_graph_version",
+    "required_checks",
+    "review_evidence",
+    "blocker_labels_absent",
+    "verdict",
+    "expires_when"
+  ],
+  "properties": {
+    "check": {
+      "const": "merge-readiness"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "event": {
+      "type": "string"
+    },
+    "pr": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "head_sha": {
+      "type": "string",
+      "minLength": 7
+    },
+    "base_sha": {
+      "type": "string",
+      "minLength": 7
+    },
+    "gate_graph_version": {
+      "type": "string",
+      "minLength": 8
+    },
+    "required_checks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "review_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocker_labels_absent": {
+      "type": "boolean"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "valid",
+        "stale_head",
+        "stale_base",
+        "stale_gate_graph",
+        "blocked",
+        "missing"
+      ]
+    },
+    "expires_when": {
+      "type": "string"
     }
-  ]
+  },
+  "additionalProperties": false
 }

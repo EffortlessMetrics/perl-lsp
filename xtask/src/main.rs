@@ -915,6 +915,12 @@ enum Commands {
         fail_on_advisory: bool,
     },
 
+    /// Emit, verify, and reconcile SHA-bound merge-readiness receipts.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1353,6 +1359,38 @@ enum GateReceiptsFormat {
 }
 
 #[derive(Subcommand)]
+enum MergeReadyCommand {
+    /// Emit a merge-readiness receipt for a PR.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output path for receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+    /// Verify receipt freshness and verdict.
+    Verify {
+        /// Pull request number (advisory context).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Verify a fixture file instead of the default receipt path.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready label state from receipts.
+    Reconcile {
+        /// Apply changes (default is advisory dry-run).
+        #[arg(long)]
+        apply: bool,
+        /// Force dry-run mode.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1788,6 +1826,15 @@ fn main() -> Result<()> {
                 fail_on_advisory,
             })
         }
+        Commands::MergeReady { command } => match command {
+            MergeReadyCommand::Emit { pr, receipt } => merge_ready::emit(pr, receipt),
+            MergeReadyCommand::Verify { pr, fixture } => merge_ready::verify(pr, fixture),
+            MergeReadyCommand::Reconcile { apply, dry_run } => {
+                let run_dry = if apply { false } else { true };
+                let run_dry = if dry_run { true } else { run_dry };
+                merge_ready::reconcile(run_dry)
+            }
+        },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }
