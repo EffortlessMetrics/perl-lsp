@@ -1,0 +1,15 @@
+{
+  "pr_number": 7102,
+  "pr_head_sha": "prsha002",
+  "pr_status": {
+    "state": "failure",
+    "signature": "gate::pr-fast::lint"
+  },
+  "master_status": {
+    "sha": "mastersha002",
+    "state": "success",
+    "signature": "gate::pr-fast::lint"
+  },
+  "pr_is_behind_master": true,
+  "current_head_evidence": true
+}
