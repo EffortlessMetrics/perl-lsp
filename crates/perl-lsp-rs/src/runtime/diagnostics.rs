@@ -1756,8 +1756,7 @@ mod tests {
     /// build_context must use the workspace root of the folder that owns the document,
     /// not the global root_path (which points to the first workspace folder).
     #[test]
-    fn build_context_uses_doc_scoped_workspace_root()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn build_context_uses_doc_scoped_workspace_root() -> Result<(), Box<dyn std::error::Error>> {
         let temp = tempfile::tempdir()?;
         let folder_a = temp.path().join("folder-a");
         let folder_b = temp.path().join("folder-b");
@@ -1766,8 +1765,7 @@ mod tests {
         std::fs::create_dir_all(&folder_b)?;
         std::fs::write(&script_b, "use strict;\n")?;
 
-        let doc_uri =
-            url::Url::from_file_path(&script_b).map_err(|_| "bad uri")?.to_string();
+        let doc_uri = url::Url::from_file_path(&script_b).map_err(|_| "bad uri")?.to_string();
 
         let (server, _buf) = make_server_with_capture();
         // root_path points to folder_a (the "primary" folder)

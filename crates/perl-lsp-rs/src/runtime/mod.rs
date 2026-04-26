@@ -1062,8 +1062,8 @@ mod tests {
     }
 
     #[test]
-    fn include_paths_for_doc_deduplicates_across_folders()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn include_paths_for_doc_deduplicates_across_folders() -> Result<(), Box<dyn std::error::Error>>
+    {
         let temp = tempfile::tempdir()?;
         let folder_a = temp.path().join("a");
         let folder_b = temp.path().join("b");
@@ -1115,8 +1115,8 @@ mod tests {
     }
 
     #[test]
-    fn include_paths_for_doc_respects_use_perl5lib_false()
-    -> Result<(), Box<dyn std::error::Error>> {
+    fn include_paths_for_doc_respects_use_perl5lib_false() -> Result<(), Box<dyn std::error::Error>>
+    {
         // When use_perl5lib=false, effective_include_paths must not inject PERL5LIB entries.
         // We verify this by building a WorkspaceConfig with an explicit include_paths list and
         // use_perl5lib=false, then ensuring the result matches exactly that list (resolved).
