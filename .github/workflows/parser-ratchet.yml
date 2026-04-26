@@ -1,0 +1,177 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref_name }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+          shared-key: parser-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Load rollout profile
+        id: profile
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import tomllib
+
+          profile = pathlib.Path('.ci/parser-ratchet/profiles/pr.toml')
+          data = tomllib.loads(profile.read_text(encoding='utf-8'))
+
+          selected = bool(data.get('selected', False))
+          mode = str(data.get('mode', 'scaffold')).strip().lower()
+          manifest = str(data.get('manifest', '.ci/common-corpus-manifest.txt'))
+          baseline = str(data.get('baseline', '.ci/parser-corpus-baseline.json'))
+
+          if mode not in {'scaffold', 'canary', 'enforce'}:
+              raise SystemExit(f'Unsupported parser-ratchet mode: {mode}')
+
+          out = pathlib.Path(__import__('os').environ['GITHUB_OUTPUT'])
+          with out.open('a', encoding='utf-8') as fh:
+              fh.write(f'selected={str(selected).lower()}\n')
+              fh.write(f'mode={mode}\n')
+              fh.write(f'manifest={manifest}\n')
+              fh.write(f'baseline={baseline}\n')
+          PY
+
+      - name: Run parser ratchet according to rollout mode
+        id: run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/receipts
+
+          SELECTED='${{ steps.profile.outputs.selected }}'
+          MODE='${{ steps.profile.outputs.mode }}'
+          MANIFEST='${{ steps.profile.outputs.manifest }}'
+          BASELINE='${{ steps.profile.outputs.baseline }}'
+
+          COMMAND=(cargo xtask parser-corpus-sweep --manifest "$MANIFEST" --baseline "$BASELINE" --enforce --receipt)
+
+          verdict="pass"
+          exit_code=0
+          status_note=""
+
+          if [[ "$SELECTED" != "true" ]]; then
+            verdict="pass"
+            status_note="selected=false (scaffold/no-op)"
+          elif [[ "$MODE" == "canary" ]]; then
+            set +e
+            "${COMMAND[@]}"
+            exit_code=$?
+            set -e
+            if [[ $exit_code -ne 0 ]]; then
+              verdict="would_fail"
+              status_note="selected=true canary captured hard regression"
+            else
+              verdict="pass"
+              status_note="selected=true canary clean"
+            fi
+          elif [[ "$MODE" == "enforce" ]]; then
+            set +e
+            "${COMMAND[@]}"
+            exit_code=$?
+            set -e
+            if [[ $exit_code -ne 0 ]]; then
+              verdict="fail"
+              status_note="selected=true enforce hard regression"
+            else
+              verdict="pass"
+              status_note="selected=true enforce clean"
+            fi
+          else
+            verdict="warn"
+            status_note="unknown rollout mode"
+          fi
+
+          export verdict exit_code status_note
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import os
+
+          payload = {
+              'schema_version': 1,
+              'check': 'parser-ratchet',
+              'profile': 'pr',
+              'event': os.environ.get('GITHUB_EVENT_NAME', ''),
+              'ref': os.environ.get('GITHUB_REF', ''),
+              'sha': os.environ.get('GITHUB_SHA', ''),
+              'selected': os.environ['SELECTED'] == 'true',
+              'mode': os.environ['MODE'],
+              'manifest': os.environ['MANIFEST'],
+              'baseline': os.environ['BASELINE'],
+              'verdict': os.environ['verdict'],
+              'command': os.environ['COMMAND_STR'],
+              'command_exit_code': int(os.environ['exit_code']),
+              'status_note': os.environ['status_note'],
+          }
+
+          target = pathlib.Path('target/receipts/parser-ratchet.json')
+          target.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+          print(target)
+          PY
+
+          {
+            echo "selected=$SELECTED"
+            echo "mode=$MODE"
+            echo "verdict=$verdict"
+            echo "exit_code=$exit_code"
+          } >> "$GITHUB_OUTPUT"
+
+          if [[ "$MODE" == "enforce" && "$SELECTED" == "true" && "$exit_code" -ne 0 ]]; then
+            echo "::error::Parser Ratchet enforcement failed (see receipt artifact)."
+            exit 1
+          fi
+        env:
+          SELECTED: ${{ steps.profile.outputs.selected }}
+          MODE: ${{ steps.profile.outputs.mode }}
+          MANIFEST: ${{ steps.profile.outputs.manifest }}
+          BASELINE: ${{ steps.profile.outputs.baseline }}
+          COMMAND_STR: cargo xtask parser-corpus-sweep --manifest ${{ steps.profile.outputs.manifest }} --baseline ${{ steps.profile.outputs.baseline }} --enforce --receipt
+
+      - name: Upload parser ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parser-ratchet-receipt-${{ github.sha }}
+          path: |
+            target/receipts/parser-ratchet.json
+            target/receipts/*-corpus-sweep.json
+          if-no-files-found: warn
+          retention-days: 7

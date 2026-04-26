@@ -1,0 +1,15 @@
+schema_version = 1
+profile = "pr"
+
+# Rollout starts in scaffold mode: gate metadata is emitted but parser ratchet is
+# not selected. Flip `selected = true` only when canary/enforce evidence is ready.
+selected = false
+mode = "scaffold"
+
+# PR profile intentionally uses the strict-clean common corpus subset. Do not use
+# CPAN top-N here; that belongs to dedicated corpus workflows.
+manifest = ".ci/common-corpus-manifest.txt"
+baseline = ".ci/parser-corpus-baseline.json"
+
+# Enforce only when `mode = "enforce"` and selected=true.
+enforce = false
