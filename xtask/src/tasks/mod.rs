@@ -50,6 +50,7 @@ pub mod inject_sha_assets;
 pub mod layer_check;
 pub mod metrics;
 pub mod parse_rust;
+pub mod parser_concept_floor;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
 pub mod populate_book;

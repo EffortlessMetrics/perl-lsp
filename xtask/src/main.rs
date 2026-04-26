@@ -831,6 +831,12 @@ enum Commands {
         command: CpanCorpusCommand,
     },
 
+    /// Parser ratchet tooling for corpus quality floors
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Generate canonical receipts (test summary, doc metrics, consolidated state)
     ///
     /// Runs workspace tests and doc builds, parses output, and produces
@@ -1220,6 +1226,20 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Enforce repository-owned concept floors for perl-corpus fixtures.
+    ConceptFloors {
+        /// Fixture manifest JSON.
+        #[arg(long)]
+        manifest: PathBuf,
+
+        /// Output receipt path.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1571,6 +1591,15 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::ConceptFloors { manifest, receipt } => {
+                parser_concept_floor::run(parser_concept_floor::ConceptFloorConfig {
+                    manifest,
+                    receipt,
+                    profile: "pr".to_string(),
+                })
+            }
+        },
         Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
             receipts::run(receipts::ReceiptsConfig {
                 tests_only,
