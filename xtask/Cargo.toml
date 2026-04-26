@@ -36,6 +36,7 @@ tree-sitter-perl-c = { path = "../crates/tree-sitter-perl-c", optional = true }
 regex.workspace = true
 serde_yaml_ng = "0.10.0"
 toml = "1.1.2"
+sha2 = "0.10.9"
 bindgen = "0.72.1"
 peak_alloc = "0.3.0"
 notify = "8.2.0"

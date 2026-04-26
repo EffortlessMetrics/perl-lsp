@@ -853,6 +853,12 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Emit and verify SHA-bound merge-readiness receipts.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1303,6 +1309,37 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum MergeReadyCommand {
+    /// Emit a merge-readiness receipt for a pull request.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output receipt path.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+    /// Verify merge-readiness for a pull request.
+    Verify {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Optional fixture/receipt path override.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready labels against current receipts.
+    Reconcile {
+        /// Advisory mode; reports actions without mutating labels.
+        #[arg(long)]
+        dry_run: bool,
+        /// Apply mode; allows label mutation and comment emission.
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1579,6 +1616,17 @@ fn main() -> Result<()> {
                 test_threads,
             })
         }
+        Commands::MergeReady { command } => match command {
+            MergeReadyCommand::Emit { pr, receipt } => {
+                merge_ready::emit(merge_ready::EmitOptions { pr, receipt })
+            }
+            MergeReadyCommand::Verify { pr, fixture } => {
+                merge_ready::verify(merge_ready::VerifyOptions { pr, fixture })
+            }
+            MergeReadyCommand::Reconcile { dry_run, apply } => {
+                merge_ready::reconcile(merge_ready::ReconcileOptions { dry_run, apply })
+            }
+        },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }
