@@ -230,19 +230,47 @@ impl UxClient {
         self.send_raw(&msg)
     }
 
-    /// Send `textDocument/didOpen`.
-    pub fn did_open(&self, uri: &str, text: &str) -> Result<()> {
+    /// Send `textDocument/didOpen` using the provided language identifier.
+    pub fn did_open_with_language_id(
+        &self,
+        uri: &str,
+        text: &str,
+        language_id: &str,
+    ) -> Result<()> {
         self.notify(
             "textDocument/didOpen",
             json!({
                 "textDocument": {
                     "uri": uri,
-                    "languageId": "perl",
+                    "languageId": language_id,
                     "version": 1,
                     "text": text
                 }
             }),
         )
+    }
+
+    /// Send `textDocument/didChange` with a full-document replacement.
+    pub fn did_change_full(&self, uri: &str, version: i32, text: &str) -> Result<()> {
+        self.notify(
+            "textDocument/didChange",
+            json!({
+                "textDocument": {
+                    "uri": uri,
+                    "version": version
+                },
+                "contentChanges": [
+                    {
+                        "text": text
+                    }
+                ]
+            }),
+        )
+    }
+
+    /// Send `textDocument/didOpen` using Perl as the language identifier.
+    pub fn did_open(&self, uri: &str, text: &str) -> Result<()> {
+        self.did_open_with_language_id(uri, text, "perl")
     }
 
     /// Drain all buffered server-initiated events and decode them.

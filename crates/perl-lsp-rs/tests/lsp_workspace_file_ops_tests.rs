@@ -1253,6 +1253,104 @@ fn test_will_rename_files_pure_parent_only() -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
+/// Regression: Moo/Moose inheritance/role DSL (`extends`/`with`) should also be
+/// discovered as dependency edges and rewritten during workspace/willRenameFiles.
+#[test]
+fn test_will_rename_files_rewrites_moose_extends_and_with() -> Result<(), Box<dyn std::error::Error>>
+{
+    let server = create_test_server();
+
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
+
+    let parent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/My/App/Parent.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package My::App::Parent;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(parent_open));
+
+    let role_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/My/App/Role.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package My::App::Role;\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(role_open));
+
+    let child_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/child.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package Child;\nuse Moo;\nextends 'My::App::Parent';\nwith 'My::App::Role';\n1;\n"
+        }
+    });
+    let _ = make_request(&server, "textDocument/didOpen", Some(child_open));
+
+    let parent_rename = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/My/App/Parent.pm",
+            "newUri": "file:///test/workspace/lib/My/App/RenamedParent.pm"
+        }]
+    });
+    let parent_edit = make_request(&server, "workspace/willRenameFiles", Some(parent_rename))?
+        .ok_or("expected workspace edit for parent rename")?;
+    let parent_changes = parent_edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object for parent rename")?;
+    let child_changes = parent_changes
+        .get("file:///test/workspace/child.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for child.pl on extends rename")?;
+    let parent_new_texts: Vec<String> = child_changes
+        .iter()
+        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+    assert!(
+        parent_new_texts.contains(&"extends 'My::App::RenamedParent';".to_string()),
+        "expected rewritten extends in edits: {parent_new_texts:?}"
+    );
+
+    let role_rename = json!({
+        "files": [{
+            "oldUri": "file:///test/workspace/lib/My/App/Role.pm",
+            "newUri": "file:///test/workspace/lib/My/App/RenamedRole.pm"
+        }]
+    });
+    let role_edit = make_request(&server, "workspace/willRenameFiles", Some(role_rename))?
+        .ok_or("expected workspace edit for role rename")?;
+    let role_changes = role_edit
+        .get("changes")
+        .and_then(Value::as_object)
+        .ok_or("expected changes object for role rename")?;
+    let child_changes = role_changes
+        .get("file:///test/workspace/child.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for child.pl on with rename")?;
+    let role_new_texts: Vec<String> = child_changes
+        .iter()
+        .filter_map(|e| e.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+    assert!(
+        role_new_texts.contains(&"with 'My::App::RenamedRole';".to_string()),
+        "expected rewritten with in edits: {role_new_texts:?}"
+    );
+
+    Ok(())
+}
+
 /// Regression test: renaming a module whose own file is open should include
 /// package declaration edits for the renamed module file itself.
 #[test]
