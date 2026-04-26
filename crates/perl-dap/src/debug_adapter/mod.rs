@@ -505,14 +505,9 @@ impl VariableCache {
         self.entries
             .values()
             .filter(|entry| entry.kind == VariableCacheKind::Root)
-            .chain(
-                self.entries
-                    .values()
-                    .filter(|entry| entry.kind == VariableCacheKind::Child),
-            )
+            .chain(self.entries.values().filter(|entry| entry.kind == VariableCacheKind::Child))
             .flat_map(|entry| entry.full.iter())
     }
-
 }
 
 fn slice_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {

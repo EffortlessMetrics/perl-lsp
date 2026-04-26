@@ -271,7 +271,11 @@ print "marker=$marker\n";
             return Err("globals scope contains variables with empty names".to_string());
         }
         let n = globals.len();
-        Ok(format!("globals scope returned {} named {}", n, if n == 1 { "variable" } else { "variables" }))
+        Ok(format!(
+            "globals scope returned {} named {}",
+            n,
+            if n == 1 { "variable" } else { "variables" }
+        ))
     })());
 
     let eval_metric = metric_from_result((|| {

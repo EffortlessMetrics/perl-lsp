@@ -161,11 +161,8 @@ impl DebugAdapter {
                 parsed_child_cache = child_cache;
             }
         } else {
-            let (full_roots, _child_cache) = self.parse_scope_variables_from_output(
-                variables_ref,
-                0,
-                1024,
-            );
+            let (full_roots, _child_cache) =
+                self.parse_scope_variables_from_output(variables_ref, 0, 1024);
             parsed_from_output = slice_variables(&full_roots, start, count);
         }
 
@@ -180,7 +177,11 @@ impl DebugAdapter {
             && !parsed_full_roots.is_empty()
             && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
         {
-            session.variable_cache.upsert(variables_ref, VariableCacheKind::Root, parsed_full_roots);
+            session.variable_cache.upsert(
+                variables_ref,
+                VariableCacheKind::Root,
+                parsed_full_roots,
+            );
             for (reference, children) in parsed_child_cache {
                 session.variable_cache.upsert(reference, VariableCacheKind::Child, children);
             }
