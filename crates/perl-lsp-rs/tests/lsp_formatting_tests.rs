@@ -230,7 +230,6 @@ sub clean_function {
     my $y = 2;
     return $x + $y;
 }
-
 1;
 "#,
     )?;
@@ -258,6 +257,66 @@ sub clean_function {
             }
         }
     }
+
+    Ok(())
+}
+
+/// Test that formatting requests return no edits when formatting is disabled at runtime.
+#[test]
+fn test_formatting_disabled_via_configuration_returns_no_edits() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    harness.notify(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "perl": {
+                    "formatting": {
+                        "enabled": false
+                    }
+                }
+            }
+        }),
+    );
+
+    let doc_uri = "file:///test_formatting_disabled.pl";
+    harness.open(doc_uri, "sub messy{my$x=1;return$x;}\n")?;
+
+    let response = harness.request(
+        "textDocument/formatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+
+    let edits = response.as_array().ok_or("formatting response must be an array")?;
+    assert!(edits.is_empty(), "expected no formatting edits when formatting is disabled");
+
+    let range_response = harness.request(
+        "textDocument/rangeFormatting",
+        json!({
+            "textDocument": { "uri": doc_uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 26 }
+            },
+            "options": {
+                "tabSize": 4,
+                "insertSpaces": true
+            }
+        }),
+    )?;
+    let range_edits =
+        range_response.as_array().ok_or("rangeFormatting response must be an array")?;
+    assert!(
+        range_edits.is_empty(),
+        "expected no range formatting edits when formatting is disabled"
+    );
 
     Ok(())
 }

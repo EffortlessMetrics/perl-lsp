@@ -46,35 +46,46 @@ impl DebugAdapter {
 
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
+        let new_breakpoint_records = if let Some(ref source_path) = args.source.path {
+            self.breakpoints.get_breakpoints(source_path)
+        } else {
+            Vec::new()
+        };
+        let condition_by_id: HashMap<i64, Option<String>> = new_breakpoint_records
+            .into_iter()
+            .map(|record| (record.id, record.condition))
+            .collect();
 
         // If a session is active, also sync the breakpoints to the Perl debugger
         if let Ok(mut guard) = self.session.lock()
             && let Some(ref mut session) = *guard
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
+                let mut command_batch = String::new();
+
                 // Clear only the old breakpoints for this specific file
                 for old_bp in &old_breakpoints {
                     if old_bp.verified {
-                        let cmd = format!("B {}\n", old_bp.line);
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
+                        command_batch.push_str(&format!("B {}\n", old_bp.line));
                     }
                 }
 
                 // Set new breakpoints that were successfully verified
                 for bp in &verified_breakpoints {
                     if bp.verified {
-                        // Retrieve the record to get the original condition
-                        let cmd = if let Some(record) = self.breakpoints.get_breakpoint_by_id(bp.id)
-                            && let Some(cond) = record.condition
-                        {
+                        // Retrieve original condition (if present) from records produced by this call.
+                        let cmd = if let Some(Some(cond)) = condition_by_id.get(&bp.id) {
                             format!("b {} {}\n", bp.line, cond)
                         } else {
                             format!("b {}\n", bp.line)
                         };
-                        let _ = stdin.write_all(cmd.as_bytes());
-                        let _ = stdin.flush();
+                        command_batch.push_str(&cmd);
                     }
+                }
+
+                if !command_batch.is_empty() {
+                    let _ = stdin.write_all(command_batch.as_bytes());
+                    let _ = stdin.flush();
                 }
             }
         }
