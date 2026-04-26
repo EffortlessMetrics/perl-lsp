@@ -19,14 +19,14 @@ This document defines the receipt contract for the control-plane modernization t
 
 ### Committed schemas
 
-- Path: `.ci/receipts/schemas/*.schema.json`
+- Path: `.ci/schemas/*.schema.{json,yaml}`
 - Characteristics:
   - versioned contract for receipt payload validation
   - code-reviewed alongside producer/consumer changes
 
 ### Committed registry
 
-- Path: `.ci/receipts/registry.toml`
+- Path: `.ci/GATE_REGISTRY.toml`
 - Characteristics:
   - catalog of known receipt kinds and schema mappings
   - single source for schema discovery by validators/reconcilers
