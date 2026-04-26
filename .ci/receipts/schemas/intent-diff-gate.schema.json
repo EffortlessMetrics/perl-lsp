@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/ci/intent-diff-gate.schema.json",
+  "title": "Intent Diff Gate Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claimed_component",
+    "claimed_closeout_issues",
+    "expected_paths",
+    "actual_paths",
+    "evidence",
+    "verdict",
+    "violations"
+  ],
+  "properties": {
+    "claimed_component": { "type": "string" },
+    "claimed_closeout_issues": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "expected_paths": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "actual_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "touched_expected_path",
+        "test_updated",
+        "behavior_receipt",
+        "explicit_override"
+      ],
+      "properties": {
+        "touched_expected_path": { "type": "boolean" },
+        "test_updated": { "type": "boolean" },
+        "behavior_receipt": { "type": "boolean" },
+        "explicit_override": { "type": "boolean" }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["warn", "fail"] },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

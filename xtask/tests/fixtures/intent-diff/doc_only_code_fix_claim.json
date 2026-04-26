@@ -1,0 +1,7 @@
+{
+  "title": "fix(vscode): fix VS Code activation bug",
+  "body": "Fixes #6747\n\nAdded docs note only.",
+  "actual_paths": [
+    "docs/troubleshooting/vscode-activation.md"
+  ]
+}

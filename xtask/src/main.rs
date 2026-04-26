@@ -895,6 +895,19 @@ enum Commands {
     /// Check invariants in features.toml
     DocClaims,
 
+    /// Validate PR intent/body claims against changed-file evidence.
+    IntentDiffGate {
+        /// Pull request number to inspect via gh CLI.
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Fixture JSON input for deterministic local validation.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Optional output path for gate receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -1592,6 +1605,9 @@ fn main() -> Result<()> {
             })
         }
         Commands::DocClaims => doc_claims::run(),
+        Commands::IntentDiffGate { pr, fixture, receipt } => {
+            intent_diff_gate::run(pr, fixture, receipt)
+        }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
             FeaturesCommand::Verify => features::verify(),

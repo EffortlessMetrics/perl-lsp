@@ -1,0 +1,18 @@
+[severity]
+docs_only_code_fix = "fail"
+closeout_missing_evidence = "fail"
+scaffold_with_close_keyword = "fail"
+docs_claim_but_code_changed = "warn"
+vscode_activation_missing_path = "fail"
+
+[issues."6747"]
+expected_paths = [
+  "vscode-extension/package.json",
+  "crates/perl-lsp-rs/tests",
+]
+
+[component_expected_paths]
+vscode_activation_fix = [
+  "vscode-extension/package.json",
+  "crates/perl-lsp-rs/tests",
+]

@@ -1,0 +1,8 @@
+{
+  "title": "feat(ci): scaffold intent diff gate",
+  "body": "Refs #6853\n\npartial scaffolding only",
+  "actual_paths": [
+    "xtask/src/tasks/intent_diff_gate.rs",
+    "docs/ci/intent-diff-closeout-gate.md"
+  ]
+}

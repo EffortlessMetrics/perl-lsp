@@ -1,0 +1,8 @@
+{
+  "title": "fix(vscode): fix VS Code activation path",
+  "body": "Resolves #6747",
+  "actual_paths": [
+    "vscode-extension/package.json",
+    "crates/perl-lsp-rs/tests/vscode_activation.rs"
+  ]
+}
