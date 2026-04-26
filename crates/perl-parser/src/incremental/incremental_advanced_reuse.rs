@@ -750,6 +750,67 @@ impl AdvancedReuseAnalyzer {
 
         count
     }
+
+    /// Map an old-tree byte position to its corresponding position in the new
+    /// tree, using the supplied [`EditSet`] to apply byte shifts.
+    ///
+    /// Semantics:
+    /// - If `old_pos` precedes the first edit's `start_byte`, returns `old_pos`
+    ///   unchanged.
+    /// - If `old_pos` falls inside an edit's old range
+    ///   `[start_byte, old_end_byte)`, returns that edit's `new_end_byte`
+    ///   (i.e. the position is consumed by the edit and snaps to the edit's
+    ///   new boundary).
+    /// - Otherwise the position is shifted by the cumulative byte shift of all
+    ///   prior edits whose `old_end_byte <= old_pos`.
+    ///
+    /// Edits in [`EditSet`] are sorted by `start_byte`, so iteration short-
+    /// circuits as soon as the next edit starts past `old_pos`.
+    pub fn map_old_position_to_new(&self, old_pos: usize, edits: &EditSet) -> usize {
+        let mut shift: isize = 0;
+        for edit in edits.edits() {
+            if old_pos < edit.start_byte {
+                break;
+            }
+            if old_pos < edit.old_end_byte {
+                // Position is consumed by this edit; snap to its new end.
+                return edit.new_end_byte;
+            }
+            shift += edit.byte_shift();
+        }
+        let signed = old_pos as isize + shift;
+        if signed < 0 { 0 } else { signed as usize }
+    }
+
+    /// Attempt to register an `old_pos -> new_pos` reuse claim, enforcing the
+    /// one-to-one invariant: at most one old position may map to any given
+    /// new position.
+    ///
+    /// Returns `true` if the registration was inserted, `false` if some other
+    /// `old_pos` has already claimed the same `new_pos` (in which case the
+    /// existing claim is left unchanged).
+    pub fn try_register_match(
+        &self,
+        reuse_map: &mut HashMap<usize, ReuseStrategy>,
+        old_pos: usize,
+        new_pos: usize,
+        reuse_type: ReuseType,
+        confidence: f64,
+    ) -> bool {
+        if reuse_map.values().any(|s| s.target_position == new_pos) {
+            return false;
+        }
+        reuse_map.insert(
+            old_pos,
+            ReuseStrategy {
+                target_position: new_pos,
+                reuse_type,
+                confidence_score: confidence,
+                position_adjustment: (new_pos as isize) - (old_pos as isize),
+            },
+        );
+        true
+    }
 }
 
 /// Comprehensive analysis of a tree structure
