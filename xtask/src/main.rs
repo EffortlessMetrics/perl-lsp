@@ -1119,6 +1119,18 @@ enum Commands {
     /// Populate mdBook source directory from `docs/`.
     PopulateBook,
 
+    /// Agent lease/receipt primitives for GitHub-backed coordination.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
+    /// Build a deterministic GitHub queue snapshot JSON.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Validate workspace exclusion strategy and dependency invariants.
     ValidateWorkspaceExclusions,
 
@@ -1300,6 +1312,71 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Create or verify leases.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Validate and classify receipts.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Create a lease JSON from a task JSON.
+    Create {
+        #[arg(long)]
+        task: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value = "local-box/codex")]
+        owner: String,
+    },
+    /// Verify lease freshness and deterministic winner status.
+    Verify {
+        #[arg(long)]
+        lease: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate receipt against task and snapshot.
+    Validate {
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        task: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+    /// Return receipt freshness status against snapshot.
+    Status {
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Build queue snapshot output.
+    Snapshot {
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        fixture: Option<PathBuf>,
     },
 }
 
@@ -1678,6 +1755,36 @@ fn main() -> Result<()> {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
         Commands::PopulateBook => populate_book::run(),
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Create { task, out, owner } => {
+                    agent_lease::create(&task, &out, &owner, chrono::Utc::now())
+                }
+                AgentLeaseCommand::Verify { lease, snapshot } => {
+                    let status = agent_lease::verify(&lease, &snapshot, chrono::Utc::now())?;
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                    Ok(())
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt, task, snapshot } => {
+                    let status =
+                        agent_receipt::validate(&receipt, &task, &snapshot, chrono::Utc::now())?;
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                    Ok(())
+                }
+                AgentReceiptCommand::Status { receipt, snapshot } => {
+                    let status = agent_receipt::status(&receipt, &snapshot, chrono::Utc::now())?;
+                    println!("{}", serde_json::to_string_pretty(&status)?);
+                    Ok(())
+                }
+            },
+        },
+        Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out, fixture } => {
+                queue_snapshot::snapshot(fixture.as_deref(), &out, chrono::Utc::now())
+            }
+        },
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {

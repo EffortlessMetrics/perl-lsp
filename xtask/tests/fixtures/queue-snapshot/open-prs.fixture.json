@@ -1,0 +1,51 @@
+{
+  "snapshot_id": "gh-snapshot-2026-04-26T18:40:00Z",
+  "captured_at": "2026-04-26T18:40:00Z",
+  "repository": "EffortlessMetrics/perl-lsp",
+  "default_branch": "master",
+  "master_sha": "fff999",
+  "ruleset_summary": "convention-only",
+  "prs": [
+    {
+      "number": 6854,
+      "title": "CI green follow-up",
+      "head_sha": "abc123",
+      "base_sha": "def456",
+      "is_draft": false,
+      "merge_state_status": "CLEAN",
+      "labels": ["diff-audited"],
+      "status_check_rollup": [
+        {"name": "ci", "conclusion": "SUCCESS"}
+      ],
+      "updated_at": "2026-04-26T18:35:00Z",
+      "author": "maintainer-a",
+      "review_decision": "APPROVED"
+    },
+    {
+      "number": 6855,
+      "title": "failing PR",
+      "head_sha": "abc124",
+      "base_sha": "def456",
+      "is_draft": false,
+      "merge_state_status": "CLEAN",
+      "labels": ["needs-ci-fix"],
+      "status_check_rollup": [
+        {"name": "ci", "conclusion": "FAILURE"}
+      ],
+      "updated_at": "2026-04-26T18:36:00Z",
+      "author": "maintainer-b",
+      "review_decision": "CHANGES_REQUESTED"
+    }
+  ],
+  "buckets": {
+    "merge_ready": [],
+    "ci_green": [],
+    "needs_ci_fix": [],
+    "needs_builder_fix": [],
+    "needs_diff_fix": [],
+    "diff_audited_waiting_ci": [],
+    "stale_or_dirty": [],
+    "draft": [],
+    "blocked_unknown": []
+  }
+}

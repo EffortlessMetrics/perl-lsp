@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent_task",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "lane", "pr", "head_sha", "base_sha", "allowed_mutations", "forbidden_mutations", "expires_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "agent_task"},
+    "task_id": {"type": "string"},
+    "snapshot_id": {"type": "string"},
+    "lane": {"type": "string"},
+    "pr": {"type": "integer", "minimum": 1},
+    "head_sha": {"type": "string"},
+    "base_sha": {"type": "string"},
+    "canonical_state": {"type": "string"},
+    "allowed_mutations": {"type": "array", "items": {"type": "string"}},
+    "forbidden_mutations": {"type": "array", "items": {"type": "string"}},
+    "required_output_schema": {"type": "string"},
+    "expires_at": {"type": "string", "format": "date-time"}
+  }
+}

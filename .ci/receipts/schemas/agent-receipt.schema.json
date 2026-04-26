@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agent_receipt",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "lease_id", "lane", "pr", "head_sha", "base_sha", "verdict", "classification"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "agent_receipt"},
+    "task_id": {"type": "string"},
+    "lease_id": {"type": "string"},
+    "lane": {"type": "string"},
+    "pr": {"type": "integer", "minimum": 1},
+    "head_sha": {"type": "string"},
+    "base_sha": {"type": "string"},
+    "verdict": {"type": "string"},
+    "classification": {"type": "string"},
+    "forbidden_mutations": {"type": "array", "items": {"type": "string"}}
+  }
+}

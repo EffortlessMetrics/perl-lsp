@@ -1,0 +1,34 @@
+{
+  "snapshot_id": "gh-snapshot-2026-04-26T18:40:00Z",
+  "prs": [
+    {"number": 6854, "head_sha": "abc123", "base_sha": "def456"}
+  ],
+  "leases": [
+    {
+      "schema_version": 1,
+      "kind": "agent_lease",
+      "task_id": "task-review-6854-abc123",
+      "lease_id": "lease-b",
+      "owner": "box-b/codex-2",
+      "pr": 6854,
+      "head_sha": "abc123",
+      "base_sha": "def456",
+      "allowed_mutations": ["emit_receipt", "comment"],
+      "claimed_at": "2026-04-26T18:41:00Z",
+      "expires_at": "2026-04-26T19:10:00Z"
+    },
+    {
+      "schema_version": 1,
+      "kind": "agent_lease",
+      "task_id": "task-review-6854-abc123",
+      "lease_id": "lease-a",
+      "owner": "box-a/codex-1",
+      "pr": 6854,
+      "head_sha": "abc123",
+      "base_sha": "def456",
+      "allowed_mutations": ["emit_receipt", "comment"],
+      "claimed_at": "2026-04-26T18:40:30Z",
+      "expires_at": "2026-04-26T19:10:00Z"
+    }
+  ]
+}
