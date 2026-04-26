@@ -2549,7 +2549,8 @@ mod tests {
     /// Legacy Windows URI forms (file://C:\...) should normalize to canonical file:///c:/...
     /// so follow-up requests using standard URI syntax still resolve the open document.
     #[test]
-    fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std::error::Error>> {
+    fn did_open_normalizes_legacy_windows_file_uri_form() -> Result<(), Box<dyn std::error::Error>>
+    {
         let server = LspServer::new();
         let legacy_uri = r"file://C:\Users\dev\example.pl";
         let canonical_uri = "file:///c:/Users/dev/example.pl";
