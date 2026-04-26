@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/fmt.schema.json",
+  "title": "fmt receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "verdict",
+    "classification",
+    "failures",
+    "fix_forward_kind",
+    "safe_auto_fix",
+    "repro"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "check": { "const": "fmt" },
+    "schema_version": { "type": "string" },
+    "verdict": { "enum": ["pass", "fail"] },
+    "classification": { "const": "fmt_drift" },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool", "crate", "path", "check_command", "fix_command"],
+        "additionalProperties": false,
+        "properties": {
+          "tool": { "type": "string", "minLength": 1 },
+          "crate": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "check_command": { "type": "string", "minLength": 1 },
+          "fix_command": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "fix_forward_kind": { "const": "FMT_ONLY" },
+    "safe_auto_fix": { "const": true },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "additionalProperties": false,
+      "properties": {
+        "command": { "const": "cargo xtask fmt --check" }
+      }
+    }
+  }
+}
