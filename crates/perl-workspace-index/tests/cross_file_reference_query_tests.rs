@@ -141,3 +141,63 @@ fn query_symbol_references_avoids_false_positives_for_ambiguous_bare_symbols()
 
     Ok(())
 }
+
+// --- regression tests for #6799 ---
+
+#[test]
+fn static_method_calls_found_by_bare_name_query() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for #6799: MethodCall references must be stored under both the
+    // qualified form (when static) AND the bare method name, mirroring the
+    // FunctionCall storage pattern (workspace_index.rs:3127-3138).
+    //
+    // A bare-name reference query for `process` must find the static call
+    // `Helper->process()` in Caller.pm. This passes today via the iterator-fallback
+    // path in `find_references` (which scans `*::process` keys), but the underlying
+    // storage asymmetry is what this test pins.
+    let index = WorkspaceIndex::new();
+    index.index_file(
+        file_url("/lib/Helper.pm")?,
+        "package Helper;\nsub process { 1 }\n".to_string(),
+    )?;
+    index.index_file(
+        file_url("/lib/Caller.pm")?,
+        "package Caller;\nHelper->process();\n".to_string(),
+    )?;
+
+    let refs = index.find_references("process");
+    assert!(
+        refs.iter().any(|loc| loc.uri.contains("Caller.pm")),
+        "expected Helper->process() in Caller.pm to appear in bare-name reference query, \
+         got refs: {:?}",
+        refs.iter().map(|loc| loc.uri.as_str()).collect::<Vec<_>>(),
+    );
+    Ok(())
+}
+
+#[test]
+fn static_method_callee_is_not_flagged_unused() -> Result<(), Box<dyn std::error::Error>> {
+    // Regression test for #6799 (storage-shape demonstration): `find_unused_symbols`
+    // performs an exact-key lookup of `fi.references.get(&symbol.name)` for the bare
+    // sub name. Before the fix, MethodCall stored static method references only under
+    // the qualified key (`Helper::process`), so the bare-key lookup `process` returned
+    // None for Caller.pm, and `process` was incorrectly flagged as unused.
+    let index = WorkspaceIndex::new();
+    index.index_file(
+        file_url("/lib/Helper.pm")?,
+        "package Helper;\nsub process { 1 }\n".to_string(),
+    )?;
+    index.index_file(
+        file_url("/lib/Caller.pm")?,
+        "package Caller;\nHelper->process();\n".to_string(),
+    )?;
+
+    let unused: Vec<String> =
+        index.find_unused_symbols().iter().map(|s| s.name.clone()).collect();
+    assert!(
+        !unused.contains(&"process".to_string()),
+        "Helper::process is called via Helper->process() in Caller.pm and must not be \
+         flagged unused; got unused={:?}",
+        unused,
+    );
+    Ok(())
+}
