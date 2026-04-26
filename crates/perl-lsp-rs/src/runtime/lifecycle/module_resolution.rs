@@ -113,6 +113,7 @@ fn resolution_root(server: &LspServer, doc_uri: Option<&str>) -> Option<PathBuf>
 
 fn build_effective_inc_roots(
     include_paths: &[String],
+    perl5lib_set: &HashSet<String>,
     lexical_paths: &[String],
     system_paths: &[PathBuf],
 ) -> Vec<IncRoot> {
@@ -141,20 +142,17 @@ fn build_effective_inc_roots(
 
     for path in include_paths {
         let path_buf = PathBuf::from(path);
-        let kind = if path_buf.is_absolute() {
-            IncRootKind::ExternalAbsolute
-        } else {
-            IncRootKind::WorkspaceRelative
-        };
         if !seen.insert(normalized_inc_key(&path_buf)) {
             continue;
         }
-        roots.push(IncRoot {
-            kind,
-            path: path_buf,
-            precedence,
-            source: "workspace-include-paths".to_string(),
-        });
+        let (kind, source) = if perl5lib_set.contains(path) {
+            (IncRootKind::Perl5LibEnv, "perl5lib-env")
+        } else if path_buf.is_absolute() {
+            (IncRootKind::ExternalAbsolute, "workspace-include-paths")
+        } else {
+            (IncRootKind::WorkspaceRelative, "workspace-include-paths")
+        };
+        roots.push(IncRoot { kind, path: path_buf, precedence, source: source.to_string() });
         precedence += 1;
     }
 
@@ -427,8 +425,9 @@ impl LspServer {
             Vec::new()
         };
 
+        let perl5lib_set: HashSet<String> = perl5lib_paths.iter().cloned().collect();
         let effective_inc =
-            build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+            build_effective_inc_roots(&include_paths, &perl5lib_set, &lexical_paths, &system_paths);
 
         match resolve_module_uri_with_effective_inc(
             module_name,
@@ -505,8 +504,10 @@ mod tests {
         let include_paths = vec!["lib".to_string(), "lib/".to_string(), "other".to_string()];
         let lexical_paths = vec!["lib\\".to_string()];
         let system_paths = vec![PathBuf::from("other/"), PathBuf::from("syslib")];
+        let no_perl5lib = HashSet::new();
 
-        let roots = build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
         let root_paths: Vec<String> =
             roots.iter().map(|r| r.path.to_string_lossy().replace('\\', "/")).collect();
 
@@ -521,8 +522,10 @@ mod tests {
         let include_paths = vec!["dup".to_string(), "late".to_string()];
         let lexical_paths = vec!["dup".to_string()];
         let system_paths = vec![PathBuf::from("late"), PathBuf::from("sys")];
+        let no_perl5lib = HashSet::new();
 
-        let roots = build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
 
         assert_eq!(roots.len(), 3);
         assert_eq!(roots[0].path, PathBuf::from("dup"));
@@ -534,6 +537,22 @@ mod tests {
         assert_eq!(roots[0].precedence, 0);
         assert_eq!(roots[1].precedence, 1);
         assert_eq!(roots[2].precedence, 2);
+    }
+
+    #[test]
+    fn build_effective_inc_roots_labels_perl5lib_paths() {
+        let perl5lib_path = "/home/user/perl5/lib/perl5".to_string();
+        let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
+        let perl5lib_set: HashSet<String> = std::iter::once(perl5lib_path.clone()).collect();
+        let roots = build_effective_inc_roots(&include_paths, &perl5lib_set, &[], &[]);
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].path, PathBuf::from(&perl5lib_path));
+        assert_eq!(roots[0].kind, IncRootKind::Perl5LibEnv);
+        assert_eq!(roots[0].source, "perl5lib-env");
+        assert_eq!(roots[1].path, PathBuf::from("lib"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[1].source, "workspace-include-paths");
     }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
