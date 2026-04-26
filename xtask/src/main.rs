@@ -1097,6 +1097,12 @@ enum Commands {
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
+    /// Agent orchestration helpers.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -1300,6 +1306,54 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Lease-based worktree allocator commands.
+    Worktree {
+        #[command(subcommand)]
+        command: AgentWorktreeCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentWorktreeCommand {
+    /// Acquire a lease and create an agent worktree for a PR.
+    Acquire {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Base ref used for branch creation.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+        /// Optional agent task/session identifier for the lease.
+        #[arg(long)]
+        agent_task_id: Option<String>,
+    },
+    /// Release a lease and remove its worktree.
+    Release {
+        /// Worktree lease ID to release.
+        #[arg(long)]
+        id: String,
+        /// Force removal even with local modifications.
+        #[arg(long)]
+        force: bool,
+    },
+    /// List active worktree leases.
+    List,
+    /// Garbage-collect stale worktrees.
+    Gc {
+        /// Restrict GC to stale leases only.
+        #[arg(long)]
+        stale: bool,
+        /// Apply destructive cleanup (dry-run by default).
+        #[arg(long)]
+        apply: bool,
+        /// Force removal even with local modifications.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -1674,6 +1728,23 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::Agent { command } => match command {
+            AgentCommand::Worktree { command } => match command {
+                AgentWorktreeCommand::Acquire { pr, base, agent_task_id } => {
+                    worktree_allocator::acquire(pr, base, agent_task_id)
+                }
+                AgentWorktreeCommand::Release { id, force } => {
+                    worktree_allocator::release(id, force)
+                }
+                AgentWorktreeCommand::List => worktree_allocator::list(),
+                AgentWorktreeCommand::Gc { stale, apply, force } => {
+                    if !stale {
+                        return Err(eyre!("gc currently requires --stale"));
+                    }
+                    worktree_allocator::gc_stale(apply, force)
+                }
+            },
+        },
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }

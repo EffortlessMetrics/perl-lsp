@@ -1,0 +1,5 @@
+{
+  "worktrees_porcelain": "worktree /repo\nHEAD aaaaaaa\nbranch refs/heads/master\n\nworktree /repo/.claude/worktrees/wt-1\nHEAD bbbbbbb\ndetached\n\nworktree /repo/.claude/worktrees/wt-2\nHEAD ccccccc\nbranch refs/heads/pr-6854\n",
+  "target_branch": "pr-6853",
+  "expected_conflict": false
+}
