@@ -19,11 +19,12 @@ use crate::{
     state::{completion_cap, completion_deadline},
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
+use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
@@ -58,7 +59,12 @@ fn commit_chars_for_kind(kind: CompletionItemKind) -> Option<&'static [&'static 
 }
 
 impl LspServer {
-    fn module_completion_roots_for_doc(&self, uri: &str) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
+    fn module_completion_roots_for_doc(
+        &self,
+        uri: &str,
+        doc_text: &str,
+        file_dir: Option<&Path>,
+    ) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
         let mut include_paths: Vec<PathBuf> = Vec::new();
         let mut seen_include: HashSet<PathBuf> = HashSet::new();
         let mut system_inc_paths: Vec<PathBuf> = Vec::new();
@@ -69,6 +75,19 @@ impl LspServer {
         let folder_root = self
             .folder_for_doc_uri(uri)
             .and_then(|folder| super::super::workspace_folder_path(&folder));
+
+        // Prepend lexical `use lib` paths extracted from the document source.
+        // These have the highest precedence (matching goto-definition behaviour).
+        if let Some(root) = folder_root.as_ref() {
+            let use_lib_strings = resolve_use_lib_paths_from_source(doc_text, root, file_dir);
+            for path_str in use_lib_strings {
+                let p = PathBuf::from(&path_str);
+                let resolved = if p.is_absolute() { p } else { root.join(&p) };
+                if seen_include.insert(resolved.clone()) {
+                    include_paths.push(resolved);
+                }
+            }
+        }
 
         // Read effective include paths from the config clone (PERL5LIB + workspace paths).
         // The clone is lightweight — it does not trigger the system @INC subprocess.
@@ -383,8 +402,10 @@ impl LspServer {
                 // Get completions, with fallback for missing AST
                 #[cfg_attr(not(feature = "workspace"), allow(unused_mut))]
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let file_dir = super::super::source_path_from_uri(uri)
+                        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
                     let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(uri);
+                        self.module_completion_roots_for_doc(uri, &doc.text, file_dir.as_deref());
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -636,8 +657,10 @@ impl LspServer {
 
                 // Get completions with optimized cancellation support
                 let mut completions = if let Some(ast) = &doc.ast {
+                    let file_dir = super::super::source_path_from_uri(uri)
+                        .and_then(|p| p.parent().map(|d| d.to_path_buf()));
                     let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(uri);
+                        self.module_completion_roots_for_doc(uri, &doc.text, file_dir.as_deref());
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -1079,6 +1102,45 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_module_completion_roots_includes_use_lib_paths()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs;
+        use tempfile::TempDir;
+        use url::Url;
+
+        let temp = TempDir::new()?;
+        let lib_dir = temp.path().join("mylibs");
+        let module_file = lib_dir.join("MyCustom").join("Widget.pm");
+        fs::create_dir_all(module_file.parent().ok_or("no parent")?)?;
+        fs::write(&module_file, "package MyCustom::Widget;\n1;\n")?;
+
+        let workspace_uri =
+            Url::from_file_path(temp.path()).map_err(|_| "bad workspace path")?.to_string();
+        let doc_uri =
+            Url::from_file_path(temp.path().join("app.pl")).map_err(|_| "bad doc uri")?.to_string();
+
+        let lib_dir_str = lib_dir.to_string_lossy();
+        let doc_text = format!("use lib '{lib_dir_str}';\nuse MyCustom::Widget;\n");
+
+        let server = LspServer::default();
+
+        // Register workspace folder so folder_for_doc_uri / config_for_doc work.
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(workspace_uri.clone()),
+        );
+
+        let file_dir = Some(temp.path().to_path_buf());
+        let (include_paths, _sys, _use_sys) =
+            server.module_completion_roots_for_doc(&doc_uri, &doc_text, file_dir.as_deref());
+
+        assert!(
+            include_paths.contains(&lib_dir),
+            "use lib path should be in include_paths; got: {include_paths:?}",
+        );
+        Ok(())
+    }
 
     #[test]
     fn test_cancellable_completion_cross_file_variable() -> Result<(), Box<dyn std::error::Error>> {
