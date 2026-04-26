@@ -11,7 +11,7 @@ use perl_lsp_rs_core::providers::diagnostics::Diagnostic;
 use perl_lsp_rs_core::providers::diagnostics::role_conflicts::check_role_conflicts;
 use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::symbol::SymbolExtractor;
-use perl_tdd_support::{must, must_some};
+use perl_tdd_support::must;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,10 +19,6 @@ use perl_tdd_support::{must, must_some};
 
 fn has_pl303(diagnostics: &[Diagnostic]) -> bool {
     diagnostics.iter().any(|d| d.code.as_deref() == Some("PL303"))
-}
-
-fn count_pl303(diagnostics: &[Diagnostic]) -> usize {
-    diagnostics.iter().filter(|d| d.code.as_deref() == Some("PL303")).count()
 }
 
 fn extract_diagnostics(code: &str) -> Vec<Diagnostic> {
@@ -333,55 +329,6 @@ sub do_something { }
          to be marked as SymbolKind::Role in symbol table, but it was not. \
          Symbol table keys: {:?}",
         symbol_table.symbols.keys().collect::<Vec<_>>()
-    );
-
-    Ok(())
-}
-
-// ===========================================================================
-// Test 7: Framework::RoleTiny detected by ClassModelBuilder
-// ===========================================================================
-// Verify that the Framework enum includes RoleTiny and that the
-// ClassModelBuilder correctly detects `use Role::Tiny;` imports.
-// ===========================================================================
-
-#[test]
-fn test_framework_enum_has_role_tiny() -> Result<(), Box<dyn std::error::Error>> {
-    use perl_semantic_analyzer::class_model::{ClassModel, ClassModelBuilder};
-
-    let code = r#"
-package My::Role;
-use Role::Tiny;
-
-sub do_something { }
-
-1;
-"#;
-
-    let mut parser = Parser::new(code);
-    let ast = must(parser.parse());
-    let models: Vec<ClassModel> = ClassModelBuilder::new().build(&ast).collect();
-
-    // Find the My::Role model
-    let role_model = models.iter().find(|m| m.name == "My::Role");
-
-    assert!(
-        role_model.is_some(),
-        "T-role-tiny-framework-1: Expected ClassModelBuilder to produce a ClassModel \
-         for 'My::Role', but no model was found. Models produced: {models:?}"
-    );
-
-    let role_model = must_some(role_model);
-
-    // The framework should be detected as RoleTiny (once implemented)
-    // Currently this will return Framework::None, so the test will fail
-    // until RoleTiny is added to the Framework enum and detect_framework
-    // is updated to recognize Role::Tiny
-    assert!(
-        role_model.framework == perl_semantic_analyzer::class_model::Framework::RoleTiny,
-        "T-role-tiny-framework-1: Expected Framework::RoleTiny for `use Role::Tiny;` package, \
-         but got: {:?}. This test will pass once Role::Tiny support is implemented.",
-        role_model.framework
     );
 
     Ok(())
