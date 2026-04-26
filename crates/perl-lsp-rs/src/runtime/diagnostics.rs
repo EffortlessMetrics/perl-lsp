@@ -88,11 +88,7 @@ impl PullDiagnosticsOrchestrator {
         // Get config values
         let (perlcritic_enabled, perlcritic_severity, perlcritic_profile) = {
             let cfg = server.config.lock();
-            (
-                cfg.perlcritic_enabled,
-                cfg.perlcritic_severity,
-                cfg.perlcritic_profile.clone(),
-            )
+            (cfg.perlcritic_enabled, cfg.perlcritic_severity, cfg.perlcritic_profile.clone())
         };
 
         let profile =

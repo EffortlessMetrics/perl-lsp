@@ -915,18 +915,12 @@ mod tests {
 
         // Fish uses `-l mcp` (long-option form without double-dashes);
         // other shells embed `--mcp` literally. Pick the right token per shell.
-        for (shell, needle) in [
-            ("bash", "--mcp"),
-            ("zsh", "--mcp"),
-            ("fish", "-l mcp"),
-            ("powershell", "--mcp"),
-        ] {
+        for (shell, needle) in
+            [("bash", "--mcp"), ("zsh", "--mcp"), ("fish", "-l mcp"), ("powershell", "--mcp")]
+        {
             let script = super::shell_completion(shell)
                 .unwrap_or_else(|| panic!("missing completion for {shell}"));
-            assert!(
-                script.contains(needle),
-                "{shell} completion is missing {needle}: {script}"
-            );
+            assert!(script.contains(needle), "{shell} completion is missing {needle}: {script}");
         }
 
         // Parser side: --mcp must still resolve to stdio (alias semantics).
@@ -1241,7 +1235,10 @@ mod tests {
     fn ansi_force_color_enables_ansi_without_terminal() {
         let _guard_nc = EnvGuard::remove("NO_COLOR");
         let _guard = EnvGuard::set("FORCE_COLOR", "1");
-        assert!(super::should_use_ansi(false), "FORCE_COLOR=1 must enable ANSI even without a terminal");
+        assert!(
+            super::should_use_ansi(false),
+            "FORCE_COLOR=1 must enable ANSI even without a terminal"
+        );
     }
 
     /// Guard: is_warp_terminal() must be true when TERM_PROGRAM=WarpTerminal.

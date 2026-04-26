@@ -55,6 +55,8 @@ pub enum SubstitutionError {
 pub enum TransliterationError {
     /// Invalid modifier character found
     InvalidModifier(char),
+    /// Invalid delimiter after `tr`/`y`
+    InvalidDelimiter(char),
     /// Missing delimiter after `tr`/`y`
     MissingDelimiter,
     /// Search list section is missing
@@ -123,20 +125,15 @@ pub fn extract_substitution_parts_strict(
         let (body, rest, found_closing) = extract_unpaired_body_skip_strings(rest1, closing);
         (body, rest, found_closing)
     } else {
-        // Paired delimiters
+        // Paired pattern delimiters still allow either paired or non-paired delimiters
+        // for the replacement side (e.g. s{foo}/bar/ and s[foo]{bar}).
         let trimmed = rest1.trim_start();
-        // For paired delimiters, check what delimiter the replacement uses
-        // It may be the same as pattern or a different paired delimiter
-        // e.g., s[pattern]{replacement} uses [] for pattern and {} for replacement
         if let Some(rd) = trimmed.chars().next() {
-            // Check if it's a valid paired opening delimiter
-            if rd == '{' || rd == '[' || rd == '(' || rd == '<' {
-                let repl_closing = get_closing_delimiter(rd);
-                extract_delimited_content_strict(trimmed, rd, repl_closing)
-            } else {
-                // Not a valid paired delimiter - malformed
+            if rd.is_ascii_alphanumeric() || rd.is_whitespace() {
                 return Err(SubstitutionError::MissingReplacement);
             }
+            let repl_closing = get_closing_delimiter(rd);
+            extract_delimited_content_strict(trimmed, rd, repl_closing)
         } else {
             // No more content - missing replacement
             return Err(SubstitutionError::MissingReplacement);
@@ -278,16 +275,16 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
         }
     } else if is_paired {
         let trimmed = rest1.trim_start();
-        // For paired delimiters, check what delimiter the replacement uses
-        // It may be the same as pattern or a different paired delimiter
-        // e.g., s[pattern]{replacement} uses [] for pattern and {} for replacement
-        if let Some(rd) = starts_with_paired_delimiter(trimmed) {
-            let repl_closing = get_closing_delimiter(rd);
-            let (body, rest) = extract_delimited_content(trimmed, rd, repl_closing);
-            (body, Cow::Borrowed(rest))
+        if let Some(rd) = trimmed.chars().next() {
+            if rd.is_ascii_alphanumeric() || rd.is_whitespace() {
+                (String::new(), Cow::Borrowed(trimmed))
+            } else {
+                let repl_closing = get_closing_delimiter(rd);
+                let (body, rest) = extract_delimited_content(trimmed, rd, repl_closing);
+                (body, Cow::Borrowed(rest))
+            }
         } else {
-            let (body, rest) = extract_unpaired_body(rest1, closing);
-            (body, Cow::Borrowed(rest))
+            (String::new(), Cow::Borrowed(trimmed))
         }
     } else {
         (String::new(), Cow::Borrowed(rest1))
@@ -302,19 +299,23 @@ pub fn extract_substitution_parts(text: &str) -> (String, String, String) {
 /// Extract search, replace, and modifiers from a transliteration token
 pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
     // Skip 'tr' or 'y' prefix
-    let content = if let Some(stripped) = text.strip_prefix("tr") {
+    let after_op = if let Some(stripped) = text.strip_prefix("tr") {
         stripped
     } else if let Some(stripped) = text.strip_prefix('y') {
         stripped
     } else {
         text
     };
+    let content = after_op.trim_start();
 
     // Get delimiter - content must be non-empty to have a delimiter
     let delimiter = match content.chars().next() {
         Some(d) => d,
         None => return (String::new(), String::new(), String::new()),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return (String::new(), String::new(), String::new());
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
@@ -364,6 +365,12 @@ pub fn extract_transliteration_parts(text: &str) -> (String, String, String) {
         if let Some(repl_delimiter) = starts_with_paired_delimiter(rest2) {
             let repl_closing = get_closing_delimiter(repl_delimiter);
             extract_delimited_content(rest2, repl_delimiter, repl_closing)
+        } else if let Some(repl_delimiter) = rest2.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                (String::new(), rest2)
+            } else {
+                extract_delimited_content(rest2, repl_delimiter, repl_delimiter)
+            }
         } else {
             (String::new(), rest2)
         }
@@ -409,11 +416,15 @@ pub fn extract_transliteration_parts_strict(
         Some(d) => d,
         None => return Err(TransliterationError::MissingDelimiter),
     };
+    if delimiter.is_ascii_alphanumeric() || delimiter.is_whitespace() {
+        return Err(TransliterationError::InvalidDelimiter(delimiter));
+    }
     let closing = get_closing_delimiter(delimiter);
     let is_paired = delimiter != closing;
 
     // Parse first body (search).
-    let (search, rest1, search_closed) = extract_delimited_content_strict(content, delimiter, closing);
+    let (search, rest1, search_closed) =
+        extract_delimited_content_strict(content, delimiter, closing);
     if !search_closed {
         return Err(TransliterationError::MissingClosingDelimiter);
     }
@@ -427,11 +438,19 @@ pub fn extract_transliteration_parts_strict(
         (body, rest, found_closing)
     } else {
         let trimmed = rest1.trim_start();
-        if let Some(repl_delimiter) = starts_with_paired_delimiter(trimmed) {
+        if let Some(repl_delimiter) = trimmed.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                return Err(TransliterationError::MissingReplacement);
+            }
             let repl_closing = get_closing_delimiter(repl_delimiter);
             let (body, rest, found_closing) =
                 extract_delimited_content_strict(trimmed, repl_delimiter, repl_closing);
             (body, rest, found_closing)
+        } else if let Some(repl_delimiter) = trimmed.chars().next() {
+            if repl_delimiter.is_ascii_alphanumeric() || repl_delimiter.is_whitespace() {
+                return Err(TransliterationError::InvalidDelimiter(repl_delimiter));
+            }
+            extract_delimited_content_strict(trimmed, repl_delimiter, repl_delimiter)
         } else {
             return Err(TransliterationError::MissingReplacement);
         }
@@ -447,10 +466,7 @@ pub fn extract_transliteration_parts_strict(
 
     // Validate transliteration modifiers strictly.
     let mut modifiers = String::new();
-    for modifier in modifiers_str
-        .chars()
-        .take_while(|c: &char| c.is_ascii_alphanumeric())
-    {
+    for modifier in modifiers_str.chars().take_while(|c: &char| c.is_ascii_alphanumeric()) {
         if matches!(modifier, 'c' | 'd' | 's' | 'r') {
             modifiers.push(modifier);
         } else {
@@ -531,34 +547,6 @@ fn extract_delimited_content(text: &str, open: char, close: char) -> (String, &s
                     end_pos = i + ch.len_utf8();
                     break;
                 }
-            }
-            _ => body.push(ch),
-        }
-    }
-
-    (body, &text[end_pos..])
-}
-
-fn extract_unpaired_body(text: &str, closing: char) -> (String, &str) {
-    let mut body = String::new();
-    let mut escaped = false;
-    let mut end_pos = text.len();
-
-    for (i, ch) in text.char_indices() {
-        if escaped {
-            body.push(ch);
-            escaped = false;
-            continue;
-        }
-
-        match ch {
-            '\\' => {
-                body.push(ch);
-                escaped = true;
-            }
-            c if c == closing => {
-                end_pos = i + ch.len_utf8();
-                break;
             }
             _ => body.push(ch),
         }

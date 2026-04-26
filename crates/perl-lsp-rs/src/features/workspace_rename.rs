@@ -161,10 +161,8 @@ fn is_non_target_package_declaration(
     // Try to read the original source span to detect a qualified name like "Bar::process_data".
     // When the index returns an inverted range (end < start, a known indexer edge case), we fall
     // through to the package-context check below rather than conservatively returning false.
-    let maybe_original = doc
-        .line_index
-        .position_to_offset(start_line, start_char)
-        .and_then(|start_off| {
+    let maybe_original =
+        doc.line_index.position_to_offset(start_line, start_char).and_then(|start_off| {
             doc.line_index
                 .position_to_offset(end_line, end_char)
                 .and_then(|end_off| doc.text.get(start_off..end_off))

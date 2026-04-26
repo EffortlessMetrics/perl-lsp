@@ -17,8 +17,7 @@ const MAX_PATH_LENGTH: usize = 4096;
 /// Allowed file extensions for Perl files.
 const ALLOWED_EXTENSIONS: &[&str] = &["pl", "pm", "t", "pod"];
 /// Allowed URI schemes for text document synchronization.
-const ALLOWED_TEXT_DOCUMENT_URI_SCHEMES: &[&str] =
-    &["file://", "untitled:", "opencode:"];
+const ALLOWED_TEXT_DOCUMENT_URI_SCHEMES: &[&str] = &["file://", "untitled:", "opencode:"];
 
 /// Validates and sanitizes a file path to prevent path traversal attacks.
 pub fn validate_file_path<P: AsRef<Path>>(path: P, workspace_root: &Path) -> Result<PathBuf> {
@@ -123,10 +122,7 @@ fn validate_text_document_params(params: &serde_json::Value) -> Result<()> {
         .and_then(|text_document| text_document.get("uri"))
         .and_then(serde_json::Value::as_str)
     {
-        if !ALLOWED_TEXT_DOCUMENT_URI_SCHEMES
-            .iter()
-            .any(|scheme| uri.starts_with(scheme))
-        {
+        if !ALLOWED_TEXT_DOCUMENT_URI_SCHEMES.iter().any(|scheme| uri.starts_with(scheme)) {
             return Err(anyhow!("Invalid URI scheme: {}", uri));
         }
 
@@ -374,7 +370,7 @@ mod tests {
         assert!(result.is_ok(), "file:// URI must be accepted after scheme allowlist refactor");
     }
 
-        #[test]
+    #[test]
     fn test_file_size_limit_sourced_from_lsp_limits() {
         // The file size limit must come from perl-lsp-limits, not a local constant.
         // This test documents the expected single source of truth.

@@ -19,6 +19,9 @@
         "supportsSetVariable",
         "supportsCompletionsRequest",
         "supportsLoadedSourcesRequest"
+      ],
+      "expectedEventsAfter": [
+        { "event": "initialized" }
       ]
     },
     {
@@ -82,7 +85,10 @@
     },
     {
       "command": "disconnect",
-      "expectSuccess": true
+      "expectSuccess": true,
+      "expectedEventsAfter": [
+        { "event": "terminated" }
+      ]
     }
   ]
 }
