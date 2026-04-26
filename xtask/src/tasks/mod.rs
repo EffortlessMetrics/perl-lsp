@@ -80,5 +80,6 @@ pub mod update_status;
 pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
 pub mod workflow_policy_lint;
+pub mod workflow_trigger_lint;
 pub mod worktree_allocator;
 pub mod worktrees;
