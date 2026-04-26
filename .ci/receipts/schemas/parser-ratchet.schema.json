@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-ratchet.schema.json",
+  "title": "Parser Ratchet receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "check",
+    "schema_version",
+    "selected",
+    "selection_reason",
+    "profile",
+    "verdict",
+    "classification",
+    "repro"
+  ],
+  "properties": {
+    "check": {
+      "type": "string",
+      "const": "parser-ratchet"
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "event": {
+      "type": ["string", "null"]
+    },
+    "run_id": {
+      "type": ["string", "null"]
+    },
+    "base_sha": {
+      "type": ["string", "null"]
+    },
+    "head_sha": {
+      "type": ["string", "null"]
+    },
+    "candidate_sha": {
+      "type": ["string", "null"]
+    },
+    "selected": {
+      "type": "boolean",
+      "const": false
+    },
+    "selection_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string"
+    },
+    "verdict": {
+      "type": "string",
+      "const": "pass"
+    },
+    "classification": {
+      "type": "string",
+      "enum": ["skipped", "not_selected"]
+    },
+    "repro": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

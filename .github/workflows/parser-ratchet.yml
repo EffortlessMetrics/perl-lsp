@@ -1,0 +1,46 @@
+name: Parser Ratchet (Scaffold)
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet Receipt
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Emit parser-ratchet receipt scaffold
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          GITHUB_CANDIDATE_SHA: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: cargo xtask parser-ratchet --profile pr --receipt target/receipts/parser-ratchet.json
+
+      - name: Upload parser-ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parser-ratchet-receipt
+          path: target/receipts/parser-ratchet.json
+          if-no-files-found: error
