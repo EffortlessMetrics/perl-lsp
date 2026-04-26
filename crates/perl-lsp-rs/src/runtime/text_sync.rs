@@ -45,6 +45,14 @@ fn build_incremental_edit_set(
     use crate::textdoc::{PosEnc, range_to_bytes, range_to_chars};
     use perl_parser::incremental::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 
+    fn map_offset_to_original_space(evolving: usize, cumulative_shift: isize) -> Option<usize> {
+        if cumulative_shift >= 0 {
+            evolving.checked_sub(cumulative_shift as usize)
+        } else {
+            evolving.checked_add((-cumulative_shift) as usize)
+        }
+    }
+
     let mut working_rope = original_rope.clone();
     let mut edit_set = IncrementalEditSet::new();
     // Track the cumulative byte shift introduced by all prior edits so we can
@@ -66,8 +74,15 @@ fn build_incremental_edit_set(
 
         // Map back to original-document space by undoing the byte shift that
         // prior edits introduced into the working rope.
-        let orig_start = (evolving_start as isize - cumulative_shift) as usize;
-        let orig_end = (evolving_end as isize - cumulative_shift) as usize;
+        let (Some(orig_start), Some(orig_end)) = (
+            map_offset_to_original_space(evolving_start, cumulative_shift),
+            map_offset_to_original_space(evolving_end, cumulative_shift),
+        ) else {
+            tracing::debug!(
+                "Incremental edit batch cannot be mapped to original space; falling back to full reparse"
+            );
+            return None;
+        };
         edit_set.add(IncrementalEdit::new(orig_start, orig_end, change.text.clone()));
 
         // Apply this edit to the working rope so the next iteration's
@@ -1364,6 +1379,92 @@ mod tests {
         //   2. apply edit[0] (start_byte=1):         "abcYZ"[1..1] ← "X"   ⟹ "aXbcYZ"
         let result = edit_set.apply_to_string(original_str);
         assert_eq!(result, "aXbcYZ", "apply_to_string must reproduce the client-intended document");
+    }
+
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_returns_none_when_follow_up_edit_targets_inserted_text() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        let original = ropey::Rope::from_str("abc");
+        let changes = vec![
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 1 },
+                }),
+                range_length: None,
+                text: "XYZ".to_string(),
+            },
+            // This second edit applies to the inserted text in the evolving
+            // document ("aXYZbc"), which cannot be represented with
+            // original-document byte offsets.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 2 },
+                }),
+                range_length: None,
+                text: "_".to_string(),
+            },
+        ];
+
+        assert!(
+            build_incremental_edit_set(&original, &changes).is_none(),
+            "edits that target newly inserted content should fall back to full reparse"
+        );
+    }
+
+    /// After a deletion the cumulative_shift is negative; a second edit that targets
+    /// text AFTER the deleted region must be correctly mapped back via checked_add
+    /// (the negative-shift branch of map_offset_to_original_space).
+    #[cfg(feature = "incremental")]
+    #[test]
+    fn test_build_incremental_edits_negative_shift_uses_checked_add() {
+        use lsp_types::{Position, Range, TextDocumentContentChangeEvent};
+
+        // Original: "abcde" (5 bytes, all ASCII).
+        let original = ropey::Rope::from_str("abcde");
+        let changes = vec![
+            // Edit 0: delete [1,3) → removes "bc", leaving evolving doc "ade".
+            // cumulative_shift becomes 0 - (3-1) = -2.
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 3 },
+                }),
+                range_length: None,
+                text: String::new(),
+            },
+            // Edit 1: replace [1,2) on evolving "ade" (the 'd') with "D".
+            // evolving_start=1, evolving_end=2, cumulative_shift=-2.
+            // map_offset(1, -2) = 1.checked_add(2) = Some(3)  (in original-doc space: 'd' = byte 3).
+            // map_offset(2, -2) = 2.checked_add(2) = Some(4)  (in original-doc space: 'e' = byte 4).
+            TextDocumentContentChangeEvent {
+                range: Some(Range {
+                    start: Position { line: 0, character: 1 },
+                    end: Position { line: 0, character: 2 },
+                }),
+                range_length: None,
+                text: "D".to_string(),
+            },
+        ];
+
+        let edit_set = build_incremental_edit_set(&original, &changes)
+            .expect("deletion batch followed by suffix edit should be mappable");
+        assert_eq!(edit_set.edits.len(), 2, "both edits should be in the set");
+
+        // Edit 0 maps 1..1 in original space (zero-length deletion start at byte 1 was already
+        // calculated with cumulative_shift=0).
+        assert_eq!(edit_set.edits[0].start_byte, 1);
+        assert_eq!(edit_set.edits[0].old_end_byte, 3);
+
+        // Edit 1: evolving [1,2) + cumulative_shift=-2 → original [3,4).
+        assert_eq!(
+            edit_set.edits[1].start_byte, 3,
+            "negative cumulative_shift must use checked_add to map back to original space"
+        );
+        assert_eq!(edit_set.edits[1].old_end_byte, 4);
     }
 
     /// Verify that a ranged didChange initializes and preserves incremental_doc.
