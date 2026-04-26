@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-26T00:00:00Z",
+  "prs": [
+    {
+      "number": 101,
+      "draft": false,
+      "labels": ["review-reviewed", "needs-builder-fix"],
+      "head_sha": "abc123",
+      "base_sha": "base123",
+      "status_rollup": "pending",
+      "receipts": [
+        {
+          "kind": "review",
+          "path": "target/receipts/review-101.json",
+          "head_sha": "abc123",
+          "base_sha": "base123",
+          "valid": true
+        }
+      ]
+    }
+  ]
+}

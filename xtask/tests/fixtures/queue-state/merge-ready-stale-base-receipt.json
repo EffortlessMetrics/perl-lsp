@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-26T00:00:00Z",
+  "prs": [
+    {
+      "number": 103,
+      "draft": false,
+      "labels": ["merge-ready", "review-reviewed"],
+      "head_sha": "ghi789",
+      "base_sha": "base-current",
+      "status_rollup": "green",
+      "receipts": [
+        {
+          "kind": "merge-readiness",
+          "path": "target/receipts/merge-readiness-103.json",
+          "head_sha": "ghi789",
+          "base_sha": "base-stale",
+          "valid": true
+        }
+      ]
+    }
+  ]
+}

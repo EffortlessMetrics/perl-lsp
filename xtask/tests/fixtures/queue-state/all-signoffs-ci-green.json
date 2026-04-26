@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-04-26T00:00:00Z",
+  "prs": [
+    {
+      "number": 102,
+      "draft": false,
+      "labels": ["review-reviewed"],
+      "head_sha": "def456",
+      "base_sha": "base456",
+      "status_rollup": "green",
+      "receipts": [
+        {
+          "kind": "review",
+          "path": "target/receipts/review-102.json",
+          "head_sha": "def456",
+          "base_sha": "base456",
+          "valid": true
+        }
+      ]
+    }
+  ]
+}
