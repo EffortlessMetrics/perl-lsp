@@ -33,31 +33,7 @@ impl LspServer {
 
     /// Normalize URI key for consistent document lookup
     pub(crate) fn normalize_uri_key(&self, raw: &str) -> String {
-        // Parse to Url to canonicalize, then stringify the way we store it.
-        // If parsing fails, return the raw key so we at least try the given string.
-        if let Ok(u) = url::Url::parse(raw) {
-            // On Windows, lower-case the drive letter to match how many editors send it.
-            #[cfg(windows)]
-            {
-                let s = u.as_str().to_string();
-                if let Some(rest) = s.strip_prefix("file:///") {
-                    if rest.len() > 1
-                        && rest.as_bytes()[1] == b':'
-                        && rest.as_bytes()[0].is_ascii_alphabetic()
-                    {
-                        return format!(
-                            "file:///{}{}",
-                            rest[0..1].to_ascii_lowercase(),
-                            &rest[1..]
-                        );
-                    }
-                }
-                return s;
-            }
-            #[cfg(not(windows))]
-            return u.as_str().to_string();
-        }
-        raw.to_string()
+        perl_uri::uri_key(raw)
     }
 
     /// Get document by URI with normalization fallback
