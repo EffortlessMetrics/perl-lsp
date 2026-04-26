@@ -188,17 +188,25 @@ fn test_perl_incremental_parsing_not_in_allowlist() -> TestResult {
 // Section 4: Published Count Baseline Tests
 // =============================================================================
 
-/// Test that published-crate-baseline.txt is updated to 34 (down from 37)
+/// Test that published-crate-baseline.txt has not regressed above 34.
+///
+/// Wave 4-Completion reduced the count from 37 → 34 (3 parser satellites absorbed).
+/// Subsequent waves (Wave G3, Wave Final PR B) reduced it further to 31.
+/// This test enforces the ratchet: the baseline must be ≤ 34 and must be positive.
 #[test]
 fn test_published_count_baseline_is_34() -> TestResult {
     let baseline_path = ws("xtask/published-crate-baseline.txt");
     let content = fs::read_to_string(&baseline_path)?;
     let baseline_count = content.trim().parse::<u32>()?;
 
-    if baseline_count == 34 {
+    if baseline_count > 0 && baseline_count <= 34 {
         Ok(())
     } else {
-        Err(format!("published-crate-baseline.txt must be 34, got {}", baseline_count).into())
+        Err(format!(
+            "published-crate-baseline.txt must be ≤ 34 and > 0 (Wave 4-Completion ratchet), got {}",
+            baseline_count
+        )
+        .into())
     }
 }
 

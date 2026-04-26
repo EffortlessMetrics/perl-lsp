@@ -107,7 +107,7 @@
 use perl_lexer::{PerlLexer, StringPart, TokenType};
 use perl_parser_core::ast::{Node, NodeKind};
 use regex::Regex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::VecDeque;
 use std::sync::LazyLock;
 
@@ -579,6 +579,9 @@ pub fn collect_semantic_tokens(
         .map(|((start, end), is_readonly)| (start, end, is_readonly))
         .collect::<Vec<_>>();
 
+    // 2a-ii) Collect assignment LHS spans for write-modifier tagging
+    let assignment_spans = assignment_lhs_spans(ast);
+
     // 2b) AST overlays: package/sub/variable with precise spans where available
     walk_ast_full(ast, &mut |node| {
         // For nodes with name_span, use the precise span for better highlighting
@@ -738,7 +741,11 @@ pub fn collect_semantic_tokens(
                 let mods = match decl_info {
                     Some((_, _, true)) => 1 | 4 | special_mod | sigil_mod, // declaration | readonly (our)
                     Some((_, _, false)) => 1 | special_mod | sigil_mod, // declaration (my/local/state)
-                    None => special_mod | sigil_mod,
+                    None => {
+                        // bit 7 (128) = modification: variable is being written to
+                        let write_mod = if assignment_spans.contains(&(vs, ve)) { 128 } else { 0 };
+                        special_mod | sigil_mod | write_mod
+                    }
                 };
                 ("variable", mods)
             }
@@ -879,6 +886,21 @@ fn declaration_readonly_flags(ast: &Node) -> FxHashMap<(usize, usize), bool> {
     });
 
     flags
+}
+
+/// Collect the byte-span of every variable that appears on the left-hand side of
+/// an assignment (`$x = …`, `@arr = …`, `%hash = …`).  These spans are used to
+/// apply the LSP "modification" token modifier (bit 7, value 128) so editors can
+/// visually distinguish writes from reads.
+fn assignment_lhs_spans(ast: &Node) -> FxHashSet<(usize, usize)> {
+    let mut spans = FxHashSet::default();
+    walk_ast_full(ast, &mut |node| {
+        if let NodeKind::Assignment { lhs, .. } = &node.kind {
+            spans.insert((lhs.location.start, lhs.location.end));
+        }
+        true
+    });
+    spans
 }
 
 fn ast_uses_const_fast(ast: &Node) -> bool {
@@ -1305,5 +1327,68 @@ print "ok" foreach @ys;
                 );
             }
         }
+    }
+
+    /// Build a simple byte-offset → (line, col-u16) converter for unit tests.
+    fn make_pos16(source: &str) -> impl Fn(usize) -> (u32, u32) + '_ {
+        move |offset: usize| {
+            let prefix = &source[..offset.min(source.len())];
+            let line = prefix.bytes().filter(|&b| b == b'\n').count() as u32;
+            let col = prefix.rfind('\n').map_or(offset, |p| offset - p - 1) as u32;
+            (line, col)
+        }
+    }
+
+    #[test]
+    fn test_modification_modifier_applied_on_assignment_lhs() {
+        // `$x` on line 1 (`$x = 2`) is an assignment LHS → should get bit 7 (128 = modification).
+        // `$x` on line 2 (`$x;`) is a bare read expression → should NOT get bit 7.
+        // Note: `print $x` is intentionally NOT used here because the FunctionCall AST node spans
+        // the entire expression including arguments, causing the overlap-dedup pass to drop the
+        // child Variable token (shorter span loses).
+        let source = "my $x = 1;\n$x = 2;\n$x;\n";
+        let mut parser = Parser::new(source);
+        let ast = parser.parse().expect("parse failed");
+        let pos16 = make_pos16(source);
+        let tokens = collect_semantic_tokens(&ast, source, &pos16);
+
+        // variable token type is index 11 (see lsp_semantic_tokens_e2e.rs comment)
+        // Decode back from delta encoding to find $x tokens
+        let mut line = 0u32;
+        let mut col = 0u32;
+        let mut vars: Vec<(u32, u32, u32)> = Vec::new(); // (line, col, mods)
+        for &[dl, ds, len, kind, mods] in &tokens {
+            if dl > 0 {
+                line += dl;
+                col = ds;
+            } else {
+                col += ds;
+            }
+            if kind == 11 && len == 2 {
+                // variable token of length 2 = "$x"
+                vars.push((line, col, mods));
+            }
+        }
+
+        // Line 0: declaration `my $x` — should have declaration bit (1), no modification bit
+        let decl = vars.iter().find(|&&(l, _, _)| l == 0);
+        assert!(decl.is_some(), "expected $x declaration token on line 0");
+        let (_, _, decl_mods) = decl.unwrap();
+        assert!(decl_mods & 1 != 0, "declaration token must have bit 0 (declaration)");
+        assert!(decl_mods & 128 == 0, "declaration token must NOT have modification bit");
+
+        // Line 1: assignment `$x = 2` — should have modification bit (128)
+        let write = vars.iter().find(|&&(l, _, _)| l == 1);
+        assert!(write.is_some(), "expected $x write token on line 1");
+        let (_, _, write_mods) = write.unwrap();
+        assert!(write_mods & 128 != 0, "assignment LHS must have modification bit (128)");
+        assert!(write_mods & 1 == 0, "write token must NOT have declaration bit");
+
+        // Line 2: bare read `$x;` — should have neither declaration nor modification bit
+        let read = vars.iter().find(|&&(l, _, _)| l == 2);
+        assert!(read.is_some(), "expected $x read token on line 2");
+        let (_, _, read_mods) = read.unwrap();
+        assert!(read_mods & 1 == 0, "read token must NOT have declaration bit");
+        assert!(read_mods & 128 == 0, "read token must NOT have modification bit");
     }
 }
