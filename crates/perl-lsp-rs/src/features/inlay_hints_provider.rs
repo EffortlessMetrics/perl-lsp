@@ -451,7 +451,7 @@ impl InlayHintsProvider {
                 line += 1;
                 col = 0;
             } else {
-                col += 1;
+                col += ch.len_utf16() as u32;
             }
         }
 
@@ -569,5 +569,18 @@ print("Hello, World!");
         let (line, col) = provider.offset_to_position(4);
         assert_eq!(line, 1, "byte offset 4 ('l') should be on line 1");
         assert_eq!(col, 0, "byte offset 4 ('l') should be at column 0");
+    }
+
+    #[test]
+    fn test_offset_to_position_non_bmp_utf16() {
+        // '😀' (U+1F600) is 4 bytes in UTF-8 and 2 UTF-16 code units.
+        // LSP requires UTF-16 column counting, so the 'b' after '😀' should be at col=3
+        // (1 for 'a' + 2 for '😀'), not col=2 (1 + 1, if using scalar count).
+        let source = "a😀b".to_string();
+        let provider = InlayHintsProvider::new(source);
+        // byte layout: a=0, 😀=1-4 (4 bytes), b=5
+        let (line, col) = provider.offset_to_position(5);
+        assert_eq!(line, 0, "byte offset 5 ('b') should be on line 0");
+        assert_eq!(col, 3, "byte offset 5 ('b') should be at UTF-16 column 3");
     }
 }
