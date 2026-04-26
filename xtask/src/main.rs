@@ -1116,6 +1116,12 @@ enum Commands {
         format: swarm_summary::SwarmSummaryOutputFormat,
     },
 
+    /// Agent lease and receipt primitives for disconnected orchestration.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Populate mdBook source directory from `docs/`.
     PopulateBook,
 
@@ -1300,6 +1306,45 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Acquire a typed lease from an input task document.
+    Acquire {
+        #[arg(long)]
+        task: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify a lease against the current reconciler snapshot.
+    Verify {
+        #[arg(long)]
+        lease: PathBuf,
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate a receipt against idempotency and mutation rules.
+    Validate {
+        #[arg(long)]
+        receipt: PathBuf,
     },
 }
 
@@ -1677,6 +1722,17 @@ fn main() -> Result<()> {
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Acquire { task, out } => agent_lease::acquire(&task, &out),
+                AgentLeaseCommand::Verify { lease, current } => {
+                    agent_lease::verify(&lease, &current)
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
+            },
+        },
         Commands::PopulateBook => populate_book::run(),
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/agent-receipt.schema.json",
+  "title": "Agent Receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "task_id",
+    "snapshot_id",
+    "head_sha",
+    "received_at",
+    "expires_at",
+    "mutation",
+    "allowed_mutations",
+    "forbidden_mutations",
+    "output_schema"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "head_sha": { "type": "string", "minLength": 1 },
+    "received_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "mutation": { "type": "string", "minLength": 1 },
+    "allowed_mutations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "forbidden_mutations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "output_schema": { "type": "string", "minLength": 1 },
+    "supersedes": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

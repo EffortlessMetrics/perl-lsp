@@ -1,0 +1,13 @@
+{
+  "task_id": "task-6853-expired",
+  "snapshot_id": "snap-1",
+  "lane": "merge-gate",
+  "pr": 6853,
+  "head_sha": "abc123",
+  "base_sha": "def456",
+  "canonical_state": "open",
+  "allowed_mutations": ["comment.update"],
+  "forbidden_mutations": ["label.set"],
+  "required_output_schema": "agent-receipt-v1",
+  "expires_at": "2020-01-01T00:00:00Z"
+}

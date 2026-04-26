@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "receipt_id": "receipt-2",
+  "task_id": "task-6853",
+  "snapshot_id": "snap-1",
+  "head_sha": "abc123",
+  "received_at": "2026-01-01T00:00:00Z",
+  "expires_at": "2099-01-01T00:00:00Z",
+  "mutation": "label.set",
+  "allowed_mutations": ["comment.update"],
+  "forbidden_mutations": ["label.set"],
+  "output_schema": "agent-receipt-v1",
+  "supersedes": "receipt-1"
+}
