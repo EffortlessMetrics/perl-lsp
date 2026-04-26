@@ -794,6 +794,17 @@ enum Commands {
     /// is wired into `just pr-fast` and `just ci-gate`.
     PublishManifestCheck,
 
+    /// Emit Parser Ratchet scaffold receipt (no-op selector).
+    ParserRatchet {
+        /// Execution profile to record in the receipt.
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Write receipt JSON to target/receipts/parser-ratchet.json
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1510,6 +1521,7 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::ParserRatchet { profile, receipt } => parser_ratchet::run(profile, receipt),
         Commands::ParserCorpusSweep {
             roots,
             manifest,

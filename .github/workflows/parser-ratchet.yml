@@ -1,0 +1,64 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+    branches: [main, master]
+  merge_group: {}
+  push:
+    branches: [master]
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet Receipt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.92.0
+
+      - name: Emit parser-ratchet receipt
+        run: cargo xtask parser-ratchet --profile pr --receipt target/receipts/parser-ratchet.json
+
+      - name: Validate parser-ratchet receipt schema (if present)
+        if: hashFiles('.ci/receipts/schemas/parser-ratchet.schema.json') != ''
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet jsonschema
+          python3 - <<'PY'
+          import json
+          from jsonschema import Draft202012Validator
+
+          schema_path = '.ci/receipts/schemas/parser-ratchet.schema.json'
+          receipt_path = 'target/receipts/parser-ratchet.json'
+
+          with open(schema_path, 'r', encoding='utf-8') as f:
+              schema = json.load(f)
+          with open(receipt_path, 'r', encoding='utf-8') as f:
+              receipt = json.load(f)
+
+          Draft202012Validator(schema).validate(receipt)
+          print('parser-ratchet receipt schema validation passed')
+          PY
+
+      - name: Upload parser-ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-ratchet-receipt-${{ github.sha }}
+          path: target/receipts/parser-ratchet.json
+          if-no-files-found: warn
