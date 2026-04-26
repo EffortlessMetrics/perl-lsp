@@ -1424,6 +1424,23 @@ fn renderer_with_max_array_preview() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn array_preview_truncation_keeps_child_pagination_precise() -> Result<(), Box<dyn std::error::Error>>
+{
+    let renderer = PerlVariableRenderer::new().with_max_array_preview(1);
+    let val = PerlValue::Array((0..6).map(PerlValue::Integer).collect());
+
+    let rendered = renderer.render("@a", &val);
+    assert!(rendered.value.contains("6 total"));
+    assert_eq!(rendered.indexed_variables, Some(6));
+
+    let paged_children = renderer.render_children(&val, 2, 3);
+    assert_eq!(paged_children.len(), 3);
+    assert_eq!(paged_children[0].name, "[2]");
+    assert_eq!(paged_children[2].name, "[4]");
+    Ok(())
+}
+
+#[test]
 fn renderer_with_max_hash_preview() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_hash_preview(1);
     let val = PerlValue::Hash(vec![
