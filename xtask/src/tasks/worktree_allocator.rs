@@ -191,6 +191,11 @@ fn gc(stale_only: bool, apply: bool, force: bool, ttl_hours: i64) -> Result<()> 
         return Ok(());
     }
 
+    // Track which worktrees were *actually* removed so the lease-state update only drops
+    // leases whose worktrees were successfully removed. Dirty-skipped worktrees must remain
+    // in the state file because their git metadata and working directory are still live.
+    let mut removed_ids = BTreeSet::new();
+
     for lease in &state.leases {
         if !stale_ids.contains(&lease.worktree_id) {
             continue;
@@ -213,9 +218,11 @@ fn gc(stale_only: bool, apply: bool, force: bool, ttl_hours: i64) -> Result<()> 
         if !status.success() {
             bail!("failed to remove worktree {}", lease.path);
         }
+        removed_ids.insert(lease.worktree_id.clone());
     }
 
-    state.leases.retain(|lease| !stale_ids.contains(&lease.worktree_id) || !apply);
+    // Only evict leases whose worktrees were actually removed (not merely dirty-skipped).
+    state.leases.retain(|lease| !removed_ids.contains(&lease.worktree_id));
     save_state(&root, &state)?;
     Ok(())
 }
