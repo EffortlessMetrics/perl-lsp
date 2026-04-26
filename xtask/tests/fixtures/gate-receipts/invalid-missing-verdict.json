@@ -1,0 +1,5 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1.0.0",
+  "event": "pull_request"
+}

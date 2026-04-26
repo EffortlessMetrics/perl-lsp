@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/methodology-gate.schema.json",
+  "title": "Methodology Gate Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check"],
+      "properties": {
+        "check": { "const": "methodology-gate" },
+        "metrics": { "type": "object" }
+      }
+    }
+  ]
+}

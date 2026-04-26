@@ -1,0 +1,17 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1.0.0",
+  "event": "pull_request",
+  "verdict": "pass",
+  "run_id": "12345",
+  "pr": 6856,
+  "base_sha": "aaaaaaaa",
+  "head_sha": "bbbbbbbb",
+  "metrics": {
+    "required_checks": 12,
+    "completed_checks": 12
+  },
+  "repro": {
+    "command": "cargo xtask gates --tier merge-gate"
+  }
+}

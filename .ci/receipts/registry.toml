@@ -1,0 +1,54 @@
+version = 1
+
+[common]
+required = ["check", "schema_version", "event", "verdict"]
+optional = [
+  "run_id",
+  "pr",
+  "base_sha",
+  "head_sha",
+  "candidate_sha",
+  "selected",
+  "selection_reason",
+  "classification",
+  "violations",
+  "metrics",
+  "artifacts",
+  "repro.command",
+  "runner",
+]
+
+[[schemas]]
+name = "common-gate-receipt"
+check = "*"
+path = ".ci/receipts/schemas/common-gate-receipt.schema.json"
+
+[[schemas]]
+name = "methodology-gate"
+check = "methodology-gate"
+path = ".ci/receipts/schemas/methodology-gate.schema.json"
+
+[[schemas]]
+name = "parser-ratchet"
+check = "parser-ratchet"
+path = ".ci/receipts/schemas/parser-ratchet.schema.json"
+
+[[schemas]]
+name = "aggregator"
+check = "aggregator"
+path = ".ci/receipts/schemas/aggregator-receipt.schema.json"
+
+[[schemas]]
+name = "merge-readiness"
+check = "merge-readiness"
+path = ".ci/receipts/schemas/merge-readiness.schema.json"
+
+[[schemas]]
+name = "fmt"
+check = "fmt"
+path = ".ci/receipts/schemas/fmt.schema.json"
+
+[[schemas]]
+name = "failure-classifier"
+check = "failure-classifier"
+path = ".ci/receipts/schemas/failure-classifier.schema.json"

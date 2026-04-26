@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/fmt.schema.json",
+  "title": "Fmt Gate Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check"],
+      "properties": {
+        "check": { "const": "fmt" },
+        "repro": {
+          "type": "object",
+          "properties": {
+            "command": { "type": "string" }
+          }
+        }
+      }
+    }
+  ]
+}

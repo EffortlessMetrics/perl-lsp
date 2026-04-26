@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/parser-ratchet.schema.json",
+  "title": "Parser Ratchet Gate Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check"],
+      "properties": {
+        "check": { "const": "parser-ratchet" },
+        "violations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": { "type": "string" },
+              "path": { "type": "string" },
+              "detail": { "type": "string" }
+            },
+            "required": ["rule"]
+          }
+        }
+      }
+    }
+  ]
+}

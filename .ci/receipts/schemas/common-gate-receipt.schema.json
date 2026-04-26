@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/common-gate-receipt.schema.json",
+  "title": "Common Gate Receipt",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["check", "schema_version", "event", "verdict"],
+  "properties": {
+    "check": { "type": "string", "minLength": 1 },
+    "schema_version": { "type": "string", "minLength": 1 },
+    "event": {
+      "type": "string",
+      "enum": ["pull_request", "merge_group", "push", "local"]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "warn", "skipped"]
+    },
+    "run_id": { "type": ["string", "integer"] },
+    "pr": { "type": "integer", "minimum": 1 },
+    "base_sha": { "type": "string", "minLength": 7 },
+    "head_sha": { "type": "string", "minLength": 7 },
+    "candidate_sha": { "type": "string", "minLength": 7 },
+    "selected": { "type": "boolean" },
+    "selection_reason": { "type": "string" },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "code_regression",
+        "infra_failure",
+        "stale_base",
+        "master_red",
+        "skipped",
+        "unknown"
+      ]
+    },
+    "violations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "metrics": { "type": "object" },
+    "artifacts": {
+      "type": "array",
+      "items": { "type": ["string", "object"] }
+    },
+    "repro": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "command": { "type": "string" }
+      }
+    },
+    "runner": { "type": "object" }
+  }
+}
