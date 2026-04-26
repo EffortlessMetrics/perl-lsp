@@ -1,0 +1,41 @@
+name: Workflow Policy Lint
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'xtask/src/tasks/workflow_policy_lint.rs'
+      - 'xtask/src/main.rs'
+      - 'xtask/src/tasks/mod.rs'
+      - 'xtask/tests/fixtures/workflow-policy/**'
+      - '.ci/receipts/schemas/workflow-policy.schema.json'
+      - 'docs/ci/workflow-security-policy.md'
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/**'
+      - 'xtask/src/tasks/workflow_policy_lint.rs'
+      - 'xtask/src/main.rs'
+      - 'xtask/src/tasks/mod.rs'
+      - 'xtask/tests/fixtures/workflow-policy/**'
+      - '.ci/receipts/schemas/workflow-policy.schema.json'
+      - 'docs/ci/workflow-security-policy.md'
+  merge_group: {}
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+      - name: Run workflow policy lint
+        run: cargo xtask workflow-policy-lint --receipt target/receipts/workflow-policy.json
+      - name: Upload receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-policy-receipt
+          path: target/receipts/workflow-policy.json
