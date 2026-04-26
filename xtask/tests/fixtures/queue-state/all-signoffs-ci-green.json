@@ -1,0 +1,22 @@
+{
+  "pr": {
+    "number": 102,
+    "draft": false,
+    "merged": false,
+    "labels": ["review-reviewed", "standards-approved"],
+    "head_sha": "def123",
+    "base_sha": "base222",
+    "status_rollup": "green"
+  },
+  "receipts": [
+    {
+      "pr_number": 102,
+      "receipt_type": "review",
+      "head_sha": "def123",
+      "base_sha": null,
+      "valid": true
+    }
+  ],
+  "expected_state": "CI_GREEN",
+  "expected_contradiction": null
+}

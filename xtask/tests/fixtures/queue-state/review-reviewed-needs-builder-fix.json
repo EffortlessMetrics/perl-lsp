@@ -1,0 +1,22 @@
+{
+  "pr": {
+    "number": 101,
+    "draft": false,
+    "merged": false,
+    "labels": ["review-reviewed", "needs-builder-fix"],
+    "head_sha": "abc123",
+    "base_sha": "base123",
+    "status_rollup": "green"
+  },
+  "receipts": [
+    {
+      "pr_number": 101,
+      "receipt_type": "review",
+      "head_sha": "abc123",
+      "base_sha": null,
+      "valid": true
+    }
+  ],
+  "expected_state": "NEEDS_BUILDER_FIX",
+  "expected_contradiction": "conflicting_positive_signals_with_needs_blocker"
+}

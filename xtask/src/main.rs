@@ -479,6 +479,12 @@ enum Commands {
         apply: bool,
     },
 
+    /// Queue orchestration state utilities (dry-run only).
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Generate bindings
     #[cfg(feature = "parser-tasks")]
     Bindings {
@@ -1235,6 +1241,31 @@ enum FeaturesCommand {
 }
 
 #[derive(Subcommand)]
+enum QueueCommand {
+    /// Snapshot PR queue facts from GitHub into JSON.
+    Snapshot {
+        /// Output path for the queue snapshot JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Build canonical PR queue states from a snapshot and receipts.
+    State {
+        /// Snapshot JSON path from `queue snapshot`.
+        #[arg(long)]
+        snapshot: PathBuf,
+        /// Dry-run mode (required for this initial implementation).
+        #[arg(long)]
+        dry_run: bool,
+        /// Output path for the queue-state receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Optional directory containing receipt JSON fragments.
+        #[arg(long)]
+        receipts_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum MetricsCommand {
     /// Emit parser phase timings and benchmark summary.
     ParserStats {
@@ -1477,6 +1508,17 @@ fn main() -> Result<()> {
         Commands::GhLabels => github::run_labels(),
         Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
         Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
+        Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out } => queue_snapshot::run(out),
+            QueueCommand::State { snapshot, dry_run, receipt, receipts_dir } => {
+                queue_state::run(queue_state::QueueStateConfig {
+                    snapshot,
+                    dry_run,
+                    receipt,
+                    receipts_dir,
+                })
+            }
+        },
         Commands::CorpusAudit { corpus_path, output, check, fresh } => {
             corpus_audit::run(corpus_audit::AuditConfig {
                 corpus_path,

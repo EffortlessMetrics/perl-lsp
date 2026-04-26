@@ -1,0 +1,22 @@
+{
+  "pr": {
+    "number": 103,
+    "draft": false,
+    "merged": false,
+    "labels": ["merge-ready", "review-reviewed"],
+    "head_sha": "aaa111",
+    "base_sha": "base-current",
+    "status_rollup": "green"
+  },
+  "receipts": [
+    {
+      "pr_number": 103,
+      "receipt_type": "merge-readiness",
+      "head_sha": "aaa111",
+      "base_sha": "base-old",
+      "valid": true
+    }
+  ],
+  "expected_state": "CI_GREEN",
+  "expected_contradiction": "merge_ready_label_without_valid_receipt"
+}

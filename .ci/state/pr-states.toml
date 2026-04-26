@@ -1,0 +1,29 @@
+schema_version = 1
+mode = "dry-run"
+
+[states]
+canonical = [
+  "DRAFT",
+  "NEW",
+  "NEEDS_STANDARDS_REVIEW",
+  "NEEDS_DEEP_REVIEW",
+  "NEEDS_DIFF_AUDIT",
+  "NEEDS_MAINTAINER_REVIEW",
+  "NEEDS_BUILDER_FIX",
+  "NEEDS_DIFF_FIX",
+  "NEEDS_CI_FIX",
+  "NEEDS_CASCADE_UPDATE",
+  "NEEDS_INFRA_FIX",
+  "REVIEWED_WAITING_CI",
+  "CI_GREEN",
+  "MERGE_READY",
+  "QUEUED",
+  "MERGED",
+  "SUPERSEDED",
+  "BLOCKED_UNKNOWN",
+]
+
+[rules]
+needs_blockers_block_green = true
+merge_ready_requires_valid_receipt = true
+review_receipt_head_sha_must_match = true
