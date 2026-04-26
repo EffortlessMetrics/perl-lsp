@@ -1,0 +1,12 @@
+{
+  "gates": [
+    {
+      "gate_name": "status-docs",
+      "status": "fail",
+      "output_summary": "generated docs are stale"
+    }
+  ],
+  "summary": {
+    "blocking_failures": ["status-docs"]
+  }
+}

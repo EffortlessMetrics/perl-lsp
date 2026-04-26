@@ -1,0 +1,12 @@
+{
+  "gates": [
+    {
+      "gate_name": "fmt",
+      "status": "fail",
+      "output_summary": "cargo fmt --check reported drift"
+    }
+  ],
+  "summary": {
+    "blocking_failures": ["fmt"]
+  }
+}

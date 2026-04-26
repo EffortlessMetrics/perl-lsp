@@ -1,0 +1,6 @@
+{
+  "classification": "STALE_BASE_CASCADE",
+  "summary": {
+    "blocking_failures": ["stale-base-classifier"]
+  }
+}

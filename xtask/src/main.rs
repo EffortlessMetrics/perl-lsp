@@ -1152,6 +1152,27 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Typed fix-forward classification and playbook lookup.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a failure receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to source receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Path to output fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// List configured typed fix-forward playbooks.
+    ListPlaybooks,
 }
 
 #[derive(Subcommand)]
@@ -1686,6 +1707,12 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
+        },
     }
 }
 
