@@ -1152,6 +1152,12 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Queue orchestration and health gates.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1300,6 +1306,20 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Evaluate queue health and emit a GREEN/PENDING/RED receipt.
+    Health {
+        /// Optional path to write queue health receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Optional JSON fixture path used as queue input.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
     },
 }
 
@@ -1686,6 +1706,11 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::Health { receipt, fixture } => {
+                queue_health::run(queue_health::QueueHealthConfig { receipt, fixture })
+            }
+        },
     }
 }
 

@@ -1,0 +1,11 @@
+{
+  "master_sha": "2222222pending",
+  "master_ci_state": "pending",
+  "pending_checks": 2,
+  "running_checks": 1,
+  "gate_policy": {
+    "candidate_current": false,
+    "policy_name": "default"
+  },
+  "expected_mode": "PENDING"
+}

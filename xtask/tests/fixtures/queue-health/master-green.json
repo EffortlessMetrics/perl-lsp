@@ -1,0 +1,11 @@
+{
+  "master_sha": "1111111green",
+  "master_ci_state": "green",
+  "pending_checks": 0,
+  "running_checks": 0,
+  "gate_policy": {
+    "candidate_current": true,
+    "policy_name": "default"
+  },
+  "expected_mode": "GREEN"
+}

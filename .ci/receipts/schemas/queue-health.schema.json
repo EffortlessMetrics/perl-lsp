@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/schemas/queue-health.schema.json",
+  "title": "Queue health receipt",
+  "type": "object",
+  "required": [
+    "master_sha",
+    "mode",
+    "allowed_lanes",
+    "blocked_lanes",
+    "reasons",
+    "verdict"
+  ],
+  "properties": {
+    "master_sha": {
+      "type": "string",
+      "minLength": 7
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["GREEN", "PENDING", "RED"]
+    },
+    "allowed_lanes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "blocked_lanes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "reasons": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "verdict": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}
