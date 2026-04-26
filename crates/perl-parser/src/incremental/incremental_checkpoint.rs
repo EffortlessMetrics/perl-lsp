@@ -268,11 +268,7 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() {
-            None
-        } else {
-            Some(all_tokens)
-        }
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
     }
 
     /// Return cached tokens that end at or before `position`.
@@ -298,11 +294,7 @@ impl TokenCache {
             }
         }
 
-        if all_tokens.is_empty() {
-            None
-        } else {
-            Some(all_tokens)
-        }
+        if all_tokens.is_empty() { None } else { Some(all_tokens) }
     }
 
     fn count_segments_with_tokens_before(&self, position: usize) -> usize {
@@ -741,8 +733,8 @@ impl CheckpointedIncrementalParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_parser_core::token_stream::TokenKind;
     use perl_parser_core::NodeKind;
+    use perl_parser_core::token_stream::TokenKind;
     use perl_tdd_support::must;
 
     #[test]
@@ -950,7 +942,11 @@ mod tests {
         // Invalidate a range entirely after the cached segment — no overlap.
         cache.invalidate_range(30, 50);
 
-        assert_eq!(cache.segments.len(), 1, "non-overlapping invalidation should leave segment intact");
+        assert_eq!(
+            cache.segments.len(),
+            1,
+            "non-overlapping invalidation should leave segment intact"
+        );
         assert_eq!(cache.segments[0].start, 0);
         assert_eq!(cache.segments[0].end, 20);
         assert_eq!(cache.segments[0].tokens.len(), 2);
@@ -1006,8 +1002,17 @@ mod tests {
 
         // But individual token positions must remain at their original values so
         // Phase-3's byte_shift application later yields the right final position.
-        assert_eq!(cache.segments[0].tokens[0].start, 100, "token start must NOT be shifted by adjust_positions");
-        assert_eq!(cache.segments[0].tokens[0].end, 110, "token end must NOT be shifted by adjust_positions");
-        assert_eq!(cache.segments[0].tokens[1].start, 110, "token start must NOT be shifted by adjust_positions");
+        assert_eq!(
+            cache.segments[0].tokens[0].start, 100,
+            "token start must NOT be shifted by adjust_positions"
+        );
+        assert_eq!(
+            cache.segments[0].tokens[0].end, 110,
+            "token end must NOT be shifted by adjust_positions"
+        );
+        assert_eq!(
+            cache.segments[0].tokens[1].start, 110,
+            "token start must NOT be shifted by adjust_positions"
+        );
     }
 }
