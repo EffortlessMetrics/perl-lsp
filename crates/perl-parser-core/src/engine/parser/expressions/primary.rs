@@ -449,6 +449,12 @@ impl<'a> Parser<'a> {
                                         c
                                     )
                                 }
+                                quote_parser::TransliterationError::InvalidDelimiter(c) => {
+                                    format!(
+                                        "Invalid transliteration delimiter '{}'. Delimiter must be a non-alphanumeric, non-whitespace character",
+                                        c
+                                    )
+                                }
                                 quote_parser::TransliterationError::MissingDelimiter => {
                                     "Missing delimiter after transliteration operator".to_string()
                                 }

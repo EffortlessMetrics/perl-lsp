@@ -93,4 +93,3 @@ fn hash_and_sub_sigils_as_identifier_tokens_keep_sigil_kind() {
         "bare %/& as Identifier tokens must map to sigil kinds, not operator kinds"
     );
 }
-
