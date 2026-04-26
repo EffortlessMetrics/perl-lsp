@@ -768,6 +768,21 @@ impl TokenKind {
         }
     }
 
+    /// Returns `true` if this token kind is a keyword.
+    pub const fn is_keyword(self) -> bool {
+        matches!(self.category(), TokenCategory::Keyword)
+    }
+
+    /// Returns `true` if this token kind is an operator.
+    pub const fn is_operator(self) -> bool {
+        matches!(self.category(), TokenCategory::Operator)
+    }
+
+    /// Returns `true` if this token kind is a literal.
+    pub const fn is_literal(self) -> bool {
+        matches!(self.category(), TokenCategory::Literal)
+    }
+
     /// Map a canonical keyword spelling to its [`TokenKind`].
     ///
     /// This mapping is case-sensitive and only recognizes canonical Perl
