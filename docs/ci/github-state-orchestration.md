@@ -11,10 +11,9 @@ This document defines the control-plane contract for disconnected maintainership
 
 - `cargo xtask queue snapshot --out target/queue/open-prs.json`
 - `cargo xtask queue snapshot --fixture <fixture.json> --out target/queue/open-prs.json`
-- `cargo xtask agent lease create --task <task.json> --owner <owner> --out <lease.json>`
-- `cargo xtask agent lease verify --lease <lease.json> --snapshot <snapshot.json>`
-- `cargo xtask agent receipt validate --receipt <receipt.json> --task <task.json> --snapshot <snapshot.json>`
-- `cargo xtask agent receipt status --receipt <receipt.json> --snapshot <snapshot.json>`
+- `cargo xtask agent lease acquire --task <task.json> --out <lease.json>`
+- `cargo xtask agent lease verify --lease <lease.json> --current <snapshot.json>`
+- `cargo xtask agent receipt validate --receipt <receipt.json>`
 
 ## Constraints
 

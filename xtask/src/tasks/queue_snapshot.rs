@@ -82,6 +82,31 @@ pub fn run_snapshot(out: PathBuf, fixture: Option<PathBuf>) -> Result<()> {
 
 fn snapshot_from_gh_cli() -> Result<QueueSnapshot> {
     let root = project_root()?;
+
+    // Fetch repository name (nameWithOwner).
+    let repo_output = Command::new("gh")
+        .current_dir(&root)
+        .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+        .output()
+        .context("failed to execute gh repo view")?;
+    let repository = if repo_output.status.success() {
+        String::from_utf8_lossy(&repo_output.stdout).trim().to_string()
+    } else {
+        "unknown".to_string()
+    };
+
+    // Fetch current master SHA via git.
+    let sha_output = Command::new("git")
+        .current_dir(&root)
+        .args(["rev-parse", "origin/master"])
+        .output()
+        .context("failed to execute git rev-parse")?;
+    let master_sha = if sha_output.status.success() {
+        String::from_utf8_lossy(&sha_output.stdout).trim().to_string()
+    } else {
+        "unknown".to_string()
+    };
+
     let output = Command::new("gh")
         .current_dir(&root)
         .args([
@@ -187,9 +212,9 @@ fn snapshot_from_gh_cli() -> Result<QueueSnapshot> {
     Ok(QueueSnapshot {
         snapshot_id,
         captured_at: now.to_rfc3339(),
-        repository: "unknown".to_string(),
+        repository,
         default_branch: "master".to_string(),
-        master_sha: "unknown".to_string(),
+        master_sha,
         ruleset_summary: serde_json::json!({"source":"gh-cli"}),
         buckets: derive_buckets(&prs),
         prs,
@@ -197,11 +222,77 @@ fn snapshot_from_gh_cli() -> Result<QueueSnapshot> {
     })
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_pr(number: u64, labels: Vec<&str>, checks: Vec<(&str, &str)>) -> PullRequestSnapshot {
+        PullRequestSnapshot {
+            number,
+            title: format!("PR {number}"),
+            head_sha: "abc".to_string(),
+            base_sha: "def".to_string(),
+            is_draft: false,
+            merge_state_status: Some("CLEAN".to_string()),
+            labels: labels.into_iter().map(ToString::to_string).collect(),
+            status_check_rollup: checks
+                .into_iter()
+                .map(|(name, state)| StatusCheck {
+                    name: name.to_string(),
+                    state: state.to_string(),
+                })
+                .collect(),
+            updated_at: "2026-04-26T00:00:00Z".to_string(),
+            author: "bot".to_string(),
+            review_decision: None,
+        }
+    }
+
+    #[test]
+    fn cancelled_check_routes_to_needs_ci_fix() {
+        let prs = vec![make_pr(1, vec![], vec![("ci", "CANCELLED")])];
+        let buckets = derive_buckets(&prs);
+        assert!(buckets.needs_ci_fix.contains(&1), "CANCELLED must route to needs_ci_fix");
+        assert!(!buckets.ci_green.contains(&1));
+    }
+
+    #[test]
+    fn timed_out_check_routes_to_needs_ci_fix() {
+        let prs = vec![make_pr(2, vec![], vec![("ci", "TIMED_OUT")])];
+        let buckets = derive_buckets(&prs);
+        assert!(buckets.needs_ci_fix.contains(&2), "TIMED_OUT must route to needs_ci_fix");
+    }
+
+    #[test]
+    fn action_required_routes_to_needs_ci_fix() {
+        let prs = vec![make_pr(3, vec![], vec![("ci", "ACTION_REQUIRED")])];
+        let buckets = derive_buckets(&prs);
+        assert!(buckets.needs_ci_fix.contains(&3), "ACTION_REQUIRED must route to needs_ci_fix");
+    }
+
+    #[test]
+    fn success_routes_to_ci_green() {
+        let prs = vec![make_pr(4, vec![], vec![("ci", "success")])];
+        let buckets = derive_buckets(&prs);
+        assert!(buckets.ci_green.contains(&4));
+        assert!(!buckets.needs_ci_fix.contains(&4));
+    }
+
+    #[test]
+    fn failure_routes_to_needs_ci_fix() {
+        let prs = vec![make_pr(5, vec![], vec![("ci", "failure")])];
+        let buckets = derive_buckets(&prs);
+        assert!(buckets.needs_ci_fix.contains(&5));
+    }
+}
+
 pub fn derive_buckets(prs: &[PullRequestSnapshot]) -> DerivedBuckets {
     let mut buckets = DerivedBuckets::default();
     for pr in prs {
-        let has_failing =
-            pr.status_check_rollup.iter().any(|check| check.state.eq_ignore_ascii_case("failure"));
+        let has_failing = pr.status_check_rollup.iter().any(|check| {
+            let s = check.state.to_ascii_uppercase();
+            s == "FAILURE" || s == "CANCELLED" || s == "TIMED_OUT" || s == "ACTION_REQUIRED"
+        });
         let all_green = !pr.status_check_rollup.is_empty()
             && pr.status_check_rollup.iter().all(|check| {
                 check.state.eq_ignore_ascii_case("success")

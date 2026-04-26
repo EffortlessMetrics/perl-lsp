@@ -1,8 +1,8 @@
 use assert_cmd::cargo::cargo_bin_cmd;
-use std::path::Path;
 
 fn fixture(path: &str) -> String {
-    Path::new("tests").join("fixtures").join(path).display().to_string()
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    std::path::Path::new(manifest).join("tests").join("fixtures").join(path).display().to_string()
 }
 
 #[test]
