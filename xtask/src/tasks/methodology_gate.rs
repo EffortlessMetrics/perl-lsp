@@ -325,9 +325,7 @@ fn should_warn_closeout_hygiene(body: Option<&str>) -> bool {
     };
 
     CLOSEOUT_RE.as_ref().is_some_and(|regex| regex.is_match(body))
-        && PARTIAL_RE
-            .as_ref()
-            .is_some_and(|regex| regex.is_match(body))
+        && PARTIAL_RE.as_ref().is_some_and(|regex| regex.is_match(body))
 }
 
 fn glob_matches(pattern: &str, value: &str) -> bool {
