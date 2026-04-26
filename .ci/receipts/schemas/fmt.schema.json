@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/fmt.schema.json",
+  "title": "Formatting Gate Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "check": { "const": "fmt" },
+        "violations": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  ]
+}

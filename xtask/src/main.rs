@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_receipts::ReceiptOutputFormat;
 use tasks::gates::{GateTier, OutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
@@ -1059,6 +1060,13 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Validate and inspect gate receipt schemas from `.ci/receipts/registry.toml`.
+    #[command(name = "gate-receipts")]
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommands,
+    },
+
     /// Verify hook scripts are executable.
     HookCheck,
 
@@ -1151,6 +1159,32 @@ enum Commands {
         baseline: PathBuf,
         /// Current receipt JSON path.
         current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum GateReceiptsCommands {
+    /// List registered gate receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: ReceiptOutputFormat,
+    },
+    /// Validate one receipt JSON against common + check-specific requirements.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: ReceiptOutputFormat,
+    },
+    /// Validate every JSON receipt file found under a directory.
+    ValidateAll {
+        /// Directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: ReceiptOutputFormat,
     },
 }
 
@@ -1663,6 +1697,15 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommands::List { format } => gate_receipts::list(format),
+            GateReceiptsCommands::Validate { path, format } => {
+                gate_receipts::validate(path, format)
+            }
+            GateReceiptsCommands::ValidateAll { dir, format } => {
+                gate_receipts::validate_all(dir, format)
+            }
+        },
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand

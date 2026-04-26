@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/perl-lsp/receipts/failure-classifier.schema.json",
+  "title": "Failure Classifier Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["classification"],
+      "properties": {
+        "check": { "const": "failure-classifier" },
+        "classification": {
+          "type": "string",
+          "enum": ["code_regression", "infra_failure", "stale_base", "master_red", "skipped", "unknown"]
+        }
+      }
+    }
+  ]
+}

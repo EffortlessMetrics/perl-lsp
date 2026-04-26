@@ -1,0 +1,12 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1.0.0",
+  "event": "pull_request",
+  "verdict": "pass",
+  "run_id": "12345",
+  "pr": 6856,
+  "base_sha": "abc123",
+  "head_sha": "def456",
+  "selected": true,
+  "selection_reason": "all prerequisite gates passed"
+}

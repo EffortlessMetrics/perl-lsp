@@ -1,0 +1,42 @@
+[registry]
+version = "1"
+default_schema_version = "1.0.0"
+
+[[schema]]
+check = "common-gate-receipt"
+schema = ".ci/receipts/schemas/common-gate-receipt.schema.json"
+description = "Common gate receipt contract used by CI/control-plane checks"
+
+[[schema]]
+check = "parser-ratchet"
+schema = ".ci/receipts/schemas/parser-ratchet.schema.json"
+description = "Parser ratchet verdict and metrics receipt"
+
+[[schema]]
+check = "methodology-gate"
+schema = ".ci/receipts/schemas/methodology-gate.schema.json"
+description = "Methodology gate decision receipt"
+extra_required = ["selected", "selection_reason"]
+
+[[schema]]
+check = "aggregator-receipt"
+schema = ".ci/receipts/schemas/aggregator-receipt.schema.json"
+description = "Aggregated gate status receipt"
+extra_required = ["metrics"]
+
+[[schema]]
+check = "merge-readiness"
+schema = ".ci/receipts/schemas/merge-readiness.schema.json"
+description = "Merge readiness decision receipt"
+extra_required = ["candidate_sha", "selected"]
+
+[[schema]]
+check = "fmt"
+schema = ".ci/receipts/schemas/fmt.schema.json"
+description = "Formatting check verdict receipt"
+
+[[schema]]
+check = "failure-classifier"
+schema = ".ci/receipts/schemas/failure-classifier.schema.json"
+description = "Failure classification receipt"
+extra_required = ["classification"]

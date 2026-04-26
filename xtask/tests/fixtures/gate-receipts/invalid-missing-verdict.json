@@ -1,0 +1,9 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1.0.0",
+  "event": "pull_request",
+  "run_id": "12345",
+  "pr": 6856,
+  "selected": true,
+  "selection_reason": "missing verdict should fail"
+}

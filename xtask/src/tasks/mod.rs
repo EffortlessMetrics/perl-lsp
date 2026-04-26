@@ -39,6 +39,7 @@ pub mod features;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
+pub mod gate_receipts;
 pub mod gates;
 pub mod github;
 pub mod hardening;
