@@ -794,6 +794,12 @@ enum Commands {
     /// is wired into `just pr-fast` and `just ci-gate`.
     PublishManifestCheck,
 
+    /// Parser ratchet workflows for repo-owned perl-corpus fixtures
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1220,6 +1226,102 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate a single receipt JSON file.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Root directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GateReceiptsFormat {
+    Human,
+    Json,
+}
+
+#[derive(Subcommand)]
+enum MergeReadyCommand {
+    /// Emit a merge-readiness receipt for a PR.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output path for receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+    /// Verify receipt freshness and verdict.
+    Verify {
+        /// Pull request number (advisory context).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Verify a fixture file instead of the default receipt path.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready label state from receipts.
+    Reconcile {
+        /// Apply changes (default is advisory dry-run).
+        #[arg(long)]
+        apply: bool,
+        /// Force dry-run mode.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Scan all open PRs and resolve label contradictions queue-wide.
+    ///
+    /// Uses live CI state for ci-green/needs-ci-fix decisions, and
+    /// "later-applied wins" timeline logic for other contradiction pairs.
+    /// Apply mode is the default; pass --dry-run for advisory mode.
+    ReconcileQueue {
+        /// Apply label changes (default when neither flag given).
+        #[arg(long)]
+        apply: bool,
+        /// Dry-run: report what would change without applying.
+        #[arg(long, conflicts_with = "apply")]
+        dry_run: bool,
+        /// Limit to a single PR number (useful for testing).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Output path for the queue-reconcile.json receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Enforce concept floors for repo-owned perl-corpus fixtures
+    ConceptFloors {
+        /// Optional parser-ratchet manifest path
+        #[arg(long)]
+        manifest: PathBuf,
+
+        /// Output receipt path
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1510,6 +1612,14 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::ConceptFloors { manifest, receipt } => {
+                parser_concept_floor::run(&parser_concept_floor::ConceptFloorsConfig {
+                    manifest,
+                    receipt,
+                })
+            }
+        },
         Commands::ParserCorpusSweep {
             roots,
             manifest,
