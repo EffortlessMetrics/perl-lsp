@@ -132,10 +132,7 @@ mod tests {
             sexp.contains("local_declaration"),
             "Expected local_declaration in sexp, got: {sexp}",
         );
-        assert!(
-            sexp.contains("PATH"),
-            "Expected localized hash element key in sexp, got: {sexp}",
-        );
+        assert!(sexp.contains("PATH"), "Expected localized hash element key in sexp, got: {sexp}",);
         assert!(
             sexp.contains("(variable $ next)"),
             "Expected trailing argument to stay separate, got: {sexp}",
@@ -190,14 +187,8 @@ mod tests {
         let stmt = first_stmt(code);
         let sexp = stmt.to_sexp();
         // Both $x and $y must appear in the local declaration
-        assert!(
-            sexp.contains("(variable $ x)"),
-            "Expected localized $x in sexp, got: {sexp}",
-        );
-        assert!(
-            sexp.contains("(variable $ y)"),
-            "Expected localized $y in sexp, got: {sexp}",
-        );
+        assert!(sexp.contains("(variable $ x)"), "Expected localized $x in sexp, got: {sexp}",);
+        assert!(sexp.contains("(variable $ y)"), "Expected localized $y in sexp, got: {sexp}",);
         // $z must be a separate argument, not inside the local()
         assert!(
             sexp.contains("(variable $ z)"),
