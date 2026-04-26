@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.github.io/perl-lsp/schemas/parser-ratchet.schema.json",
+  "title": "Parser Ratchet Receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "profile",
+    "selected",
+    "selection_reason",
+    "manifest_fingerprint",
+    "base_sha",
+    "head_sha",
+    "metrics",
+    "violations",
+    "ratchet_opportunity",
+    "verdict",
+    "repro"
+  ],
+  "properties": {
+    "check": { "const": "Parser Ratchet" },
+    "profile": { "type": "string" },
+    "selected": { "type": "string", "enum": ["perl-corpus", "system-perl"] },
+    "selection_reason": { "type": "string" },
+    "manifest_fingerprint": { "type": "string" },
+    "base_sha": { "type": "string" },
+    "head_sha": { "type": "string" },
+    "metrics": {
+      "type": "object",
+      "required": ["base", "head"],
+      "properties": {
+        "base": { "$ref": "#/$defs/metrics" },
+        "head": { "$ref": "#/$defs/metrics" }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/violation" }
+    },
+    "ratchet_opportunity": { "type": "boolean" },
+    "verdict": { "type": "string", "enum": ["pass", "fail"] },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "metrics": {
+      "type": "object",
+      "required": [
+        "selected",
+        "panic_count",
+        "timeout_count",
+        "clean_parse_rate",
+        "error_node_count",
+        "node_kind_seen_count"
+      ],
+      "properties": {
+        "selected": { "type": "string" },
+        "concept_floors_pass": { "type": ["boolean", "null"] },
+        "panic_count": { "type": "integer", "minimum": 0 },
+        "timeout_count": { "type": "integer", "minimum": 0 },
+        "clean_parse_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "error_node_count": { "type": "integer", "minimum": 0 },
+        "node_kind_seen_count": { "type": "integer", "minimum": 0 },
+        "corpus_runtime_ms": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "violation": {
+      "type": "object",
+      "required": ["code", "level", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "level": { "type": "string", "enum": ["error", "warning"] },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

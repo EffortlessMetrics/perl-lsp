@@ -794,6 +794,22 @@ enum Commands {
     /// is wired into `just pr-fast` and `just ci-gate`.
     PublishManifestCheck,
 
+    /// Compare parser metrics between base and candidate for PR ratcheting.
+    ParserRatchet {
+        #[arg(long, default_value = "pr")]
+        profile: String,
+        #[arg(long = "base")]
+        base_sha: Option<String>,
+        #[arg(long = "head")]
+        head_sha: Option<String>,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        #[command(subcommand)]
+        command: Option<ParserRatchetCommand>,
+    },
+
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
@@ -1155,6 +1171,27 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Compare two metrics files and emit parser-ratchet receipt.
+    Compare {
+        #[arg(long, default_value = "pr")]
+        profile: String,
+        #[arg(long)]
+        base_sha: Option<String>,
+        #[arg(long)]
+        head_sha: Option<String>,
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        #[arg(long)]
+        base_metrics: PathBuf,
+        #[arg(long)]
+        head_metrics: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum CpanCorpusCommand {
     /// Fetch top N distributions from MetaCPAN by reverse dependency count
     FetchList {
@@ -1510,6 +1547,34 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::ParserRatchet { profile, base_sha, head_sha, manifest, receipt, command } => {
+            match command {
+                Some(ParserRatchetCommand::Compare {
+                    profile,
+                    base_sha,
+                    head_sha,
+                    manifest,
+                    base_metrics,
+                    head_metrics,
+                    receipt,
+                }) => parser_ratchet::compare(parser_ratchet::ParserRatchetCompareConfig {
+                    profile,
+                    base_sha,
+                    head_sha,
+                    manifest,
+                    base_metrics,
+                    head_metrics,
+                    receipt,
+                }),
+                None => parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
+                    profile,
+                    base_sha: base_sha.ok_or_else(|| eyre!("--base is required"))?,
+                    head_sha: head_sha.ok_or_else(|| eyre!("--head is required"))?,
+                    manifest: manifest.ok_or_else(|| eyre!("--manifest is required"))?,
+                    receipt: receipt.ok_or_else(|| eyre!("--receipt is required"))?,
+                }),
+            }
+        }
         Commands::ParserCorpusSweep {
             roots,
             manifest,

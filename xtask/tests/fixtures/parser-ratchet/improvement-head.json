@@ -1,0 +1,10 @@
+{
+  "selected": "perl-corpus",
+  "concept_floors_pass": true,
+  "panic_count": 0,
+  "timeout_count": 0,
+  "clean_parse_rate": 0.975,
+  "error_node_count": 115,
+  "node_kind_seen_count": 852,
+  "corpus_runtime_ms": 9999
+}

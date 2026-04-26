@@ -1,0 +1,9 @@
+{
+  "selected": "system-perl",
+  "panic_count": 3,
+  "timeout_count": 1,
+  "clean_parse_rate": 0.918,
+  "error_node_count": 312,
+  "node_kind_seen_count": 699,
+  "corpus_runtime_ms": 8050
+}
