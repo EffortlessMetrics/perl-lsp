@@ -1,0 +1,12 @@
+# Required check names policy (planning scaffold).
+#
+# This file is informational unless and until the ruleset rollout is approved.
+
+[metadata]
+status = "draft"
+source_of_truth = "GitHub repository ruleset"
+notes = "Keep this aligned with final aggregator check names before required_status_checks enforcement."
+
+[required_checks]
+# Populate with final aggregator check names after observation criteria are met.
+contexts = []
