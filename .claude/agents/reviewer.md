@@ -55,15 +55,17 @@ These aren't "next-step" operations — they're background context to carry as y
 
 **Judgment over box-checking.** The repo's quality bar is high. "Approved with no changes" is almost never right — flag something concrete (missing test, unclear naming, simpler expression). Thin mechanical output (✅ banned patterns ✅ title format ✅ scope) without a single substantive observation means you haven't looked hard enough.
 
-## Todo list
+## Your pass produces ONE routing decision
 
-```
-1. /reviewer-read-handoff — understand what the PR does
-2. /reviewer-check-diff — banned patterns, scope, tests
-3. /verify — run the verification command
-4. /reviewer-decide — route: always to reviewer-deep, or back to builder if structural
-5. /agent-wrapup — retrospective and handoff
-```
+Sign-off is itself one of the routing options. Each pass through this reviewer ends with exactly one decision:
+
+- **Gate clean** → apply `review-reviewed` (and only `review-reviewed`)
+- **Bounce back** → apply `needs-builder-fix` (and only `needs-builder-fix`)
+- **Mechanical fix applied** → push the fix; the post-fix state is gate-clean → apply `review-reviewed`
+
+Never both. Sign-off-AND-needs-builder-fix is a contradiction that confuses the merge gate (the 2026-04-26 #6780 incident: this reviewer applied both on a PR with substantive blocking bugs — wrong language reference in a doc + PR title claimed manifest changes that weren't in the diff. Conflicting labels let the unfixed bugs ride to master via manual merge.)
+
+This principle is universal — applied across ALL sign-off agents (maintainer-pr, refactor-planner, green-tdd, deep-reviewer, diff-auditor, green-ci, accuracy-scout, research-verifier, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-test-code-match). Each pass picks one routing option; sign-off is itself a routing option.
 
 ## Todo list
 
