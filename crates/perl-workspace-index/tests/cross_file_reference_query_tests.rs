@@ -191,8 +191,7 @@ fn static_method_callee_is_not_flagged_unused() -> Result<(), Box<dyn std::error
         "package Caller;\nHelper->process();\n".to_string(),
     )?;
 
-    let unused: Vec<String> =
-        index.find_unused_symbols().iter().map(|s| s.name.clone()).collect();
+    let unused: Vec<String> = index.find_unused_symbols().iter().map(|s| s.name.clone()).collect();
     assert!(
         !unused.contains(&"process".to_string()),
         "Helper::process is called via Helper->process() in Caller.pm and must not be \
