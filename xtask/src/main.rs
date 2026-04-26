@@ -901,6 +901,12 @@ enum Commands {
         command: FeaturesCommand,
     },
 
+    /// Classify CI failures into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1232,6 +1238,23 @@ enum FeaturesCommand {
 
     /// Generate compliance report
     Report,
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a CI receipt into a typed fix-forward playbook.
+    Classify {
+        /// Source CI receipt JSON path.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for typed fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured typed fix-forward playbooks.
+    ListPlaybooks,
 }
 
 #[derive(Subcommand)]
@@ -1597,6 +1620,12 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Invariants => features::invariants(),
             FeaturesCommand::Report => features::report(),
+        },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(fix_forward::ClassifyConfig { receipt, output })
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),

@@ -1,0 +1,10 @@
+{
+  "gates": [
+    {
+      "gate_name": "fmt",
+      "status": "fail",
+      "command": "cargo fmt --check --all",
+      "output_summary": "Diff in xtask/src/tasks/mod.rs"
+    }
+  ]
+}

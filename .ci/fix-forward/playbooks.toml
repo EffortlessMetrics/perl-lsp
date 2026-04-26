@@ -1,0 +1,37 @@
+[[playbook]]
+kind = "FMT_ONLY"
+safe_auto_fix = true
+command = "cargo xtask fmt"
+branch_prefix = "fix-forward/fmt"
+next_agent = "builder"
+
+[[playbook]]
+kind = "TITLE_FIX"
+safe_auto_fix = true
+mutation = "github_pr_title_only"
+next_agent = "orchestrator"
+
+[[playbook]]
+kind = "STALE_BASE_CASCADE"
+safe_auto_fix = false
+route = "cascade-update"
+next_agent = "cascade"
+
+[[playbook]]
+kind = "GENERATED_DOC_REGEN"
+safe_auto_fix = false
+command = "cargo xtask status-docs"
+route = "docs"
+next_agent = "builder"
+
+[[playbook]]
+kind = "INFRA_ADVISORY_DEMOTION"
+safe_auto_fix = false
+route = "infra"
+next_agent = "infra"
+
+[[playbook]]
+kind = "PARSER_RATCHET_REGRESSION"
+safe_auto_fix = false
+route = "parser-builder"
+next_agent = "parser-builder"

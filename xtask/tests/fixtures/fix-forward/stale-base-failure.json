@@ -1,0 +1,14 @@
+{
+  "gates": [
+    {
+      "gate_name": "merge-base-check",
+      "status": "fail",
+      "command": "just ci-stale-base-check",
+      "output_summary": "stale base: branch is out of date with main"
+    },
+    {
+      "gate_name": "clippy-lib",
+      "status": "skip"
+    }
+  ]
+}
