@@ -29,6 +29,7 @@ mod lsp;
 mod parser;
 mod quality;
 mod tests;
+mod token;
 mod workspace;
 
 // ---------------------------------------------------------------------------

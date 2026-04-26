@@ -14,6 +14,7 @@
 //! - No crash signatures after the request.
 
 use perl_lsp_ux_tests::{ScenarioConfig, UxHarness};
+use serde_json::json;
 use std::time::Duration;
 
 fn binary_available() -> bool {
@@ -53,7 +54,8 @@ fn scenario_10_definition_request_does_not_error() {
     std::thread::sleep(Duration::from_millis(500));
 
     // Request definition on the call site `greet('World')` — line 8, char 0.
-    let result = harness.definition("greet.pl", 8, 0);
+    let cursor = harness.position_cursor("greet.pl", 8, 0);
+    let result = harness.definition_at(&cursor);
     assert!(
         result.is_ok(),
         "textDocument/definition must not return a JSON-RPC error — feature grid regression: {:?}",
@@ -80,7 +82,8 @@ fn scenario_10_definition_result_is_location_or_empty() {
 
     std::thread::sleep(Duration::from_millis(500));
 
-    let defs = harness.definition("greet.pl", 8, 0).expect("definition must not error");
+    let cursor = harness.position_cursor("greet.pl", 8, 0);
+    let defs = harness.definition_at(&cursor).expect("definition must not error");
 
     // If results are returned they must be well-formed Location objects.
     for loc in &defs {
@@ -89,12 +92,12 @@ fn scenario_10_definition_result_is_location_or_empty() {
             "Definition result must have 'uri' and 'range' fields, got: {:?}",
             loc
         );
-        // The location must point to our file (not some unrelated URI).
-        let uri = loc["uri"].as_str().unwrap_or("");
-        assert!(
-            uri.ends_with("greet.pl"),
-            "Definition location should point to greet.pl, got uri={:?}",
-            uri
+        harness.assert_normalized_eq(
+            loc,
+            &json!({
+                "uri": "file://$WORKSPACE/greet.pl",
+                "range": loc["range"].clone(),
+            }),
         );
     }
 
@@ -115,9 +118,9 @@ fn scenario_10_definition_on_unknown_position_returns_empty() {
     harness.open_file("simple.pl", source).expect("didOpen should succeed");
 
     // Position in middle of `strict` string literal — no definition expected.
-    let defs = harness
-        .definition("simple.pl", 0, 5)
-        .expect("definition must not error on arbitrary position");
+    let cursor = harness.position_cursor("simple.pl", 0, 5);
+    let defs =
+        harness.definition_at(&cursor).expect("definition must not error on arbitrary position");
 
     // Empty is fine; what we are testing is that no crash or error occurs.
     let _ = defs;

@@ -1,3 +1,5 @@
+//! Source-text utility helpers shared by code action fix builders.
+
 use super::CodeActionsProvider;
 
 pub(super) fn ranges_overlap(r1: (usize, usize), r2: (usize, usize)) -> bool {

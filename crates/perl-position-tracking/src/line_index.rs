@@ -1,12 +1,27 @@
 //! Line index for efficient UTF-16 position calculations.
 use ropey::Rope;
 
+/// Returns true if `b` is a UTF-8 continuation byte (0b10xxxxxx).
+#[inline]
+fn is_utf8_continuation(b: u8) -> bool {
+    (b & 0b1100_0000) == 0b1000_0000
+}
+
 /// Caches byte offsets for line starts to speed up coordinate conversion.
 #[derive(Debug, Clone)]
 pub struct LineStartsCache {
     line_starts: Vec<usize>,
 }
 impl LineStartsCache {
+    /// Clamp `offset` into `text` and ensure it is on a UTF-8 char boundary.
+    fn normalize_text_offset(text: &str, offset: usize) -> usize {
+        let mut normalized = offset.min(text.len());
+        while normalized > 0 && !text.is_char_boundary(normalized) {
+            normalized -= 1;
+        }
+        normalized
+    }
+
     /// Builds a cache from UTF-8 source text.
     pub fn new(text: &str) -> Self {
         let mut ls = vec![0];
@@ -41,7 +56,7 @@ impl LineStartsCache {
 
     /// Converts a byte offset in `text` to `(line, column_utf16)`.
     pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32) {
-        let offset = offset.min(text.len());
+        let offset = Self::normalize_text_offset(text, offset);
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
         (line as u32, text[ls..offset].chars().map(|c| c.len_utf16()).sum::<usize>() as u32)
@@ -80,13 +95,30 @@ impl LineStartsCache {
 
     /// Converts a byte offset in `rope` to `(line, column_utf16)`.
     pub fn offset_to_position_rope(&self, rope: &Rope, offset: usize) -> (u32, u32) {
-        let offset = offset.min(rope.len_bytes());
+        let offset = Self::normalize_rope_offset(rope, offset);
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
         (
             line as u32,
             rope.byte_slice(ls..offset).chars().map(|c| c.len_utf16()).sum::<usize>() as u32,
         )
+    }
+
+    /// Clamp `offset` into `rope` and snap it back to a UTF-8 char boundary.
+    ///
+    /// `Rope::byte_slice` panics if the offset splits a multi-byte codepoint, so
+    /// the clamp here mirrors [`Self::normalize_text_offset`]. Ropey 1.x does
+    /// not expose `is_char_boundary` directly, so we inspect the byte at the
+    /// candidate offset: UTF-8 continuation bytes always satisfy `b & 0xC0 ==
+    /// 0x80` (top two bits are `10`), and every other byte is a codepoint
+    /// start.
+    fn normalize_rope_offset(rope: &Rope, offset: usize) -> usize {
+        let len = rope.len_bytes();
+        let mut normalized = offset.min(len);
+        while normalized > 0 && normalized < len && is_utf8_continuation(rope.byte(normalized)) {
+            normalized -= 1;
+        }
+        normalized
     }
 
     /// Converts `(line, column_utf16)` into a byte offset in `rope`.
@@ -128,10 +160,20 @@ impl LineIndex {
     /// Create a new LineIndex from source text
     pub fn new(text: String) -> Self {
         let mut line_starts = vec![0];
-        for (i, ch) in text.char_indices() {
-            if ch == '\n' {
+        let bytes = text.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'\n' {
                 line_starts.push(i + 1);
+            } else if bytes[i] == b'\r' {
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
+                    line_starts.push(i + 2);
+                    i += 1;
+                } else {
+                    line_starts.push(i + 1);
+                }
             }
+            i += 1;
         }
 
         Self { line_starts, text }

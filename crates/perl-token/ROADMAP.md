@@ -15,6 +15,10 @@ Token definitions for Perl parser
 - Address early adopter feedback.
 - Refine API contracts and error handling.
 - Improve test coverage and documentation.
+- Keep `perl-token` as a **tiny stable leaf crate** with no runtime dependencies.
+- TokenKind variants: 132
+- Conformance update rule: any new `TokenKind` must update metadata, docs, and
+  conformance tests in the same change.
 
 ### v0.15.0 Stability Contract
 - Lock down public API for semantic versioning.
