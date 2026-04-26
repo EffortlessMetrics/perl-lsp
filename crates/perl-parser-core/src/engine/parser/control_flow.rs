@@ -617,6 +617,45 @@ impl<'a> Parser<'a> {
                 None
             };
 
+            // Error.pm-style typed catch:
+            //   catch Some::Error with { ... }
+            // Keep this strict: if a class-like filter appears after `catch`,
+            // require the `with` keyword before the block.
+            if var.is_none() && self.peek_kind() != Some(TokenKind::LeftBrace) {
+                let mut consumed_filter = false;
+                while let Some(kind) = self.peek_kind() {
+                    let is_component =
+                        kind == TokenKind::Identifier && self.tokens.peek()?.text.as_ref() != "with";
+                    if is_component {
+                        self.consume_token()?;
+                        consumed_filter = true;
+                        continue;
+                    }
+
+                    if kind == TokenKind::DoubleColon {
+                        self.consume_token()?;
+                        consumed_filter = true;
+                        continue;
+                    }
+
+                    break;
+                }
+
+                if consumed_filter {
+                    if self.peek_kind() == Some(TokenKind::Identifier)
+                        && self.tokens.peek()?.text.as_ref() == "with"
+                    {
+                        self.consume_token()?; // consume `with`
+                    } else {
+                        let error_pos = self.current_position();
+                        self.errors.push(ParseError::syntax(
+                            "Expected 'with' before catch block",
+                            error_pos,
+                        ));
+                    }
+                }
+            }
+
             let block = self.parse_block()?;
             catch_blocks.push((var, block));
         }
