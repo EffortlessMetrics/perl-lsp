@@ -406,6 +406,17 @@ enum Commands {
     /// Check for disallowed direct `ExitStatus::from_raw()` usage.
     CheckFromRaw,
 
+    /// Lint GitHub Actions workflows for security and policy compliance.
+    WorkflowPolicyLint {
+        /// Optional output path for JSON receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single workflow fixture file instead of repository workflows.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -1464,6 +1475,12 @@ fn main() -> Result<()> {
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
+        Commands::WorkflowPolicyLint { receipt, fixture } => {
+            workflow_policy_lint::run(workflow_policy_lint::WorkflowPolicyLintConfig {
+                receipt,
+                fixture,
+            })
+        }
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
         Commands::ProductionGatesValidation => hardening::production_gates_validation(),

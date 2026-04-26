@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://perl-lsp.dev/schemas/workflow-policy.schema.json",
+  "title": "Workflow policy lint receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "lint",
+    "passed",
+    "errors",
+    "warnings",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "lint": { "const": "workflow-policy" },
+    "passed": { "type": "boolean" },
+    "errors": { "type": "integer", "minimum": 0 },
+    "warnings": { "type": "integer", "minimum": 0 },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "rule", "workflow", "message"],
+        "properties": {
+          "severity": { "enum": ["error", "warning"] },
+          "rule": { "type": "string" },
+          "workflow": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

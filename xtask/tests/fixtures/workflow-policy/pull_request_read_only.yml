@@ -1,0 +1,21 @@
+name: fixture pull_request read only
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixture-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: echo "safe"
