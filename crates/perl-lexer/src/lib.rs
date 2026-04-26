@@ -1622,10 +1622,14 @@ impl<'a> PerlLexer<'a> {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
-                        // A bare sigil token used for dereference (`${...}`, `@{...}`,
-                        // `%{...}`) must still allow the following `{` to be treated as
-                        // the dereference opener, not a block opener.
-                        self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
+                        // A standalone sigil token before `{` starts a dereference
+                        // sequence (e.g. `${$ref}` / `@{$aref}` / `%{$href}` / `&{$cref}`).
+                        // Mark it as subscript-capable so `{` increments brace depth
+                        // and the closing `}` can enable chained `{...}` subscripts.
+                        // (Broader form than master's `$|@|%` filter — `*` is already
+                        // excluded by the `is_deref` guard above and `&` deref also
+                        // benefits from chained-subscript handling.)
+                        self.after_var_subscript = true;
 
                         return Some(Token {
                             token_type: TokenType::Identifier(Arc::from(text)),
@@ -1702,8 +1706,8 @@ impl<'a> PerlLexer<'a> {
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
-                            // Preserve `{` as dereference opener for $, @, % sigils.
-                            self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
+                            // Same as above: sigil-only token means a dereference opener.
+                            self.after_var_subscript = true;
 
                             return Some(Token {
                                 token_type: TokenType::Identifier(Arc::from(text)),
