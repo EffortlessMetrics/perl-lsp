@@ -749,7 +749,8 @@ impl ClassModelBuilder {
         // Determine accessor name: explicit accessor/reader overrides default
         let explicit_accessor = options.get("accessor").or_else(|| options.get("reader")).cloned();
 
-        for name in names {
+        for raw_name in names {
+            let Some(name) = normalize_attribute_name(raw_name) else { continue };
             let accessor_name = explicit_accessor.clone().unwrap_or_else(|| name.clone());
 
             // builder => 1 derives `_build_<attr>`; a string value names the method directly
@@ -1190,6 +1191,12 @@ fn normalize_symbol_name(raw: &str) -> Option<String> {
     if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
 }
 
+fn normalize_attribute_name(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    let without_override_prefix = trimmed.strip_prefix('+').unwrap_or(trimmed);
+    normalize_symbol_name(without_override_prefix)
+}
+
 fn expand_symbol_list(raw: &str) -> Vec<String> {
     let raw = raw.trim();
 
@@ -1588,6 +1595,24 @@ has 'name' => (is => 'ro', reader => 'get_name');
 
         let model = &models[0];
         assert_eq!(model.attributes[0].accessor_name, "get_name");
+    }
+
+    #[test]
+    fn inherited_attribute_override_strips_plus_prefix() {
+        let models = build_models(
+            r#"
+use Moo;
+has '+name' => (is => 'ro', builder => 1, predicate => 1, clearer => 1);
+"#,
+        );
+
+        let model = &models[0];
+        let attr = &model.attributes[0];
+        assert_eq!(attr.name, "name");
+        assert_eq!(attr.accessor_name, "name");
+        assert_eq!(attr.builder.as_deref(), Some("_build_name"));
+        assert_eq!(attr.predicate.as_deref(), Some("has_name"));
+        assert_eq!(attr.clearer.as_deref(), Some("clear_name"));
     }
 
     #[test]

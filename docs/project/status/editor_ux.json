@@ -1,4 +1,7 @@
 {
+  "schema_version": 1,
+  "receipt_kind": "planning_scaffold",
+  "scorecard": "editor_ux",
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
     "scenario_count": 17,
@@ -22,30 +25,47 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
     ]
   },
-  "integration_points": {
-    "ci_lane": "just ux-tests",
-    "quality_surface": "docs/project/status/quality.md",
-    "release_lane": "just ux-tests-full",
-    "status_update": "cargo xtask update-status --only quality"
-  },
-  "receipt_kind": "planning_scaffold",
-  "schema_version": 1,
-  "scorecard": "editor_ux",
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
     },
     {
       "name": "workflow_stability_rate",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
-      "owner": "perl-lsp-ux-tests",
-      "state": "planned"
+      "state": "planned",
+      "owner": "perl-lsp-ux-tests"
     }
-  ]
+  ],
+  "confidence_signals": [
+    {
+      "name": "manual_editor_smoke",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 16
+    },
+    {
+      "name": "first_five_minutes_harness",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 17
+    },
+    {
+      "name": "issue_burndown_regression_guard",
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "workflow_count": 7
+    }
+  ],
+  "integration_points": {
+    "ci_lane": "just ux-tests",
+    "release_lane": "just ux-tests-full",
+    "status_update": "cargo xtask update-status --only quality",
+    "quality_surface": "docs/project/status/quality.md"
+  }
 }

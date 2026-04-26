@@ -137,6 +137,11 @@ mod corpus_gap_tests {
         test_corpus_file("tie_interface.pl")
     }
 
+    #[test]
+    fn test_regex_timeout_hardening() -> Result<(), Box<dyn std::error::Error>> {
+        test_corpus_file("regex_timeout_hardening.pl")
+    }
+
     /// Regression: anonymous sub as expression initializer (`my $c = sub { 1 };`)
     /// must produce a subroutine node inside the initializer (locks down peek_second() fix).
     #[test]

@@ -1,11 +1,14 @@
+//! Quote-like operator helpers for the lexer.
+//!
+//! This module centralizes metadata and utility functions used while tokenizing
+//! Perl quote-like operators:
+//! - quote operators (`q`, `qq`, `qw`, `qr`, `qx`)
+//! - regex operators (`m`, `s`)
+//! - transliteration operators (`tr`, `y`)
+//!
+//! Modifier validation now lives in the parser, but canonicalization and
+//! operator-to-token mapping remain here for lexing and shared normalization.
 use crate::TokenType;
-/// Quote operator handling with uniform delimiter processing and modifier attachment
-///
-/// This module provides consistent handling for all Perl quote-like operators:
-/// - q/qq/qw/qr/qx for quote operators
-/// - m for match operators  
-/// - s for substitution operators
-/// - tr/y for transliteration operators
 use std::sync::Arc;
 
 /// Specification for which modifiers are allowed for each operator

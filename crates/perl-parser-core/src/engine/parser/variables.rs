@@ -93,6 +93,12 @@ impl<'a> Parser<'a> {
                 // For local, parse a general lvalue expression
                 self.parse_assignment()?
             } else {
+                // Legacy typed lexical declarations are used by pseudo-hash `fields`-style code:
+                //     my Package::Type $self = shift;
+                // Perl accepts this syntax; consume the optional leading type token so that
+                // parsing continues at the declared variable.
+                self.consume_legacy_decl_type_constraint()?;
+
                 // For my/our/state, parse a simple variable
                 let var = self.parse_variable()?;
                 // If -> follows the declared variable, treat it as an lvalue subscript chain
@@ -154,6 +160,51 @@ impl<'a> Parser<'a> {
             );
             Ok(node)
         }
+    }
+
+    /// Consume an optional legacy type constraint in lexical declarations.
+    ///
+    /// This supports old pseudo-hash style declarations like:
+    /// `my Debconf::DbDriver $this = shift;`
+    ///
+    /// The type constraint is intentionally ignored in the AST for now.
+    fn consume_legacy_decl_type_constraint(&mut self) -> ParseResult<()> {
+        if self.peek_kind() != Some(TokenKind::Identifier) {
+            return Ok(());
+        }
+
+        let looks_like_type = {
+            let current = self.tokens.peek()?;
+            if current.text.starts_with('$')
+                || current.text.starts_with('@')
+                || current.text.starts_with('%')
+                || current.text.starts_with('&')
+                || current.text.starts_with('*')
+            {
+                false
+            } else {
+                let next = self.tokens.peek_second()?;
+                matches!(
+                    next.kind,
+                    TokenKind::ScalarSigil
+                        | TokenKind::ArraySigil
+                        | TokenKind::HashSigil
+                        | TokenKind::SubSigil
+                        | TokenKind::GlobSigil
+                ) || (next.kind == TokenKind::Identifier
+                    && next
+                        .text
+                        .chars()
+                        .next()
+                        .is_some_and(|c| matches!(c, '$' | '@' | '%' | '&' | '*')))
+            }
+        };
+
+        if looks_like_type {
+            self.consume_token()?;
+        }
+
+        Ok(())
     }
 
     /// Parse local statement (can localize any lvalue, not just simple variables)
@@ -642,15 +693,22 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> ParseResult<Vec<Node>> {
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut params = Vec::new();
+        let mut seen_invocant_separator = false;
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             // Parse parameter
             let param = self.parse_signature_param()?;
             params.push(param);
 
-            // Check for comma or end of signature
+            // Check for separator or end of signature.
+            // Perl method signatures may use an invocant separator:
+            //   method run ($self: $arg1, $arg2) { ... }
+            // Treat the first `:` after a parameter as a valid separator.
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?; // consume comma
+            } else if self.peek_kind() == Some(TokenKind::Colon) && !seen_invocant_separator {
+                self.tokens.next()?; // consume invocant separator
+                seen_invocant_separator = true;
             } else if self.peek_kind() == Some(TokenKind::RightParen) {
                 break;
             } else {

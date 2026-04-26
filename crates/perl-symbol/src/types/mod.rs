@@ -117,15 +117,8 @@ pub enum SymbolKind {
 }
 
 impl SymbolKind {
-    /// Convert to LSP-compliant symbol kind number (workspace profile).
-    ///
-    /// Maps Perl symbol types to the closest LSP protocol equivalents.
-    /// This is the default mapping used for workspace symbols where a
-    /// generic "Variable" kind is appropriate for all variable types.
-    ///
-    /// See the enum documentation for the full mapping table.
     #[inline]
-    pub const fn to_lsp_kind(self) -> u32 {
+    const fn base_lsp_kind(self) -> u32 {
         match self {
             SymbolKind::Package => 2,      // Module
             SymbolKind::Class => 5,        // Class
@@ -139,6 +132,18 @@ impl SymbolKind {
             SymbolKind::Label => 20,       // Key
             SymbolKind::Format => 23,      // Struct
         }
+    }
+
+    /// Convert to LSP-compliant symbol kind number (workspace profile).
+    ///
+    /// Maps Perl symbol types to the closest LSP protocol equivalents.
+    /// This is the default mapping used for workspace symbols where a
+    /// generic "Variable" kind is appropriate for all variable types.
+    ///
+    /// See the enum documentation for the full mapping table.
+    #[inline]
+    pub const fn to_lsp_kind(self) -> u32 {
+        self.base_lsp_kind()
     }
 
     /// Convert to LSP symbol kind with richer variable type distinctions.
@@ -157,19 +162,10 @@ impl SymbolKind {
     #[inline]
     pub const fn to_lsp_kind_document_symbol(self) -> u32 {
         match self {
-            SymbolKind::Package => 2,                    // Module
-            SymbolKind::Class => 5,                      // Class
-            SymbolKind::Role => 8,                       // Interface
-            SymbolKind::Subroutine => 12,                // Function
-            SymbolKind::Method => 6,                     // Method
             SymbolKind::Variable(VarKind::Scalar) => 13, // Variable
             SymbolKind::Variable(VarKind::Array) => 18,  // Array
             SymbolKind::Variable(VarKind::Hash) => 19,   // Object
-            SymbolKind::Constant => 14,                  // Constant
-            SymbolKind::Import => 2,                     // Module
-            SymbolKind::Export => 12,                    // Function
-            SymbolKind::Label => 20,                     // Key
-            SymbolKind::Format => 23,                    // Struct
+            _ => self.base_lsp_kind(),
         }
     }
 
@@ -275,6 +271,26 @@ mod tests {
         assert_eq!(SymbolKind::Variable(VarKind::Scalar).to_lsp_kind_document_symbol(), 13); // Variable
         assert_eq!(SymbolKind::Variable(VarKind::Array).to_lsp_kind_document_symbol(), 18); // Array
         assert_eq!(SymbolKind::Variable(VarKind::Hash).to_lsp_kind_document_symbol(), 19); // Object
+    }
+
+    #[test]
+    fn test_non_variable_document_mapping_matches_workspace_mapping() {
+        let non_variable_kinds = [
+            SymbolKind::Package,
+            SymbolKind::Class,
+            SymbolKind::Role,
+            SymbolKind::Subroutine,
+            SymbolKind::Method,
+            SymbolKind::Constant,
+            SymbolKind::Import,
+            SymbolKind::Export,
+            SymbolKind::Label,
+            SymbolKind::Format,
+        ];
+
+        for kind in non_variable_kinds {
+            assert_eq!(kind.to_lsp_kind_document_symbol(), kind.to_lsp_kind());
+        }
     }
 
     #[test]

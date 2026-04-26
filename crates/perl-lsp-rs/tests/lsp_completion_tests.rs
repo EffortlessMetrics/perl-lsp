@@ -3,10 +3,26 @@ use serde_json::json;
 
 mod common;
 use common::{
-    completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
-    start_lsp_server,
+    completion_items, drain_until_quiet, initialize_lsp, initialize_lsp_with_capabilities,
+    send_notification, send_request, start_lsp_server,
 };
 use std::time::Duration;
+
+fn completion_item_caps(
+    snippet_support: bool,
+    commit_characters_support: bool,
+) -> serde_json::Value {
+    json!({
+        "textDocument": {
+            "completion": {
+                "completionItem": {
+                    "snippetSupport": snippet_support,
+                    "commitCharactersSupport": commit_characters_support
+                }
+            }
+        }
+    })
+}
 
 /// Test basic variable completion
 #[test]
@@ -857,7 +873,7 @@ Cwd::"#
 #[test]
 fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test.pl";
     send_notification(
@@ -1038,6 +1054,109 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Test that completion ranking respects lexical scope distance.
+///
+/// A variable declared in the immediately-enclosing block (Immediate scope,
+/// sort key 'a') must rank before a variable declared at file scope
+/// (PackageLevel, sort key 'c') when both share the same completion prefix.
+///
+/// Uses *distinct* variable names (`$scope_inner` vs `$scope_outer`) so
+/// `deduplicate_and_sort()` keeps both items — the critical design fix
+/// identified in plan-review: shadowed same-name variables collapse to one
+/// entry and make the ranking assertion dead code.
+#[test]
+fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp(&server);
+
+    let uri = "file:///test_scope_ranking.pl";
+    // $scope_outer declared at file scope → PackageLevel distance from inner block.
+    // $scope_inner declared inside the block → Immediate distance from the cursor.
+    // Both match the "$scope" prefix; distinct labels survive deduplicate_and_sort().
+    let code = "my $scope_outer = 1;\n{\n    my $scope_inner = 2;\n    my $x = $scope\n}\n";
+
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": code
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    // Line 3 is "    my $x = $scope" (18 chars); character 18 places the cursor
+    // immediately after '$scope', triggering prefix-based completion.
+    let target_line = code.lines().position(|l| l.ends_with("$scope")).unwrap_or(3);
+    let target_char = code.lines().nth(target_line).map(|l| l.len()).unwrap_or(18);
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": target_line as i32, "character": target_char as i32 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+
+    let inner_item = items
+        .iter()
+        .find(|item| item["label"].as_str().map(|s| s == "$scope_inner").unwrap_or(false));
+    let outer_item = items
+        .iter()
+        .find(|item| item["label"].as_str().map(|s| s == "$scope_outer").unwrap_or(false));
+
+    assert!(inner_item.is_some(), "$scope_inner should appear in completions");
+    assert!(outer_item.is_some(), "$scope_outer should appear in completions");
+
+    let inner_sort = inner_item.unwrap()["sortText"].as_str().unwrap_or("");
+    let outer_sort = outer_item.unwrap()["sortText"].as_str().unwrap_or("");
+
+    // Immediate scope → sort key 'a' → sort_text "1a_scope_inner"
+    // PackageLevel (file-scope `my`) → sort key 'c' → sort_text "1c_scope_outer"
+    //
+    // Guard that sortText is actually present in the wire response.  Without
+    // this check the `!outer_sort.starts_with("1a_")` assertion passes vacuously
+    // when sortText is absent (empty string does not start with "1a_").
+    assert!(
+        !inner_sort.is_empty(),
+        "$scope_inner must have a non-empty sortText — check that completion.rs \
+         serializes sort_text to the LSP wire response"
+    );
+    assert!(
+        !outer_sort.is_empty(),
+        "$scope_outer must have a non-empty sortText — check that completion.rs \
+         serializes sort_text to the LSP wire response"
+    );
+    assert!(
+        inner_sort.starts_with("1a_"),
+        "$scope_inner should have Immediate scope sort_text (\"1a_...\"), got: '{inner_sort}'"
+    );
+    assert!(
+        !outer_sort.starts_with("1a_"),
+        "$scope_outer should NOT have Immediate scope sort_text, got: '{outer_sort}'"
+    );
+    assert!(
+        inner_sort < outer_sort,
+        "$scope_inner (immediate) should sort before $scope_outer (package): \
+         '{inner_sort}' vs '{outer_sort}'"
+    );
+
+    Ok(())
+}
+
 /// Test completion with incremental typing
 #[test]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
@@ -1184,7 +1303,7 @@ $prefi"#
 #[test]
 fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_fn.pl";
     send_notification(
@@ -1245,7 +1364,7 @@ fn test_function_completion_has_commit_characters() -> Result<(), Box<dyn std::e
 #[test]
 fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_var.pl";
     send_notification(
@@ -1303,6 +1422,66 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Test that module completions include namespace-friendly commit characters.
+#[test]
+fn test_module_completion_has_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let server = start_lsp_server();
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
+
+    let uri = "file:///test_commit_module.pl";
+    send_notification(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "package My::Module;\npackage My::Other;\nMy::"
+                }
+            }
+        }),
+    );
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+    let response = send_request(
+        &server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 4 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    // Find a Module-kind item (LSP kind 9 = Module)
+    let module_item = items.iter().find(|item| item["kind"] == 9);
+    let module_item = module_item.ok_or("Should have at least one module completion")?;
+
+    let commit_chars = module_item["commitCharacters"]
+        .as_array()
+        .ok_or("Module completions must have commitCharacters")?;
+
+    assert!(commit_chars.iter().any(|c| c == ":"), "Module commit chars should include ':'");
+    assert!(commit_chars.iter().any(|c| c == ";"), "Module commit chars should include ';'");
+
+    for ch in commit_chars {
+        let s = ch.as_str().ok_or("commit char must be string")?;
+        assert_eq!(
+            s.chars().count(),
+            1,
+            "Commit char '{s}' must be a single character per LSP spec"
+        );
+    }
+
+    Ok(())
+}
+
 /// Test that keyword completions do NOT include commit characters.
 ///
 /// Uses "retur" as the prefix because "return" is a plain Keyword (not a snippet),
@@ -1313,7 +1492,7 @@ fn test_variable_completion_has_commit_characters() -> Result<(), Box<dyn std::e
 #[test]
 fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
-    initialize_lsp(&server);
+    initialize_lsp_with_capabilities(&server, completion_item_caps(true, true));
 
     let uri = "file:///test_commit_kw.pl";
     send_notification(
@@ -1367,6 +1546,91 @@ fn test_keyword_completion_has_no_commit_characters() -> Result<(), Box<dyn std:
             "Keyword '{}' should not have commitCharacters",
             kw["label"]
         );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_cross_editor_completion_capability_profiles() -> Result<(), Box<dyn std::error::Error>> {
+    let profiles = [
+        ("vscode", completion_item_caps(true, true), true, true),
+        ("zed", completion_item_caps(true, false), true, false),
+        ("neovim", completion_item_caps(false, false), false, false),
+        ("helix", completion_item_caps(false, false), false, false),
+    ];
+
+    for (name, capabilities, expect_snippet_format, expect_commit_chars) in profiles {
+        let server = start_lsp_server();
+        initialize_lsp_with_capabilities(&server, capabilities);
+
+        let uri = format!("file:///cross_editor_{name}.pl");
+        send_notification(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": "perl",
+                        "version": 1,
+                        "text": "my $my_var = 1;\n$my_\nfo"
+                    }
+                }
+            }),
+        );
+        drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(2000));
+
+        let variable_completion = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 1, "character": 4 }
+                }
+            }),
+        );
+        let variable_items = completion_items(&variable_completion);
+        let variable_item =
+            variable_items.iter().find(|item| item["kind"] == 6).ok_or_else(|| {
+                format!("profile '{name}' should return at least one variable completion")
+            })?;
+
+        let has_commit_chars =
+            variable_item.get("commitCharacters").and_then(|v| v.as_array()).is_some();
+        assert_eq!(
+            has_commit_chars, expect_commit_chars,
+            "profile '{name}' commitCharacters parity mismatch"
+        );
+
+        let snippet_completion = send_request(
+            &server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": 2, "character": 2 }
+                }
+            }),
+        );
+        let snippet_items = completion_items(&snippet_completion);
+        let foreach_item = snippet_items
+            .iter()
+            .find(|item| item["label"] == "foreach")
+            .ok_or_else(|| format!("profile '{name}' should return foreach snippet completion"))?;
+
+        let insert_text_format = foreach_item["insertTextFormat"]
+            .as_i64()
+            .ok_or_else(|| format!("profile '{name}' missing insertTextFormat"))?;
+        if expect_snippet_format {
+            assert_eq!(insert_text_format, 2, "profile '{name}' should keep snippet format");
+        } else {
+            assert_eq!(insert_text_format, 1, "profile '{name}' should degrade snippet format");
+        }
     }
 
     Ok(())

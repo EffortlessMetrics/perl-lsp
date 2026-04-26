@@ -4122,15 +4122,14 @@ fn find_hash_comment_start(line: &str, perl_mode: bool) -> Option<usize> {
                 if perl_mode {
                     return Some(idx);
                 }
-                if let Some(prev) = line[..idx].chars().next_back() {
-                    if prev.is_whitespace()
+                if let Some(prev) = line[..idx].chars().next_back()
+                    && (prev.is_whitespace()
                         || matches!(
                             prev,
                             ';' | '{' | '}' | '(' | ')' | '[' | ']' | '&' | '|' | '<' | '>' | ','
-                        )
-                    {
-                        return Some(idx);
-                    }
+                        ))
+                {
+                    return Some(idx);
                 }
             }
             _ => {}

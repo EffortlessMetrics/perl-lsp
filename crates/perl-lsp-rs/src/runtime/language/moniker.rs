@@ -28,9 +28,12 @@ impl LspServer {
 
                     // Find the symbol at the cursor position
                     let current_pkg = crate::declaration::current_package_at(ast, offset);
-                    if let Some(key) =
-                        crate::declaration::symbol_at_cursor(ast, offset, current_pkg)
-                    {
+                    if let Some(key) = crate::declaration::symbol_at_cursor_with_source(
+                        ast,
+                        offset,
+                        current_pkg,
+                        &doc.text,
+                    ) {
                         let mut monikers = Vec::new();
 
                         // Determine moniker properties based on symbol context
@@ -307,7 +310,11 @@ impl LspServer {
     ///
     /// Searches `use` statements for the symbol name, handling both bare imports
     /// and `qw<...>` style import lists with all delimiter types.
-    fn find_import_source(&self, ast: &crate::ast::Node, symbol_name: &str) -> Option<String> {
+    pub(crate) fn find_import_source(
+        &self,
+        ast: &crate::ast::Node,
+        symbol_name: &str,
+    ) -> Option<String> {
         use perl_parser::ast::NodeKind;
 
         fn require_module_name(node: &crate::ast::Node) -> Option<String> {

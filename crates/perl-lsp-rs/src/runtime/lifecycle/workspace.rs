@@ -444,4 +444,37 @@ include_paths = ["other_lib"]
             );
         }
     }
+    #[test]
+    fn request_workspace_configuration_supersedes_older_pending_requests() {
+        let server = LspServer::new();
+        server.client_capabilities.lock().workspace_configuration_support = true;
+
+        let temp = tempfile::tempdir().expect("failed to create temp dir");
+        let folder = temp.path().join("folder");
+        std::fs::create_dir_all(&folder).expect("failed to create folder");
+        let uri = url::Url::from_directory_path(&folder).expect("failed to create uri").to_string();
+
+        server.workspace_folders.lock().push(
+            crate::runtime::workspace_folder::WorkspaceFolderState::new(uri)
+                .with_path(folder.clone()),
+        );
+        let expected_uri = server.workspace_folders.lock()[0].uri.clone();
+
+        server.pending_workspace_configuration_requests.lock().insert(
+            1,
+            crate::runtime::PendingWorkspaceConfigurationRequest {
+                folder_uris: vec!["file:///stale".to_string()],
+                includes_global_item: true,
+                created_at: std::time::Instant::now(),
+            },
+        );
+
+        server.request_workspace_configuration_for_folders();
+
+        let pending = server.pending_workspace_configuration_requests.lock();
+        assert_eq!(pending.len(), 1, "only latest request should remain pending");
+        let pending_request = pending.values().next().expect("missing pending request");
+        assert_eq!(pending_request.folder_uris.len(), 1);
+        assert_eq!(pending_request.folder_uris[0], expected_uri);
+    }
 }

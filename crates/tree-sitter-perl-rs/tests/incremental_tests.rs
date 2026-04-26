@@ -187,3 +187,37 @@ fn when_reparse_after_edit_then_new_tree_has_correct_ast() {
         "new tree must have at least one child for 'sub foo'"
     );
 }
+
+#[test]
+fn when_parse_with_old_tree_given_unchanged_source_then_old_tree_is_reused() {
+    let mut parser = Parser::new();
+    let old_tree = must_some(parser.parse("my $x = 1;"));
+
+    let reparsed = must_some(parser.parse_with_old_tree("my $x = 1;", &old_tree));
+
+    assert_eq!(reparsed, old_tree, "unchanged source should return the existing tree");
+}
+
+#[test]
+fn when_parse_with_old_tree_given_unchanged_source_but_pending_edits_then_tree_is_reparsed() {
+    let mut parser = Parser::new();
+    let mut old_tree = must_some(parser.parse("my $x = 1;"));
+
+    let edit = Edit::new(
+        8,
+        9,
+        10,
+        Position::new(8, 0, 8),
+        Position::new(9, 0, 9),
+        Position::new(10, 0, 10),
+    );
+    old_tree.edit(&edit);
+
+    let reparsed = must_some(parser.parse_with_old_tree("my $x = 1;", &old_tree));
+
+    assert_ne!(
+        reparsed, old_tree,
+        "pending edits should disable unchanged-source reuse and force a reparse"
+    );
+    assert_eq!(reparsed.source(), "my $x = 1;");
+}

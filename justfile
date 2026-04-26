@@ -48,13 +48,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     START=$(date +%s)
     just _timed "fmt-check" "just fmt-check" && \
+    just _timed "release-history" "just ci-release-history" && \
     just _timed "readme-heading-check" "just readme-heading-check" && \
     just _timed "clippy-core" "just clippy-core" && \
     just _timed "test-core" "just test-core" && \
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -63,13 +65,15 @@ pr-fast: _check-tools-basic
     echo "=============================================="
     exit $RC
 
-# Compile-only gate: catches integration-test and benchmark bit-rot without
-# incurring full test runtime (~30-45 s). Matches the workspace excludes used
-# by the rest of the CI gates (tree-sitter-perl, fuzz, archive are excluded
-# from the workspace Cargo.toml so --workspace picks only the 134 crates).
+# Compile-only gate: catches integration-test/benchmark bit-rot and also
+# validates feature-gated code paths without incurring full test runtime.
+# Matches the workspace excludes used by the rest of the CI gates
+# (tree-sitter-perl, fuzz, archive are excluded from Cargo.toml workspace).
 check-all-targets:
-    @echo "Compiling all targets (lib, bins, tests, benches) — bit-rot check..."
+    @echo "Compiling all targets (default features) — bit-rot check..."
     cargo check --workspace --all-targets --locked
+    @echo "Compiling all targets (all features) — deep verification check..."
+    cargo check --workspace --all-targets --all-features --locked
     @echo "All targets compile clean."
 
 # Fail if README.md has duplicate level-2 headings. Helps catch accidental
@@ -101,6 +105,7 @@ merge-gate: _check-tools-basic pr-fast
     START=$(date +%s)
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
+    just _timed "check-all-targets" "just check-all-targets" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
     just _timed "lsp-bdd" "just ci-lsp-bdd" && \
@@ -330,13 +335,16 @@ mutation-regression:
 fuzz-bounded:
     @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
     @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
+    @cargo +nightly fuzz run declaration_parsing -- -max_total_time=60 || echo "  Declaration parsing fuzzing complete"
     @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
+    @cargo +nightly fuzz run incremental_edit_sequences -- -max_total_time=60 || echo "  Incremental edit sequences fuzzing complete"
     @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
     @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
     @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
+    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
@@ -820,12 +828,14 @@ ci-gate:
     just ci-check-no-nested-lock && \
     just ci-format && \
     just ci-docs-check && \
+    just ci-release-history && \
     just status-check && \
     just ci-clippy-gate && \
     just ci-unwrap-panic-ratchet && \
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
+    just check-all-targets && \
     just common-corpus-check && \
     just ci-policy && \
     just ci-v2-bundle-sync && \
@@ -844,7 +854,8 @@ ci-gate:
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
-    just ci-published-crate-count
+    just ci-published-crate-count && \
+    just ci-release-history-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -852,6 +863,10 @@ ci-gate:
 gates tier='merge-gate' *args='':
     @echo "🧾 Running gate runner (tier: {{tier}})..."
     cargo xtask gates --tier {{tier}} --receipt {{args}}
+
+# Validate release-history surfaces (tags ↔ ledger ↔ notes ↔ changelog).
+ci-release-history:
+    bash scripts/check_release_history.sh
 
 # Run gates with JSON output (for CI)
 gates-json tier='merge-gate':
@@ -958,6 +973,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Release-history drift check: tags, notes, ledger, changelog
+ci-release-history-check:
+    @echo "📚 Checking release-history surface drift..."
+    bash scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
 ci-publish-manifest-check:
@@ -2005,13 +2026,16 @@ fuzz-check-crashes:
 fuzz-regression duration='30':
     @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
     @just fuzz builtin_functions {{duration}} || true
+    @just fuzz declaration_parsing {{duration}} || true
     @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz incremental_edit_sequences {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
     @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz utf16_roundtrip {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"

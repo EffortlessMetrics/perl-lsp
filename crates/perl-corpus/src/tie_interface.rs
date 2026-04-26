@@ -277,6 +277,14 @@ $obj->clear();
 "#,
     },
     TieInterfaceCase {
+        id: "tied.direct.method.call",
+        description: "Call method directly on tied() return value.",
+        tags: &["tie", "tied", "method", "hash"],
+        source: r#"tie my %cache, 'Tie::StdHash';
+tied(%cache)->CLEAR();
+"#,
+    },
+    TieInterfaceCase {
         id: "tie.stdmodules.stdhash",
         description: "Use Tie::StdHash standard module.",
         tags: &["tie", "hash", "std-module"],

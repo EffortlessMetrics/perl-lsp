@@ -505,6 +505,8 @@ mod tests;
 #[cfg(test)]
 mod tie_tests;
 #[cfg(test)]
+mod typed_variable_declaration_tests;
+#[cfg(test)]
 mod unclosed_block_recovery_tests;
 #[cfg(test)]
 mod use_overload_tests;

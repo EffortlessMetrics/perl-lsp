@@ -20,16 +20,34 @@ pub fn add_function_completions(
 
     for (name, symbols) in &symbol_table.symbols {
         for symbol in symbols {
-            if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix_without_amp) {
+            if (symbol.kind == SymbolKind::Subroutine || symbol.kind == SymbolKind::Constant)
+                && name.starts_with(prefix_without_amp)
+            {
                 let distance =
                     compute_scope_distance(symbol_table, context.cursor_scope_id, symbol.scope_id);
+                let (kind, detail, insert_text, sort_tier) = if symbol.kind == SymbolKind::Constant
+                {
+                    (
+                        super::items::CompletionItemKind::Constant,
+                        Some("constant".to_string()),
+                        Some(name.clone()),
+                        "3",
+                    )
+                } else {
+                    (
+                        super::items::CompletionItemKind::Function,
+                        Some("sub".to_string()),
+                        Some(format!("{}()", name)),
+                        "2",
+                    )
+                };
                 completions.push(CompletionItem {
                     label: name.clone(),
-                    kind: super::items::CompletionItemKind::Function,
-                    detail: Some("sub".to_string()),
+                    kind,
+                    detail,
                     documentation: symbol.documentation.clone(),
-                    insert_text: Some(format!("{}()", name)),
-                    sort_text: Some(format!("2{}_{}", distance.sort_key(), name)),
+                    insert_text,
+                    sort_text: Some(format!("{sort_tier}{}_{}", distance.sort_key(), name)),
                     filter_text: Some(name.clone()),
                     additional_edits: vec![],
                     text_edit_range: Some((context.prefix_start, context.position)),

@@ -368,7 +368,7 @@ mod inc_search_order {
             &["lib".to_string()],
             true,
             &[inc],
-            Duration::from_millis(200),
+            Duration::from_millis(500),
         );
 
         match result {

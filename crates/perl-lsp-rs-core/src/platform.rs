@@ -3,7 +3,7 @@
 //! Extracted from `perl-dap::platform` to break the config→dap cycle
 //! and serve as a stable, reusable service layer for both LSP and DAP consumers.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::env;
 use std::path::PathBuf;
 
@@ -75,14 +75,40 @@ pub fn detect_plenv_perl() -> Option<PathBuf> {
 ///
 /// Returns an error when perl cannot be found on PATH.
 pub fn resolve_perl_path() -> Result<PathBuf> {
-    let path_env = env::var("PATH").context("PATH environment variable not set")?;
-    for path_dir in path_env.split(PATH_SEPARATOR) {
-        let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
+    if let Ok(path_env) = env::var("PATH") {
+        for path_dir in path_env.split(PATH_SEPARATOR) {
+            let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
+            if perl_path.exists() && perl_path.is_file() {
+                return Ok(perl_path);
+            }
+        }
+    }
+
+    for perl_path in termux_perl_candidates() {
         if perl_path.exists() && perl_path.is_file() {
             return Ok(perl_path);
         }
     }
-    anyhow::bail!("perl binary not found on PATH. Please install Perl or add it to PATH.")
+
+    anyhow::bail!(perl_not_found_install_message())
+}
+
+/// Candidate Perl locations used by Termux environments when PATH is minimal.
+fn termux_perl_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(prefix) = env::var("PREFIX") {
+        if !prefix.is_empty() {
+            candidates.push(PathBuf::from(prefix).join("bin").join(PERL_EXECUTABLE));
+        }
+    }
+    candidates.push(PathBuf::from("/data/data/com.termux/files/usr/bin").join(PERL_EXECUTABLE));
+    candidates
+}
+
+/// End-user remediation guidance shown when no Perl interpreter is available.
+fn perl_not_found_install_message() -> &'static str {
+    "perl binary not found on PATH. Install Perl via https://strawberryperl.com (Windows), \
+`brew install perl` (macOS), your distro package manager, or `pkg install perl` on Termux, then add it to PATH."
 }
 
 /// Return the perlbrew root directory (`PERLBREW_ROOT` or `~/perl5/perlbrew`).
@@ -159,6 +185,45 @@ mod tests {
     }
 
     #[test]
+    fn termux_candidates_include_prefix_bin_perl() {
+        let original_prefix = std::env::var("PREFIX").ok();
+
+        // SAFETY: test controls process env for the duration of this test.
+        unsafe {
+            std::env::set_var("PREFIX", "/data/data/com.termux/files/usr");
+        }
+
+        let candidates = termux_perl_candidates();
+
+        if let Some(val) = original_prefix {
+            // SAFETY: restore captured test environment value.
+            unsafe {
+                std::env::set_var("PREFIX", val);
+            }
+        } else {
+            // SAFETY: restore environment to original unset state.
+            unsafe {
+                std::env::remove_var("PREFIX");
+            }
+        }
+
+        assert!(
+            candidates.iter().any(|p| p
+                == &PathBuf::from("/data/data/com.termux/files/usr/bin").join(PERL_EXECUTABLE)),
+            "Termux PREFIX candidate should include $PREFIX/bin/{PERL_EXECUTABLE}: {candidates:?}"
+        );
+    }
+
+    #[test]
+    fn install_message_mentions_termux_pkg_command() {
+        let msg = perl_not_found_install_message();
+        assert!(
+            msg.contains("pkg install perl"),
+            "install guidance should mention Termux package install command: {msg}"
+        );
+    }
+
+    #[test]
     fn resolve_perl_path_returns_existing_binary_or_error() {
         match resolve_perl_path() {
             Ok(path) => {
@@ -170,6 +235,10 @@ mod tests {
                 assert!(
                     msg.contains("perl") || msg.contains("PATH"),
                     "error should mention perl/PATH: {msg}"
+                );
+                assert!(
+                    msg.contains("strawberryperl.com"),
+                    "error should include install guidance: {msg}"
                 );
             }
         }

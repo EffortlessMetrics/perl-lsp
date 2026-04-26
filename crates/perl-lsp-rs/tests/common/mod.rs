@@ -39,7 +39,9 @@ mod handshake;
 pub mod protocol_io;
 
 // Re-export everything from extracted submodules for backwards compatibility
-pub use handshake::{await_index_ready, initialize_lsp, shutdown_and_exit};
+pub use handshake::{
+    await_index_ready, initialize_lsp, initialize_lsp_with_capabilities, shutdown_and_exit,
+};
 pub use protocol_io::{
     drain_until_quiet, read_notification_method, read_notification_timeout, read_response,
     read_response_matching, read_response_matching_i64, read_response_only_timeout,

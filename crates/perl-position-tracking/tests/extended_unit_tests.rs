@@ -594,6 +594,77 @@ fn line_starts_cache_offset_clamped() {
     assert_eq!(col, 3);
 }
 
+#[test]
+fn line_starts_cache_offset_mid_utf8_char_clamps_to_boundary() {
+    let src = "a😀b";
+    let cache = LineStartsCache::new(src);
+
+    // Byte offset 2 is in the middle of 😀 (starts at 1, ends before 5).
+    let (line, col) = cache.offset_to_position(src, 2);
+    assert_eq!(line, 0);
+    assert_eq!(col, 1);
+}
+
+#[test]
+fn line_starts_cache_offset_at_every_mid_byte_of_4byte_char_clamps_down() {
+    // 😀 (U+1F600) occupies bytes 1..5. Any in-the-middle offset (2, 3, 4)
+    // must clamp back to byte 1 (the start of the codepoint), not forward
+    // to byte 5 — clamping forward would bill the caller for 2 UTF-16 units
+    // for a character they never asked about.
+    let src = "a😀b";
+    let cache = LineStartsCache::new(src);
+    for mid_byte in [2usize, 3, 4] {
+        let (line, col) = cache.offset_to_position(src, mid_byte);
+        assert_eq!(line, 0, "offset={mid_byte} line");
+        assert_eq!(col, 1, "offset={mid_byte} should clamp back to start of 😀 (col=1)");
+    }
+
+    // Byte 5 is the start of 'b' and must give col=3 (a=1 + 😀=2).
+    let (line, col) = cache.offset_to_position(src, 5);
+    assert_eq!((line, col), (0, 3));
+}
+
+#[test]
+fn line_starts_cache_offset_mid_utf8_across_newline() {
+    // A multi-byte codepoint immediately after a newline: clamping must
+    // land on the start of the codepoint on the *new* line, not drift
+    // back across the newline into the previous line.
+    let src = "x\n😀y"; // newline at byte 1 → line 1 starts at byte 2
+    let cache = LineStartsCache::new(src);
+
+    // Byte 3 is one byte into 😀 (which begins at byte 2). Must clamp
+    // back to 2 and stay on line 1 (col 0), not leak to line 0.
+    let (line, col) = cache.offset_to_position(src, 3);
+    assert_eq!(line, 1, "must not drift back across newline");
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn line_starts_cache_offset_mid_utf8_bom() {
+    // A BOM (U+FEFF, encoded as 0xEF 0xBB 0xBF — 3 bytes) at the very start
+    // is sometimes produced by editors. Any in-the-middle offset must clamp
+    // back to 0, not forward to 3.
+    let src = "\u{feff}fn";
+    let cache = LineStartsCache::new(src);
+    for mid_byte in [1usize, 2] {
+        let (line, col) = cache.offset_to_position(src, mid_byte);
+        assert_eq!(line, 0);
+        assert_eq!(col, 0, "mid-BOM offset {mid_byte} must clamp back to col 0");
+    }
+}
+
+#[test]
+fn line_starts_cache_offset_empty_text_any_offset() {
+    // Empty text: any offset (including beyond the text) must produce
+    // (0, 0), not panic on array indexing.
+    let src = "";
+    let cache = LineStartsCache::new(src);
+    for offset in [0usize, 1, 100, usize::MAX] {
+        let (line, col) = cache.offset_to_position(src, offset);
+        assert_eq!((line, col), (0, 0), "offset={offset}");
+    }
+}
+
 // ─── LineStartsCache: position_to_offset ─────────────────────────────────────
 
 #[test]
@@ -677,6 +748,34 @@ fn line_starts_cache_rope_beyond_end() {
     assert_eq!(off, rope.len_bytes());
 }
 
+#[test]
+fn line_starts_cache_rope_offset_mid_utf8_char_clamps_to_boundary() {
+    // Rope byte_slice panics on mid-codepoint offsets; verify the rope
+    // variant snaps back to a char boundary just like the &str variant.
+    let src = "a😀b";
+    let rope = ropey::Rope::from_str(src);
+    let cache = LineStartsCache::new_rope(&rope);
+    for mid_byte in [2usize, 3, 4] {
+        let (line, col) = cache.offset_to_position_rope(&rope, mid_byte);
+        assert_eq!(line, 0, "offset={mid_byte}");
+        assert_eq!(col, 1, "mid-byte offset {mid_byte} must clamp back to col 1");
+    }
+    // Byte 5 is the start of 'b' — (line=0, col=3).
+    let (line, col) = cache.offset_to_position_rope(&rope, 5);
+    assert_eq!((line, col), (0, 3));
+}
+
+#[test]
+fn line_starts_cache_rope_offset_empty_rope_any_offset() {
+    // Empty rope: clamping must not panic for offsets at or beyond zero.
+    let rope = ropey::Rope::from_str("");
+    let cache = LineStartsCache::new_rope(&rope);
+    for offset in [0usize, 1, 100, usize::MAX] {
+        let (line, col) = cache.offset_to_position_rope(&rope, offset);
+        assert_eq!((line, col), (0, 0), "offset={offset}");
+    }
+}
+
 // ─── LineIndex ───────────────────────────────────────────────────────────────
 
 #[test]
@@ -704,6 +803,33 @@ fn line_index_multi_line() {
     let (line2, col2) = idx.offset_to_position(5); // 'e'
     assert_eq!(line2, 1);
     assert_eq!(col2, 1);
+}
+
+#[test]
+fn line_index_handles_crlf_line_endings() {
+    let idx = LineIndex::new("abc\r\ndef".to_string());
+    let (line, col) = idx.offset_to_position(5); // 'd'
+    assert_eq!(line, 1);
+    assert_eq!(col, 0);
+
+    let off = must_some(idx.position_to_offset(1, 1));
+    assert_eq!(off, 6); // 'e'
+}
+
+#[test]
+fn line_index_handles_cr_line_endings() {
+    let idx = LineIndex::new("abc\rdef".to_string());
+    let (line, col) = idx.offset_to_position(4); // 'd'
+    assert_eq!(line, 1);
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn line_index_clamps_offset_past_end() {
+    let idx = LineIndex::new("abc\ndef".to_string());
+    let (line, col) = idx.offset_to_position(1000);
+    assert_eq!(line, 1);
+    assert_eq!(col, 3);
 }
 
 #[test]
@@ -750,6 +876,22 @@ fn line_index_utf16_column_surrogate() {
     let (line, col) = idx.offset_to_position(5); // byte of 'b'
     assert_eq!(line, 0);
     assert_eq!(col, 3); // a(1) + 😀(2) = 3 UTF-16 units
+}
+
+#[test]
+fn line_index_offset_to_position_non_boundary_clamps_to_previous_boundary() {
+    let idx = LineIndex::new("a😀b".to_string());
+    let (line, col) = idx.offset_to_position(2); // in the middle of 😀
+    assert_eq!(line, 0);
+    assert_eq!(col, 1); // clamps to byte offset 1 (just after 'a')
+}
+
+#[test]
+fn line_index_offset_to_position_beyond_end_clamps_to_eof() {
+    let idx = LineIndex::new("a😀b".to_string());
+    let (line, col) = idx.offset_to_position(usize::MAX);
+    assert_eq!(line, 0);
+    assert_eq!(col, 4); // a(1) + 😀(2) + b(1)
 }
 
 // ─── convert: offset_to_utf16_line_col ───────────────────────────────────────

@@ -33,11 +33,16 @@ fn identifier() -> impl Strategy<Value = String> {
     ]
 }
 
+/// Generate a Perl package path (`Foo`, `Foo::Bar`, ...).
+fn package_path() -> impl Strategy<Value = String> {
+    prop::collection::vec(identifier(), 1..=4_usize).prop_map(|segments| segments.join("::"))
+}
+
 /// Generate a full Perl variable name including sigil.
 ///
 /// Covers scalar (`$x`), array (`@x`), hash (`%x`), special variables
 /// (`$_`, `@_`, `$1`–`$9`), and optionally package-qualified names
-/// (`$Foo::bar`).
+/// (`$Foo::Bar::baz`).
 pub fn variable() -> impl Strategy<Value = String> {
     prop_oneof![
         // Special variables
@@ -51,7 +56,7 @@ pub fn variable() -> impl Strategy<Value = String> {
         (prop_oneof![Just('$'), Just('@'), Just('%')], identifier())
             .prop_map(|(sigil, name)| format!("{}{}", sigil, name)),
         // Package-qualified
-        (prop_oneof![Just('$'), Just('@'), Just('%')], identifier(), identifier())
+        (prop_oneof![Just('$'), Just('@'), Just('%')], package_path(), identifier())
             .prop_map(|(sigil, pkg, name)| format!("{}{}::{}", sigil, pkg, name)),
     ]
 }
@@ -75,6 +80,13 @@ mod tests {
         #[test]
         fn identifier_is_ascii(id in identifier()) {
             prop_assert!(id.is_ascii(), "identifier must be ASCII: {}", id);
+        }
+
+        #[test]
+        fn package_path_has_no_empty_segments(pkg in package_path()) {
+            for segment in pkg.split("::") {
+                prop_assert!(!segment.is_empty(), "empty package segment in {pkg}");
+            }
         }
     }
 }
