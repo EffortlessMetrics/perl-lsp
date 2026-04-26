@@ -205,12 +205,14 @@ pub struct InlineValuesResponseBody {
 #[serde(rename_all = "camelCase")]
 pub struct InitializeRequestArguments {
     /// Client ID (e.g., "vscode")
+    #[serde(rename = "clientID", alias = "clientId")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
     /// Client name (e.g., "Visual Studio Code")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_name: Option<String>,
     /// Adapter ID (e.g., "perl-rs")
+    #[serde(rename = "adapterID", alias = "adapterId")]
     pub adapter_id: String,
     /// Locale (e.g., "en-US")
     #[serde(skip_serializing_if = "Option::is_none")]

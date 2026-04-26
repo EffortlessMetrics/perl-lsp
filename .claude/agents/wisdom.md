@@ -26,7 +26,7 @@ surface — your job is to synthesize across it.
 
 ## This repo's quality culture
 
-This is a rust-as-spec codebase: 134 microcrates, typed errors everywhere,
+This is a rust-as-spec codebase: ~30 focused microcrates with strong boundaries, typed errors everywhere,
 BDD-style tests with NFR verification, multi-layer verification pipeline
 (5 haiku passes before sonnet plan-review). Learnings should be measured
 against this bar:

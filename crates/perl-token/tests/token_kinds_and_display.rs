@@ -473,10 +473,10 @@ fn display_name_literals() {
         (TokenKind::HeredocStart, "heredoc (<<)"),
         (TokenKind::HeredocBody, "heredoc body"),
         (TokenKind::FormatBody, "format body"),
-        (TokenKind::DataMarker, "__DATA__"),
-        (TokenKind::DataBody, "data section"),
-        (TokenKind::UnknownRest, "unparsed content"),
-        (TokenKind::HeredocDepthLimit, "heredoc depth limit"),
+        (TokenKind::DataMarker, "data marker (__DATA__ or __END__)"),
+        (TokenKind::DataBody, "data section body"),
+        (TokenKind::UnknownRest, "unparsed remainder"),
+        (TokenKind::HeredocDepthLimit, "heredoc depth limit exceeded"),
     ];
     for (kind, expected) in cases {
         assert_eq!(kind.display_name(), *expected, "display_name mismatch for {kind:?}");

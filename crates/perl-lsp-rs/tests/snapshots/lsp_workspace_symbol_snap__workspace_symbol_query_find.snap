@@ -1,0 +1,19 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_symbol_snap.rs
+expression: normalized
+---
+- name: ws_snap_find_all_users
+  kind: 12
+  container_name: "Acme::Customer"
+  uri: "file:///ws_snap_a.pl"
+  start_line: 6
+- name: ws_snap_find_order
+  kind: 12
+  container_name: "Acme::Helpers"
+  uri: "file:///ws_snap_b.pl"
+  start_line: 2
+- name: ws_snap_find_user
+  kind: 12
+  container_name: "Acme::Customer"
+  uri: "file:///ws_snap_a.pl"
+  start_line: 2
