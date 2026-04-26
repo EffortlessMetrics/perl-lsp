@@ -329,6 +329,9 @@ mutation-regression:
     @cargo test -p perl-parser --test mutation_hardening_tests
     @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
     @cargo test -p perl-lsp-rs --test mutation_survivors_elimination
+    @cargo test -p perl-parser-core --test path_security_mutation_hardening
+    @cargo test -p perl-parser-core --test path_normalize_mutation_hardening
+    @cargo test -p perl-parser-core --test qualified_name_mutation_hardening
     @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
