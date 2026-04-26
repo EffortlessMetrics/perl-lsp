@@ -1,3 +1,5 @@
+//! Test-only helpers for mocking process exit status across platforms.
+
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt as _;
