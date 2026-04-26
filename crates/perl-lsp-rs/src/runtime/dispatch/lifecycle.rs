@@ -75,9 +75,19 @@ impl LspServer {
 
     /// Handle shutdown request
     pub(super) fn handle_shutdown_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
+        // Enforce single-shutdown idempotence via atomic swap.
+        // Note: The LSP router permits shutdown before initialize_requested
+        // (see dispatch/mod.rs), so we do not check initialize_requested here.
+        if self.shutdown_received.swap(true, Ordering::AcqRel) {
+            return Err(JsonRpcError {
+                code: -32600, // InvalidRequest per LSP spec
+                message: "shutdown request may only be sent once".to_string(),
+                data: None,
+            });
+        }
+
         // Clear any pending cancelled requests on shutdown
         self.cancelled.lock().clear();
-        self.shutdown_received.store(true, Ordering::Release);
         Ok(Some(json!(null)))
     }
 
@@ -253,6 +263,40 @@ mod tests {
         server.handle_set_trace_dispatch(Some(json!({ "value": "verbose" })))?;
         assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
 
+        Ok(())
+    }
+
+    #[test]
+    fn shutdown_sets_shutdown_received_flag() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        server.handle_initialize(None)?;
+
+        let result = server.handle_shutdown_dispatch()?;
+
+        assert_eq!(result, Some(json!(null)), "shutdown must return JSON null");
+        assert!(
+            server.shutdown_received.load(Ordering::Acquire),
+            "shutdown_received must be true after successful shutdown (exit will use code 0)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shutdown_can_only_be_requested_once() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        server.handle_initialize(None)?;
+
+        let first = server.handle_shutdown_dispatch();
+        let second = server.handle_shutdown_dispatch();
+
+        assert!(first.is_ok(), "first shutdown must succeed");
+        assert!(second.is_err(), "second shutdown must error");
+        if let Err(second_err) = second {
+            assert_eq!(
+                second_err.code, -32600,
+                "second shutdown must return InvalidRequest (-32600) per LSP spec"
+            );
+        }
         Ok(())
     }
 
