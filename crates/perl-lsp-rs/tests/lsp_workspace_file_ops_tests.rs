@@ -1417,8 +1417,8 @@ fn test_will_rename_files_updates_package_declaration_in_renamed_file()
 /// store → disk) ensures those files receive edits.  This test validates the
 /// open-then-close lifecycle does not break the handler for other open files.
 #[test]
-fn test_will_rename_files_graceful_with_closed_dependent()
--> Result<(), Box<dyn std::error::Error>> {
+fn test_will_rename_files_graceful_with_closed_dependent() -> Result<(), Box<dyn std::error::Error>>
+{
     let server = create_test_server();
 
     let init_params = json!({

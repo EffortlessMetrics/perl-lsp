@@ -1424,8 +1424,8 @@ fn renderer_with_max_array_preview() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn array_preview_truncation_keeps_child_pagination_precise() -> Result<(), Box<dyn std::error::Error>>
-{
+fn array_preview_truncation_keeps_child_pagination_precise()
+-> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_array_preview(1);
     let val = PerlValue::Array((0..6).map(PerlValue::Integer).collect());
 

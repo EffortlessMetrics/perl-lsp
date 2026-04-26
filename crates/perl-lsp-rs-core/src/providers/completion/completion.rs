@@ -1609,9 +1609,7 @@ impl CompletionProvider {
         // Check for `->` immediately before the `{` (hashref deref — out of scope).
         // Use byte comparison to avoid slicing at a non-char-boundary when a multi-byte
         // character immediately precedes `{`.
-        if brace_pos >= 2
-            && source.as_bytes().get(brace_pos - 2..brace_pos) == Some(b"->")
-        {
+        if brace_pos >= 2 && source.as_bytes().get(brace_pos - 2..brace_pos) == Some(b"->") {
             return None;
         }
 

@@ -989,12 +989,7 @@ fn lexer_slash_comment_adjacent_division_and_defined_or() -> TestResult {
 fn lexer_slash_expression_keyword_contexts_stay_expect_term() -> TestResult {
     // `return /re/`, `die /re/`, `warn /re/`, `eval /re/` are all
     // valid Perl and must produce a RegexMatch token, not a Division token.
-    let cases = [
-        "return /ok/",
-        "die /ok/",
-        "warn /ok/",
-        "eval /ok/",
-    ];
+    let cases = ["return /ok/", "die /ok/", "warn /ok/", "eval /ok/"];
 
     for code in cases {
         let mut lexer = PerlLexer::new(code);

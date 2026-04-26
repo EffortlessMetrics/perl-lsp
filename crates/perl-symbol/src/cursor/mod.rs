@@ -127,19 +127,16 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     // Prefer the character at the cursor. If the cursor is positioned at the
     // end of a token (or line), snap to the previous byte when that byte is
     // part of an identifier/module token or sigil.
-    let anchor = if byte_pos < bytes.len() {
-        byte_pos
-    } else {
-        bytes.len().saturating_sub(1)
-    };
+    let anchor = if byte_pos < bytes.len() { byte_pos } else { bytes.len().saturating_sub(1) };
 
-    let cursor = if is_modchar(bytes[anchor]) || matches!(bytes[anchor], b'$' | b'@' | b'%' | b'&' | b'*') {
-        anchor
-    } else if anchor > 0 && is_modchar(bytes[anchor - 1]) {
-        anchor - 1
-    } else {
-        return None;
-    };
+    let cursor =
+        if is_modchar(bytes[anchor]) || matches!(bytes[anchor], b'$' | b'@' | b'%' | b'&' | b'*') {
+            anchor
+        } else if anchor > 0 && is_modchar(bytes[anchor - 1]) {
+            anchor - 1
+        } else {
+            return None;
+        };
 
     let mut start = cursor;
     let mut end = cursor;

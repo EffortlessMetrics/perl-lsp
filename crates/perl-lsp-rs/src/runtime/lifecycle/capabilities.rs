@@ -560,9 +560,8 @@ mod tests {
             }
         });
 
-        let response = server
-            .handle_initialize(Some(params))?
-            .ok_or("initialize should return payload")?;
+        let response =
+            server.handle_initialize(Some(params))?.ok_or("initialize should return payload")?;
 
         let workspace_folders = response
             .pointer("/capabilities/workspace/workspaceFolders/supported")
