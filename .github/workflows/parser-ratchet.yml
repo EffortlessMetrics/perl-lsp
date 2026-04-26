@@ -1,0 +1,49 @@
+name: Parser Ratchet Scaffold
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet Receipt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          cache-on-failure: true
+          shared-key: parser-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Run parser-ratchet scaffold
+        run: cargo xtask parser-ratchet --profile pr --receipt target/receipts/parser-ratchet.json
+
+      - name: Upload parser-ratchet receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-ratchet-receipt
+          path: target/receipts/parser-ratchet.json
+          if-no-files-found: error

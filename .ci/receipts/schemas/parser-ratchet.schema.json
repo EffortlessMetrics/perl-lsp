@@ -2,38 +2,67 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-ratchet.schema.json",
   "title": "Parser Ratchet Receipt",
-  "description": "Future-complete parser ratchet schema. Current producers may emit narrower payloads.",
-  "allOf": [
-    { "$ref": "./common-gate-receipt.schema.json" },
-    {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "selected",
+    "selection_reason",
+    "profile",
+    "verdict",
+    "classification",
+    "repro"
+  ],
+  "properties": {
+    "check": {
+      "const": "parser-ratchet"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "event": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "base_sha": {
+      "type": "string"
+    },
+    "head_sha": {
+      "type": "string"
+    },
+    "candidate_sha": {
+      "type": "string"
+    },
+    "selected": {
+      "const": false
+    },
+    "selection_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "const": "pr"
+    },
+    "verdict": {
+      "const": "pass"
+    },
+    "classification": {
+      "enum": ["skipped", "not_selected"]
+    },
+    "repro": {
       "type": "object",
-      "required": ["check"],
+      "additionalProperties": false,
+      "required": ["command"],
       "properties": {
-        "check": { "const": "parser-ratchet" },
-        "metrics": {
-          "type": "object",
-          "properties": {
-            "baseline_clean_rate": { "type": "number" },
-            "current_clean_rate": { "type": "number" },
-            "error_nodes": { "type": "integer", "minimum": 0 }
-          },
-          "additionalProperties": true
-        },
-        "violations": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "metric": { "type": "string" },
-              "expected": {},
-              "actual": {}
-            },
-            "required": ["metric"],
-            "additionalProperties": true
-          }
+        "command": {
+          "type": "string",
+          "minLength": 1
         }
-      },
-      "additionalProperties": true
+      }
     }
-  ]
+  }
 }
