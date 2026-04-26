@@ -74,17 +74,9 @@ pub fn run(config: QueueStateConfig) -> Result<()> {
 
     let receipts = load_receipts(config.receipts_dir.as_deref())?;
 
-    let states = snapshot
-        .pull_requests
-        .iter()
-        .map(|pr| derive_state(pr, &receipts))
-        .collect();
+    let states = snapshot.pull_requests.iter().map(|pr| derive_state(pr, &receipts)).collect();
 
-    let payload = QueueStateReceipt {
-        schema_version: 1,
-        dry_run: config.dry_run,
-        states,
-    };
+    let payload = QueueStateReceipt { schema_version: 1, dry_run: config.dry_run, states };
 
     if let Some(parent) = config.receipt.parent() {
         fs::create_dir_all(parent)
@@ -126,7 +118,8 @@ fn load_receipts(receipts_dir: Option<&Path>) -> Result<Vec<QueueReceipt>> {
 fn derive_state(pr: &PullRequestFacts, receipts: &[QueueReceipt]) -> PrStateResult {
     let label_set: BTreeSet<&str> = pr.labels.iter().map(String::as_str).collect();
 
-    let pr_receipts: Vec<&QueueReceipt> = receipts.iter().filter(|receipt| receipt.pr_number == pr.number).collect();
+    let pr_receipts: Vec<&QueueReceipt> =
+        receipts.iter().filter(|receipt| receipt.pr_number == pr.number).collect();
     let (stale_receipts, has_valid_merge_ready) = evaluate_receipts(pr, &pr_receipts);
 
     let mut contradictions = Vec::new();
@@ -171,7 +164,9 @@ fn derive_state(pr: &PullRequestFacts, receipts: &[QueueReceipt]) -> PrStateResu
         contradictions.push("needs_blocker_conflicts_with_green_state".to_string());
     }
     if has_needs_blocker
-        && (label_set.contains("review-reviewed") || label_set.contains("ci-green") || label_set.contains("merge-ready"))
+        && (label_set.contains("review-reviewed")
+            || label_set.contains("ci-green")
+            || label_set.contains("merge-ready"))
     {
         contradictions.push("conflicting_positive_signals_with_needs_blocker".to_string());
     }
@@ -202,8 +197,10 @@ fn evaluate_receipts(pr: &PullRequestFacts, receipts: &[&QueueReceipt]) -> (Vec<
         }
 
         if receipt.receipt_type == "merge-readiness" {
-            let head_ok = receipt.head_sha.as_deref().is_some_and(|head_sha| head_sha == pr.head_sha);
-            let base_ok = receipt.base_sha.as_deref().is_some_and(|base_sha| base_sha == pr.base_sha);
+            let head_ok =
+                receipt.head_sha.as_deref().is_some_and(|head_sha| head_sha == pr.head_sha);
+            let base_ok =
+                receipt.base_sha.as_deref().is_some_and(|base_sha| base_sha == pr.base_sha);
             if head_ok && base_ok && receipt.valid {
                 merge_ready_valid = true;
             } else {
@@ -261,9 +258,11 @@ fn next_routes(state: &str) -> Vec<String> {
         "NEEDS_DEEP_REVIEW" => "deep-review",
         "NEEDS_DIFF_AUDIT" => "diff-audit",
         "NEEDS_MAINTAINER_REVIEW" => "maintainer-review",
-        "NEEDS_BUILDER_FIX" | "NEEDS_DIFF_FIX" | "NEEDS_CI_FIX" | "NEEDS_CASCADE_UPDATE" | "NEEDS_INFRA_FIX" => {
-            "author-fix"
-        }
+        "NEEDS_BUILDER_FIX"
+        | "NEEDS_DIFF_FIX"
+        | "NEEDS_CI_FIX"
+        | "NEEDS_CASCADE_UPDATE"
+        | "NEEDS_INFRA_FIX" => "author-fix",
         "REVIEWED_WAITING_CI" => "await-ci",
         "CI_GREEN" => "merge-readiness",
         "MERGE_READY" => "merge-queue",
@@ -328,7 +327,9 @@ mod tests {
         let fixture = load_fixture("merge-ready-stale-base-receipt.json")?;
         let actual = derive_state(&fixture.pr, &fixture.receipts);
         assert_eq!(actual.canonical_state, fixture.expected_state);
-        assert!(actual.stale_receipts.iter().any(|value| value == "merge_readiness_stale_or_invalid"));
+        assert!(
+            actual.stale_receipts.iter().any(|value| value == "merge_readiness_stale_or_invalid")
+        );
         Ok(())
     }
 
