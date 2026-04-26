@@ -6,7 +6,7 @@
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
-use crate::util::token_under_cursor;
+use crate::util::{read_text_file_with_encoding, token_under_cursor};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[cfg(feature = "workspace")]
@@ -38,6 +38,12 @@ static MOJO_KV_ROUTE_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock
 #[cfg(feature = "workspace")]
 static MOJO_KV_ROUTE_RE_ACTION_FIRST: OnceLock<Result<regex::Regex, regex::Error>> =
     OnceLock::new();
+
+#[cfg(feature = "workspace")]
+static GOTO_LABEL_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
+static LABEL_DECLARATION_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
@@ -108,6 +114,42 @@ fn get_super_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
                 "Failed to initialize SUPER method-call regex: {err}"
             ))
         })
+}
+
+#[cfg(feature = "workspace")]
+fn get_goto_label_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    GOTO_LABEL_RE
+        .get_or_init(|| regex::Regex::new(r"\bgoto\s+([A-Za-z_][A-Za-z0-9_]*)"))
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize goto label regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn get_label_declaration_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    LABEL_DECLARATION_RE
+        .get_or_init(|| regex::Regex::new(r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:"))
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize label declaration regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn find_label_declaration_span(
+    text: &str,
+    label: &str,
+) -> Result<Option<(usize, usize)>, JsonRpcError> {
+    let label_re = get_label_declaration_regex()?;
+    Ok(label_re.captures_iter(text).find_map(|cap| {
+        let declared_label = cap.get(1)?;
+        (declared_label.as_str() == label).then_some((declared_label.start(), declared_label.end()))
+    }))
 }
 
 #[derive(Debug, Clone)]
@@ -300,7 +342,7 @@ fn xs_bootstrap_location(path: &Path, module_name: &str) -> Value {
     let uri = Url::from_file_path(path).map(|url| url.to_string()).unwrap_or_default();
     let boot_symbol = xs_boot_symbol_name(module_name);
 
-    if let Ok(text) = std::fs::read_to_string(path)
+    if let Ok(text) = read_text_file_with_encoding(path)
         && let Some(offset) = text.find(&boot_symbol)
     {
         let (start_line, start_char) = byte_to_line_col(&text, offset);
@@ -441,7 +483,7 @@ pub(super) fn workspace_document_text(
 ) -> Option<String> {
     workspace_index.document_store().get_text(uri).or_else(|| {
         crate::workspace_index::uri_to_fs_path(uri)
-            .and_then(|path| std::fs::read_to_string(path).ok())
+            .and_then(|path| read_text_file_with_encoding(&path).ok())
     })
 }
 
@@ -1060,6 +1102,32 @@ impl LspServer {
                 let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                 let cursor_in_text = offset - text_start;
 
+                let goto_label_re = get_goto_label_regex()?;
+                for cap in goto_label_re.captures_iter(&text_around) {
+                    if let Some(label_match) = cap.get(1)
+                        && cursor_in_text >= label_match.start()
+                        && cursor_in_text <= label_match.end()
+                        && let Some((target_start, target_end)) =
+                            find_label_declaration_span(&doc.text, label_match.as_str())?
+                    {
+                        let (def_line, def_char) = self.offset_to_pos16(doc, target_start);
+                        let (def_end_line, def_end_char) = self.offset_to_pos16(doc, target_end);
+                        return Ok(Some(json!([{
+                            "uri": uri,
+                            "range": {
+                                "start": {
+                                    "line": def_line,
+                                    "character": def_char,
+                                },
+                                "end": {
+                                    "line": def_end_line,
+                                    "character": def_end_char,
+                                },
+                            },
+                        }])));
+                    }
+                }
+
                 if let Some(mason_location) = self.resolve_mason_definition(uri, &doc.text, offset)
                 {
                     if let Some(lsp_location) =
@@ -1351,7 +1419,12 @@ impl LspServer {
                             let current_package =
                                 crate::declaration::current_package_at(ast, offset);
                             if let Some(symbol_key) =
-                                crate::declaration::symbol_at_cursor(ast, offset, current_package)
+                                crate::declaration::symbol_at_cursor_with_source(
+                                    ast,
+                                    offset,
+                                    current_package,
+                                    &doc.text,
+                                )
                             {
                                 tracing::debug!(symbol_key = ?symbol_key, "looking for definition");
 

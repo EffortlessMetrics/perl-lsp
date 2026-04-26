@@ -78,22 +78,39 @@ impl LspServer {
                     .and_then(|w| w.get("configuration"))
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
+                caps.workspace_folders_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("workspaceFolders"))
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
 
-                // Check if client supports snippet syntax in completion items
+                // Check if client supports snippet syntax in completion items.
+                //
+                // Spec-compliant clients send this under
+                // textDocument.completion.completionItem.*, but some generic
+                // clients flatten these booleans directly onto
+                // textDocument.completion. Support both shapes.
                 caps.snippet_support = params
                     .get("capabilities")
                     .and_then(|c| c.get("textDocument"))
                     .and_then(|td| td.get("completion"))
-                    .and_then(|comp| comp.get("completionItem"))
-                    .and_then(|ci| ci.get("snippetSupport"))
+                    .and_then(|comp| {
+                        comp.get("completionItem")
+                            .and_then(|ci| ci.get("snippetSupport"))
+                            .or_else(|| comp.get("snippetSupport"))
+                    })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
                 caps.completion_commit_characters_support = params
                     .get("capabilities")
                     .and_then(|c| c.get("textDocument"))
                     .and_then(|td| td.get("completion"))
-                    .and_then(|comp| comp.get("completionItem"))
-                    .and_then(|ci| ci.get("commitCharactersSupport"))
+                    .and_then(|comp| {
+                        comp.get("completionItem")
+                            .and_then(|ci| ci.get("commitCharactersSupport"))
+                            .or_else(|| comp.get("commitCharactersSupport"))
+                    })
                     .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
@@ -198,8 +215,13 @@ impl LspServer {
             if let Some(workspace_folders) =
                 params.get("workspaceFolders").and_then(|f| f.as_array())
             {
+                let uris = extract_workspace_folder_uris(workspace_folders);
+                if let Some(first_uri) = uris.first() {
+                    self.set_root_uri(first_uri);
+                }
+
                 let mut folders = self.workspace_folders.lock();
-                for uri in extract_workspace_folder_uris(workspace_folders) {
+                for uri in uris {
                     tracing::debug!(uri, "Initialized with workspace folder");
                     let mut folder =
                         super::super::workspace_folder::WorkspaceFolderState::new(uri.clone());
@@ -229,6 +251,16 @@ impl LspServer {
                     root_uri.clone(),
                 ));
                 self.set_root_uri(&root_uri);
+            } else if let Ok(cwd) = std::env::current_dir() {
+                // Compatibility fallback for lightweight clients (for example Aider)
+                // that initialize without workspaceFolders/rootUri/rootPath.
+                let cwd_uri = root_path_to_file_uri(&cwd.to_string_lossy());
+                let mut folders = self.workspace_folders.lock();
+                folders.push(super::super::workspace_folder::WorkspaceFolderState::new(
+                    cwd_uri.clone(),
+                ));
+                self.set_root_uri(&cwd_uri);
+                tracing::debug!(cwd_uri, "Initialized with process current directory fallback");
             }
         }
 
@@ -280,7 +312,7 @@ impl LspServer {
 
         // TextDocumentSyncKind::Full (1): the server always reparses the full
         // document on every didChange notification.  Advertising Incremental (2)
-        // would be inaccurate — we do not maintain incremental AST state between
+        // would be inaccurate â€” we do not maintain incremental AST state between
         // edits; we rebuild the entire AST from the complete document text each time.
         let sync_kind = 1;
 
@@ -329,10 +361,11 @@ impl LspServer {
         });
 
         // Workspace capabilities: folders, file operations, and content schemes
+        let workspace_folders_support = self.client_capabilities.lock().workspace_folders_support;
         capabilities["workspace"] = json!({
             "workspaceFolders": {
-                "supported": true,
-                "changeNotifications": true
+                "supported": workspace_folders_support,
+                "changeNotifications": workspace_folders_support
             },
             "fileOperations": {
                 "willCreate": { "filters": [
@@ -443,6 +476,7 @@ mod tests {
     use super::apply_disabled_feature_id;
     use crate::LspServer;
     use crate::protocol::capabilities::BuildFlags;
+    use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
 
     #[test]
@@ -499,9 +533,30 @@ mod tests {
             assert!(
                 !still_all,
                 "feature ID '{id}' emitted by to_feature_ids() has no match arm in \
-                 apply_disabled_feature_id — add one to keep the two in sync"
+                 apply_disabled_feature_id â€” add one to keep the two in sync"
             );
         }
+    }
+
+    #[test]
+    fn initialize_with_workspace_folders_sets_root_path_from_first_folder() {
+        let server = LspServer::new();
+        let params = json!({
+            "workspaceFolders": [
+                { "uri": "file:///primary", "name": "primary" },
+                { "uri": "file:///secondary", "name": "secondary" }
+            ],
+            "capabilities": {}
+        });
+
+        let result = server.handle_initialize(Some(params));
+        assert!(result.is_ok(), "initialize should succeed");
+
+        let root_path = server.root_path.lock();
+        assert!(
+            root_path.as_ref().is_some_and(|path| path.ends_with("primary")),
+            "root path should come from first workspace folder"
+        );
     }
 
     #[test]
@@ -510,7 +565,8 @@ mod tests {
         let params = json!({
             "capabilities": {
                 "workspace": {
-                    "configuration": true
+                    "configuration": true,
+                    "workspaceFolders": true
                 }
             }
         });
@@ -518,6 +574,122 @@ mod tests {
         let _ = server.handle_initialize(Some(params));
 
         assert!(server.client_capabilities.lock().workspace_configuration_support);
+        assert!(server.client_capabilities.lock().workspace_folders_support);
+    }
+
+    #[test]
+    fn initialize_disables_workspace_folder_server_capability_when_client_lacks_support()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "workspace": {
+                    "workspaceFolders": false
+                }
+            }
+        });
+
+        let response =
+            server.handle_initialize(Some(params))?.ok_or("initialize should return payload")?;
+
+        let workspace_folders = response
+            .pointer("/capabilities/workspace/workspaceFolders/supported")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let change_notifications = response
+            .pointer("/capabilities/workspace/workspaceFolders/changeNotifications")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        assert!(!workspace_folders, "server must not advertise unsupported workspace folders");
+        assert!(
+            !change_notifications,
+            "server must not advertise workspace folder change notifications when unsupported"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn initialize_parses_completion_item_capabilities_from_spec_shape() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "completionItem": {
+                            "snippetSupport": true,
+                            "commitCharactersSupport": true
+                        }
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(caps.snippet_support);
+        assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_parses_completion_item_capabilities_from_flattened_shape() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {
+                "textDocument": {
+                    "completion": {
+                        "snippetSupport": true,
+                        "commitCharactersSupport": true
+                    }
+                }
+            }
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let caps = server.client_capabilities.lock();
+        assert!(caps.snippet_support);
+        assert!(caps.completion_commit_characters_support);
+    }
+
+    #[test]
+    fn initialize_uses_current_directory_when_root_is_missing() {
+        let server = LspServer::new();
+        let params = json!({
+            "capabilities": {}
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "missing roots should fall back to current directory");
+
+        let expected_uri =
+            std::env::current_dir().ok().map(|cwd| root_path_to_file_uri(&cwd.to_string_lossy()));
+        assert_eq!(
+            folders[0].uri,
+            expected_uri.unwrap_or_default(),
+            "workspace folder should match current directory fallback URI"
+        );
+    }
+
+    /// Guard: cwd fallback must NOT fire when a top-level rootUri is present.
+    #[test]
+    fn initialize_cwd_fallback_not_used_when_root_uri_present() {
+        let server = LspServer::new();
+        let params = json!({
+            "rootUri": "file:///explicit-workspace"
+        });
+
+        let _ = server.handle_initialize(Some(params));
+
+        let folders = server.workspace_folders.lock();
+        assert_eq!(folders.len(), 1, "must create exactly one workspace folder from rootUri");
+        assert_eq!(
+            folders[0].uri, "file:///explicit-workspace",
+            "cwd fallback must not override an explicitly provided rootUri"
+        );
     }
 
     #[test]

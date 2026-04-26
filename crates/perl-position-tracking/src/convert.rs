@@ -36,7 +36,9 @@ pub fn offset_to_utf16_line_col(text: &str, offset: usize) -> (u32, u32) {
             while cs > 0 && !line.is_char_boundary(cs) {
                 cs -= 1;
             }
-            return (line_idx as u32, line[..cs].encode_utf16().count() as u32 + 1);
+            // Clamp to the previous Unicode scalar boundary.
+            // Returning a half-surrogate UTF-16 column would violate LSP invariants.
+            return (line_idx as u32, line[..cs].encode_utf16().count() as u32);
         }
         acc = next;
     }
@@ -79,6 +81,17 @@ pub fn utf16_line_col_to_offset(text: &str, line: u32, col: u32) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{offset_to_utf16_line_col, utf16_line_col_to_offset};
+
+    #[test]
+    fn offset_to_utf16_clamps_mid_codepoint_offsets_to_previous_boundary() {
+        let text = "💖z";
+
+        // Byte offset 1 sits inside the first UTF-8 codepoint (the emoji).
+        // The reported UTF-16 column must stay on a valid boundary (0 or 2).
+        assert_eq!(offset_to_utf16_line_col(text, 1), (0, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 2), (0, 0));
+        assert_eq!(offset_to_utf16_line_col(text, 3), (0, 0));
+    }
 
     #[test]
     fn offset_to_utf16_handles_multibyte_and_surrogate_pairs() {
