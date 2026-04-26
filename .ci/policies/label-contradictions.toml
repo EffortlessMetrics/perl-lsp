@@ -1,0 +1,29 @@
+[[forbidden]]
+labels = ["review-reviewed", "needs-builder-fix"]
+reason = "sign-off and builder route are mutually exclusive"
+
+[[forbidden]]
+labels = ["diff-audited", "needs-diff-fix"]
+reason = "diff sign-off and diff fix routing are mutually exclusive"
+
+[[forbidden]]
+labels = ["maintainer-pr-reviewed", "needs-maintainer-fix"]
+reason = "maintainer review approval and maintainer fix routing are mutually exclusive"
+
+[[forbidden]]
+labels = ["ci-green", "needs-ci-fix"]
+reason = "ci-green cannot coexist with active CI fix routing"
+
+[[forbidden]]
+labels = ["deep-reviewed", "needs-deep-review"]
+reason = "deep-reviewed and needs-deep-review are mutually exclusive"
+
+[[forbidden_pattern]]
+required = "merge-ready"
+forbidden_glob = "needs-*"
+reason = "merge-ready cannot coexist with any active blocker"
+
+[[forbidden_pattern]]
+required = "auto-merge"
+forbidden_glob = "needs-*"
+reason = "auto-merge cannot coexist with any active blocker"

@@ -1,0 +1,48 @@
+name: Methodology Gate
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  methodology-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run Methodology Gate (pull_request)
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo xtask methodology-gate \
+            --pr "${{ github.event.pull_request.number }}" \
+            --receipt target/receipts/methodology-gate.json
+
+      - name: Run Methodology Gate (merge_group/push advisory)
+        if: github.event_name != 'pull_request'
+        run: |
+          cargo xtask methodology-gate \
+            --fixture "$GITHUB_EVENT_PATH" \
+            --receipt target/receipts/methodology-gate.json
+
+      - name: Upload methodology receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: methodology-gate-receipt
+          path: target/receipts/methodology-gate.json
+          if-no-files-found: ignore

@@ -1,0 +1,9 @@
+{
+  "event_name": "pull_request",
+  "number": 101,
+  "body": "Refs #6855\n\nPartial implementation, advisory rollout.",
+  "labels": [
+    "review-reviewed",
+    "needs-builder-fix"
+  ]
+}

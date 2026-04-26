@@ -23,6 +23,8 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // ci-gate-self-tests.yml is path-filtered to gate scripts only.
     // Runs only when the gate scripts or self-test scripts change.
     "ci-gate-self-tests.yml",
+    // Methodology gate is intentionally lightweight and runs unconditionally.
+    "methodology-gate.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];

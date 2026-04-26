@@ -1,0 +1,9 @@
+{
+  "event_name": "pull_request",
+  "number": 102,
+  "body": "Refs #6855\n\nContradictory state fixture.",
+  "labels": [
+    "merge-ready",
+    "needs-ci-fix"
+  ]
+}

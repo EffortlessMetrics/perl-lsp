@@ -13,6 +13,7 @@ mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::methodology_gate::MethodologyGateFormat;
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
@@ -1059,6 +1060,33 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Validate contradictory PR label states and emit a methodology receipt.
+    MethodologyGate {
+        /// Read PR metadata from a fixture JSON payload.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Read PR metadata directly from GitHub for this PR number.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Path to write methodology receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Enforce mode: contradictions fail the task.
+        #[arg(long)]
+        enforce: bool,
+
+        /// Dry-run mode: compute output without writing receipt files.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: MethodologyGateFormat,
+    },
+
     /// Verify hook scripts are executable.
     HookCheck,
 
@@ -1663,6 +1691,9 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::MethodologyGate { fixture, pr, receipt, enforce, dry_run, format } => {
+            methodology_gate::run(fixture, pr, receipt, enforce, dry_run, format)
+        }
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand

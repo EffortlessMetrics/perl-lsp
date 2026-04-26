@@ -1,0 +1,10 @@
+{
+  "event_name": "pull_request",
+  "number": 100,
+  "body": "Refs #6855\n\nFully aligned label state.",
+  "labels": [
+    "review-reviewed",
+    "diff-audited",
+    "ci-green"
+  ]
+}
