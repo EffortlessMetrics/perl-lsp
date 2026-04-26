@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/parser-ratchet.schema.json",
+  "title": "Parser Ratchet Receipt",
+  "type": "object",
+  "required": [
+    "check", "profile", "selected", "selection_reason", "manifest_fingerprint",
+    "base_sha", "head_sha", "candidate_sha", "metrics", "violations",
+    "ratchet_opportunity", "verdict", "repro"
+  ],
+  "properties": {
+    "check": {"const": "Parser Ratchet"},
+    "profile": {"type": "string"},
+    "selected": {"enum": ["perl-corpus", "system-perl"]},
+    "selection_reason": {"type": "string"},
+    "manifest_fingerprint": {"type": "string"},
+    "base_sha": {"type": "string"},
+    "head_sha": {"type": "string"},
+    "candidate_sha": {"type": "string"},
+    "metrics": {
+      "type": "object",
+      "required": ["base", "head"],
+      "properties": {
+        "base": {"$ref": "#/$defs/metrics"},
+        "head": {"$ref": "#/$defs/metrics"}
+      }
+    },
+    "violations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/violation"}
+    },
+    "ratchet_opportunity": {"type": "boolean"},
+    "verdict": {"enum": ["pass", "fail"]},
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {"command": {"type": "string"}}
+    }
+  },
+  "$defs": {
+    "metrics": {
+      "type": "object",
+      "required": ["selected", "clean_parse_rate", "panic_count", "timeout_count", "error_node_count"],
+      "properties": {
+        "selected": {"type": "string"},
+        "clean_parse_rate": {"type": "number"},
+        "panic_count": {"type": "integer", "minimum": 0},
+        "timeout_count": {"type": "integer", "minimum": 0},
+        "error_node_count": {"type": "integer", "minimum": 0},
+        "node_kind_seen_count": {"type": ["integer", "null"], "minimum": 0},
+        "concept_floors_pass": {"type": ["boolean", "null"]},
+        "corpus_runtime_ms": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "violation": {
+      "type": "object",
+      "required": ["metric", "message", "severity"],
+      "properties": {
+        "metric": {"type": "string"},
+        "message": {"type": "string"},
+        "severity": {"enum": ["error", "warn"]}
+      }
+    }
+  }
+}

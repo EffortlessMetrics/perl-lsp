@@ -1,0 +1,6 @@
+selected = "perl-corpus"
+selection_reason = "PR mode uses perl-corpus strict floors; system-perl is differential-only when selected"
+clean_parse_rate_epsilon = 0.0005
+error_node_material_increase = 0
+node_kind_unexpected_drop = 0
+runtime_regression_warn_ms = 10000
