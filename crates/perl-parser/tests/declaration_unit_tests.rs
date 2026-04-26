@@ -176,6 +176,32 @@ fn test_unicode_and_crlf() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn test_goto_label_resolves_to_labeled_statement() -> TestResult {
+    let content = r#"
+sub jump {
+    goto TARGET;
+}
+
+TARGET: return 1;
+"#;
+    let mut parser = Parser::new(content);
+    let ast = parser.parse()?;
+
+    let provider =
+        DeclarationProvider::new(Arc::new(ast), content.to_string(), "test.pl".to_string());
+
+    let goto_label_pos = content.find("TARGET;").ok_or("Could not find goto label usage")?;
+    let links =
+        provider.find_declaration(goto_label_pos, 0).ok_or("Should resolve goto label target")?;
+    assert_eq!(links.len(), 1);
+
+    let label_decl_pos = content.find("TARGET:").ok_or("Could not find label declaration")?;
+    assert_eq!(links[0].target_selection_range.0, label_decl_pos);
+    assert_eq!(links[0].target_selection_range.1, label_decl_pos + "TARGET".len());
+    Ok(())
+}
+
 #[cfg(feature = "package-qualified")]
 #[test]
 fn test_tricky_names() -> TestResult {
