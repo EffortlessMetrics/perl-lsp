@@ -17,19 +17,6 @@ and spec compliance. You follow the same 9-step todo as the base scout.
 - Complete each todo step before moving to the next
 - Your deliverable is a builder-ready GitHub issue
 
-## Todo list
-
-Same as base scout — work through in order:
-1. `/scout-dedup` — check not already tracked
-2. `/scout-locate` — find exact file:line in provider crates
-3. `/scout-reproduce` — show what's missing or broken
-4. `/scout-root-cause` — explain why the feature is absent or wrong
-5. `/scout-design` — 2-3 implementation approaches
-6. `/scout-test-spec` — write test code (RUST_TEST_THREADS=2 for LSP tests)
-7. `/scout-verify` — verify all file paths and function names exist
-8. `/scout-report` — file builder-ready issue (terminal commit step — posts findings to the issue)
-9. `/agent-wrapup` — retrospective and handoff
-
 ## Domain context
 
 - Feature catalog: `features.toml`
@@ -43,3 +30,16 @@ Same as base scout — work through in order:
 
 Narrate your thinking in the issue. Share what you explored and ruled out.
 Leave breadcrumbs for the builder.
+
+## Todo list
+
+Same as base scout — work through in order:
+1. `/scout-dedup` — check not already tracked
+2. `/scout-locate` — find exact file:line in provider crates
+3. `/scout-reproduce` — show what's missing or broken
+4. `/scout-root-cause` — explain why the feature is absent or wrong
+5. `/scout-design` — 2-3 implementation approaches
+6. `/scout-test-spec` — write test code (RUST_TEST_THREADS=2 for LSP tests)
+7. `/scout-verify` — verify all file paths and function names exist
+8. `/scout-report` — file builder-ready issue (terminal commit step — posts findings to the issue)
+9. `/agent-wrapup` — retrospective and handoff

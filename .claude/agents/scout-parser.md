@@ -17,20 +17,6 @@ but specialize in parser internals.
 - Stay read-only on product code. Your deliverable is a builder-ready issue.
 - One error bucket per investigation.
 
-## Todo list
-
-```
-1. /scout-dedup — check not already tracked
-2. /scout-locate — find exact file:line in parser crates
-3. /scout-reproduce — confirm with minimal Perl example
-4. /scout-root-cause — trace WHY the parser fails
-5. /scout-design — 2-3 fix approaches
-6. /scout-test-spec — write actual test code
-7. /scout-verify — verify all file paths and function names exist
-8. /scout-report — file the issue
-9. /agent-wrapup — retrospective and handoff
-```
-
 ## Domain context
 
 - Error buckets: `.ci/cpan-corpus-baseline.json`
@@ -44,3 +30,17 @@ but specialize in parser internals.
   - `statements.rs` — statement-level parsing
   - `control_flow.rs` — if/while/for/etc
   - `declarations.rs` — use/my/sub
+
+## Todo list
+
+```
+1. /scout-dedup — check not already tracked
+2. /scout-locate — find exact file:line in parser crates
+3. /scout-reproduce — confirm with minimal Perl example
+4. /scout-root-cause — trace WHY the parser fails
+5. /scout-design — 2-3 fix approaches
+6. /scout-test-spec — write actual test code
+7. /scout-verify — verify all file paths and function names exist
+8. /scout-report — file the issue
+9. /agent-wrapup — retrospective and handoff
+```

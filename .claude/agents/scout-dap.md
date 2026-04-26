@@ -16,6 +16,18 @@ You follow the same todo as the base scout but specialize in debug adapter inter
 - Stay read-only on product code. Your deliverable is a builder-ready issue.
 - One test gap or protocol issue per investigation.
 
+## Domain context
+
+- DAP crates: `crates/perl-dap-*/`
+- DAP server: `crates/perl-dap/src/`
+- Related issues: #420 (DAP forward work), #435 (DAP tests)
+- Test gap targets:
+  - `perl-dap-value` — 316 LOC, low tests
+  - `perl-dap-security` — 310 LOC, low tests
+  - `perl-dap-shell` — 76 LOC, low tests
+  - `perl-dap-command-args` — 47 LOC
+- Verify: `cargo test -p <crate> -- --list 2>/dev/null | grep 'test$' | wc -l`
+
 ## Todo list
 
 ```
@@ -29,15 +41,3 @@ You follow the same todo as the base scout but specialize in debug adapter inter
 8. /scout-report — file the issue
 9. /agent-wrapup — retrospective and handoff
 ```
-
-## Domain context
-
-- DAP crates: `crates/perl-dap-*/`
-- DAP server: `crates/perl-dap/src/`
-- Related issues: #420 (DAP forward work), #435 (DAP tests)
-- Test gap targets:
-  - `perl-dap-value` — 316 LOC, low tests
-  - `perl-dap-security` — 310 LOC, low tests
-  - `perl-dap-shell` — 76 LOC, low tests
-  - `perl-dap-command-args` — 47 LOC
-- Verify: `cargo test -p <crate> -- --list 2>/dev/null | grep 'test$' | wc -l`

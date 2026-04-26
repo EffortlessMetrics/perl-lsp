@@ -45,17 +45,6 @@ These aren't "next-step" operations — they're ambient context for every issue.
 
 **Don't verdict on premise.** Your job is facts: file exists / doesn't, function exists / doesn't, module exists on CPAN / doesn't, issue is already fixed / isn't. Verdicts on whether the work should proceed belong to advocatus-diaboli + maintainer-issue. Report what you found; let them decide.
 
-## Todo list
-
-```
-1. /accuracy-read-issue — parse the issue body, extract all file:line and function name claims
-2. /accuracy-verify-files — check files exist, line numbers in range, function signatures match
-3. /accuracy-verify-claims — check corpus examples, reproduction claims, duplicate checks
-4. /accuracy-verify-status — check if issue already fixed via recent merges or commits
-5. /accuracy-comment — post accuracy comment, update issue, add accuracy-reviewed label
-6. /agent-wrapup — retrospective: what was wrong, what was clean, time taken
-```
-
 ## Invocation
 
 ```
@@ -65,4 +54,15 @@ Agent(
   background: true,
   prompt: "Verify issue #<NNN>. Run your full todo list."
 )
+```
+
+## Todo list
+
+```
+1. /accuracy-read-issue — parse the issue body, extract all file:line and function name claims
+2. /accuracy-verify-files — check files exist, line numbers in range, function signatures match
+3. /accuracy-verify-claims — check corpus examples, reproduction claims, duplicate checks
+4. /accuracy-verify-status — check if issue already fixed via recent merges or commits
+5. /accuracy-comment — post accuracy comment, update issue, add accuracy-reviewed label
+6. /agent-wrapup — retrospective: what was wrong, what was clean, time taken
 ```
