@@ -1,0 +1,21 @@
+{
+  "pr_number": 6853,
+  "pr_head_sha": "old111",
+  "failed_prs": [
+    6853
+  ],
+  "signature": "lint: cargo clippy failed",
+  "pr_status": {
+    "sha": "old111",
+    "gate": "ci / lint",
+    "state": "FAILURE",
+    "signature": "lint: cargo clippy failed"
+  },
+  "master_status": {
+    "sha": "new999",
+    "gate": "ci / lint",
+    "state": "SUCCESS",
+    "signature": "lint: cargo clippy passed"
+  },
+  "pr_head_is_behind_master": true
+}

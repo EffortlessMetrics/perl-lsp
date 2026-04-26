@@ -1,0 +1,25 @@
+{
+  "pr_number": 6853,
+  "pr_head_sha": "abc123",
+  "failed_prs": [6853, 6854],
+  "signature": "test: parser corpus gate failed",
+  "pr_status": {
+    "sha": "abc123",
+    "gate": "ci / test",
+    "state": "FAILURE",
+    "signature": "test: parser corpus gate failed",
+    "failing_files": ["crates/perl-parser/src/recovery.rs"]
+  },
+  "master_status": {
+    "sha": "def456",
+    "gate": "ci / test",
+    "state": "FAILURE",
+    "signature": "test: parser corpus gate failed"
+  },
+  "merge_group_status": {
+    "sha": "mg1",
+    "gate": "ci / test",
+    "state": "FAILURE",
+    "signature": "test: parser corpus gate failed"
+  }
+}

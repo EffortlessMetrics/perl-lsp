@@ -1,0 +1,19 @@
+{
+  "pr_number": 6853,
+  "pr_head_sha": "head999",
+  "failed_prs": [6853],
+  "signature": "compile error in crates/perl-parser/src/ast.rs",
+  "pr_status": {
+    "sha": "head999",
+    "gate": "ci / test",
+    "state": "FAILURE",
+    "signature": "compile error in crates/perl-parser/src/ast.rs",
+    "failing_files": ["crates/perl-parser/src/ast.rs"]
+  },
+  "master_status": {
+    "sha": "master111",
+    "gate": "ci / test",
+    "state": "SUCCESS",
+    "signature": "all checks passed"
+  }
+}

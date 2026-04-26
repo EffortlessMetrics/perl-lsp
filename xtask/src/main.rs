@@ -400,6 +400,21 @@ enum Commands {
         format: String,
     },
 
+    /// Classify CI failures before routing labels/actions.
+    FailureClassifier {
+        /// Queue snapshot JSON input.
+        #[arg(long)]
+        snapshot: Option<PathBuf>,
+
+        /// Fixture JSON input for deterministic testing.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output receipt JSON path (used with --snapshot).
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1461,6 +1476,13 @@ fn main() -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::FailureClassifier { snapshot, fixture, receipt } => {
+            failure_classifier::run(failure_classifier::FailureClassifierConfig {
+                snapshot,
+                fixture,
+                receipt,
+            })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
