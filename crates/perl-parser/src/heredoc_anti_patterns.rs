@@ -986,8 +986,8 @@ END
 "#;
 
         let diagnostics = detector.detect_all(code);
-        assert!(
-            diagnostics.iter().any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. }))
-        );
+        assert!(diagnostics
+            .iter()
+            .any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. })));
     }
 }
