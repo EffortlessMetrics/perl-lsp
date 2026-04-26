@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-ratchet.schema.json",
+  "title": "Parser ratchet gate receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check", "schema_version", "event", "verdict"],
+      "properties": {
+        "check": { "const": "parser-ratchet" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "baseline_error_rate": { "type": "number", "minimum": 0 },
+            "current_error_rate": { "type": "number", "minimum": 0 },
+            "delta_error_rate": { "type": "number" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

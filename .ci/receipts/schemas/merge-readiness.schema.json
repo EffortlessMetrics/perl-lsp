@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/merge-readiness.schema.json",
+  "title": "Merge readiness receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check", "schema_version", "event", "verdict"],
+      "properties": {
+        "check": { "const": "merge-readiness" },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "code_regression",
+            "infra_failure",
+            "stale_base",
+            "master_red",
+            "skipped",
+            "unknown"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

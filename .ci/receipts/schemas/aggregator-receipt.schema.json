@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/aggregator-receipt.schema.json",
+  "title": "Gate aggregator receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check", "schema_version", "event", "verdict"],
+      "properties": {
+        "check": { "const": "aggregator" },
+        "selected": { "type": "array", "items": { "type": "string" } },
+        "metrics": { "type": "object" },
+        "artifacts": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

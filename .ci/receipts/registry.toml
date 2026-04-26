@@ -1,0 +1,41 @@
+[[schemas]]
+name = "common-gate-receipt"
+schema = ".ci/receipts/schemas/common-gate-receipt.schema.json"
+description = "Common minimal receipt contract used by all CI/control-plane receipts"
+checks = ["common-gate-receipt"]
+
+[[schemas]]
+name = "parser-ratchet"
+schema = ".ci/receipts/schemas/parser-ratchet.schema.json"
+description = "Parser ratchet compatibility receipt schema (substrate for #6854 evolution)"
+checks = ["parser-ratchet"]
+
+[[schemas]]
+name = "methodology-gate"
+schema = ".ci/receipts/schemas/methodology-gate.schema.json"
+description = "Methodology gate selection and verdict receipt"
+checks = ["methodology-gate"]
+
+[[schemas]]
+name = "aggregator"
+schema = ".ci/receipts/schemas/aggregator-receipt.schema.json"
+description = "Aggregator roll-up verdict receipt"
+checks = ["aggregator"]
+
+[[schemas]]
+name = "merge-readiness"
+schema = ".ci/receipts/schemas/merge-readiness.schema.json"
+description = "Merge readiness classification receipt"
+checks = ["merge-readiness"]
+
+[[schemas]]
+name = "fmt"
+schema = ".ci/receipts/schemas/fmt.schema.json"
+description = "Formatting gate receipt"
+checks = ["fmt"]
+
+[[schemas]]
+name = "failure-classifier"
+schema = ".ci/receipts/schemas/failure-classifier.schema.json"
+description = "Failure classification receipt"
+checks = ["failure-classifier"]

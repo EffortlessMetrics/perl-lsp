@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/common-gate-receipt.schema.json",
+  "title": "Common CI/control-plane gate receipt",
+  "type": "object",
+  "required": ["check", "schema_version", "event", "verdict"],
+  "additionalProperties": true,
+  "properties": {
+    "check": { "type": "string", "minLength": 1 },
+    "schema_version": { "type": "string", "minLength": 1 },
+    "event": {
+      "type": "string",
+      "enum": ["pull_request", "merge_group", "push", "local"]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "warn", "skipped"]
+    },
+    "run_id": { "type": ["string", "integer"] },
+    "pr": { "type": "integer", "minimum": 1 },
+    "base_sha": { "type": "string" },
+    "head_sha": { "type": "string" },
+    "candidate_sha": { "type": "string" },
+    "selected": { "type": "array", "items": { "type": "string" } },
+    "selection_reason": { "type": "string" },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "code_regression",
+        "infra_failure",
+        "stale_base",
+        "master_red",
+        "skipped",
+        "unknown"
+      ]
+    },
+    "violations": { "type": "array", "items": { "type": "object" } },
+    "metrics": { "type": "object" },
+    "artifacts": { "type": "array", "items": { "type": "object" } },
+    "repro": {
+      "type": "object",
+      "properties": {
+        "command": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "runner": { "type": "object" }
+  }
+}

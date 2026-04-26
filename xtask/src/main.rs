@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_receipts::OutputFormat as GateReceiptOutputFormat;
 use tasks::gates::{GateTier, OutputFormat};
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
@@ -853,6 +854,16 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Validate CI/control-plane gate receipt schemas from .ci/receipts/registry.toml.
+    GateReceipts {
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1220,6 +1231,24 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List,
+
+    /// Validate a single receipt JSON against registry-selected schema.
+    Validate {
+        /// Path to receipt JSON.
+        path: PathBuf,
+    },
+
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Directory to scan recursively for *.json receipt files.
+        dir: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1301,6 +1330,12 @@ enum MetricsCommand {
         #[arg(long)]
         input: Option<PathBuf>,
     },
+}
+
+#[derive(ValueEnum, Clone)]
+enum GateReceiptsFormat {
+    Human,
+    Json,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1578,6 +1613,19 @@ fn main() -> Result<()> {
                 output_dir,
                 test_threads,
             })
+        }
+        Commands::GateReceipts { format, command } => {
+            let output = match format {
+                GateReceiptsFormat::Human => GateReceiptOutputFormat::Human,
+                GateReceiptsFormat::Json => GateReceiptOutputFormat::Json,
+            };
+            match command {
+                GateReceiptsCommand::List => gate_receipts::list(output),
+                GateReceiptsCommand::Validate { path } => gate_receipts::validate(&path, output),
+                GateReceiptsCommand::ValidateAll { dir } => {
+                    gate_receipts::validate_all(&dir, output)
+                }
+            }
         }
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)

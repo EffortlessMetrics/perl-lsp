@@ -1,0 +1,17 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1.0.0",
+  "event": "pull_request",
+  "verdict": "pass",
+  "run_id": "gha-12345",
+  "pr": 6856,
+  "selection_reason": "baseline satisfied",
+  "selected": ["fmt", "lint", "tests"],
+  "metrics": {
+    "required_checks": 3,
+    "present_checks": 3
+  },
+  "repro": {
+    "command": "cargo xtask gate-receipts validate xtask/tests/fixtures/gate-receipts/valid-methodology-gate.json"
+  }
+}
