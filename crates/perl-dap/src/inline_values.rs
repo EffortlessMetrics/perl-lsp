@@ -494,18 +494,25 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         return Vec::new();
     }
     let mut inline_values = Vec::new();
+    let mut seen_on_line: HashSet<(usize, String)> = HashSet::new();
 
     for (idx, line) in lines.iter().enumerate().skip(start_idx).take(end_idx - start_idx + 1) {
         let code_mask = code_byte_mask(line);
-        for (start, end, var_text) in collect_line_variables(line, false) {
+        for (start, end, var_name) in collect_line_variables(line, false) {
             if !code_mask[start..end].iter().all(|is_code| *is_code) {
+                continue;
+            }
+            if is_special_variable_name(&var_name) {
+                continue;
+            }
+            if !seen_on_line.insert((idx, var_name.clone())) {
                 continue;
             }
             let column = (start + 1) as i64;
             inline_values.push(InlineValueText {
                 line: (idx + 1) as i64,
                 column,
-                text: format!("{} = ?", var_text),
+                text: format!("{} = ?", var_name),
             });
         }
     }
@@ -811,6 +818,22 @@ mod tests {
         let values = collect_inline_values(source, 1, 1);
         assert_eq!(values.len(), 1);
         assert_eq!(values[0].text, "$scalar_name = ?");
+    }
+
+    #[test]
+    fn test_legacy_inline_values_deduplicate_per_line() {
+        let source = "$x = $x + $x;";
+        let values = collect_inline_values(source, 1, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$x = ?");
+    }
+
+    #[test]
+    fn test_legacy_inline_values_exclude_special_variables() {
+        let source = "print $_; warn $!; my $ok = 1;";
+        let values = collect_inline_values(source, 1, 1);
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].text, "$ok = ?");
     }
 
     #[test]

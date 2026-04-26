@@ -17,13 +17,15 @@ Merge up to 3 PRs from the candidates identified in step 1.
 
 2. **Fresh green check** — immediately before each merge, verify live state:
    ```bash
-   gh pr view <number> --json isDraft,mergeable,headRefOid,reviewDecision,statusCheckRollup
+   gh pr view <number> --json isDraft,mergeable,mergeStateStatus,labels,headRefOid,reviewDecision,statusCheckRollup
    ```
    All of these must be true AT MERGE TIME (not remembered from earlier):
    - Not draft
-   - Mergeable now
-   - CI checks green on the current HEAD SHA
+   - mergeStateStatus = CLEAN (NOT UNSTABLE, NOT UNKNOWN, NOT DIRTY)
+   - CI checks green on the current HEAD SHA using **latest-per-check filter** (per `feedback_status_check_rollup_stale_entries.md`)
    - No blocking review comments
+   - **NO active `needs-*` label** (per the 2026-04-26 sign-off-as-routing rule: presence of `needs-builder-fix` / `needs-ci-fix` / `needs-diff-fix` / `needs-spec-fix` / `needs-red-tdd-fix` MUST block merge regardless of `merge-ready`). Sign-off is one of the routing decisions; if any gate ALSO bounced, the PR is not actually signed off.
+   - **Workspace-wide CI checks SUCCESS** (Compile All Targets, PR Smoke including workspace fmt, Windows Guardrails compile/module-separator/sandbox), not just per-crate. Per the 2026-04-26 master-green directive: per-crate gates miss workspace drift.
 
 3. **Policy gate (defense-in-depth)** — run the scripted pre-merge guard:
    ```bash
@@ -72,6 +74,18 @@ Merge up to 3 PRs from the candidates identified in step 1.
    - CI green on old SHA → skip, note "stale CI — needs rerun"
    - Draft → skip, note "still in review"
    - Missing `deep-reviewed` on a non-docs PR → skip, note "missing deep review signal"
+   - **Active `needs-*` label** → skip, note "sign-off contradicted by needs-* routing label; gate has not actually cleared"
+   - mergeStateStatus = UNSTABLE → skip, note "non-required check failing or in flight; verify which before forcing"
+
+8. **After each batch of 3** — verify master is genuinely green BEFORE starting the next batch:
+   ```bash
+   gh run list --workflow=CI --branch=master --limit=3 --json conclusion,headSha,event,name
+   ```
+   Required: latest master CI run on the merged SHA = SUCCESS. If master goes red post-merge:
+   - Halt the queue immediately
+   - Report which merge introduced the regression (compare master CI logs to recent merges)
+   - Dispatch a master-fix path (narrow fix PR, admin-merge, cascade-update queued PRs)
+   - Do NOT continue merging until master is verified green
 
 ## Rules
 
