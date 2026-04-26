@@ -272,10 +272,7 @@ fn is_stringy_eval_line(line: &str) -> bool {
                 .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
         let rest = &search[eval_pos + 4..];
         // Word boundary: char after must not be alphanumeric or '_'
-        let after_ok = rest
-            .chars()
-            .next()
-            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        let after_ok = rest.chars().next().is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
         if before_ok && after_ok {
             let after_eval = rest.trim_start();
             // String eval: literal strings (eval "..." / eval '...')
