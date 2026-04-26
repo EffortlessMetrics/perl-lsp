@@ -406,6 +406,33 @@ enum Commands {
     /// Check for disallowed direct `ExitStatus::from_raw()` usage.
     CheckFromRaw,
 
+    /// Evaluate PR methodology contradictions from labels and emit a receipt.
+    MethodologyGate {
+        /// Path to fixture JSON payload (offline mode).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// PR number to inspect via `gh pr view`.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Optional output path for methodology receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Dry-run mode: never fail, only emit findings.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Enforce mode: contradictory labels fail the command.
+        #[arg(long)]
+        enforce: bool,
+
+        /// Output format: `human` (default) or `json`.
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
+
     /// Run production security hardening checks.
     SecurityHardening,
 
@@ -1464,6 +1491,20 @@ fn main() -> Result<()> {
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
+        Commands::MethodologyGate { fixture, pr, receipt, dry_run, enforce, format } => {
+            let format_json = format.eq_ignore_ascii_case("json");
+            if !format_json && !format.eq_ignore_ascii_case("human") {
+                return Err(eyre!("unsupported methodology-gate --format: {format}"));
+            }
+            methodology_gate::run(methodology_gate::MethodologyGateConfig {
+                fixture,
+                pr,
+                receipt,
+                dry_run,
+                enforce,
+                format_json,
+            })
+        }
         Commands::SecurityHardening => hardening::security_hardening(),
         Commands::PerformanceHardening => hardening::performance_hardening(),
         Commands::ProductionGatesValidation => hardening::production_gates_validation(),

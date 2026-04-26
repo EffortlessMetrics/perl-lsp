@@ -1,0 +1,61 @@
+name: Methodology Gate
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  methodology-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run methodology gate (advisory)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/receipts
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            cargo xtask methodology-gate \
+              --pr "${{ github.event.pull_request.number }}" \
+              --receipt target/receipts/methodology-gate.json
+          elif [[ "${GITHUB_EVENT_NAME}" == "merge_group" ]]; then
+            cat > target/receipts/methodology-merge-group.json <<'JSON'
+          {
+            "event_name": "merge_group",
+            "labels_available": false,
+            "body": "",
+            "labels": []
+          }
+          JSON
+            cargo xtask methodology-gate \
+              --fixture target/receipts/methodology-merge-group.json \
+              --receipt target/receipts/methodology-gate.json
+          else
+            cargo xtask methodology-gate \
+              --fixture xtask/tests/fixtures/methodology/clean.json \
+              --receipt target/receipts/methodology-gate.json
+          fi
+
+      - name: Upload methodology receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: methodology-gate-receipt
+          path: target/receipts/methodology-gate.json
+          if-no-files-found: ignore

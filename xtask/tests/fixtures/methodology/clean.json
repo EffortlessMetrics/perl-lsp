@@ -1,0 +1,11 @@
+{
+  "pr_number": 6855,
+  "event_name": "pull_request",
+  "body": "Refs #6855\n\nMethodology gate scaffold.",
+  "labels_available": true,
+  "labels": [
+    "in-review",
+    "review-reviewed",
+    "diff-audited"
+  ]
+}

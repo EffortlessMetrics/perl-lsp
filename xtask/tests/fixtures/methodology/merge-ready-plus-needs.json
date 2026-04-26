@@ -1,0 +1,11 @@
+{
+  "pr_number": 6780,
+  "event_name": "pull_request",
+  "body": "Refs #6855\n\npartial implementation umbrella",
+  "labels_available": true,
+  "labels": [
+    "merge-ready",
+    "needs-ci-fix",
+    "deep-reviewed"
+  ]
+}
