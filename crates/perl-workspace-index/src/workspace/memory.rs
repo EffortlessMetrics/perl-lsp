@@ -1,4 +1,4 @@
-//! Memory profiling infrastructure for large workspace symbol resolution.
+﻿//! Memory profiling infrastructure for large workspace symbol resolution.
 //!
 //! This module provides pure-Rust memory estimation for the workspace index,
 //! enabling baseline documentation and scaling analysis without external
@@ -263,7 +263,10 @@ mod tests {
 
         let linear_factor =
             linear.scaling_factor().ok_or("expected linear scaling factor to exist")?;
-        assert!((linear_factor - 1.0).abs() < f64::EPSILON);
+        // Use a relative tolerance (1e-9) rather than f64::EPSILON (2.2e-16) so the
+        // assertion remains valid if test values are changed to non-power-of-2 numbers
+        // that introduce floating-point rounding error.
+        assert!((linear_factor - 1.0).abs() < 1e-9, "expected ~1.0, got {linear_factor}");
 
         let mut super_linear = ScaleReport::new();
         super_linear
@@ -273,7 +276,10 @@ mod tests {
 
         let super_linear_factor =
             super_linear.scaling_factor().ok_or("expected super-linear scaling factor to exist")?;
-        assert!((super_linear_factor - 1.5).abs() < f64::EPSILON);
+        assert!(
+            (super_linear_factor - 1.5).abs() < 1e-9,
+            "expected ~1.5, got {super_linear_factor}"
+        );
 
         Ok(())
     }
