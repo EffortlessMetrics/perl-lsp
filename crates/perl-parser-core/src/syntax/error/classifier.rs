@@ -29,6 +29,7 @@
 //! // let suggestion = classifier.get_suggestion(&error_kind);
 //! ```
 
+use super::ParseError;
 use perl_ast::Node;
 
 /// Specific types of parse errors found in Perl script content
@@ -335,6 +336,89 @@ impl ErrorClassifier {
     }
 }
 
+/// Recovery-salvage metrics computed for a single parsed file.
+///
+/// Used by accuracy closeout reporting to distinguish salvageable structured
+/// recovery from unrecovered parser damage.
+///
+/// Distinct from [`crate::RecoverySalvageProfile`] in two ways: this type
+/// carries `unrecovered_diagnostic_count` (non-recovery diagnostics) for finer
+/// classification, and exposes `is_dirty()`/`is_structured_recovery_only()`
+/// helpers used by the corpus closeout reports.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RecoverySalvageMetrics {
+    /// Number of [`ParseError::Recovered`] diagnostics observed.
+    pub recovered_node_count: usize,
+    /// Number of non-recovery diagnostics observed (`diagnostics.len() -
+    /// recovered_node_count`).
+    pub unrecovered_diagnostic_count: usize,
+    /// Number of `NodeKind::Error` nodes observed in the AST.
+    pub error_node_count: usize,
+    /// Message from the earliest unrecovered `ERROR` node (by start offset),
+    /// if any.
+    pub first_unrecovered_error_node: Option<String>,
+}
+
+impl RecoverySalvageMetrics {
+    /// Returns true when the parse produced any error node, recovered
+    /// diagnostic, or unrecovered diagnostic.
+    pub fn is_dirty(&self) -> bool {
+        self.error_node_count > 0
+            || self.recovered_node_count > 0
+            || self.unrecovered_diagnostic_count > 0
+    }
+
+    /// Returns true when the parse only produced structured recovery
+    /// diagnostics — i.e. recovered diagnostics with no `ERROR` AST nodes and
+    /// no other diagnostics.
+    pub fn is_structured_recovery_only(&self) -> bool {
+        self.recovered_node_count > 0
+            && self.error_node_count == 0
+            && self.unrecovered_diagnostic_count == 0
+    }
+}
+
+/// Compute [`RecoverySalvageMetrics`] for a parsed AST and its diagnostics.
+///
+/// Walks the AST counting `NodeKind::Error` nodes, recording the earliest
+/// error message by start offset, and partitions `diagnostics` into recovered
+/// vs unrecovered counts.
+pub fn classify_recovery_salvage(ast: &Node, diagnostics: &[ParseError]) -> RecoverySalvageMetrics {
+    let mut error_node_count = 0usize;
+    let mut first_start = usize::MAX;
+    let mut first_unrecovered_error_node: Option<String> = None;
+
+    fn walk(
+        node: &Node,
+        error_node_count: &mut usize,
+        first_start: &mut usize,
+        first_unrecovered_error_node: &mut Option<String>,
+    ) {
+        if let perl_ast::NodeKind::Error { message, .. } = &node.kind {
+            *error_node_count = error_node_count.saturating_add(1);
+            if node.location.start < *first_start {
+                *first_start = node.location.start;
+                *first_unrecovered_error_node = Some(message.clone());
+            }
+        }
+        node.for_each_child(|child| {
+            walk(child, error_node_count, first_start, first_unrecovered_error_node);
+        });
+    }
+    walk(ast, &mut error_node_count, &mut first_start, &mut first_unrecovered_error_node);
+
+    let recovered_node_count =
+        diagnostics.iter().filter(|e| matches!(e, ParseError::Recovered { .. })).count();
+    let unrecovered_diagnostic_count = diagnostics.len().saturating_sub(recovered_node_count);
+
+    RecoverySalvageMetrics {
+        recovered_node_count,
+        unrecovered_diagnostic_count,
+        error_node_count,
+        first_unrecovered_error_node,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,10 +514,7 @@ mod tests {
             !metrics.is_structured_recovery_only(),
             "no recovery diagnostics — not structured-recovery-only"
         );
-        assert_eq!(
-            metrics.first_unrecovered_error_node.as_deref(),
-            Some("unexpected token")
-        );
+        assert_eq!(metrics.first_unrecovered_error_node.as_deref(), Some("unexpected token"));
     }
 
     #[test]
