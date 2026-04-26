@@ -1,0 +1,19 @@
+{
+  "kind": "review",
+  "producer": "plan-reviewer",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "verdict": "clean",
+  "material_observations": [
+    "Verified updated review receipt docs now require concrete findings for clean sign-off."
+  ],
+  "negative_checks": [
+    "No missing schema fields in the clean receipt example."
+  ],
+  "blockers": [],
+  "next_routes": [
+    "state_builder"
+  ],
+  "supersedes": null
+}

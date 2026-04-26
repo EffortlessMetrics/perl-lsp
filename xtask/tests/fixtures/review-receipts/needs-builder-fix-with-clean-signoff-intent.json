@@ -1,0 +1,21 @@
+{
+  "kind": "review",
+  "producer": "plan-reviewer",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "verdict": "needs_builder_fix",
+  "material_observations": [
+    "Builder emitted a stale route table for this diff."
+  ],
+  "negative_checks": [
+    "No parser/lsp behavior change detected in touched crates."
+  ],
+  "blockers": [
+    "Builder must regenerate route table with current schema."
+  ],
+  "next_routes": [
+    "signoff_clean"
+  ],
+  "supersedes": null
+}

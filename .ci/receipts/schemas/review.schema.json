@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/review.schema.json",
+  "title": "Review Receipt",
+  "description": "Evidence-only review receipt used by automation to understand reviewer outcomes without mutating labels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "producer",
+    "pr",
+    "head_sha",
+    "base_sha",
+    "verdict",
+    "material_observations",
+    "negative_checks",
+    "blockers",
+    "next_routes"
+  ],
+  "properties": {
+    "kind": {
+      "const": "review"
+    },
+    "producer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pr": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "head_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "base_sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "clean",
+        "needs_builder_fix",
+        "needs_diff_fix",
+        "needs_human",
+        "blocked_unknown"
+      ]
+    },
+    "material_observations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "negative_checks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "next_routes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "supersedes": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "verdict": {
+            "const": "clean"
+          }
+        },
+        "required": [
+          "verdict"
+        ]
+      },
+      "then": {
+        "properties": {
+          "material_observations": {
+            "minItems": 1
+          },
+          "negative_checks": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
