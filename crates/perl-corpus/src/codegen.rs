@@ -314,6 +314,7 @@ fn basic_statement() -> impl Strategy<Value = String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn generated_code_is_stable_for_seed() {
@@ -333,5 +334,40 @@ mod tests {
         };
         let code = generate_perl_code_with_options(options);
         assert!(code.is_empty());
+    }
+
+    #[test]
+    fn strategy_indices_cover_all_kinds_when_requested() {
+        let mut rng = StdRng::seed_from_u64(7);
+        let strategy_len = 6;
+        let statements = 30;
+
+        let indices = build_strategy_indices(strategy_len, statements, true, &mut rng);
+        assert_eq!(indices.len(), statements);
+
+        let unique: HashSet<usize> = indices.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            strategy_len,
+            "expected all strategy indices to appear at least once"
+        );
+        assert!(unique.iter().all(|idx| *idx < strategy_len));
+    }
+
+    #[test]
+    fn strategy_indices_do_not_repeat_when_budget_is_smaller_than_kind_count() {
+        let mut rng = StdRng::seed_from_u64(11);
+        let strategy_len = 10;
+        let statements = 4;
+
+        let indices = build_strategy_indices(strategy_len, statements, true, &mut rng);
+        assert_eq!(indices.len(), statements);
+
+        let unique: HashSet<usize> = indices.iter().copied().collect();
+        assert_eq!(
+            unique.len(),
+            statements,
+            "expected unique indices when sampling fewer statements than kinds"
+        );
     }
 }

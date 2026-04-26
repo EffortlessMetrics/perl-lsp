@@ -1646,9 +1646,12 @@ impl<'a> PerlLexer<'a> {
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
                         // A standalone sigil token before `{` starts a dereference
-                        // sequence (e.g. `${$ref}` / `@{$aref}` / `%{$href}`).
+                        // sequence (e.g. `${$ref}` / `@{$aref}` / `%{$href}` / `&{$cref}`).
                         // Mark it as subscript-capable so `{` increments brace depth
                         // and the closing `}` can enable chained `{...}` subscripts.
+                        // (Broader form than master's `$|@|%` filter — `*` is already
+                        // excluded by the `is_deref` guard above and `&` deref also
+                        // benefits from chained-subscript handling.)
                         self.after_var_subscript = true;
 
                         return Some(Token {
