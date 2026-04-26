@@ -50,3 +50,21 @@ fn signature_param_attr_with_args_then_default_no_error() {
     // Attribute with parens AND a default value.
     assert_clean_parse(r#"sub build ($x :reader(get_x) = "default") { }"#);
 }
+
+#[test]
+fn native_class_with_package_qualified_name_parses_cleanly() {
+    // `class Foo::Bar { }` — DoubleColon in the class name must still trigger
+    // native-class parsing (via the peek_second == DoubleColon guard arm).
+    // Before the guard the DoubleColon was handled but the guard being removed
+    // could accidentally break this. Lock it explicitly.
+    assert_clean_parse(r#"class Foo::Bar { }"#);
+}
+
+#[test]
+fn signature_named_param_colon_dollar_not_treated_as_attr() {
+    // `:$name` is a named parameter, not a trailing attribute.
+    // The `named` check at the top of parse_signature_param consumes the leading `:`,
+    // so consume_signature_param_attributes must not see a `:` for a named param
+    // that has already been consumed.
+    assert_clean_parse(r#"sub build (:$host, :$port = 80) { }"#);
+}
