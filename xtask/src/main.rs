@@ -757,6 +757,39 @@ enum Commands {
         date: Option<String>,
     },
 
+    /// Manage CI/control-plane gate receipts.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
+    /// Run methodology gate checks.
+    MethodologyGate,
+
+    /// Aggregate receipt artifacts into a single report.
+    AggregateReceipts,
+
+    /// Perform final gate checks before merge.
+    FinalizeCheck,
+
+    /// Validate workflow trigger configuration.
+    WorkflowTriggerLint,
+
+    /// Evaluate merge-readiness from control-plane artifacts.
+    MergeReady,
+
+    /// Classify queue failures and suggest handling lanes.
+    FailureClassifier,
+
+    /// Queue control-plane commands.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
+    /// Produce fix-forward planning artifacts.
+    FixForward,
+
     /// Publish VSCode extension to marketplace
     PublishVscode {
         /// Skip confirmation
@@ -1220,6 +1253,25 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List known gate receipt types and locations.
+    List,
+    /// Validate a gate receipt file.
+    Validate {
+        /// Path to the receipt JSON file to validate.
+        path: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Show queue state summary.
+    State,
+    /// Project labels for queue items (no mutations).
+    ProjectLabels,
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1510,6 +1562,21 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommand::List => gate_receipts::list(),
+            GateReceiptsCommand::Validate { path } => gate_receipts::validate(path),
+        },
+        Commands::MethodologyGate => methodology_gate::run(),
+        Commands::AggregateReceipts => aggregate_receipts::run(),
+        Commands::FinalizeCheck => finalize_check::run(),
+        Commands::WorkflowTriggerLint => workflow_trigger_lint::run(),
+        Commands::MergeReady => merge_ready::run(),
+        Commands::FailureClassifier => failure_classifier::run(),
+        Commands::Queue { command } => match command {
+            QueueCommand::State => queue_state::run(),
+            QueueCommand::ProjectLabels => label_projector::run(),
+        },
+        Commands::FixForward => fix_forward::run(),
         Commands::ParserCorpusSweep {
             roots,
             manifest,
