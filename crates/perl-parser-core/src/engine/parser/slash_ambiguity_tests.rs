@@ -156,6 +156,16 @@ mod tests {
     }
 
     #[test]
+    fn test_regex_after_builtin_argument_separator() {
+        // print /foo/  -> regex argument, not division
+        let code = "print /foo/;";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("regex"), "Should be regex after builtin: {sexp}");
+    }
+
+    #[test]
     fn test_regex_in_map() {
         // map /pattern/, @list  ->  regex in map (less common but valid Perl)
         let code = "map /abc/, @list;";

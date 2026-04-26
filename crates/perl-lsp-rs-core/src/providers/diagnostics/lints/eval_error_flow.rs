@@ -42,10 +42,10 @@ fn visit_node(node: &Node, diagnostics: &mut Vec<Diagnostic>, state: FlowState) 
         NodeKind::If { then_branch, elsif_branches, else_branch, .. } => {
             visit_node(then_branch, diagnostics, state);
             for (_, branch) in elsif_branches {
-                visit_node(branch, diagnostics, FlowState::default());
+                visit_node(branch, diagnostics, state);
             }
             if let Some(branch) = else_branch {
-                visit_node(branch, diagnostics, FlowState::default());
+                visit_node(branch, diagnostics, state);
             }
         }
         NodeKind::While { body, continue_block, .. } => {
@@ -228,5 +228,110 @@ fn make_diagnostic(node: &Node, has_prior_source: bool) -> Diagnostic {
             "Move the exception check immediately after the `eval` or `try` block."
                 .to_string(),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_parser_core::parser::Parser;
+    use perl_tdd_support::must;
+
+    fn eval_error_flow_diags(source: &str) -> Vec<Diagnostic> {
+        let ast = must(Parser::new(source).parse());
+        let mut diagnostics = Vec::new();
+        check_eval_error_flow(&ast, &mut diagnostics);
+        diagnostics
+    }
+
+    #[test]
+    fn no_pl407_when_immediate_check_happens_in_else_branch() {
+        let source = r#"
+eval { risky() };
+if ($ok) {
+    return;
+} else {
+    warn $@;
+}
+"#;
+        let diagnostics = eval_error_flow_diags(source);
+        assert!(
+            diagnostics.iter().all(|diag| diag.code.as_deref() != Some("PL407")),
+            "Immediate `$@` check inside an else branch after eval should not be flagged: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn pl407_when_intervening_statement_precedes_else_branch_check() {
+        let source = r#"
+eval { risky() };
+my $x = 1;
+if ($ok) {
+    return;
+} else {
+    warn $@;
+}
+"#;
+        let diagnostics = eval_error_flow_diags(source);
+        assert!(
+            diagnostics.iter().any(|diag| diag.code.as_deref() == Some("PL407")),
+            "Stale `$@` read in else branch after intervening statement should be flagged: {diagnostics:?}"
+        );
+    }
+
+    // Covers the elsif branch of the fix â€” the PR modifies both elsif_branches and
+    // else_branch to inherit caller flow state, but the original two tests only
+    // exercise the else path.
+    #[test]
+    fn no_pl407_when_immediate_check_happens_in_elsif_branch() {
+        let source = r#"
+eval { risky() };
+if ($ok) {
+    return;
+} elsif ($other) {
+    warn $@;
+}
+"#;
+        let diagnostics = eval_error_flow_diags(source);
+        assert!(
+            diagnostics.iter().all(|diag| diag.code.as_deref() != Some("PL407")),
+            "Immediate `$@` check inside an elsif branch after eval should not be flagged: {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn pl407_when_intervening_statement_precedes_elsif_branch_check() {
+        let source = r#"
+eval { risky() };
+my $x = 1;
+if ($ok) {
+    return;
+} elsif ($other) {
+    warn $@;
+}
+"#;
+        let diagnostics = eval_error_flow_diags(source);
+        assert!(
+            diagnostics.iter().any(|diag| diag.code.as_deref() == Some("PL407")),
+            "Stale `$@` read in elsif branch after intervening statement should be flagged: {diagnostics:?}"
+        );
+    }
+
+    // For/foreach loop bodies reset flow state (FlowState::default()) â€” verify that
+    // $@ inside a foreach body after an eval IS flagged even though eval is immediate.
+    // This ensures the PR's change to if/elsif/else did not accidentally affect loops.
+    #[test]
+    fn pl407_fires_inside_foreach_body_even_after_immediate_eval() {
+        let source = r#"
+eval { risky() };
+foreach my $item (@items) {
+    warn $@;
+}
+"#;
+        let diagnostics = eval_error_flow_diags(source);
+        assert!(
+            diagnostics.iter().any(|diag| diag.code.as_deref() == Some("PL407")),
+            "foreach body resets flow state â€” $@ after eval inside loop body should be flagged: {diagnostics:?}"
+        );
     }
 }

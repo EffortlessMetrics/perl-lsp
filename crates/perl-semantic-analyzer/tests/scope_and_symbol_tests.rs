@@ -1914,6 +1914,92 @@ print WIFEXITED(0);
 }
 
 #[test]
+fn strict_subs_allows_require_then_manual_import_barewords()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Loader;
+My::Loader->import('load_data');
+print load_data();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should not flag barewords imported via static require + manual import"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_require_then_manual_import_qw_barewords()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require My::Tools;
+My::Tools->import(qw(helper_one helper_two));
+print helper_one();
+print helper_two();
+"#;
+    let issues = scope_issues_strict(code);
+
+    for symbol in ["helper_one", "helper_two"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == symbol
+            }),
+            "strict 'subs' should not flag {symbol} imported through qw manual import"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn strict_subs_still_flags_import_without_require() -> Result<(), Box<dyn std::error::Error>> {
+    // Guard: ->import() without a preceding require should NOT suppress strict_subs.
+    // Bareword identifiers (no parens) are the subject of strict 'subs' checking.
+    // Use `print SOME_CONST` to produce an Identifier node rather than a FunctionCall.
+    let code = r#"
+use strict 'subs';
+My::Loader->import('LOAD_CONST');
+print LOAD_CONST;
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "LOAD_CONST"
+        }),
+        "strict 'subs' should still flag bareword Identifiers when require is absent"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_subs_allows_require_path_form_then_manual_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    // require "Foo/Bar.pm" path form should normalise to Foo::Bar for the
+    // subsequent Foo::Bar->import(...) pairing.
+    let code = r#"
+use strict 'subs';
+require "My/Loader.pm";
+My::Loader->import('load_data');
+print load_data();
+"#;
+    let issues = scope_issues_strict(code);
+
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "load_data"
+        }),
+        "strict 'subs' should not flag barewords imported via require path form + manual import"
+    );
+    Ok(())
+}
+
+#[test]
 fn version_pragma_enables_strict_vars_and_subs() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
 use v5.40;
@@ -3784,6 +3870,216 @@ try {
         &code[unused.range.0..unused.range.1],
         "$exception",
         "the diagnostic range must span exactly the catch parameter text"
+    );
+    Ok(())
+}
+
+// ============================================================================
+// GREEN-TDD EDGE CASE TESTS FOR ISSUE #6061 (static require + manual import)
+// ============================================================================
+
+#[test]
+fn require_inside_conditional_block_still_suppresses_strict_subs()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+if (1) {
+    require Conditional::Loader;
+    Conditional::Loader->import('get_value');
+}
+print get_value();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "get_value"
+        }),
+        "require inside conditional should suppress strict 'subs' for manual imports"
+    );
+    Ok(())
+}
+
+#[test]
+fn require_inside_eval_block_is_runtime_not_static() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+eval {
+    require Dynamic::Module;
+    Dynamic::Module->import('func');
+};
+print func();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "func"
+        }),
+        "require inside eval {{ }} is runtime; should not suppress strict 'subs'"
+    );
+    Ok(())
+}
+
+#[test]
+fn require_with_variable_target_does_not_match_static_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+my $loader = 'MyLoader';
+require $loader;
+MyLoader->import('exported_func');
+print exported_func();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "exported_func"
+        }),
+        "require with variable target is runtime; should not suppress strict 'subs'"
+    );
+    Ok(())
+}
+
+#[test]
+fn multiple_imports_from_same_required_module() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require Toolkit;
+Toolkit->import('func_a');
+Toolkit->import(qw(func_b func_c));
+print func_a();
+print func_b();
+print func_c();
+"#;
+    let issues = scope_issues_strict(code);
+    for symbol in &["func_a", "func_b", "func_c"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && &issue.variable_name == symbol
+            }),
+            "strict 'subs' should not flag {} imported via multiple calls",
+            symbol
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn require_path_form_vs_bareword_normalization() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require "Mismatched/Module.pm";
+Mismatched::Module->import('exported');
+print exported();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword) && issue.variable_name == "exported"
+        }),
+        "require path form should normalize for module-name matching"
+    );
+    Ok(())
+}
+
+#[test]
+fn import_on_unrequired_module_does_not_suppress() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+Unrelated::Module->import('orphaned_func');
+print orphaned_func();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "orphaned_func"
+        }),
+        "->import() without preceding require should not suppress strict 'subs'"
+    );
+    Ok(())
+}
+
+#[test]
+fn qw_form_with_special_delimiters() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require Delim::Module;
+Delim::Module->import(qw[sym_one sym_two]);
+print sym_one();
+print sym_two();
+"#;
+    let issues = scope_issues_strict(code);
+    for symbol in &["sym_one", "sym_two"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && &issue.variable_name == symbol
+            }),
+            "qw with [] delimiters should parse symbols correctly"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn require_without_subsequent_import_does_nothing() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require Some::Module;
+print unimported_symbol();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "unimported_symbol"
+        }),
+        "bare require without ->import() should not suppress unrelated symbols"
+    );
+    Ok(())
+}
+
+#[test]
+fn array_literal_import_args() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+require ArrayImporter;
+ArrayImporter->import(['sym_x', 'sym_y']);
+print sym_x();
+print sym_y();
+"#;
+    let issues = scope_issues_strict(code);
+    for symbol in &["sym_x", "sym_y"] {
+        assert!(
+            !issues.iter().any(|issue| {
+                matches!(issue.kind, IssueKind::UnquotedBareword) && &issue.variable_name == symbol
+            }),
+            "array literal import should register {}",
+            symbol
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn nested_blocks_preserve_require_scope() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"
+use strict 'subs';
+{
+    require Scoped::Module;
+    {
+        Scoped::Module->import('nested_func');
+    }
+}
+print nested_func();
+"#;
+    let issues = scope_issues_strict(code);
+    assert!(
+        !issues.iter().any(|issue| {
+            matches!(issue.kind, IssueKind::UnquotedBareword)
+                && issue.variable_name == "nested_func"
+        }),
+        "require should be visible to nested import in same program scope"
     );
     Ok(())
 }
