@@ -530,7 +530,10 @@ impl RegexAnalyzer {
     /// Generate hover text for a Perl regex pattern and its modifiers.
     ///
     /// Summarises the named capture groups and explains the meaning of each
-    /// modifier flag (`i`, `m`, `s`, `x`, `g`).
+    /// modifier flag (`i`, `m`, `s`, `x`, `g`, `a`, `d`, `l`, `u`, `n`,
+    /// `p`, `r`, `c`, `o`, `e`). Repeated modifiers are deduplicated.
+    /// Unknown modifier flags are collected and appended as
+    /// `Unknown modifiers: \`…\`` at the end of the hover text.
     ///
     /// # Example
     /// ```
