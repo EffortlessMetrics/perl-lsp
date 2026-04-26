@@ -1,0 +1,16 @@
+{
+  "task_id": "task-6853-a",
+  "snapshot_id": "snap-2026-04-26-001",
+  "lane": "ci-modernization",
+  "pr": 6853,
+  "head_sha": "abc1234def5678",
+  "base_sha": "00112233445566",
+  "canonical_state": {
+    "phase": "review",
+    "status": "open"
+  },
+  "allowed_mutations": ["comment", "comment_update"],
+  "forbidden_mutations": ["label_mutation", "worktree_allocate"],
+  "required_output_schema": ".ci/receipts/schemas/agent-receipt.schema.json",
+  "expires_at": "2099-01-01T00:00:00Z"
+}

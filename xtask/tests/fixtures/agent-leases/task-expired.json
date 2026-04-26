@@ -1,0 +1,16 @@
+{
+  "task_id": "task-6853-expired",
+  "snapshot_id": "snap-2026-04-26-expired",
+  "lane": "ci-modernization",
+  "pr": 6853,
+  "head_sha": "abc1234def5678",
+  "base_sha": "00112233445566",
+  "canonical_state": {
+    "phase": "review",
+    "status": "open"
+  },
+  "allowed_mutations": ["comment"],
+  "forbidden_mutations": ["label_mutation"],
+  "required_output_schema": ".ci/receipts/schemas/agent-receipt.schema.json",
+  "expires_at": "2020-01-01T00:00:00Z"
+}

@@ -1,0 +1,20 @@
+{
+  "receipt_id": "receipt-6853-2",
+  "task_id": "task-6853-a",
+  "snapshot_id": "snap-2026-04-26-001",
+  "canonical_head_sha": "abc1234def5678",
+  "observed_head_sha": "abc1234def5678",
+  "created_at": "2026-04-26T00:00:00Z",
+  "lease_expires_at": "2099-01-01T00:00:00Z",
+  "allowed_mutations": ["comment", "comment_update"],
+  "forbidden_mutations": ["state_transition"],
+  "idempotency_key": "task-6853-a",
+  "supersedes_receipt_id": "receipt-6853-1",
+  "required_output_schema": ".ci/receipts/schemas/agent-receipt.schema.json",
+  "applied_mutations": [
+    {
+      "action": "state_transition",
+      "target": "pr:6853"
+    }
+  ]
+}

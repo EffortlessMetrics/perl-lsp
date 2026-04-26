@@ -1097,6 +1097,12 @@ enum Commands {
     /// Remove stale `.claude/worktrees` entries and prune Git metadata.
     WorktreeCleanup,
 
+    /// Agent lease/receipt primitives for disconnected orchestration safety.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Show summary statistics from swarm-metrics.jsonl.
     SwarmSummary {
         /// Path to operations directory (defaults to `.ops-perl-lsp`).
@@ -1216,6 +1222,52 @@ enum CpanCorpusCommand {
         /// Local install directory containing CPAN modules
         #[arg(long)]
         install_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Acquire and verify task leases.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Validate agent receipts against lease constraints.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Acquire a lease from a typed task payload.
+    Acquire {
+        /// Path to an agent task JSON.
+        #[arg(long)]
+        task: PathBuf,
+        /// Output path for the generated lease JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify that a lease is still valid for the current snapshot.
+    Verify {
+        /// Path to a lease JSON created by `agent lease acquire`.
+        #[arg(long)]
+        lease: PathBuf,
+        /// Path to current snapshot JSON used by the reconciler.
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate a receipt's idempotency and mutation constraints.
+    Validate {
+        /// Path to an agent receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
     },
 }
 
@@ -1674,6 +1726,21 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::WorktreeCleanup => worktrees::cleanup(),
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Acquire { task, out } => {
+                    agent_lease::acquire(task.as_path(), out.as_path())
+                }
+                AgentLeaseCommand::Verify { lease, current } => {
+                    agent_lease::verify(lease.as_path(), current.as_path())
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt } => {
+                    agent_receipt::validate(receipt.as_path())
+                }
+            },
+        },
         Commands::SwarmSummary { ops_dir, since, limit, format } => {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }

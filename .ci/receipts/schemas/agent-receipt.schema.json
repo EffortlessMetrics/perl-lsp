@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/agent-receipt.schema.json",
+  "title": "Agent Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_id",
+    "task_id",
+    "snapshot_id",
+    "canonical_head_sha",
+    "observed_head_sha",
+    "created_at",
+    "lease_expires_at",
+    "allowed_mutations",
+    "forbidden_mutations",
+    "idempotency_key",
+    "required_output_schema",
+    "applied_mutations"
+  ],
+  "properties": {
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "canonical_head_sha": { "type": "string", "minLength": 7 },
+    "observed_head_sha": { "type": "string", "minLength": 7 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "lease_expires_at": { "type": "string", "format": "date-time" },
+    "allowed_mutations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "forbidden_mutations": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "supersedes_receipt_id": { "type": ["string", "null"] },
+    "required_output_schema": { "type": "string", "minLength": 1 },
+    "applied_mutations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "target"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "comment_update",
+              "state_transition",
+              "artifact_upload"
+            ]
+          },
+          "target": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
