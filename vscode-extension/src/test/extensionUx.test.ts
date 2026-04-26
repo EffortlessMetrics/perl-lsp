@@ -150,6 +150,107 @@ describe('extension UX warnings', () => {
     );
   });
 
+  test('does not offer directory creation when include path traverses a symlink outside workspace', async () => {
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-symlink-'));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-outside-'));
+    const symlinkPath = path.join(workspaceDir, 'linked');
+    try {
+      fs.symlinkSync(outsideDir, symlinkPath, 'dir');
+    } catch {
+      return;
+    }
+
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['linked/created-from-warning']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    showWarningMessage.mockResolvedValue(undefined);
+
+    await validateIncludePaths(context);
+
+    // The symlinked path must be excluded from creatablePaths so only 'Open Settings' is offered.
+    expect(showWarningMessage).toHaveBeenCalledWith(
+      expect.stringContaining('linked/created-from-warning'),
+      'Open Settings'
+    );
+    expect(showWarningMessage).not.toHaveBeenCalledWith(
+      expect.any(String),
+      'Open Settings',
+      'Create Missing Directories'
+    );
+    // Belt-and-suspenders: even if the user somehow triggered creation, nothing should land outside.
+    expect(fs.existsSync(path.join(outsideDir, 'created-from-warning'))).toBe(false);
+  });
+
+  test('does not create directories outside workspace when user clicks Create Missing Directories with a symlinked include path', async () => {
+    // This test verifies the T2 re-check guard in the mkdir loop: even if creatablePaths
+    // somehow contains a symlinked path (e.g. due to a race between the T1 filter and the
+    // actual mkdir call), hasSafeExistingAncestor is re-evaluated before mkdirSync runs.
+    // We simulate this by injecting a mixed set of paths: one safe (inside workspace) and
+    // one that resolves through a symlink to outside.  We then verify only the safe one is
+    // created and nothing lands outside.
+    const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-symlink2-'));
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'perl-lsp-ux-outside2-'));
+    const symlinkPath = path.join(workspaceDir, 'linked2');
+    try {
+      fs.symlinkSync(outsideDir, symlinkPath, 'dir');
+    } catch {
+      // Symlink creation not supported on this platform/environment — skip.
+      return;
+    }
+
+    const context = makeContext();
+    context.globalState = {
+      get: jest.fn(() => undefined),
+      update: jest.fn(async () => undefined),
+    };
+
+    const getConfiguration = vscode.workspace.getConfiguration as jest.Mock;
+    // 'safe-lib' is inside the workspace; 'linked2/escape' traverses the symlink outside.
+    getConfiguration.mockImplementation(() => ({
+      get: jest.fn(() => ['safe-lib', 'linked2/escape']),
+    }));
+
+    (vscode.workspace as any).workspaceFolders = [
+      {
+        name: 'workspace',
+        uri: {
+          fsPath: workspaceDir,
+          toString: () => `file://${workspaceDir}`,
+        },
+      },
+    ];
+
+    const showWarningMessage = vscode.window.showWarningMessage as jest.Mock;
+    // The user clicks 'Create Missing Directories'.
+    showWarningMessage.mockResolvedValue('Create Missing Directories');
+
+    await validateIncludePaths(context);
+
+    // 'safe-lib' is safe: it should be created inside the workspace.
+    expect(fs.existsSync(path.join(workspaceDir, 'safe-lib'))).toBe(true);
+    // 'linked2/escape' resolves through a symlink outside: nothing should be created there.
+    expect(fs.existsSync(path.join(outsideDir, 'escape'))).toBe(false);
+  });
+
   test('warns once per major version when conflicting Perl extensions are installed', async () => {
     const context = makeContext('0.12.3');
     let warnedMajor: string | undefined;

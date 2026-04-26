@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
                         // Hash/array slice: @hash{...} or %hash{...}
                         self.tokens.next()?; // consume {
                         let key = self.parse_hash_subscript_key()?;
-                        self.expect(TokenKind::RightBrace)?;
+                        self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                         let start = expr.location.start;
                         let end = self.previous_position();
@@ -163,7 +163,7 @@ impl<'a> Parser<'a> {
                                 // ->%{...} hash slice
                                 self.tokens.next()?; // consume {
                                 let key = self.parse_hash_subscript_key()?;
-                                self.expect(TokenKind::RightBrace)?;
+                                self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                                 let start = expr.location.start;
                                 let end = self.previous_position();
@@ -326,7 +326,7 @@ impl<'a> Parser<'a> {
                             // Arrow hash dereference: $ref->{key}
                             self.tokens.next()?; // consume {
                             let key = self.parse_hash_subscript_key()?;
-                            self.expect(TokenKind::RightBrace)?;
+                            self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                             let start = expr.location.start;
                             let end = self.previous_position();
@@ -599,7 +599,7 @@ impl<'a> Parser<'a> {
                     // Hash element access
                     self.tokens.next()?; // consume {
                     let key = self.parse_hash_subscript_key()?;
-                    self.expect(TokenKind::RightBrace)?;
+                    self.expect_closing_delimiter(TokenKind::RightBrace)?;
 
                     let start = expr.location.start;
                     let end = self.previous_position();
