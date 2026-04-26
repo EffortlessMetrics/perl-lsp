@@ -1,0 +1,8 @@
+{
+  "old_decision": {
+    "selected_lanes": ["clippy_scoped"]
+  },
+  "new_decision": {
+    "selected_lanes": ["clippy_scoped", "test_scoped"]
+  }
+}

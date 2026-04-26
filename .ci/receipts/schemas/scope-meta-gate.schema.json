@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/ci/receipts/scope-meta-gate.schema.json",
+  "title": "scope-meta-gate receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mode",
+    "old_decision",
+    "new_decision",
+    "changed_lanes",
+    "verdict",
+    "message"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "mode": { "type": "string", "enum": ["fixture", "sha"] },
+    "old_decision": { "$ref": "#/$defs/decision" },
+    "new_decision": { "$ref": "#/$defs/decision" },
+    "changed_lanes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "verdict": { "type": "string", "enum": ["pass", "warn", "fail"] },
+    "message": { "type": "string", "minLength": 1 }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "required": ["selected_lanes"],
+      "properties": {
+        "selected_lanes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -400,6 +400,25 @@ enum Commands {
         format: String,
     },
 
+    /// Meta-gate for scope/gate selection logic changes.
+    ScopeMetaGate {
+        /// Base commit SHA for comparison mode.
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Head commit SHA for comparison mode.
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Fixture JSON path (offline deterministic mode).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Receipt output path.
+        #[arg(long, default_value = "target/receipts/scope-meta-gate.json")]
+        receipt: PathBuf,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1461,6 +1480,14 @@ fn main() -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::ScopeMetaGate { base, head, fixture, receipt } => {
+            scope_meta_gate::run(scope_meta_gate::ScopeMetaGateConfig {
+                base,
+                head,
+                fixture,
+                receipt,
+            })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),
