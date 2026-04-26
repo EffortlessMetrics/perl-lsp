@@ -1,0 +1,8 @@
+{
+  "old_decision": {
+    "selected_lanes": ["parser_ratchet", "test_scoped", "clippy_scoped"]
+  },
+  "new_decision": {
+    "selected_lanes": ["test_scoped", "clippy_scoped"]
+  }
+}

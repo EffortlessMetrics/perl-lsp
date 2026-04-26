@@ -400,6 +400,25 @@ enum Commands {
         format: String,
     },
 
+    /// Detect lane-selection regressions when CI scope logic changes.
+    ScopeMetaGate {
+        /// Base git SHA/reference used for the old decision.
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Head git SHA/reference used for the new decision.
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Optional path to write a receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Optional fixture JSON with `old_decision` and `new_decision`.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1461,6 +1480,14 @@ fn main() -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::ScopeMetaGate { base, head, receipt, fixture } => {
+            scope_meta_gate::run(scope_meta_gate::ScopeMetaGateConfig {
+                base,
+                head,
+                receipt,
+                fixture,
+            })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),

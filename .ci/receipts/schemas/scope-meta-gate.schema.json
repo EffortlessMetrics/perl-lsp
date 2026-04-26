@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/ci/receipts/scope-meta-gate.schema.json",
+  "title": "Scope Meta Gate Receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "old_decision",
+    "new_decision",
+    "changed_lanes",
+    "verdict",
+    "advisory"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "old_decision": { "$ref": "#/$defs/decision" },
+    "new_decision": { "$ref": "#/$defs/decision" },
+    "changed_lanes": {
+      "type": "object",
+      "required": ["removed", "added", "unchanged"],
+      "properties": {
+        "removed": { "$ref": "#/$defs/lane_list" },
+        "added": { "$ref": "#/$defs/lane_list" },
+        "unchanged": { "$ref": "#/$defs/lane_list" }
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "advisory": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "lane_list": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "decision": {
+      "type": "object",
+      "required": ["selected_lanes"],
+      "properties": {
+        "selected_lanes": { "$ref": "#/$defs/lane_list" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

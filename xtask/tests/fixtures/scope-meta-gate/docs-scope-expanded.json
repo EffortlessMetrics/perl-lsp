@@ -1,0 +1,8 @@
+{
+  "old_decision": {
+    "selected_lanes": ["docs"]
+  },
+  "new_decision": {
+    "selected_lanes": ["docs", "doc_build"]
+  }
+}
