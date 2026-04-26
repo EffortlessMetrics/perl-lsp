@@ -6,8 +6,8 @@
 
 mod cpan_test_helpers;
 use cpan_test_helpers::*;
-use perl_parser_core::error::{ParseError, RecoveryKind};
 use perl_parser_core::Parser;
+use perl_parser_core::error::{ParseError, RecoveryKind};
 use perl_tdd_support::must;
 
 // function call args
@@ -103,14 +103,13 @@ fn malformed_tie_missing_paren_emits_inserted_closer() {
     let ast = must(parser.parse());
     let errors = parser.errors().to_vec();
 
-    let has_inserted_closer = errors.iter().any(|e| {
-        matches!(e, ParseError::Recovered { kind: RecoveryKind::InsertedCloser, .. })
-    });
+    let has_inserted_closer = errors
+        .iter()
+        .any(|e| matches!(e, ParseError::Recovered { kind: RecoveryKind::InsertedCloser, .. }));
     assert!(
         has_inserted_closer,
         "Expected InsertedCloser for missing ')' in tie() for '{}', got errors: {:?}",
-        src,
-        errors
+        src, errors
     );
     assert!(
         matches!(ast.kind, perl_parser_core::NodeKind::Program { .. }),
