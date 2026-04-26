@@ -1,0 +1,11 @@
+{
+  "master_sha": "1111111111111111111111111111111111111111",
+  "master_ci_state": "success",
+  "pending_checks": 0,
+  "running_checks": 0,
+  "failed_checks": 0,
+  "ruleset": {
+    "candidate_current": true,
+    "gate_policy": "merge-gate-v2"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "master_sha": "3333333333333333333333333333333333333333",
+  "master_ci_state": "failure",
+  "pending_checks": 0,
+  "running_checks": 0,
+  "failed_checks": 3,
+  "failure_classifier": {
+    "shared_blocker": true,
+    "summary": "core gate failing on master"
+  },
+  "ruleset": {
+    "candidate_current": true,
+    "gate_policy": "merge-gate-v2"
+  }
+}

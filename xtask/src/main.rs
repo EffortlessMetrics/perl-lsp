@@ -757,6 +757,12 @@ enum Commands {
         date: Option<String>,
     },
 
+    /// Queue orchestration utilities.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Publish VSCode extension to marketplace
     PublishVscode {
         /// Skip confirmation
@@ -1220,6 +1226,20 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum QueueCommand {
+    /// Compute queue health mode and emit a machine-readable receipt.
+    Health {
+        /// Optional fixture JSON with CI/check state inputs.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Path to write the receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1510,6 +1530,11 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::Queue { command } => match command {
+            QueueCommand::Health { fixture, receipt } => {
+                queue_health::run(queue_health::QueueHealthConfig { fixture, receipt })
+            }
+        },
         Commands::ParserCorpusSweep {
             roots,
             manifest,
