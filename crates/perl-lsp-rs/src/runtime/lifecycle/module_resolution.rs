@@ -10,6 +10,7 @@ use perl_module::resolution::{
     IncRoot, IncRootKind, ModuleUriResolution,
     resolve_module_path as resolve_workspace_module_path, resolve_module_uri_with_effective_inc,
 };
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Once;
 use std::time::Duration;
@@ -112,10 +113,12 @@ fn resolution_root(server: &LspServer, doc_uri: Option<&str>) -> Option<PathBuf>
 
 fn build_effective_inc_roots(
     include_paths: &[String],
+    perl5lib_set: &HashSet<String>,
     lexical_paths: &[String],
     system_paths: &[PathBuf],
 ) -> Vec<IncRoot> {
     let mut roots = Vec::new();
+    let mut seen = HashSet::new();
     let mut precedence = 0usize;
 
     for path in lexical_paths {
@@ -125,6 +128,9 @@ fn build_effective_inc_roots(
         } else {
             IncRootKind::FileLocalLexical
         };
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind,
             path: path_buf,
@@ -136,21 +142,24 @@ fn build_effective_inc_roots(
 
     for path in include_paths {
         let path_buf = PathBuf::from(path);
-        let kind = if path_buf.is_absolute() {
-            IncRootKind::ExternalAbsolute
+        if !seen.insert(normalized_inc_key(&path_buf)) {
+            continue;
+        }
+        let (kind, source) = if perl5lib_set.contains(path) {
+            (IncRootKind::Perl5LibEnv, "perl5lib-env")
+        } else if path_buf.is_absolute() {
+            (IncRootKind::ExternalAbsolute, "workspace-include-paths")
         } else {
-            IncRootKind::WorkspaceRelative
+            (IncRootKind::WorkspaceRelative, "workspace-include-paths")
         };
-        roots.push(IncRoot {
-            kind,
-            path: path_buf,
-            precedence,
-            source: "workspace-include-paths".to_string(),
-        });
+        roots.push(IncRoot { kind, path: path_buf, precedence, source: source.to_string() });
         precedence += 1;
     }
 
     for path in system_paths {
+        if !seen.insert(normalized_inc_key(path)) {
+            continue;
+        }
         roots.push(IncRoot {
             kind: IncRootKind::InterpreterStartup,
             path: path.clone(),
@@ -161,6 +170,27 @@ fn build_effective_inc_roots(
     }
 
     roots
+}
+
+fn append_system_inc_paths(
+    config: &mut perl_lsp_rs_core::config::WorkspaceConfig,
+    include_paths: &mut Vec<String>,
+) {
+    if !config.use_system_inc {
+        return;
+    }
+
+    for path in config.get_system_inc() {
+        let as_string = path.to_string_lossy().to_string();
+        if !include_paths.iter().any(|existing| existing == &as_string) {
+            include_paths.push(as_string);
+        }
+    }
+}
+
+fn normalized_inc_key(path: &std::path::Path) -> String {
+    let normalized = path.to_string_lossy().replace('\\', "/");
+    if normalized == "/" { normalized } else { normalized.trim_end_matches('/').to_string() }
 }
 
 impl LspServer {
@@ -191,11 +221,12 @@ impl LspServer {
             }
         };
 
-        let config = workspace_config_for_doc(self, None);
+        let mut config = workspace_config_for_doc(self, None);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             prepend_use_lib_paths(&mut include_paths, text, &root, None);
@@ -228,11 +259,12 @@ impl LspServer {
             }
         };
 
-        let config = workspace_config_for_doc(self, doc_uri);
+        let mut config = workspace_config_for_doc(self, doc_uri);
         let perl5lib_paths = std::env::var("PERL5LIB")
             .map(|v| perl_lsp_rs_core::config::WorkspaceConfig::parse_perl5lib(&v))
             .unwrap_or_default();
         let mut include_paths = config.effective_include_paths(&perl5lib_paths);
+        append_system_inc_paths(&mut config, &mut include_paths);
 
         if let Some(text) = doc_text {
             let file_dir = doc_uri
@@ -393,8 +425,13 @@ impl LspServer {
             Vec::new()
         };
 
+        let perl5lib_set: HashSet<String> = if config.use_perl5lib {
+            perl5lib_paths.iter().cloned().collect()
+        } else {
+            HashSet::new()
+        };
         let effective_inc =
-            build_effective_inc_roots(&include_paths, &lexical_paths, &system_paths);
+            build_effective_inc_roots(&include_paths, &perl5lib_set, &lexical_paths, &system_paths);
 
         match resolve_module_uri_with_effective_inc(
             module_name,
@@ -464,6 +501,76 @@ mod tests {
                 "resolve_module_path must consistently return None when workspace root unset"
             );
         }
+    }
+
+    #[test]
+    fn build_effective_inc_roots_dedupes_with_normalized_separators() {
+        let include_paths = vec!["lib".to_string(), "lib/".to_string(), "other".to_string()];
+        let lexical_paths = vec!["lib\\".to_string()];
+        let system_paths = vec![PathBuf::from("other/"), PathBuf::from("syslib")];
+        let no_perl5lib = HashSet::new();
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
+        let root_paths: Vec<String> =
+            roots.iter().map(|r| r.path.to_string_lossy().replace('\\', "/")).collect();
+
+        assert_eq!(root_paths, vec!["lib/".to_string(), "other".to_string(), "syslib".to_string()]);
+        assert_eq!(roots[0].source, "use-lib-lexical");
+        assert_eq!(roots[1].source, "workspace-include-paths");
+        assert_eq!(roots[2].source, "interpreter-startup-inc");
+    }
+
+    #[test]
+    fn build_effective_inc_roots_preserves_precedence_for_first_occurrence() {
+        let include_paths = vec!["dup".to_string(), "late".to_string()];
+        let lexical_paths = vec!["dup".to_string()];
+        let system_paths = vec![PathBuf::from("late"), PathBuf::from("sys")];
+        let no_perl5lib = HashSet::new();
+
+        let roots =
+            build_effective_inc_roots(&include_paths, &no_perl5lib, &lexical_paths, &system_paths);
+
+        assert_eq!(roots.len(), 3);
+        assert_eq!(roots[0].path, PathBuf::from("dup"));
+        assert_eq!(roots[0].kind, IncRootKind::FileLocalLexical);
+        assert_eq!(roots[1].path, PathBuf::from("late"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[2].path, PathBuf::from("sys"));
+        assert_eq!(roots[2].kind, IncRootKind::InterpreterStartup);
+        assert_eq!(roots[0].precedence, 0);
+        assert_eq!(roots[1].precedence, 1);
+        assert_eq!(roots[2].precedence, 2);
+    }
+
+    #[test]
+    fn build_effective_inc_roots_labels_perl5lib_paths() {
+        let perl5lib_path = "/home/user/perl5/lib/perl5".to_string();
+        let include_paths = vec![perl5lib_path.clone(), "lib".to_string()];
+        let perl5lib_set: HashSet<String> = std::iter::once(perl5lib_path.clone()).collect();
+        let roots = build_effective_inc_roots(&include_paths, &perl5lib_set, &[], &[]);
+
+        assert_eq!(roots.len(), 2);
+        assert_eq!(roots[0].path, PathBuf::from(&perl5lib_path));
+        assert_eq!(roots[0].kind, IncRootKind::Perl5LibEnv);
+        assert_eq!(roots[0].source, "perl5lib-env");
+        assert_eq!(roots[1].path, PathBuf::from("lib"));
+        assert_eq!(roots[1].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[1].source, "workspace-include-paths");
+    }
+
+    #[test]
+    fn build_effective_inc_roots_empty_perl5lib_set_does_not_reclassify_workspace_paths() {
+        // Regression: when use_perl5lib=false the caller passes an empty set.
+        // A configured path like "lib" must remain WorkspaceRelative even if
+        // it coincidentally appears in $PERL5LIB.
+        let include_paths = vec!["lib".to_string()];
+        let empty_perl5lib: HashSet<String> = HashSet::new();
+        let roots = build_effective_inc_roots(&include_paths, &empty_perl5lib, &[], &[]);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(roots[0].kind, IncRootKind::WorkspaceRelative);
+        assert_eq!(roots[0].source, "workspace-include-paths");
     }
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -1011,11 +1118,14 @@ use Overlay::Live;
     }
 
     #[test]
-    fn test_resolve_module_path_use_lib_outside_workspace_honored() -> TestResult {
+    fn test_resolve_module_path_use_lib_outside_workspace_is_rejected() -> TestResult {
+        // Security: lexical `use lib` paths from untrusted document text must not resolve
+        // modules outside the workspace.  Absolute paths that don't live under the workspace
+        // root are silently dropped so the outside module is never reachable via the LSP.
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
-        // Place a module OUTSIDE the workspace and verify absolute use lib can find it.
+        // Place a module OUTSIDE the workspace — it must never be found.
         let outside_dir = temp.path().join("outside");
         let outside_module = outside_dir.join("Evil").join("Hack.pm");
         fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
@@ -1028,15 +1138,16 @@ use Overlay::Live;
             config.include_paths = vec![];
         }
 
-        // Absolute paths in use lib should be honored literally.
+        // Absolute path outside workspace in `use lib` should NOT enable resolution of
+        // an out-of-workspace module; the path must be silently dropped.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
-        let result = server
-            .resolve_module_path("Evil::Hack", Some(&doc_text))
-            .ok_or("resolve_module_path returned None unexpectedly")?;
-        assert_eq!(
-            result, outside_module,
-            "absolute path outside workspace should resolve directly: {result:?}"
+        let result = server.resolve_module_path("Evil::Hack", Some(&doc_text));
+        // The result must not be the outside module path.
+        assert!(
+            result.as_ref().map_or(true, |p| p != &outside_module),
+            "absolute outside-workspace use lib path should not resolve the outside module, \
+             got: {result:?}"
         );
         Ok(())
     }
@@ -1149,6 +1260,59 @@ use Overlay::Live;
             // Must not panic
             let _result = server.resolve_module_path("Any::Module", Some(doc_text));
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_module_path_with_uri_honors_system_inc_opt_in() -> TestResult {
+        // This test shells out to `perl -I <path> -e 'print join("\n", @INC)'`.
+        // Skip gracefully on machines where perl is not installed.
+        let perl_available = std::process::Command::new("perl")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !perl_available {
+            eprintln!(
+                "SKIP: test_resolve_module_path_with_uri_honors_system_inc_opt_in — perl not found on PATH"
+            );
+            return Ok(());
+        }
+
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        fs::create_dir_all(&workspace)?;
+
+        let external_inc = temp.path().join("external-inc");
+        let module_file = external_inc.join("System").join("Inc.pm");
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package System::Inc; 1;")?;
+
+        let doc_uri = Url::from_file_path(workspace.join("main.pl"))
+            .map_err(|_| "failed to create doc uri")?
+            .to_string();
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = Vec::new();
+            config.use_system_inc = true;
+            config.perl_path = Some("perl".to_string());
+            config.perl_args = vec!["-I".to_string(), external_inc.to_string_lossy().to_string()];
+        }
+
+        let resolved = server.resolve_module_path_with_uri(
+            "System::Inc",
+            Some("use System::Inc;\n"),
+            Some(&doc_uri),
+        );
+        assert_eq!(
+            resolved,
+            Some(module_file),
+            "opted-in system @INC should be searched by resolve_module_path_with_uri"
+        );
+
         Ok(())
     }
 }

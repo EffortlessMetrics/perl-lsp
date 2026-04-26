@@ -21,6 +21,7 @@ pub struct SimpleIncrementalParser {
 }
 
 impl SimpleIncrementalParser {
+    /// Create a new parser with no cached tree.
     pub fn new() -> Self {
         SimpleIncrementalParser {
             last_tree: None,
@@ -31,10 +32,14 @@ impl SimpleIncrementalParser {
         }
     }
 
+    /// Queue an edit to be applied on the next [`parse`] call.
+    ///
+    /// [`parse`]: SimpleIncrementalParser::parse
     pub fn edit(&mut self, edit: Edit) {
         self.pending_edits.add(edit);
     }
 
+    /// Parse `source`, reusing cached tree nodes where no structural change occurred.
     pub fn parse(&mut self, source: &str) -> ParseResult<Node> {
         // Reset statistics
         self.reused_nodes = 0;

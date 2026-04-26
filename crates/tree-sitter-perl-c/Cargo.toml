@@ -18,12 +18,14 @@ include = [
     "build.rs",
     "Cargo.toml",
     "README.md",
+    "UPSTREAM_SNAPSHOT.md",
     "LICENSE-APACHE",
     "LICENSE-MIT",
 ]
 
 [dependencies]
 tree-sitter = "0.26.6"
+tree-sitter-language = "0.1.7"
 
 [package.metadata.docs.rs]
 # docs.rs runs on Linux with a C toolchain available, so the build succeeds.
