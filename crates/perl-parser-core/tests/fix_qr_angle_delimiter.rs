@@ -86,6 +86,16 @@ fn qr_braces() {
     assert_clean_parse(r#"my $re = qr{foo}i;"#);
 }
 
+#[test]
+fn qr_braces_with_nested_blocks() {
+    assert_clean_parse(r#"my $re = qr{(?:foo|bar){2,3}}x;"#);
+}
+
+#[test]
+fn qr_angle_with_whitespace_before_delimiter() {
+    assert_clean_parse(r#"my $re = qr <foo\d+>i;"#);
+}
+
 // --- Real-world patterns from CPAN ---
 
 #[test]

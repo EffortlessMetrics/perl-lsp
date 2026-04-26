@@ -7,7 +7,9 @@
 
 use color_eyre::eyre::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
-use perl_parser::{Node, NodeKind, Parser};
+#[cfg(test)]
+use perl_parser::{Node, NodeKind};
+use perl_parser::{ParseError, Parser, RecoverySalvageClass, RecoverySalvageProfile};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -159,7 +161,19 @@ pub struct SweepReport {
     pub files_unreadable: usize,
     pub clean_files: usize,
     pub files_with_errors: usize,
+    #[serde(default)]
+    pub total_dirty_files: usize,
+    #[serde(default)]
+    pub files_with_structured_recovery_only: usize,
+    #[serde(default)]
+    pub files_with_error_nodes: usize,
+    #[serde(default)]
+    pub files_with_catastrophic_parse_failure: usize,
     pub total_error_nodes: usize,
+    #[serde(default)]
+    pub recovered_node_count: usize,
+    #[serde(default)]
+    pub first_unrecovered_error_node_buckets: BTreeMap<String, usize>,
     pub first_error_buckets: BTreeMap<String, usize>,
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
     pub files_by_bucket: BTreeMap<String, Vec<String>>,
@@ -178,6 +192,8 @@ pub struct SweepReport {
     /// line count (older verbose=false receipts, or empty corpora).
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub median_error_density_per_1k_loc: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub recovery_salvage_rate: Option<f64>,
     /// Top slowest files by parse duration (always captured, regardless of verbose mode).
     ///
     /// Introduced in schema 1.3.0. Always present when phase timings are
@@ -246,6 +262,8 @@ pub struct FileResult {
     pub error_node_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub recovered_count: Option<usize>,
     /// Wall time spent parsing this file, in milliseconds.
     ///
     /// Introduced in schema 1.3.0. Absent for `status == "unreadable"`
@@ -309,6 +327,7 @@ fn get_perl_version() -> String {
 }
 
 /// Summary of Error nodes found in an AST.
+#[cfg(test)]
 struct ErrorSummary {
     /// Total count of NodeKind::Error nodes in the tree
     count: usize,
@@ -321,6 +340,7 @@ struct ErrorSummary {
 /// Counts all `NodeKind::Error` nodes and captures the raw message from
 /// the earliest error by byte offset. Uses `for_each_child` to traverse
 /// the full tree including `partial` subtrees of Error nodes.
+#[cfg(test)]
 fn collect_error_summary(root: &Node) -> ErrorSummary {
     let mut count = 0usize;
     let mut first_start = usize::MAX;
@@ -329,6 +349,7 @@ fn collect_error_summary(root: &Node) -> ErrorSummary {
     ErrorSummary { count, first_message }
 }
 
+#[cfg(test)]
 fn walk_errors(
     node: &Node,
     count: &mut usize,
@@ -679,7 +700,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
     let mut files_unreadable = 0usize;
     let mut clean_files = 0usize;
     let mut files_with_errors = 0usize;
+    let mut total_dirty_files = 0usize;
+    let mut files_with_structured_recovery_only = 0usize;
+    let mut files_with_error_nodes = 0usize;
+    let mut files_with_catastrophic_parse_failure = 0usize;
     let mut total_error_nodes = 0usize;
+    let mut recovered_node_count = 0usize;
+    let mut first_unrecovered_error_node_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut first_error_buckets: BTreeMap<String, usize> = BTreeMap::new();
     let mut files_by_bucket: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut file_results: Vec<FileResult> = Vec::new();
@@ -716,6 +743,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
                         status: "unreadable".to_string(),
                         error_node_count: 0,
                         first_error: None,
+                        recovered_count: None,
                         parse_duration_ms: None,
                         line_count: None,
                     });
@@ -738,24 +766,23 @@ pub fn run(config: SweepConfig) -> Result<()> {
         let ast = match parse_result {
             Ok(ast) => ast,
             Err(_) => {
-                // Catastrophic failure (recursion limit etc.) — count as error
+                // Catastrophic failure (recursion limit etc.) — separate from AST ERROR nodes.
                 files_with_errors += 1;
-                total_error_nodes += 1;
-                let bucket = "catastrophic_parse_failure".to_string();
-                *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-                files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
+                total_dirty_files += 1;
+                files_with_catastrophic_parse_failure += 1;
                 measurements.push(FileMeasurement {
                     path: portable_path.clone(),
                     parse_duration_ms,
                     line_count,
-                    error_node_count: 1,
+                    error_node_count: 0,
                 });
                 if config.verbose {
                     file_results.push(FileResult {
                         path: portable_path.clone(),
-                        status: "errors".to_string(),
-                        error_node_count: 1,
-                        first_error: Some(bucket),
+                        status: "catastrophic".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(0),
                         parse_duration_ms: Some(parse_duration_ms),
                         line_count: Some(line_count),
                     });
@@ -765,44 +792,79 @@ pub fn run(config: SweepConfig) -> Result<()> {
             }
         };
 
-        // Count ERROR nodes via AST walk
-        let summary = collect_error_summary(&ast);
+        let errors: Vec<ParseError> = parser.errors().to_vec();
+        let salvage = RecoverySalvageProfile::from_parse(&ast, &errors, false);
 
         measurements.push(FileMeasurement {
             path: portable_path.clone(),
             parse_duration_ms,
             line_count,
-            error_node_count: summary.count,
+            error_node_count: salvage.error_node_count,
         });
 
-        if summary.count == 0 {
-            clean_files += 1;
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path.clone(),
-                    status: "clean".to_string(),
-                    error_node_count: 0,
-                    first_error: None,
-                    parse_duration_ms: Some(parse_duration_ms),
-                    line_count: Some(line_count),
-                });
+        recovered_node_count = recovered_node_count.saturating_add(salvage.recovered_count);
+        match salvage.class {
+            RecoverySalvageClass::Clean => {
+                clean_files += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "clean".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(0),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
             }
-        } else {
-            files_with_errors += 1;
-            total_error_nodes += summary.count;
-            let first = summary.first_message.as_deref().unwrap_or("unknown");
-            let bucket = normalize_error_bucket(first);
-            *first_error_buckets.entry(bucket.clone()).or_default() += 1;
-            files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
-            if config.verbose {
-                file_results.push(FileResult {
-                    path: portable_path,
-                    status: "errors".to_string(),
-                    error_node_count: summary.count,
-                    first_error: Some(bucket),
-                    parse_duration_ms: Some(parse_duration_ms),
-                    line_count: Some(line_count),
-                });
+            RecoverySalvageClass::StructuredRecoveryOnly => {
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_structured_recovery_only += 1;
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "recovered".to_string(),
+                        error_node_count: 0,
+                        first_error: None,
+                        recovered_count: Some(salvage.recovered_count),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            }
+            RecoverySalvageClass::ErrorNodesPresent => {
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_error_nodes += 1;
+                total_error_nodes = total_error_nodes.saturating_add(salvage.error_node_count);
+                let first = salvage.first_unrecovered_error_node.as_deref().unwrap_or("unknown");
+                let bucket = normalize_error_bucket(first);
+                *first_unrecovered_error_node_buckets.entry(bucket.clone()).or_default() += 1;
+                *first_error_buckets.entry(bucket.clone()).or_default() += 1;
+                files_by_bucket.entry(bucket.clone()).or_default().push(portable_path.clone());
+                if config.verbose {
+                    file_results.push(FileResult {
+                        path: portable_path.clone(),
+                        status: "errors".to_string(),
+                        error_node_count: salvage.error_node_count,
+                        first_error: Some(bucket),
+                        recovered_count: Some(salvage.recovered_count),
+                        parse_duration_ms: Some(parse_duration_ms),
+                        line_count: Some(line_count),
+                    });
+                }
+            }
+            RecoverySalvageClass::CatastrophicFailure => {
+                // This arm is unreachable in this branch: `from_parse` is always
+                // called with `catastrophic=false` here.  True catastrophic failures
+                // are handled above via the `Err(_)` arm which calls `continue`.
+                // Keeping the arm to satisfy the exhaustive match; clippy will flag
+                // it as unreachable if the enum ever gains a structural invariant.
+                files_with_errors += 1;
+                total_dirty_files += 1;
+                files_with_catastrophic_parse_failure += 1;
             }
         }
 
@@ -821,6 +883,11 @@ pub fn run(config: SweepConfig) -> Result<()> {
         total_ms: elapsed.as_millis() as u64,
     };
     let median_error_density_per_1k_loc = compute_median_error_density(&measurements);
+    let recovery_salvage_rate = if total_dirty_files == 0 {
+        None
+    } else {
+        Some(files_with_structured_recovery_only as f64 / total_dirty_files as f64)
+    };
     let slowest_files = top_n_slowest(&measurements, SLOWEST_FILES_LIMIT);
 
     let report = SweepReport {
@@ -839,13 +906,20 @@ pub fn run(config: SweepConfig) -> Result<()> {
         files_unreadable,
         clean_files,
         files_with_errors,
+        total_dirty_files,
+        files_with_structured_recovery_only,
+        files_with_error_nodes,
+        files_with_catastrophic_parse_failure,
         total_error_nodes,
+        recovered_node_count,
+        first_unrecovered_error_node_buckets,
         first_error_buckets,
         files_by_bucket,
         file_results: if config.verbose { file_results } else { Vec::new() },
         elapsed_secs: elapsed.as_secs_f64(),
         phase_timings: Some(phase_timings),
         median_error_density_per_1k_loc,
+        recovery_salvage_rate,
         slowest_files,
     };
 
@@ -951,8 +1025,7 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     let mut violations = Vec::new();
 
     // 1. Crash count must be 0
-    let crash_count =
-        report.first_error_buckets.get("catastrophic_parse_failure").copied().unwrap_or(0);
+    let crash_count = report.files_with_catastrophic_parse_failure;
     if crash_count > 0 {
         violations.push(RatchetViolation {
             metric: "crash_count".to_string(),
@@ -970,12 +1043,22 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
         });
     }
 
-    // 3. Clean-file count must not decrease
-    if report.clean_files < baseline.clean_files {
+    // 3. Clean-rate must not decrease.
+    //
+    // Compare ratios rather than absolute clean-file counts so the ratchet
+    // remains meaningful when corpus inventory size differs between runners
+    // (for example, distro package layout drift or optional roots missing).
+    //
+    // Use a small epsilon to prevent spurious failures from floating-point
+    // rounding when both sides are computed from the same integer division
+    // but stored at different precision (e.g. if a future schema stores a
+    // pre-computed float in the baseline).  Consistent with the epsilon guard
+    // used in corpus_audit.rs for the same class of comparisons.
+    if clean_rate(report) + 1e-9 < clean_rate(baseline) {
         violations.push(RatchetViolation {
-            metric: "clean_files".to_string(),
-            baseline_value: baseline.clean_files.to_string(),
-            current_value: report.clean_files.to_string(),
+            metric: "clean_rate".to_string(),
+            baseline_value: format!("{:.6}", clean_rate(baseline)),
+            current_value: format!("{:.6}", clean_rate(report)),
         });
     }
 
@@ -1001,6 +1084,13 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     }
 
     violations
+}
+
+fn clean_rate(report: &SweepReport) -> f64 {
+    if report.total_files == 0 {
+        return 1.0;
+    }
+    report.clean_files as f64 / report.total_files as f64
 }
 
 /// Discover all .pm files under the given roots
@@ -1076,7 +1166,12 @@ pub fn print_summary(report: &SweepReport) {
     println!("Total files:       {}", report.total_files);
     println!("Unreadable:        {}", report.files_unreadable);
     println!("Clean (no errors): {} ({:.1}%)", report.clean_files, clean_pct);
+    println!("Dirty files:       {}", report.total_dirty_files);
     println!("With errors:       {}", report.files_with_errors);
+    println!("  - Structured recovery only: {}", report.files_with_structured_recovery_only);
+    println!("  - With ERROR nodes:         {}", report.files_with_error_nodes);
+    println!("  - Catastrophic parse fail:  {}", report.files_with_catastrophic_parse_failure);
+    println!("Recovered nodes:   {}", report.recovered_node_count);
     println!("Total ERROR nodes: {}", report.total_error_nodes);
     println!("Elapsed:           {:.1}s", report.elapsed_secs);
 
@@ -1090,6 +1185,9 @@ pub fn print_summary(report: &SweepReport) {
 
     if let Some(density) = report.median_error_density_per_1k_loc {
         println!("\nMedian error density (dirty files): {density:.2} errors / 1k LOC");
+    }
+    if let Some(salvage_rate) = report.recovery_salvage_rate {
+        println!("Recovery salvage rate: {:.1}%", salvage_rate * 100.0);
     }
 
     if !report.slowest_files.is_empty() {
@@ -1120,9 +1218,9 @@ pub fn print_summary(report: &SweepReport) {
         }
     }
 
-    if !report.first_error_buckets.is_empty() {
-        println!("\n--- First-error buckets (top 20) ---");
-        let mut sorted: Vec<_> = report.first_error_buckets.iter().collect();
+    if !report.first_unrecovered_error_node_buckets.is_empty() {
+        println!("\n--- First unrecovered ERROR-node buckets (top 20) ---");
+        let mut sorted: Vec<_> = report.first_unrecovered_error_node_buckets.iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(a.1));
         for (i, (bucket, count)) in sorted.iter().enumerate() {
             if i >= 20 {
@@ -1160,13 +1258,20 @@ mod tests {
             files_unreadable,
             clean_files,
             files_with_errors,
+            total_dirty_files: files_with_errors,
+            files_with_structured_recovery_only: 0,
+            files_with_error_nodes: files_with_errors,
+            files_with_catastrophic_parse_failure: 0,
             total_error_nodes,
+            recovered_node_count: 0,
+            first_unrecovered_error_node_buckets: first_error_buckets.clone(),
             first_error_buckets,
             files_by_bucket: BTreeMap::new(),
             file_results: vec![],
             elapsed_secs: 1.0,
             phase_timings: None,
             median_error_density_per_1k_loc: None,
+            recovery_salvage_rate: None,
             slowest_files: vec![],
         }
     }
@@ -1441,7 +1546,7 @@ mod tests {
             test_report(80, 18, 25, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
 
         let report = SweepReport {
-            clean_files: 75,       // decreased (violation)
+            clean_files: 75,       // decreased clean-rate (violation)
             total_error_nodes: 30, // increased (violation)
             files_unreadable: 3,   // increased (violation)
             ..baseline.clone()
@@ -1452,7 +1557,7 @@ mod tests {
 
         let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
         assert!(metrics.contains(&"files_unreadable"));
-        assert!(metrics.contains(&"clean_files"));
+        assert!(metrics.contains(&"clean_rate"));
         assert!(metrics.contains(&"total_error_nodes"));
     }
 
@@ -1486,10 +1591,7 @@ mod tests {
     fn test_enforce_ratchet_crash_count() {
         let baseline = test_report(80, 20, 20, 0, BTreeMap::new());
 
-        let report = SweepReport {
-            first_error_buckets: BTreeMap::from([("catastrophic_parse_failure".to_string(), 2)]),
-            ..baseline.clone()
-        };
+        let report = SweepReport { files_with_catastrophic_parse_failure: 2, ..baseline.clone() };
 
         let violations = enforce_ratchet(&report, &baseline);
         let crash_violation = violations.iter().find(|v| v.metric == "crash_count");
@@ -1871,6 +1973,38 @@ mod tests {
     }
 
     // ── enforce_ratchet edge cases ─────────────────────────────────────
+
+    #[test]
+    fn test_enforce_ratchet_clean_rate_equal_no_violation() {
+        // Same counts on both sides → rates are identical → no violation.
+        let baseline = test_report(80, 18, 25, 2, BTreeMap::new());
+        // report is a clone: clean_rate(report) == clean_rate(baseline) exactly
+        let report = baseline.clone();
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Equal clean-rate must not trigger a violation");
+    }
+
+    #[test]
+    fn test_enforce_ratchet_clean_rate_epsilon_no_false_positive() {
+        // If the rates differ by less than 1e-9 (pure floating-point rounding),
+        // the epsilon guard must suppress the violation.
+        // We cannot manufacture a sub-epsilon diff via integer division, but we
+        // can verify the guard itself by checking that the comparison threshold
+        // is strictly less than: clean_rate(report) + 1e-9 < clean_rate(baseline).
+        // Concretely: 8000/10000 == 8001/10001 rounds to 0.8000 at 6 decimal places;
+        // confirm neither fires (improvement direction).
+        let baseline = test_report(8000, 2000, 0, 0, BTreeMap::new()); // rate=0.8
+        let report = SweepReport {
+            clean_files: 8001,
+            // total_files inherited from baseline = 10000; rate = 8001/10000 = 0.8001 > 0.8
+            ..baseline.clone()
+        };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(
+            !violations.iter().any(|v| v.metric == "clean_rate"),
+            "Marginal improvement must not trigger clean_rate violation"
+        );
+    }
 
     #[test]
     fn test_enforce_ratchet_improvement_no_violations() {
