@@ -38,13 +38,46 @@ The extension auto-downloads the matching `perllsp` binary for your platform.
 
 ```lua
 -- Neovim (nvim-lspconfig)
-require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
+local capabilities = vim.lsp.protocol.make_client_capabilities()
+local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
+if ok_cmp then
+  capabilities = cmp_lsp.default_capabilities(capabilities)
+end
+
+require("lspconfig").perl_lsp.setup({
+  cmd = { "perllsp", "--stdio" },
+  capabilities = capabilities,
+})
 ```
 
 ```elisp
-;; Emacs (eglot)
+;; Emacs (eglot) — perl-ts-mode is a third-party package, omit if not installed
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
+             '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio")))
+```
+
+```toml
+# Helix (~/.config/helix/languages.toml)
+[[language]]
+name = "perl"
+language-servers = ["perllsp"]
+
+[language-server.perllsp]
+command = "perllsp"
+args = ["--stdio"]
+```
+
+```json
+// Sublime Text LSP package settings
+{
+  "clients": {
+    "perllsp": {
+      "enabled": true,
+      "command": ["perllsp", "--stdio"],
+      "selector": "source.perl"
+    }
+  }
+}
 ```
 
 ```text
@@ -59,6 +92,7 @@ perllsp --health
 ```
 
 For a full walkthrough, see [docs/tutorials/GETTING_STARTED.md](docs/tutorials/GETTING_STARTED.md).
+For editor-specific setup (Neovim, Emacs, Helix, Sublime), see [docs/specs/PACKAGING_INSTALL_SPEC.md](docs/specs/PACKAGING_INSTALL_SPEC.md).
 
 > **Note:** Do not use `cargo install perl-lsp`. That name is owned by an unrelated project on crates.io. Use `cargo install --path crates/perllsp` to build from source.
 
