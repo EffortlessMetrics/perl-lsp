@@ -123,6 +123,12 @@ fn location_from_start(line_starts: &[usize], offset: usize, start: usize) -> Lo
 }
 
 fn mask_non_code_regions(code: &str) -> String {
+    fn push_masked_char(masked: &mut String, ch: char) {
+        for _ in 0..ch.len_utf8() {
+            masked.push(' ');
+        }
+    }
+
     let mut masked = String::with_capacity(code.len());
     let mut in_single_quote = false;
     let mut in_double_quote = false;
@@ -135,7 +141,7 @@ fn mask_non_code_regions(code: &str) -> String {
                 in_line_comment = false;
                 masked.push('\n');
             } else {
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             continue;
         }
@@ -148,7 +154,7 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '\'' {
                 in_single_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
@@ -160,22 +166,22 @@ fn mask_non_code_regions(code: &str) -> String {
             } else if ch == '"' {
                 in_double_quote = false;
             }
-            masked.push(' ');
+            push_masked_char(&mut masked, ch);
             continue;
         }
 
         match ch {
             '#' => {
                 in_line_comment = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '\'' => {
                 in_single_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             '"' => {
                 in_double_quote = true;
-                masked.push(' ');
+                push_masked_char(&mut masked, ch);
             }
             _ => masked.push(ch),
         }
@@ -945,7 +951,7 @@ SECOND
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 0, "first-byte match must be on line 0");
         assert_eq!(location.column, 0, "first-byte match must be at column 0");
@@ -964,7 +970,7 @@ SECOND
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 2, "match on third line must report line 2");
         assert_eq!(location.column, 0, "match at start of line must report column 0");
@@ -983,7 +989,7 @@ SECOND
         // The comment is masked; only SourceFilterHeredoc on line 1 should fire.
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 1);
         assert_eq!(location.column, 4, "mid-line match must report correct column");
@@ -1012,5 +1018,24 @@ my $s = "BEGIN { my $x = <<'END'; END }";
 
         let diagnostics = detector.detect_all(code);
         assert!(diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_format_detection_handles_utf8_in_masked_regions() {
+        let detector = AntiPatternDetector::new();
+        let code = r#"# comment with emoji 😀
+format REPORT =
+<<'END'
+Body
+END
+.
+"#;
+
+        let diagnostics = detector.detect_all(code);
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diag| matches!(diag.pattern, AntiPattern::FormatHeredoc { .. }))
+        );
     }
 }
