@@ -14,6 +14,14 @@ fn module_segment() -> impl Strategy<Value = String> {
         Just("IO".to_string()),
         (
             prop::char::range('A', 'Z'),
+            prop::collection::vec(
+                prop_oneof![prop::char::range('A', 'Z'), prop::char::range('0', '9'), Just('_'),],
+                0..=7_usize,
+            ),
+        )
+            .prop_map(|(first, rest)| std::iter::once(first).chain(rest).collect::<String>()),
+        (
+            prop::char::range('A', 'Z'),
             prop::collection::vec(prop::char::range('a', 'z'), 0..=7_usize),
         )
             .prop_map(|(first, rest)| std::iter::once(first).chain(rest).collect::<String>()),
@@ -54,6 +62,24 @@ mod tests {
             prop_assert!(!segs.is_empty());
             for s in &segs {
                 prop_assert!(!s.is_empty());
+            }
+        }
+
+        #[test]
+        fn segments_use_module_identifier_charset(segs in module_path_segments()) {
+            for seg in &segs {
+                let mut chars = seg.chars();
+                let Some(first) = chars.next() else {
+                    prop_assert!(false, "segment cannot be empty");
+                    continue;
+                };
+                prop_assert!(first.is_ascii_uppercase(), "segment must start uppercase: {seg}");
+                for ch in chars {
+                    prop_assert!(
+                        ch.is_ascii_alphanumeric() || ch == '_',
+                        "invalid module segment char '{ch}' in {seg}",
+                    );
+                }
             }
         }
     }

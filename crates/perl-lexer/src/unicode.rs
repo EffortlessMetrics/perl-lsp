@@ -1,8 +1,11 @@
+//! Unicode-aware identifier classification utilities.
+//!
+//! The lexer uses this module to decide whether characters may start or
+//! continue Perl identifiers, combining Unicode XID checks with
+//! Perl-specific allowances such as apostrophe package separators and emoji.
+//! It also exposes lightweight counters used for profiling Unicode-heavy
+//! corpora in tests and debugging.
 use std::sync::atomic::{AtomicU64, Ordering};
-/// Unicode character classification for Perl identifiers
-///
-/// Perl allows a wide range of Unicode characters in identifiers,
-/// including emoji and other symbols.
 use unicode_ident::{is_xid_continue, is_xid_start};
 
 // Performance tracking for Unicode operations

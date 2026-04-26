@@ -25,6 +25,28 @@ impl DebugAdapter {
             }
         };
 
+        if args.start.is_some_and(|start| start < 0) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "variables".to_string(),
+                body: None,
+                message: Some("Invalid start: must be >= 0".to_string()),
+            };
+        }
+
+        if args.count.is_some_and(|count| count < 0) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "variables".to_string(),
+                body: None,
+                message: Some("Invalid count: must be >= 0".to_string()),
+            };
+        }
+
         let variables_ref = args.variables_reference as i32;
         let start = args.start.unwrap_or(0) as usize;
         let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);

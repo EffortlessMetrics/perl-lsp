@@ -5,7 +5,8 @@
 use crate::path::module_name_to_path;
 use perl_parser_core::path_security::validate_workspace_path;
 use perl_workspace::folder::workspace_folder_to_path;
-use std::path::{Path, PathBuf};
+use std::collections::HashSet;
+use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 use url::Url;
 
@@ -65,8 +66,16 @@ pub fn resolve_module_uri(
     timeout: Duration,
 ) -> ModuleUriResolution {
     let mut effective_inc_roots = Vec::new();
-    for (idx, include_path) in include_paths.iter().enumerate() {
-        let path = PathBuf::from(include_path);
+    let mut seen_include_paths = HashSet::new();
+
+    for include_path in include_paths {
+        let Some(path) = normalize_inc_path_string(include_path) else {
+            continue;
+        };
+        if !seen_include_paths.insert(path.clone()) {
+            continue;
+        }
+
         let kind = if path.is_absolute() {
             IncRootKind::ExternalAbsolute
         } else {
@@ -75,20 +84,31 @@ pub fn resolve_module_uri(
         effective_inc_roots.push(IncRoot {
             kind,
             path,
-            precedence: idx,
+            precedence: effective_inc_roots.len(),
             source: "includePaths".to_string(),
         });
     }
+
     if use_system_inc {
-        for (offset, path) in system_inc.iter().enumerate() {
+        let mut seen_system_paths = HashSet::new();
+
+        for path in system_inc {
+            let Some(path) = normalize_system_inc_path(path) else {
+                continue;
+            };
+            if !seen_system_paths.insert(path.clone()) {
+                continue;
+            }
+
             effective_inc_roots.push(IncRoot {
                 kind: IncRootKind::InterpreterStartup,
-                path: path.clone(),
-                precedence: include_paths.len() + offset,
+                path,
+                precedence: effective_inc_roots.len(),
                 source: "interpreter-startup-inc".to_string(),
             });
         }
     }
+
     resolve_module_uri_with_effective_inc(
         module_name,
         open_document_uris,
@@ -170,6 +190,41 @@ pub fn resolve_module_uri_with_effective_inc(
     }
 
     ModuleUriResolution::NotFound
+}
+
+fn normalize_inc_path_string(input: &str) -> Option<PathBuf> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    Some(normalize_path_for_dedupe(Path::new(trimmed)))
+}
+
+fn normalize_system_inc_path(input: &Path) -> Option<PathBuf> {
+    let trimmed = input.to_string_lossy().trim().to_string();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let normalized = normalize_path_for_dedupe(Path::new(&trimmed));
+    if normalized == Path::new(".") {
+        return None;
+    }
+
+    Some(normalized)
+}
+
+fn normalize_path_for_dedupe(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        if component == Component::CurDir {
+            continue;
+        }
+        normalized.push(component.as_os_str());
+    }
+
+    if normalized.as_os_str().is_empty() { PathBuf::from(".") } else { normalized }
 }
 
 fn full_path_for_root(

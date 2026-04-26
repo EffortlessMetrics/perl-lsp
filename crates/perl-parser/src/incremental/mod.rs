@@ -12,6 +12,8 @@ use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
 use perl_parser_core::parser::Parser;
 
 pub mod incremental_advanced_reuse;
+#[cfg(test)]
+mod incremental_boundary_regressions;
 pub mod incremental_checkpoint;
 pub mod incremental_document;
 pub mod incremental_edit;
@@ -354,6 +356,17 @@ impl Edit {
     }
 }
 
+impl Edit {
+    /// Returns the size of text touched by this edit (inserted or deleted).
+    ///
+    /// This is used for fallback heuristics so that large deletions are treated
+    /// the same as large insertions.
+    fn touched_bytes(&self) -> usize {
+        let replaced_len = self.old_end_byte.saturating_sub(self.start_byte);
+        replaced_len.max(self.new_text.len())
+    }
+}
+
 /// Result of incremental reparse
 #[derive(Debug)]
 pub struct ReparseResult {
@@ -370,7 +383,7 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
     sorted_edits.reverse(); // Apply from end to start to avoid offset shifts
 
     // Check if we should fall back to full reparse
-    let total_changed = sorted_edits.iter().map(|e| e.new_text.len()).sum::<usize>();
+    let total_changed = sorted_edits.iter().map(Edit::touched_bytes).sum::<usize>();
 
     // Fallback thresholds
     const MAX_EDIT_SIZE: usize = 64 * 1024; // 64KB
@@ -384,7 +397,7 @@ pub fn apply_edits(state: &mut IncrementalState, edits: &[Edit]) -> Result<Repar
         let edit = &sorted_edits[0];
 
         // Heuristic: if edit is large (>1KB) or crosses many lines, do full reparse
-        if edit.new_text.len() > 1024 || edit.new_text.matches('\n').count() > 10 {
+        if edit.touched_bytes() > 1024 || edit.new_text.matches('\n').count() > 10 {
             apply_single_edit(state, edit)?;
             return full_reparse(state);
         }
@@ -529,6 +542,20 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    #[derive(Clone, Debug)]
+    struct FuzzEdit {
+        start: usize,
+        delete_len: usize,
+        insert_text: String,
+    }
+
+    fn apply_edit_to_ground_truth(source: &mut String, edit: &FuzzEdit) {
+        let start = edit.start.min(source.len());
+        let old_end = (start + edit.delete_len).min(source.len());
+        source.replace_range(start..old_end, &edit.insert_text);
+    }
 
     /// Verify that a small ranged edit re-lexes substantially fewer bytes than
     /// the total document length, confirming the checkpoint fast-path fires.
@@ -613,6 +640,67 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    /// Verify large deletions trigger full-reparse fallback the same as large insertions.
+    #[test]
+    fn test_incremental_state_large_deletion_falls_back_to_full_reparse() -> Result<()> {
+        let source = "my $x = 1;\n".repeat(10_000);
+        let mut state = IncrementalState::new(source);
+
+        // Delete almost the entire document; this should use full-reparse fallback
+        // to keep incremental behavior predictable for large edits.
+        let old_end_byte = state.source.len().saturating_sub(1);
+        let edit = Edit { start_byte: 0, old_end_byte, new_end_byte: 0, new_text: String::new() };
+
+        let result = apply_edits(&mut state, &[edit])?;
+
+        assert_eq!(
+            result.reparsed_bytes,
+            state.source.len(),
+            "large deletion must trigger full reparse, reparsed_bytes should equal doc length"
+        );
+
+        Ok(())
+    }
+
+    proptest! {
+        #[test]
+        fn prop_incremental_apply_edits_matches_ground_truth(
+            edits in prop::collection::vec(
+                (
+                    0usize..900usize,
+                    0usize..80usize,
+                    "[a-zA-Z0-9_ \\n;\\$\\(\\)\\{\\}\\[\\],]{0,40}"
+                ),
+                1..60
+            )
+        ) {
+            let mut state = IncrementalState::new("my $seed = 0;\n".repeat(80));
+            let mut expected_source = state.source.clone();
+
+            for (start, delete_len, insert_text) in edits {
+                let fuzz_edit = FuzzEdit { start, delete_len, insert_text };
+                let start_byte = fuzz_edit.start.min(state.source.len());
+                let old_end_byte = (start_byte + fuzz_edit.delete_len).min(state.source.len());
+
+                apply_edit_to_ground_truth(&mut expected_source, &fuzz_edit);
+
+                let incremental_edit = Edit {
+                    start_byte,
+                    old_end_byte,
+                    new_end_byte: start_byte + fuzz_edit.insert_text.len(),
+                    new_text: fuzz_edit.insert_text,
+                };
+
+                let result = apply_edits(&mut state, &[incremental_edit]);
+                prop_assert!(result.is_ok());
+                prop_assert_eq!(&state.source, &expected_source);
+            }
+
+            let reparsed = IncrementalState::new(expected_source);
+            prop_assert_eq!(&state.source, &reparsed.source);
+        }
     }
 }
 

@@ -69,7 +69,6 @@ This means you can pipe any Perl source through this parser and rely on getting 
 
 ## Known limitations (Phase 1)
 
-- `end_byte()` may return `source.len() + 1` for the root node on some inputs — clamp if needed.
 - `Node::children()` allocates a `Vec` internally on each call. Prefer iterating once over calling repeatedly.
 - `RecursionLimit` / `NestingTooDeep` parse errors produce `None` rather than a partial tree.
 - `Node::kind()` returns v3 internal names (e.g. `"Program"`) rather than tree-sitter grammar names (e.g. `"source_file"`). Use `Node::to_sexp()` for grammar-canonical output.

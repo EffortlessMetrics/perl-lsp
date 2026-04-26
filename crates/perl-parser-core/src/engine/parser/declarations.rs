@@ -565,7 +565,7 @@ impl<'a> Parser<'a> {
         }
 
         // Parse optional version number
-        if self.peek_kind() == Some(TokenKind::Number) {
+        if module != "if" && module != "unless" && self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
             module.push_str(&self.consume_token()?.text);
         }
@@ -1131,7 +1131,7 @@ impl<'a> Parser<'a> {
         }
 
         // Parse optional version number
-        if self.peek_kind() == Some(TokenKind::Number) {
+        if module != "if" && module != "unless" && self.peek_kind() == Some(TokenKind::Number) {
             module.push(' ');
             module.push_str(&self.consume_token()?.text);
         }

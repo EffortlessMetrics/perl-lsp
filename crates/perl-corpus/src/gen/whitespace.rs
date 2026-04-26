@@ -25,7 +25,7 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
         result.push(ch);
 
         // Don't insert whitespace inside strings or regexes
-        if !in_string && !in_regex {
+        if !in_string && !in_regex && can_insert_after(ch) {
             // Randomly insert whitespace or comments
             let choice = rng.random_range(0..20);
             match choice {
@@ -41,6 +41,13 @@ pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {
     }
 
     result
+}
+
+fn can_insert_after(ch: char) -> bool {
+    matches!(
+        ch,
+        ';' | ',' | '(' | ')' | '{' | '}' | '[' | ']' | '=' | '+' | '-' | '*' | '/' | '%' | ':'
+    )
 }
 
 /// Generate various whitespace patterns
@@ -141,11 +148,9 @@ mod tests {
             })
             .collect();
 
-        // Whitespace insertion can split tokens (e.g., "my" → "m\ty"), so we verify
-        // that the combined tokens preserve the original content
         assert!(
-            trans_tokens.len() >= orig_tokens.len(),
-            "Whitespace insertion should not lose tokens: expected at least {} tokens, got {}",
+            trans_tokens.len() == orig_tokens.len(),
+            "Whitespace insertion should preserve token boundaries: expected {} tokens, got {}",
             orig_tokens.len(),
             trans_tokens.len()
         );

@@ -7,7 +7,7 @@
 //! Run with: cargo test -p perl-dap --test control_flow_handlers_tests
 
 use perl_dap::{DapMessage, DebugAdapter};
-use perl_tdd_support::must;
+use perl_tdd_support::{must, must_some};
 use serde_json::json;
 
 // AC9.1: Test continue request handler
@@ -523,6 +523,32 @@ fn test_unknown_control_flow_command() {
                     "Error should indicate unknown command"
                 );
             }
+        }
+        _ => {
+            must(Err::<(), _>("Expected Response for unknown command"));
+            unreachable!()
+        }
+    }
+}
+
+#[test]
+fn test_unknown_command_includes_case_only_suggestion() {
+    let mut adapter = DebugAdapter::new();
+
+    let response = adapter.handle_request(1, "STEPIN", None);
+
+    match response {
+        DapMessage::Response { success, message, .. } => {
+            assert!(!success, "Unexpected success for unknown command");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("Unknown command: STEPIN"),
+                "Error should include unknown command: {msg}"
+            );
+            assert!(
+                msg.contains("Did you mean 'stepIn'?"),
+                "Error should include case-only suggestion: {msg}"
+            );
         }
         _ => {
             must(Err::<(), _>("Expected Response for unknown command"));

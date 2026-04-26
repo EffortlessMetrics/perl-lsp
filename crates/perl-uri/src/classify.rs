@@ -42,7 +42,7 @@ pub fn uri_key(uri: &str) -> String {
 /// Check if a URI uses the `file://` scheme.
 #[must_use]
 pub fn is_file_uri(uri: &str) -> bool {
-    uri.starts_with("file://")
+    uri.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
 }
 
 /// Check if a URI uses a special scheme (not `file://`).
@@ -54,6 +54,7 @@ pub fn is_special_scheme(uri: &str) -> bool {
         uri.starts_with("untitled:")
             || uri.starts_with("git:")
             || uri.starts_with("vscode-notebook:")
+            || uri.starts_with("vscode-notebook-cell:")
             || uri.starts_with("vscode-vfs:")
     }
 }
@@ -63,8 +64,13 @@ pub fn is_special_scheme(uri: &str) -> bool {
 pub fn uri_extension(uri: &str) -> Option<&str> {
     let path_without_query_or_fragment =
         uri.split_once(['?', '#']).map_or(uri, |(path_prefix, _)| path_prefix);
-    let path_part = path_without_query_or_fragment.rsplit('/').next()?;
+    let path_part = path_without_query_or_fragment.rsplit(['/', '\\']).next()?;
     let dot_pos = path_part.rfind('.')?;
+    // A leading dot means a dotfile (e.g. `.bashrc`, `.gitignore`) — treat as
+    // extensionless rather than returning the entire filename after the dot.
+    if dot_pos == 0 {
+        return None;
+    }
     let ext = &path_part[dot_pos + 1..];
     if ext.is_empty() { None } else { Some(ext) }
 }
@@ -101,6 +107,9 @@ mod tests {
     #[test]
     fn detects_file_uris() {
         assert!(is_file_uri("file:///tmp/test.pl"));
+        assert!(is_file_uri("file://localhost/tmp/test.pl"));
+        assert!(is_file_uri("FILE:///tmp/test.pl"));
+        assert!(!is_file_uri("file:test.pl"));
         assert!(!is_file_uri("https://example.com"));
     }
 
@@ -108,6 +117,7 @@ mod tests {
     fn detects_special_schemes() {
         assert!(is_special_scheme("untitled:Untitled-1"));
         assert!(is_special_scheme("git:/foo/bar"));
+        assert!(is_special_scheme("vscode-notebook-cell:/nb.ipynb#cell-id"));
         assert!(!is_special_scheme("file:///tmp/test.pl"));
     }
 
@@ -116,6 +126,9 @@ mod tests {
         assert_eq!(uri_extension("file:///tmp/test.pl"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl?query=1"), Some("pl"));
         assert_eq!(uri_extension("file:///tmp/file.pl#L10/permalink"), Some("pl"));
+        assert_eq!(uri_extension(r"C:\tmp\file.pl"), Some("pl"));
+        assert_eq!(uri_extension(r"C:\Users\.bashrc"), None);
+        assert_eq!(uri_extension(r"C:\Users\.gitignore"), None);
         assert_eq!(uri_extension("file:///tmp/no-extension"), None);
     }
 }

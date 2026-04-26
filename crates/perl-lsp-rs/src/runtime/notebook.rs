@@ -90,18 +90,21 @@ impl NotebookStore {
         let notebook_uri = notebook.uri.clone();
         let cell_uris: Vec<String> = notebook.cells.iter().map(|c| c.document.clone()).collect();
 
+        // Clear stale mappings if this notebook is being replaced with new cells.
+        let prior_cells = {
+            let mut notebooks = self.notebooks.lock();
+            notebooks.insert(notebook_uri.clone(), notebook).map(|existing| existing.cells)
+        };
+
         // Register all cells
-        {
-            let mut cell_map = self.cell_to_notebook.lock();
-            for cell_uri in cell_uris {
-                cell_map.insert(cell_uri, notebook_uri.clone());
+        let mut cell_map = self.cell_to_notebook.lock();
+        if let Some(prior_cells) = prior_cells {
+            for prior_cell in prior_cells {
+                cell_map.remove(&prior_cell.document);
             }
         }
-
-        // Store notebook
-        {
-            let mut notebooks = self.notebooks.lock();
-            notebooks.insert(notebook_uri, notebook);
+        for cell_uri in cell_uris {
+            cell_map.insert(cell_uri, notebook_uri.clone());
         }
     }
 
@@ -621,6 +624,51 @@ impl LspServer {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn register_notebook_replaces_stale_cell_mappings() -> Result<(), Box<dyn std::error::Error>> {
+        let store = NotebookStore::new();
+        let notebook_uri = "file:///workspace/notebook.ipynb".to_string();
+        let old_cell = "file:///workspace/old_cell.pl";
+        let new_cell = "file:///workspace/new_cell.pl";
+
+        store.register_notebook(NotebookDocState {
+            uri: notebook_uri.clone(),
+            notebook_type: "jupyter-notebook".to_string(),
+            version: 1,
+            metadata: None,
+            cells: vec![NotebookCellState {
+                kind: 2,
+                document: old_cell.to_string(),
+                metadata: None,
+                execution_summary: None,
+            }],
+        });
+        store.register_notebook(NotebookDocState {
+            uri: notebook_uri.clone(),
+            notebook_type: "jupyter-notebook".to_string(),
+            version: 2,
+            metadata: None,
+            cells: vec![NotebookCellState {
+                kind: 2,
+                document: new_cell.to_string(),
+                metadata: None,
+                execution_summary: None,
+            }],
+        });
+
+        assert_eq!(store.get_notebook_for_cell(old_cell), None);
+        assert_eq!(store.get_notebook_for_cell(new_cell), Some(notebook_uri.clone()));
+
+        let stored = store.get_notebook(&notebook_uri).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "notebook should exist")
+        })?;
+        assert_eq!(stored.version, 2);
+        assert_eq!(stored.cells.len(), 1);
+        assert_eq!(stored.cells[0].document, new_cell);
+
+        Ok(())
+    }
 
     #[test]
     fn notebook_did_open_registers_cells_and_documents() -> Result<(), Box<dyn std::error::Error>> {

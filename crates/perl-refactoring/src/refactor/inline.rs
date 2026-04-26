@@ -297,7 +297,7 @@ fn find_sub_start(source: &str, sub_name: &str) -> Option<usize> {
                 // Verify it's a word boundary (not "sub foobar" when looking for "foo")
                 let boundary_ok =
                     after_name.chars().next().is_none_or(|c| !c.is_alphanumeric() && c != '_');
-                if boundary_ok && after_name.trim_start().starts_with('{') {
+                if boundary_ok && is_sub_opening_delimiter(after_name) {
                     return Some(pos + idx);
                 }
             }
@@ -307,6 +307,47 @@ fn find_sub_start(source: &str, sub_name: &str) -> Option<usize> {
         }
     }
     None
+}
+
+/// Returns true if text after a sub name starts a valid body delimiter.
+///
+/// Accepts:
+/// - `sub name { ... }`
+/// - `sub name ($arg1, $arg2) { ... }`
+fn is_sub_opening_delimiter(after_name: &str) -> bool {
+    let trimmed = after_name.trim_start();
+    if trimmed.starts_with('{') {
+        return true;
+    }
+    let Some(rest) = trimmed.strip_prefix('(') else {
+        return false;
+    };
+    let mut depth = 1usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+    for (i, c) in rest.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match c {
+            '\\' if in_single_quote || in_double_quote => {
+                escaped = true;
+            }
+            '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+            '"' if !in_single_quote => in_double_quote = !in_double_quote,
+            '(' if !in_single_quote && !in_double_quote => depth += 1,
+            ')' if !in_single_quote && !in_double_quote => {
+                depth -= 1;
+                if depth == 0 {
+                    return rest[i + c.len_utf8()..].trim_start().starts_with('{');
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Extract the text between a matching pair of braces starting at `open_pos`

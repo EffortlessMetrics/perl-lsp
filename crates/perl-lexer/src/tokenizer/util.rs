@@ -1,4 +1,9 @@
-//! Utility functions for the Perl parser
+//! Tokenization utilities shared by parser-facing entry points.
+//!
+//! Helpers in this module identify Perl data-section markers (`__DATA__` and
+//! `__END__`) using lexer tokens, so callers can safely split executable code
+//! from trailing payload without matching markers embedded in strings,
+//! heredocs, or POD content.
 
 /// Find the byte offset of a __DATA__ or __END__ marker in the source text.
 /// Uses the lexer to avoid false positives in heredocs/POD.

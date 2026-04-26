@@ -5,6 +5,44 @@
 use super::super::*;
 use crate::protocol::req_uri;
 use std::borrow::Cow;
+use std::path::Path;
+
+fn is_windows_drive_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
+}
+
+fn resolve_file_link_target(base_uri: &str, file_path: &str) -> Option<String> {
+    if file_path.starts_with("//") {
+        return url::Url::parse(&format!("file:{file_path}")).ok().map(|url| url.to_string());
+    }
+
+    if is_windows_drive_path(file_path) {
+        return url::Url::parse(&format!("file:///{file_path}")).ok().map(|url| url.to_string());
+    }
+
+    if Path::new(file_path).is_absolute() {
+        if let Ok(target_url) = url::Url::from_file_path(file_path) {
+            return Some(target_url.to_string());
+        }
+    }
+
+    let base_url = url::Url::parse(base_uri).ok()?;
+    if let Ok(target_url) = base_url.join(file_path) {
+        return Some(target_url.to_string());
+    }
+
+    if let Ok(base_path) = base_url.to_file_path()
+        && let Some(parent) = base_path.parent()
+    {
+        let resolved = parent.join(file_path);
+        if let Ok(target_url) = url::Url::from_file_path(&resolved) {
+            return Some(target_url.to_string());
+        }
+    }
+
+    None
+}
 
 fn normalize_document_link_file_path(file_path: &str) -> Cow<'_, str> {
     if !file_path.contains(['\\', '/']) {
@@ -138,20 +176,10 @@ impl LspServer {
                                 data: None,
                             })?;
 
-                        // Resolve relative to base URI. Prefer URL joins because tests
-                        // and editors may use synthetic file:// roots that are not
-                        // convertible to platform-native absolute paths on Windows.
-                        if let Ok(base_url) = url::Url::parse(base_uri) {
-                            if let Ok(target_url) = base_url.join(&normalized_file_path) {
-                                link["target"] = json!(target_url.to_string());
-                            } else if let Ok(base_path) = base_url.to_file_path() {
-                                if let Some(parent) = base_path.parent() {
-                                    let resolved = parent.join(normalized_file_path.as_ref());
-                                    if let Ok(target_url) = url::Url::from_file_path(&resolved) {
-                                        link["target"] = json!(target_url.to_string());
-                                    }
-                                }
-                            }
+                        if let Some(target) =
+                            resolve_file_link_target(base_uri, normalized_file_path.as_ref())
+                        {
+                            link["target"] = json!(target);
                         }
                     }
                     Some("url") => {
@@ -217,7 +245,7 @@ impl LspServer {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_document_link_file_path;
+    use super::{normalize_document_link_file_path, resolve_file_link_target};
 
     #[test]
     fn normalize_document_link_file_path_collapses_windows_separators() {
@@ -232,5 +260,21 @@ mod tests {
             normalize_document_link_file_path(r"\\server\share\Thing.pm"),
             "//server/share/Thing.pm"
         );
+    }
+
+    #[test]
+    fn resolve_file_link_target_handles_windows_absolute_paths() {
+        let resolved =
+            resolve_file_link_target("file:///workspace/project/file.pl", "C:/Users/me/Thing.pm");
+        assert_eq!(resolved, Some("file:///C:/Users/me/Thing.pm".to_string()));
+    }
+
+    #[test]
+    fn resolve_file_link_target_handles_unc_paths() {
+        let resolved = resolve_file_link_target(
+            "file:///workspace/project/file.pl",
+            "//server/share/lib/Thing.pm",
+        );
+        assert_eq!(resolved, Some("file://server/share/lib/Thing.pm".to_string()));
     }
 }

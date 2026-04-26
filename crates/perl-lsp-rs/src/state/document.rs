@@ -286,6 +286,8 @@ pub struct ClientCapabilities {
     pub workspace_configuration_support: bool,
     /// Supports snippet syntax in completion items
     pub snippet_support: bool,
+    /// Supports `completionItem.commitCharacters` in completion results
+    pub completion_commit_characters_support: bool,
     /// Supports markdown message content in diagnostics (LSP 3.18)
     ///
     /// When true, the server can provide rich markdown formatting in diagnostic
