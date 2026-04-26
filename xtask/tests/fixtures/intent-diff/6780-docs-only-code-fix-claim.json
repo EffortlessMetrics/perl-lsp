@@ -1,0 +1,9 @@
+{
+  "title": "fix(vscode): fix VS Code activation startup",
+  "body": "Fixes #6747",
+  "changed_paths": [
+    "docs/project/status/lsp.md"
+  ],
+  "explicit_override": false,
+  "behavior_receipt": false
+}

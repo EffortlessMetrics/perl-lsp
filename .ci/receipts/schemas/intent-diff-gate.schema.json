@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/intent-diff-gate.schema.json",
+  "title": "Intent diff closeout gate receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claimed_component",
+    "claimed_closeout_issues",
+    "expected_paths",
+    "actual_paths",
+    "evidence",
+    "verdict",
+    "violations"
+  ],
+  "properties": {
+    "claimed_component": {
+      "type": ["string", "null"]
+    },
+    "claimed_closeout_issues": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "expected_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "actual_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_path_touched",
+        "test_updated",
+        "behavior_receipt",
+        "explicit_override",
+        "docs_only_diff",
+        "scaffold_or_partial"
+      ],
+      "properties": {
+        "target_path_touched": { "type": "boolean" },
+        "test_updated": { "type": "boolean" },
+        "behavior_receipt": { "type": "boolean" },
+        "explicit_override": { "type": "boolean" },
+        "docs_only_diff": { "type": "boolean" },
+        "scaffold_or_partial": { "type": "boolean" }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "severity", "message"],
+        "properties": {
+          "code": { "type": "string" },
+          "severity": { "type": "string", "enum": ["warn", "fail"] },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}

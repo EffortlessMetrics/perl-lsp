@@ -1,0 +1,10 @@
+{
+  "title": "feat(ci): scaffold intent gate plumbing",
+  "body": "Refs #6853",
+  "changed_paths": [
+    "xtask/src/tasks/intent_diff_gate.rs",
+    "docs/ci/intent-diff-closeout-gate.md"
+  ],
+  "explicit_override": false,
+  "behavior_receipt": false
+}
