@@ -1,0 +1,19 @@
+{
+  "pr": {
+    "number": 6853,
+    "draft": false,
+    "merged_at": null,
+    "head_sha": "head-123",
+    "base_sha": "base-123",
+    "labels": ["review-reviewed", "needs-builder-fix"],
+    "status_rollup": "GREEN"
+  },
+  "receipts": [
+    {
+      "kind": "review",
+      "pr_number": 6853,
+      "head_sha": "head-123",
+      "valid": true
+    }
+  ]
+}

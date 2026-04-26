@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/queue-state.schema.json",
+  "title": "Queue State Receipt",
+  "type": "object",
+  "required": ["generated_at", "dry_run", "states"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "dry_run": { "type": "boolean" },
+    "states": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "number",
+          "canonical_state",
+          "blockers",
+          "stale_receipts",
+          "projected_next_routes",
+          "projected_labels",
+          "contradictions"
+        ],
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "canonical_state": { "type": "string" },
+          "blockers": { "type": "array", "items": { "type": "string" } },
+          "stale_receipts": { "type": "array", "items": { "type": "string" } },
+          "projected_next_routes": { "type": "array", "items": { "type": "string" } },
+          "projected_labels": { "type": "array", "items": { "type": "string" } },
+          "contradictions": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

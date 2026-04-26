@@ -1,0 +1,20 @@
+{
+  "pr": {
+    "number": 6855,
+    "draft": false,
+    "merged_at": null,
+    "head_sha": "head-789",
+    "base_sha": "base-current",
+    "labels": ["merge-ready", "review-reviewed"],
+    "status_rollup": "GREEN"
+  },
+  "receipts": [
+    {
+      "kind": "merge-readiness",
+      "pr_number": 6855,
+      "head_sha": "head-789",
+      "base_sha": "base-stale",
+      "valid": true
+    }
+  ]
+}

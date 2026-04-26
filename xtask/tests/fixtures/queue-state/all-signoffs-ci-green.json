@@ -1,0 +1,19 @@
+{
+  "pr": {
+    "number": 6854,
+    "draft": false,
+    "merged_at": null,
+    "head_sha": "head-456",
+    "base_sha": "base-456",
+    "labels": ["review-reviewed", "standards-signed", "deep-review-signed"],
+    "status_rollup": "GREEN"
+  },
+  "receipts": [
+    {
+      "kind": "review",
+      "pr_number": 6854,
+      "head_sha": "head-456",
+      "valid": true
+    }
+  ]
+}

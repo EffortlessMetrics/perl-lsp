@@ -1152,6 +1152,12 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Queue state-machine dry-run tools.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1300,6 +1306,28 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Capture queue snapshot from GitHub facts.
+    Snapshot {
+        /// Output JSON file.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Derive canonical states from a queue snapshot.
+    State {
+        /// Input snapshot JSON file.
+        #[arg(long)]
+        snapshot: PathBuf,
+        /// Keep command in read-only dry-run mode.
+        #[arg(long)]
+        dry_run: bool,
+        /// Optional output receipt JSON file.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
     },
 }
 
@@ -1686,6 +1714,12 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out } => queue_snapshot::run(out),
+            QueueCommand::State { snapshot, dry_run, receipt } => {
+                queue_state::run(snapshot, dry_run, receipt)
+            }
+        },
     }
 }
 
