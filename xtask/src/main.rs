@@ -1119,6 +1119,12 @@ enum Commands {
     /// Populate mdBook source directory from `docs/`.
     PopulateBook,
 
+    /// Agent lease and receipt primitives.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Validate workspace exclusion strategy and dependency invariants.
     ValidateWorkspaceExclusions,
 
@@ -1300,6 +1306,52 @@ enum MetricsCommand {
         /// `target/receipts/system-corpus-sweep.json`.
         #[arg(long)]
         input: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    /// Lease lifecycle commands.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Agent receipt commands.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Acquire a lease from a task payload.
+    Acquire {
+        /// Path to task JSON.
+        #[arg(long)]
+        task: PathBuf,
+        /// Output path for generated lease JSON.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify lease validity against the current snapshot.
+    Verify {
+        /// Path to lease JSON.
+        #[arg(long)]
+        lease: PathBuf,
+        /// Path to current snapshot JSON.
+        #[arg(long)]
+        current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate a receipt payload.
+    Validate {
+        /// Path to receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
     },
 }
 
@@ -1678,6 +1730,21 @@ fn main() -> Result<()> {
             swarm_summary::run(swarm_summary::SwarmSummaryConfig { ops_dir, since, limit, format })
         }
         Commands::PopulateBook => populate_book::run(),
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Acquire { task, out } => {
+                    tasks::agent_lease::acquire(&task, &out)
+                }
+                AgentLeaseCommand::Verify { lease, current } => {
+                    tasks::agent_lease::verify(&lease, &current)
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt } => {
+                    tasks::agent_receipt::validate(&receipt)
+                }
+            },
+        },
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {

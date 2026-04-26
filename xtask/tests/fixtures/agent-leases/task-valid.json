@@ -1,0 +1,15 @@
+{
+  "task_id": "task-6853-1",
+  "snapshot_id": "snapshot-2026-04-26T00:00:00Z",
+  "lane": "pr-fast",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "canonical_state": {
+    "status": "open"
+  },
+  "allowed_mutations": ["comment", "status"],
+  "forbidden_mutations": ["label"],
+  "required_output_schema": "agent-receipt@1.0.0",
+  "expires_at": "2099-01-01T00:00:00Z"
+}

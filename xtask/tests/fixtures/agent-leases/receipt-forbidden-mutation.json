@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "receipt_id": "r-6853-1",
+  "task_id": "task-6853-1",
+  "snapshot_id": "snapshot-2026-04-26T00:00:00Z",
+  "lane": "pr-fast",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "mutation": "label",
+  "allowed_mutations": ["comment", "status"],
+  "forbidden_mutations": ["label"],
+  "required_output_schema": "agent-receipt@1.0.0",
+  "emitted_at": "2026-04-26T00:00:00Z",
+  "lease_expires_at": "2099-01-01T00:00:00Z",
+  "sequence": 2
+}
