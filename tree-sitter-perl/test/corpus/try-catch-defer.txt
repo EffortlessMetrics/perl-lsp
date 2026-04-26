@@ -209,9 +209,12 @@ my $result = try {
 ---
 
 (source_file
-  (use_statement)
-  (subroutine_declaration)
-  (statement))
+  (use_statement
+    (package)
+    (string_literal
+      (string_content)))
+  (subroutine_declaration_statement)
+  (expression_statement))
 
 ==================
 Defer blocks
