@@ -15,6 +15,7 @@ categories = ["development-tools", "data-structures", "text-editors"]
 publish = true
 include = [
     "src/**",
+    "benches/**",
     "Cargo.toml",
     "LICENSE*",
     "README.md",
