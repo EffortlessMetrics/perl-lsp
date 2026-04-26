@@ -410,8 +410,8 @@ impl LspServer {
                 let mut completions = if let Some(ast) = &doc.ast {
                     let file_dir = super::super::source_path_from_uri(uri)
                         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-                    let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(
+                    let (include_paths, system_inc_paths, include_system_inc) = self
+                        .module_completion_roots_for_doc(
                             uri,
                             &doc.text,
                             offset,
@@ -670,8 +670,8 @@ impl LspServer {
                 let mut completions = if let Some(ast) = &doc.ast {
                     let file_dir = super::super::source_path_from_uri(uri)
                         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-                    let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(
+                    let (include_paths, system_inc_paths, include_system_inc) = self
+                        .module_completion_roots_for_doc(
                             uri,
                             &doc.text,
                             offset,
@@ -1148,13 +1148,12 @@ mod tests {
         );
 
         let file_dir = Some(temp.path().to_path_buf());
-        let (include_paths, _sys, _use_sys) =
-            server.module_completion_roots_for_doc(
-                &doc_uri,
-                &doc_text,
-                doc_text.len(),
-                file_dir.as_deref(),
-            );
+        let (include_paths, _sys, _use_sys) = server.module_completion_roots_for_doc(
+            &doc_uri,
+            &doc_text,
+            doc_text.len(),
+            file_dir.as_deref(),
+        );
 
         assert!(
             include_paths.contains(&lib_dir),
