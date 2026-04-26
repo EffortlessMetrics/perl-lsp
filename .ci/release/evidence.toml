@@ -1,0 +1,15 @@
+[release_evidence]
+required = [
+  "ci-gate.json",
+  "parser-ratchet-release.json",
+  "vscode-extension-smoke.json",
+  "lsp-scenario.json",
+  "real-workspace-baseline.json",
+  "ai-completion-e2e.json",
+  "unresolved-risk-register.json",
+]
+summary_receipt = "target/receipts/release-evidence.json"
+
+[advisory]
+receipt = "advisory-status.json"
+release_blocking = false

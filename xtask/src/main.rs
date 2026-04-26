@@ -520,14 +520,10 @@ enum Commands {
         bench: bool,
     },
 
-    /// Prepare release
+    /// Release operations.
     Release {
-        /// Version to release
-        version: String,
-
-        /// Skip confirmation
-        #[arg(long)]
-        yes: bool,
+        #[command(subcommand)]
+        command: ReleaseCommand,
     },
 
     /// Extract the curated release body from `docs/releases/<tag>.md`.
@@ -1155,6 +1151,38 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum ReleaseCommand {
+    /// Prepare release artifacts.
+    Prepare {
+        /// Version to release
+        version: String,
+
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Evaluate a release evidence bundle and emit a summary receipt.
+    Evidence {
+        /// Release version (for example `0.13.0`).
+        #[arg(long)]
+        version: String,
+        /// Directory containing release-evidence receipts.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify a previously generated release-evidence summary receipt.
+    #[command(name = "verify-evidence")]
+    VerifyEvidence {
+        /// Release version (for example `0.13.0`).
+        #[arg(long)]
+        version: String,
+        /// Path to `release-evidence.json` summary receipt.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum CpanCorpusCommand {
     /// Fetch top N distributions from MetaCPAN by reverse dependency count
     FetchList {
@@ -1410,7 +1438,15 @@ fn main() -> Result<()> {
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
         }
-        Commands::Release { version, yes } => release::run(version, yes),
+        Commands::Release { command } => match command {
+            ReleaseCommand::Prepare { version, yes } => release::run(version, yes),
+            ReleaseCommand::Evidence { version, out } => {
+                release_evidence::run_evidence(version, out)
+            }
+            ReleaseCommand::VerifyEvidence { version, receipt } => {
+                release_evidence::run_verify_evidence(version, receipt)
+            }
+        },
         Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,

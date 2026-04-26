@@ -1,0 +1,11 @@
+{
+  "receipts": {
+    "ci-gate.json": { "status": "pass" },
+    "vscode-extension-smoke.json": { "status": "pass" },
+    "lsp-scenario.json": { "status": "pass" },
+    "real-workspace-baseline.json": { "status": "pass" },
+    "ai-completion-e2e.json": { "status": "pass" },
+    "advisory-status.json": { "status": "pass", "release_blocking": false },
+    "unresolved-risk-register.json": { "status": "pass" }
+  }
+}
