@@ -197,10 +197,10 @@ fn discover_system_perl_paths() -> Result<(String, BTreeMap<String, PathBuf>)> {
 
     let mut paths = BTreeMap::new();
     for line in stdout.lines() {
-        if let Some((key, value)) = line.split_once('=') {
-            if !value.trim().is_empty() {
-                paths.insert(key.to_string(), PathBuf::from(value.trim()));
-            }
+        if let Some((key, value)) = line.split_once('=')
+            && !value.trim().is_empty()
+        {
+            paths.insert(key.to_string(), PathBuf::from(value.trim()));
         }
     }
 
@@ -296,10 +296,10 @@ fn summarize_sources(files: &[ManifestFile]) -> Vec<ManifestSource> {
 fn source_root(path: &str, source: &str) -> String {
     if source.starts_with("repo:") {
         let maybe = path.split("/tests/").next();
-        if let Some(prefix) = maybe {
-            if !prefix.is_empty() {
-                return prefix.to_string();
-            }
+        if let Some(prefix) = maybe
+            && !prefix.is_empty()
+        {
+            return prefix.to_string();
         }
     }
 
