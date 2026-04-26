@@ -1,0 +1,9 @@
+name: Write All
+on:
+  workflow_dispatch: {}
+permissions: write-all
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "no-op"

@@ -1,0 +1,12 @@
+name: PR Target Unsafe
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+jobs:
+  unsafe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - run: echo "${{ secrets.GITHUB_TOKEN }}"

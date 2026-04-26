@@ -349,6 +349,17 @@ enum Commands {
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
 
+    /// Enforce workflow security and policy lint rules.
+    WorkflowPolicyLint {
+        /// Optional single workflow file to lint as a fixture.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Optional JSON receipt output path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Measure CI lane runtimes and emit timing artifacts.
     CiMeasure,
 
@@ -1454,6 +1465,12 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::WorkflowPolicyLint { fixture, receipt } => {
+            workflow_policy_lint::run(workflow_policy_lint::WorkflowPolicyLintConfig {
+                fixture,
+                receipt,
+            })
+        }
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {

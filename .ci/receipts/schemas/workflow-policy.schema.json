@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/workflow-policy.schema.json",
+  "title": "Workflow Policy Lint Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["files_scanned", "violations", "warnings"],
+  "properties": {
+    "files_scanned": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "violations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
