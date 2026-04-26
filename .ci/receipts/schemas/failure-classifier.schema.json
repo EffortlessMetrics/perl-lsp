@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.github.io/perl-lsp/schemas/failure-classifier.schema.json",
+  "title": "Failure Classifier Receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "signature",
+    "affected_prs",
+    "master_sha",
+    "master_same_signature",
+    "classification",
+    "recommended_action",
+    "confidence",
+    "evidence"
+  ],
+  "properties": {
+    "check": {
+      "const": "Failure Classifier"
+    },
+    "signature": {
+      "type": "string",
+      "minLength": 1
+    },
+    "affected_prs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "master_sha": {
+      "type": ["string", "null"]
+    },
+    "master_same_signature": {
+      "type": "boolean"
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "PR_OWNED",
+        "STALE_BASE",
+        "MASTER_RED",
+        "INFRA_FAILURE",
+        "FLAKY",
+        "UNKNOWN"
+      ]
+    },
+    "recommended_action": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}

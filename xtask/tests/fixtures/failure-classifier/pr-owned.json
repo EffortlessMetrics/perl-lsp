@@ -1,0 +1,30 @@
+{
+  "current_head_sha": "ghi333",
+  "gate": "pr-fast",
+  "pr": {
+    "sha": "ghi333",
+    "status": "failure",
+    "signature": "test:perl-lsp-rs:definition-regression",
+    "observed_head_sha": "ghi333",
+    "changed_files": [
+      "crates/perl-lsp-rs/src/handlers/goto_definition.rs",
+      "crates/perl-lsp-rs/src/handlers/hover.rs"
+    ],
+    "failed_files": ["crates/perl-lsp-rs/src/handlers/goto_definition.rs"]
+  },
+  "master": {
+    "sha": "master1001",
+    "status": "success",
+    "signature": ""
+  },
+  "known_infra_signatures": ["runner:timeout", "gha:service-unavailable"],
+  "receipt_artifacts": [
+    {
+      "name": "junit",
+      "signature": "test:perl-lsp-rs:definition-regression"
+    }
+  ],
+  "affected_prs": ["6853"],
+  "base_behind_master": false,
+  "flaky_indicators": []
+}

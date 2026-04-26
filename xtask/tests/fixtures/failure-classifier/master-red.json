@@ -1,0 +1,27 @@
+{
+  "current_head_sha": "abc111",
+  "gate": "pr-fast",
+  "pr": {
+    "sha": "abc111",
+    "status": "failure",
+    "signature": "cargo-test:perl-parser:panic",
+    "observed_head_sha": "abc111",
+    "changed_files": ["crates/perl-parser/src/parser.rs"],
+    "failed_files": ["crates/perl-parser/src/parser.rs"]
+  },
+  "master": {
+    "sha": "master999",
+    "status": "failure",
+    "signature": "cargo-test:perl-parser:panic"
+  },
+  "merge_group": {
+    "sha": "mg123",
+    "status": "failure",
+    "signature": "cargo-test:perl-parser:panic"
+  },
+  "known_infra_signatures": [],
+  "receipt_artifacts": [],
+  "affected_prs": ["6821", "6841"],
+  "base_behind_master": false,
+  "flaky_indicators": []
+}

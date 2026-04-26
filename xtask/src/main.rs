@@ -751,6 +751,21 @@ enum Commands {
         args: Vec<String>,
     },
 
+    /// Classify CI failures before applying routing labels.
+    FailureClassifier {
+        /// Queue snapshot JSON (live payload from green-ci orchestration).
+        #[arg(long, conflicts_with = "fixture")]
+        snapshot: Option<PathBuf>,
+
+        /// Fixture JSON for local testing.
+        #[arg(long, conflicts_with = "snapshot")]
+        fixture: Option<PathBuf>,
+
+        /// Optional output path for the failure-classifier receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+    },
+
     /// Publish a review receipt bundle in `review/receipts/YYYY-MM-DD/`.
     PublishReceipts {
         /// Optional date override in `YYYY-MM-DD` format.
@@ -1504,6 +1519,13 @@ fn main() -> Result<()> {
         Commands::HookTests => hook_checks::run_hook_tests(),
         Commands::ForbidFatalConstructs { args } => forbid_fatal_constructs::run(args),
         Commands::CiHygiene { command, args } => ci_hygiene::run(command, args),
+        Commands::FailureClassifier { snapshot, fixture, receipt } => {
+            failure_classifier::run(failure_classifier::FailureClassifierConfig {
+                snapshot,
+                fixture,
+                receipt,
+            })
+        }
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
         Commands::PublishClosure { crate_name } => publish_closure::run(crate_name),
         Commands::PublishedCrateCount => count_ratchet::run(),

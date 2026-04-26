@@ -1,0 +1,17 @@
+{
+  "current_head_sha": "jkl444",
+  "gate": "pr-fast",
+  "pr": {
+    "sha": "jkl444",
+    "status": "failure",
+    "signature": null,
+    "changed_files": [],
+    "failed_files": []
+  },
+  "master": null,
+  "known_infra_signatures": [],
+  "receipt_artifacts": [],
+  "affected_prs": ["6853"],
+  "base_behind_master": false,
+  "flaky_indicators": []
+}

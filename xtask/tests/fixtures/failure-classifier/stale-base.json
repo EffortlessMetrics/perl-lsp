@@ -1,0 +1,27 @@
+{
+  "current_head_sha": "def222",
+  "gate": "merge-gate",
+  "pr": {
+    "sha": "def222",
+    "status": "failure",
+    "signature": "compile:error:E0433",
+    "observed_head_sha": "def222",
+    "changed_files": ["crates/perl-lsp-rs/src/server.rs"],
+    "failed_files": ["crates/perl-lsp-rs/src/server.rs"]
+  },
+  "master": {
+    "sha": "master1000",
+    "status": "success",
+    "signature": ""
+  },
+  "merge_group": {
+    "sha": "mg224",
+    "status": "failure",
+    "signature": "compile:error:E0433"
+  },
+  "known_infra_signatures": [],
+  "receipt_artifacts": [],
+  "affected_prs": ["6853"],
+  "base_behind_master": true,
+  "flaky_indicators": []
+}
