@@ -23,6 +23,10 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // ci-gate-self-tests.yml is path-filtered to gate scripts only.
     // Runs only when the gate scripts or self-test scripts change.
     "ci-gate-self-tests.yml",
+    // workflow-policy.yml is path-filtered to workflow-policy lint sources only.
+    // Runs only when .github/workflows/, the workflow_policy_lint xtask, or its
+    // fixtures/schema change.
+    "workflow-policy.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
