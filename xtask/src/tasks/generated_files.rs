@@ -73,10 +73,8 @@ pub fn check(
     let (changed_files, generator_receipts) = load_inputs(&root, fixture)?;
 
     let changed_generated = collect_changed_generated_files(&manifest.generated, &changed_files)?;
-    let receipt_lookup: BTreeSet<(String, String)> = generator_receipts
-        .into_iter()
-        .map(|item| (item.owner, item.command))
-        .collect();
+    let receipt_lookup: BTreeSet<(String, String)> =
+        generator_receipts.into_iter().map(|item| (item.owner, item.command)).collect();
 
     let mut missing_receipts = Vec::new();
     let mut expected_commands = BTreeSet::new();
@@ -88,11 +86,8 @@ pub fn check(
         }
     }
 
-    let verdict = if missing_receipts.is_empty() || allow_missing_receipt {
-        "pass"
-    } else {
-        "fail"
-    };
+    let verdict =
+        if missing_receipts.is_empty() || allow_missing_receipt { "pass" } else { "fail" };
 
     let receipt_payload = CheckReceipt {
         verdict: verdict.to_string(),
@@ -106,8 +101,8 @@ pub fn check(
             .with_context(|| format!("creating receipt directory {}", parent.display()))?;
     }
 
-    let receipt_json =
-        serde_json::to_string_pretty(&receipt_payload).context("serialize generated-file receipt")?;
+    let receipt_json = serde_json::to_string_pretty(&receipt_payload)
+        .context("serialize generated-file receipt")?;
     fs::write(&receipt_path, receipt_json)
         .with_context(|| format!("writing receipt {}", receipt_path.display()))?;
 
@@ -144,7 +139,10 @@ fn collect_changed_generated_files(
     Ok(matches)
 }
 
-fn load_inputs(root: &Path, fixture: Option<PathBuf>) -> Result<(Vec<String>, Vec<GeneratorReceipt>)> {
+fn load_inputs(
+    root: &Path,
+    fixture: Option<PathBuf>,
+) -> Result<(Vec<String>, Vec<GeneratorReceipt>)> {
     if let Some(path) = fixture {
         let fixture_path = resolve_path(root, &path);
         let bytes = fs::read(&fixture_path)
@@ -195,8 +193,8 @@ fn read_manifest(root: &Path) -> Result<GeneratedManifest> {
     let manifest_path = root.join(GENERATED_MANIFEST);
     let content = fs::read_to_string(&manifest_path)
         .with_context(|| format!("reading {}", manifest_path.display()))?;
-    let manifest: GeneratedManifest = toml::from_str(&content)
-        .with_context(|| format!("parsing {}", manifest_path.display()))?;
+    let manifest: GeneratedManifest =
+        toml::from_str(&content).with_context(|| format!("parsing {}", manifest_path.display()))?;
     Ok(manifest)
 }
 
@@ -213,8 +211,9 @@ fn collect_generator_receipts_from_changed_files(
         if !file_path.exists() {
             continue;
         }
-        let bytes = fs::read(&file_path)
-            .with_context(|| format!("reading potential generator receipt {}", file_path.display()))?;
+        let bytes = fs::read(&file_path).with_context(|| {
+            format!("reading potential generator receipt {}", file_path.display())
+        })?;
         let parsed: serde_json::Value = match serde_json::from_slice(&bytes) {
             Ok(value) => value,
             Err(_) => continue,
