@@ -7,6 +7,8 @@
     "definition_exact_hit": null,
     "symbol_correct": null,
     "cross_file_success": null,
+    "rename_success": null,
+    "diagnostics_correct": null,
     "latency_ms_by_request": {
       "hover": [18, 21, 24, 31, 29]
     }
@@ -19,6 +21,8 @@
     "definition_exact_hit": true,
     "symbol_correct": null,
     "cross_file_success": true,
+    "rename_success": null,
+    "diagnostics_correct": null,
     "latency_ms_by_request": {
       "definition": [27, 32, 36, 39, 44]
     }
@@ -31,6 +35,8 @@
     "definition_exact_hit": null,
     "symbol_correct": true,
     "cross_file_success": true,
+    "rename_success": null,
+    "diagnostics_correct": null,
     "latency_ms_by_request": {
       "workspace_symbols": [42, 48, 55, 61, 68]
     }
@@ -43,6 +49,8 @@
     "definition_exact_hit": null,
     "symbol_correct": true,
     "cross_file_success": true,
+    "rename_success": null,
+    "diagnostics_correct": null,
     "latency_ms_by_request": {
       "workspace_symbols": [46, 49, 58, 64, 70]
     }
@@ -55,8 +63,52 @@
     "definition_exact_hit": null,
     "symbol_correct": null,
     "cross_file_success": null,
+    "rename_success": null,
+    "diagnostics_correct": null,
     "latency_ms_by_request": {
       "completion": [19, 23, 27, 33, 35]
+    }
+  },
+  {
+    "scenario_id": "diagnostics_after_edit",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "cross_file_success": null,
+    "rename_success": null,
+    "diagnostics_correct": true,
+    "latency_ms_by_request": {
+      "diagnostics": [45, 52, 60, 67, 74]
+    }
+  },
+  {
+    "scenario_id": "rename_workflow",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "cross_file_success": null,
+    "rename_success": true,
+    "diagnostics_correct": null,
+    "latency_ms_by_request": {
+      "rename": [38, 44, 51, 57, 63]
+    }
+  },
+  {
+    "scenario_id": "goto_declaration_core",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": true,
+    "symbol_correct": null,
+    "cross_file_success": true,
+    "rename_success": null,
+    "diagnostics_correct": null,
+    "latency_ms_by_request": {
+      "definition": [29, 34, 38, 42, 47]
     }
   }
 ]

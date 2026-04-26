@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "receipt_kind": "planning_scaffold",
+  "receipt_kind": "measured",
   "scorecard": "editor_ux",
   "harness": {
     "crate": "crates/perl-lsp-ux-tests",
-    "scenario_count": 17,
+    "scenario_count": 23,
     "scenario_files": [
       "crates/perl-lsp-ux-tests/tests/ux_scenario_01_simple_file.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_02_missing_perltidy.rs",
@@ -22,23 +22,73 @@
       "crates/perl-lsp-ux-tests/tests/ux_scenario_14_inc_conformance.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_15_workspace_symbols.rs",
       "crates/perl-lsp-ux-tests/tests/ux_scenario_16_workspace_folder_removal.rs",
-      "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs"
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_17_deleted_file_churn.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_diagnostics_after_edit.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_goto_declaration.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_18_real_repo_perf.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_22_template_language_mode.rs",
+      "crates/perl-lsp-ux-tests/tests/ux_scenario_23_rename_workflow.rs"
     ]
   },
   "top_line_metrics": [
     {
       "name": "workflow_pass_rate",
-      "state": "planned",
-      "owner": "perl-lsp-ux-tests"
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests",
+      "description": "Percentage of fixture scenarios where every exercised metric passes"
     },
     {
       "name": "workflow_stability_rate",
-      "state": "planned",
-      "owner": "perl-lsp-ux-tests"
+      "state": "tracked",
+      "owner": "perl-lsp-ux-tests",
+      "description": "Scenario pass rate across repeated runs (flakiness guard)"
     },
     {
       "name": "p95_time_to_first_useful_result_ms",
-      "state": "planned",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests",
+      "description": "p95 hover latency as proxy for time-to-first-useful-result"
+    }
+  ],
+  "correctness_metrics": [
+    {
+      "name": "hover_correctness_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "completion_top1_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "completion_top5_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "definition_exact_hit_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "symbol_correctness_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "cross_file_success_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "rename_success_pct",
+      "state": "measured",
+      "owner": "perl-lsp-ux-tests"
+    },
+    {
+      "name": "diagnostics_correctness_pct",
+      "state": "measured",
       "owner": "perl-lsp-ux-tests"
     }
   ],
@@ -47,25 +97,27 @@
       "name": "manual_editor_smoke",
       "state": "tracked",
       "owner": "perl-lsp-ux-tests",
-      "workflow_count": 16
+      "workflow_count": 21
     },
     {
       "name": "first_five_minutes_harness",
       "state": "tracked",
       "owner": "perl-lsp-ux-tests",
-      "workflow_count": 17
+      "workflow_count": 23
     },
     {
       "name": "issue_burndown_regression_guard",
       "state": "tracked",
       "owner": "perl-lsp-ux-tests",
-      "workflow_count": 7
+      "workflow_count": 9
     }
   ],
   "integration_points": {
     "ci_lane": "just ux-tests",
     "release_lane": "just ux-tests-full",
     "status_update": "cargo xtask update-status --only quality",
-    "quality_surface": "docs/project/status/quality.md"
+    "quality_surface": "docs/project/status/quality.md",
+    "scorecard_generator": "cargo xtask ux-scorecard",
+    "ratchet_check": "cargo xtask ux-scorecard --ratchet-check"
   }
 }

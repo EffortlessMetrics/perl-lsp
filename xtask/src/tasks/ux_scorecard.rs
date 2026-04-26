@@ -29,6 +29,8 @@ struct ScenarioMeasurement {
     definition_exact_hit: Option<bool>,
     symbol_correct: Option<bool>,
     cross_file_success: Option<bool>,
+    rename_success: Option<bool>,
+    diagnostics_correct: Option<bool>,
     latency_ms_by_request: BTreeMap<String, Vec<u64>>,
 }
 
@@ -49,6 +51,7 @@ struct UxScorecardArtifact {
     measured_at: String,
     subsystem: &'static str,
     scenario_count: usize,
+    workflow_pass_rate: Option<f64>,
     rows: BTreeMap<String, PercentMetric>,
     latency_by_request_class: BTreeMap<String, LatencyPercentiles>,
     provenance: serde_json::Value,
@@ -72,6 +75,7 @@ pub fn run(
     let symbol_correctness_pct =
         percent_true(raw_measurements.iter().filter_map(|s| s.symbol_correct));
     let latencies = compute_latency_percentiles(&raw_measurements);
+    let workflow_pass_rate = compute_workflow_pass_rate(&raw_measurements);
 
     let mut rows = BTreeMap::new();
     rows.insert(
@@ -98,12 +102,21 @@ pub fn run(
         "cross_file_success_pct".to_string(),
         PercentMetric { value: scorecard.cross_file_success_pct },
     );
+    rows.insert(
+        "rename_success_pct".to_string(),
+        PercentMetric { value: scorecard.rename_success_pct },
+    );
+    rows.insert(
+        "diagnostics_correctness_pct".to_string(),
+        PercentMetric { value: scorecard.diagnostics_correctness_pct },
+    );
 
     let artifact = UxScorecardArtifact {
         schema_version: 1,
         measured_at: Utc::now().to_rfc3339(),
         subsystem: "editor_ux",
         scenario_count: scorecard.scenario_count,
+        workflow_pass_rate,
         rows,
         latency_by_request_class: latencies,
         provenance: json!({
@@ -114,7 +127,7 @@ pub fn run(
     };
 
     write_json(&output_path, &artifact)?;
-    fs::write(&status_path, render_status_markdown(&artifact))
+    fs::write(&status_path, render_status_markdown(&artifact, &raw_measurements))
         .with_context(|| format!("writing {}", status_path.display()))?;
     maybe_embed_receipt_block(&root, &artifact)?;
 
@@ -144,6 +157,8 @@ fn load_measurements(raw: &[ScenarioMeasurement]) -> Vec<ScenarioScore> {
             completion_top5_correct: m.completion_top5_correct,
             definition_exact_hit: m.definition_exact_hit,
             cross_file_success: m.cross_file_success,
+            rename_success: m.rename_success,
+            diagnostics_correct: m.diagnostics_correct,
             mean_latency_ms: BTreeMap::new(),
         })
         .collect()
@@ -167,24 +182,105 @@ fn write_json(path: &Path, artifact: &UxScorecardArtifact) -> Result<()> {
     fs::write(path, format!("{payload}\n")).with_context(|| format!("writing {}", path.display()))
 }
 
-fn render_status_markdown(artifact: &UxScorecardArtifact) -> String {
+fn render_status_markdown(
+    artifact: &UxScorecardArtifact,
+    raw: &[ScenarioMeasurement],
+) -> String {
     let mut text = String::new();
+
+    // Header
     text.push_str("# Editor UX Scorecard\n\n");
     text.push_str(&format!("Measured: `{}`  \n", artifact.measured_at));
     text.push_str(&format!("Scenarios: `{}`\n\n", artifact.scenario_count));
+
+    // Top-line summary
+    let pass_rate_str = artifact
+        .workflow_pass_rate
+        .map(|r| format!("{:.1}%", r))
+        .unwrap_or_else(|| "n/a".to_string());
+    let p95_hover = artifact
+        .latency_by_request_class
+        .get("hover")
+        .and_then(|l| l.p95_ms)
+        .map(|ms| format!("{ms:.0}ms"))
+        .unwrap_or_else(|| "n/a".to_string());
+    text.push_str("## Summary\n\n");
+    text.push_str("| | |\n|---|---|\n");
+    text.push_str(&format!("| Workflow pass rate | **{pass_rate_str}** |\n"));
+    text.push_str(&format!("| Scenarios measured | {} |\n", artifact.scenario_count));
+    text.push_str(&format!("| Hover p95 latency | {p95_hover} |\n"));
+    text.push('\n');
+
+    // Correctness metrics
     text.push_str("## Correctness\n\n| Metric | Value |\n|---|---:|\n");
     for (k, v) in &artifact.rows {
         let value = v.value.map(|n| format!("{n:.2}%")).unwrap_or_else(|| "n/a".to_string());
         text.push_str(&format!("| {k} | {value} |\n"));
     }
-    text.push_str("\n## Latency (ms)\n\n| Request class | p50 | p95 |\n|---|---:|---:|\n");
+    text.push('\n');
+
+    // Latency table
+    text.push_str("## Latency (ms)\n\n| Request class | p50 | p95 |\n|---|---:|---:|\n");
     for (k, v) in &artifact.latency_by_request_class {
         let p50 = v.p50_ms.map(|n| format!("{n:.2}")).unwrap_or_else(|| "n/a".to_string());
         let p95 = v.p95_ms.map(|n| format!("{n:.2}")).unwrap_or_else(|| "n/a".to_string());
         text.push_str(&format!("| {k} | {p50} | {p95} |\n"));
     }
-    text.push_str("\n## Ratchet policy\n\nRegression-only ratchet: floor metrics may improve or stay flat; any statistically meaningful regression fails `cargo xtask ux-scorecard --ratchet-check`.\n");
+    text.push('\n');
+
+    // Per-scenario breakdown
+    text.push_str("## Scenarios\n\n");
+    text.push_str("| Scenario | Hover | Completion | Definition | Symbol | Cross-file | Rename | Diagnostics |\n");
+    text.push_str("|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|\n");
+    for m in raw {
+        let cell = |v: Option<bool>| match v {
+            Some(true) => "✓",
+            Some(false) => "✗",
+            None => "—",
+        };
+        text.push_str(&format!(
+            "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
+            m.scenario_id,
+            cell(m.hover_correct),
+            cell(m.completion_top1_correct),
+            cell(m.definition_exact_hit),
+            cell(m.symbol_correct),
+            cell(m.cross_file_success),
+            cell(m.rename_success),
+            cell(m.diagnostics_correct),
+        ));
+    }
+    text.push('\n');
+
+    // Ratchet policy
+    text.push_str("## Ratchet policy\n\nRegression-only ratchet: floor metrics may improve or stay flat; any statistically meaningful regression fails `cargo xtask ux-scorecard --ratchet-check`.\n");
     text
+}
+
+/// A scenario "passes" if every metric it exercises is true (nulls are skipped).
+fn compute_workflow_pass_rate(scenarios: &[ScenarioMeasurement]) -> Option<f64> {
+    if scenarios.is_empty() {
+        return None;
+    }
+    let mut pass = 0usize;
+    for s in scenarios {
+        let checks: &[Option<bool>] = &[
+            s.hover_correct,
+            s.completion_top1_correct,
+            s.completion_top5_correct,
+            s.definition_exact_hit,
+            s.symbol_correct,
+            s.cross_file_success,
+            s.rename_success,
+            s.diagnostics_correct,
+        ];
+        let any_measured = checks.iter().any(|c| c.is_some());
+        let all_pass = checks.iter().filter_map(|c| *c).all(|v| v);
+        if any_measured && all_pass {
+            pass += 1;
+        }
+    }
+    Some((pass as f64 / scenarios.len() as f64) * 100.0)
 }
 
 fn compute_latency_percentiles(
@@ -249,12 +345,15 @@ fn maybe_embed_receipt_block(root: &Path, artifact: &UxScorecardArtifact) -> Res
         object.insert(
             "ux_scorecard".to_string(),
             json!({
+                "workflow_pass_rate": artifact.workflow_pass_rate,
                 "hover_correctness_pct": artifact.rows.get("hover_correctness_pct").and_then(|m| m.value),
                 "completion_top1_pct": artifact.rows.get("completion_top1_pct").and_then(|m| m.value),
                 "completion_top5_pct": artifact.rows.get("completion_top5_pct").and_then(|m| m.value),
                 "definition_exact_hit_pct": artifact.rows.get("definition_exact_hit_pct").and_then(|m| m.value),
                 "symbol_correctness_pct": artifact.rows.get("symbol_correctness_pct").and_then(|m| m.value),
-                "cross_file_success_pct": artifact.rows.get("cross_file_success_pct").and_then(|m| m.value)
+                "cross_file_success_pct": artifact.rows.get("cross_file_success_pct").and_then(|m| m.value),
+                "rename_success_pct": artifact.rows.get("rename_success_pct").and_then(|m| m.value),
+                "diagnostics_correctness_pct": artifact.rows.get("diagnostics_correctness_pct").and_then(|m| m.value),
             }),
         );
     }
@@ -272,6 +371,9 @@ fn enforce_ratchet(root: &Path, artifact: &UxScorecardArtifact) -> Result<()> {
     let mut current_floor = BTreeMap::new();
     for (k, v) in &artifact.rows {
         current_floor.insert(k.clone(), v.value);
+    }
+    if let Some(wpr) = artifact.workflow_pass_rate {
+        current_floor.insert("workflow_pass_rate".to_string(), Some(wpr));
     }
     for (request, latency) in &artifact.latency_by_request_class {
         current_floor.insert(format!("latency_{}_p50_ms", request), latency.p50_ms);
@@ -316,6 +418,8 @@ mod tests {
             definition_exact_hit: Some(true),
             symbol_correct: Some(true),
             cross_file_success: Some(true),
+            rename_success: None,
+            diagnostics_correct: None,
             latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30, 40])]),
         }];
 
@@ -326,6 +430,54 @@ mod tests {
             assert_eq!(metrics.p50_ms, Some(30.0));
             assert_eq!(metrics.p95_ms, Some(40.0));
         }
+    }
+
+    #[test]
+    fn workflow_pass_rate_counts_all_pass_scenarios() {
+        let rows = vec![
+            ScenarioMeasurement {
+                scenario_id: "all-pass".to_string(),
+                hover_correct: Some(true),
+                completion_top1_correct: Some(true),
+                completion_top5_correct: None,
+                definition_exact_hit: None,
+                symbol_correct: None,
+                cross_file_success: None,
+                rename_success: None,
+                diagnostics_correct: None,
+                latency_ms_by_request: BTreeMap::new(),
+            },
+            ScenarioMeasurement {
+                scenario_id: "one-fail".to_string(),
+                hover_correct: Some(false),
+                completion_top1_correct: Some(true),
+                completion_top5_correct: None,
+                definition_exact_hit: None,
+                symbol_correct: None,
+                cross_file_success: None,
+                rename_success: None,
+                diagnostics_correct: None,
+                latency_ms_by_request: BTreeMap::new(),
+            },
+            ScenarioMeasurement {
+                scenario_id: "rename-pass".to_string(),
+                hover_correct: None,
+                completion_top1_correct: None,
+                completion_top5_correct: None,
+                definition_exact_hit: None,
+                symbol_correct: None,
+                cross_file_success: None,
+                rename_success: Some(true),
+                diagnostics_correct: Some(true),
+                latency_ms_by_request: BTreeMap::new(),
+            },
+        ];
+        // 2 out of 3 scenarios pass all their checks
+        let rate = compute_workflow_pass_rate(&rows);
+        assert!(rate.is_some());
+        let pct = rate.unwrap();
+        // "all-pass" and "rename-pass" pass; "one-fail" fails
+        assert!((pct - 66.666_666_f64).abs() < 0.01, "expected ~66.7%, got {pct}");
     }
 
     /// Verifies the full measurement→rows→latency pipeline produces consistent
@@ -341,6 +493,8 @@ mod tests {
                 definition_exact_hit: None,
                 symbol_correct: Some(true),
                 cross_file_success: None,
+                rename_success: None,
+                diagnostics_correct: None,
                 latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30])]),
             },
             ScenarioMeasurement {
@@ -351,6 +505,8 @@ mod tests {
                 definition_exact_hit: None,
                 symbol_correct: Some(false),
                 cross_file_success: Some(true),
+                rename_success: Some(true),
+                diagnostics_correct: Some(true),
                 latency_ms_by_request: BTreeMap::from([
                     ("completion".to_string(), vec![5, 15, 25]),
                     ("hover".to_string(), vec![50, 60, 70]),
@@ -358,56 +514,54 @@ mod tests {
             },
         ];
 
-        // Correctness metrics via the ScenarioScore → aggregate path.
         let scenarios = load_measurements(&raw);
         let scorecard = aggregate_editor_ux_scorecard(&scenarios);
 
-        // hover_correct: true, false → 50%
         assert_eq!(scorecard.hover_correctness_pct, Some(50.0));
-        // completion_top1: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top1_pct, Some(100.0));
-        // completion_top5: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top5_pct, Some(100.0));
-        // definition_exact_hit: neither scenario measured → None
         assert_eq!(scorecard.definition_exact_hit_pct, None);
-        // cross_file_success: only scenario 2 measured → 100%
         assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
+        assert_eq!(scorecard.rename_success_pct, Some(100.0));
+        assert_eq!(scorecard.diagnostics_correctness_pct, Some(100.0));
 
-        // symbol_correct via the direct raw path.
         let symbol_pct = percent_true(raw.iter().filter_map(|s| s.symbol_correct));
-        // true, false → 50%
         assert_eq!(symbol_pct, Some(50.0));
 
-        // Latency via compute_latency_percentiles.
         let latencies = compute_latency_percentiles(&raw);
-
-        // "hover" samples combined: [10, 20, 30, 50, 60, 70] sorted.
-        // p50: rank = (6-1)*0.50 = 2.5 → 3, samples[3]=50
-        // p95: rank = (6-1)*0.95 = 4.75 → 5, samples[5]=70
         let hover_lat = latencies.get("hover").expect("hover latency present");
         assert_eq!(hover_lat.p50_ms, Some(50.0));
         assert_eq!(hover_lat.p95_ms, Some(70.0));
 
-        // "completion" samples: [5, 15, 25] sorted.
-        // p50: rank = (3-1)*0.50 = 1.0 → 1, samples[1]=15
-        // p95: rank = (3-1)*0.95 = 1.9 → 2, samples[2]=25
         let comp_lat = latencies.get("completion").expect("completion latency present");
         assert_eq!(comp_lat.p50_ms, Some(15.0));
         assert_eq!(comp_lat.p95_ms, Some(25.0));
 
-        // Verify the artifact serialization round-trips: JSON → value → back.
+        // Pass rate: hover_test passes (hover=true); completion_test fails (hover=false).
+        let wpr = compute_workflow_pass_rate(&raw);
+        assert_eq!(wpr, Some(50.0));
+
         let mut rows = BTreeMap::new();
         rows.insert(
             "hover_correctness_pct".to_string(),
             PercentMetric { value: scorecard.hover_correctness_pct },
         );
         rows.insert("symbol_correctness_pct".to_string(), PercentMetric { value: symbol_pct });
+        rows.insert(
+            "rename_success_pct".to_string(),
+            PercentMetric { value: scorecard.rename_success_pct },
+        );
+        rows.insert(
+            "diagnostics_correctness_pct".to_string(),
+            PercentMetric { value: scorecard.diagnostics_correctness_pct },
+        );
 
         let artifact = UxScorecardArtifact {
             schema_version: 1,
             measured_at: "2026-01-01T00:00:00Z".to_string(),
             subsystem: "editor_ux",
             scenario_count: scorecard.scenario_count,
+            workflow_pass_rate: wpr,
             rows,
             latency_by_request_class: latencies,
             provenance: serde_json::json!({"input": "fixture", "generator": "test"}),
@@ -420,23 +574,20 @@ mod tests {
 
         assert_eq!(parsed["schema_version"], 1);
         assert_eq!(parsed["subsystem"], "editor_ux");
-        // PercentMetric serializes as {"value": <f64>}.
+        assert_eq!(parsed["workflow_pass_rate"], serde_json::json!(50.0));
         assert_eq!(parsed["rows"]["hover_correctness_pct"]["value"], serde_json::json!(50.0));
-        assert_eq!(parsed["rows"]["symbol_correctness_pct"]["value"], serde_json::json!(50.0));
-        // Latency is serialized nested under latency_by_request_class.
+        assert_eq!(parsed["rows"]["rename_success_pct"]["value"], serde_json::json!(100.0));
+        assert_eq!(parsed["rows"]["diagnostics_correctness_pct"]["value"], serde_json::json!(100.0));
         assert!(parsed["latency_by_request_class"]["hover"]["p50_ms"].is_number());
         assert!(parsed["latency_by_request_class"]["completion"]["p95_ms"].is_number());
     }
 
-    /// Ensures percent_true returns None when all metric observations are absent
-    /// (no scenario measured the metric at all).
     #[test]
     fn percent_true_returns_none_on_empty_iterator() {
         let result = percent_true(std::iter::empty::<bool>());
         assert_eq!(result, None);
     }
 
-    /// Ensures a single-element latency vec produces identical p50 and p95.
     #[test]
     fn single_sample_latency_p50_equals_p95() {
         let rows = vec![ScenarioMeasurement {
@@ -447,11 +598,52 @@ mod tests {
             definition_exact_hit: None,
             symbol_correct: None,
             cross_file_success: None,
+            rename_success: None,
+            diagnostics_correct: None,
             latency_ms_by_request: BTreeMap::from([("definition".to_string(), vec![42])]),
         }];
         let latency = compute_latency_percentiles(&rows);
         let def = latency.get("definition").expect("definition present");
         assert_eq!(def.p50_ms, Some(42.0));
         assert_eq!(def.p95_ms, Some(42.0));
+    }
+
+    #[test]
+    fn render_markdown_includes_scenario_table_and_summary() {
+        let raw = vec![ScenarioMeasurement {
+            scenario_id: "hover_core".to_string(),
+            hover_correct: Some(true),
+            completion_top1_correct: None,
+            completion_top5_correct: None,
+            definition_exact_hit: None,
+            symbol_correct: None,
+            cross_file_success: None,
+            rename_success: None,
+            diagnostics_correct: None,
+            latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![20, 30])]),
+        }];
+        let latencies = compute_latency_percentiles(&raw);
+        let wpr = compute_workflow_pass_rate(&raw);
+        let mut rows = BTreeMap::new();
+        rows.insert(
+            "hover_correctness_pct".to_string(),
+            PercentMetric { value: Some(100.0) },
+        );
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 1,
+            workflow_pass_rate: wpr,
+            rows,
+            latency_by_request_class: latencies,
+            provenance: serde_json::json!({}),
+        };
+        let md = render_status_markdown(&artifact, &raw);
+        assert!(md.contains("## Summary"), "missing Summary section");
+        assert!(md.contains("Workflow pass rate"), "missing pass rate row");
+        assert!(md.contains("## Scenarios"), "missing Scenarios table");
+        assert!(md.contains("hover_core"), "missing scenario row");
+        assert!(md.contains("## Ratchet policy"), "missing ratchet section");
     }
 }
