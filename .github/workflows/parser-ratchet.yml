@@ -1,0 +1,74 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet Scaffold
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.92.0
+
+      - name: Run parser ratchet scaffold
+        env:
+          PARSER_RATCHET_EVENT: ${{ github.event_name }}
+          PARSER_RATCHET_RUN_ID: ${{ github.run_id }}
+          PARSER_RATCHET_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          PARSER_RATCHET_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+          PARSER_RATCHET_CANDIDATE_SHA: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: cargo xtask parser-ratchet --profile pr --receipt target/receipts/parser-ratchet.json
+
+      - name: Validate parser-ratchet receipt schema (if present)
+        run: |
+          if [ -f .ci/receipts/schemas/parser-ratchet.schema.json ]; then
+            python3 - <<'PY'
+import json
+from pathlib import Path
+
+try:
+    import jsonschema
+except ImportError:
+    print("::warning::python jsonschema is unavailable; skipping parser-ratchet receipt validation")
+    raise SystemExit(0)
+
+schema = json.loads(Path('.ci/receipts/schemas/parser-ratchet.schema.json').read_text(encoding='utf-8'))
+receipt = json.loads(Path('target/receipts/parser-ratchet.json').read_text(encoding='utf-8'))
+jsonschema.validate(receipt, schema)
+print('parser-ratchet receipt schema validation passed')
+PY
+          else
+            echo "Schema not present; skipping parser-ratchet receipt schema validation"
+          fi
+
+      - name: Validate receipts gate (if available)
+        run: |
+          if just --list 2>/dev/null | grep -q '^gate-receipts'; then
+            just gate-receipts
+          else
+            echo "gate-receipts recipe not present; skipping"
+          fi
+
+      - name: Upload parser-ratchet receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parser-ratchet-receipt
+          path: target/receipts/parser-ratchet.json

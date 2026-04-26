@@ -825,6 +825,17 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Emit the parser ratchet scaffold receipt.
+    ParserRatchet {
+        /// Execution profile label for the receipt (defaults to `pr`).
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Output path for parser-ratchet receipt JSON.
+        #[arg(long, default_value = "target/receipts/parser-ratchet.json")]
+        receipt: PathBuf,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1533,6 +1544,9 @@ fn main() -> Result<()> {
                 verbose,
                 receipt,
             })
+        }
+        Commands::ParserRatchet { profile, receipt } => {
+            parser_ratchet::run(parser_ratchet::ParserRatchetConfig { profile, receipt })
         }
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
