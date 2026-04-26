@@ -12,6 +12,8 @@ use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
 use perl_parser_core::parser::Parser;
 
 pub mod incremental_advanced_reuse;
+#[cfg(test)]
+mod incremental_boundary_regressions;
 pub mod incremental_checkpoint;
 pub mod incremental_document;
 pub mod incremental_edit;

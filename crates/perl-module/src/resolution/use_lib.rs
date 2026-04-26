@@ -38,8 +38,8 @@ pub enum UseLibAction {
 pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
     let mut paths = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             extract_paths_from_args(rest, &mut paths);
         }
@@ -53,8 +53,8 @@ pub fn extract_use_lib_paths(source: &str) -> Vec<UseLibPath> {
 pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     let mut ops = Vec::new();
 
-    for line in source.lines() {
-        let trimmed = line.trim();
+    for statement in split_perl_statements(source) {
+        let trimmed = statement.trim();
         if let Some(rest) = strip_use_lib_prefix(trimmed) {
             let mut paths = Vec::new();
             extract_paths_from_args(rest, &mut paths);
@@ -76,9 +76,92 @@ pub fn extract_use_lib_operations(source: &str) -> Vec<UseLibAction> {
     ops
 }
 
+fn split_perl_statements(source: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut start = 0;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    // Whether any non-whitespace, non-comment content has appeared in the
+    // current statement since `start`.  When false and we hit a comment, we
+    // can safely advance `start` past the comment so it doesn't pollute the
+    // next statement slice.
+    let mut has_content = false;
+
+    let chars: Vec<(usize, char)> = source.char_indices().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let (idx, ch) = chars[i];
+
+        if escaped {
+            escaped = false;
+            i += 1;
+            continue;
+        }
+
+        if ch == '\\' && (in_single || in_double) {
+            escaped = true;
+            i += 1;
+            continue;
+        }
+
+        if ch == '\'' && !in_double {
+            in_single = !in_single;
+            has_content = true;
+            i += 1;
+            continue;
+        }
+
+        if ch == '"' && !in_single {
+            in_double = !in_double;
+            has_content = true;
+            i += 1;
+            continue;
+        }
+
+        // Skip Perl line comments: # ... <newline>
+        // A `#` is only a comment when outside of any string literal.
+        if ch == '#' && !in_single && !in_double {
+            // Skip to end of line (or end of source).
+            let comment_end = match source[idx..].find('\n') {
+                Some(nl_offset) => idx + nl_offset + 1,
+                None => source.len(),
+            };
+            // If no statement content has been seen yet, advance `start` past
+            // the comment so the comment text is not included in the next slice.
+            if !has_content {
+                start = comment_end;
+            }
+            // Skip the iterator past the comment.
+            while i < chars.len() && chars[i].0 < comment_end {
+                i += 1;
+            }
+            continue;
+        }
+
+        if ch == ';' && !in_single && !in_double {
+            let end = idx + ch.len_utf8();
+            statements.push(&source[start..end]);
+            start = end;
+            has_content = false;
+        } else if !ch.is_whitespace() {
+            has_content = true;
+        }
+
+        i += 1;
+    }
+
+    if start < source.len() {
+        statements.push(&source[start..]);
+    }
+
+    statements
+}
+
 /// Resolve `use lib` paths against a workspace root and optional file directory.
 ///
-/// - Absolute paths are returned as-is (if they exist).
+/// - Absolute paths are accepted only when they stay under `workspace_root`.
 /// - `$FindBin::Bin`-relative paths are resolved against `file_dir` (or `workspace_root` if absent).
 /// - Other relative paths are resolved against `workspace_root`.
 pub fn resolve_use_lib_paths(
@@ -107,8 +190,9 @@ pub fn resolve_use_lib_paths(
         } else {
             let p = Path::new(path_str);
             if p.is_absolute() {
-                let s = normalize_relative_path_string(path_str);
-                if !result.contains(&s) {
+                if let Some(s) = path_to_relative_string(p, workspace_root)
+                    && !result.contains(&s)
+                {
                     result.push(s);
                 }
             } else {
@@ -241,6 +325,15 @@ fn extract_quoted_list(s: &str, out: &mut Vec<UseLibPath>) {
             break;
         }
 
+        // Skip Perl line comments: # ... <newline>
+        if remaining.starts_with('#') {
+            remaining = match remaining.find('\n') {
+                Some(nl) => &remaining[nl + 1..],
+                None => "",
+            };
+            continue;
+        }
+
         if let Some((path, from_findbin, rest)) = extract_one_quoted(remaining) {
             out.push(UseLibPath { path, from_findbin });
             remaining = rest.trim_start_matches(|c: char| c == ',' || c.is_whitespace());
@@ -322,8 +415,17 @@ fn resolve_findbin_in_string(s: &str) -> (String, bool) {
 
 fn path_to_relative_string(path: &Path, workspace_root: &Path) -> Option<String> {
     if let Ok(rel) = path.strip_prefix(workspace_root) {
+        // Guard against lexical strip_prefix matching an embedded `..` segment.
+        // For example, `/workspace/../etc` strips the `/workspace` prefix lexically,
+        // leaving `../etc` which would escape the workspace.  Reject any result
+        // that contains a parent-directory component.
+        if rel.components().any(|c| c == std::path::Component::ParentDir) {
+            return None;
+        }
         let s = normalize_relative_path_string(rel.to_string_lossy().as_ref());
         if s.is_empty() { Some(".".to_string()) } else { Some(s) }
+    } else if path.is_absolute() {
+        None
     } else {
         let s = normalize_relative_path_string(path.to_string_lossy().as_ref());
         Some(s)
