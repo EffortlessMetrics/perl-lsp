@@ -443,8 +443,8 @@ impl InlayHintsProvider {
         let mut line = 0;
         let mut col = 0;
 
-        for (i, ch) in self.source.chars().enumerate() {
-            if i >= offset {
+        for (byte_idx, ch) in self.source.char_indices() {
+            if byte_idx >= offset {
                 break;
             }
             if ch == '\n' {
@@ -555,5 +555,19 @@ print("Hello, World!");
 
             // Test passes if no crash occurs - actual hint behavior is flexible
         }
+    }
+
+    #[test]
+    fn test_offset_to_position_multibyte_utf8() {
+        // 'é' is 2 bytes in UTF-8 (U+00E9: 0xC3 0xA9).
+        // Before the fix, chars().enumerate() yields character indices, not byte
+        // offsets, so byte offset 4 would be compared against character index 3
+        // (the second 'l'), reporting (line=1, col=1) instead of (line=1, col=0).
+        let source = "hé\nllo".to_string();
+        let provider = InlayHintsProvider::new(source);
+        // byte layout: h=0, é=1-2 (2 bytes), \n=3, l=4, l=5, o=6
+        let (line, col) = provider.offset_to_position(4);
+        assert_eq!(line, 1, "byte offset 4 ('l') should be on line 1");
+        assert_eq!(col, 0, "byte offset 4 ('l') should be at column 0");
     }
 }
