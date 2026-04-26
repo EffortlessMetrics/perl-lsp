@@ -123,7 +123,7 @@ The workspace contains many crates organized into families. Key crates:
 | Crate | Purpose |
 |-------|---------|
 | `perl-parser` | Main parser (v3 recursive descent) |
-| `perl-lsp` | LSP server binary |
+| `perl-lsp-rs` | LSP server binary |
 | `perl-dap` | Debug Adapter Protocol server |
 | `perl-lexer` | Context-aware tokenizer |
 
@@ -338,7 +338,7 @@ cargo nextest run                              # Fast parallel runner
 For LSP tests, control threading to avoid flaky results:
 
 ```bash
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+RUST_TEST_THREADS=2 cargo test -p perl-lsp-rs -- --test-threads=2
 ```
 
 See [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) for the full command catalog.
