@@ -906,7 +906,11 @@ mod tests {
         // so 3 newlines yield 3 empty lines (each empty string).
         // Every line_idx from enumerate() is within bounds of offsets.
         for (i, _line) in lines.iter().enumerate() {
-            assert!(i < offsets.len(), "line_idx {i} must index within offsets (len {})", offsets.len());
+            assert!(
+                i < offsets.len(),
+                "line_idx {i} must index within offsets (len {})",
+                offsets.len()
+            );
         }
     }
 

@@ -1072,6 +1072,11 @@ perltidy_extra_args = ["-noll"]
         #[cfg(not(windows))]
         let input = " lib :local/lib::lib: ";
         let parsed = WorkspaceConfig::parse_perl5lib(input);
+        // normalize_include_path round-trips through PathBuf, which emits the
+        // platform-native separator.  Gate the expected value accordingly.
+        #[cfg(windows)]
+        assert_eq!(parsed, vec!["lib", "local\\lib"]);
+        #[cfg(not(windows))]
         assert_eq!(parsed, vec!["lib", "local/lib"]);
     }
 
@@ -1089,6 +1094,10 @@ perltidy_extra_args = ["-noll"]
             "vendor/lib".to_string(),
         ]);
 
+        // normalize_include_path uses PathBuf internally, so separators are platform-native.
+        #[cfg(windows)]
+        assert_eq!(paths, vec!["local\\lib", "vendor\\lib", "lib"]);
+        #[cfg(not(windows))]
         assert_eq!(paths, vec!["local/lib", "vendor/lib", "lib"]);
     }
 
@@ -1106,6 +1115,10 @@ perltidy_extra_args = ["-noll"]
             "lib".to_string(),
         ]);
 
+        // normalize_include_path uses PathBuf internally, so separators are platform-native.
+        #[cfg(windows)]
+        assert_eq!(paths, vec!["lib", "local\\lib", "vendor\\lib"]);
+        #[cfg(not(windows))]
         assert_eq!(paths, vec!["lib", "local/lib", "vendor/lib"]);
     }
 
