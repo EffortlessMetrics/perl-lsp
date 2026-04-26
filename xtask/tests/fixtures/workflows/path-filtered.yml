@@ -1,0 +1,19 @@
+name: CI Gate
+
+on:
+  pull_request:
+    paths:
+      - 'crates/**'
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo filtered

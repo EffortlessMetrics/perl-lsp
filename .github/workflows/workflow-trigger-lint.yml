@@ -1,0 +1,36 @@
+name: Workflow Trigger Lint
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: workflow-trigger-lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  workflow-trigger-lint:
+    name: Workflow Trigger Lint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run workflow trigger lint (advisory)
+        run: |
+          cargo xtask workflow-trigger-lint \
+            --policy .ci/policies/required-checks.toml \
+            --receipt target/receipts/workflow-trigger-lint.json
+
+      - name: Upload lint receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-trigger-lint-receipt
+          path: target/receipts/workflow-trigger-lint.json

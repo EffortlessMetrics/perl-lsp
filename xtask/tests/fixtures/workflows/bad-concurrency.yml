@@ -1,0 +1,17 @@
+name: CI Gate
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo bad concurrency

@@ -17,6 +17,7 @@ use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
 use tasks::ux_scorecard::UxScorecardFormat;
+use tasks::workflow_trigger_lint::WorkflowTriggerLintConfig;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -348,6 +349,25 @@ enum Commands {
 
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
+
+    /// Lint required workflows for stable trigger and concurrency policy.
+    WorkflowTriggerLint {
+        /// Path to required checks policy TOML.
+        #[arg(long)]
+        policy: Option<PathBuf>,
+
+        /// Path to write a JSON receipt artifact.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single workflow fixture file directly.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: WorkflowTriggerLintOutputFormat,
+    },
 
     /// Measure CI lane runtimes and emit timing artifacts.
     CiMeasure,
@@ -1315,6 +1335,12 @@ enum UxScorecardOutputFormat {
     Json,
 }
 
+#[derive(ValueEnum, Clone)]
+enum WorkflowTriggerLintOutputFormat {
+    Human,
+    Json,
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
@@ -1454,6 +1480,21 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::WorkflowTriggerLint { policy, receipt, fixture, format } => {
+            workflow_trigger_lint::run(WorkflowTriggerLintConfig {
+                policy,
+                receipt,
+                fixture,
+                format: match format {
+                    WorkflowTriggerLintOutputFormat::Human => {
+                        workflow_trigger_lint::WorkflowTriggerLintFormat::Human
+                    }
+                    WorkflowTriggerLintOutputFormat::Json => {
+                        workflow_trigger_lint::WorkflowTriggerLintFormat::Json
+                    }
+                },
+            })
+        }
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {

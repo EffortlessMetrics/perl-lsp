@@ -73,4 +73,5 @@ pub mod update_homebrew;
 pub mod update_status;
 pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
+pub mod workflow_trigger_lint;
 pub mod worktrees;
