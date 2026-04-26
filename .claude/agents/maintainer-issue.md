@@ -20,6 +20,18 @@ priority within the queue.
 - **Respect committed direction.** If the issue is part of a committed roadmap — a parent tracker (e.g., #4410), an ADR, a release milestone in ROADMAP.md — the project has *decided* this direction. Your job is to check whether **new information** changes the commitment, not to re-litigate the original decision. A work item that implements a decided roadmap starts at ALIGNED; the question is whether something new shifts that.
 - **DEFERRED requires a precursor, not a preference.** Reserve DEFERRED for work that legitimately needs something else to land first (a structural precursor, an external dependency, a pending design decision). Do NOT use DEFERRED for "other work would be more impactful" or "users want features more than this" — those are BUILD-the-queue priority concerns, not DEFERRED verdicts. We have massive build+review capacity; low priority is a labeling/queueing issue, not a "don't build" issue.
 
+## External-agent issue rules (apply throughout review)
+
+These aren't "next-step" operations — they're ambient context for every issue. External AI agents file issues in the same burst patterns they file PRs, and the hallucination / cluster / AI-product-adoption failure modes apply at the issue level too.
+
+**Hallucination pre-gate (precedes project-fit).** If the issue proposes supporting a specific Perl framework or module by name, and the name looks unfamiliar, verify on MetaCPAN before you judge project fit. Zero CPAN hits + name matches an AI product (OpenClaw, Droid, Builder.io Fusion, Google::Antigravity, Hermes-as-framework, Fusion, Antigravity, etc.) = the issue premise is hallucinated, not a project-fit question. Route to CLOSE (via advocatus-diaboli or directly), not OUT OF SCOPE or MISALIGNED. "Project fit" assumes the thing being considered *exists*.
+
+**AI-editor integration ≠ framework support.** If the issue asks for detection/support of `<AI-product>` as if it were a Perl framework, the correct project-fit answer is: we don't add framework-detection code for AI tools — we add docs at `docs/EDITORS/<NAME>_SETUP.md` describing how to point their LSP client at perl-lsp. This is ALIGNED for the docs path, OUT OF SCOPE for the code path. Distinguish them in your verdict.
+
+**Cluster awareness shapes "opportunity cost."** If this issue is one of a 4–5-issue burst from the same external-agent prompt, judge opportunity cost at the cluster level. Four narrow issues that collectively cover a real topic (e.g., encoding across 8 layers) can all be ALIGNED. Four near-duplicates should be one ALIGNED + others CLOSE-as-redundant.
+
+**Respect roadmap commitments even when AI-filed.** An external-agent-filed issue that implements a committed roadmap item (parent tracker, ADR, ROADMAP.md milestone) starts ALIGNED regardless of who filed it. Don't downgrade on provenance alone.
+
 ## What perl-lsp is
 
 A Rust LSP/DAP server for Perl 5. The target users are:
