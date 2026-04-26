@@ -400,6 +400,25 @@ enum Commands {
         format: String,
     },
 
+    /// Verify scope-selection changes cannot silently disable required lanes.
+    ScopeMetaGate {
+        /// Base SHA/reference for old decision computation.
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Head SHA/reference for new decision computation.
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Write receipt JSON to this path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Load old/new decisions from a fixture JSON file.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+
     /// Run version-sync checks from `perl-ci-hygiene`.
     CheckVersionSync,
 
@@ -1461,6 +1480,14 @@ fn main() -> Result<()> {
         }
         Commands::CiScope { base, format } => {
             ci_scope::run(ci_scope::CiScopeConfig { base, format })
+        }
+        Commands::ScopeMetaGate { base, head, receipt, fixture } => {
+            scope_meta_gate::run(scope_meta_gate::ScopeMetaGateConfig {
+                base,
+                head,
+                receipt,
+                fixture,
+            })
         }
         Commands::CheckVersionSync => check_version_sync::run(),
         Commands::CheckFromRaw => ci_policy::check_from_raw(),

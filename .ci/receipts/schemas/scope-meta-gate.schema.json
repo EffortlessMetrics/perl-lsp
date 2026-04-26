@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/scope-meta-gate.schema.json",
+  "title": "Scope Meta Gate Receipt",
+  "type": "object",
+  "required": ["schema_version", "mode", "old_decision", "new_decision", "changed_lanes", "verdict"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "mode": { "type": "string", "enum": ["fixture", "git"] },
+    "old_decision": { "type": "object" },
+    "new_decision": { "type": "object" },
+    "changed_lanes": {
+      "type": "object",
+      "required": ["dropped", "added", "unchanged"],
+      "properties": {
+        "dropped": { "type": "array", "items": { "type": "string" } },
+        "added": { "type": "array", "items": { "type": "string" } },
+        "unchanged": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["status", "reason", "required_lanes"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pass", "warn", "fail"] },
+        "reason": { "type": "string" },
+        "required_lanes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

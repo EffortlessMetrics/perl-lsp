@@ -1,0 +1,37 @@
+{
+  "old_decision": {
+    "schema_version": 2,
+    "base": "old",
+    "head_sha": "old",
+    "changed_files": ["docs/ci/LOCAL_CI_PROTOCOL.md"],
+    "diff_class": "prose_only",
+    "direct_crates": [],
+    "reverse_dep_closure": [],
+    "architecture_wideners": [],
+    "risk_tags": [],
+    "platform_overrides": {"windows_runner": false},
+    "selected_lanes": [
+      {"lane": "clippy_scoped", "scope": ["xtask"], "reason": "direct"}
+    ],
+    "selected_heavy_lanes": [],
+    "explanations": {}
+  },
+  "new_decision": {
+    "schema_version": 2,
+    "base": "new",
+    "head_sha": "new",
+    "changed_files": ["docs/ci/LOCAL_CI_PROTOCOL.md"],
+    "diff_class": "prose_only",
+    "direct_crates": [],
+    "reverse_dep_closure": [],
+    "architecture_wideners": [],
+    "risk_tags": [],
+    "platform_overrides": {"windows_runner": false},
+    "selected_lanes": [
+      {"lane": "clippy_scoped", "scope": ["xtask"], "reason": "direct"},
+      {"lane": "docs", "scope": [], "reason": "docs"}
+    ],
+    "selected_heavy_lanes": [],
+    "explanations": {}
+  }
+}
