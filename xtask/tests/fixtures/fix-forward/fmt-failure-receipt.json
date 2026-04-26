@@ -1,0 +1,17 @@
+{
+  "gates": [
+    {
+      "gate_name": "fmt",
+      "status": "fail",
+      "output_summary": "cargo fmt --check reported drift"
+    },
+    {
+      "gate_name": "clippy-lib",
+      "status": "pass"
+    }
+  ],
+  "agent_receipt": {
+    "is_latest": true,
+    "failures": []
+  }
+}

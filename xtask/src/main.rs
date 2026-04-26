@@ -964,6 +964,12 @@ enum Commands {
         command: MetricsCommand,
     },
 
+    /// Classify CI failures into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
     /// Publish structured editor UX scorecard artifact/status from harness fixtures.
     UxScorecard {
         /// Output format for stdout.
@@ -1303,6 +1309,21 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON file.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Output path for the fix-forward receipt.
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1622,6 +1643,12 @@ fn main() -> Result<()> {
                 metrics::ratchet::run_promote_baseline(&root, &subsystem, delta_pct)
             }
             MetricsCommand::SweepStats { input } => metrics::sweep_stats::run(input),
+        },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UxScorecard { format, input, output, status_md, ratchet_check } => {
             let format = match format {

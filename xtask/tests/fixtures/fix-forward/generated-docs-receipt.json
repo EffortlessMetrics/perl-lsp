@@ -1,0 +1,13 @@
+{
+  "gates": [
+    {
+      "gate_name": "docs-check",
+      "status": "fail",
+      "output_summary": "generated docs are stale; run status docs regeneration"
+    }
+  ],
+  "agent_receipt": {
+    "is_latest": true,
+    "failures": []
+  }
+}

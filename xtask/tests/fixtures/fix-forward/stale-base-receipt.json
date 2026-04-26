@@ -1,0 +1,18 @@
+{
+  "gates": [
+    {
+      "gate_name": "stale-base-classifier",
+      "status": "fail",
+      "output_summary": "base commit is behind target"
+    }
+  ],
+  "agent_receipt": {
+    "is_latest": false,
+    "failures": [
+      {
+        "lane": "stale-base-classifier",
+        "summary": "stale base detected"
+      }
+    ]
+  }
+}

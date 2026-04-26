@@ -36,6 +36,7 @@ pub mod doc_claims;
 pub mod e2e_validate;
 pub mod edge_cases;
 pub mod features;
+pub mod fix_forward;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
