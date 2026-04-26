@@ -825,6 +825,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Parser ratchet tasks for corpus regression/floor enforcement.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1220,6 +1226,19 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Enforce repo-owned parser concept floors for tests/perl-corpus fixtures.
+    ConceptFloors {
+        /// Path to parser-ratchet manifest (existence required).
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Path to receipt JSON output.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1534,6 +1553,11 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::ConceptFloors { manifest, receipt } => {
+                parser_concept_floor::run(manifest, receipt)
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {

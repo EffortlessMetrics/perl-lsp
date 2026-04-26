@@ -1,0 +1,3 @@
+concepts = ["recovery"]
+profile = ["pr"]
+expected = "recover_without_panic"
