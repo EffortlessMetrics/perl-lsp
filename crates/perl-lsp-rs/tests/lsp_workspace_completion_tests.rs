@@ -2,6 +2,7 @@
 ///
 /// This module tests that the completion provider properly queries the workspace
 /// index to provide cross-file symbol completions.
+use insta::assert_yaml_snapshot;
 use serde_json::json;
 use std::time::Duration;
 
@@ -10,6 +11,37 @@ use common::{
     completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
     start_lsp_server,
 };
+
+fn completion_snapshot(items: &[serde_json::Value], prefix: &str) -> Vec<serde_json::Value> {
+    let mut snapshot_items: Vec<serde_json::Value> = items
+        .iter()
+        .filter_map(|item| {
+            let label = item.get("label")?.as_str()?;
+            if !label.contains(prefix) {
+                return None;
+            }
+
+            Some(json!({
+                "label": label,
+                "kind": item.get("kind"),
+                "detail": item.get("detail"),
+                "documentation": item
+                    .get("documentation")
+                    .and_then(|doc| doc.get("value").and_then(serde_json::Value::as_str))
+                    .or_else(|| item.get("documentation").and_then(serde_json::Value::as_str)),
+                "insertText": item.get("insertText"),
+            }))
+        })
+        .collect();
+
+    snapshot_items.sort_by(|a, b| {
+        let a_label = a.get("label").and_then(serde_json::Value::as_str).unwrap_or("");
+        let b_label = b.get("label").and_then(serde_json::Value::as_str).unwrap_or("");
+        a_label.cmp(b_label)
+    });
+
+    snapshot_items
+}
 
 fn await_open_processing(server: &common::LspServer) {
     // didOpen triggers parse + indexing work asynchronously in the spawned server.
@@ -212,6 +244,9 @@ my $result = DataProcessor::
         documentation.contains("DataProcessor::process_data"),
         "cross-file package completion should expose a qualified documentation snippet, got: {documentation:?}"
     );
+
+    let qualified_snapshot = completion_snapshot(items, "data");
+    assert_yaml_snapshot!("workspace_completion_qualified_data_processor", qualified_snapshot);
 
     Ok(())
 }
@@ -490,6 +525,9 @@ fn test_completion_inherited_method_from_parent() -> Result<(), Box<dyn std::err
         "Should suggest inherited_greet from parent class. Got: {:?}",
         labels
     );
+
+    let inherited_snapshot = completion_snapshot(items, "");
+    assert_yaml_snapshot!("workspace_completion_inherited_methods", inherited_snapshot);
 
     Ok(())
 }
