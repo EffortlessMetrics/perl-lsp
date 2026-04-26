@@ -1,0 +1,11 @@
+{
+  "name": "docs-only non-parser docs",
+  "changed_files": [
+    "docs/reference/FAQ.md"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": false,
+    "reason": "no parser-relevant paths or risk tags matched"
+  }
+}

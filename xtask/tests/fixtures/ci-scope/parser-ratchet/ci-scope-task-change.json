@@ -1,0 +1,11 @@
+{
+  "name": "ci scope task change",
+  "changed_files": [
+    "xtask/src/tasks/ci_scope.rs"
+  ],
+  "risk_tags": [],
+  "expected": {
+    "selected": true,
+    "selection_reason": "matched path: xtask/src/tasks/ci_scope.rs"
+  }
+}
