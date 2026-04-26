@@ -92,7 +92,10 @@ pub fn run(config: ManifestConfig) -> Result<()> {
         Ok(found) => found,
         Err(error) => {
             if config.profile.requires_system_perl() {
-                bail!("system Perl discovery required for profile {}: {error}", config.profile.as_str());
+                bail!(
+                    "system Perl discovery required for profile {}: {error}",
+                    config.profile.as_str()
+                );
             }
             advisory.push(format!("system Perl discovery unavailable: {error}"));
             ("unknown".to_string(), BTreeMap::new())
@@ -113,10 +116,7 @@ pub fn run(config: ManifestConfig) -> Result<()> {
         schema_version: SCHEMA_VERSION.to_string(),
         profile: config.profile.as_str().to_string(),
         sources,
-        runner: RunnerInfo {
-            os: std::env::consts::OS.to_string(),
-            perl_version,
-        },
+        runner: RunnerInfo { os: std::env::consts::OS.to_string(), perl_version },
         files,
         fingerprint: fingerprint.clone(),
     };
@@ -152,10 +152,8 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 
 fn discover_repo_files(root: &Path) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
-    let patterns = [
-        ("repo:tests/perl-corpus", "tests/perl-corpus"),
-        ("repo:tests/parser", "tests/parser"),
-    ];
+    let patterns =
+        [("repo:tests/perl-corpus", "tests/perl-corpus"), ("repo:tests/parser", "tests/parser")];
 
     for (source, rel) in patterns {
         let dir = root.join(rel);
@@ -234,7 +232,11 @@ fn discover_system_files(
     Ok(files)
 }
 
-fn discover_files_under(path: &Path, source: &str, advisory: &mut Vec<String>) -> Result<Vec<ManifestFile>> {
+fn discover_files_under(
+    path: &Path,
+    source: &str,
+    advisory: &mut Vec<String>,
+) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
 
     for entry in WalkDir::new(path).follow_links(false).into_iter().filter_map(Result::ok) {
@@ -251,7 +253,8 @@ fn discover_files_under(path: &Path, source: &str, advisory: &mut Vec<String>) -
         let record = match build_file_record(entry.path(), source) {
             Ok(value) => value,
             Err(error) => {
-                advisory.push(format!("skipping unreadable file {}: {error}", entry.path().display()));
+                advisory
+                    .push(format!("skipping unreadable file {}: {error}", entry.path().display()));
                 continue;
             }
         };
