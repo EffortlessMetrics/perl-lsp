@@ -107,6 +107,54 @@ cost_tier = "low"  # <5 seconds
 failure_impact = "medium"  # Cost control
 
 [[gate]]
+id = "parser-corpus-ratchet"
+name = "Parser Corpus Ratchet (System)"
+type = "correctness"
+blocking = true
+timeout_seconds = 180
+command = "cargo run -p xtask -- parser-corpus-sweep --baseline .ci/parser-corpus-baseline.json --enforce --receipt"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents parser clean-rate, error-node, and bucket regressions on the system corpus"
+docs_url = "justfile#corpus-sweep-check"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
+id = "cpan-corpus-ratchet"
+name = "Parser Corpus Ratchet (CPAN)"
+type = "correctness"
+blocking = true
+timeout_seconds = 300
+command = "cargo run -p xtask -- cpan-corpus sweep --enforce"
+evidence_pattern = "Ratchet: all checks passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents parser regressions on the CPAN corpus and known-clean manifest"
+docs_url = "justfile#cpan-corpus-check"
+cost_tier = "high"
+failure_impact = "high"
+
+[[gate]]
+id = "parser-audit-closeout"
+name = "Parser Closeout Audit Ratchet"
+type = "correctness"
+blocking = true
+timeout_seconds = 180
+command = "cargo run -p xtask -- corpus-audit --fresh --corpus-path . --check"
+evidence_pattern = "CI gate passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Defends parser closeout floors for valid-gap count, NodeKind coverage, and recovery salvage"
+docs_url = "justfile#parser-audit"
+cost_tier = "medium"
+failure_impact = "high"
+
+[[gate]]
 id = "todo-compliance"
 name = "TODO Compliance"
 type = "governance"
@@ -121,6 +169,22 @@ description = "Enforces that all TODOs/FIXMEs link to a GitHub issue"
 docs_url = "ci/check_todos.sh"
 cost_tier = "low"
 failure_impact = "medium"
+
+[[gate]]
+id = "perl-token-leaf-contract"
+name = "perl-token Leaf Contract"
+type = "governance"
+blocking = true
+timeout_seconds = 120
+command = "cargo test -p perl-token --test conformance_guards --locked"
+evidence_pattern = "test result: ok"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Protects perl-token leaf status: no runtime deps, stable Token/TokenKind contract, complete metadata coverage"
+docs_url = "crates/perl-token/README.md#stability-contract"
+cost_tier = "low"
+failure_impact = "high"
 
 [[gate]]
 id = "no-nested-lock"
