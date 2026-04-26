@@ -214,7 +214,7 @@ fn lint_workflow_file(path: &Path, is_fixture: bool, issues: &mut Vec<LintIssue>
 }
 
 fn is_contents_write_allowlisted(workflow_name: &str) -> bool {
-    ALLOWLIST_PR_CONTENTS_WRITE.iter().any(|value| *value == workflow_name)
+    ALLOWLIST_PR_CONTENTS_WRITE.contains(&workflow_name)
 }
 
 fn triggers(workflow: &Value) -> Vec<String> {
