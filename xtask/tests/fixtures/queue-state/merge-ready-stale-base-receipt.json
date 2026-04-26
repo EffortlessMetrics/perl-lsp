@@ -1,0 +1,18 @@
+{
+  "number": 7002,
+  "draft": false,
+  "merged": false,
+  "head_sha": "head-3",
+  "base_sha": "base-current",
+  "labels": ["review-reviewed", "merge-ready"],
+  "status_rollup": "GREEN",
+  "receipts": [
+    {
+      "kind": "merge-readiness",
+      "path": "target/receipts/merge-ready.json",
+      "head_sha": "head-3",
+      "base_sha": "base-stale",
+      "valid": true
+    }
+  ]
+}

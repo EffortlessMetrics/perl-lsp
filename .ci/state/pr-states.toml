@@ -1,0 +1,71 @@
+[states.DRAFT]
+next_routes = ["await-ready-for-review"]
+projected_labels = ["draft"]
+
+[states.NEW]
+next_routes = ["standards-review"]
+projected_labels = ["new"]
+
+[states.NEEDS_STANDARDS_REVIEW]
+next_routes = ["standards-review"]
+projected_labels = ["needs-standards-review"]
+
+[states.NEEDS_DEEP_REVIEW]
+next_routes = ["deep-review"]
+projected_labels = ["needs-deep-review"]
+
+[states.NEEDS_DIFF_AUDIT]
+next_routes = ["diff-audit"]
+projected_labels = ["needs-diff-audit"]
+
+[states.NEEDS_MAINTAINER_REVIEW]
+next_routes = ["maintainer-review"]
+projected_labels = ["needs-maintainer-review"]
+
+[states.NEEDS_BUILDER_FIX]
+next_routes = ["builder-fix"]
+projected_labels = ["needs-builder-fix"]
+
+[states.NEEDS_DIFF_FIX]
+next_routes = ["diff-fix"]
+projected_labels = ["needs-diff-fix"]
+
+[states.NEEDS_CI_FIX]
+next_routes = ["ci-fix"]
+projected_labels = ["needs-ci-fix"]
+
+[states.NEEDS_CASCADE_UPDATE]
+next_routes = ["cascade-update"]
+projected_labels = ["needs-cascade-update"]
+
+[states.NEEDS_INFRA_FIX]
+next_routes = ["infra-fix"]
+projected_labels = ["needs-infra-fix"]
+
+[states.REVIEWED_WAITING_CI]
+next_routes = ["wait-for-ci"]
+projected_labels = ["review-reviewed"]
+
+[states.CI_GREEN]
+next_routes = ["prepare-merge-readiness"]
+projected_labels = ["ci-green"]
+
+[states.MERGE_READY]
+next_routes = ["enqueue"]
+projected_labels = ["merge-ready"]
+
+[states.QUEUED]
+next_routes = ["wait-merge"]
+projected_labels = ["queued"]
+
+[states.MERGED]
+next_routes = ["done"]
+projected_labels = ["merged"]
+
+[states.SUPERSEDED]
+next_routes = ["close"]
+projected_labels = ["superseded"]
+
+[states.BLOCKED_UNKNOWN]
+next_routes = ["triage"]
+projected_labels = ["blocked-unknown"]

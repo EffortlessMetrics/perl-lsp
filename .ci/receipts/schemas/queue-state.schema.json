@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/queue-state.schema.json",
+  "title": "Queue State Receipt",
+  "type": "object",
+  "required": [
+    "receipt_version",
+    "mode",
+    "evaluated_at",
+    "results"
+  ],
+  "properties": {
+    "receipt_version": { "type": "string" },
+    "mode": { "type": "string", "enum": ["dry-run"] },
+    "evaluated_at": { "type": "string", "format": "date-time" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "number",
+          "canonical_state",
+          "blockers",
+          "stale_receipts",
+          "projected_next_routes",
+          "projected_labels",
+          "contradictions"
+        ],
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "canonical_state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "NEW",
+              "NEEDS_STANDARDS_REVIEW",
+              "NEEDS_DEEP_REVIEW",
+              "NEEDS_DIFF_AUDIT",
+              "NEEDS_MAINTAINER_REVIEW",
+              "NEEDS_BUILDER_FIX",
+              "NEEDS_DIFF_FIX",
+              "NEEDS_CI_FIX",
+              "NEEDS_CASCADE_UPDATE",
+              "NEEDS_INFRA_FIX",
+              "REVIEWED_WAITING_CI",
+              "CI_GREEN",
+              "MERGE_READY",
+              "QUEUED",
+              "MERGED",
+              "SUPERSEDED",
+              "BLOCKED_UNKNOWN"
+            ]
+          },
+          "blockers": { "type": "array", "items": { "type": "string" } },
+          "stale_receipts": { "type": "array", "items": { "type": "string" } },
+          "projected_next_routes": { "type": "array", "items": { "type": "string" } },
+          "projected_labels": { "type": "array", "items": { "type": "string" } },
+          "contradictions": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

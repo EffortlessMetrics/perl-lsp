@@ -1,0 +1,18 @@
+{
+  "number": 7001,
+  "draft": false,
+  "merged": false,
+  "head_sha": "head-2",
+  "base_sha": "base-2",
+  "labels": ["review-reviewed"],
+  "status_rollup": "GREEN",
+  "receipts": [
+    {
+      "kind": "review",
+      "path": "target/receipts/review.json",
+      "head_sha": "head-2",
+      "base_sha": "base-2",
+      "valid": true
+    }
+  ]
+}
