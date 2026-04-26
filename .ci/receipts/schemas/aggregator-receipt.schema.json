@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/aggregator-receipt.schema.json",
+  "title": "Aggregator Receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "verdict",
+    "classification",
+    "subreceipts",
+    "missing_receipts",
+    "repro"
+  ],
+  "properties": {
+    "check": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "event": { "type": "string" },
+    "verdict": { "type": "string", "enum": ["pass", "fail", "warn", "skipped", "unknown"] },
+    "classification": {
+      "type": "string",
+      "enum": ["code_regression", "infra_failure", "stale_base", "skipped", "unknown"]
+    },
+    "subreceipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "required", "selected", "verdict"],
+        "properties": {
+          "check": { "type": "string" },
+          "required": { "type": "boolean" },
+          "selected": { "type": "boolean" },
+          "verdict": { "type": "string" },
+          "classification": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "missing_receipts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

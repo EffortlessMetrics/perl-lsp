@@ -42,6 +42,26 @@ enum Commands {
     /// Run format and clippy checks only (no tests)
     CheckOnly,
 
+    /// Aggregate internal receipt JSON files into one final gate receipt.
+    AggregateReceipts {
+        /// Stable final check name.
+        #[arg(long)]
+        check: String,
+        /// Directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+        /// Output path for the aggregator receipt.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// Finalize a gate receipt and return non-zero on failure verdict.
+    FinalizeCheck {
+        /// Path to the aggregated gate receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+
     /// Verify local Rust toolchain meets the pinned MSRV in rust-toolchain.toml.
     CheckToolchain {
         /// Show a warning when rustc satisfies the minimum MSRV but differs
@@ -1327,6 +1347,10 @@ fn main() -> Result<()> {
         }
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
+        Commands::AggregateReceipts { check, inputs, output } => {
+            aggregate_receipts::run(check, inputs, output)
+        }
+        Commands::FinalizeCheck { receipt } => finalize_check::run(receipt),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)

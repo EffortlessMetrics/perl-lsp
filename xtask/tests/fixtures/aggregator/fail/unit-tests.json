@@ -1,0 +1,7 @@
+{
+  "check": "unit-tests",
+  "required": true,
+  "selected": true,
+  "verdict": "fail",
+  "classification": "code_regression"
+}

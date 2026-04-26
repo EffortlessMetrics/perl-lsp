@@ -1,0 +1,7 @@
+{
+  "check": "advisory-style",
+  "required": false,
+  "selected": true,
+  "verdict": "fail",
+  "classification": "infra_failure"
+}

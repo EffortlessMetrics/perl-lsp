@@ -1,0 +1,7 @@
+{
+  "check": "unit-tests",
+  "required": true,
+  "selected": true,
+  "verdict": "pass",
+  "classification": "unknown"
+}

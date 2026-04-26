@@ -1,0 +1,6 @@
+{
+  "required_receipts": [
+    "unit-tests",
+    "lint"
+  ]
+}

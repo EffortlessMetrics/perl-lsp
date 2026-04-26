@@ -1,5 +1,6 @@
 //! Task implementations for xtask automation
 
+pub mod aggregate_receipts;
 pub mod bench;
 pub mod benchmarks;
 #[cfg(feature = "parser-tasks")]
@@ -36,6 +37,7 @@ pub mod doc_claims;
 pub mod e2e_validate;
 pub mod edge_cases;
 pub mod features;
+pub mod finalize_check;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
