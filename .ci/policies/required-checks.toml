@@ -1,0 +1,17 @@
+# Candidate final check names for eventual GitHub Ruleset required_status_checks.
+#
+# This file is planning metadata only. Do not treat this as automatic enforcement.
+# Apply ruleset updates manually after the rollout observation criteria are met.
+
+[required_checks]
+# Replace with stable final aggregator check names once confirmed.
+final_aggregators = [
+  "Methodology Gate",
+  "Parser Ratchet",
+]
+
+[rollout]
+min_clean_days = 3
+min_prs = 10
+min_master_pushes = 1
+min_merge_group_events = 1
