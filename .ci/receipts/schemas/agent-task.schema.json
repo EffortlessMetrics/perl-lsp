@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/agent-task.schema.json",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "snapshot_id", "lane", "pr", "head_sha", "base_sha", "expires_at"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "agent_task" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "lane": { "type": "string", "minLength": 1 },
+    "pr": { "type": "integer", "minimum": 1 },
+    "head_sha": { "type": "string", "minLength": 3 },
+    "base_sha": { "type": "string", "minLength": 3 },
+    "allowed_mutations": { "type": "array", "items": { "type": "string" } },
+    "forbidden_mutations": { "type": "array", "items": { "type": "string" } },
+    "expires_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": true
+}

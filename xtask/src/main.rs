@@ -36,6 +36,12 @@ enum Commands {
     #[command(name = "list-commands")]
     List,
 
+    /// Manage GitHub-state coordination primitives for disconnected maintainership.
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
+
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -1155,6 +1161,60 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum AgentCommand {
+    /// Lease operations for bounded agent tasks.
+    Lease {
+        #[command(subcommand)]
+        command: AgentLeaseCommand,
+    },
+    /// Receipt validation and freshness status checks.
+    Receipt {
+        #[command(subcommand)]
+        command: AgentReceiptCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentLeaseCommand {
+    /// Create a lease JSON from an agent task JSON.
+    Create {
+        #[arg(long)]
+        task: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value = "local/codex")]
+        owner: String,
+    },
+    /// Verify lease freshness and deterministic winner selection against a snapshot.
+    Verify {
+        #[arg(long)]
+        lease: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum AgentReceiptCommand {
+    /// Validate receipt freshness and policy constraints.
+    Validate {
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        task: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+    /// Compute receipt freshness status against snapshot state.
+    Status {
+        #[arg(long)]
+        receipt: PathBuf,
+        #[arg(long)]
+        snapshot: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum CpanCorpusCommand {
     /// Fetch top N distributions from MetaCPAN by reverse dependency count
     FetchList {
@@ -1325,6 +1385,30 @@ fn main() -> Result<()> {
             print_top_level_commands();
             Ok(())
         }
+        Commands::Agent { command } => match command {
+            AgentCommand::Lease { command } => match command {
+                AgentLeaseCommand::Create { task, out, owner } => {
+                    agent_lease::create(&task, &out, &owner)
+                }
+                AgentLeaseCommand::Verify { lease, snapshot } => {
+                    let result = agent_lease::verify(&lease, &snapshot)?;
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                    Ok(())
+                }
+            },
+            AgentCommand::Receipt { command } => match command {
+                AgentReceiptCommand::Validate { receipt, task, snapshot } => {
+                    let result = agent_receipt::validate(&receipt, &task, &snapshot)?;
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                    Ok(())
+                }
+                AgentReceiptCommand::Status { receipt, snapshot } => {
+                    let result = agent_receipt::status(&receipt, &snapshot)?;
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                    Ok(())
+                }
+            },
+        },
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),

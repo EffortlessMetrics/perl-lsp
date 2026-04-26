@@ -1,5 +1,7 @@
 //! Task implementations for xtask automation
 
+pub mod agent_lease;
+pub mod agent_receipt;
 pub mod bench;
 pub mod benchmarks;
 #[cfg(feature = "parser-tasks")]

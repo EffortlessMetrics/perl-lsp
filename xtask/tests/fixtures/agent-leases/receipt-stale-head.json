@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "kind": "agent_receipt",
+  "task_id": "task-6854-green-ci-abc123",
+  "lease_id": "lease-6854-early",
+  "lane": "green_ci",
+  "pr": 6854,
+  "head_sha": "old999",
+  "base_sha": "def456",
+  "verdict": "ci_green",
+  "requested_mutations": ["emit_receipt"],
+  "created_at": "2026-04-26T18:49:00Z"
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/agent-receipt.schema.json",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "lease_id", "lane", "pr", "head_sha", "base_sha", "verdict", "created_at"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "agent_receipt" },
+    "task_id": { "type": "string" },
+    "lease_id": { "type": "string" },
+    "lane": { "type": "string" },
+    "pr": { "type": "integer", "minimum": 1 },
+    "head_sha": { "type": "string" },
+    "base_sha": { "type": "string" },
+    "verdict": { "type": "string" },
+    "requested_mutations": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/agent-lease.schema.json",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "lease_id", "owner", "lane", "pr", "head_sha", "base_sha", "issued_at", "expires_at"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "agent_lease" },
+    "task_id": { "type": "string" },
+    "lease_id": { "type": "string" },
+    "owner": { "type": "string" },
+    "lane": { "type": "string" },
+    "pr": { "type": "integer", "minimum": 1 },
+    "head_sha": { "type": "string" },
+    "base_sha": { "type": "string" },
+    "allowed_mutations": { "type": "array", "items": { "type": "string" } },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": true
+}
