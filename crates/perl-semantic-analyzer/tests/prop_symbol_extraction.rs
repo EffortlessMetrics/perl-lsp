@@ -8,9 +8,7 @@
 //! - Scope analysis issues reference valid source regions
 
 use perl_semantic_analyzer::{
-    Parser,
-    analysis::scope_analyzer::ScopeAnalyzer,
-    analysis::symbol::SymbolExtractor,
+    Parser, analysis::scope_analyzer::ScopeAnalyzer, analysis::symbol::SymbolExtractor,
 };
 use perl_test_generators::{module_path, variable};
 use proptest::prelude::*;
@@ -29,11 +27,7 @@ fn my_scalar_decl() -> impl Strategy<Value = String> {
 
 /// A simple named subroutine with one local variable inside.
 fn simple_sub() -> impl Strategy<Value = String> {
-    (
-        "[a-z][a-z0-9_]{1,10}".prop_map(String::from),
-        variable(),
-        "[0-9]{1,4}".prop_map(String::from),
-    )
+    ("[a-z][a-z0-9_]{1,10}".prop_map(String::from), variable(), "[0-9]{1,4}".prop_map(String::from))
         .prop_map(|(name, var, val)| format!("sub {name} {{\n    my {var} = {val};\n}}\n"))
 }
 
@@ -44,13 +38,7 @@ fn package_decl() -> impl Strategy<Value = String> {
 
 /// A small Perl program composed of a package declaration plus a few subs.
 fn small_program() -> impl Strategy<Value = String> {
-    (
-        package_decl(),
-        prop::collection::vec(
-            prop_oneof![simple_sub(), my_scalar_decl()],
-            1..6,
-        ),
-    )
+    (package_decl(), prop::collection::vec(prop_oneof![simple_sub(), my_scalar_decl()], 1..6))
         .prop_map(|(pkg, stmts)| {
             let mut prog = pkg;
             for s in stmts {
