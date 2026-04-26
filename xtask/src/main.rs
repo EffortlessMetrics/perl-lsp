@@ -853,6 +853,35 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Aggregate CI subreceipt fragments into one stable final receipt.
+    AggregateReceipts {
+        /// Stable final check name.
+        #[arg(long)]
+        check: String,
+        /// Input directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+        /// Output path for aggregate receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+    },
+
+    /// Compute final pass/fail outcome from an aggregate receipt.
+    FinalizeCheck {
+        /// Path to aggregate receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Allow required lanes to no-op without failing the final check.
+        #[arg(long, default_value_t = true)]
+        allow_noop: bool,
+        /// Treat advisory warnings/failures as fatal.
+        #[arg(long, default_value_t = false)]
+        fail_on_advisory: bool,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1577,6 +1606,21 @@ fn main() -> Result<()> {
                 docs_only,
                 output_dir,
                 test_threads,
+            })
+        }
+        Commands::AggregateReceipts { check, inputs, output, allow_noop } => {
+            aggregate_receipts::run(aggregate_receipts::AggregateReceiptsConfig {
+                check,
+                inputs,
+                output,
+                allow_noop,
+            })
+        }
+        Commands::FinalizeCheck { receipt, allow_noop, fail_on_advisory } => {
+            finalize_check::run(finalize_check::FinalizeCheckConfig {
+                receipt,
+                allow_noop,
+                fail_on_advisory,
             })
         }
         Commands::IgnoredTests { update, check, verbose } => {
