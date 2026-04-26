@@ -831,6 +831,12 @@ enum Commands {
         command: CpanCorpusCommand,
     },
 
+    /// Queue orchestration helpers.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Generate canonical receipts (test summary, doc metrics, consolidated state)
     ///
     /// Runs workspace tests and doc builds, parses output, and produces
@@ -1220,6 +1226,36 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum QueueCommand {
+    /// Project labels from canonical PR state.
+    ProjectLabels {
+        /// Path to canonical queue state receipt JSON.
+        #[arg(long)]
+        state: PathBuf,
+
+        /// Write receipt JSON to this file.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Optional projection config path.
+        #[arg(long)]
+        config: Option<PathBuf>,
+
+        /// Explicit dry-run mode (default behavior when --apply is absent).
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Apply projected label changes to GitHub.
+        #[arg(long)]
+        apply: bool,
+
+        /// Allow creating missing labels before applying.
+        #[arg(long)]
+        create_missing_labels: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1571,6 +1607,23 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::ProjectLabels {
+                state,
+                receipt,
+                config,
+                dry_run,
+                apply,
+                create_missing_labels,
+            } => label_projector::run_project_labels(
+                state,
+                dry_run,
+                apply,
+                receipt,
+                config,
+                create_missing_labels,
+            ),
+        },
         Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
             receipts::run(receipts::ReceiptsConfig {
                 tests_only,

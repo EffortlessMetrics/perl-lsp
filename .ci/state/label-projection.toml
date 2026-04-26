@@ -1,0 +1,15 @@
+[state.NEEDS_BUILDER_FIX]
+apply = ["needs-builder-fix"]
+remove = ["review-reviewed", "ci-green", "merge-ready"]
+
+[state.NEEDS_CI_FIX]
+apply = ["needs-ci-fix"]
+remove = ["ci-green", "merge-ready"]
+
+[state.CI_GREEN]
+apply = ["ci-green"]
+remove = ["needs-ci-fix", "merge-ready"]
+
+[state.MERGE_READY]
+apply = ["merge-ready"]
+remove = ["needs-builder-fix", "needs-ci-fix", "needs-diff-fix", "needs-spec-fix", "needs-red-tdd-fix"]

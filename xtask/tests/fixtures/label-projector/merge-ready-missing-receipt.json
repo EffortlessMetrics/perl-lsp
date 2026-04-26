@@ -1,0 +1,9 @@
+{
+  "canonical_state": "MERGE_READY",
+  "pr_number": 6853,
+  "current_labels": [
+    "needs-ci-fix",
+    "review-reviewed"
+  ],
+  "merge_ready_receipt_valid": false
+}

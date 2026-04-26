@@ -1,0 +1,9 @@
+{
+  "canonical_state": "NEEDS_BUILDER_FIX",
+  "pr_number": 6853,
+  "current_labels": [
+    "review-reviewed",
+    "ci-green",
+    "merge-ready"
+  ]
+}
