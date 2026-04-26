@@ -13,6 +13,7 @@ mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::workflow_trigger_lint::WorkflowTriggerLintFormat;
 use tasks::metrics;
 use tasks::targeted_checks::CheckMode;
 use tasks::unwired_scan::UnwiredScanConfig;
@@ -348,6 +349,25 @@ enum Commands {
 
     /// Audit CI workflows for PR-safety and spend-risk controls.
     CiAuditWorkflows,
+
+    /// Lint required workflows for trigger and concurrency policy compliance.
+    WorkflowTriggerLint {
+        /// Path to required-check policy TOML.
+        #[arg(long)]
+        policy: Option<PathBuf>,
+
+        /// Path to write the JSON receipt.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Lint a single fixture workflow file.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: WorkflowTriggerLintFormat,
+    },
 
     /// Measure CI lane runtimes and emit timing artifacts.
     CiMeasure,
@@ -1454,6 +1474,9 @@ fn main() -> Result<()> {
         }
         Commands::TestEdgeCases { bench, coverage, test } => edge_cases::run(bench, coverage, test),
         Commands::CiAuditWorkflows => ci_audit_workflows::run(),
+        Commands::WorkflowTriggerLint { policy, receipt, fixture, format } => {
+            workflow_trigger_lint::run(policy, receipt, fixture, format)
+        }
         Commands::CiMeasure => ci_measure::run(),
         Commands::CiCostMonitor { days, json } => ci_metrics::run_cost_monitor(days, json),
         Commands::CiBaseline { branch, days, limit, output } => {

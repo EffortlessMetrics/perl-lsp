@@ -1,0 +1,21 @@
+name: Path Filtered Workflow
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'crates/**'
+  merge_group:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-gate-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

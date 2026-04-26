@@ -1,0 +1,51 @@
+name: Workflow Trigger Lint
+
+on:
+  pull_request:
+    branches: [master]
+  merge_group:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: workflow-trigger-lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-trigger-lint:
+    name: Workflow Trigger Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Run workflow trigger lint (advisory)
+        run: |
+          cargo xtask workflow-trigger-lint \
+            --policy .ci/policies/required-checks.toml \
+            --receipt target/receipts/workflow-trigger-lint.json
+
+      - name: Upload workflow trigger lint receipt
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: workflow-trigger-lint-receipt
+          path: target/receipts/workflow-trigger-lint.json
+          if-no-files-found: warn
+
+      - name: Advisory summary
+        if: always()
+        run: |
+          echo "Workflow Trigger Lint currently runs in advisory mode while required-check policy is conventional." >> "$GITHUB_STEP_SUMMARY"
+          echo "Ruleset required_status_checks are not yet configured; policy source is .ci/policies/required-checks.toml." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,19 @@
+name: Bad Concurrency Workflow
+
+on:
+  pull_request:
+    branches: [master]
+  merge_group:
+    branches: [master]
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
