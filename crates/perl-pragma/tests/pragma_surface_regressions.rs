@@ -275,3 +275,40 @@ fn no_builtin_bare_clears_all_imports() {
     assert!(!state.has_builtin_import("floor"));
     assert!(!state.has_builtin_import("weaken"));
 }
+
+#[test]
+fn use_if_strict_qw_enables_only_requested_categories_conditionally()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `use if $cond, strict => qw(vars refs)` via conditional path
+    // Master used `normalized_pragma_token` (no qw expansion); the PR fixes this
+    // by routing through `set_strict_categories` which calls `pragma_arg_items`.
+    // This test would pass on master for the DIRECT use-strict path (which already
+    // called pragma_arg_items) but the conditional path was broken.
+    let ast = program(vec![use_node("if", &["$cond", "strict", "qw(vars refs)"], 0, 38)]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 20);
+    assert!(state.strict_vars, "conditional use-if-strict qw(vars refs) must enable vars");
+    assert!(!state.strict_subs, "subs was not in the qw list, must stay disabled");
+    assert!(state.strict_refs, "conditional use-if-strict qw(vars refs) must enable refs");
+    Ok(())
+}
+
+#[test]
+fn no_if_strict_qw_disables_only_requested_categories_conditionally()
+-> Result<(), Box<dyn std::error::Error>> {
+    // `no if $cond, strict => qw(vars)` via conditional path.
+    // Before the PR, the conditional no-strict arm used `normalized_pragma_token`
+    // which could not expand qw lists; this test pins the fixed behavior.
+    let ast = program(vec![
+        use_node("strict", &[], 0, 10),
+        no_node("if", &["$cond", "strict", "qw(vars)"], 11, 44),
+    ]);
+    let map = PragmaTracker::build(&ast);
+
+    let state = PragmaTracker::state_for_offset(&map, 25);
+    assert!(!state.strict_vars, "conditional no-if-strict qw(vars) must disable vars");
+    assert!(state.strict_subs, "subs was not in the qw list, must stay enabled");
+    assert!(state.strict_refs, "refs was not in the qw list, must stay enabled");
+    Ok(())
+}
