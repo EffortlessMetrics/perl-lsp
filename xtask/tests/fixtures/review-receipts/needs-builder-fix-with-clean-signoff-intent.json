@@ -1,0 +1,23 @@
+{
+  "kind": "review",
+  "producer": "codex",
+  "pr": 6853,
+  "head_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "base_sha": "1234567890abcdef1234567890abcdef12345678",
+  "verdict": "needs_builder_fix",
+  "diff_classification": "non_trivial",
+  "material_observations": [
+    "Builder route computes incorrect merge-gate state for receipts missing negative checks."
+  ],
+  "negative_checks": [
+    "No parser regressions observed in touched crates."
+  ],
+  "blockers": [
+    "State builder must reject empty evidence payloads before sign-off."
+  ],
+  "next_routes": [
+    "signoff:clean",
+    "builder:repair-review-flow"
+  ],
+  "supersedes": "review:2026-04-25:abc1234"
+}

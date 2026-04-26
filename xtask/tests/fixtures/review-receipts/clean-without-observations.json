@@ -1,0 +1,18 @@
+{
+  "kind": "review",
+  "producer": "codex",
+  "pr": 6853,
+  "head_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "base_sha": "1234567890abcdef1234567890abcdef12345678",
+  "verdict": "clean",
+  "diff_classification": "non_trivial",
+  "material_observations": [],
+  "negative_checks": [
+    "No CI policy regressions found."
+  ],
+  "blockers": [],
+  "next_routes": [
+    "builder:apply-clean"
+  ],
+  "supersedes": null
+}

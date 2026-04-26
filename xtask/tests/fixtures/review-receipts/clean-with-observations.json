@@ -1,0 +1,22 @@
+{
+  "kind": "review",
+  "producer": "codex",
+  "pr": 6853,
+  "head_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "base_sha": "1234567890abcdef1234567890abcdef12345678",
+  "verdict": "clean",
+  "diff_classification": "non_trivial",
+  "material_observations": [
+    "Validated parser fallback behavior still routes through perl-lsp-rs-core feature gates.",
+    "Confirmed no label mutation side effects in review receipt handling."
+  ],
+  "negative_checks": [
+    "No panic/unwrap/todo usage introduced.",
+    "No CI label mutation command emitted by receipt generation."
+  ],
+  "blockers": [],
+  "next_routes": [
+    "builder:apply-clean"
+  ],
+  "supersedes": null
+}
