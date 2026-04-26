@@ -1,0 +1,5 @@
+{
+  "required": ["pr-smoke", "windows-guardrails"],
+  "allow_noop": false,
+  "advisory_mode": "pass"
+}

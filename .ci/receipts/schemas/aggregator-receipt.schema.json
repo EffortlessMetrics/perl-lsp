@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/aggregator-receipt.schema.json",
+  "title": "Aggregator Receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "event",
+    "verdict",
+    "classification",
+    "subreceipts",
+    "missing_receipts",
+    "repro"
+  ],
+  "properties": {
+    "check": { "type": "string", "minLength": 1 },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "event": { "type": "string", "minLength": 1 },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "warn", "skipped", "unknown"]
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "code_regression",
+        "infra_failure",
+        "stale_base",
+        "skipped",
+        "unknown"
+      ]
+    },
+    "subreceipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "selected", "skipped", "verdict", "required"],
+        "properties": {
+          "check": { "type": "string", "minLength": 1 },
+          "selected": { "type": "boolean" },
+          "skipped": { "type": "boolean" },
+          "verdict": {
+            "type": "string",
+            "enum": ["pass", "fail", "warn", "skipped", "unknown"]
+          },
+          "classification": {
+            "type": ["string", "null"],
+            "enum": [
+              "code_regression",
+              "infra_failure",
+              "stale_base",
+              "skipped",
+              "unknown",
+              null
+            ]
+          },
+          "required": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "missing_receipts": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

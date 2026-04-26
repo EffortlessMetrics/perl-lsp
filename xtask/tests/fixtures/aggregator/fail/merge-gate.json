@@ -1,0 +1,8 @@
+{
+  "check": "merge-gate",
+  "selected": true,
+  "skipped": false,
+  "required": true,
+  "verdict": "pass",
+  "classification": null
+}

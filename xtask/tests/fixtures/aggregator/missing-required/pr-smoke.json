@@ -1,0 +1,8 @@
+{
+  "check": "pr-smoke",
+  "selected": true,
+  "skipped": false,
+  "required": true,
+  "verdict": "pass",
+  "classification": null
+}

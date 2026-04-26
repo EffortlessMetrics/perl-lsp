@@ -1,0 +1,5 @@
+{
+  "required": ["pr-smoke", "merge-gate"],
+  "allow_noop": false,
+  "advisory_mode": "pass"
+}

@@ -1,0 +1,8 @@
+{
+  "check": "ux-tests",
+  "selected": true,
+  "skipped": false,
+  "required": false,
+  "verdict": "warn",
+  "classification": "infra_failure"
+}

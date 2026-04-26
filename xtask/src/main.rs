@@ -1122,6 +1122,28 @@ enum Commands {
     /// Validate workspace exclusion strategy and dependency invariants.
     ValidateWorkspaceExclusions,
 
+    /// Aggregate CI subreceipts into a stable final check receipt.
+    AggregateReceipts {
+        /// Stable check name for the final gate.
+        #[arg(long)]
+        check: String,
+
+        /// Directory containing subreceipt JSON files.
+        #[arg(long)]
+        inputs: PathBuf,
+
+        /// Output JSON path for the aggregated receipt.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// Finalize a CI check from an aggregated receipt.
+    FinalizeCheck {
+        /// Path to aggregator receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+
     /// Generate a build-timing receipt JSON with workspace duration metrics.
     BuildTimingReceipt {
         /// Measure clean build with `cargo build --workspace --locked`.
@@ -1680,6 +1702,10 @@ fn main() -> Result<()> {
         Commands::PopulateBook => populate_book::run(),
         Commands::LayerCheck => layer_check::run(),
         Commands::ValidateWorkspaceExclusions => validate_workspace_exclusions::run(),
+        Commands::AggregateReceipts { check, inputs, output } => {
+            aggregate_receipts::run(check, inputs, output)
+        }
+        Commands::FinalizeCheck { receipt } => finalize_check::run(receipt),
         Commands::BuildTimingReceipt { clean, incremental, tests, output, baseline } => {
             build_timing::run_receipt(clean, incremental, tests, output, baseline)
         }
