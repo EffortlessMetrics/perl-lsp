@@ -1,0 +1,15 @@
+# Canonical final check names for eventual GitHub Ruleset required_status_checks.
+# Planning artifact only: update this file first, then apply ruleset changes manually.
+
+version = 1
+
+[rollout]
+mode = "observe"
+notes = "Do not enforce in rulesets until observation thresholds are met."
+
+# Replace/add entries as final aggregator check names stabilize.
+[checks]
+final = [
+  "Methodology Gate",
+  "Parser Ratchet",
+]
