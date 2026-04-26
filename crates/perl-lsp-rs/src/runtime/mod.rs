@@ -982,14 +982,20 @@ mod tests {
 
     #[test]
     fn resolve_ai_api_key_prefers_configured_env_var() {
-        let config = AiCompletionConfig { api_key_env: "OPENAI_API_KEY".to_string(), ..AiCompletionConfig::default() };
+        let config = AiCompletionConfig {
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            ..AiCompletionConfig::default()
+        };
         let read_env = |name: &str| match name {
             "OPENAI_API_KEY" => Some("openai-key".to_string()),
             "GEMINI_API_KEY" => Some("gemini-key".to_string()),
             _ => None,
         };
 
-        assert_eq!(LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(), Some("openai-key"));
+        assert_eq!(
+            LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
+            Some("openai-key")
+        );
     }
 
     #[test]
@@ -1001,6 +1007,9 @@ mod tests {
             _ => None,
         };
 
-        assert_eq!(LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(), Some("gemini-key"));
+        assert_eq!(
+            LspServer::resolve_ai_api_key_with(&config, read_env).as_deref(),
+            Some("gemini-key")
+        );
     }
 }
