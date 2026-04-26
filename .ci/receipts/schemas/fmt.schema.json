@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/p5-lang/perl-lsp/.ci/receipts/schemas/fmt.schema.json",
+  "title": "fmt receipt",
+  "type": "object",
+  "required": [
+    "check",
+    "schema_version",
+    "verdict",
+    "classification",
+    "failures",
+    "fix_forward_kind",
+    "safe_auto_fix",
+    "repro"
+  ],
+  "properties": {
+    "check": {
+      "const": "fmt"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "classification": {
+      "const": "fmt_drift"
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tool", "crate", "path", "check_command", "fix_command"],
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "crate": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "check_command": {
+            "type": "string"
+          },
+          "fix_command": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "fix_forward_kind": {
+      "const": "FMT_ONLY"
+    },
+    "safe_auto_fix": {
+      "const": true
+    },
+    "repro": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
