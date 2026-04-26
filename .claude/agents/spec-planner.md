@@ -43,6 +43,55 @@ For each change in the spec, produce:
 5. **Test file** — where the TDD builder should write the failing test
 6. **Verify command** — the exact cargo command to run after each step
 
+## Grid completeness — load-bearing discipline
+
+The `acceptance.md` file you produce is **the BDD grid for this spec**. It is read mechanically by the spec-test-code-match agent (between red-tdd and builder), which walks each row and verifies that the named code-side and test-side references resolve. Without grid completeness, the three-way-match agent has nothing to walk and the methodology loses a layer of defense-in-depth verification.
+
+See `docs/forensics/2026-04-25-bdd-grid-as-architectural-pattern.md` for the architectural rationale.
+
+**Three row types — author each with the right markup:**
+
+| Row type | Markup | When to use | Example |
+|----------|--------|-------------|---------|
+| **Grid row** (behavioral) | `- [ ]` | Carries assertion + code-side ref + test-side ref | `- [ ] crates/perl-foo/src/lib.rs:42 implements Bar trait, verified by tests/bar_impl.rs::test_basic_dispatch()` |
+| **Gate criterion** | `- ` (unboxed bullet, in dedicated "Gates" section) | Pass/fail verification commands (cargo, xtask) — not grid rows | `- cargo check --workspace passes` |
+| **Context** | `> ` (blockquote) | Background, amendments, scope-exclusions, decisions | `> Amendment 7: deferred per ADR-0041 G2 retrospective` |
+
+Grid-row triple — every behavioral `[ ]` row should resolve all three sides:
+
+- **Assertion**: the row text itself (what should be true after this change lands)
+- **Code-side reference**: file path, file:line, or symbol name (e.g., `crates/perl-foo/src/lib.rs:42`, `perl_foo::Bar::dispatch`)
+- **Test-side reference**: test file name AND test function (e.g., `tests/bar_impl.rs::test_basic_dispatch`)
+
+Acceptable inline shapes:
+
+```
+- [ ] <assertion> at `<code-ref>`, verified by `<test-ref>`
+- [ ] `<code-ref>` <assertion>; test: `<test-ref>`
+- [ ] <assertion>
+      - Code: `<code-ref>`
+      - Test: `<test-ref>`
+```
+
+If a grid row is structurally non-testable (e.g., a Cargo.toml dependency removal where the test-side is a cargo command, not a test function), **either** mark it as a Gate (move out of `[ ]` rows) **or** name the cargo command + the crate it runs against as the test-side (`tests via cargo test -p perl-foo`).
+
+**Self-audit before submitting acceptance.md:**
+
+Count every `[ ]` row. For each, classify as:
+- **GRID-COMPLETE**: all three sides present
+- **CODE-ONLY**: assertion + code-side, no test-side
+- **TEST-ONLY**: assertion + test-side, no code-side
+- **ASSERTION-ONLY**: assertion only, no refs
+
+Targets:
+- ≥80% of behavioral `[ ]` rows GRID-COMPLETE
+- 0 ASSERTION-ONLY rows (these are gates or context, not grid rows — re-classify)
+- Cargo.toml / structural rows may be CODE-ONLY but should reference the cargo command that proves them
+
+If you cannot meet these targets, the spec is incomplete and you must do another pass — adding test references where missing, or moving non-testable items to Gates / Context sections.
+
+The 2026-04-25 grid completeness audit measured 27-52% completeness across recent specs. The new target is ≥80%. This is a meaningful uplift; budget extra time for the test-side enumeration in your `/spec-planner-plan` pass.
+
 ## Branch handling
 
 You create the implementation branch. This is the anchor point for

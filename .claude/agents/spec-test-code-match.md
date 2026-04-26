@@ -61,20 +61,49 @@ For each test file added or modified by the red-tdd commit:
   - **Doesn't resolve on master and not named in acceptance.md**: FLAG as `hallucinated-api`.
   - **Resolved on a recent past master but no longer exists** (renamed/deleted): FLAG as `stale-api`.
 
-### Pass 3 — Acceptance coverage
+### Pass 3 — Acceptance coverage (graduated by grid health)
 
-For each `[ ]` row in acceptance.md that asserts behavior (not just file existence or Cargo.toml structure):
+Before walking acceptance coverage, compute the spec's **grid health score**:
 
-- Check that at least one test in the red-tdd commit exercises the assertion. Use the row's named test file or symbol references as the link.
-- Rows with no test linkage AND no `Scope Exclusion` marker: FLAG as `uncovered-assertion`.
-- Rows that ARE explicitly excluded (per "Scope Exclusions" section) or are pure prose context: skip.
+- Count every `[ ]` row in acceptance.md
+- Classify each as:
+  - **GRID-COMPLETE**: row has assertion + named code-side ref + named test-side ref
+  - **CODE-ONLY**: row has assertion + code-side ref, no test-side ref
+  - **TEST-ONLY**: row has assertion + test-side ref, no code-side ref
+  - **ASSERTION-ONLY**: row has assertion only, no resolvable refs
+  - **CONTEXT**: row is in a "Scope Exclusions", "Known Edge Cases", "Related Context", "Gates" section, or starts with `>` blockquote — skip from coverage validation
+- Compute `grid_completeness = GRID-COMPLETE / (GRID-COMPLETE + CODE-ONLY + TEST-ONLY + ASSERTION-ONLY)`
+
+Then apply graduated validation by grid health:
+
+| grid_completeness | Validation mode | Behavior |
+|-------------------|-----------------|----------|
+| ≥ 80% | **Strict** | Every GRID-COMPLETE row must have its named test in the diff. CODE-ONLY rows flagged for missing test-side. ASSERTION-ONLY rows flagged as not-grid-rows. |
+| 50%–80% | **Lenient** | GRID-COMPLETE rows validated as in Strict. CODE-ONLY rows tracked but not flagged. ASSERTION-ONLY rows flagged. Verdict downgraded to FLAGGED-WEAK-GRID with recommendation to spec-planner to improve. |
+| < 50% | **Warn-only** | Issue a warning that the spec is too weakly gridded for meaningful coverage validation. Skip per-row coverage; only check that at least one test exists in the red-tdd diff. Bounce to spec-planner for grid uplift. |
+| Spec is non-implementation (< 3 code-side refs total AND 0 test-side refs total across all rows) | **Skip** | This is a tooling, prompt, or process-update spec (e.g., `.spec/4513-red-tdd-api-read/`). Coverage validation does not apply. Output PASS with note "non-implementation spec; grid framework not applicable." |
+
+For each row that fails coverage in the active validation mode:
+
+- **Test-name resolves but is not in diff**: FLAG as `test-not-implemented` — name the row and the missing test function/file.
+- **Test-name resolves and is in diff but assertion text doesn't match what the test asserts**: FLAG as `test-asserts-different-thing` — name the divergence.
+- **Test-name doesn't resolve at all**: FLAG as `test-name-unresolvable` — possible typo in spec or test was renamed.
 
 ## What you output
 
 Post a single comment on the issue with this structure:
 
 ```
-## Spec-test-code three-way-match: <PASS|FLAGGED>
+## Spec-test-code three-way-match: <PASS|FLAGGED-WEAK-GRID|FLAGGED-RED-TDD|FLAGGED-SPEC|SKIPPED-NON-IMPL>
+
+### Grid health
+- Total `[ ]` rows: <N>
+- GRID-COMPLETE: <A> (<A%>)
+- CODE-ONLY: <B>
+- TEST-ONLY: <C>
+- ASSERTION-ONLY: <D>
+- CONTEXT (skipped): <E>
+- Grid completeness: <X%> → validation mode: <Strict|Lenient|Warn-only|Skip>
 
 ### Pass 1 — Grid resolution: <N> rows checked, <M> unresolved
 [list each unresolved row with the reason]
@@ -82,20 +111,24 @@ Post a single comment on the issue with this structure:
 ### Pass 2 — Test API resolution: <N> references checked, <M> flagged
 [list each flag with: file:line, reference, category (hallucinated-api / signature-drift / stale-api), suggested fix]
 
-### Pass 3 — Acceptance coverage: <N> assertions checked, <M> uncovered
-[list each uncovered assertion with the row text]
+### Pass 3 — Acceptance coverage: <N> rows in scope under <validation mode>, <M> flagged
+[list each flag with category (test-not-implemented / test-asserts-different-thing / test-name-unresolvable) and row text]
 
 ### Verdict
-- PASS: All three passes clean. Builder may proceed.
-- FLAGGED-RED-TDD: Findings in pass 2 or 3 — bounce to red-tdd to fix tests before builder runs.
-- FLAGGED-SPEC: Findings in pass 1 — bounce to spec-planner to repair acceptance.md before red-tdd retries.
+- PASS: All applicable passes clean. Builder may proceed.
+- FLAGGED-WEAK-GRID: Grid completeness <80%; Pass 3 ran in Lenient or Warn-only mode. Recommend spec-planner uplift but does not block builder if Pass 1 + 2 clean.
+- FLAGGED-RED-TDD: Findings in pass 2 (API resolution) or pass 3 with Strict-mode test failures — bounce to red-tdd to fix tests before builder runs.
+- FLAGGED-SPEC: Findings in pass 1 (grid resolution) or ASSERTION-ONLY rows present — bounce to spec-planner to repair acceptance.md before red-tdd retries.
+- SKIPPED-NON-IMPL: Spec is non-implementation (tooling, prompt, or process update with <3 code-side refs AND 0 test-side refs). Grid framework not applicable. Auto-pass.
 ```
 
 Then set the appropriate label:
 
 - PASS: set `spec-match-reviewed`, leave `red-tdd-reviewed` in place.
+- FLAGGED-WEAK-GRID: set `spec-match-reviewed` (does not block) AND `needs-spec-uplift` (recommendation, not blocker).
 - FLAGGED-RED-TDD: set `needs-red-tdd-fix`, leave `red-tdd-reviewed` for tracking.
 - FLAGGED-SPEC: set `needs-spec-fix`, strip `red-tdd-reviewed` (red-tdd will need to re-run after spec repair).
+- SKIPPED-NON-IMPL: set `spec-match-reviewed` with comment noting "skipped: non-implementation spec." Builder may proceed.
 
 ## Principles
 
