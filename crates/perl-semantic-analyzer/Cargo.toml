@@ -32,6 +32,7 @@ rustc-hash = "2.1.2"
 tracing.workspace = true
 
 [dev-dependencies]
+perl-lsp-rs-core = { workspace = true }
 perl-tdd-support = { workspace = true }
 
 [package.metadata.docs.rs]

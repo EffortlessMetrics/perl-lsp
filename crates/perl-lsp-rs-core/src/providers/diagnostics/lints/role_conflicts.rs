@@ -1,8 +1,8 @@
-//! Same-file Moo/Moose role conflict diagnostics.
+//! Same-file Moo/Moose/Role::Tiny role conflict diagnostics.
 //!
 //! This lint checks for roles consumed by a class in the same file that
 //! provide overlapping method names. It intentionally ignores workspace-wide
-//! indexing, Role::Tiny, and transitive role composition.
+//! indexing and transitive role composition.
 
 use std::collections::{HashMap, HashSet};
 

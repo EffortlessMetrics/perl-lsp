@@ -25,8 +25,10 @@ pub enum Framework {
     Native,
     /// Native Perl 5.38+ class (use feature 'class')
     NativeClass,
-    /// Plain OO via `use parent`, `use base`, or `@ISA` (no framework)
+    /// Plain Perl OOP via `use parent`, `use base`, or `@ISA` (no framework)
     PlainOO,
+    /// `use Role::Tiny;`
+    RoleTiny,
     /// No OO framework detected
     None,
 }
@@ -529,6 +531,7 @@ impl ClassModelBuilder {
             "Mouse" | "Mouse::Role" => Framework::Mouse,
             "Class::Accessor" => Framework::ClassAccessor,
             "Object::Pad" => Framework::ObjectPad,
+            "Role::Tiny" | "Role::Tiny::With" => Framework::RoleTiny,
             "base" | "parent" => {
                 // Capture parent class names, skipping -norequire flag and Class::Accessor sentinel.
                 // args may be:
