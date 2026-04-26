@@ -67,6 +67,7 @@ pub mod publish;
 pub mod publish_closure;
 pub mod publish_manifest_check;
 pub mod publish_receipts;
+pub mod queue_health;
 pub mod queue_snapshot;
 pub mod receipts;
 pub mod release;
