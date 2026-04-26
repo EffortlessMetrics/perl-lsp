@@ -11,6 +11,7 @@
 
 use perl_lsp::features::diagnostics::DiagnosticsProvider;
 use perl_parser::Parser;
+use std::sync::Arc;
 
 #[test]
 fn test_hash_key_vs_variable_bareword() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,6 +24,7 @@ print FOO;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -48,6 +50,7 @@ print STDERR;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -76,6 +79,7 @@ my @values = @h{$k1, $k2};
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -115,6 +119,7 @@ print BAREWORD;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -143,6 +148,7 @@ my @values = @h{ @arr };
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -165,6 +171,7 @@ my @values = @h{ get_keys() };
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -187,6 +194,7 @@ print INVALID;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -220,6 +228,7 @@ print BAREWORD_WARNING;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -250,6 +259,7 @@ print SHOULD_WARN;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -277,6 +287,7 @@ print NORMAL_BAREWORD;
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
@@ -310,6 +321,7 @@ delete $hash{delete_key};
 
     let mut parser = Parser::new(source);
     let ast = parser.parse()?;
+    let ast = Arc::new(ast);
     let diagnostics_provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = diagnostics_provider.get_diagnostics(&ast, &[], source, None);
 
