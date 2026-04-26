@@ -1,0 +1,9 @@
+{
+  "status": "fail",
+  "advisories": [
+    {
+      "id": "RUSTSEC-2026-0001",
+      "severity": "high"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# Release evidence verification policy.
+# Severity values are matched case-insensitively.
+release_blocking_advisory_severities = ["critical"]

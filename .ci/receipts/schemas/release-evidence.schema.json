@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/release-evidence.schema.json",
+  "title": "release-evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "subsystem",
+    "version",
+    "bundle_root",
+    "required_receipts",
+    "missing_receipts",
+    "failed_receipts",
+    "advisory_warnings",
+    "status"
+  ],
+  "properties": {
+    "subsystem": { "const": "release_evidence" },
+    "version": { "type": "string" },
+    "bundle_root": { "type": "string" },
+    "required_receipts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 8
+    },
+    "missing_receipts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "failed_receipts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "advisory_warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": { "enum": ["pass", "fail"] }
+  }
+}
