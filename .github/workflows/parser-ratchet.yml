@@ -1,0 +1,203 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: parser-ratchet-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PARSER_RATCHET_PROFILE: .ci/parser-ratchet/profiles/pr.toml
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable (master)
+        with:
+          toolchain: 1.92.0
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-on-failure: true
+          shared-key: parser-ratchet-${{ hashFiles('Cargo.lock') }}
+
+      - name: Resolve rollout profile
+        id: profile
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          profile_path = pathlib.Path(os.environ["PARSER_RATCHET_PROFILE"])
+          data = tomllib.loads(profile_path.read_text(encoding="utf-8"))
+
+          rollout = data.get("rollout", {})
+          inputs = data.get("inputs", {})
+
+          mode = str(rollout.get("mode", "scaffold")).strip()
+          selected = bool(rollout.get("selected", False))
+          default_verdict = str(rollout.get("verdict", "pass")).strip()
+          manifest = str(inputs.get("manifest", ".ci/common-corpus-manifest.txt")).strip()
+          baseline = str(inputs.get("baseline", ".ci/parser-corpus-baseline.json")).strip()
+
+          allowed = {"scaffold", "canary", "enforce"}
+          if mode not in allowed:
+            raise SystemExit(f"invalid rollout.mode={mode!r}; expected one of {sorted(allowed)}")
+
+          out = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a", encoding="utf-8") as f:
+            f.write(f"mode={mode}\n")
+            f.write(f"selected={'true' if selected else 'false'}\n")
+            f.write(f"default_verdict={default_verdict}\n")
+            f.write(f"manifest={manifest}\n")
+            f.write(f"baseline={baseline}\n")
+
+          print(f"mode={mode} selected={selected} manifest={manifest} baseline={baseline}")
+          PY
+
+      - name: Run parser ratchet
+        id: ratchet
+        run: |
+          mkdir -p target/receipts
+
+          mode="${{ steps.profile.outputs.mode }}"
+          selected="${{ steps.profile.outputs.selected }}"
+          manifest="${{ steps.profile.outputs.manifest }}"
+          baseline="${{ steps.profile.outputs.baseline }}"
+
+          cmd=(cargo run -p xtask -- parser-corpus-sweep --manifest "$manifest" --baseline "$baseline" --enforce --receipt --output target/receipts/parser-ratchet-sweep.json)
+
+          execution_exit=0
+          hard_regression=false
+          verdict="pass"
+          should_fail=false
+
+          if [ "$selected" = "true" ]; then
+            set +e
+            "${cmd[@]}" 2>&1 | tee target/receipts/parser-ratchet.log
+            execution_exit=${PIPESTATUS[0]}
+            set -e
+
+            if [ "$execution_exit" -ne 0 ]; then
+              hard_regression=true
+            fi
+          else
+            echo "Rollout selection disabled (selected=false). No-op path." | tee target/receipts/parser-ratchet.log
+          fi
+
+          case "$mode" in
+            scaffold)
+              verdict="pass"
+              ;;
+            canary)
+              if [ "$selected" = "true" ] && [ "$hard_regression" = "true" ]; then
+                verdict="would_fail"
+              else
+                verdict="pass"
+              fi
+              ;;
+            enforce)
+              if [ "$selected" = "true" ] && [ "$hard_regression" = "true" ]; then
+                verdict="fail"
+                should_fail=true
+              else
+                verdict="pass"
+              fi
+              ;;
+          esac
+
+          {
+            echo "execution_exit=$execution_exit"
+            echo "hard_regression=$hard_regression"
+            echo "verdict=$verdict"
+            echo "should_fail=$should_fail"
+            echo "selected=$selected"
+            printf 'command='"%q " "${cmd[@]}"
+            echo
+          } >> "$GITHUB_OUTPUT"
+
+          echo "mode=$mode selected=$selected hard_regression=$hard_regression verdict=$verdict"
+
+          if [ "$should_fail" = "true" ]; then
+            echo "Enforcement active and hard regression detected; failing job."
+            exit 1
+          fi
+
+      - name: Emit parser ratchet receipt
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          from datetime import datetime, timezone
+
+          def gh_env(name: str, default: str = "") -> str:
+              return os.environ.get(name, default)
+
+          receipt_path = pathlib.Path("target/receipts/parser-ratchet-receipt.json")
+          receipt_path.parent.mkdir(parents=True, exist_ok=True)
+
+          commit = subprocess.run(
+              ["git", "rev-parse", "HEAD"],
+              check=False,
+              capture_output=True,
+              text=True,
+          ).stdout.strip()
+
+          payload = {
+              "schema_version": 1,
+              "receipt_kind": "parser_ratchet",
+              "generated_at": datetime.now(timezone.utc).isoformat(),
+              "workflow": gh_env("GITHUB_WORKFLOW"),
+              "event_name": gh_env("GITHUB_EVENT_NAME"),
+              "ref": gh_env("GITHUB_REF"),
+              "commit": commit,
+              "profile": gh_env("PARSER_RATCHET_PROFILE"),
+              "mode": "${{ steps.profile.outputs.mode }}",
+              "selected": "${{ steps.ratchet.outputs.selected }}" == "true",
+              "default_verdict": "${{ steps.profile.outputs.default_verdict }}",
+              "verdict": "${{ steps.ratchet.outputs.verdict }}",
+              "hard_regression": "${{ steps.ratchet.outputs.hard_regression }}" == "true",
+              "enforcement_exit": int("${{ steps.ratchet.outputs.execution_exit || '0' }}"),
+              "command": "${{ steps.ratchet.outputs.command }}".strip(),
+              "inputs": {
+                  "manifest": "${{ steps.profile.outputs.manifest }}",
+                  "baseline": "${{ steps.profile.outputs.baseline }}",
+              },
+          }
+
+          receipt_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+          print(f"Wrote receipt: {receipt_path}")
+          PY
+
+      - name: Upload parser ratchet receipt
+        if: always()
+        uses: ./.github/actions/upload-receipt
+        with:
+          receipt-path: target/receipts/parser-ratchet-receipt.json
+          logs-path: target/receipts
+          artifacts-path: target/receipts
+          artifact-name: parser-ratchet-receipt
+          retention-days: 14

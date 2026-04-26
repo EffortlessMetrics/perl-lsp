@@ -1,0 +1,18 @@
+# Parser Ratchet PR profile
+# Default rollout is scaffold (non-blocking, no-op selected=false).
+
+[rollout]
+# Valid modes: scaffold | canary | enforce
+mode = "scaffold"
+
+# Selection toggle for whether the parser ratchet command runs on this profile.
+selected = false
+
+# Expected verdict while scaffolded. Workflow computes final verdict at runtime.
+verdict = "pass"
+
+[inputs]
+# Keep PR profile lightweight: strict-clean manifest only.
+# Do NOT use CPAN top-N in this PR profile.
+manifest = ".ci/common-corpus-manifest.txt"
+baseline = ".ci/parser-corpus-baseline.json"
