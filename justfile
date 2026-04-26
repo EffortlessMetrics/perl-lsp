@@ -105,6 +105,7 @@ merge-gate: _check-tools-basic pr-fast
     START=$(date +%s)
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
+    just _timed "check-all-targets" "just check-all-targets" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
     just _timed "lsp-bdd" "just ci-lsp-bdd" && \
@@ -328,6 +329,9 @@ mutation-regression:
     @cargo test -p perl-parser --test mutation_hardening_tests
     @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
     @cargo test -p perl-lsp-rs --test mutation_survivors_elimination
+    @cargo test -p perl-parser-core --test path_security_mutation_hardening
+    @cargo test -p perl-parser-core --test path_normalize_mutation_hardening
+    @cargo test -p perl-parser-core --test qualified_name_mutation_hardening
     @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
@@ -834,6 +838,7 @@ ci-gate:
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
+    just check-all-targets && \
     just common-corpus-check && \
     just ci-policy && \
     just ci-v2-bundle-sync && \

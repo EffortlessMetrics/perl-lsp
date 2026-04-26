@@ -1043,12 +1043,22 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
         });
     }
 
-    // 3. Clean-file count must not decrease
-    if report.clean_files < baseline.clean_files {
+    // 3. Clean-rate must not decrease.
+    //
+    // Compare ratios rather than absolute clean-file counts so the ratchet
+    // remains meaningful when corpus inventory size differs between runners
+    // (for example, distro package layout drift or optional roots missing).
+    //
+    // Use a small epsilon to prevent spurious failures from floating-point
+    // rounding when both sides are computed from the same integer division
+    // but stored at different precision (e.g. if a future schema stores a
+    // pre-computed float in the baseline).  Consistent with the epsilon guard
+    // used in corpus_audit.rs for the same class of comparisons.
+    if clean_rate(report) + 1e-9 < clean_rate(baseline) {
         violations.push(RatchetViolation {
-            metric: "clean_files".to_string(),
-            baseline_value: baseline.clean_files.to_string(),
-            current_value: report.clean_files.to_string(),
+            metric: "clean_rate".to_string(),
+            baseline_value: format!("{:.6}", clean_rate(baseline)),
+            current_value: format!("{:.6}", clean_rate(report)),
         });
     }
 
@@ -1074,6 +1084,13 @@ pub fn enforce_ratchet(report: &SweepReport, baseline: &SweepReport) -> Vec<Ratc
     }
 
     violations
+}
+
+fn clean_rate(report: &SweepReport) -> f64 {
+    if report.total_files == 0 {
+        return 1.0;
+    }
+    report.clean_files as f64 / report.total_files as f64
 }
 
 /// Discover all .pm files under the given roots
@@ -1529,7 +1546,7 @@ mod tests {
             test_report(80, 18, 25, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
 
         let report = SweepReport {
-            clean_files: 75,       // decreased (violation)
+            clean_files: 75,       // decreased clean-rate (violation)
             total_error_nodes: 30, // increased (violation)
             files_unreadable: 3,   // increased (violation)
             ..baseline.clone()
@@ -1540,7 +1557,7 @@ mod tests {
 
         let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
         assert!(metrics.contains(&"files_unreadable"));
-        assert!(metrics.contains(&"clean_files"));
+        assert!(metrics.contains(&"clean_rate"));
         assert!(metrics.contains(&"total_error_nodes"));
     }
 
@@ -1956,6 +1973,38 @@ mod tests {
     }
 
     // ── enforce_ratchet edge cases ─────────────────────────────────────
+
+    #[test]
+    fn test_enforce_ratchet_clean_rate_equal_no_violation() {
+        // Same counts on both sides → rates are identical → no violation.
+        let baseline = test_report(80, 18, 25, 2, BTreeMap::new());
+        // report is a clone: clean_rate(report) == clean_rate(baseline) exactly
+        let report = baseline.clone();
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Equal clean-rate must not trigger a violation");
+    }
+
+    #[test]
+    fn test_enforce_ratchet_clean_rate_epsilon_no_false_positive() {
+        // If the rates differ by less than 1e-9 (pure floating-point rounding),
+        // the epsilon guard must suppress the violation.
+        // We cannot manufacture a sub-epsilon diff via integer division, but we
+        // can verify the guard itself by checking that the comparison threshold
+        // is strictly less than: clean_rate(report) + 1e-9 < clean_rate(baseline).
+        // Concretely: 8000/10000 == 8001/10001 rounds to 0.8000 at 6 decimal places;
+        // confirm neither fires (improvement direction).
+        let baseline = test_report(8000, 2000, 0, 0, BTreeMap::new()); // rate=0.8
+        let report = SweepReport {
+            clean_files: 8001,
+            // total_files inherited from baseline = 10000; rate = 8001/10000 = 0.8001 > 0.8
+            ..baseline.clone()
+        };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(
+            !violations.iter().any(|v| v.metric == "clean_rate"),
+            "Marginal improvement must not trigger clean_rate violation"
+        );
+    }
 
     #[test]
     fn test_enforce_ratchet_improvement_no_violations() {
