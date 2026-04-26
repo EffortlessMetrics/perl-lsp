@@ -2,7 +2,7 @@
 
 **Version**: 0.12.4 | **LSP spec**: 3.18 | **Source of truth**: [`features.toml`](../../features.toml)
 
-119 features — 88 LSP, 24 DAP, 7 Perl-specific extensions. All are GA and
+119 features — 94 LSP, 24 DAP, 1 experimental. All are GA and
 advertised unless noted otherwise. This document groups them by user-facing
 area to help you find what you need quickly.
 
