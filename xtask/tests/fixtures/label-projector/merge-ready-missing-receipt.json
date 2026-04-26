@@ -1,0 +1,10 @@
+{
+  "canonical_state": "MERGE_READY",
+  "current_labels": ["needs-ci-fix", "review-reviewed"],
+  "pull_request": {
+    "owner": "EffortlessMetrics",
+    "repo": "perl-lsp",
+    "number": 6853
+  },
+  "merge_ready_receipt_valid": false
+}

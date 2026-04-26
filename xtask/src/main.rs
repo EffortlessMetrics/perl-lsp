@@ -831,6 +831,12 @@ enum Commands {
         command: CpanCorpusCommand,
     },
 
+    /// Queue-state based CI orchestration helpers.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
     /// Generate canonical receipts (test summary, doc metrics, consolidated state)
     ///
     /// Runs workspace tests and doc builds, parses output, and produces
@@ -1235,6 +1241,28 @@ enum FeaturesCommand {
 }
 
 #[derive(Subcommand)]
+enum QueueCommand {
+    /// Project GitHub labels from canonical queue-state receipts.
+    ProjectLabels {
+        /// Canonical queue-state JSON input.
+        #[arg(long)]
+        state: PathBuf,
+        /// Force dry-run behavior (default mode).
+        #[arg(long)]
+        dry_run: bool,
+        /// Apply projected label operations to GitHub.
+        #[arg(long)]
+        apply: bool,
+        /// Optional projection receipt output path.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+        /// Allow creating missing labels during apply.
+        #[arg(long)]
+        create_labels: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum MetricsCommand {
     /// Emit parser phase timings and benchmark summary.
     ParserStats {
@@ -1571,6 +1599,11 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Queue { command } => match command {
+            QueueCommand::ProjectLabels { state, dry_run, apply, receipt, create_labels } => {
+                label_projector::run(&state, dry_run, apply, receipt.as_deref(), create_labels)
+            }
+        },
         Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
             receipts::run(receipts::ReceiptsConfig {
                 tests_only,
