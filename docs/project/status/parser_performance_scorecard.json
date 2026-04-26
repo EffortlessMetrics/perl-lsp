@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "generated_at_epoch_s": 1777010864,
+  "metrics": {
+    "cold_parse": {
+      "iterations": 30,
+      "median_ns": 44708,
+      "p95_ns": 98033,
+      "mean_ns": 69888
+    },
+    "incremental_multiple_edits": {
+      "iterations": 35,
+      "median_ns": 36733,
+      "p95_ns": 182845,
+      "mean_ns": 50285
+    },
+    "incremental_small_edit": {
+      "iterations": 35,
+      "median_ns": 73307,
+      "p95_ns": 148249,
+      "mean_ns": 78530
+    },
+    "lexer_only": {
+      "iterations": 40,
+      "median_ns": 24210,
+      "p95_ns": 482279,
+      "mean_ns": 62896
+    },
+    "scope_analysis": {
+      "iterations": 40,
+      "median_ns": 9784,
+      "p95_ns": 24722,
+      "mean_ns": 11871
+    },
+    "warm_reparse": {
+      "iterations": 35,
+      "median_ns": 118046,
+      "p95_ns": 277118,
+      "mean_ns": 242863
+    }
+  }
+}

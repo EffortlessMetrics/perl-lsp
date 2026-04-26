@@ -5,11 +5,12 @@
 //! - Edge cases: empty PATH, missing perl, multiple perls, unusual locations
 //! - Path normalization boundary conditions
 
+use perl_dap::platform::{
+    PerlInterpreterResult, find_perl_interpreter_cached, normalize_path, resolve_perl_path,
+    resolve_perl_path_with_toolchain, setup_environment,
+};
 #[cfg(not(windows))]
 use perl_dap::platform::{detect_perlbrew_perl, detect_plenv_perl};
-use perl_dap::platform::{
-    normalize_path, resolve_perl_path, resolve_perl_path_with_toolchain, setup_environment,
-};
 use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -247,6 +248,30 @@ fn normalize_path_wsl_activeperl() -> TestResult {
         s.starts_with("C:"),
         "WSL path to ActivePerl should convert to Windows drive, got: {s}"
     );
+    Ok(())
+}
+
+#[test]
+fn find_perl_interpreter_cached_respects_configured_path_changes() -> TestResult {
+    let tmp = tempfile::tempdir()?;
+    let fake_perl = tmp.path().join("perl");
+    std::fs::write(&fake_perl, "#!/usr/bin/env perl\n")?;
+
+    let configured = fake_perl.to_string_lossy().to_string();
+    let found = find_perl_interpreter_cached(Some(&configured));
+    assert!(
+        matches!(found, PerlInterpreterResult::ConfiguredPath(ref path) if *path == fake_perl),
+        "configured path should be returned as-is, got: {found:?}"
+    );
+
+    let missing = tmp.path().join("missing-perl");
+    let missing_cfg = missing.to_string_lossy().to_string();
+    let not_found = find_perl_interpreter_cached(Some(&missing_cfg));
+    assert!(
+        matches!(not_found, PerlInterpreterResult::NotFound { .. }),
+        "missing configured path should not be replaced by cached previous result, got: {not_found:?}"
+    );
+
     Ok(())
 }
 

@@ -102,10 +102,14 @@ pub fn is_modchar(byte: u8) -> bool {
 pub fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
     let mut units = 0;
     for (i, ch) in line_text.char_indices() {
-        if units == col_utf16 {
+        if units >= col_utf16 {
             return i;
         }
-        units += if ch as u32 >= 0x10000 { 2 } else { 1 };
+        let ch_units = if ch as u32 >= 0x10000 { 2 } else { 1 };
+        units += ch_units;
+        if units > col_utf16 {
+            return i;
+        }
     }
     line_text.len()
 }
@@ -116,12 +120,29 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     let byte_pos = byte_offset_utf16(line_text, col_utf16);
     let bytes = line_text.as_bytes();
 
-    if byte_pos >= bytes.len() {
+    if bytes.is_empty() {
         return None;
     }
 
-    let mut start = byte_pos;
-    let mut end = byte_pos;
+    // Prefer the character at the cursor. If the cursor is positioned at the
+    // end of a token (or line), snap to the previous byte when that byte is
+    // part of an identifier/module token or sigil.
+    let anchor = if byte_pos < bytes.len() {
+        byte_pos
+    } else {
+        bytes.len().saturating_sub(1)
+    };
+
+    let cursor = if is_modchar(bytes[anchor]) || matches!(bytes[anchor], b'$' | b'@' | b'%' | b'&' | b'*') {
+        anchor
+    } else if anchor > 0 && is_modchar(bytes[anchor - 1]) {
+        anchor - 1
+    } else {
+        return None;
+    };
+
+    let mut start = cursor;
+    let mut end = cursor;
 
     while start > 0 && is_modchar(bytes[start - 1]) {
         start -= 1;
@@ -130,8 +151,18 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
         start -= 1;
     }
 
+    // When the cursor is directly on a sigil character, step `end` past it so
+    // the following identifier walk can collect the name (`$foo` → `$foo`, not empty).
+    if end < bytes.len() && matches!(bytes[end], b'$' | b'@' | b'%' | b'&' | b'*') {
+        end += 1;
+    }
+
     while end < bytes.len() && is_modchar(bytes[end]) {
         end += 1;
+    }
+
+    if end == start {
+        return None;
     }
 
     Some(line_text[start..end].to_string())
@@ -168,10 +199,30 @@ mod tests {
     }
 
     #[test]
+    fn token_under_cursor_supports_cursor_after_symbol() {
+        let text = "use Demo::Worker\n";
+        assert_eq!(token_under_cursor(text, 0, 16), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_supports_cursor_on_sigil() {
+        // Cursor directly ON the `$` sigil (col 3) must still extract `$value`.
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 0, 3), Some("$value".to_string()));
+    }
+
+    #[test]
+    fn token_under_cursor_returns_none_on_punctuation() {
+        let text = "my $value = 1;\n";
+        assert_eq!(token_under_cursor(text, 0, 11), None);
+    }
+
+    #[test]
     fn utf16_col_to_byte_offset_handles_surrogate_pairs() {
         let line = "A😀B";
         assert_eq!(byte_offset_utf16(line, 0), 0);
         assert_eq!(byte_offset_utf16(line, 1), 1);
+        assert_eq!(byte_offset_utf16(line, 2), 1);
         assert_eq!(byte_offset_utf16(line, 3), 5);
         assert_eq!(byte_offset_utf16(line, 4), 6);
     }

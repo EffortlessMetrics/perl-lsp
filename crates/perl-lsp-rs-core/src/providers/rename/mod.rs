@@ -459,6 +459,8 @@ mod tests {
         assert!(validate_name("valid_name", SymbolKind::scalar(), &provider.symbol_table).is_ok());
         assert!(validate_name("_private", SymbolKind::scalar(), &provider.symbol_table).is_ok());
         assert!(validate_name("camelCase", SymbolKind::scalar(), &provider.symbol_table).is_ok());
+        assert!(validate_name("naïve", SymbolKind::scalar(), &provider.symbol_table).is_err());
+        assert!(validate_name("１２name", SymbolKind::scalar(), &provider.symbol_table).is_err());
     }
 
     #[test]

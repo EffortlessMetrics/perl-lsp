@@ -413,9 +413,6 @@ sub startup {
     Ok(())
 }
 
-    Ok(())
-}
-
 #[test]
 fn mojolicious_string_route_snake_case_controller_resolves_to_camelized_package() -> TestResult {
     let workspace = TempWorkspace::new()?;

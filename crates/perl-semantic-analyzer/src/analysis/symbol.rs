@@ -964,8 +964,32 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+            NodeKind::Untie { variable } => {
                 self.visit_node(variable);
+            }
+
+            NodeKind::Goto { target } => {
+                match &target.kind {
+                    NodeKind::Identifier { name } => {
+                        self.table.add_reference(SymbolReference {
+                            name: name.clone(),
+                            kind: SymbolKind::Label,
+                            location: target.location,
+                            scope_id: self.table.current_scope(),
+                            is_write: false,
+                        });
+                    }
+                    NodeKind::Variable { sigil, name } if sigil == "&" => {
+                        self.table.add_reference(SymbolReference {
+                            name: name.clone(),
+                            kind: SymbolKind::Subroutine,
+                            location: target.location,
+                            scope_id: self.table.current_scope(),
+                            is_write: false,
+                        });
+                    }
+                    _ => self.visit_node(target),
+                }
             }
 
             // Regex related nodes - we recurse into expression
@@ -3202,7 +3226,7 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_symbol_extraction() {
@@ -3467,6 +3491,49 @@ sub configure ($x, %opts) {
         assert_eq!(
             span_len, 2,
             "symbol location should cover just '$y' (2 chars), not the full '$y = 0' (6 chars)"
+        );
+    }
+
+    #[test]
+    fn test_goto_label_creates_label_reference() {
+        let code = r#"
+sub run {
+    goto FINISH;
+FINISH:
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("FINISH"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Label),
+            "goto FINISH should produce a label reference"
+        );
+    }
+
+    #[test]
+    fn test_goto_ampersand_creates_subroutine_reference() {
+        let code = r#"
+sub target { return 42; }
+sub jump {
+    goto &target;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("target"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
+            "goto &target should produce a subroutine reference"
         );
     }
 }

@@ -156,14 +156,15 @@ jobs:
             echo "::notice::ci-scope diff_class=$DIFF_CLASS crates=$CRATES_ARGS"
           fi
 
-      # Skip heavy lanes entirely for prose-only or CI-config-only diffs.
-      - name: Skip notice (prose-only / CI-config diff)
+      # Skip heavy lanes entirely for prose/docs-as-code/CI-config-only diffs.
+      - name: Skip notice (prose/docs-as-code/CI-config diff)
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           (steps.scope.outputs.diff_class == 'prose_only' ||
+           steps.scope.outputs.diff_class == 'docs_as_code' ||
            steps.scope.outputs.diff_class == 'ci_config')
         run: |
-          echo "::notice::Prose-only / CI-config diff — skipping Rust build lanes (no code changed)"
+          echo "::notice::Prose/docs-as-code/CI-config diff — skipping Rust build lanes (no Rust code changed)"
 
       # ── Scoped clippy (scope-aware path) ─────────────────────────────────
       # Runs when ci-scope succeeded AND diff is not prose/CI-config AND
@@ -172,6 +173,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -182,6 +184,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -192,6 +195,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -205,6 +209,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'false' ||
           (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'docs_as_code' &&
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just clippy-core
@@ -213,6 +218,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'false' ||
           (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'docs_as_code' &&
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
