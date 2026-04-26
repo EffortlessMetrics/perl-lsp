@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-corpus-manifest.schema.json",
+  "title": "Parser Corpus Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile",
+    "sources",
+    "runner",
+    "files",
+    "fingerprint"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "profile": { "type": "string", "enum": ["pr", "system_required"] },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source_type", "root", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "source_type": { "type": "string", "enum": ["repo", "system"] },
+          "root": { "type": "string" },
+          "status": { "type": "string", "enum": ["ok", "missing", "skipped", "advisory"] },
+          "note": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "runner": {
+      "type": "object",
+      "required": ["os", "perl_version"],
+      "properties": {
+        "os": { "type": "string" },
+        "perl_version": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "source", "bytes", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "source": { "type": "string" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "concepts": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

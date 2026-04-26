@@ -60,6 +60,7 @@ pub mod merge_ready;
 pub mod methodology_gate;
 pub mod metrics;
 pub mod parse_rust;
+pub mod parser_corpus_manifest;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
 pub mod populate_book;
