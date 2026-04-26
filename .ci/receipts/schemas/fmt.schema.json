@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/receipts/fmt.schema.json",
+  "title": "Format Check Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "check",
+    "schema_version",
+    "verdict",
+    "classification",
+    "failures",
+    "fix_forward_kind",
+    "safe_auto_fix",
+    "repro"
+  ],
+  "properties": {
+    "check": { "const": "fmt" },
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "verdict": { "type": "string", "enum": ["pass", "fail"] },
+    "classification": { "const": "fmt_drift" },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool", "crate", "path", "check_command", "fix_command"],
+        "properties": {
+          "tool": { "type": "string", "minLength": 1 },
+          "crate": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1 },
+          "check_command": { "type": "string", "minLength": 1 },
+          "fix_command": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "fix_forward_kind": { "const": "FMT_ONLY" },
+    "safe_auto_fix": { "const": true },
+    "repro": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verdict": { "const": "pass" } } },
+      "then": {
+        "properties": {
+          "failures": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "verdict": { "const": "fail" } } },
+      "then": {
+        "properties": {
+          "failures": { "minItems": 1 }
+        }
+      }
+    }
+  ]
+}
