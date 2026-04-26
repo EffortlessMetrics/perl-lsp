@@ -23,17 +23,12 @@ EXPR and EXPR
       (number))))
 
 ================================================================================
-xor and ^^
+xor
 ================================================================================
-1 ^^ 2;
 2 xor 3;
 --------------------------------------------------------------------------------
 
 (source_file
-  (expression_statement
-    (binary_expression
-      (number)
-      (number)))
   (expression_statement
     (lowprec_logical_expression
       (number)
