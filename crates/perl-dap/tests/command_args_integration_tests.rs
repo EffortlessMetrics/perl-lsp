@@ -228,6 +228,15 @@ mod unix_quoting {
         let result = format_command_args(&args);
         assert_eq!(result[0], "'col1\tcol2'");
     }
+
+    #[test]
+    fn carriage_return_without_space_is_quoted() {
+        // CR is whitespace (char::is_whitespace) — relevant for CRLF-encoded args
+        // on Windows-origin input. Must be quoted like any other whitespace.
+        let args = vec!["win\rarg".to_string()];
+        let result = format_command_args(&args);
+        assert_eq!(result[0], "'win\rarg'");
+    }
 }
 
 // ── Many arguments ──────────────────────────────────────────────────
