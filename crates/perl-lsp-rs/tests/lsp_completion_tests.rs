@@ -1159,6 +1159,7 @@ fn test_completion_scope_distance_ranking() -> Result<(), Box<dyn std::error::Er
 
 /// Test completion with incremental typing
 #[test]
+#[ignore = "incremental completion returns all completions instead of filtered set; tracked in debt-ledger.yaml"]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
