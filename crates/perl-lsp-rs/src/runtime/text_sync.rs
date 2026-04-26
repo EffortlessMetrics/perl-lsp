@@ -14,20 +14,12 @@ use crate::state::DegradationTier;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{IndexPhase, IndexState};
 use perl_parser_core::source_file::is_binary_content;
-use std::path::Path;
 
 const TEMPLATE_EXTENSIONS: [&str; 4] = ["ep", "tt", "tt2", "mason"];
 
 fn is_embedded_template_uri(uri: &str) -> bool {
-    let extension = url::Url::parse(uri)
-        .ok()
-        .and_then(|url| url.to_file_path().ok())
-        .and_then(|path| path.extension().and_then(|ext| ext.to_str()).map(str::to_owned))
-        .or_else(|| Path::new(uri).extension().and_then(|ext| ext.to_str()).map(str::to_owned));
-
-    extension.is_some_and(|ext| {
-        TEMPLATE_EXTENSIONS.iter().any(|candidate| candidate.eq_ignore_ascii_case(&ext))
-    })
+    perl_uri::uri_extension(uri)
+        .is_some_and(|ext| TEMPLATE_EXTENSIONS.iter().any(|t| t.eq_ignore_ascii_case(ext)))
 }
 
 fn is_perl_language_id(language_id: &str) -> bool {
