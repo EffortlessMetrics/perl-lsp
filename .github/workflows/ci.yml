@@ -9,6 +9,7 @@ on:
   pull_request:
     branches: [ main, master ]
     types: [opened, synchronize, reopened, labeled, ready_for_review, converted_to_draft]
+  merge_group: {}
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
@@ -16,8 +17,8 @@ on:
 # Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
 # preflight gate instead of cancelling in-flight work mid-run.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
