@@ -279,6 +279,21 @@ fn completion_labels(response: &Value) -> BTreeSet<String> {
     labels
 }
 
+fn signature_labels(response: &Value) -> Vec<String> {
+    response
+        .get("signatures")
+        .and_then(Value::as_array)
+        .map(|signatures| {
+            signatures
+                .iter()
+                .filter_map(|signature| {
+                    signature.get("label").and_then(Value::as_str).map(ToOwned::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn hover_text(hover: &Value) -> String {
     if let Some(text) = hover.pointer("/contents/value").and_then(Value::as_str) {
         return text.to_string();
@@ -880,6 +895,51 @@ is(calculate_total(1, 2), 3, 'adds values');
     let signatures =
         signature_help.get("signatures").and_then(Value::as_array).cloned().unwrap_or_default();
     assert!(!signatures.is_empty(), "signature help should include signatures");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_signature_help_tracks_active_parameter() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Signature help tracks active parameter");
+
+    let code = r#"use strict;
+use warnings;
+
+my $text = "Hello World";
+my $slice = substr($text, 6, );
+"#;
+
+    scenario.given("a workspace where the user is typing a built-in function call");
+    let (mut harness, workspace) = setup_workspace(&[("main.pl", code)])?;
+    let uri = workspace.uri("main.pl");
+    harness.open(&uri, code)?;
+
+    scenario.when("requesting signature help after typing the second comma in substr");
+    let (line, mut character) = find_position(code, "substr($text, 6,");
+    character += "substr($text, 6,".len() as u32;
+
+    let signature_help = harness.request(
+        "textDocument/signatureHelp",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character }
+        }),
+    )?;
+
+    scenario.then("signature help includes substr and marks the third parameter as active");
+    let labels = signature_labels(&signature_help);
+    assert!(
+        labels.iter().any(|label| label.contains("substr")),
+        "signature help should include substr label; got {labels:?}"
+    );
+
+    let active_parameter = signature_help
+        .get("activeParameter")
+        .and_then(Value::as_u64)
+        .ok_or("expected activeParameter in signature help response")?;
+    assert_eq!(active_parameter, 2, "expected LENGTH argument position");
 
     Ok(())
 }
@@ -2435,6 +2495,83 @@ sub collect_metrics {
     assert!(
         names.iter().any(|name| name == "collect_metrics" || name.ends_with("collect_metrics")),
         "workspace symbols should include collect_metrics; got {names:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_workspace_symbols_refresh_after_incremental_package_rename()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Workspace symbols refresh after incremental package rename");
+    scenario.given("a workspace containing a package that is renamed in-place");
+
+    let before = r#"package SymbolHub;
+use strict;
+use warnings;
+
+sub collect_metrics {
+    return 1;
+}
+
+1;
+"#;
+
+    let after = before.replace("SymbolHub", "MetricsHub");
+
+    let (mut harness, workspace) = setup_workspace(&[("lib/SymbolHub.pm", before)])?;
+    let module_uri = workspace.uri("lib/SymbolHub.pm");
+    harness.open(&module_uri, before)?;
+    harness.wait_for_symbol("SymbolHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    scenario.when("querying workspace symbols before and after a didChange rename");
+    let before_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "SymbolHub"
+        }),
+    )?;
+
+    harness.change_full(&module_uri, 2, &after)?;
+    harness.wait_for_symbol("MetricsHub", Some(&module_uri), Duration::from_secs(10)).ok();
+    harness.barrier();
+
+    let after_result = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "MetricsHub"
+        }),
+    )?;
+
+    scenario.then("workspace symbol search reflects the updated package name");
+    let before_names: Vec<String> = before_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+    let after_names: Vec<String> = after_result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get("name").and_then(Value::as_str).map(ToOwned::to_owned))
+        .collect();
+
+    assert!(
+        before_names.iter().any(|name| name == "SymbolHub"),
+        "pre-change workspace symbols should include SymbolHub; got {before_names:?}"
+    );
+    assert!(
+        after_names.iter().any(|name| name == "MetricsHub"),
+        "post-change workspace symbols should include MetricsHub; got {after_names:?}"
+    );
+    // Verify stale index entry is removed — a correct implementation must evict
+    // the old package name after an incremental didChange, not just append the new one.
+    assert!(
+        !after_names.iter().any(|name| name == "SymbolHub"),
+        "post-change workspace symbols should NOT include stale SymbolHub; got {after_names:?}"
     );
 
     Ok(())
