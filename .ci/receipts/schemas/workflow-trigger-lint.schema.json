@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.github.io/perl-lsp/schemas/workflow-trigger-lint.schema.json",
+  "title": "Workflow Trigger Lint Receipt",
+  "type": "object",
+  "required": ["passed", "mode", "checks"],
+  "properties": {
+    "passed": { "type": "boolean" },
+    "mode": { "type": "string", "enum": ["policy", "fixture"] },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["policy_name", "workflow", "required", "passed", "violations"],
+        "properties": {
+          "policy_name": { "type": "string" },
+          "workflow": { "type": "string" },
+          "required": { "type": "boolean" },
+          "passed": { "type": "boolean" },
+          "violations": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
