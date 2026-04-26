@@ -207,6 +207,65 @@ fn use_strict_quoted_args_double_quotes() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn use_strict_qw_args_enable_requested_categories() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw(vars refs)"], 0, 28)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(!state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+#[test]
+fn use_strict_mixed_grouped_and_plain_args() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw(vars refs)", "'subs'"], 0, 38)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(state.strict_refs);
+    Ok(())
+}
+
+/// `use strict qw()` — empty qw list should be a no-op, not enable-all.
+/// The empty qw expands to zero items, so no categories are toggled.
+#[test]
+fn use_strict_empty_qw_is_noop() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", &["qw()"], 0, 18)]);
+    let map = PragmaTracker::build(&ast);
+    // No recognized category → no state change → no entry pushed (or default state).
+    let state = if map.is_empty() { PragmaState::default() } else { map[0].1.clone() };
+    assert!(!state.strict_vars, "empty qw() must not enable strict_vars");
+    assert!(!state.strict_subs, "empty qw() must not enable strict_subs");
+    assert!(!state.strict_refs, "empty qw() must not enable strict_refs");
+    Ok(())
+}
+
+/// Perl allows `use strict 'refs vars'` (a single quoted string with
+/// space-separated categories), but `pragma_arg_items` does not split on
+/// spaces inside a plain quoted string — only `qw(...)` is split.
+/// This test documents the known limitation: the space-separated form is
+/// silently treated as an unrecognized category and ignored.
+/// Callers that need all three categories should use qw() or separate args.
+#[test]
+fn use_strict_space_separated_in_single_string_is_not_parsed_known_limitation()
+-> Result<(), Box<dyn std::error::Error>> {
+    // In real Perl: `use strict 'refs vars'` enables both refs and vars.
+    // Our pragma_arg_items strips quotes but does not split on whitespace
+    // for plain quoted strings, so the whole "refs vars" token is unrecognized.
+    let ast = program(vec![use_node("strict", &["'refs vars'"], 0, 25)]);
+    let map = PragmaTracker::build(&ast);
+    // No recognized category → no state change → no entry pushed.
+    // This is the known limitation: this form is silently ignored.
+    let state = if map.is_empty() { PragmaState::default() } else { map[0].1.clone() };
+    // Neither category is enabled; document the gap.
+    assert!(!state.strict_refs, "known limitation: 'refs vars' is not split by pragma_arg_items");
+    assert!(!state.strict_vars, "known limitation: 'refs vars' is not split by pragma_arg_items");
+    Ok(())
+}
+
+#[test]
 fn use_if_strict_conditionally_enables_strict() -> Result<(), Box<dyn std::error::Error>> {
     let ast = program(vec![use_node("if", &["$^O", "eq", "'MSWin32'", "'strict'"], 0, 35)]);
     let map = PragmaTracker::build(&ast);
@@ -347,6 +406,20 @@ fn no_strict_quoted_double() -> Result<(), Box<dyn std::error::Error>> {
     let state = &map[1].1;
     assert!(state.strict_vars);
     assert!(!state.strict_subs);
+    Ok(())
+}
+
+#[test]
+fn no_strict_qw_args_disable_requested_categories() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", &[], 0, 12),
+        no_node("strict", &["qw(vars refs)"], 13, 36),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.strict_vars);
+    assert!(state.strict_subs);
+    assert!(!state.strict_refs);
     Ok(())
 }
 
@@ -562,6 +635,65 @@ fn no_feature_all_clears_bundle_features() -> Result<(), Box<dyn std::error::Err
     assert!(!state.has_feature("say"));
     assert!(!state.has_feature("switch"));
     assert!(!state.has_feature("builtin"));
+    Ok(())
+}
+
+#[test]
+fn use_feature_all_enables_known_features() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("feature", &["':all'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("class"));
+    assert!(state.has_feature("builtin"));
+    assert!(state.signatures_strict);
+    // ':all' includes ALL known features, including experimental/deprecated ones
+    // like 'switch' — unlike version bundles which omit switch at v5.38+.
+    assert!(
+        state.has_feature("switch"),
+        "':all' should enable every known feature including experimental 'switch'"
+    );
+    Ok(())
+}
+
+#[test]
+fn use_feature_all_sets_unicode_strings_bool_field() -> Result<(), Box<dyn std::error::Error>> {
+    // Verify that ':all' toggles the dedicated unicode_strings bool field
+    // (not just the named-feature list) via enable_feature_name.
+    let ast = program(vec![use_node("feature", &["':all'"], 0, 24)]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[0].1;
+    assert!(state.unicode_strings, "':all' must set unicode_strings bool");
+    assert!(state.signatures_strict, "':all' must set signatures_strict bool");
+    Ok(())
+}
+
+#[test]
+fn no_feature_all_clears_unicode_strings_bool_field() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("feature", &["':all'"], 0, 24),
+        no_node("feature", &["':all'"], 25, 43),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(!state.unicode_strings, "no feature ':all' must clear unicode_strings");
+    assert!(!state.signatures_strict, "no feature ':all' must clear signatures_strict");
+    Ok(())
+}
+
+#[test]
+fn feature_bundle_can_be_reenabled_after_no_feature_all() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("v5.40", &[], 0, 12),
+        no_node("feature", &["':all'"], 13, 31),
+        use_node("feature", &["':5.40'"], 32, 52),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[2].1;
+    assert!(state.has_feature("say"));
+    assert!(state.has_feature("builtin"));
+    assert!(!state.has_feature("switch"));
     Ok(())
 }
 
@@ -1478,6 +1610,45 @@ fn use_builtin_tracks_lexical_imports_only() -> Result<(), Box<dyn std::error::E
         !state.has_feature("builtin"),
         "lexical builtin imports should stay separate from version-implied features"
     );
+    Ok(())
+}
+
+#[test]
+fn no_builtin_removes_selected_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["qw(true floor ceil)"], 0, 30),
+        no_node("builtin", &["qw(floor)"], 31, 50),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("floor"));
+    assert!(state.has_builtin_import("ceil"));
+    Ok(())
+}
+
+#[test]
+fn no_builtin_without_args_clears_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["'true'", "'floor'"], 0, 28),
+        no_node("builtin", &[], 29, 40),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.builtin_imports.is_empty());
+    Ok(())
+}
+
+#[test]
+fn no_if_builtin_conditionally_removes_lexical_imports() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("builtin", &["'true'", "'floor'"], 0, 28),
+        no_node("if", &["$cond", "builtin", "'floor'"], 29, 59),
+    ]);
+    let map = PragmaTracker::build(&ast);
+    let state = &map[1].1;
+    assert!(state.has_builtin_import("true"));
+    assert!(!state.has_builtin_import("floor"));
     Ok(())
 }
 

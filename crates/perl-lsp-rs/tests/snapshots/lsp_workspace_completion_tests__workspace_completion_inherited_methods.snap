@@ -1,0 +1,65 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_completion_tests.rs
+assertion_line: 531
+expression: inherited_snapshot
+---
+- detail: "$main::c"
+  documentation: "Variable `$main::c` declared in the workspace."
+  insertText: $c
+  kind: 6
+  label: $c
+- detail: "$CompletionBase::class"
+  documentation: "Variable `$CompletionBase::class` declared in the workspace."
+  insertText: $class
+  kind: 6
+  label: $class
+- detail: "$CompletionBase::self"
+  documentation: "Variable `$CompletionBase::self` declared in the workspace."
+  insertText: $self
+  kind: 6
+  label: $self
+- detail: CompletionBase
+  documentation: "Package `CompletionBase` available in the workspace."
+  insertText: CompletionBase
+  kind: 9
+  label: CompletionBase
+- detail: CompletionChild
+  documentation: "Package `CompletionChild` available in the workspace."
+  insertText: CompletionChild
+  kind: 9
+  label: CompletionChild
+- detail: method
+  documentation: Check if object does role
+  insertText: DOES()
+  kind: 3
+  label: DOES
+- detail: method
+  documentation: Get version
+  insertText: VERSION()
+  kind: 3
+  label: VERSION
+- detail: method
+  documentation: Check if object can call method
+  insertText: can()
+  kind: 3
+  label: can
+- detail: CompletionChild method
+  documentation: "Method `CompletionChild::child_only_method` from workspace index."
+  insertText: child_only_method()
+  kind: 3
+  label: child_only_method
+- detail: CompletionChild method (from CompletionBase)
+  documentation: "Method `CompletionBase::inherited_greet` from workspace index."
+  insertText: inherited_greet()
+  kind: 3
+  label: inherited_greet
+- detail: method
+  documentation: Check if object is of given class
+  insertText: isa()
+  kind: 3
+  label: isa
+- detail: method
+  documentation: Constructor
+  insertText: new()
+  kind: 3
+  label: new

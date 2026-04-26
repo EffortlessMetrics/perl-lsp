@@ -1,3 +1,5 @@
+//! Diagnostic-to-fix mapping logic for quick-fix code actions.
+
 use crate::features::diagnostics::Diagnostic;
 
 use super::{CodeAction, CodeActionKind, CodeActionsProvider, TextEdit, source_utils};

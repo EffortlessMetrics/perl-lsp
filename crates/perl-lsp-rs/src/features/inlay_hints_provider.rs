@@ -1,3 +1,5 @@
+//! Inlay hints provider data model and AST-driven hint generation.
+
 use perl_parser::ast::{Node, NodeKind};
 use perl_parser::builtin_signatures_phf::get_param_names;
 use perl_parser::position::{Position as LspPosition, Range};

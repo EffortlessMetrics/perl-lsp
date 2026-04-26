@@ -201,8 +201,23 @@ impl CancellationRegistry {
     }
 
     /// Register new cancellation token
+    ///
+    /// If a token for the same `request_id` was previously registered and its
+    /// cancellation state was cached by [`Self::get_token`], the stale cache
+    /// entry is evicted here.  Without this eviction, a sequence of
+    /// `register → get_token → cancel → register → is_cancelled` would return
+    /// `true` from the fast-path cache even though a fresh (uncancelled) token
+    /// has just been registered — a correctness violation caught by
+    /// `prop_registry_model_matches_runtime_state`.
     pub fn register_token(&self, token: PerlLspCancellationToken) -> Result<(), CancellationError> {
         let key = format!("{:?}", token.request_id);
+
+        // Evict any stale fast-path cache entry for this ID *before* writing
+        // the new token so that concurrent readers never observe a cancelled
+        // clone of the old token after registration succeeds.
+        if let Ok(mut cache) = self.token_cache.write() {
+            cache.remove(&key);
+        }
 
         if let Ok(mut tokens) = self.tokens.write() {
             tokens.insert(key.clone(), token);
@@ -316,6 +331,10 @@ impl CancellationRegistry {
 
         if let Ok(mut tokens) = self.tokens.write() {
             tokens.remove(&key);
+        }
+
+        if let Ok(mut cache) = self.token_cache.write() {
+            cache.remove(&key);
         }
 
         if let Ok(mut contexts) = self.cleanup_contexts.lock() {

@@ -6,9 +6,10 @@
 
 #[cfg(feature = "dap-phase2")]
 mod dap_golden_transcripts {
-    use anyhow::Result;
+    use anyhow::{Result, anyhow};
     use perl_dap::debug_adapter::{DapMessage, DebugAdapter};
-    use serde_json::{Value, json};
+    use serde_json::{Map, Value, json};
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
 
     fn transcript_path(name: &str) -> PathBuf {
@@ -60,6 +61,120 @@ mod dap_golden_transcripts {
                 }
             }
             _ => anyhow::bail!("expected response for {command}"),
+        }
+        Ok(())
+    }
+
+    fn required_body_keys_for_command(command: &str) -> &'static [&'static str] {
+        match command {
+            "initialize" => &["supportsConfigurationDoneRequest"],
+            "setBreakpoints" => &["breakpoints"],
+            "stackTrace" => &["stackFrames"],
+            "scopes" => &["scopes"],
+            "variables" => &["variables"],
+            "evaluate" => &["result", "variablesReference"],
+            "continue" => &["allThreadsContinued"],
+            _ => &[],
+        }
+    }
+
+    fn require_object<'a>(value: &'a Value, label: &str) -> Result<&'a Map<String, Value>> {
+        value.as_object().ok_or_else(|| anyhow!("{label} must be a JSON object"))
+    }
+
+    fn assert_transcript_conformance(name: &str, messages: &[Value]) -> Result<()> {
+        let mut request_by_seq: BTreeMap<i64, String> = BTreeMap::new();
+        let mut prev_response_seq: Option<i64> = None;
+        let mut event_positions: BTreeMap<String, usize> = BTreeMap::new();
+
+        for (idx, message) in messages.iter().enumerate() {
+            let msg_type = message.get("type").and_then(Value::as_str).unwrap_or_default();
+            match msg_type {
+                "request" => {
+                    let seq =
+                        message.get("seq").and_then(Value::as_i64).unwrap_or((idx as i64) + 1);
+                    let command = message
+                        .get("command")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| anyhow!("{name}[{idx}] request missing command"))?;
+                    request_by_seq.insert(seq, command.to_string());
+                }
+                "response" => {
+                    let seq = message
+                        .get("seq")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| anyhow!("{name}[{idx}] response missing seq"))?;
+                    if let Some(previous) = prev_response_seq {
+                        if seq <= previous {
+                            return Err(anyhow!(
+                                "{name}[{idx}] response seq must be monotonic ({seq} <= {previous})"
+                            ));
+                        }
+                    }
+                    prev_response_seq = Some(seq);
+
+                    let command = message
+                        .get("command")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| anyhow!("{name}[{idx}] response missing command"))?;
+                    let request_seq = message
+                        .get("request_seq")
+                        .and_then(Value::as_i64)
+                        .ok_or_else(|| anyhow!("{name}[{idx}] response missing request_seq"))?;
+                    let echoed = request_by_seq.get(&request_seq).ok_or_else(|| {
+                        anyhow!("{name}[{idx}] response request_seq={request_seq} has no matching request")
+                    })?;
+                    if echoed != command {
+                        return Err(anyhow!(
+                            "{name}[{idx}] request_seq={request_seq} echoed command '{command}', expected '{echoed}'"
+                        ));
+                    }
+
+                    if let Some(body) = message.get("body") {
+                        let body_obj =
+                            require_object(body, &format!("{name}[{idx}] response body"))?;
+                        for key in required_body_keys_for_command(command) {
+                            if !body_obj.contains_key(*key) {
+                                return Err(anyhow!(
+                                    "{name}[{idx}] {command} response body missing key '{key}'"
+                                ));
+                            }
+                        }
+                    } else if !required_body_keys_for_command(command).is_empty() {
+                        return Err(anyhow!(
+                            "{name}[{idx}] {command} response missing required body"
+                        ));
+                    }
+                }
+                "event" => {
+                    let event = message
+                        .get("event")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| anyhow!("{name}[{idx}] event missing event name"))?;
+                    event_positions.entry(event.to_string()).or_insert(idx);
+                    if let Some(body) = message.get("body") {
+                        let _ = require_object(body, &format!("{name}[{idx}] event body"))?;
+                    }
+                }
+                _ => return Err(anyhow!("{name}[{idx}] invalid message type '{msg_type}'")),
+            }
+        }
+
+        if let (Some(continued), Some(terminated)) =
+            (event_positions.get("continued"), event_positions.get("terminated"))
+            && continued > terminated
+        {
+            return Err(anyhow!(
+                "{name}: continued event should precede terminated event in session transcript"
+            ));
+        }
+        if let (Some(stopped), Some(terminated)) =
+            (event_positions.get("stopped"), event_positions.get("terminated"))
+            && stopped > terminated
+        {
+            return Err(anyhow!(
+                "{name}: stopped event should precede terminated event in session transcript"
+            ));
         }
         Ok(())
     }
@@ -162,6 +277,7 @@ mod dap_golden_transcripts {
         let transcript = load_transcript("breakpoint_sequence.json")?;
         let messages = extract_messages(&transcript)?;
         assert!(messages.iter().any(|m| m["command"] == "setBreakpoints"));
+        assert_transcript_conformance("breakpoint_sequence.json", messages)?;
 
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(
@@ -187,6 +303,44 @@ mod dap_golden_transcripts {
             }
             _ => anyhow::bail!("expected setBreakpoints response"),
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    // AC:13
+    async fn test_comprehensive_session_golden_conformance() -> Result<()> {
+        let transcript = load_transcript("comprehensive_session_sequence.json")?;
+        let messages = extract_messages(&transcript)?;
+        assert_transcript_conformance("comprehensive_session_sequence.json", messages)?;
+
+        let required_commands = [
+            "initialize",
+            "launch",
+            "setBreakpoints",
+            "configurationDone",
+            "stackTrace",
+            "scopes",
+            "variables",
+            "evaluate",
+            "disconnect",
+        ];
+        for command in required_commands {
+            assert!(
+                messages
+                    .iter()
+                    .any(|message| message["type"] == "request" && message["command"] == command),
+                "comprehensive transcript must include request command '{command}'"
+            );
+        }
+        for event in ["stopped", "continued", "terminated"] {
+            assert!(
+                messages
+                    .iter()
+                    .any(|message| message["type"] == "event" && message["event"] == event),
+                "comprehensive transcript must include '{event}' event"
+            );
+        }
+
         Ok(())
     }
 }

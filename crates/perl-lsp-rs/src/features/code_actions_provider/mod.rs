@@ -1,3 +1,5 @@
+//! Code action provider model and generation entry points.
+
 use crate::features::diagnostics::Diagnostic;
 use perl_diagnostics::codes::DiagnosticCode;
 

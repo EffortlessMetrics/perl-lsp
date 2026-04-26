@@ -1,0 +1,5 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_symbol_snap.rs
+expression: capability
+---
+resolveProvider: true

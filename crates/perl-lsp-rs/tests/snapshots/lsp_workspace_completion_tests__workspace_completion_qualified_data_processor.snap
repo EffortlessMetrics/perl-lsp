@@ -1,0 +1,20 @@
+---
+source: crates/perl-lsp-rs/tests/lsp_workspace_completion_tests.rs
+assertion_line: 250
+expression: qualified_snapshot
+---
+- detail: DataProcessor
+  documentation: "Package variable `$DataProcessor::data` declared in `DataProcessor`."
+  insertText: "$DataProcessor::data"
+  kind: 6
+  label: $data
+- detail: DataProcessor
+  documentation: "Subroutine `DataProcessor::process_data` defined in package `DataProcessor`."
+  insertText: "DataProcessor::process_data"
+  kind: 3
+  label: process_data
+- detail: DataProcessor
+  documentation: "Subroutine `DataProcessor::transform_data` defined in package `DataProcessor`."
+  insertText: "DataProcessor::transform_data"
+  kind: 3
+  label: transform_data
