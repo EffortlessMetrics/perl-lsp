@@ -2416,6 +2416,12 @@ sub collect_metrics {
         after_names.iter().any(|name| name == "MetricsHub"),
         "post-change workspace symbols should include MetricsHub; got {after_names:?}"
     );
+    // Verify stale index entry is removed — a correct implementation must evict
+    // the old package name after an incremental didChange, not just append the new one.
+    assert!(
+        !after_names.iter().any(|name| name == "SymbolHub"),
+        "post-change workspace symbols should NOT include stale SymbolHub; got {after_names:?}"
+    );
 
     Ok(())
 }
