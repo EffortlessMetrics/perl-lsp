@@ -825,6 +825,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Parser corpus utility commands for ratchet workflows
+    ParserCorpus {
+        #[command(subcommand)]
+        command: ParserCorpusCommand,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1151,6 +1157,24 @@ enum Commands {
         baseline: PathBuf,
         /// Current receipt JSON path.
         current: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum ParserCorpusCommand {
+    /// Discover and fingerprint parser ratchet corpus manifest
+    Manifest {
+        /// Corpus profile (for example: pr)
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Output manifest file path
+        #[arg(long)]
+        out: PathBuf,
+
+        /// Optional receipt file path
+        #[arg(long)]
+        receipt: Option<PathBuf>,
     },
 }
 
@@ -1534,6 +1558,15 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserCorpus { command } => match command {
+            ParserCorpusCommand::Manifest { profile, out, receipt } => {
+                parser_corpus_manifest::run(parser_corpus_manifest::ManifestConfig {
+                    profile,
+                    out,
+                    receipt,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
