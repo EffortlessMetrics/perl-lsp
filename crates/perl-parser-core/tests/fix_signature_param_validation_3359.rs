@@ -206,3 +206,13 @@ fn test_double_invocant_separator_is_rejected() {
         "Expected a syntax error for double invocant separator, got no diagnostics",
     );
 }
+
+#[test]
+fn test_signature_param_attributes_parse_without_signature_separator_error() {
+    let errors = parse_and_collect_errors("sub build ($x :param, $y :reader(name)) { }");
+    assert!(
+        !errors.iter().any(|e| e.contains("Expected comma or closing parenthesis in signature")),
+        "parameter attributes must not trip signature separator recovery, got: {:?}",
+        errors
+    );
+}
