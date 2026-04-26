@@ -251,6 +251,42 @@ my $greeting = "Hi $name";
     Ok(())
 }
 
+/// Validates that go-to-definition on a `goto LABEL` target resolves to the label declaration.
+#[test]
+fn test_go_to_label_definition_from_goto_statement() -> TestResult {
+    let doc = r#"
+sub run {
+    goto FINISH;
+    return 0;
+FINISH:
+    return 1;
+}
+"#;
+
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+    harness.open_document("file:///goto_label.pl", doc)?;
+
+    let result = harness
+        .request(
+            "textDocument/definition",
+            json!({
+                "textDocument": {"uri": "file:///goto_label.pl"},
+                "position": {"line": 2, "character": 9} // Position on "FINISH" in `goto FINISH`
+            }),
+        )
+        .unwrap_or(json!(null));
+
+    let locations = result.as_array().ok_or("Expected array result")?;
+    assert!(!locations.is_empty(), "Expected goto label definition to resolve");
+    assert_valid_location(&locations[0]);
+
+    let def_line = locations[0].pointer("/range/start/line").and_then(|l| l.as_u64());
+    assert_eq!(def_line, Some(4), "Label FINISH should resolve to line 4");
+
+    Ok(())
+}
+
 /// Tests feature spec: navigation.rs#definition-empty-file
 ///
 /// Validates graceful handling of go-to-definition on an empty document.

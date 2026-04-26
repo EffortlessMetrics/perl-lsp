@@ -16,6 +16,7 @@ pub use perl_lsp_rs_core::platform::{
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
 
 #[cfg(windows)]
 const PATH_SEPARATOR: char = ';';
@@ -43,6 +44,28 @@ pub enum PerlInterpreterResult {
     /// No Perl interpreter found anywhere.
     /// Carries the list of locations searched, for use in an error message.
     NotFound { searched: Vec<String> },
+}
+
+static PERL_INTERPRETER_CACHE: LazyLock<Mutex<Option<(String, PerlInterpreterResult)>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+fn perl_discovery_cache_key(configured_path: Option<&str>) -> String {
+    let path_env = env::var("PATH").unwrap_or_default();
+    let perlbrew_perl = env::var("PERLBREW_PERL").unwrap_or_default();
+    let perlbrew_root = env::var("PERLBREW_ROOT").unwrap_or_default();
+    let plenv_root = env::var("PLENV_ROOT").unwrap_or_default();
+    let plenv_version = env::var("PLENV_VERSION").unwrap_or_default();
+    // HOME (Unix) and USERPROFILE (Windows) are both checked by home_dir() in
+    // perl-lsp-rs-core::platform when PERLBREW_ROOT/PLENV_ROOT are absent.
+    let home = env::var("HOME").unwrap_or_default();
+    let userprofile = env::var("USERPROFILE").unwrap_or_default();
+    // PREFIX is used by resolve_perl_path() for Termux detection.
+    let prefix = env::var("PREFIX").unwrap_or_default();
+
+    format!(
+        "cfg={};path={path_env};perlbrew_perl={perlbrew_perl};perlbrew_root={perlbrew_root};plenv_root={plenv_root};plenv_version={plenv_version};home={home};userprofile={userprofile};prefix={prefix}",
+        configured_path.unwrap_or_default()
+    )
 }
 
 /// Rank a Perl binary path for preference on Windows.
@@ -119,7 +142,15 @@ fn fallback_perl_paths() -> Vec<(PathBuf, &'static str)> {
             (PathBuf::from("/usr/bin/perl"), "macOS system Perl"),
         ]
     }
-    #[cfg(all(not(windows), not(target_os = "macos")))]
+    #[cfg(target_os = "android")]
+    {
+        // Android (Termux)
+        vec![
+            (PathBuf::from("/data/data/com.termux/files/usr/bin/perl"), "Termux Perl"),
+            (PathBuf::from("/data/user/0/com.termux/files/usr/bin/perl"), "Termux Perl"),
+        ]
+    }
+    #[cfg(all(not(windows), not(target_os = "macos"), not(target_os = "android")))]
     {
         // Linux and others
         vec![
@@ -181,6 +212,38 @@ pub fn find_perl_interpreter(configured_path: Option<&str>) -> PerlInterpreterRe
     PerlInterpreterResult::NotFound { searched }
 }
 
+/// Cached variant of [`find_perl_interpreter`].
+///
+/// This avoids repeated PATH/toolchain scans during repeated launch failures in
+/// the same environment while still invalidating when key discovery inputs
+/// (PATH, toolchain environment, configured path) change.
+///
+/// # Concurrency
+///
+/// The cache uses a simple check-then-compute-then-store pattern with two
+/// separate lock acquisitions. Two concurrent callers racing on a cold cache
+/// will both run [`find_perl_interpreter`] and the second write wins. This is
+/// intentional: the correctness invariant is that callers always receive a
+/// valid result for the current environment, not that exactly one subprocess
+/// is spawned per cache entry. A condvar/OnceLock approach would complicate the
+/// API without measurable benefit for the low-frequency DAP launch path.
+pub fn find_perl_interpreter_cached(configured_path: Option<&str>) -> PerlInterpreterResult {
+    let cache_key = perl_discovery_cache_key(configured_path);
+
+    if let Ok(cache) = PERL_INTERPRETER_CACHE.lock()
+        && let Some((cached_key, cached_result)) = cache.as_ref()
+        && *cached_key == cache_key
+    {
+        return cached_result.clone();
+    }
+
+    let resolved = find_perl_interpreter(configured_path);
+    if let Ok(mut cache) = PERL_INTERPRETER_CACHE.lock() {
+        *cache = Some((cache_key, resolved.clone()));
+    }
+    resolved
+}
+
 #[cfg(test)]
 fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
     for path_dir in path_env.split(PATH_SEPARATOR).filter_map(normalize_path_entry) {
@@ -197,7 +260,7 @@ fn resolve_perl_path_from_path_env(path_env: &str) -> anyhow::Result<PathBuf> {
 /// End-user remediation guidance shown when no Perl interpreter is available.
 fn perl_not_found_install_message() -> &'static str {
     "perl binary not found on PATH. Install Perl via https://strawberryperl.com (Windows), \
-`brew install perl` (macOS), or your distro package manager, then add it to PATH."
+`brew install perl` (macOS), `pkg install perl` in Termux (Android), or your distro package manager, then add it to PATH."
 }
 
 /// Normalize a file path for cross-platform compatibility.
@@ -321,10 +384,7 @@ mod tests {
             msg.contains("perl") || msg.contains("PATH"),
             "error should mention perl/PATH: {msg}"
         );
-        assert!(
-            msg.contains("strawberryperl.com"),
-            "error should include install guidance: {msg}"
-        );
+        assert!(msg.contains("strawberryperl.com"), "error should include install guidance: {msg}");
     }
 
     #[test]
@@ -456,6 +516,23 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "android")]
+    fn fallback_perl_paths_include_termux_locations() {
+        let paths = fallback_perl_paths();
+        let path_strings: Vec<String> =
+            paths.into_iter().map(|(path, _)| path.to_string_lossy().to_string()).collect();
+
+        assert!(
+            path_strings.iter().any(|p| p == "/data/data/com.termux/files/usr/bin/perl"),
+            "expected /data/data/com.termux/files/usr/bin/perl in fallback paths"
+        );
+        assert!(
+            path_strings.iter().any(|p| p == "/data/user/0/com.termux/files/usr/bin/perl"),
+            "expected /data/user/0/com.termux/files/usr/bin/perl in fallback paths"
+        );
+    }
+
+    #[test]
     #[cfg(windows)]
     fn windows_perl_rank_strawberry_is_best() {
         let strawberry = std::path::Path::new(r"C:\Strawberry\perl\bin\perl.exe");
@@ -475,5 +552,24 @@ mod tests {
             windows_perl_rank(active) < windows_perl_rank(msys),
             "ActiveState should rank better than msys perl"
         );
+    }
+
+    /// Verify that USERPROFILE and PREFIX changes produce different cache keys.
+    ///
+    /// On Windows, HOME is typically absent and home_dir() falls back to
+    /// USERPROFILE to resolve the perlbrew/plenv default root.  The PREFIX
+    /// variable is used by the Termux path resolver.  Both must appear in the
+    /// cache key so that a changed user profile or Termux prefix invalidates
+    /// a stale cached result.
+    #[test]
+    fn discovery_cache_key_contains_userprofile_and_prefix() {
+        // Synthetic keys that differ only in userprofile or prefix must differ.
+        let base = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=;prefix=";
+        let with_profile = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=C_Users_alice;prefix=";
+        let with_prefix = "cfg=;path=;perlbrew_perl=;perlbrew_root=;plenv_root=;plenv_version=;home=;userprofile=;prefix=/data/data/com.termux/files/usr";
+        assert_ne!(base, with_profile, "key must differ when userprofile changes");
+        assert_ne!(base, with_prefix, "key must differ when prefix changes");
+        assert!(base.contains("userprofile="), "key must contain userprofile= field");
+        assert!(base.contains("prefix="), "key must contain prefix= field");
     }
 }

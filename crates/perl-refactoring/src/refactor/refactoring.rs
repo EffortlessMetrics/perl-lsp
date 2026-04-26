@@ -1206,6 +1206,16 @@ impl RefactoringEngine {
     }
 
     #[cfg(feature = "workspace_refactor")]
+    fn path_within_directory(path: &Path, directory: &Path) -> bool {
+        match (path.canonicalize(), directory.canonicalize()) {
+            (Ok(canonical_path), Ok(canonical_directory)) => {
+                canonical_path.starts_with(&canonical_directory)
+            }
+            _ => false,
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
     fn find_package_byte_range(source: &str, package_name: &str) -> Option<(usize, usize)> {
         let package_decl = format!("package {package_name}");
         let start = source.find(&package_decl)?;
@@ -1688,27 +1698,64 @@ impl RefactoringEngine {
                     {
                         Ok(refactor_result) => {
                             let edits = refactor_result.file_edits;
-                            if edits.is_empty() {
-                                warnings.push(format!(
-                                    "Symbol '{}' not found across workspace",
-                                    symbol_name
-                                ));
+                            let scope_root = def_file.parent().unwrap_or(def_file);
+                            let mut skipped_out_of_scope = 0usize;
+                            let scoped_edits: Vec<_> = edits
+                                .into_iter()
+                                .filter(|file_edit| {
+                                    let is_in_scope = Self::path_within_directory(
+                                        &file_edit.file_path,
+                                        scope_root,
+                                    );
+                                    if !is_in_scope {
+                                        skipped_out_of_scope += 1;
+                                    }
+                                    is_in_scope
+                                })
+                                .collect();
+                            if scoped_edits.is_empty() {
+                                if skipped_out_of_scope > 0 {
+                                    // All found edits were outside the definition file's
+                                    // directory tree — report skips rather than "not found".
+                                    warnings.push(format!(
+                                        "Skipped {} out-of-scope file(s) during inline \
+                                         all_occurrences; no in-scope edits remain",
+                                        skipped_out_of_scope
+                                    ));
+                                } else {
+                                    warnings.push(format!(
+                                        "Symbol '{}' not found across workspace",
+                                        symbol_name
+                                    ));
+                                }
+                                // Merge upstream warnings so callers see the full picture.
+                                let mut merged_warnings = refactor_result.warnings;
+                                merged_warnings.extend(warnings);
                                 return Ok(RefactoringResult {
                                     success: false,
                                     files_modified: 0,
                                     changes_made: 0,
-                                    warnings,
+                                    warnings: merged_warnings,
                                     errors: vec![],
                                     operation_id: None,
                                 });
                             }
-                            let changes_made = edits.iter().map(|e| e.edits.len()).sum::<usize>();
-                            let files_modified = self.apply_file_edits(&edits)?;
+                            if skipped_out_of_scope > 0 {
+                                warnings.push(format!(
+                                    "Skipped {} out-of-scope file(s) during inline all_occurrences",
+                                    skipped_out_of_scope
+                                ));
+                            }
+                            let changes_made =
+                                scoped_edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                            let files_modified = self.apply_file_edits(&scoped_edits)?;
+                            let mut merged_warnings = refactor_result.warnings;
+                            merged_warnings.extend(warnings);
                             return Ok(RefactoringResult {
                                 success: true,
                                 files_modified,
                                 changes_made,
-                                warnings: refactor_result.warnings,
+                                warnings: merged_warnings,
                                 errors: vec![],
                                 operation_id: None,
                             });
@@ -3376,5 +3423,93 @@ sub complex {
 
         assert!(result.success, "expected success, warnings: {:?}", result.warnings);
         assert_eq!(result.files_modified, 1);
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_all_occurrences_skips_out_of_scope_file_edits() {
+        let temp_dir = must(tempfile::tempdir());
+        let other_dir = must(tempfile::tempdir());
+        let path_a = temp_dir.path().join("a.pl");
+        let path_b = other_dir.path().join("b.pl");
+
+        let content_a = "my $const = 42;\nprint $const;\n";
+        let content_b = "print $const;\n";
+
+        must(std::fs::write(&path_a, content_a));
+        must(std::fs::write(&path_b, content_b));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        must(engine.index_file(&path_a, content_a));
+        must(engine.index_file(&path_b, content_b));
+
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$const".to_string(), all_occurrences: true },
+            vec![path_a.clone()],
+        ));
+
+        assert!(result.success, "expected success, warnings: {:?}", result.warnings);
+        assert!(
+            result
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("Skipped 1 out-of-scope file(s)")),
+            "expected out-of-scope warning, got {:?}",
+            result.warnings
+        );
+
+        let updated_b = must(std::fs::read_to_string(&path_b));
+        assert_eq!(updated_b, content_b);
+    }
+
+    /// When some edits are in-scope and some are out-of-scope, success is true
+    /// and the result counts only the in-scope files modified.  The out-of-scope
+    /// files must remain untouched and a scope-skip warning must be emitted.
+    #[cfg(feature = "workspace_refactor")]
+    #[test]
+    fn test_inline_all_occurrences_counts_only_in_scope_files_modified() {
+        let temp_dir = must(tempfile::tempdir());
+        let other_dir = must(tempfile::tempdir());
+
+        // Definition + in-scope usage in temp_dir.
+        let path_def = temp_dir.path().join("def.pl");
+        let path_in = temp_dir.path().join("in_scope.pl");
+        // Out-of-scope usage in other_dir.
+        let path_out = other_dir.path().join("out_scope.pl");
+
+        let content_def = "my $val = 99;\nprint $val;\n";
+        let content_in = "print $val;\n";
+        let content_out = "print $val;\n";
+
+        must(std::fs::write(&path_def, content_def));
+        must(std::fs::write(&path_in, content_in));
+        must(std::fs::write(&path_out, content_out));
+
+        let mut engine = RefactoringEngine::new();
+        engine.config.safe_mode = false;
+
+        must(engine.index_file(&path_def, content_def));
+        must(engine.index_file(&path_in, content_in));
+        must(engine.index_file(&path_out, content_out));
+
+        let result = must(engine.refactor(
+            RefactoringType::Inline { symbol_name: "$val".to_string(), all_occurrences: true },
+            vec![path_def.clone()],
+        ));
+
+        assert!(result.success, "expected success; warnings: {:?}", result.warnings);
+
+        // Out-of-scope file must be untouched.
+        let updated_out = must(std::fs::read_to_string(&path_out));
+        assert_eq!(updated_out, content_out, "out-of-scope file must not be modified");
+
+        // A scope-skip warning must appear so callers are informed.
+        assert!(
+            result.warnings.iter().any(|w| w.contains("out-of-scope")),
+            "expected out-of-scope warning, got {:?}",
+            result.warnings
+        );
     }
 }
