@@ -733,6 +733,20 @@ pub fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
             description: "Encrypts a string using the system crypt() function.",
         }),
 
+        // utf8 module functions
+        "utf8::encode" => Some(BuiltinDoc {
+            signature: "utf8::encode SCALAR",
+            description: "Converts the string in SCALAR from Unicode to UTF-8 encoded bytes, in-place. Does not return a meaningful value.",
+        }),
+        "utf8::decode" => Some(BuiltinDoc {
+            signature: "utf8::decode SCALAR",
+            description: "Converts the string in SCALAR from UTF-8 encoded bytes to Unicode, in-place. Does not return a meaningful value.",
+        }),
+        "utf8::downgrade" => Some(BuiltinDoc {
+            signature: "utf8::downgrade SCALAR, FAIL_OK?\nutf8::downgrade SCALAR",
+            description: "Attempts to convert the string in SCALAR from Unicode to bytes (ASCII-compatible). Fails if the string contains characters beyond U+00FF. With FAIL_OK, returns false instead of dying.",
+        }),
+
         // Time
         "time" => Some(BuiltinDoc {
             signature: "time",
