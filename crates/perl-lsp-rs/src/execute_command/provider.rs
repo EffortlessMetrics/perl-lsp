@@ -1,3 +1,5 @@
+//! Backend command implementations for run/debug/test and analyzer actions.
+
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use serde_json::{Value, json};
 use std::borrow::Cow;

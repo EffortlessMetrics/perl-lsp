@@ -1866,6 +1866,7 @@ name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
  "anyhow",
+ "criterion",
  "perl-ast",
  "perl-parser-core",
  "perl-tdd-support",
@@ -1901,6 +1902,10 @@ name = "perl-token"
 version = "0.12.4"
 dependencies = [
  "criterion",
+ "perl-lexer",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3157,8 +3162,11 @@ version = "0.12.4"
 dependencies = [
  "insta",
  "perl-ast",
+ "perl-module",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
  "perl-tdd-support",
 ]
 
