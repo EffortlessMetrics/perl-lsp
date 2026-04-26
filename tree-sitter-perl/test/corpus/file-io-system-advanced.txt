@@ -741,13 +741,13 @@ if (-T $file) {
 ---
 
 (source_file
-  (if_statement)
-  (if_statement)
-  (if_statement)
-  (statement)
-  (statement)
-  (statement)
-  (if_statement))
+  (conditional_statement)
+  (conditional_statement)
+  (conditional_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (conditional_statement))
 
 ==================
 Select and file handles
