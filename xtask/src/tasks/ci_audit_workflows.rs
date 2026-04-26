@@ -33,6 +33,10 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // would prevent it from detecting label contradictions on the PRs that
     // most need detection.
     "methodology-gate.yml",
+    // workflow-trigger-lint.yml is a single small advisory lint (no test
+    // execution); the job exits 0 even when violations are found and only
+    // uploads a JSON receipt.
+    "workflow-trigger-lint.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];
