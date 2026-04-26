@@ -1641,6 +1641,7 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-uri",
  "perl-workspace",
  "predicates",
  "proptest",

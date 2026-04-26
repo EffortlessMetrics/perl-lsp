@@ -504,6 +504,97 @@ my $also = process_data();
 
 #[test]
 #[serial]
+fn bdd_imported_subroutine_navigation_across_modules() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Imported subroutine navigation across modules");
+
+    let utils_module = r#"package MyApp::Utils;
+use strict;
+use warnings;
+use Exporter 'import';
+
+our @EXPORT_OK = qw(format_date);
+
+sub format_date {
+    my ($value) = @_;
+    return $value;
+}
+
+1;
+"#;
+
+    let main_script = r#"use strict;
+use warnings;
+use lib './lib';
+use MyApp::Utils qw(format_date);
+
+my $result = format_date("2026-04-23");
+"#;
+
+    scenario.given("a workspace where a subroutine is imported from a module");
+    let (mut harness, workspace) =
+        setup_workspace(&[("lib/MyApp/Utils.pm", utils_module), ("bin/main.pl", main_script)])?;
+
+    let utils_uri = workspace.uri("lib/MyApp/Utils.pm");
+    let main_uri = workspace.uri("bin/main.pl");
+
+    harness.open(&utils_uri, utils_module)?;
+    harness.open(&main_uri, main_script)?;
+    harness.wait_for_symbol("format_date", Some(&utils_uri), Duration::from_secs(10))?;
+    harness.barrier();
+
+    scenario.when("requesting go-to-definition on the imported call site");
+    let (call_line, call_character) = find_position(main_script, "format_date(\"2026-04-23\")");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &main_uri,
+        call_line,
+        call_character,
+        &utils_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the exporter module");
+    assert_eq!(
+        first_location_uri(&definition),
+        Some(utils_uri.clone()),
+        "imported call should resolve to exporting module"
+    );
+
+    scenario.when("requesting workspace symbols for the imported function name");
+    let symbols = harness.request(
+        "workspace/symbol",
+        json!({
+            "query": "format_date"
+        }),
+    )?;
+
+    scenario.then("workspace symbols include the exporting module symbol");
+    let uris = ref_uris(&symbols);
+    assert!(
+        uri_set_contains(&uris, &utils_uri),
+        "workspace symbols should include exporter module; got {uris:?}"
+    );
+
+    scenario.when("requesting hover on the imported call site");
+    let hover = harness.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": main_uri },
+            "position": { "line": call_line, "character": call_character }
+        }),
+    )?;
+
+    scenario.then("hover provides non-empty imported symbol information");
+    assert!(
+        !hover_text(&hover).is_empty(),
+        "hover over imported subroutine should contain details"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_rename_updates_workspace_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Rename propagates across workspace");
 
@@ -2653,6 +2744,118 @@ my $value = combine("a", "b");
     assert!(
         entries.iter().all(|entry| selection_range_depth(entry) >= 2),
         "each entry should include nested parent expansion; got {entries:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_mojolicious_embedded_template_reports_no_parse_errors()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious embedded templates avoid Perl parse errors");
+
+    let app = r#"use Mojolicious::Lite;
+
+get '/' => sub {
+    my $c = shift;
+    $c->stash(title => 'BDD');
+    $c->render(template => 'index');
+};
+
+app->start;
+
+__DATA__
+@@ index.html.ep
+% my $name = 'Perl';
+<h1><%= $title %> <%= $name %></h1>
+"#;
+
+    scenario.given("a Mojolicious::Lite app with an __DATA__ template section");
+    let (mut harness, workspace) = setup_workspace(&[("app.pl", app)])?;
+    let uri = workspace.uri("app.pl");
+    harness.open(&uri, app)?;
+    harness.barrier();
+
+    scenario.when("requesting pull diagnostics for the app file");
+    let report = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    scenario.then("the embedded template does not produce parse-error diagnostics");
+    let parse_errors = diagnostic_items(&report)
+        .iter()
+        .filter(|diag| diag.get("code").and_then(Value::as_str) == Some("PL001"))
+        .count();
+    assert_eq!(
+        parse_errors, 0,
+        "Mojolicious __DATA__ templates should not be parsed as Perl code; report={report:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_mojolicious_dashed_route_resolves_to_nested_controller_definition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Mojolicious dashed routes resolve to nested controllers");
+
+    let app = r##"package MyApp;
+use Mojo::Base 'Mojolicious';
+
+sub startup {
+    my $self = shift;
+    my $r = $self->routes;
+    $r->get('/admin/users')->to('admin-user#list');
+}
+
+1;
+"##;
+
+    let controller = r#"package MyApp::Controller::Admin::User;
+use Mojo::Base 'Mojolicious::Controller';
+
+sub list {
+    return 'ok';
+}
+
+1;
+"#;
+
+    scenario.given("a nested controller and a Mojolicious route using a dashed target");
+    let (mut harness, workspace) = setup_workspace(&[
+        ("lib/MyApp.pm", app),
+        ("lib/MyApp/Controller/Admin/User.pm", controller),
+    ])?;
+
+    let app_uri = workspace.uri("lib/MyApp.pm");
+    let controller_uri = workspace.uri("lib/MyApp/Controller/Admin/User.pm");
+
+    harness.open(&controller_uri, controller)?;
+    harness.open(&app_uri, app)?;
+    harness.wait_for_symbol("list", Some(&controller_uri), Duration::from_secs(10)).ok();
+
+    let (line, character) = find_position(app, "admin-user#list");
+
+    scenario.when("requesting go-to-definition on the dashed route target");
+    let definition = wait_for_definition_uri(
+        &mut harness,
+        &app_uri,
+        line,
+        character,
+        &controller_uri,
+        Duration::from_secs(10),
+    )?;
+
+    scenario.then("definition resolves to the nested controller file");
+    assert_eq!(
+        first_location_uri(&definition).as_deref(),
+        Some(controller_uri.as_str()),
+        "expected dashed route target to resolve to nested controller; got {definition:?}"
     );
 
     Ok(())
