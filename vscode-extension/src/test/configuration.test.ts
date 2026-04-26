@@ -156,6 +156,8 @@ describe('package.json contributes', () => {
       const perl = pkg.contributes.languages.find((l: any) => l.id === 'perl');
       const exts: string[] = perl.extensions;
       expect(exts).toContain('.pl');
+      expect(exts).toContain('.cgi');
+      expect(exts).toContain('.fcgi');
       expect(exts).toContain('.pm');
       expect(exts).toContain('.xs');
       expect(exts).toContain('.xsi');

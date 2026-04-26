@@ -15,7 +15,7 @@ fn request_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         seq: 1,
         msg_type: "request".to_string(),
         command: "initialize".to_string(),
-        arguments: Some(json!({"clientId": "vscode"})),
+        arguments: Some(json!({"clientID": "vscode"})),
     };
     let json = serde_json::to_string(&req)?;
     let back: Request = serde_json::from_str(&json)?;
@@ -121,9 +121,9 @@ fn initialize_request_args_round_trip() -> Result<(), Box<dyn std::error::Error>
         path_format: Some("path".to_string()),
     };
     let json = serde_json::to_string(&args)?;
-    assert!(json.contains("clientId"), "camelCase: {json}");
+    assert!(json.contains("clientID"), "DAP spelling: {json}");
     assert!(json.contains("clientName"), "camelCase: {json}");
-    assert!(json.contains("adapterId"), "camelCase: {json}");
+    assert!(json.contains("adapterID"), "DAP spelling: {json}");
     assert!(json.contains("linesStartAt1"), "camelCase: {json}");
     assert!(json.contains("columnsStartAt1"), "camelCase: {json}");
     assert!(json.contains("pathFormat"), "camelCase: {json}");
@@ -136,11 +136,20 @@ fn initialize_request_args_round_trip() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn initialize_request_args_minimal() -> Result<(), Box<dyn std::error::Error>> {
-    let json = r#"{"adapterId": "perl-rs"}"#;
+    let json = r#"{"adapterID": "perl-rs"}"#;
     let args: InitializeRequestArguments = serde_json::from_str(json)?;
     assert_eq!(args.adapter_id, "perl-rs");
     assert!(args.client_id.is_none());
     assert!(args.lines_start_at1.is_none());
+    Ok(())
+}
+
+#[test]
+fn initialize_request_args_accepts_legacy_id_spellings() -> Result<(), Box<dyn std::error::Error>> {
+    let json = r#"{"clientId":"vscode","adapterId":"perl-rs"}"#;
+    let args: InitializeRequestArguments = serde_json::from_str(json)?;
+    assert_eq!(args.client_id.as_deref(), Some("vscode"));
+    assert_eq!(args.adapter_id, "perl-rs");
     Ok(())
 }
 
