@@ -2,6 +2,7 @@
 
 pub mod bench;
 pub mod benchmarks;
+pub mod aggregate_receipts;
 #[cfg(feature = "parser-tasks")]
 pub mod bindings;
 pub mod build;
@@ -36,10 +37,14 @@ pub mod doc_claims;
 pub mod e2e_validate;
 pub mod edge_cases;
 pub mod features;
+pub mod failure_classifier;
+pub mod finalize_check;
+pub mod fix_forward;
 pub mod fmt;
 pub mod forbid_fatal_constructs;
 pub mod forensics;
 pub mod gates;
+pub mod gate_receipts;
 pub mod github;
 pub mod hardening;
 #[cfg(feature = "parser-tasks")]
@@ -48,7 +53,10 @@ pub mod hook_checks;
 pub mod ignored_tests;
 pub mod inject_sha_assets;
 pub mod layer_check;
+pub mod label_projector;
+pub mod merge_ready;
 pub mod metrics;
+pub mod methodology_gate;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
@@ -73,4 +81,6 @@ pub mod update_homebrew;
 pub mod update_status;
 pub mod ux_scorecard;
 pub mod validate_workspace_exclusions;
+pub mod workflow_trigger_lint;
 pub mod worktrees;
+pub mod queue_state;
