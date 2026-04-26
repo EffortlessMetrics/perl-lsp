@@ -14,8 +14,8 @@ on:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
-# preflight gate instead of cancelling in-flight work mid-run.
+# Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
+# The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
