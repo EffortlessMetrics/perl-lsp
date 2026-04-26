@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "version": "0.13.0",
+  "out_dir": "target/release-evidence/v0.13.0",
+  "overall_status": "fail",
+  "items": [
+    {"name":"ci-gate","path":"ci-gate.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"parser-ratchet-release","path":"parser-ratchet-release.json","kind":"required","status":"missing","release_blocking":true,"classification":"missing"}
+  ],
+  "warnings": []
+}

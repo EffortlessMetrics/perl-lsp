@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "version": "0.13.0",
+  "out_dir": "target/release-evidence/v0.13.0",
+  "overall_status": "pass",
+  "items": [
+    {"name":"advisory-status","path":"advisory-status.json","kind":"advisory","status":"fail","release_blocking":false,"classification":"advisory-warning"}
+  ],
+  "warnings": [
+    "advisory-status failing is classified as advisory warning"
+  ]
+}

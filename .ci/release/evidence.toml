@@ -1,0 +1,43 @@
+schema_version = 1
+summary_receipt = "target/receipts/release-evidence.json"
+
+[[required]]
+name = "ci-gate"
+path = "ci-gate.json"
+kind = "required"
+
+[[required]]
+name = "parser-ratchet-release"
+path = "parser-ratchet-release.json"
+kind = "required"
+
+[[required]]
+name = "vscode-extension-smoke"
+path = "vscode-extension-smoke.json"
+kind = "required"
+
+[[required]]
+name = "lsp-scenario"
+path = "lsp-scenario.json"
+kind = "required"
+
+[[required]]
+name = "real-workspace-baseline"
+path = "real-workspace-baseline.json"
+kind = "required"
+
+[[required]]
+name = "ai-completion-e2e"
+path = "ai-completion-e2e.json"
+kind = "required"
+
+[[required]]
+name = "advisory-status"
+path = "advisory-status.json"
+kind = "advisory"
+release_blocking = false
+
+[[required]]
+name = "unresolved-risk-register"
+path = "unresolved-risk-register.json"
+kind = "required"

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/release-evidence.schema.json",
+  "title": "Release Evidence Summary Receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "version",
+    "out_dir",
+    "overall_status",
+    "items",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "version": { "type": "string" },
+    "out_dir": { "type": "string" },
+    "overall_status": { "type": "string", "enum": ["pass", "fail"] },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "status",
+          "release_blocking",
+          "classification"
+        ],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "kind": { "type": "string", "enum": ["required", "advisory"] },
+          "status": { "type": "string" },
+          "release_blocking": { "type": "boolean" },
+          "classification": {
+            "type": "string",
+            "enum": ["pass", "missing", "advisory-warning", "release-blocking"]
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

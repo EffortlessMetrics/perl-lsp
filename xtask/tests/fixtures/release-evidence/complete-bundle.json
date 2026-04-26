@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "version": "0.13.0",
+  "out_dir": "target/release-evidence/v0.13.0",
+  "overall_status": "pass",
+  "items": [
+    {"name":"ci-gate","path":"ci-gate.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"parser-ratchet-release","path":"parser-ratchet-release.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"vscode-extension-smoke","path":"vscode-extension-smoke.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"lsp-scenario","path":"lsp-scenario.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"real-workspace-baseline","path":"real-workspace-baseline.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"ai-completion-e2e","path":"ai-completion-e2e.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"},
+    {"name":"advisory-status","path":"advisory-status.json","kind":"advisory","status":"pass","release_blocking":false,"classification":"pass"},
+    {"name":"unresolved-risk-register","path":"unresolved-risk-register.json","kind":"required","status":"pass","release_blocking":true,"classification":"pass"}
+  ],
+  "warnings": []
+}

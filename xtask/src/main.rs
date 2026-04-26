@@ -31,6 +31,41 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+enum ReleaseCommand {
+    /// Prepare release artifacts.
+    Prepare {
+        /// Version to release
+        version: String,
+
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
+
+    /// Build release evidence bundle summary receipt.
+    Evidence {
+        /// Release version (for example 0.13.0)
+        #[arg(long)]
+        version: String,
+
+        /// Directory containing raw release evidence receipts.
+        #[arg(long)]
+        out: PathBuf,
+    },
+
+    /// Verify an existing release evidence summary receipt.
+    VerifyEvidence {
+        /// Release version (for example 0.13.0)
+        #[arg(long)]
+        version: String,
+
+        /// Path to the generated release evidence summary receipt.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum Commands {
     /// Print all available top-level xtask commands.
     #[command(name = "list-commands")]
@@ -520,14 +555,10 @@ enum Commands {
         bench: bool,
     },
 
-    /// Prepare release
+    /// Release workflow tasks.
     Release {
-        /// Version to release
-        version: String,
-
-        /// Skip confirmation
-        #[arg(long)]
-        yes: bool,
+        #[command(subcommand)]
+        command: ReleaseCommand,
     },
 
     /// Extract the curated release body from `docs/releases/<tag>.md`.
@@ -1410,7 +1441,13 @@ fn main() -> Result<()> {
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
         }
-        Commands::Release { version, yes } => release::run(version, yes),
+        Commands::Release { command } => match command {
+            ReleaseCommand::Prepare { version, yes } => release::run(version, yes),
+            ReleaseCommand::Evidence { version, out } => release_evidence::generate(version, out),
+            ReleaseCommand::VerifyEvidence { version, receipt } => {
+                release_evidence::verify(version, receipt)
+            }
+        },
         Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,
