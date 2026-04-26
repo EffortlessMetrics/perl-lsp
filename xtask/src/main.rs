@@ -853,6 +853,39 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Manage control-plane CI gate receipts.
+    GateReceipts {
+        #[command(subcommand)]
+        command: GateReceiptsCommand,
+    },
+
+    /// Run methodology gate checks.
+    MethodologyGate,
+
+    /// Aggregate receipt data for downstream checks.
+    AggregateReceipts,
+
+    /// Run finalize-check verification.
+    FinalizeCheck,
+
+    /// Lint workflow triggers used by CI orchestration.
+    WorkflowTriggerLint,
+
+    /// Evaluate merge-ready control-plane signals.
+    MergeReady,
+
+    /// Classify CI failures for queue follow-ups.
+    FailureClassifier,
+
+    /// Queue management control-plane commands.
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommand,
+    },
+
+    /// Apply fix-forward follow-up workflow.
+    FixForward,
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1220,6 +1253,22 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List known gate receipt entries.
+    List,
+    /// Validate one gate receipt payload file.
+    Validate { path: PathBuf },
+}
+
+#[derive(Subcommand)]
+enum QueueCommand {
+    /// Show queue state summary.
+    State,
+    /// Project labels for queue work items (stub, non-mutating).
+    ProjectLabels,
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1579,6 +1628,21 @@ fn main() -> Result<()> {
                 test_threads,
             })
         }
+        Commands::GateReceipts { command } => match command {
+            GateReceiptsCommand::List => gate_receipts::list(),
+            GateReceiptsCommand::Validate { path } => gate_receipts::validate(&path),
+        },
+        Commands::MethodologyGate => methodology_gate::run(),
+        Commands::AggregateReceipts => aggregate_receipts::run(),
+        Commands::FinalizeCheck => finalize_check::run(),
+        Commands::WorkflowTriggerLint => workflow_trigger_lint::run(),
+        Commands::MergeReady => merge_ready::run(),
+        Commands::FailureClassifier => failure_classifier::run(),
+        Commands::Queue { command } => match command {
+            QueueCommand::State => queue_state::run(),
+            QueueCommand::ProjectLabels => label_projector::run(),
+        },
+        Commands::FixForward => fix_forward::run(),
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }
