@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-concept-floor.schema.json",
+  "title": "Parser Concept Floor Receipt",
+  "type": "object",
+  "required": ["concepts_required", "concepts_hit", "missing_concepts", "violations"],
+  "properties": {
+    "concepts_required": { "type": "array", "items": { "type": "string" } },
+    "concepts_hit": { "type": "array", "items": { "type": "string" } },
+    "missing_concepts": { "type": "array", "items": { "type": "string" } },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fixture", "expected", "message"],
+        "properties": {
+          "fixture": { "type": "string" },
+          "expected": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
