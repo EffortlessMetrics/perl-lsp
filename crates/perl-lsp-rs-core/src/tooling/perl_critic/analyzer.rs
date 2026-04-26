@@ -164,6 +164,15 @@ impl CriticAnalyzer {
         self.cache.len()
     }
 
+    /// Returns `true` if the cache contains an entry for the given path string.
+    ///
+    /// Intended for tests — allows assertions on which specific entries were
+    /// evicted by the LRU policy.
+    #[cfg(test)]
+    pub fn cache_contains(&self, path: &str) -> bool {
+        self.cache.contains_key(path)
+    }
+
     /// Convert violations to diagnostics
     #[cfg(feature = "lsp-compat")]
     pub fn to_diagnostics(&self, violations: &[Violation]) -> Vec<lsp_types::Diagnostic> {
@@ -356,15 +365,42 @@ mod tests {
     #[test]
     fn lru_eviction_respects_max_cache_entries() {
         let mut analyzer = make_analyzer(3);
+        // Insert file0, file1, file2 — in that order (file0 gets lowest access_seq).
         for i in 0..3u32 {
             let path = format!("/tmp/file{i}.pl");
             let _ = analyzer.analyze_file(std::path::Path::new(&path));
         }
         assert_eq!(analyzer.cache_len(), 3);
 
-        // Adding a 4th entry must evict the LRU (file0, never accessed again).
+        // Re-access file1 and file2 so that file0 remains the least-recently-used.
+        let _ = analyzer.analyze_file(std::path::Path::new("/tmp/file1.pl"));
+        let _ = analyzer.analyze_file(std::path::Path::new("/tmp/file2.pl"));
+
+        // Adding a 4th entry must evict the LRU — file0.
         let _ = analyzer.analyze_file(std::path::Path::new("/tmp/file3.pl"));
         assert_eq!(analyzer.cache_len(), 3);
+
+        // Verify the correct entry was evicted (file0) and the rest survive.
+        assert!(!analyzer.cache_contains("/tmp/file0.pl"), "file0 should have been evicted");
+        assert!(analyzer.cache_contains("/tmp/file1.pl"), "file1 should still be cached");
+        assert!(analyzer.cache_contains("/tmp/file2.pl"), "file2 should still be cached");
+        assert!(analyzer.cache_contains("/tmp/file3.pl"), "file3 should have been inserted");
+    }
+
+    #[test]
+    fn lru_update_existing_key_at_capacity_does_not_over_evict() {
+        // Regression: updating an existing key when the cache is full must not
+        // trigger eviction — the key is already present so cache.len() stays at max.
+        let mut analyzer = make_analyzer(2);
+        let _ = analyzer.analyze_file(std::path::Path::new("/tmp/a.pl"));
+        let _ = analyzer.analyze_file(std::path::Path::new("/tmp/b.pl"));
+        assert_eq!(analyzer.cache_len(), 2);
+
+        // Re-insert existing key with a new hash — should update in-place, no eviction.
+        let _ = analyzer.analyze_file_with_hash(std::path::Path::new("/tmp/a.pl"), 999);
+        assert_eq!(analyzer.cache_len(), 2, "Updating an existing key must not trigger eviction");
+        assert!(analyzer.cache_contains("/tmp/a.pl"), "a.pl should still be cached after update");
+        assert!(analyzer.cache_contains("/tmp/b.pl"), "b.pl should not have been evicted");
     }
 
     #[test]
