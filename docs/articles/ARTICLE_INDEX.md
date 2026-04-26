@@ -36,6 +36,19 @@ These documents are polished prose ready for editorial review or direct publicat
 | [PARSER_WINS.md](PARSER_WINS.md) | "Perl Parsing Hall of Fame" | Hardest constructs handled: heredocs, slash ambiguity, fat arrows |
 | [THREE_LAYER_PRODUCT.md](THREE_LAYER_PRODUCT.md) | "The Three-Layer Product" — LSP + swarm OS + memory/evidence | Why the repo is three products in one |
 
+### Session 2026-04-24: Economic Maturity + Deep Review Catalog + Architecture Audit
+
+Articles from the 2026-04-24 session (75 merged, 156 closed, 231 total resolved). Economic
+analysis from ChatGPT synthesis; deep-review catalog with 17 verified findings; architecture
+audit after Wave 4-Completion (31 published crates).
+
+| File | Title | Notes |
+|------|-------|-------|
+| [ECONOMIC_MATURITY_THROUGHPUT_VS_TRUSTWORTHY.md](ECONOMIC_MATURITY_THROUGHPUT_VS_TRUSTWORTHY.md) | "Economic Maturity: From Throughput to Trustworthy Throughput" | 3-metric evolution, 4 forward metrics, verified cost numbers, 4 biggest cost sinks. |
+| [DEEP_REVIEW_FIX_FORWARD_CATALOG_2026_04_24.md](DEEP_REVIEW_FIX_FORWARD_CATALOG_2026_04_24.md) | "Deep Review Fix-Forward Catalog: Session 2026-04-24" | 17 findings across 14 PRs; double-parse regression, coordinate-space mixing, p95 formula, vacuous assertions, schema mismatch. |
+| [ARCHITECTURE_POST_COLLAPSE_AUDIT.md](ARCHITECTURE_POST_COLLAPSE_AUDIT.md) | "Architecture Post-Collapse Audit: State and Next Steps" | 135→31 collapse done; 3 seams needing surface tightening; parser-family tracker-vs-manifest; post-alpha roadmap. |
+| [SESSION_2026_04_24_ECONOMICS.md](SESSION_2026_04_24_ECONOMICS.md) | "Session Economics: 2026-04-24" | Verified numbers (75 merged, 156 closed); master bit-rot cascade pattern; Windows short-name canonicalize fix. |
+
 ### Wave G1 Collapse Session (2026-04-19)
 
 Articles from the Wave G1 collapse session — 5 PRs merged, 74 → 49 published crates. Each is self-contained; [SCOPE_PIVOT_ON_DEFER.md](SCOPE_PIVOT_ON_DEFER.md), [LLM_READS_SPEC_NOT_CODE.md](LLM_READS_SPEC_NOT_CODE.md), and [VERIFICATION_LADDER_PER_LAYER_ROI.md](VERIFICATION_LADDER_PER_LAYER_ROI.md) are the strongest standalone pieces.
