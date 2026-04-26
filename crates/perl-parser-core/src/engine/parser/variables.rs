@@ -859,7 +859,27 @@ impl<'a> Parser<'a> {
     }
 
     fn consume_signature_param_attributes(&mut self, mut end: usize) -> ParseResult<usize> {
+        // Only consume `:identifier(...)` parameter attributes. A bare `:` (with `)`,
+        // sigil, variable, or other non-bareword token following) is the
+        // method-invocant separator and must be left for `parse_signature` to
+        // handle — see #6254 for the invocant separator support that this
+        // helper must coexist with.
+        //
+        // Note: the perl-lexer returns variables as Identifier tokens whose text
+        // begins with the sigil (e.g. `$b`). A real parameter attribute is a
+        // bareword identifier (e.g. `param`, `reader`), so reject identifier
+        // texts that begin with a Perl sigil character.
         while self.peek_kind() == Some(TokenKind::Colon) {
+            let next_is_attr_ident = match self.tokens.peek_second() {
+                Ok(tok) if tok.kind == TokenKind::Identifier => {
+                    let first = tok.text.chars().next();
+                    !matches!(first, Some('$' | '@' | '%' | '&' | '*'))
+                }
+                _ => false,
+            };
+            if !next_is_attr_ident {
+                break;
+            }
             self.consume_token()?; // consume ':'
             let attr = self.expect(TokenKind::Identifier)?;
             end = attr.end;
