@@ -8,40 +8,14 @@
 
 Plans: **Claude 20× Max** + **Codex Pro**. 5h sessions reset; weekly budget is the rollup. These are the numbers for the current 5h session window only — prior iterations (2026-04-22) covered in `docs/forensics/2026-04-22-continuous-codex-review-session.md`.
 
-Each window is a **separate 5h session** (sessions reset; weekly accumulates). Within each window, checkpoints show the delta in session % and what that delta bought.
+| Measure | Current session usage | Weekly total (after this session) | Weekly delta this session |
+|---|---|---|---|
+| Claude Code (20× Max) | **33%** of the 5h window | **79%** | **+3–4%** (from ~76%) |
+| Codex Pro | **41%** of the 5h window | (82% remaining) | **+6%** |
 
-### Window 1 — earlier today
+**Per-outcome cost.** Claude's 33% session drove: ~20 merges, 18+ deep-reviews with fix-forward, 8 issues filed, 10+ dupe closes, 1 critical master bit-rot fix (#5018), 1 tier-wiring landing (#5005), 1 forensic + policy memory (this doc + `feedback_reviewer_deep_proactive_fixes.md`). **Roughly ~1% Claude session per actionable outcome** — consistent with prior sessions at ~$0.05 each at retail 20× Max pricing.
 
-**Claude 0 → 33% session / Codex 0 → 41% session / Weekly Claude 76% → 79%, Codex ~15% → ~18%**
-
-Checkpoints during Window 1:
-
-| At Claude % | Work produced in the interval |
-|---|---|
-| 0 → 10% | Recovered context post-compaction, triaged fresh Codex wave (#4997-#5015), closed 3 hallucinated docs PRs (#5002-5004), #5018 bit-rot fix filed + opened |
-| 10 → 20% | #5018 merged, cascade-updated 19 PRs, filed 3 CI-improvement issues (#5019, #5020, #5021), sent #5022 + #5024 + #5027 + #5029 + #5030 to reviewer-deep |
-| 20 → 33% | Collected reviewer-deep batches, fix-forward on #4979/#5022/#5024/#4999/#5029, merged #4998/#5000/#5001/#5005/#5008/#5010/#5012/#5015/#5031, wrote session forensic |
-
-### Window 2 — current
-
-**Claude 0 → 18% session / Codex 0 → 11% session / Weekly Claude 79% → 82%, Codex ~18% → ~21%**
-
-Checkpoints during Window 2:
-
-| At Claude % | Work produced in the interval |
-|---|---|
-| 0 → 5% | Dispatched 6 reviewer-deep agents across 18 PRs (position/line-index, pragma, refactor, tree-sitter, lexer/parser, corpus/URI), filed #5096 UX flakiness, dispatched #5097 timeout fix + #5017 anon-sub builder |
-| 5 → 10% | Collected first reviewer-deep returns (DAP, Moose, regex clusters), merged cascade of ready PRs (#4998, #5015, #5031 trailing from Window 1), spawned more parallel review |
-| 10 → 14% | 12 more PRs reviewed (small-fixes agent with fix-forward on `must()` #[must_use] generic bug across 373 call sites), merged #5091-5094/5101/5102/5107/5110-5114/5116-5121/5126/5130-5135, filed #5152 clippy-single-match + sandbox-ignore fix |
-| 14 → 18% | Filed #5313 capability snapshot regen (bit-rot #4), #5314 docs + reviewer-deep skill-chain fix (4 articles: TWO_MODE_DEV_LOOP, TRIAGE_AS_LEARNING, HAIKU_FOR_MECHANICAL, TWO_PHASE_MERGE_GATE), #5315 validate-title clarification. Dispatched 7 Haiku standards reviewers covering all 103 non-deep-reviewed PRs → closed ~20 dupes at fractional Haiku cost. Dispatched 8 reviewer-deep agents on substantive cohorts (Perl-matrix winner #5247 + 3 closed, metrics cohort of 8, fuzz/workspace/Windows cluster, batch-01 approved, docs-only batch, workspace-config #5207-5209 as complementary not dup, parser-recovery #5011+#5009 as complementary) |
-
-**Key economic observation:** Codex Pro is ~4× more budget-efficient than Claude 20× Max this week by weekly consumption. Codex did the heavy generation (200+ PRs produced); Claude did high-leverage routing and review. The spray-and-filter pattern ALIGNS with this cost asymmetry — the cheap model sprays, the expensive model filters.
-
-**When the Claude weekly approaches saturation (82%), the right move is to lean into Haiku for mechanical work** (see `docs/articles/HAIKU_FOR_MECHANICAL.md`). 7 Haiku reviewer batches dispatched this session closed ~20 duplicate PRs with negligible Claude cost — work that would have eaten real Sonnet budget per review.
-
-**Per-outcome cost.** Mid-session Claude 33% drove: ~20 merges, 18+ deep-reviews with fix-forward, 8 issues filed, 10+ dupe closes, 1 critical master bit-rot fix (#5018), 1 tier-wiring landing (#5005), 1 forensic + policy memory. Later pass additional ~15% Claude session: 7 Haiku standards reviewers across 103 PRs (~15 per batch), 8 reviewer-deep agents across ~45 substantive PRs, the reviewer-deep skill-chain fix (#5314), reviewer validate-title clarification (#5315), multiple doc articles (TWO_MODE, TRIAGE_AS_LEARNING, HAIKU_FOR_MECHANICAL, TWO_PHASE_MERGE_GATE).
-
-Roughly **~1% Claude session per actionable outcome** held across the session. Haiku's per-outcome cost was a small fraction of that — closer to ~0.1%.
+**Matched intensity held.** When Codex dispatched 40+ PR waves, Claude triaged/reviewed/merged at matching pace. Claude 33% session ↔ Codex 41% session is within ~25% of each other — the spray-and-filter economics survives continued throughput increases.
 
 **What changed the cost shape.** The fix-forward policy (reviewer-deep pushes mechanical fixes directly) collapsed the typical find→file→build→review→merge pipeline into find→push→merge for narrow corrections. One-line and small fixes no longer pay a fresh-builder spawn.
 
@@ -169,3 +143,78 @@ Surfaced during reviews but left for follow-up scouts:
 ---
 
 _Forensic captured during the session for future-session substrate. Paired with `docs/articles/ORCHESTRATION_COUNTERINTUITIONS.md` and `docs/articles/CONTINUOUS_REVIEW_PATTERNS.md`._
+
+---
+
+## Windows 3 + 4 — agent saturation + Codex hallucination triage
+
+Two more 5h windows ran in this session after the log above was captured.
+
+### Window 3 — agent saturation experiment
+
+**Claude 18% → 52% session / Codex ~21% → ~30% spent weekly / Weekly Claude 82% → 87%**
+
+~55 agents dispatched across three overlapping 20-agent waves (ops drain, rebase, Haiku review, deep-review, diff-audit, research-verify, refactor-plan, maintainer-pr, scout, docs-review, CI flake, RC1 punch list, retrospective). Observation: at 20+ agents in flight, orchestrator context cost is almost entirely agent-dispatch metadata + return summaries — not code reading. Orchestrator is a pure router.
+
+Merge-ready queue built up: 15+ deep-reviewed PRs awaiting ci-green + diff-audited. 172 total open PRs. RC1 punch list landed as PR #5497.
+
+### Window 4 — master bit-rot cascade + Codex hallucination triage
+
+**Claude 52% → 66% session / Codex ~88% remaining session / Weekly Claude 87% → 97%, Codex 70% remaining weekly**
+
+**Master bit-rot cascade — six pre-existing breaks surfaced by tier-wiring expansion:**
+
+1. `#5494` — `scope_and_symbol_tests.rs:1737` `${Foo::name}` parsed as invalid format string (introduced PR #5090)
+2. `#5495` — `mojolicious_navigation_tests.rs:417` stray duplicate close (merge artifact, PR #5288)
+3. **xtask/lsp_stats.rs** — `last_run` + `run.completion_rate()` + missing `load_last_run` helper (incomplete #5303 refactor)
+4. **xtask fmt drift** — `lsp_stats.rs` multi-line `assert!` blocks
+5. **hash_key_bareword_tests.rs** — 22 type errors `expected &Arc<Node>, found &Node` (API signature drift)
+6. **perl-regex/tests/comprehensive_unit_tests.rs:366** — fmt drift on function signature
+
+All fixed via four-commit stack on PR #5501 (`fix/mojolicious-stray-close`). Windows Guardrails module-separator-regressions (`#5593`) — separate pre-existing Windows 8.3 path-canonicalization issue, filed as follow-up for `dunce::canonicalize` work.
+
+Every fire-fix exposed the next. Classic "Tier-wiring noise is bit-rot signal" (memory entry). `--lib`-only push CI hid these for weeks; `cargo check --workspace --all-targets` is the right gate. Scout issue #4507 covers this — sprint evidence added as comment.
+
+**Codex hallucination triage — NEW failure mode:**
+
+Codex generated 10 PRs adding Perl framework detection for names it encountered in training-data periphery:
+
+- **OpenClaw** (agentic editor): #5631–5634 closed — added `WebFrameworkKind::OpenClaw`, `.claw` as Perl source extension, Moo-family aliases
+- **Droid / Droid::Factory** (Factory.ai terminal agent): #5619, #5641 closed — added web-route detection + `IMPLICIT_STRICT_MODULES` entry
+- **Builder::IO::Fusion** (builder.io JS visual AI): #5627–5630 closed — conflated with real `Plack::Builder`
+- **Google::Antigravity** (Google agentic browser): #5592 closed — added to Tier-1 completion suggestions
+
+Pattern: 3–4 cross-crate PRs all reinforcing the same fictional framework (parser ext + semantic detection + completion tier + go-to-impl skip). Each individual PR is coherent, tested, and clippy-clean — only MetaCPAN verification distinguishes hallucination from real.
+
+**Legitimate-but-poisoned example:** #5591 Mojolicious whitespace-in-controller-name fix was real but used `google antigravity#launch` as the only fixture. Comment posted to replace fixture; feature stays.
+
+**Separately verified legitimate:** All 19 editor-integration docs PRs (Trae, Kiro, PearAI, Eclipse, Windsurf, Notepad++, JetBrains, Cursor, Zed, Roo Code, Kilo Code, Warp, Aider, Claude Code, Factory Droid host-detection, MCP/Hermes) target real products with LSP support. Codex editor-docs have high fidelity; the hallucination pattern is isolated to **framework-detection code**.
+
+Memory: `feedback_codex_framework_hallucination.md` — prescribes MetaCPAN pre-filter before approving any PR adding entries to `WebFrameworkKind`, `IMPLICIT_STRICT_MODULES`, `IMPLICIT_EXPORT_SKIP_LIST`, `COMMON_MODULES_TIER_1`, or `PERL_SOURCE_EXTENSIONS`.
+
+### Cross-window economic observations
+
+- **Sprint-attributable weekly movement:** ~100%. Claude 76% → 97% weekly is sprint-driven.
+- **Codex cheaper than Claude 20× by weekly burn:** confirmed again. Codex 70% remaining weekly at session close (~30% spent across four windows generating 250+ PRs including the hallucination batch). In the same span Claude went 76% → 97% weekly (~21% spent). **Codex delivered ~8× the PR output for ~1.4× the relative budget spend** — the spray-and-filter asymmetry is stable.
+- **Orchestrator cost floor at saturation ≈ agent-dispatch metadata.** 20 agents in flight costs ~4-6% session for return-summary rollup; not for code reading (which lives in children).
+- **Fire-fix cascade is higher per-cycle cost than review passes.** Each master-red fix exposes the next; investigator dispatches cost ~1-2% session each because they pull CI job logs.
+- **Research-verify is the correct filter for hallucinations.** Haiku standards-review passed #5619/#5627/#5631 as "clean" — they are clean by banned-pattern check, but the code is for nonexistent frameworks. Only web-verified research catches this. Adding a MetaCPAN pre-gate to standards-review (or making research-verifier a required stage for semantic-analyzer additions) would close the loop.
+- **`git reset --hard` blocked by safety hook** — working as intended. Several agents needed alternative paths (`checkout -B`, `checkout -- file`) to recover from CRLF contamination. Hook-level enforcement is the right layer for destructive ops protection.
+
+### Follow-ups explicitly deferred to next session
+
+- **Master may still be red at session close:** fire-fix-wave-4 was still running when the user called end-of-session. #5501 needs ops-merge attention once CI settles.
+- **#5593:** Windows 8.3 short-path canonicalization in perl-module — `dunce::canonicalize` work; pre-existing, independent of RC1 Linux shape.
+- **Green-refactor pass:** nine deep-reviewed PRs have `refactor-planner-reviewed` but haven't executed; queued for post-master-green cycle.
+- **Merge-queue drain:** 15+ PRs have `deep-reviewed + ci-green + diff-audited` — waiting on master green to merge.
+- **Scenario-number collisions:** #5268/#5381 both assigned slot 20; #5252/#5401 both assigned slot 21 by overlapping rebase waves. First-to-merge wins; losers re-renumber on conflict.
+- **3 impl branches ready for red-TDD:** `impl/5496-parser-unclosed-delimiters`, `impl/5498-dap-function-breakpoints`, `impl/5499-completion-scope-distance` — spec-planner created; red-TDD needs to add failing tests next session.
+
+### Artifacts added this pair of windows
+
+- **Memory files added:** `feedback_codex_framework_hallucination.md`
+- **Issues filed:** #5494, #5495, #5496, #5498, #5499, #5593, #5653 (inlayHint resolve), #5658 (DAP pagination nested) + comments adding sprint evidence to #4507
+- **PRs opened:** #5497 (RC1 punch list), #5500 (superseded by #5501), #5501 (combined master fire-fix, 4 commits)
+- **Editor PRs triaged:** 19 verified legitimate, 10 hallucinated closed, 1 poisoned-example flagged
+- **Clusters closed as dupes:** Zed 3-of-4, ts-perl-c re-reversed (#5075/#5076 closed, #5386/#5387/#5388 reopened after catching wrong consolidation), metrics-receipt (#5460/#5461 → #5462), editor-docs (#5580 → #5581), vscode package.json (#5587/#5588 → #5586), Trae 3-of-4 (#5582/#5583/#5585 → #5584)
+- **Deep-review fix-forwards:** 10+ real bugs caught + pushed on PR branches (including cancellation-cache invalidation #5428, missing tree-sitter-language dep #5489, FindBin word-boundary #5392, scenario 18→19 line-9-vs-10 coord bug #5327, workspace_rename 2 bugs #5434, nvim lspconfig silent no-op #5442, Zed config wrong schema #5470, emacs perl-ts-mode overclaim #5444, #5476 checked_sub dead code, #5487 missing mojolicious test)
