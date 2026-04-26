@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/parser-ratchet.schema.json",
+  "title": "Parser Ratchet Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "check",
+    "profile",
+    "selected",
+    "selection_reason",
+    "manifest_fingerprint",
+    "base_sha",
+    "candidate_sha",
+    "metrics",
+    "violations",
+    "ratchet_opportunity",
+    "verdict",
+    "repro"
+  ],
+  "properties": {
+    "check": {"type": "string", "const": "Parser Ratchet"},
+    "profile": {"type": "string"},
+    "selected": {"type": "string"},
+    "selection_reason": {"type": "string"},
+    "manifest_fingerprint": {"type": "string"},
+    "base_sha": {"type": "string"},
+    "candidate_sha": {"type": "string"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "head"],
+      "properties": {
+        "base": {"$ref": "#/$defs/metrics"},
+        "head": {"$ref": "#/$defs/metrics"}
+      }
+    },
+    "violations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/violation"}
+    },
+    "ratchet_opportunity": {"type": "boolean"},
+    "verdict": {"type": "string", "enum": ["pass", "fail"]},
+    "repro": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "properties": {
+        "command": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "panic_count",
+        "timeout_count",
+        "concept_floors_pass",
+        "clean_parse_rate",
+        "error_node_count",
+        "node_kind_seen_count",
+        "corpus_runtime_ms"
+      ],
+      "properties": {
+        "panic_count": {"type": "integer", "minimum": 0},
+        "timeout_count": {"type": "integer", "minimum": 0},
+        "concept_floors_pass": {"type": "boolean"},
+        "clean_parse_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "error_node_count": {"type": "integer", "minimum": 0},
+        "node_kind_seen_count": {"type": "integer", "minimum": 0},
+        "corpus_runtime_ms": {"type": "integer", "minimum": 0}
+      }
+    },
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected", "metric", "detail"],
+      "properties": {
+        "selected": {"type": "string"},
+        "metric": {"type": "string"},
+        "detail": {"type": "string"}
+      }
+    }
+  }
+}

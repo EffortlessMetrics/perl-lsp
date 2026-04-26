@@ -825,6 +825,32 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Compare parser ratchet metrics for base vs candidate in PR/merge-group mode.
+    ParserRatchet {
+        /// Ratchet profile (for example: pr).
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Base git SHA (required for live PR mode).
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Candidate git SHA (required for live PR mode).
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Canonical manifest path used by both base and candidate.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+
+        /// Output receipt path.
+        #[arg(long, default_value = "target/receipts/parser-ratchet.json")]
+        receipt: PathBuf,
+
+        #[command(subcommand)]
+        command: Option<ParserRatchetCommand>,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1220,6 +1246,32 @@ enum CpanCorpusCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Compare two metric JSONs and emit a parser-ratchet receipt.
+    Compare {
+        /// Ratchet profile (for example: pr).
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Scope selector (perl-corpus or system-perl).
+        #[arg(long, default_value = "perl-corpus")]
+        selected: String,
+
+        /// Base metrics JSON.
+        #[arg(long)]
+        base_metrics: PathBuf,
+
+        /// Candidate metrics JSON.
+        #[arg(long)]
+        head_metrics: PathBuf,
+
+        /// Output receipt path.
+        #[arg(long, default_value = "target/receipts/parser-ratchet.json")]
+        receipt: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
 enum FeaturesCommand {
     /// Sync documentation from features.toml
     SyncDocs,
@@ -1533,6 +1585,51 @@ fn main() -> Result<()> {
                 verbose,
                 receipt,
             })
+        }
+        Commands::ParserRatchet { profile, base, head, manifest, receipt, command } => {
+            match command {
+                Some(ParserRatchetCommand::Compare {
+                    profile,
+                    selected,
+                    base_metrics,
+                    head_metrics,
+                    receipt,
+                }) => parser_ratchet::run_compare(parser_ratchet::ParserRatchetCompareConfig {
+                    profile,
+                    selected,
+                    base_metrics,
+                    head_metrics,
+                    receipt,
+                    base_sha: None,
+                    head_sha: None,
+                    manifest: None,
+                    selection_reason: Some(
+                        "explicit compare mode with supplied metric receipts".to_string(),
+                    ),
+                }),
+                None => {
+                    let base_sha = match base {
+                        Some(value) => value,
+                        None => return Err(eyre!("--base is required for live PR mode")),
+                    };
+                    let head_sha = match head {
+                        Some(value) => value,
+                        None => return Err(eyre!("--head is required for live PR mode")),
+                    };
+                    let manifest = match manifest {
+                        Some(value) => value,
+                        None => return Err(eyre!("--manifest is required for live PR mode")),
+                    };
+
+                    parser_ratchet::run(parser_ratchet::ParserRatchetRunConfig {
+                        profile,
+                        base_sha,
+                        head_sha,
+                        manifest,
+                        receipt,
+                    })
+                }
+            }
         }
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();

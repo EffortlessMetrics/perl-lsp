@@ -1,0 +1,5 @@
+profile = "pr"
+selected = ["perl-corpus", "system-perl"]
+clean_parse_rate_epsilon = 0.001
+error_node_material_increase = 10
+node_kind_unexpected_drop = 5
