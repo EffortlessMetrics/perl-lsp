@@ -1,0 +1,8 @@
+{
+  "labels": [
+    "merge-ready",
+    "needs-ci-fix",
+    "ci-green"
+  ],
+  "body": "Partial scaffold; closes #6855"
+}

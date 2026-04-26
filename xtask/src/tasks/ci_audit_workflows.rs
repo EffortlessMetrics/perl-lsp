@@ -23,6 +23,8 @@ const ALLOWED_WORKFLOWS: &[&str] = &[
     // ci-gate-self-tests.yml is path-filtered to gate scripts only.
     // Runs only when the gate scripts or self-test scripts change.
     "ci-gate-self-tests.yml",
+    // methodology-gate.yml is a low-cost policy check that runs across PR states.
+    "methodology-gate.yml",
 ];
 
 const ALLOWED_UNGATED_JOBS: &[&str] = &["tautology-check", "test-metrics", "fmt", "clippy"];

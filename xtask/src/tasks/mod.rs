@@ -49,6 +49,7 @@ pub mod ignored_tests;
 pub mod inject_sha_assets;
 pub mod layer_check;
 pub mod metrics;
+pub mod methodology_gate;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
