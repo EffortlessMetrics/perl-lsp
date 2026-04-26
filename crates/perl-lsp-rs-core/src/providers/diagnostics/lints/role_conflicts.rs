@@ -1,8 +1,13 @@
-//! Same-file Moo/Moose/Role::Tiny role conflict diagnostics.
+//! Same-file Moo/Moose/Role::Tiny role conflict diagnostics (PL303).
 //!
 //! This lint checks for roles consumed by a class in the same file that
-//! provide overlapping method names. It intentionally ignores workspace-wide
-//! indexing and transitive role composition.
+//! provide overlapping method names. Supports Moo, Moose, Mouse, and Role::Tiny
+//! role composition via `with()`.
+//!
+//! Detection relies on framework detection in [`FrameworkKind`] and
+//! [`Framework`] enums, and symbol classification via [`SymbolKind::Role`].
+//! See [`perl_semantic_analyzer::analysis::symbol`] and
+//! [`perl_semantic_analyzer::analysis::class_model`] for details.
 
 use std::collections::{HashMap, HashSet};
 
@@ -84,6 +89,14 @@ pub fn check_role_conflicts(
     }
 }
 
+/// Look up the [`SymbolKind`] for a package in the symbol table.
+///
+/// Returns `SymbolKind::Class` or `SymbolKind::Role` if the package has been
+/// upgraded from `SymbolKind::Package` by the framework detection pass in
+/// [`upgrade_package_symbols_from_framework_flags`](crate::symbol::SymbolExtractor::upgrade_package_symbols_from_framework_flags).
+///
+/// Returns `None` if the package is not in the symbol table or has not been
+/// classified as a class or role.
 fn package_kind(symbol_table: &SymbolTable, package_name: &str) -> Option<SymbolKind> {
     symbol_table.symbols.get(package_name)?.iter().find_map(|symbol| match symbol.kind {
         SymbolKind::Class | SymbolKind::Role => Some(symbol.kind),
@@ -91,10 +104,19 @@ fn package_kind(symbol_table: &SymbolTable, package_name: &str) -> Option<Symbol
     })
 }
 
+/// Collect all method names provided by a class model.
+///
+/// Combines both regular methods and `BUILD`/`DEMOLISH` adjustment methods
+/// since both contribute to method visibility in role composition.
 fn provided_method_names(model: &ClassModel) -> HashSet<String> {
     model.methods.iter().chain(model.adjusts.iter()).map(|method| method.name.clone()).collect()
 }
 
+/// Find the source location of a role reference for use as a diagnostic anchor.
+///
+/// The anchor is the `with()` call that consumes the conflicting roles.
+/// Returns the location of the first role reference found in the symbol table
+/// that has `SymbolKind::Role`. Returns `None` if no role references are found.
 fn role_anchor_location(
     symbol_table: &SymbolTable,
     role_names: &[String],
@@ -110,12 +132,22 @@ fn role_anchor_location(
     None
 }
 
+/// Build a human-readable diagnostic message for a role method conflict.
+///
+/// Uses "both provide" for two roles, "all provide" for three or more.
 fn build_message(class_name: &str, method_name: &str, role_names: &[String]) -> String {
     let role_list = format_role_list(role_names);
     let provider_verb = if role_names.len() == 2 { "both provide" } else { "all provide" };
     format!("Roles {role_list} {provider_verb} method `{method_name}` consumed by `{class_name}`")
 }
 
+/// Format a list of role names as a human-readable string.
+///
+/// Examples:
+/// - `[]` → `""`
+/// - `["RoleA"]` → `` `RoleA` ``
+/// - `["RoleA", "RoleB"]` → `` `RoleA` and `RoleB` ``
+/// - `["RoleA", "RoleB", "RoleC"]` → `` `RoleA`, `RoleB`, and `RoleC` ``
 fn format_role_list(role_names: &[String]) -> String {
     match role_names {
         [] => String::from(""),
