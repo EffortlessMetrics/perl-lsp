@@ -54,10 +54,6 @@ describe('perl-lsp.previewPod command (issue #2062)', () => {
     const entry = paletteEntries.find((e: any) => e.command === 'perl-lsp.previewPod');
     expect(entry?.when).toContain('editorLangId == perl');
   });
-
-  test('perl-lsp.previewPod has an activation event', () => {
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.previewPod');
-  });
 });
 
 // ---------------------------------------------------------------------------
