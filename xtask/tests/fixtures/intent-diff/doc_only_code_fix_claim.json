@@ -1,0 +1,8 @@
+{
+  "title": "fix(vscode): activation regression",
+  "body": "Fixes #6747. This updates only docs.",
+  "actual_paths": [
+    "docs/project/CURRENT_STATUS.md",
+    "docs/ci/intent-diff-closeout-gate.md"
+  ]
+}

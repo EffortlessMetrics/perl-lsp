@@ -1,0 +1,8 @@
+{
+  "title": "fix(vscode): activation failure at startup",
+  "body": "Resolves #6747 by updating activation events.",
+  "actual_paths": [
+    "vscode-extension/package.json",
+    "crates/perl-lsp-rs/tests/vscode_activation_smoke.rs"
+  ]
+}

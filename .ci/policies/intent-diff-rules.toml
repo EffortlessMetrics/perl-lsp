@@ -1,0 +1,20 @@
+[severity]
+docs_only_code_claim = "fail"
+docs_title_code_change = "warn"
+scaffold_closeout = "fail"
+
+override_markers = ["intent-diff-override", "intent-diff: override"]
+test_path_markers = ["/tests/", "_test", "/spec/"]
+behavior_receipt_markers = ["target/receipts/", ".ci/receipts/", "review/receipts/"]
+
+[issue_targets]
+"6747" = [
+  "vscode-extension/package.json",
+  "crates/perl-lsp-rs/tests/",
+  "crates/perl-lsp-ux-tests/"
+]
+
+[component_expectations.vscode_activation]
+keywords = ["vs code activation", "vscode activation"]
+expected_paths = ["vscode-extension/package.json", "crates/perl-lsp-rs/tests/"]
+level = "fail"

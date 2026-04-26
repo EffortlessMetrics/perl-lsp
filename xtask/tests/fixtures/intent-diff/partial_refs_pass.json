@@ -1,0 +1,8 @@
+{
+  "title": "chore(ci): scaffold intent gate",
+  "body": "Partial implementation. Refs #6853.",
+  "actual_paths": [
+    "xtask/src/tasks/intent_diff_gate.rs",
+    "docs/ci/intent-diff-closeout-gate.md"
+  ]
+}
