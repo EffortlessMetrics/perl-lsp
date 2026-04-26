@@ -1,0 +1,3 @@
+required_checks = [
+  "ci / pr-fast",
+]

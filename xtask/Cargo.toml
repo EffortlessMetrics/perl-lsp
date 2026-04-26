@@ -42,6 +42,7 @@ notify = "8.2.0"
 flate2 = "1.1.5"
 tar = "0.4.44"
 tempfile.workspace = true
+sha2 = "0.10.9"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.18.0"

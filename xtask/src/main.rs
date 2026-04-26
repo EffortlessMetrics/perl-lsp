@@ -853,6 +853,12 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Manage merge-readiness receipts and reconciliation.
+    MergeReady {
+        #[command(subcommand)]
+        command: MergeReadyCommand,
+    },
+
     /// Track ignored tests and enforce gate policy
     IgnoredTests {
         /// Write current counts back to baseline
@@ -1303,6 +1309,37 @@ enum MetricsCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum MergeReadyCommand {
+    /// Emit a SHA-bound merge-readiness receipt.
+    Emit {
+        /// Pull request number.
+        #[arg(long)]
+        pr: u64,
+        /// Output path for receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+    },
+    /// Verify receipt freshness and merge-readiness status.
+    Verify {
+        /// Pull request number (required unless --fixture is used).
+        #[arg(long)]
+        pr: Option<u64>,
+        /// Optional fixture receipt path for offline validation.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Reconcile merge-ready labels against receipts.
+    Reconcile {
+        /// Run in advisory mode only (default).
+        #[arg(long)]
+        dry_run: bool,
+        /// Apply mode (remove stale merge-ready and emit reason comment).
+        #[arg(long)]
+        apply: bool,
+    },
+}
+
 #[derive(ValueEnum, Clone)]
 enum PrepCratesMode {
     Core,
@@ -1579,6 +1616,13 @@ fn main() -> Result<()> {
                 test_threads,
             })
         }
+        Commands::MergeReady { command } => match command {
+            MergeReadyCommand::Emit { pr, receipt } => merge_ready::emit(pr, receipt),
+            MergeReadyCommand::Verify { pr, fixture } => merge_ready::verify(pr, fixture),
+            MergeReadyCommand::Reconcile { dry_run, apply } => {
+                merge_ready::reconcile(dry_run, apply)
+            }
+        },
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
         }

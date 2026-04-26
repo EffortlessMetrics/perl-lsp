@@ -1,0 +1,19 @@
+{
+  "check": "merge-readiness",
+  "schema_version": 1,
+  "event": "pull_request",
+  "pr": 6859,
+  "head_sha": "dddddddddddddddddddddddddddddddddddddddd",
+  "base_sha": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "gate_graph_version": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "required_checks": [
+    "ci / pr-fast"
+  ],
+  "review_evidence": {
+    "approved": true,
+    "reviewed_head_sha": "dddddddddddddddddddddddddddddddddddddddd"
+  },
+  "blocker_labels_absent": false,
+  "verdict": "blocked",
+  "expires_when": "head_sha_or_base_sha_or_gate_graph_changes"
+}
