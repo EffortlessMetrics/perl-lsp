@@ -2843,11 +2843,12 @@ sub complex {
                 thread::sleep(Duration::from_millis(50));
             }
 
+            let backup_dir = must(tempfile::tempdir());
             let config = RefactoringConfig {
                 create_backups: true,
                 max_backup_retention: 2,
                 backup_max_age_seconds: 0, // Disable age-based retention
-                backup_root: Some(backup_root),
+                backup_root: Some(backup_dir.path().to_path_buf()),
                 ..RefactoringConfig::default()
             };
             let mut engine = RefactoringEngine::with_config(config);
