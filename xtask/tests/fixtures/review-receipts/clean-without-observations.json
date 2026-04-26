@@ -1,0 +1,15 @@
+{
+  "kind": "review",
+  "producer": "codex",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "verdict": "clean",
+  "material_observations": [],
+  "negative_checks": [
+    "No unsupported feature flags were introduced."
+  ],
+  "blockers": [],
+  "next_routes": ["signoff_clean"],
+  "supersedes": null
+}

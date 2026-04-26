@@ -1,0 +1,17 @@
+{
+  "kind": "review",
+  "producer": "codex",
+  "pr": 6853,
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "verdict": "clean",
+  "material_observations": [
+    "Confirmed symbol resolution logic is unchanged for non-edited files."
+  ],
+  "negative_checks": [
+    "No new fallback paths silently swallowing parser errors."
+  ],
+  "blockers": [],
+  "next_routes": ["signoff_clean"],
+  "supersedes": null
+}

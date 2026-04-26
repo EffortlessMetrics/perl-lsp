@@ -757,6 +757,12 @@ enum Commands {
         date: Option<String>,
     },
 
+    /// Validate a review receipt JSON payload against policy rules.
+    ValidateReviewReceipt {
+        /// Path to a review receipt JSON file.
+        path: PathBuf,
+    },
+
     /// Publish VSCode extension to marketplace
     PublishVscode {
         /// Skip confirmation
@@ -1510,6 +1516,7 @@ fn main() -> Result<()> {
         Commands::PublishManifestCheck => publish_manifest_check::run(),
         Commands::SmokeTestRelease { version } => publish::smoke_test_release(version),
         Commands::PublishReceipts { date } => publish_receipts::run(date),
+        Commands::ValidateReviewReceipt { path } => review_receipts::run_validate(path),
         Commands::ParserCorpusSweep {
             roots,
             manifest,
