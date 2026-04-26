@@ -19,7 +19,7 @@ use crate::{
     state::{completion_cap, completion_deadline},
 };
 use perl_lexer::LSP_RUNTIME_COMPLETION_KEYWORDS;
-use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source;
+use perl_module::resolution::use_lib::resolve_use_lib_paths_from_source_at_offset;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
@@ -63,6 +63,7 @@ impl LspServer {
         &self,
         uri: &str,
         doc_text: &str,
+        cursor_offset: usize,
         file_dir: Option<&Path>,
     ) -> (Vec<PathBuf>, Vec<PathBuf>, bool) {
         let mut include_paths: Vec<PathBuf> = Vec::new();
@@ -79,7 +80,12 @@ impl LspServer {
         // Prepend lexical `use lib` paths extracted from the document source.
         // These have the highest precedence (matching goto-definition behaviour).
         if let Some(root) = folder_root.as_ref() {
-            let use_lib_strings = resolve_use_lib_paths_from_source(doc_text, root, file_dir);
+            let use_lib_strings = resolve_use_lib_paths_from_source_at_offset(
+                doc_text,
+                cursor_offset,
+                root,
+                file_dir,
+            );
             for path_str in use_lib_strings {
                 let p = PathBuf::from(&path_str);
                 let resolved = if p.is_absolute() { p } else { root.join(&p) };
@@ -405,7 +411,12 @@ impl LspServer {
                     let file_dir = super::super::source_path_from_uri(uri)
                         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
                     let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(uri, &doc.text, file_dir.as_deref());
+                        self.module_completion_roots_for_doc(
+                            uri,
+                            &doc.text,
+                            offset,
+                            file_dir.as_deref(),
+                        );
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -660,7 +671,12 @@ impl LspServer {
                     let file_dir = super::super::source_path_from_uri(uri)
                         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
                     let (include_paths, system_inc_paths, include_system_inc) =
-                        self.module_completion_roots_for_doc(uri, &doc.text, file_dir.as_deref());
+                        self.module_completion_roots_for_doc(
+                            uri,
+                            &doc.text,
+                            offset,
+                            file_dir.as_deref(),
+                        );
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -1133,7 +1149,12 @@ mod tests {
 
         let file_dir = Some(temp.path().to_path_buf());
         let (include_paths, _sys, _use_sys) =
-            server.module_completion_roots_for_doc(&doc_uri, &doc_text, file_dir.as_deref());
+            server.module_completion_roots_for_doc(
+                &doc_uri,
+                &doc_text,
+                doc_text.len(),
+                file_dir.as_deref(),
+            );
 
         assert!(
             include_paths.contains(&lib_dir),
