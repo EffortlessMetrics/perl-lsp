@@ -899,7 +899,7 @@ SECOND
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 0, "first-byte match must be on line 0");
         assert_eq!(location.column, 0, "first-byte match must be at column 0");
@@ -918,7 +918,7 @@ SECOND
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 2, "match on third line must report line 2");
         assert_eq!(location.column, 0, "match at start of line must report column 0");
@@ -937,7 +937,7 @@ SECOND
         // The comment is masked; only SourceFilterHeredoc on line 1 should fire.
         assert_eq!(diagnostics.len(), 1);
         let AntiPattern::SourceFilterHeredoc { location, .. } = &diagnostics[0].pattern else {
-            panic!("expected SourceFilterHeredoc");
+            unreachable!("expected SourceFilterHeredoc");
         };
         assert_eq!(location.line, 1);
         assert_eq!(location.column, 4, "mid-line match must report correct column");

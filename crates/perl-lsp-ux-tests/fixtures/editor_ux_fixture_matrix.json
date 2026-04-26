@@ -456,6 +456,26 @@
         "manual_editor_smoke",
         "issue_burndown_regression_guard"
       ]
+    },
+    {
+      "id": "workspace_folder_addition_freshness",
+      "scenario_file": "ux_scenario_19_workspace_folder_addition.rs",
+      "subsystem_owner": "workspace_indexing",
+      "ci_tier": "pr",
+      "user_journey": "add a workspace folder after initialize and re-run workspace symbol search",
+      "measures": [
+        "workflow_pass_rate",
+        "workflow_stability_rate",
+        "multi_root_workspace_navigation_success_rate"
+      ],
+      "expected_outcomes": [
+        "added folder symbols appear in search results without restart"
+      ],
+      "confidence_signals": [
+        "first_five_minutes_harness",
+        "manual_editor_smoke",
+        "issue_burndown_regression_guard"
+      ]
     }
   ]
 }
