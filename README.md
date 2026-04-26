@@ -42,9 +42,9 @@ require('lspconfig').perl_ls.setup { cmd = { "perllsp", "--stdio" } }
 ```
 
 ```elisp
-;; Emacs (eglot)
+;; Emacs (eglot) — perl-ts-mode is a third-party package, omit if not installed
 (add-to-list 'eglot-server-programs
-             '((perl-mode cperl-mode) . ("perllsp" "--stdio")))
+             '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio")))
 ```
 
 ```text
