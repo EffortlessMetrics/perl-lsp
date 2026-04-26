@@ -1869,6 +1869,7 @@ name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
  "anyhow",
+ "criterion",
  "perl-ast",
  "perl-parser-core",
  "perl-tdd-support",

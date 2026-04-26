@@ -3,10 +3,10 @@
 //! This suite targets the highest-impact path (editor open/change events):
 //! parse with recovery, symbol extraction, scope analysis, and semantic token generation.
 
+use perl_semantic_analyzer::Parser;
 use perl_semantic_analyzer::analysis::scope_analyzer::ScopeAnalyzer;
 use perl_semantic_analyzer::analysis::semantic::SemanticAnalyzer;
 use perl_semantic_analyzer::symbol::SymbolExtractor;
-use perl_semantic_analyzer::Parser;
 
 #[derive(Debug, Clone)]
 struct XorShift64 {
