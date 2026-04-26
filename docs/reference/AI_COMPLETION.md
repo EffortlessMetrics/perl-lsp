@@ -66,6 +66,8 @@ built-in default values.
 | Variable | Purpose |
 |----------|---------|
 | `OPENAI_API_KEY` | Default API key variable. The server reads the key from whatever variable name is configured in `apiKeyEnv`. |
+| `GEMINI_API_KEY` | Fallback key variable used automatically when `apiKeyEnv` is unset/empty in the environment. Useful for Gemini CLI/OpenAI-compatible setups. |
+| `GOOGLE_API_KEY` | Secondary fallback key variable for Gemini/OpenAI-compatible setups. |
 
 The API key is resolved at runtime via `std::env::var`. The variable must be
 set in the environment where the LSP server process runs. If the variable is
@@ -89,6 +91,7 @@ The server auto-selects the request/stream format from your configured endpoint:
 - **OpenAI (Responses)** -- `https://api.openai.com/v1/responses`
 - **Azure OpenAI** -- `https://<resource>.openai.azure.com/openai/deployments/<deployment>/chat/completions?api-version=<version>`
 - **Local servers** -- Any OpenAI-compatible local inference server (e.g. llama.cpp, vLLM, Ollama with OpenAI compatibility layer)
+- **Gemini (OpenAI-compatible)** -- `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` (typically with `model` like `gemini-2.5-pro` or `gemini-2.5-flash`)
 - **Other providers** -- Any service that accepts the same request format and returns SSE `data:` lines with `choices[].delta.content`
 
 For Chat Completions endpoints, the request format uses `"stream": true`,

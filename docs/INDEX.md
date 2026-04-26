@@ -40,6 +40,9 @@ Choose the path that matches what you are trying to do:
 | Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
 | Read the historical analyses and launch material | [Articles and Research Notes](articles/README.md) |
 | Decide where a doc belongs in Diataxis | [Diataxis Authoring Guide](reference/DIATAXIS_GUIDE.md) |
+| **Contribute code to perl-lsp** | **[Contributing Guide](../CONTRIBUTING.md)** |
+| Develop the VS Code extension locally | [VS Code Extension Dev Guide](../vscode-extension/DEVELOPMENT.md) |
+| Navigate the 89 helper scripts | [Scripts Directory Index](../scripts/README.md) |
 
 ## Documentation Map
 
@@ -107,6 +110,17 @@ Long-form historical writing plus the supporting research notes that fed it.
 - [Parsing Perl](articles/PARSING_PERL.md)
 - [Zero-Panic Reliability and Security](articles/ZERO_PANIC.md)
 - [Curiosities, Records, and Surprising Facts](articles/CURIOSITIES.md)
+
+### Contributing & Development
+
+Resources for contributors working on the codebase itself.
+
+- [Contributing Guide](../CONTRIBUTING.md) — first-time setup checklist, workflow, coding standards, PR process
+- [CLAUDE.md](../CLAUDE.md) — architecture overview, crate map, agent pipeline, key commands
+- [VS Code Extension Dev Guide](../vscode-extension/DEVELOPMENT.md) — build, test, and point at a local binary
+- [Scripts Directory Index](../scripts/README.md) — categorized guide to the 89 helper scripts
+- [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) — how to implement and test LSP features
+- [ADR Index](adr/README.md) — design decisions and rationale
 
 ## Suggested Reading Order for New Contributors
 
