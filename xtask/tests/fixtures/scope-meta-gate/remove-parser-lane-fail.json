@@ -1,0 +1,19 @@
+{
+  "changed_files": [
+    "xtask/src/tasks/ci_scope.rs",
+    ".ci/parser-ratchet/rules.yaml"
+  ],
+  "old_decision": {
+    "selected_lanes": [
+      "parser_ratchet",
+      "test_scoped"
+    ],
+    "selected_heavy_lanes": []
+  },
+  "new_decision": {
+    "selected_lanes": [
+      "test_scoped"
+    ],
+    "selected_heavy_lanes": []
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/scope-meta-gate.schema.json",
+  "title": "scope-meta-gate receipt",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "changed_files",
+    "old_decision",
+    "new_decision",
+    "changed_lanes",
+    "verdict",
+    "reason"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "base": {
+      "type": ["string", "null"]
+    },
+    "head": {
+      "type": ["string", "null"]
+    },
+    "changed_files": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "old_decision": {
+      "$ref": "#/$defs/scopeDecision"
+    },
+    "new_decision": {
+      "$ref": "#/$defs/scopeDecision"
+    },
+    "changed_lanes": {
+      "type": "object",
+      "required": ["removed", "added", "unchanged"],
+      "properties": {
+        "removed": { "type": "array", "items": { "type": "string" } },
+        "added": { "type": "array", "items": { "type": "string" } },
+        "unchanged": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "scopeDecision": {
+      "type": "object",
+      "required": ["selected_lanes", "selected_heavy_lanes"],
+      "properties": {
+        "selected_lanes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "selected_heavy_lanes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

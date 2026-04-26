@@ -1,0 +1,19 @@
+{
+  "changed_files": [
+    ".ci/scope.d/docs.yaml",
+    "docs/ci/policy.md"
+  ],
+  "old_decision": {
+    "selected_lanes": [
+      "test_scoped"
+    ],
+    "selected_heavy_lanes": []
+  },
+  "new_decision": {
+    "selected_lanes": [
+      "test_scoped",
+      "doc_check"
+    ],
+    "selected_heavy_lanes": []
+  }
+}
