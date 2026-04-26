@@ -666,4 +666,3 @@ mod tests {
         assert_eq!(def.p95_ms, Some(42.0));
     }
 }
-
