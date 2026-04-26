@@ -31,3 +31,9 @@ description = "Rustfmt gate receipt for explicit formatting outcomes."
 check = "failure-classifier"
 schema = ".ci/receipts/schemas/failure-classifier.schema.json"
 description = "Classifies failures into code/infra/staleness classes."
+
+[[receipt]]
+check = "review"
+schema = ".ci/receipts/schemas/review.schema.json"
+description = "Agent sign-off receipt with material observations and negative checks."
+required_fields = ["material_observations", "negative_checks", "verdict"]
