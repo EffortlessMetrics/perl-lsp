@@ -1645,6 +1645,10 @@ impl<'a> PerlLexer<'a> {
                         // This is a dereference, don't consume the brace
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectOperator;
+                        // A bare sigil token used for dereference (`${...}`, `@{...}`,
+                        // `%{...}`) must still allow the following `{` to be treated as
+                        // the dereference opener, not a block opener.
+                        self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
 
                         return Some(Token {
                             token_type: TokenType::Identifier(Arc::from(text)),
@@ -1721,6 +1725,8 @@ impl<'a> PerlLexer<'a> {
                             self.position = start + 1; // Just past the sigil
                             let text = &self.input[start..self.position];
                             self.mode = LexerMode::ExpectOperator;
+                            // Preserve `{` as dereference opener for $, @, % sigils.
+                            self.after_var_subscript = matches!(sigil, '$' | '@' | '%');
 
                             return Some(Token {
                                 token_type: TokenType::Identifier(Arc::from(text)),
