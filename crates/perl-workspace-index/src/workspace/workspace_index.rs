@@ -3227,15 +3227,27 @@ impl IndexVisitor {
                 // Object is a read context
                 self.visit_node(object, file_index);
 
-                // Track method call with qualified name if applicable
-                let method_key = qualified_method.as_ref().unwrap_or(method);
-                file_index.references.entry(method_key.clone()).or_default().push(
-                    SymbolReference {
-                        uri: self.uri.clone(),
-                        range: self.node_to_range(node),
-                        kind: ReferenceKind::Usage,
-                    },
-                );
+                // Track method call under BOTH the qualified form (for static calls
+                // like `Pkg->method`) AND the bare method name. This mirrors the
+                // FunctionCall dual-key storage above (PR #122 dual-indexing pattern)
+                // so that bare-name lookups (e.g. `find_unused_symbols`,
+                // `count_usages("method")`) consistently find static method call sites.
+                // See #6799 for the original asymmetric-storage bug report.
+                let location = self.node_to_range(node);
+                if let Some(qualified_method) = qualified_method.as_ref() {
+                    file_index.references.entry(qualified_method.clone()).or_default().push(
+                        SymbolReference {
+                            uri: self.uri.clone(),
+                            range: location,
+                            kind: ReferenceKind::Usage,
+                        },
+                    );
+                }
+                file_index.references.entry(method.clone()).or_default().push(SymbolReference {
+                    uri: self.uri.clone(),
+                    range: location,
+                    kind: ReferenceKind::Usage,
+                });
 
                 if method == "import"
                     && let NodeKind::Identifier { name: module_name } = &object.kind
