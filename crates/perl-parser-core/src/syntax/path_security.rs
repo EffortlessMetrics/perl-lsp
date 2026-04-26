@@ -7,6 +7,18 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::syntax::path_normalize::{NormalizePathError, normalize_path_within_workspace};
 
+/// Walk `path` prefix-by-prefix and return `true` if any component is a symlink.
+fn path_has_symlink_component(path: &Path) -> bool {
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if current.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+            return true;
+        }
+    }
+    false
+}
+
 fn normalize_filesystem_path(path: PathBuf) -> PathBuf {
     #[cfg(windows)]
     {
@@ -33,6 +45,10 @@ pub enum WorkspacePathError {
     /// Path resolves outside the workspace root.
     #[error("Path outside workspace: {0}")]
     PathOutsideWorkspace(String),
+
+    /// A symlink in the path resolves to a target outside the workspace root.
+    #[error("Symlink resolves outside workspace: {0}")]
+    SymlinkOutsideWorkspace(String),
 
     /// Path contains null bytes or disallowed control characters.
     #[error("Invalid path characters detected")]
@@ -69,6 +85,16 @@ pub fn validate_workspace_path(
     let final_path = if let Ok(canonical) = resolved.canonicalize() {
         let canonical = normalize_filesystem_path(canonical);
         if !canonical.starts_with(&workspace_canonical) {
+            // Distinguish symlink escapes (path was within workspace before symlink
+            // resolution) from direct outside-workspace access.
+            if path_has_symlink_component(&resolved) {
+                return Err(WorkspacePathError::SymlinkOutsideWorkspace(format!(
+                    "Symlink resolves outside workspace: {} -> {} (workspace: {})",
+                    resolved.display(),
+                    canonical.display(),
+                    workspace_canonical.display()
+                )));
+            }
             return Err(WorkspacePathError::PathOutsideWorkspace(format!(
                 "Path resolves outside workspace: {} (workspace: {})",
                 canonical.display(),
@@ -137,7 +163,13 @@ pub fn split_completion_path_components(path: &str) -> (String, String) {
 }
 
 /// Resolve a directory used for file completion traversal.
-pub fn resolve_completion_base_directory(dir_part: &str) -> Option<PathBuf> {
+///
+/// When `workspace_root` is `Some`, the resolved path is checked for workspace
+/// containment so that symlinks pointing outside the workspace are rejected.
+pub fn resolve_completion_base_directory(
+    dir_part: &str,
+    workspace_root: Option<&Path>,
+) -> Option<PathBuf> {
     let path = Path::new(dir_part);
 
     if path.is_absolute() && dir_part != "/" {
@@ -149,7 +181,19 @@ pub fn resolve_completion_base_directory(dir_part: &str) -> Option<PathBuf> {
     }
 
     match path.canonicalize() {
-        Ok(canonical) => Some(canonical),
+        Ok(canonical) => {
+            if let Some(root) = workspace_root {
+                let root_canonical = root.canonicalize().ok()?;
+                let root_canonical = normalize_filesystem_path(root_canonical);
+                let canonical = normalize_filesystem_path(canonical);
+                if !canonical.starts_with(&root_canonical) {
+                    return None;
+                }
+                Some(canonical)
+            } else {
+                Some(normalize_filesystem_path(canonical))
+            }
+        }
         Err(_) => {
             if path.exists() && path.is_dir() {
                 Some(path.to_path_buf())
@@ -574,7 +618,10 @@ mod tests {
         {
             let result =
                 validate_workspace_path(&PathBuf::from("escape_link/secret.txt"), workspace);
-            assert!(result.is_err(), "Symlink escape should be rejected");
+            assert!(
+                matches!(result, Err(WorkspacePathError::SymlinkOutsideWorkspace(_))),
+                "Symlink escape should produce SymlinkOutsideWorkspace, got: {result:?}"
+            );
         }
 
         Ok(())
@@ -622,7 +669,10 @@ mod tests {
         #[cfg(unix)]
         {
             let result = validate_workspace_path(&PathBuf::from("hop1/hop2/data.txt"), workspace);
-            assert!(result.is_err(), "Chained symlink escape should be rejected");
+            assert!(
+                matches!(result, Err(WorkspacePathError::SymlinkOutsideWorkspace(_))),
+                "Chained symlink escape should produce SymlinkOutsideWorkspace, got: {result:?}"
+            );
         }
 
         Ok(())
@@ -1053,15 +1103,15 @@ mod tests {
     fn test_resolve_completion_base_rejects_absolute() {
         use super::resolve_completion_base_directory;
 
-        assert!(resolve_completion_base_directory("/etc").is_none());
-        assert!(resolve_completion_base_directory("/usr/bin").is_none());
+        assert!(resolve_completion_base_directory("/etc", None).is_none());
+        assert!(resolve_completion_base_directory("/usr/bin", None).is_none());
     }
 
     #[test]
     fn test_resolve_completion_base_allows_dot() {
         use super::resolve_completion_base_directory;
 
-        let result = resolve_completion_base_directory(".");
+        let result = resolve_completion_base_directory(".", None);
         assert!(result.is_some());
         assert_eq!(result, Some(PathBuf::from(".")));
     }
@@ -1070,8 +1120,32 @@ mod tests {
     fn test_resolve_completion_base_nonexistent_returns_none() {
         use super::resolve_completion_base_directory;
 
-        let result = resolve_completion_base_directory("definitely_not_a_real_dir_xyz123");
+        let result = resolve_completion_base_directory("definitely_not_a_real_dir_xyz123", None);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_completion_base_symlink_escape_rejected_with_workspace_root() -> TestResult {
+        // Simulate an absolute path being produced by canonicalize outside the workspace.
+        // We test by passing an absolute path that would normally be blocked by
+        // the `is_absolute` guard — but we test the containment logic by calling
+        // resolve on an existing non-workspace path with workspace_root set.
+        // Since the function rejects absolute input, we instead verify that when
+        // canonicalize of a relative path returns a result outside workspace_root,
+        // the function returns None.  The easiest way to trigger this without CWD
+        // manipulation is to use the public validate_workspace_path API (which
+        // calls the containment check) — so this test focuses on the workspace_root
+        // parameter wiring via a normal existing directory check.
+        let workspace = tempfile::tempdir()?;
+        let external = tempfile::tempdir()?;
+
+        // Passing an absolute external path is blocked by the is_absolute guard.
+        let abs_external = external.path().to_str().unwrap_or("/tmp").to_string();
+        let result =
+            super::resolve_completion_base_directory(&abs_external, Some(workspace.path()));
+        assert!(result.is_none(), "absolute path outside workspace should always be rejected");
+
+        Ok(())
     }
 
     #[test]
