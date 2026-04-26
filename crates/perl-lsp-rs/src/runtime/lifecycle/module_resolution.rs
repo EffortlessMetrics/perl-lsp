@@ -1081,11 +1081,14 @@ use Overlay::Live;
     }
 
     #[test]
-    fn test_resolve_module_path_use_lib_outside_workspace_honored() -> TestResult {
+    fn test_resolve_module_path_use_lib_outside_workspace_is_rejected() -> TestResult {
+        // Security: lexical `use lib` paths from untrusted document text must not resolve
+        // modules outside the workspace.  Absolute paths that don't live under the workspace
+        // root are silently dropped so the outside module is never reachable via the LSP.
         let temp = tempfile::tempdir()?;
         let workspace = temp.path().join("workspace");
         fs::create_dir_all(&workspace)?;
-        // Place a module OUTSIDE the workspace and verify absolute use lib can find it.
+        // Place a module OUTSIDE the workspace — it must never be found.
         let outside_dir = temp.path().join("outside");
         let outside_module = outside_dir.join("Evil").join("Hack.pm");
         fs::create_dir_all(outside_module.parent().ok_or("no parent")?)?;
@@ -1098,15 +1101,16 @@ use Overlay::Live;
             config.include_paths = vec![];
         }
 
-        // Absolute paths in use lib should be honored literally.
+        // Absolute path outside workspace in `use lib` should NOT enable resolution of
+        // an out-of-workspace module; the path must be silently dropped.
         let outside_dir_str = outside_dir.to_string_lossy().to_string();
         let doc_text = format!("use lib '{outside_dir_str}';\n");
-        let result = server
-            .resolve_module_path("Evil::Hack", Some(&doc_text))
-            .ok_or("resolve_module_path returned None unexpectedly")?;
-        assert_eq!(
-            result, outside_module,
-            "absolute path outside workspace should resolve directly: {result:?}"
+        let result = server.resolve_module_path("Evil::Hack", Some(&doc_text));
+        // The result must not be the outside module path.
+        assert!(
+            result.as_ref().map_or(true, |p| p != &outside_module),
+            "absolute outside-workspace use lib path should not resolve the outside module, \
+             got: {result:?}"
         );
         Ok(())
     }

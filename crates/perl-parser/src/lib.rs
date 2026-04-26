@@ -527,7 +527,7 @@ pub use workspace::workspace_rename;
 /// AST node, node kind enum, and source location types.
 pub use ast::{Node, NodeKind, SourceLocation};
 /// Parse error and result types for parser output.
-pub use error::{ParseError, ParseResult};
+pub use error::{ParseError, ParseResult, RecoverySalvageClass, RecoverySalvageProfile};
 #[cfg(feature = "incremental")]
 /// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
