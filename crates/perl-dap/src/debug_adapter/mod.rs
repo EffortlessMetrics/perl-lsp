@@ -451,12 +451,72 @@ struct DebugSession {
     state: DebugState,
     /// Stack frames
     stack_frames: Vec<StackFrame>,
-    /// Variables in current scope
-    variables: HashMap<i32, Vec<Variable>>,
+    /// Variables in current scope, including root scopes and child expansions.
+    variable_cache: VariableCache,
     /// Thread ID
     thread_id: i32,
     /// Last resume command issued while running.
     last_resume_mode: ResumeMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VariableCacheKind {
+    Root,
+    Child,
+}
+
+#[derive(Debug, Clone)]
+struct VariableCacheEntry {
+    kind: VariableCacheKind,
+    full: Vec<Variable>,
+    page_slices: HashMap<(usize, usize), Vec<Variable>>,
+}
+
+#[derive(Debug, Default)]
+struct VariableCache {
+    entries: HashMap<i32, VariableCacheEntry>,
+}
+
+impl VariableCache {
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+
+    fn upsert(&mut self, reference: i32, kind: VariableCacheKind, variables: Vec<Variable>) {
+        let _ = self.entries.insert(
+            reference,
+            VariableCacheEntry { kind, full: variables, page_slices: HashMap::new() },
+        );
+    }
+
+    fn get_page(&mut self, reference: i32, start: usize, count: usize) -> Option<Vec<Variable>> {
+        let entry = self.entries.get_mut(&reference)?;
+        let key = (start, count);
+        if let Some(cached) = entry.page_slices.get(&key) {
+            return Some(cached.clone());
+        }
+
+        let page = slice_variables(&entry.full, start, count);
+        let _ = entry.page_slices.insert(key, page.clone());
+        Some(page)
+    }
+
+    fn all_variables(&self) -> impl Iterator<Item = &Variable> {
+        self.entries
+            .values()
+            .filter(|entry| entry.kind == VariableCacheKind::Root)
+            .chain(
+                self.entries
+                    .values()
+                    .filter(|entry| entry.kind == VariableCacheKind::Child),
+            )
+            .flat_map(|entry| entry.full.iter())
+    }
+
+}
+
+fn slice_variables(variables: &[Variable], start: usize, count: usize) -> Vec<Variable> {
+    variables.iter().skip(start).take(count).cloned().collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
