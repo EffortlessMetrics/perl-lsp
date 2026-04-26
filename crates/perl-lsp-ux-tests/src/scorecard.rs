@@ -15,6 +15,12 @@ pub struct ScenarioScore {
     pub completion_top5_correct: Option<bool>,
     /// Go-to-definition landed on exact expected location.
     pub definition_exact_hit: Option<bool>,
+    /// Symbol search returned correct symbols.
+    pub symbol_correct: Option<bool>,
+    /// Diagnostics payload was correct after settling.
+    pub diagnostics_correct: Option<bool>,
+    /// Rename workflow completed with valid workspace edit.
+    pub rename_success: Option<bool>,
     /// Cross-file workflow succeeded.
     pub cross_file_success: Option<bool>,
     /// Mean latency per request class in milliseconds for this scenario.
@@ -32,6 +38,9 @@ pub struct EditorUxScorecard {
     pub completion_top1_pct: Option<f64>,
     pub completion_top5_pct: Option<f64>,
     pub definition_exact_hit_pct: Option<f64>,
+    pub symbol_correctness_pct: Option<f64>,
+    pub diagnostics_correct_pct: Option<f64>,
+    pub rename_success_pct: Option<f64>,
     pub cross_file_success_pct: Option<f64>,
     pub mean_latency_ms_by_request: BTreeMap<String, f64>,
 }
@@ -48,6 +57,9 @@ impl EditorUxScorecard {
                 "completion_top1_pct": self.completion_top1_pct,
                 "completion_top5_pct": self.completion_top5_pct,
                 "definition_exact_hit_pct": self.definition_exact_hit_pct,
+                "symbol_correctness_pct": self.symbol_correctness_pct,
+                "diagnostics_correct_pct": self.diagnostics_correct_pct,
+                "rename_success_pct": self.rename_success_pct,
                 "cross_file_success_pct": self.cross_file_success_pct,
                 "mean_latency_ms_by_request": self.mean_latency_ms_by_request,
             }
@@ -64,6 +76,10 @@ pub fn aggregate_editor_ux_scorecard(scenarios: &[ScenarioScore]) -> EditorUxSco
         percent_true(scenarios.iter().filter_map(|s| s.completion_top5_correct));
     let definition_exact_hit_pct =
         percent_true(scenarios.iter().filter_map(|s| s.definition_exact_hit));
+    let symbol_correctness_pct = percent_true(scenarios.iter().filter_map(|s| s.symbol_correct));
+    let diagnostics_correct_pct =
+        percent_true(scenarios.iter().filter_map(|s| s.diagnostics_correct));
+    let rename_success_pct = percent_true(scenarios.iter().filter_map(|s| s.rename_success));
     let cross_file_success_pct =
         percent_true(scenarios.iter().filter_map(|s| s.cross_file_success));
 
@@ -87,6 +103,9 @@ pub fn aggregate_editor_ux_scorecard(scenarios: &[ScenarioScore]) -> EditorUxSco
         completion_top1_pct,
         completion_top5_pct,
         definition_exact_hit_pct,
+        symbol_correctness_pct,
+        diagnostics_correct_pct,
+        rename_success_pct,
         cross_file_success_pct,
         mean_latency_ms_by_request,
     }
@@ -127,6 +146,9 @@ mod tests {
             completion_top1_correct: Some(false),
             completion_top5_correct: Some(true),
             definition_exact_hit: Some(true),
+            symbol_correct: Some(true),
+            diagnostics_correct: Some(true),
+            rename_success: None,
             cross_file_success: Some(true),
             mean_latency_ms: BTreeMap::from([
                 ("hover".to_string(), 12.0),
@@ -140,6 +162,9 @@ mod tests {
             completion_top1_correct: Some(true),
             completion_top5_correct: Some(true),
             definition_exact_hit: Some(false),
+            symbol_correct: Some(false),
+            diagnostics_correct: Some(false),
+            rename_success: Some(true),
             cross_file_success: Some(true),
             mean_latency_ms: BTreeMap::from([
                 ("hover".to_string(), 8.0),
@@ -155,6 +180,9 @@ mod tests {
         assert_eq!(scorecard.completion_top1_pct, Some(50.0));
         assert_eq!(scorecard.completion_top5_pct, Some(100.0));
         assert_eq!(scorecard.definition_exact_hit_pct, Some(50.0));
+        assert_eq!(scorecard.symbol_correctness_pct, Some(50.0));
+        assert_eq!(scorecard.diagnostics_correct_pct, Some(50.0));
+        assert_eq!(scorecard.rename_success_pct, Some(100.0));
         assert_eq!(scorecard.cross_file_success_pct, Some(100.0));
         assert_eq!(scorecard.mean_latency_ms_by_request.get("hover"), Some(&10.0));
         assert_eq!(scorecard.mean_latency_ms_by_request.get("completion"), Some(&30.0));
@@ -165,6 +193,9 @@ mod tests {
         assert_eq!(payload["schema_version"], 1);
         assert_eq!(payload["subsystem"], "editor_ux");
         assert_eq!(payload["rows"]["completion_top5_pct"], 100.0);
+        assert_eq!(payload["rows"]["symbol_correctness_pct"], 50.0);
+        assert_eq!(payload["rows"]["diagnostics_correct_pct"], 50.0);
+        assert_eq!(payload["rows"]["rename_success_pct"], 100.0);
 
         Ok(())
     }
@@ -177,6 +208,9 @@ mod tests {
             completion_top1_correct: None,
             completion_top5_correct: None,
             definition_exact_hit: None,
+            symbol_correct: None,
+            diagnostics_correct: None,
+            rename_success: None,
             cross_file_success: None,
             mean_latency_ms: BTreeMap::from([("document_symbols".to_string(), 18.0)]),
         };
@@ -187,9 +221,40 @@ mod tests {
         assert_eq!(scorecard.completion_top1_pct, None);
         assert_eq!(scorecard.completion_top5_pct, None);
         assert_eq!(scorecard.definition_exact_hit_pct, None);
+        assert_eq!(scorecard.symbol_correctness_pct, None);
+        assert_eq!(scorecard.diagnostics_correct_pct, None);
+        assert_eq!(scorecard.rename_success_pct, None);
         assert_eq!(scorecard.cross_file_success_pct, None);
         assert_eq!(scorecard.mean_latency_ms_by_request.get("document_symbols"), Some(&18.0));
 
+        Ok(())
+    }
+
+    #[test]
+    fn rename_success_aggregates_independently_of_other_metrics() -> Result<()> {
+        let scenarios = vec![
+            ScenarioScore {
+                scenario_id: "rename-pass".to_string(),
+                rename_success: Some(true),
+                ..Default::default()
+            },
+            ScenarioScore {
+                scenario_id: "rename-fail".to_string(),
+                rename_success: Some(false),
+                ..Default::default()
+            },
+            ScenarioScore {
+                scenario_id: "no-rename".to_string(),
+                hover_correct: Some(true),
+                rename_success: None,
+                ..Default::default()
+            },
+        ];
+        let scorecard = aggregate_editor_ux_scorecard(&scenarios);
+        // Only 2 scenarios measured rename; 1 passed → 50%
+        assert_eq!(scorecard.rename_success_pct, Some(50.0));
+        // Only 1 scenario measured hover; it passed → 100%
+        assert_eq!(scorecard.hover_correctness_pct, Some(100.0));
         Ok(())
     }
 }

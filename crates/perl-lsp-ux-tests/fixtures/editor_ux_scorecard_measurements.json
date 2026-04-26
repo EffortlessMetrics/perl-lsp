@@ -6,6 +6,8 @@
     "completion_top5_correct": null,
     "definition_exact_hit": null,
     "symbol_correct": null,
+    "diagnostics_correct": null,
+    "rename_success": null,
     "cross_file_success": null,
     "latency_ms_by_request": {
       "hover": [18, 21, 24, 31, 29]
@@ -18,6 +20,8 @@
     "completion_top5_correct": null,
     "definition_exact_hit": true,
     "symbol_correct": null,
+    "diagnostics_correct": null,
+    "rename_success": null,
     "cross_file_success": true,
     "latency_ms_by_request": {
       "definition": [27, 32, 36, 39, 44]
@@ -30,6 +34,8 @@
     "completion_top5_correct": null,
     "definition_exact_hit": null,
     "symbol_correct": true,
+    "diagnostics_correct": null,
+    "rename_success": null,
     "cross_file_success": true,
     "latency_ms_by_request": {
       "workspace_symbols": [42, 48, 55, 61, 68]
@@ -42,6 +48,8 @@
     "completion_top5_correct": null,
     "definition_exact_hit": null,
     "symbol_correct": true,
+    "diagnostics_correct": null,
+    "rename_success": null,
     "cross_file_success": true,
     "latency_ms_by_request": {
       "workspace_symbols": [46, 49, 58, 64, 70]
@@ -54,9 +62,65 @@
     "completion_top5_correct": true,
     "definition_exact_hit": null,
     "symbol_correct": null,
+    "diagnostics_correct": null,
+    "rename_success": null,
     "cross_file_success": null,
     "latency_ms_by_request": {
       "completion": [19, 23, 27, 33, 35]
     }
+  },
+  {
+    "scenario_id": "strict_diagnostics",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "diagnostics_correct": true,
+    "rename_success": null,
+    "cross_file_success": null,
+    "latency_ms_by_request": {
+      "diagnostics": [38, 44, 51, 58, 63]
+    }
+  },
+  {
+    "scenario_id": "document_symbols_core",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": true,
+    "diagnostics_correct": null,
+    "rename_success": null,
+    "cross_file_success": null,
+    "latency_ms_by_request": {
+      "document_symbols": [14, 17, 20, 24, 28]
+    }
+  },
+  {
+    "scenario_id": "diagnostics_after_edit",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "diagnostics_correct": true,
+    "rename_success": null,
+    "cross_file_success": null,
+    "latency_ms_by_request": {
+      "diagnostics": [41, 47, 53, 60, 66]
+    }
+  },
+  {
+    "scenario_id": "rename_workflow_core",
+    "hover_correct": null,
+    "completion_top1_correct": null,
+    "completion_top5_correct": null,
+    "definition_exact_hit": null,
+    "symbol_correct": null,
+    "diagnostics_correct": null,
+    "rename_success": true,
+    "cross_file_success": null,
+    "latency_ms_by_request": {}
   }
 ]
