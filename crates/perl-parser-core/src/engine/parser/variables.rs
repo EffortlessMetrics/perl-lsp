@@ -693,15 +693,22 @@ impl<'a> Parser<'a> {
     fn parse_signature(&mut self) -> ParseResult<Vec<Node>> {
         self.expect(TokenKind::LeftParen)?; // consume (
         let mut params = Vec::new();
+        let mut seen_invocant_separator = false;
 
         while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
             // Parse parameter
             let param = self.parse_signature_param()?;
             params.push(param);
 
-            // Check for comma or end of signature
+            // Check for separator or end of signature.
+            // Perl method signatures may use an invocant separator:
+            //   method run ($self: $arg1, $arg2) { ... }
+            // Treat the first `:` after a parameter as a valid separator.
             if self.peek_kind() == Some(TokenKind::Comma) {
                 self.tokens.next()?; // consume comma
+            } else if self.peek_kind() == Some(TokenKind::Colon) && !seen_invocant_separator {
+                self.tokens.next()?; // consume invocant separator
+                seen_invocant_separator = true;
             } else if self.peek_kind() == Some(TokenKind::RightParen) {
                 break;
             } else {

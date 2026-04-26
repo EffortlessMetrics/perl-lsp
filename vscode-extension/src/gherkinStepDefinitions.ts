@@ -10,6 +10,9 @@ const OUTLINE_PLACEHOLDER_RE = /<[^>\r\n]+>/y;
 const DEFAULT_STEP_DEFINITION_GLOB = '**/*.pm';
 const DEFAULT_EXCLUDE_GLOB = '{**/node_modules/**,**/blib/**}';
 const MAX_STEP_DEFINITION_FILES = 500;
+const MAX_MATCH_REGEX_LENGTH = 256;
+const MAX_MATCH_STEP_TEXT_LENGTH = 512;
+const POTENTIALLY_EXPENSIVE_REGEX_RE = /(?:\([^)]*[+*][^)]*\)|\[[^\]]+\])[+*{]|\\[1-9]|\(\?<[=!]|(\(\?[!=])/;
 
 export type StepKeyword = 'Given' | 'When' | 'Then' | 'And' | 'But';
 export type StepDefinitionStatus = 'defined' | 'undefined' | 'ambiguous';
@@ -363,9 +366,21 @@ function testExtractedDefinition(
     definition: ExtractedStepDefinition,
     stepText: string
 ): boolean | null {
+    if (!isSafeRegexForStepMatching(definition.pattern, stepText)) {
+        return null;
+    }
+
     try {
         return new RegExp(definition.pattern).test(stepText);
     } catch {
         return null;
     }
+}
+
+function isSafeRegexForStepMatching(source: string, stepText: string): boolean {
+    if (source.length > MAX_MATCH_REGEX_LENGTH || stepText.length > MAX_MATCH_STEP_TEXT_LENGTH) {
+        return false;
+    }
+
+    return !POTENTIALLY_EXPENSIVE_REGEX_RE.test(source);
 }
