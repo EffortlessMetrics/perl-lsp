@@ -333,17 +333,18 @@ fn maybe_embed_receipt_block(root: &Path, artifact: &UxScorecardArtifact) -> Res
     let mut json_value: serde_json::Value = serde_json::from_str(&raw)
         .with_context(|| format!("parsing {}", receipt_path.display()))?;
     if let Some(object) = json_value.as_object_mut() {
+        let row = |k: &str| artifact.rows.get(k).and_then(|m| m.value);
         object.insert(
             "ux_scorecard".to_string(),
             json!({
-                "hover_correctness_pct": artifact.rows.get("hover_correctness_pct").and_then(|m| m.value),
-                "completion_top1_pct": artifact.rows.get("completion_top1_pct").and_then(|m| m.value),
-                "completion_top5_pct": artifact.rows.get("completion_top5_pct").and_then(|m| m.value),
-                "definition_exact_hit_pct": artifact.rows.get("definition_exact_hit_pct").and_then(|m| m.value),
-                "symbol_correctness_pct": artifact.rows.get("symbol_correctness_pct").and_then(|m| m.value),
-                "diagnostics_correct_pct": artifact.rows.get("diagnostics_correct_pct").and_then(|m| m.value),
-                "rename_success_pct": artifact.rows.get("rename_success_pct").and_then(|m| m.value),
-                "cross_file_success_pct": artifact.rows.get("cross_file_success_pct").and_then(|m| m.value)
+                "hover_correctness_pct": row("hover_correctness_pct"),
+                "completion_top1_pct": row("completion_top1_pct"),
+                "completion_top5_pct": row("completion_top5_pct"),
+                "definition_exact_hit_pct": row("definition_exact_hit_pct"),
+                "symbol_correctness_pct": row("symbol_correctness_pct"),
+                "diagnostics_correct_pct": row("diagnostics_correct_pct"),
+                "rename_success_pct": row("rename_success_pct"),
+                "cross_file_success_pct": row("cross_file_success_pct"),
             }),
         );
     }
@@ -395,28 +396,87 @@ fn path_relative_to_root(root: &Path, path: &Path) -> String {
 mod tests {
     use super::*;
 
+    fn measurement(
+        id: &str,
+        hover: Option<bool>,
+        top1: Option<bool>,
+        top5: Option<bool>,
+        def: Option<bool>,
+        sym: Option<bool>,
+        cross: Option<bool>,
+        latency: &[(&str, Vec<u64>)],
+    ) -> ScenarioMeasurement {
+        ScenarioMeasurement {
+            scenario_id: id.to_string(),
+            hover_correct: hover,
+            completion_top1_correct: top1,
+            completion_top5_correct: top5,
+            definition_exact_hit: def,
+            symbol_correct: sym,
+            diagnostics_correct: None,
+            rename_success: None,
+            cross_file_success: cross,
+            latency_ms_by_request: latency
+                .iter()
+                .map(|(k, v)| ((*k).to_string(), v.clone()))
+                .collect(),
+        }
+    }
+
     #[test]
     fn computes_percentiles() {
-        let rows = vec![ScenarioMeasurement {
-            scenario_id: "s1".to_string(),
-            hover_correct: Some(true),
-            completion_top1_correct: Some(true),
-            completion_top5_correct: Some(true),
-            definition_exact_hit: Some(true),
-            symbol_correct: Some(true),
-            diagnostics_correct: Some(true),
-            rename_success: None,
-            cross_file_success: Some(true),
-            latency_ms_by_request: BTreeMap::from([("hover".to_string(), vec![10, 20, 30, 40])]),
-        }];
+        let rows =
+            vec![measurement("s1", None, None, None, None, None, None, &[("hover", vec![10, 20, 30, 40])])];
 
         let latency = compute_latency_percentiles(&rows);
-        let hover = latency.get("hover");
-        assert!(hover.is_some());
-        if let Some(metrics) = hover {
-            assert_eq!(metrics.p50_ms, Some(30.0));
-            assert_eq!(metrics.p95_ms, Some(40.0));
-        }
+        let hover = latency.get("hover").expect("hover present");
+        assert_eq!(hover.p50_ms, Some(30.0));
+        assert_eq!(hover.p95_ms, Some(40.0));
+    }
+
+    #[test]
+    fn single_sample_latency_p50_equals_p95() {
+        let rows = vec![measurement(
+            "single", None, None, None, None, None, None,
+            &[("definition", vec![42])],
+        )];
+        let latency = compute_latency_percentiles(&rows);
+        let def = latency.get("definition").expect("definition present");
+        assert_eq!(def.p50_ms, Some(42.0));
+        assert_eq!(def.p95_ms, Some(42.0));
+    }
+
+    #[test]
+    fn two_sample_latency_percentiles() {
+        // [10, 90]: p50 rank=(2-1)*0.5=0.5→1, samples[1]=90; p95 rank=(2-1)*0.95=0.95→1, samples[1]=90
+        let rows = vec![measurement(
+            "two", None, None, None, None, None, None,
+            &[("hover", vec![10, 90])],
+        )];
+        let latency = compute_latency_percentiles(&rows);
+        let h = latency.get("hover").expect("hover present");
+        assert_eq!(h.p50_ms, Some(90.0));
+        assert_eq!(h.p95_ms, Some(90.0));
+    }
+
+    #[test]
+    fn compute_latency_percentiles_empty_input_returns_empty_map() {
+        let latency = compute_latency_percentiles(&[]);
+        assert!(latency.is_empty());
+    }
+
+    #[test]
+    fn compute_latency_percentiles_merges_multiple_scenarios() {
+        // Two scenarios each contributing to "hover".
+        // Combined: [10, 30] sorted → p50: samples[1]=30, p95: samples[1]=30.
+        let rows = vec![
+            measurement("a", None, None, None, None, None, None, &[("hover", vec![10])]),
+            measurement("b", None, None, None, None, None, None, &[("hover", vec![30])]),
+        ];
+        let latency = compute_latency_percentiles(&rows);
+        let h = latency.get("hover").expect("hover present");
+        assert_eq!(h.p50_ms, Some(30.0));
+        assert_eq!(h.p95_ms, Some(30.0));
     }
 
     /// load_measurements propagates mean latency from raw samples into ScenarioScore.
@@ -444,7 +504,7 @@ mod tests {
         assert_eq!(s.mean_latency_ms.get("completion"), Some(&10.0));
     }
 
-    /// load_measurements populates all new correctness fields.
+    /// load_measurements populates all correctness fields including new ones.
     #[test]
     fn load_measurements_maps_all_correctness_fields() {
         let raw = vec![ScenarioMeasurement {
@@ -467,6 +527,102 @@ mod tests {
         assert_eq!(s.diagnostics_correct, Some(false));
         assert_eq!(s.rename_success, Some(true));
         assert_eq!(s.cross_file_success, Some(true));
+    }
+
+    #[test]
+    fn load_measurements_maps_symbol_correct_into_scenario_score() {
+        let raw = vec![
+            measurement("sym-true", None, None, None, None, Some(true), None, &[]),
+            measurement("sym-false", None, None, None, None, Some(false), None, &[]),
+            measurement("sym-none", None, None, None, None, None, None, &[]),
+        ];
+
+        let scenarios = load_measurements(&raw);
+        assert_eq!(scenarios[0].symbol_correct, Some(true));
+        assert_eq!(scenarios[1].symbol_correct, Some(false));
+        assert_eq!(scenarios[2].symbol_correct, None);
+
+        let scorecard = aggregate_editor_ux_scorecard(&scenarios);
+        // 1 true out of 2 measured = 50%
+        assert_eq!(scorecard.symbol_correctness_pct, Some(50.0));
+    }
+
+    #[test]
+    fn render_status_markdown_shows_coverage_pct() {
+        let mut rows = BTreeMap::new();
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 8,
+            scenario_ids: vec!["hover_core".to_string()],
+            rows,
+            latency_by_request_class: BTreeMap::new(),
+            provenance: serde_json::json!({"declared_scenario_count": 22}),
+        };
+        let md = render_status_markdown(&artifact, None);
+        assert!(md.contains("8` of `22"), "expected coverage fraction, got:\n{md}");
+        assert!(md.contains("36%"), "expected 36% coverage, got:\n{md}");
+        assert!(md.contains("hover_core"), "expected scenario id list, got:\n{md}");
+    }
+
+    #[test]
+    fn render_status_markdown_shows_baseline_deltas() {
+        let mut rows = BTreeMap::new();
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
+        let mut latency_by_request_class = BTreeMap::new();
+        latency_by_request_class.insert(
+            "hover".to_string(),
+            LatencyPercentiles { p50_ms: Some(22.0), p95_ms: Some(29.0) },
+        );
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 5,
+            scenario_ids: vec![],
+            rows,
+            latency_by_request_class,
+            provenance: serde_json::json!({"declared_scenario_count": 22}),
+        };
+        let mut floor_metrics = BTreeMap::new();
+        floor_metrics.insert("latency_hover_p50_ms".to_string(), Some(24.0_f64));
+        floor_metrics.insert("latency_hover_p95_ms".to_string(), Some(31.0_f64));
+        let baseline = SubsystemBaseline {
+            floor_metrics,
+            improvement_metrics: BTreeMap::new(),
+            tolerance_pct: 0.1,
+            lower_is_better: vec![],
+            schema_version: 1,
+            measured_at: String::new(),
+            subsystem: "editor_ux".to_string(),
+            commit: String::new(),
+        };
+        let md = render_status_markdown(&artifact, Some(&baseline));
+        assert!(md.contains("p50 baseline"), "expected baseline column header, got:\n{md}");
+        assert!(md.contains("24.00"), "expected baseline p50 value, got:\n{md}");
+        assert!(md.contains("31.00"), "expected baseline p95 value, got:\n{md}");
+    }
+
+    #[test]
+    fn render_status_markdown_shows_na_for_missing_values() {
+        let mut rows = BTreeMap::new();
+        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: None });
+
+        let artifact = UxScorecardArtifact {
+            schema_version: 1,
+            measured_at: "2026-01-01T00:00:00Z".to_string(),
+            subsystem: "editor_ux",
+            scenario_count: 0,
+            scenario_ids: vec![],
+            rows,
+            latency_by_request_class: BTreeMap::new(),
+            provenance: serde_json::json!({}),
+        };
+
+        let md = render_status_markdown(&artifact, None);
+        assert!(md.contains("n/a"), "missing n/a for absent metric");
     }
 
     /// Verifies the full measurement→rows→latency pipeline produces consistent
@@ -506,11 +662,8 @@ mod tests {
         let scenarios = load_measurements(&raw);
         let scorecard = aggregate_editor_ux_scorecard(&scenarios);
 
-        // hover_correct: true, false → 50%
         assert_eq!(scorecard.hover_correctness_pct, Some(50.0));
-        // completion_top1: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top1_pct, Some(100.0));
-        // completion_top5: only scenario 2 measured → 100%
         assert_eq!(scorecard.completion_top5_pct, Some(100.0));
         // definition_exact_hit: neither measured → None
         assert_eq!(scorecard.definition_exact_hit_pct, None);
@@ -532,13 +685,12 @@ mod tests {
         assert_eq!(hover_lat.p50_ms, Some(50.0));
         assert_eq!(hover_lat.p95_ms, Some(70.0));
 
-        // "completion" samples: [5, 15, 25] sorted.
-        // p50: rank = (3-1)*0.50 = 1.0 → 1, samples[1]=15
-        // p95: rank = (3-1)*0.95 = 1.9 → 2, samples[2]=25
+        // "completion": [5, 15, 25]; p50→15, p95→25
         let comp_lat = latencies.get("completion").expect("completion latency present");
         assert_eq!(comp_lat.p50_ms, Some(15.0));
         assert_eq!(comp_lat.p95_ms, Some(25.0));
 
+        // Artifact serialization round-trip.
         let mut rows = BTreeMap::new();
         rows.insert(
             "hover_correctness_pct".to_string(),
@@ -584,85 +736,5 @@ mod tests {
         // scenario_ids round-trips
         assert_eq!(parsed["scenario_ids"][0], "hover_test");
         assert_eq!(parsed["scenario_ids"][1], "completion_test");
-    }
-
-    /// render_status_markdown shows coverage % when declared_scenario_count is in provenance.
-    #[test]
-    fn render_status_markdown_shows_coverage_pct() {
-        let mut rows = BTreeMap::new();
-        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
-        let artifact = UxScorecardArtifact {
-            schema_version: 1,
-            measured_at: "2026-01-01T00:00:00Z".to_string(),
-            subsystem: "editor_ux",
-            scenario_count: 8,
-            scenario_ids: vec!["hover_core".to_string()],
-            rows,
-            latency_by_request_class: BTreeMap::new(),
-            provenance: serde_json::json!({"declared_scenario_count": 22}),
-        };
-        let md = render_status_markdown(&artifact, None);
-        assert!(md.contains("8` of `22"), "expected coverage fraction, got:\n{md}");
-        assert!(md.contains("36%"), "expected 36% coverage, got:\n{md}");
-        assert!(md.contains("hover_core"), "expected scenario id list, got:\n{md}");
-    }
-
-    /// render_status_markdown shows baseline deltas when baseline is provided.
-    #[test]
-    fn render_status_markdown_shows_baseline_deltas() {
-        let mut rows = BTreeMap::new();
-        rows.insert("hover_correctness_pct".to_string(), PercentMetric { value: Some(100.0) });
-        let mut latency_by_request_class = BTreeMap::new();
-        latency_by_request_class.insert(
-            "hover".to_string(),
-            LatencyPercentiles { p50_ms: Some(22.0), p95_ms: Some(29.0) },
-        );
-        let artifact = UxScorecardArtifact {
-            schema_version: 1,
-            measured_at: "2026-01-01T00:00:00Z".to_string(),
-            subsystem: "editor_ux",
-            scenario_count: 5,
-            scenario_ids: vec![],
-            rows,
-            latency_by_request_class,
-            provenance: serde_json::json!({"declared_scenario_count": 22}),
-        };
-        let mut floor_metrics = BTreeMap::new();
-        floor_metrics.insert("latency_hover_p50_ms".to_string(), Some(24.0_f64));
-        floor_metrics.insert("latency_hover_p95_ms".to_string(), Some(31.0_f64));
-        let baseline = SubsystemBaseline {
-            floor_metrics,
-            improvement_metrics: BTreeMap::new(),
-            tolerance_pct: 0.1,
-            lower_is_better: vec![],
-            schema_version: 1,
-            measured_at: String::new(),
-            subsystem: "editor_ux".to_string(),
-            commit: String::new(),
-        };
-        let md = render_status_markdown(&artifact, Some(&baseline));
-        assert!(md.contains("p50 baseline"), "expected baseline column header, got:\n{md}");
-        assert!(md.contains("24.00"), "expected baseline p50 value, got:\n{md}");
-        assert!(md.contains("31.00"), "expected baseline p95 value, got:\n{md}");
-    }
-
-    #[test]
-    fn single_sample_latency_p50_equals_p95() {
-        let rows = vec![ScenarioMeasurement {
-            scenario_id: "single".to_string(),
-            hover_correct: None,
-            completion_top1_correct: None,
-            completion_top5_correct: None,
-            definition_exact_hit: None,
-            symbol_correct: None,
-            diagnostics_correct: None,
-            rename_success: None,
-            cross_file_success: None,
-            latency_ms_by_request: BTreeMap::from([("definition".to_string(), vec![42])]),
-        }];
-        let latency = compute_latency_percentiles(&rows);
-        let def = latency.get("definition").expect("definition present");
-        assert_eq!(def.p50_ms, Some(42.0));
-        assert_eq!(def.p95_ms, Some(42.0));
     }
 }
