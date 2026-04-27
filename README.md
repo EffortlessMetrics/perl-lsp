@@ -166,7 +166,7 @@ See [docs/README.md](docs/README.md) for the full crate map and design notes.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. AI implementation agents (Codex, Jules, Roo Code) should read [AGENTS.md](AGENTS.md) first.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor workflow. AI implementation agents (Codex, Claude Code, Jules, Roo Code, Gemini CLI) should read [AGENTS.md](AGENTS.md) first. Gemini CLI users should also read [GEMINI.md](GEMINI.md).
 
 ```bash
 cargo test --workspace --lib
