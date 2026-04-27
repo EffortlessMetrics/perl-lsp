@@ -1239,17 +1239,13 @@ fn duplicate_no_warnings_category_does_not_create_extra_entry()
     Ok(())
 }
 
-
 #[test]
 fn no_warnings_empty_string_category_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
     // `no warnings ''` after quote-stripping yields an empty category name.
     // Error-recovery AST nodes can produce this.  The empty string must not be
     // pushed into disabled_warning_categories, and no map entry should be emitted
     // because the state did not change.
-    let ast = program(vec![
-        use_node("warnings", &[], 0, 12),
-        no_node("warnings", &["''"], 13, 28),
-    ]);
+    let ast = program(vec![use_node("warnings", &[], 0, 12), no_node("warnings", &["''"], 13, 28)]);
     let map = PragmaTracker::build(&ast);
     assert_eq!(map.len(), 1, "empty-string category should not create a map entry");
     assert!(

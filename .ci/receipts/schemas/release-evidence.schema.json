@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.github.io/perl-lsp/schemas/release-evidence.schema.json",
+  "title": "Release Evidence Summary Receipt",
+  "type": "object",
+  "required": ["version", "bundle_dir", "status", "receipts"],
+  "properties": {
+    "version": { "type": "string" },
+    "bundle_dir": { "type": "string" },
+    "status": { "type": "string", "enum": ["pass", "fail"] },
+    "blocking_failures": { "type": "array", "items": { "type": "string" } },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path", "status", "required", "release_blocking", "classification"],
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "status": { "type": "string" },
+          "required": { "type": "boolean" },
+          "release_blocking": { "type": "boolean" },
+          "classification": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
