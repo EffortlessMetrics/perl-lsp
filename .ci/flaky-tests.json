@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "description": "Registry of known flaky tests. Each entry documents a test that has exhibited non-deterministic failure, either currently active or resolved. Active entries inform CI triage; resolved entries are retained as institutional memory.",
+  "fields": {
+    "test": "Fully qualified test name (module::function)",
+    "crate": "Cargo package name",
+    "subsystem": "Logical subsystem: parser | lsp | dap | workspace | semantic | lexer | ux",
+    "state": "active | resolved",
+    "failure_mode": "Brief description of the non-determinism (race condition, timing, env-dependent, etc.)",
+    "issue": "GitHub issue number that tracked the flakiness",
+    "first_seen": "ISO 8601 date of first observed failure",
+    "resolved_in": "PR number that fixed the flakiness (only for resolved entries)",
+    "resolved_at": "ISO 8601 date resolved (only for resolved entries)",
+    "notes": "Optional free-form context"
+  },
+  "entries": [
+    {
+      "test": "tests::test_file_watcher_debounce_batches_rapid_events",
+      "crate": "perl-lsp-rs",
+      "subsystem": "lsp",
+      "state": "resolved",
+      "failure_mode": "Timing-sensitive: rapid event batching window occasionally expired before the assertion fired on loaded CI runners, producing a spurious 'expected 1 notification, got 2' failure.",
+      "issue": 6917,
+      "first_seen": "2026-03-15",
+      "resolved_in": 6918,
+      "resolved_at": "2026-03-16",
+      "notes": "Fixed by widening the debounce assertion window from 10ms to 50ms and adding a jitter-tolerant retry loop in the test harness."
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "active": 0,
+    "resolved": 1,
+    "by_subsystem": {
+      "lsp": 1
+    }
+  }
+}

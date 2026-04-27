@@ -1,0 +1,10 @@
+{
+  "name": "tests",
+  "selected": true,
+  "required": true,
+  "verdict": "pass",
+  "classification": "unknown",
+  "repro": {
+    "command": "cargo test --workspace"
+  }
+}

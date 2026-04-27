@@ -926,7 +926,7 @@ impl SemanticAnalyzer {
         static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
         static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
-        if self.source.is_empty() {
+        if self.source.is_empty() || start > self.source.len() {
             return None;
         }
         let before = &self.source[..start];
