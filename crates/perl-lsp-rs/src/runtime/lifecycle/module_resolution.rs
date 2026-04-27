@@ -12,7 +12,7 @@ use perl_module::resolution::{
 };
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 /// A single resolution scope representing a workspace folder's search context.
@@ -40,13 +40,6 @@ pub struct ResolutionContext {
     /// Ordered search scopes (current folder first, then others)
     pub search_scopes: Vec<ResolutionScope>,
 }
-
-/// Fires a `tracing::warn!` the first time workspace root is found to be undetected.
-///
-/// Both `resolve_module_path` and `resolve_module_path_with_uri` share this sentinel
-/// because both sites indicate the same underlying problem: no workspace root was
-/// provided by the LSP client (single-file mode with no open folder).
-static WARN_ONCE_ROOT_UNDETECTED: Once = Once::new();
 
 /// Prepend `use lib` paths extracted from `doc_text` to `include_paths`.
 ///
@@ -210,13 +203,14 @@ impl LspServer {
         let root = match resolution_root(self, None) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -248,13 +242,14 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -380,13 +375,14 @@ impl LspServer {
         let root = match resolution_root(self, doc_uri) {
             Some(r) => r,
             None => {
-                WARN_ONCE_ROOT_UNDETECTED.call_once(|| {
-                    tracing::warn!(
+                if !self.root_undetected_shown.fetch_or(true, Ordering::SeqCst) {
+                    let _ = self.show_message(
+                        MessageType::Warning,
                         "perl-lsp: workspace root not detected — module resolution disabled. \
                          To enable: open the project folder in your editor (File > Open Folder) \
-                         rather than individual files. This warning appears once per server session."
+                         rather than individual files. This warning appears once per server session.",
                     );
-                });
+                }
                 return None;
             }
         };
@@ -1260,6 +1256,146 @@ use Overlay::Live;
             // Must not panic
             let _result = server.resolve_module_path("Any::Module", Some(doc_text));
         }
+        Ok(())
+    }
+
+    // --- AC5: warns only once per LspServer instance ---
+
+    /// AC5: The first call to resolve_module_path when no workspace root is configured
+    /// must set root_undetected_shown to true. Subsequent calls must NOT reset it —
+    /// confirming that the warning fires exactly once per LspServer instance.
+    #[test]
+    fn root_undetected_shown_flag_is_set_on_first_failed_resolution() {
+        let server = LspServer::new();
+
+        // Flag must start false so the first warning can fire.
+        assert!(
+            !server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must be false at server creation"
+        );
+
+        // First resolution attempt (no root set) → flag flips to true.
+        let _ = server.resolve_module_path("First::Module", None);
+        assert!(
+            server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must be true after first failed resolution"
+        );
+    }
+
+    /// AC5 continued: a second resolution attempt with no root must see the flag already
+    /// set (suppressing a second warning). Verifies the atomic once-per-session contract.
+    #[test]
+    fn root_undetected_shown_flag_stays_set_on_subsequent_failed_resolutions() {
+        let server = LspServer::new();
+
+        // First call flips the flag.
+        let _ = server.resolve_module_path("First::Module", None);
+
+        // Manually snapshot old value to confirm the next call will suppress.
+        // fetch_or(true) returns the *previous* value: false on first, true on second.
+        // Here we test the cumulative: after two calls the flag is still true (not reset).
+        let _ = server.resolve_module_path("Second::Module", None);
+        assert!(
+            server.root_undetected_shown.load(std::sync::atomic::Ordering::SeqCst),
+            "root_undetected_shown must remain true after subsequent failed resolutions"
+        );
+    }
+
+    /// AC5: The Arc<AtomicBool> fetch_or semantics ensure the first call returns false
+    /// (enabling the warning) and subsequent calls return true (suppressing it).
+    /// This test validates the raw atomic protocol in isolation, independent of I/O.
+    #[test]
+    fn arc_atomic_fetch_or_warns_only_once_per_session() {
+        use std::sync::atomic::Ordering;
+
+        let flag = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        // First fetch_or: previous value is false → warning fires.
+        let first_was_false = !flag.fetch_or(true, Ordering::SeqCst);
+        assert!(first_was_false, "first fetch_or must return false (warning fires)");
+
+        // Second fetch_or: previous value is true → warning suppressed.
+        let second_was_true = flag.fetch_or(true, Ordering::SeqCst);
+        assert!(second_was_true, "second fetch_or must return true (warning suppressed)");
+
+        // Flag is still true regardless of subsequent calls.
+        assert!(
+            flag.load(Ordering::SeqCst),
+            "flag must remain true after multiple fetch_or(true) calls"
+        );
+    }
+
+    // --- AC8: window/showMessage payload uses MessageType::Warning ---
+
+    /// AC8: MessageType::Warning must have discriminant value 2 per the LSP specification.
+    /// The show_message call serializes `typ as i32` into the JSON payload —
+    /// this test verifies that the enum value the production code uses is correct.
+    #[test]
+    fn message_type_warning_has_lsp_discriminant_two() {
+        // LSP spec §3.16.1: MessageType.Warning = 2.
+        // Production code: `json!({ "type": typ as i32, ... })`.
+        assert_eq!(
+            MessageType::Warning as i32,
+            2,
+            "MessageType::Warning must serialize to 2 per LSP spec §3.16.1"
+        );
+    }
+
+    /// AC8: When workspace root is not detected, the outbound window/showMessage notification
+    /// must carry "type": 2 (Warning) and include actionable guidance text.
+    ///
+    /// Uses with_io() to capture the outbound stream and verifies the JSON payload
+    /// after the server is dropped (which joins the writer thread for a clean flush).
+    #[test]
+    fn show_message_on_root_undetected_uses_warning_type() -> TestResult {
+        use std::io::Cursor;
+
+        let output = std::sync::Arc::new(parking_lot::Mutex::new(Vec::<u8>::new()));
+
+        struct CaptureWriter(std::sync::Arc<parking_lot::Mutex<Vec<u8>>>);
+
+        impl std::io::Write for CaptureWriter {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let captured = std::sync::Arc::clone(&output);
+        let server = LspServer::with_io(
+            Box::new(Cursor::new(Vec::<u8>::new())),
+            Box::new(CaptureWriter(captured)),
+        );
+
+        // Trigger the first-run warning by calling resolve with no workspace root.
+        let _ = server.resolve_module_path("Warn::Me", None);
+
+        // Drop the server to flush and join the writer thread.
+        drop(server);
+
+        let bytes = output.lock().clone();
+        let text = String::from_utf8(bytes).map_err(|e| format!("output not valid UTF-8: {e}"))?;
+
+        assert!(
+            text.contains("window/showMessage"),
+            "expected window/showMessage notification in outbound stream, got: {text}"
+        );
+        assert!(
+            text.contains("\"type\":2"),
+            "expected MessageType::Warning (type:2) in window/showMessage payload, got: {text}"
+        );
+        assert!(
+            text.contains("workspace root not detected"),
+            "expected actionable guidance text in warning message, got: {text}"
+        );
+        assert!(
+            text.contains("Open Folder"),
+            "expected 'Open Folder' actionable text in warning message, got: {text}"
+        );
+
         Ok(())
     }
 
