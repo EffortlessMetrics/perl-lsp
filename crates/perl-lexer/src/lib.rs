@@ -2972,16 +2972,7 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_single_quoted_string(&mut self, start: usize) -> Option<Token> {
@@ -3019,16 +3010,7 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_backtick_string(&mut self, start: usize) -> Option<Token> {
@@ -3066,21 +3048,26 @@ impl<'a> PerlLexer<'a> {
             last_pos = self.position;
         }
 
-        // Unterminated string - return error token consuming rest of input
-        let end = self.input.len();
-        self.position = end;
-
-        Some(Token {
-            token_type: TokenType::Error(Arc::from("unterminated string")),
-            text: Arc::from(&self.input[start..end]),
-            start,
-            end,
-        })
+        Some(self.unterminated_string_error(start))
     }
 
     fn parse_q_string(&mut self, _start: usize) -> Option<Token> {
         // Simplified q-string parsing
         None
+    }
+
+    #[inline]
+    fn unterminated_string_error(&mut self, start: usize) -> Token {
+        // Consume to EOF so the caller receives a single terminal error token.
+        let end = self.input.len();
+        self.position = end;
+
+        Token {
+            token_type: TokenType::Error(Arc::from("unterminated string")),
+            text: Arc::from(&self.input[start..end]),
+            start,
+            end,
+        }
     }
 
     fn parse_substitution(&mut self, start: usize) -> Option<Token> {
