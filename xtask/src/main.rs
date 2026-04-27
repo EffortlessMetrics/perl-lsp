@@ -1288,6 +1288,25 @@ enum Commands {
         #[command(subcommand)]
         command: GeneratedFilesCommand,
     },
+
+    /// Run the parser ratchet CI check.
+    ///
+    /// Currently a no-op scaffold (selected=false) that emits a stable JSON receipt.
+    /// Subsequent PRs (see issue #6847) add scope selection, comparison, and enforcement.
+    /// Always exits 0 — never blocks a PR in this phase.
+    ParserRatchet {
+        /// CI profile name (e.g. `pr`, `nightly`).
+        #[arg(long, default_value = "pr")]
+        profile: String,
+
+        /// Base git reference to diff against.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Path to write the JSON receipt.
+        #[arg(long, default_value = "target/receipts/parser-ratchet.json")]
+        receipt: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2131,14 +2150,21 @@ fn main() -> Result<()> {
             build_timing::run_compare(baseline, current)
         }
         Commands::GeneratedFiles { command } => match command {
-            GeneratedFilesCommand::List { fixture } => generated_files::list(fixture),
+            GeneratedFilesCommand::List { fixture } => tasks::generated_files::list(fixture),
             GeneratedFilesCommand::Check {
                 receipt,
                 fixture,
                 generator_receipt,
                 allow_manual_edits,
-            } => generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+            } => tasks::generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
         },
+        Commands::ParserRatchet { profile, base, receipt } => {
+            tasks::parser_ratchet::run(tasks::parser_ratchet::ParserRatchetArgs {
+                profile,
+                base,
+                receipt,
+            })
+        }
     }
 }
 

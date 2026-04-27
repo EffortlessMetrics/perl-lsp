@@ -1,0 +1,46 @@
+name: Parser Ratchet
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+
+# DO NOT add `paths:` filter here. Per GitHub docs, path-filtered required
+# workflows can leave required checks pending. Scope decisions happen INSIDE
+# the check (currently no-op until PR 5 implements ci-scope selection).
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parser-ratchet-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  parser-ratchet:
+    name: Parser Ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: parser-ratchet-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run parser ratchet
+        run: cargo run --locked -p xtask -- parser-ratchet --profile pr --base origin/master --receipt target/receipts/parser-ratchet.json
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parser-ratchet-receipt
+          path: target/receipts/parser-ratchet.json
