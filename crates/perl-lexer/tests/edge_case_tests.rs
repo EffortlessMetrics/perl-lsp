@@ -1351,3 +1351,49 @@ fn sub_forward_declaration_does_not_leak() -> R {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Regression: sigil deref with chained hash subscript (PR #6497 fix)
+//
+// Before the fix, the two `is_deref` / backtrack paths in the sigil scanner
+// did NOT set `after_var_subscript = true`, so a following `{` was treated as
+// a block opener rather than a subscript dereference.  These tests lock the
+// correct behaviour.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn sigil_deref_scalar_chained_hash_subscript_terminates() -> R {
+    // `${$ref}{key}` — scalar deref then hash subscript.
+    // The lexer must not hang or produce a span overrun.
+    assert_terminates(r#"my $v = ${$ref}{key};"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_array_chained_slice_terminates() -> R {
+    // `@{$aref}[0]` — array deref then index subscript.
+    assert_terminates(r#"my @s = @{$aref}[0, 1];"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_hash_chained_subscript_terminates() -> R {
+    // `%{$href}{key}` — hash deref then key subscript.
+    assert_terminates(r#"my %h = %{$href}{key};"#);
+    Ok(())
+}
+
+#[test]
+fn sigil_deref_chained_does_not_suppress_regex_after_brace() -> R {
+    // After `${$ref}{key}`, a following `/` must still be a regex delimiter,
+    // not a division operator.  This guards against context-flag pollution
+    // from the dereference path.
+    let toks = significant(r#"${$ref}{key}; /pattern/"#);
+    let has_regex = toks.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(
+        has_regex,
+        "expected a Regex token after sigil-deref chain, got: {:?}",
+        toks.iter().map(|t| (&t.token_type, t.text.as_ref())).collect::<Vec<_>>()
+    );
+    Ok(())
+}

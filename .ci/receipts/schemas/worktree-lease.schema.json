@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://effortlessmetrics.dev/schemas/worktree-lease.schema.json",
+  "title": "Worktree Lease Receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "worktree_id",
+    "path",
+    "pr",
+    "branch",
+    "base_sha",
+    "owner",
+    "task_id",
+    "lease_expiry"
+  ],
+  "properties": {
+    "worktree_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pr": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lease_expiry": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
