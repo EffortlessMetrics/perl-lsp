@@ -32,8 +32,7 @@ fn has_global_symbol_diagnostic(diags: &[serde_json::Value], symbol: &str) -> bo
     diags.iter().any(|diag| {
         let message = diag.get("message").and_then(serde_json::Value::as_str).unwrap_or_default();
         let code = diag.get("code").and_then(serde_json::Value::as_str).unwrap_or_default();
-        message.contains(symbol)
-            || (code.contains("Global symbol") && message.contains(symbol))
+        message.contains(symbol) || (code.contains("Global symbol") && message.contains(symbol))
     })
 }
 
