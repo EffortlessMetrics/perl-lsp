@@ -339,6 +339,10 @@ pub enum FrameworkKind {
     Moose,
     /// `use Moose::Role;`
     MooseRole,
+    /// `use Role::Tiny;` — the package is a role
+    RoleTiny,
+    /// `use Role::Tiny::With;` — the package consumes roles
+    RoleTinyWith,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -457,8 +461,12 @@ impl SymbolExtractor {
                 continue;
             };
             let new_kind = match kind {
-                FrameworkKind::Moo | FrameworkKind::Moose => SymbolKind::Class,
-                FrameworkKind::MooRole | FrameworkKind::MooseRole => SymbolKind::Role,
+                FrameworkKind::Moo | FrameworkKind::Moose | FrameworkKind::RoleTinyWith => {
+                    SymbolKind::Class
+                }
+                FrameworkKind::MooRole
+                | FrameworkKind::MooseRole
+                | FrameworkKind::RoleTiny => SymbolKind::Role,
             };
             if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
                 for symbol in symbols.iter_mut() {
@@ -968,8 +976,8 @@ impl SymbolExtractor {
                 self.visit_node(variable);
             }
 
-            NodeKind::Goto { target } => {
-                if let NodeKind::Identifier { name } = &target.kind {
+            NodeKind::Goto { target } => match &target.kind {
+                NodeKind::Identifier { name } => {
                     self.table.add_reference(SymbolReference {
                         name: name.clone(),
                         kind: SymbolKind::Label,
@@ -978,8 +986,17 @@ impl SymbolExtractor {
                         is_write: false,
                     });
                 }
-                self.visit_node(target);
-            }
+                NodeKind::Variable { sigil, name } if sigil == "&" => {
+                    self.table.add_reference(SymbolReference {
+                        name: name.clone(),
+                        kind: SymbolKind::Subroutine,
+                        location: target.location,
+                        scope_id: self.table.current_scope(),
+                        is_write: false,
+                    });
+                }
+                _ => self.visit_node(target),
+            },
 
             // Regex related nodes - we recurse into expression
             NodeKind::Regex { .. } => {}
@@ -2137,6 +2154,8 @@ impl SymbolExtractor {
             "Moo::Role" | "Mouse::Role" => Some(FrameworkKind::MooRole),
             "Moose" => Some(FrameworkKind::Moose),
             "Moose::Role" => Some(FrameworkKind::MooseRole),
+            "Role::Tiny" => Some(FrameworkKind::RoleTiny),
+            "Role::Tiny::With" => Some(FrameworkKind::RoleTinyWith),
             _ => None,
         };
 
@@ -3215,7 +3234,7 @@ fn extract_qw_words(input: &str) -> (Vec<String>, String) {
 mod tests {
     use super::*;
     use crate::parser::Parser;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_symbol_extraction() {
@@ -3480,6 +3499,49 @@ sub configure ($x, %opts) {
         assert_eq!(
             span_len, 2,
             "symbol location should cover just '$y' (2 chars), not the full '$y = 0' (6 chars)"
+        );
+    }
+
+    #[test]
+    fn test_goto_label_creates_label_reference() {
+        let code = r#"
+sub run {
+    goto FINISH;
+FINISH:
+    return 1;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("FINISH"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Label),
+            "goto FINISH should produce a label reference"
+        );
+    }
+
+    #[test]
+    fn test_goto_ampersand_creates_subroutine_reference() {
+        let code = r#"
+sub target { return 42; }
+sub jump {
+    goto &target;
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let extractor = SymbolExtractor::new_with_source(code);
+        let table = extractor.extract(&ast);
+        let references = must_some(table.references.get("target"));
+
+        assert!(
+            references.iter().any(|reference| reference.kind == SymbolKind::Subroutine),
+            "goto &target should produce a subroutine reference"
         );
     }
 }
