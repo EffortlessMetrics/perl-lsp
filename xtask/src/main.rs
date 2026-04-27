@@ -998,6 +998,12 @@ enum Commands {
         command: AgentCommand,
     },
 
+    /// Classify failed CI receipts into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1276,6 +1282,37 @@ enum Commands {
         /// Current receipt JSON path.
         current: PathBuf,
     },
+
+    /// Validate generated-file ownership and associated receipts.
+    GeneratedFiles {
+        #[command(subcommand)]
+        command: GeneratedFilesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum GeneratedFilesCommand {
+    /// List generated-file ownership rules.
+    List {
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
+    /// Check changed generated files for matching generator receipts.
+    Check {
+        /// Path where generated-file receipt JSON is written.
+        #[arg(long, default_value = "target/receipts/generated-files.json")]
+        receipt: PathBuf,
+        /// Optional fixture JSON for deterministic tests.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+        /// Path(s) to generator receipt JSON artifacts.
+        #[arg(long = "generator-receipt")]
+        generator_receipt: Vec<PathBuf>,
+        /// Explicit override for manual edits in this run.
+        #[arg(long)]
+        allow_manual_edits: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1453,6 +1490,23 @@ enum ReleaseCommand {
         #[arg(long)]
         bundle_dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a failing receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
 }
 
 #[derive(Subcommand)]
@@ -1958,6 +2012,12 @@ fn main() -> Result<()> {
             },
             AgentCommand::Worktree { command } => worktree_allocator::run(command),
         },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
+        },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::UnwiredScan { json, check, lsp_crate } => {
@@ -2070,6 +2130,15 @@ fn main() -> Result<()> {
         Commands::CompareBuildTiming { baseline, current } => {
             build_timing::run_compare(baseline, current)
         }
+        Commands::GeneratedFiles { command } => match command {
+            GeneratedFilesCommand::List { fixture } => generated_files::list(fixture),
+            GeneratedFilesCommand::Check {
+                receipt,
+                fixture,
+                generator_receipt,
+                allow_manual_edits,
+            } => generated_files::check(receipt, fixture, generator_receipt, allow_manual_edits),
+        },
     }
 }
 
