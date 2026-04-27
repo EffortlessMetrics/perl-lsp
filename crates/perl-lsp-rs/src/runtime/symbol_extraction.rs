@@ -333,13 +333,13 @@ impl LspServer {
             }
 
             NodeKind::Use { module, .. } => {
-                if symbol_kind == "package" && perl_parser::qualified_name::split_qualified_name(module).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
+                if symbol_kind == "package" && module == symbol_name {
                     count += 1;
                 }
             }
 
             NodeKind::Identifier { name } => {
-                if symbol_kind == "package" && perl_parser::qualified_name::split_qualified_name(name).1 == perl_parser::qualified_name::split_qualified_name(symbol_name).1 {
+                if symbol_kind == "package" && name == symbol_name {
                     count += 1;
                 }
             }
