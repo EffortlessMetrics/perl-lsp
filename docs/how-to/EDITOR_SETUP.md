@@ -24,7 +24,7 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
-| Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
+| Trae (ByteDance) | install `EffortlessMetrics.perl-lsp-rs`; use `perl-lsp.serverPath` for manual or offline `perllsp` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
@@ -47,9 +47,19 @@ root pointed at the project root.
 
 ### Trae (ByteDance)
 
-Trae is VS Code-compatible, so the same extension and settings model applies.
-Install the `EffortlessMetrics.perl-lsp-rs` extension from Trae's Extensions
-panel, or configure a generic language server command as `perllsp --stdio`.
+Trae can install VS Code-compatible extensions, so use the official extension
+path first:
+
+```text
+EffortlessMetrics.perl-lsp-rs
+```
+
+The extension can auto-download `perllsp`. For offline or pinned deployments,
+install `perllsp` manually and set `perl-lsp.serverPath` with
+`perl-lsp.autoDownload` set to `false`.
+
+If the official extension is unavailable, install a generic LSP client
+extension first, then configure that extension to launch `perllsp --stdio`.
 
 ### Neovim
 

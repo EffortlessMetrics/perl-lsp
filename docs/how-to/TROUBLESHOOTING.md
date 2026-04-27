@@ -71,6 +71,25 @@ If the editor is using a helper extension or plugin, check its own logs too.
 If you are debugging with `perl-dap`, check the DAP guide:
 [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md).
 
+## Trae Does Not Start `perllsp`
+
+1. Confirm the `EffortlessMetrics.perl-lsp-rs` extension is installed and
+   enabled.
+2. Confirm the active document language is Perl.
+3. If using extension-managed downloads, confirm `perl-lsp.autoDownload` is
+   `true`.
+4. If using a manual binary, run:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+5. If Trae cannot find the binary, set an absolute `perl-lsp.serverPath`.
+6. Check the Perl LSP output/log panel and temporarily set
+   `perl-lsp.trace.server` to `messages`.
+
 ## When To Escalate
 
 Report an issue when you can include:
