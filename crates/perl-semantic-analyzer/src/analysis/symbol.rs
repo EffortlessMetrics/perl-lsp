@@ -464,9 +464,9 @@ impl SymbolExtractor {
                 FrameworkKind::Moo | FrameworkKind::Moose | FrameworkKind::RoleTinyWith => {
                     SymbolKind::Class
                 }
-                FrameworkKind::MooRole
-                | FrameworkKind::MooseRole
-                | FrameworkKind::RoleTiny => SymbolKind::Role,
+                FrameworkKind::MooRole | FrameworkKind::MooseRole | FrameworkKind::RoleTiny => {
+                    SymbolKind::Role
+                }
             };
             if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
                 for symbol in symbols.iter_mut() {
