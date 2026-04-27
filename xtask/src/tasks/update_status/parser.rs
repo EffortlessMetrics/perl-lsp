@@ -593,7 +593,6 @@ mod tests {
             median_error_density_per_1k_loc: None,
             recovery_salvage_rate: None,
             slowest_files: vec![],
-            dirty_classification: Default::default(),
         };
         let metrics = ParserMetrics {
             syntax_sections: 611,
