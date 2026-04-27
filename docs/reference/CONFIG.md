@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -559,7 +559,7 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -906,6 +906,33 @@ inlayHints.enabled = true
   }
 }
 ```
+
+#### OpenCode (`opencode.json`)
+
+OpenCode configures custom LSP servers through the `lsp` block. The `command`
+array launches the server, `extensions` controls activation, and
+`initialization` is sent as LSP initialization options.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"],
+      "initialization": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+For settings shared across editors, prefer `.perl-lsp.toml`.
 
 ---
 

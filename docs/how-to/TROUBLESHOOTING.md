@@ -17,13 +17,14 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 ## The Server Will Not Start
 
-1. Run the server in the foreground:
+1. Run server diagnostics first:
 
    ```bash
-   perllsp --stdio
+   perllsp --health
+   perllsp --info
    ```
 
-2. Turn on logging and read stderr:
+2. If needed, turn on logging and read stderr:
 
    ```bash
    RUST_LOG=perl_lsp=debug perllsp --stdio
@@ -70,6 +71,55 @@ If the editor is using a helper extension or plugin, check its own logs too.
 
 If you are debugging with `perl-dap`, check the DAP guide:
 [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md).
+
+## OpenCode Does Not Start `perllsp`
+
+1. Confirm `perllsp` works outside OpenCode:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the active file extension is listed in `opencode.json` under
+   `lsp.perl-lsp.extensions`.
+
+3. If OpenCode cannot find the binary, start OpenCode from the same shell where
+   `command -v perllsp` succeeds, or use an absolute path in the `command`
+   array.
+
+4. If `perllsp --stdio` appears to hang when run manually, that is expected. Use
+   `perllsp --health`, `perllsp --info`, or `perllsp --check path/to/file.pl`
+   for manual checks.
+
+5. Start OpenCode with debug logs:
+
+   ```bash
+   opencode --log-level DEBUG
+   ```
+
+6. Check OpenCode logs:
+
+   - macOS/Linux: `~/.local/share/opencode/log/`
+   - Windows: `%USERPROFILE%\.local\share\opencode\log`
+
+7. For direct hover, definition, references, and symbol operations, enable the
+   experimental LSP tool:
+
+   ```bash
+   OPENCODE_EXPERIMENTAL_LSP_TOOL=true opencode
+   ```
+
+   and set:
+
+   ```json
+   {
+     "permission": {
+       "lsp": "allow"
+     }
+   }
+   ```
 
 ## When To Escalate
 
