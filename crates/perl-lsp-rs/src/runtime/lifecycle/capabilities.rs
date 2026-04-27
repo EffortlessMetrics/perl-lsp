@@ -4,7 +4,7 @@
 
 use super::super::*;
 use perl_workspace::folder::{extract_workspace_folder_uris, root_path_to_file_uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn is_opencode_client(params: &Value) -> bool {
     params
@@ -508,8 +508,8 @@ mod init_options_tests {
 #[cfg(test)]
 mod tests {
     use super::{apply_disabled_feature_id, is_opencode_client};
-    use crate::protocol::capabilities::BuildFlags;
     use crate::LspServer;
+    use crate::protocol::capabilities::BuildFlags;
     use perl_workspace::folder::root_path_to_file_uri;
     use serde_json::json;
     use std::sync::atomic::Ordering;
