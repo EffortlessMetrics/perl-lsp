@@ -2826,8 +2826,8 @@ sub complex {
             use std::thread;
             use std::time::Duration;
 
-            let temp_dir = must(tempfile::tempdir());
-            let backup_root = temp_dir.path().to_path_buf();
+            let backup_dir = must(tempfile::tempdir());
+            let backup_root = backup_dir.path().to_path_buf();
 
             // Manually create 4 backup directories with different modification times.
             let backups = [
