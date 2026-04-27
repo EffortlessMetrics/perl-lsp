@@ -69,7 +69,7 @@ pub fn complete_file_paths(
     };
 
     let (dir_part, file_part) = split_completion_path_components(&safe_prefix);
-    let Some(base_dir) = resolve_completion_base_directory(&dir_part, None) else {
+    let Some(base_dir) = resolve_completion_base_directory(&dir_part) else {
         return Vec::new();
     };
 
