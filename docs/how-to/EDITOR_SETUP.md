@@ -29,7 +29,7 @@ perllsp --health
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
-| Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
+| Zed | requires a Zed Perl extension that registers `perllsp`; `settings.json` can override binary and initialization options for that registered server | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
@@ -92,8 +92,11 @@ args = ["--stdio"]
 
 ### Zed
 
-Zed requires a Perl extension that registers `perllsp`. Once installed, you
-can override the binary path via `settings.json`:
+Zed does not create arbitrary language servers from `settings.json` alone. A
+Zed language extension must first register a Perl language server ID, for
+example `perl-lsp`.
+
+Once that extension exists, configure the server in Zed settings:
 
 ```json
 {
@@ -107,6 +110,10 @@ can override the binary path via `settings.json`:
   }
 }
 ```
+
+The public Zed Perl extension currently registers `perlnavigator-server`, not
+`perllsp`, so use a perllsp-capable extension or development extension before
+applying the `perl-lsp` settings.
 
 See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 

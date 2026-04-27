@@ -66,6 +66,37 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Check whether the current file actually has a Perl mode or file type.
 - Inspect the LSP log for capability negotiation or request errors.
 
+### Zed does not start `perllsp`
+
+1. Confirm `perllsp` works outside Zed:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the installed Zed extension registers the same server ID used in
+   `settings.json`, for example `perl-lsp`.
+
+3. If Zed logs `no language server found matching 'perl-lsp'`, the server is
+   not registered. Installing `perllsp` alone is not enough.
+
+4. If Zed cannot find the binary, start Zed from the project shell:
+
+   ```bash
+   zed .
+   ```
+
+   or use an absolute `lsp.perl-lsp.binary.path`.
+
+5. Check Zed logs with `zed: open log`. For more startup detail, relaunch Zed
+   from a terminal:
+
+   ```bash
+   zed --foreground .
+   ```
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:
