@@ -21,6 +21,9 @@ jobs:
   parser-ratchet:
     name: Parser Ratchet
     runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'ci:<label>')
     steps:
       - uses: actions/checkout@v4
         with:
