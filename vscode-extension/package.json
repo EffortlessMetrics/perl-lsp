@@ -59,10 +59,10 @@
   "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:perl",
+    "onLanguage:perl5",
     "onLanguage:gherkin",
     "onWalkthrough:perl-lsp.gettingStarted",
-    "onDebugResolve:perl",
-    "onDebugInitialConfigurations"
+    "onStartupFinished"
   ],
   "contributes": {
     "languages": [
@@ -75,6 +75,7 @@
         ],
         "extensions": [
           ".pl",
+          ".PL",
           ".cgi",
           ".fcgi",
           ".pm",
@@ -91,7 +92,14 @@
           ".i"
         ],
         "firstLine": "^#!.*\\bperl\\b",
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "filenames": [
+          "Makefile.PL",
+          "Build.PL",
+          "cpanfile",
+          "cpanfile.snapshot",
+          "dist.ini"
+        ]
       },
       {
         "id": "gherkin",

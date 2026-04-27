@@ -19,6 +19,12 @@ pub enum IncRootKind {
     WorkspaceRelative,
     /// External absolute include roots.
     ExternalAbsolute,
+    /// Paths sourced from the `PERL5LIB` environment variable.
+    ///
+    /// Treated like `ExternalAbsolute` for resolution (no workspace-boundary
+    /// validation) but carries a distinct source label so diagnostics and
+    /// tooling can tell environment-supplied roots apart from project-configured ones.
+    Perl5LibEnv,
     /// Startup `@INC` entries from the selected Perl interpreter.
     InterpreterStartup,
     /// Runtime-derived include roots (reserved for future trusted runtime mode).
@@ -172,6 +178,7 @@ pub fn resolve_module_uri_with_effective_inc(
         if !matches!(
             inc_root.kind,
             IncRootKind::ExternalAbsolute
+                | IncRootKind::Perl5LibEnv
                 | IncRootKind::InterpreterStartup
                 | IncRootKind::RuntimeDerived
         ) {
@@ -245,6 +252,7 @@ fn full_path_for_root(
             }
         }
         IncRootKind::ExternalAbsolute
+        | IncRootKind::Perl5LibEnv
         | IncRootKind::InterpreterStartup
         | IncRootKind::RuntimeDerived => Some(inc_root.path.join(relative_path)),
     }
