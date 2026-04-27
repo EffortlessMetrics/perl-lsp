@@ -66,6 +66,55 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Check whether the current file actually has a Perl mode or file type.
 - Inspect the LSP log for capability negotiation or request errors.
 
+## OpenCode Does Not Start `perllsp`
+
+1. Confirm `perllsp` works outside OpenCode:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the active file extension is listed in `opencode.json` under
+   `lsp.perl-lsp.extensions`.
+
+3. If OpenCode cannot find the binary, start OpenCode from the same shell where
+   `command -v perllsp` succeeds, or use an absolute path in the `command`
+   array.
+
+4. If `perllsp --stdio` appears to hang when run manually, that is expected.
+   Use `perllsp --health`, `perllsp --info`, or `perllsp --check path/to/file.pl`
+   for manual checks.
+
+5. Start OpenCode with debug logs:
+
+   ```bash
+   opencode --log-level DEBUG
+   ```
+
+6. Check OpenCode logs:
+
+   - macOS/Linux: `~/.local/share/opencode/log/`
+   - Windows: `%USERPROFILE%\.local\share\opencode\log`
+
+7. For direct hover, definition, references, and symbol operations, enable the
+   experimental LSP tool:
+
+   ```bash
+   OPENCODE_EXPERIMENTAL_LSP_TOOL=true opencode
+   ```
+
+   and set:
+
+   ```json
+   {
+     "permission": {
+       "lsp": "allow"
+     }
+   }
+   ```
+
 ## DAP Or Debugging Issues
 
 If you are debugging with `perl-dap`, check the DAP guide:
