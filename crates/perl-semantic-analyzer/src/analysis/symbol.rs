@@ -339,6 +339,10 @@ pub enum FrameworkKind {
     Moose,
     /// `use Moose::Role;`
     MooseRole,
+    /// `use Role::Tiny;` — the package is a role
+    RoleTiny,
+    /// `use Role::Tiny::With;` — the package consumes roles
+    RoleTinyWith,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -457,8 +461,12 @@ impl SymbolExtractor {
                 continue;
             };
             let new_kind = match kind {
-                FrameworkKind::Moo | FrameworkKind::Moose => SymbolKind::Class,
-                FrameworkKind::MooRole | FrameworkKind::MooseRole => SymbolKind::Role,
+                FrameworkKind::Moo | FrameworkKind::Moose | FrameworkKind::RoleTinyWith => {
+                    SymbolKind::Class
+                }
+                FrameworkKind::MooRole | FrameworkKind::MooseRole | FrameworkKind::RoleTiny => {
+                    SymbolKind::Role
+                }
             };
             if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
                 for symbol in symbols.iter_mut() {
@@ -2146,6 +2154,8 @@ impl SymbolExtractor {
             "Moo::Role" | "Mouse::Role" => Some(FrameworkKind::MooRole),
             "Moose" => Some(FrameworkKind::Moose),
             "Moose::Role" => Some(FrameworkKind::MooseRole),
+            "Role::Tiny" => Some(FrameworkKind::RoleTiny),
+            "Role::Tiny::With" => Some(FrameworkKind::RoleTinyWith),
             _ => None,
         };
 

@@ -4,7 +4,10 @@
 
 use crate::ast::{Node, NodeKind};
 
-// Internal diagnostic type for TDD workflow (not dependent on lsp_types)
+/// Diagnostic produced during a TDD cycle (independent of `lsp_types`).
+///
+/// Used internally to track uncovered lines and code quality issues without
+/// pulling in the full LSP dependency.
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     /// Byte offset range (start line, end line) - 0-indexed
@@ -21,11 +24,16 @@ pub struct Diagnostic {
     pub tags: Vec<String>,
 }
 
+/// Severity level for a TDD-cycle [`Diagnostic`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticSeverity {
+    /// A hard failure that must be resolved before the cycle can proceed.
     Error,
+    /// A potential problem that should be addressed.
     Warning,
+    /// Informational note, no action required.
     Information,
+    /// Low-priority suggestion.
     Hint,
 }
 
@@ -35,6 +43,7 @@ pub struct TestGenerator {
 }
 
 impl TestGenerator {
+    /// Create a generator targeting `framework` (e.g. `"Test::More"` or `"Test2::V0"`).
     pub fn new(framework: &str) -> Self {
         Self { framework: framework.to_string() }
     }
@@ -141,9 +150,12 @@ impl TestGenerator {
     }
 }
 
+/// Metadata about a subroutine discovered in an AST.
 #[derive(Debug, Clone)]
 pub struct SubroutineInfo {
+    /// The subroutine name (`"anonymous"` for unnamed subs).
     pub name: String,
+    /// Number of declared parameters in the signature.
     pub param_count: usize,
 }
 
@@ -161,6 +173,7 @@ impl Default for RefactoringAnalyzer {
 }
 
 impl RefactoringAnalyzer {
+    /// Create an analyzer with default thresholds (complexity ≤ 10, lines ≤ 50, params ≤ 5).
     pub fn new() -> Self {
         Self { max_complexity: 10, max_lines: 50, max_params: 5 }
     }
@@ -333,17 +346,25 @@ impl RefactoringAnalyzer {
     }
 }
 
+/// A single refactoring suggestion produced by [`RefactoringAnalyzer`].
 #[derive(Debug, Clone)]
 pub struct RefactoringSuggestion {
+    /// Short one-line title suitable for a menu item or notification.
     pub title: String,
+    /// Longer explanation of why the refactoring is recommended.
     pub description: String,
+    /// The kind of refactoring this suggestion belongs to.
     pub category: RefactoringCategory,
 }
 
+/// Category of refactoring opportunity identified by [`RefactoringAnalyzer`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum RefactoringCategory {
+    /// Subroutine has more parameters than the configured maximum.
     TooManyParameters,
+    /// Cyclomatic complexity exceeds the configured threshold.
     HighComplexity,
+    /// Subroutine body is longer than the configured line limit.
     LongMethod,
 }
 
@@ -364,6 +385,7 @@ pub struct TddWorkflow {
 }
 
 impl TddWorkflow {
+    /// Create a workflow manager using `framework` for test generation (e.g. `"Test::More"`).
     pub fn new(framework: &str) -> Self {
         Self {
             state: TddState::Idle,
@@ -436,9 +458,12 @@ impl TddWorkflow {
     }
 }
 
+/// Result returned from each [`TddWorkflow`] transition method.
 #[derive(Debug, Clone)]
 pub struct TddResult {
+    /// The new TDD state after the transition.
     pub state: TddState,
+    /// Human-readable description of what happened and what to do next.
     pub message: String,
 }
 

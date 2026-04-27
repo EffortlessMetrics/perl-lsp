@@ -231,10 +231,14 @@ impl PullDiagnosticsOrchestrator {
             }
         }
 
+        // Compute content hash for cache validation (detects stale entries from
+        // external file changes that bypass the LSP didChange notification).
+        let content_hash = perl_lsp_rs_core::tooling::perl_critic::hash_content(doc_text);
+
         // Run analysis
         let result = {
             let mut guard = self.critic_analyzer.lock();
-            guard.as_mut().map(|a| a.analyze_file(&file_path))
+            guard.as_mut().map(|a| a.analyze_file_with_hash(&file_path, content_hash))
         };
 
         match result {
@@ -1412,11 +1416,16 @@ impl LspServer {
             }
         }
 
+        // Compute a content hash so the cache can detect stale entries when the
+        // file changes without triggering a `didChange` LSP event (e.g. external
+        // editor or `git checkout` while the server is running).
+        let content_hash = crate::perl_critic::hash_content(doc_text);
+
         // Borrow the shared analyzer to run the analysis.  The lock is held
-        // only for the duration of the `analyze_file` call.
+        // only for the duration of the `analyze_file_with_hash` call.
         let result = {
             let mut guard = self.critic_analyzer.lock();
-            guard.as_mut().map(|a| a.analyze_file(&file_path))
+            guard.as_mut().map(|a| a.analyze_file_with_hash(&file_path, content_hash))
         };
 
         match result {
