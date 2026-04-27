@@ -5,12 +5,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 fn fixture_path(name: &str) -> String {
-    Path::new("tests")
-        .join("fixtures")
-        .join("release-evidence")
-        .join(name)
-        .display()
-        .to_string()
+    Path::new("tests").join("fixtures").join("release-evidence").join(name).display().to_string()
 }
 
 #[test]
