@@ -15,13 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "perl-lsp: workspace root not detected — module resolution disabled. To enable: open
   the project folder in your editor (File > Open Folder) rather than individual files.
   This warning appears once per server session." Previously this was logged to the server
-  log only and users saw nothing. (#4178)
-
-- **DAP debugger now shows actionable error when Perl is not on PATH** — When launching
-  the debugger and `perl` cannot be found, the error message is now: "Perl interpreter
-  not found on PATH. Ensure 'perl' is installed and on your system PATH." Previously
-  users saw the raw I/O error "No such file or directory: 'perl'" with no remediation
-  guidance. (#4178)
+  log only and users saw nothing. The warning flag is stored as an `Arc<AtomicBool>` on
+  `LspServer`, so each server session shows the warning independently — in multi-root or
+  multi-server workspace configurations, each `LspServer` instance tracks its own shown
+  state rather than sharing a process-level `Once`. (#4178)
 
 ### Internal
 
