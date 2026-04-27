@@ -1,0 +1,33 @@
+registry_version = "1"
+
+[[receipt]]
+check = "methodology-gate"
+schema = ".ci/receipts/schemas/methodology-gate.schema.json"
+description = "Records gate methodology interpretation and decisioning substrate."
+
+[[receipt]]
+check = "parser-ratchet"
+schema = ".ci/receipts/schemas/parser-ratchet.schema.json"
+description = "Captures parser ratchet result summaries and violation metadata."
+
+[[receipt]]
+check = "aggregator"
+schema = ".ci/receipts/schemas/aggregator-receipt.schema.json"
+description = "Aggregates multiple gate receipts into a control-plane summary."
+
+[[receipt]]
+check = "merge-readiness"
+schema = ".ci/receipts/schemas/merge-readiness.schema.json"
+description = "Represents merge readiness derivation from upstream receipts."
+producer = "cargo xtask merge-ready emit"
+required_fields = ["head_sha", "base_sha", "gate_graph_version", "verdict"]
+
+[[receipt]]
+check = "fmt"
+schema = ".ci/receipts/schemas/fmt.schema.json"
+description = "Rustfmt gate receipt for explicit formatting outcomes."
+
+[[receipt]]
+check = "failure-classifier"
+schema = ".ci/receipts/schemas/failure-classifier.schema.json"
+description = "Classifies failures into code/infra/staleness classes."

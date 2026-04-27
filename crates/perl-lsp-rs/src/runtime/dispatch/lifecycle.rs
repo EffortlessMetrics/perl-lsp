@@ -75,9 +75,19 @@ impl LspServer {
 
     /// Handle shutdown request
     pub(super) fn handle_shutdown_dispatch(&self) -> Result<Option<Value>, JsonRpcError> {
+        // Enforce single-shutdown idempotence via atomic swap.
+        // Note: The LSP router permits shutdown before initialize_requested
+        // (see dispatch/mod.rs), so we do not check initialize_requested here.
+        if self.shutdown_received.swap(true, Ordering::AcqRel) {
+            return Err(JsonRpcError {
+                code: -32600, // InvalidRequest per LSP spec
+                message: "shutdown request may only be sent once".to_string(),
+                data: None,
+            });
+        }
+
         // Clear any pending cancelled requests on shutdown
         self.cancelled.lock().clear();
-        self.shutdown_received.store(true, Ordering::Release);
         Ok(Some(json!(null)))
     }
 
@@ -158,6 +168,7 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn initialized_requires_initialize_request_first() {
@@ -253,5 +264,142 @@ mod tests {
         assert_eq!(server.trace_level.lock().as_str(), TRACE_LEVEL_VERBOSE);
 
         Ok(())
+    }
+
+    #[test]
+    fn shutdown_sets_shutdown_received_flag() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        server.handle_initialize(None)?;
+
+        let result = server.handle_shutdown_dispatch()?;
+
+        assert_eq!(result, Some(json!(null)), "shutdown must return JSON null");
+        assert!(
+            server.shutdown_received.load(Ordering::Acquire),
+            "shutdown_received must be true after successful shutdown (exit will use code 0)"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shutdown_can_only_be_requested_once() -> Result<(), JsonRpcError> {
+        let server = LspServer::new();
+        server.handle_initialize(None)?;
+
+        let first = server.handle_shutdown_dispatch();
+        let second = server.handle_shutdown_dispatch();
+
+        assert!(first.is_ok(), "first shutdown must succeed");
+        assert!(second.is_err(), "second shutdown must error");
+        if let Err(second_err) = second {
+            assert_eq!(
+                second_err.code, -32600,
+                "second shutdown must return InvalidRequest (-32600) per LSP spec"
+            );
+        }
+        Ok(())
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    enum LifecycleAction {
+        Initialize,
+        InitializedNotification,
+        AutoInitializeCompat,
+    }
+
+    #[derive(Debug, Default)]
+    struct LifecycleModel {
+        initialize_requested: bool,
+        initialized: bool,
+    }
+
+    impl LifecycleModel {
+        fn initialize(&mut self) -> Result<(), i32> {
+            if self.initialize_requested {
+                return Err(-32600);
+            }
+            self.initialize_requested = true;
+            Ok(())
+        }
+
+        fn initialized_notification(&mut self) -> Result<(), i32> {
+            if !self.initialize_requested {
+                return Err(-32002);
+            }
+            if self.initialized {
+                return Err(-32600);
+            }
+            self.initialized = true;
+            Ok(())
+        }
+
+        fn auto_initialize_compat(&mut self) {
+            if self.initialize_requested {
+                self.initialized = true;
+            }
+        }
+    }
+
+    fn action_strategy() -> impl Strategy<Value = LifecycleAction> {
+        prop_oneof![
+            Just(LifecycleAction::Initialize),
+            Just(LifecycleAction::InitializedNotification),
+            Just(LifecycleAction::AutoInitializeCompat),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn proptest_lifecycle_state_machine(actions in prop::collection::vec(action_strategy(), 0..32)) {
+            let server = LspServer::new();
+            let mut model = LifecycleModel::default();
+
+            for action in actions {
+                match action {
+                    LifecycleAction::Initialize => {
+                        let actual = server.handle_initialize(None).map(|_| ());
+                        let expected = model.initialize();
+                        // Use prop_assert_eq! (not assert_eq!) throughout so proptest can
+                        // shrink failing sequences rather than panicking on first mismatch.
+                        prop_assert_eq!(
+                            actual.is_ok(),
+                            expected.is_ok(),
+                            "initialize result should match model"
+                        );
+                        if let (Err(actual_error), Err(expected_code)) = (&actual, &expected) {
+                            prop_assert_eq!(actual_error.code, *expected_code);
+                        }
+                    }
+                    LifecycleAction::InitializedNotification => {
+                        let actual = server.handle_initialized_dispatch().map(|_| ());
+                        let expected = model.initialized_notification();
+                        prop_assert_eq!(
+                            actual.is_ok(),
+                            expected.is_ok(),
+                            "initialized notification result should match model"
+                        );
+                        if let (Err(actual_error), Err(expected_code)) = (&actual, &expected) {
+                            prop_assert_eq!(actual_error.code, *expected_code);
+                        }
+                    }
+                    LifecycleAction::AutoInitializeCompat => {
+                        server.auto_initialize_for_compat("textDocument/completion");
+                        model.auto_initialize_compat();
+                    }
+                }
+
+                // Assert both observable state fields against the model after every action.
+                prop_assert_eq!(
+                    server.initialize_requested.load(Ordering::Acquire),
+                    model.initialize_requested,
+                    "initialize_requested flag must track model"
+                );
+                prop_assert_eq!(
+                    server.is_initialized(),
+                    model.initialized,
+                    "initialized flag must track model"
+                );
+            }
+        }
     }
 }

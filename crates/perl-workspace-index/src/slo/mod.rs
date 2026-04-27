@@ -30,7 +30,7 @@
 //!
 //! let start = tracker.start_operation(OperationType::DefinitionLookup);
 //! // ... perform operation ...
-//! tracker.record_operation(start, OperationResult::Success);
+//! tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
 //! ```
 
 use parking_lot::Mutex;
@@ -160,8 +160,6 @@ struct LatencySample {
     duration: Duration,
     /// Whether the operation succeeded
     success: bool,
-    /// When the sample was recorded
-    _timestamp: Instant,
 }
 
 /// SLO statistics for a specific operation type.
@@ -233,7 +231,7 @@ impl OperationSloTracker {
     /// Record an operation result.
     fn record(&mut self, duration: Duration, result: OperationResult) {
         let success = result.is_success();
-        let sample = LatencySample { duration, success, _timestamp: Instant::now() };
+        let sample = LatencySample { duration, success };
 
         // Add sample
         if self.samples.len() >= self.max_samples {
@@ -335,13 +333,10 @@ impl SloTracker {
 
     /// Start tracking an operation.
     ///
-    /// # Arguments
-    ///
-    /// * `operation_type` - Type of operation to track
-    ///
-    /// # Returns
-    ///
-    /// A timestamp that should be passed to `record_operation`.
+    /// Returns an [`Instant`] to pass to [`Self::record_operation_type`].
+    /// The `operation_type` parameter is accepted for call-site readability
+    /// but is not encoded in the returned timestamp — always pair with
+    /// `record_operation_type` using the same type.
     ///
     /// # Examples
     ///
@@ -351,7 +346,7 @@ impl SloTracker {
     /// let tracker = SloTracker::default();
     /// let start = tracker.start_operation(OperationType::DefinitionLookup);
     /// // ... perform operation ...
-    /// tracker.record_operation(start, OperationResult::Success);
+    /// tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
     /// ```
     pub fn start_operation(&self, _operation_type: OperationType) -> Instant {
         Instant::now()
@@ -359,10 +354,11 @@ impl SloTracker {
 
     /// Record the completion of an operation.
     ///
-    /// # Arguments
+    /// # Deprecation
     ///
-    /// * `start` - Timestamp returned from `start_operation`
-    /// * `result` - Operation result (success or failure)
+    /// This method records the duration to **every** operation-type tracker
+    /// simultaneously, which pollutes all per-type statistics.  Use
+    /// [`Self::record_operation_type`] instead to target the correct tracker.
     ///
     /// # Examples
     ///
@@ -372,13 +368,18 @@ impl SloTracker {
     /// let tracker = SloTracker::default();
     /// let start = tracker.start_operation(OperationType::DefinitionLookup);
     /// // ... perform operation ...
+    /// // Prefer: tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
+    /// #[allow(deprecated)]
     /// tracker.record_operation(start, OperationResult::Success);
     /// ```
+    #[deprecated(
+        since = "0.13.0",
+        note = "records to every operation-type tracker at once — use record_operation_type instead"
+    )]
     pub fn record_operation(&self, start: Instant, result: OperationResult) {
         let duration = start.elapsed();
         let mut trackers = self.trackers.lock();
 
-        // Record for all operation types (simplified - in practice you'd pass the type)
         for tracker in trackers.values_mut() {
             tracker.record(duration, result.clone());
         }
@@ -475,6 +476,27 @@ impl SloTracker {
     pub fn all_slos_met(&self) -> bool {
         let trackers = self.trackers.lock();
         trackers.values().all(|t| t.statistics().slo_met)
+    }
+
+    /// Return the number of samples currently in the window for `operation_type`.
+    ///
+    /// Useful for testing and monitoring — confirms that samples are being
+    /// recorded without computing full percentile statistics.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_workspace::slo::{OperationResult, OperationType, SloTracker};
+    ///
+    /// let tracker = SloTracker::default();
+    /// assert_eq!(tracker.sample_count(OperationType::DefinitionLookup), 0);
+    /// let start = tracker.start_operation(OperationType::DefinitionLookup);
+    /// tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
+    /// assert_eq!(tracker.sample_count(OperationType::DefinitionLookup), 1);
+    /// ```
+    pub fn sample_count(&self, operation_type: OperationType) -> usize {
+        let trackers = self.trackers.lock();
+        trackers.get(&operation_type).map_or(0, |t| t.samples.len())
     }
 
     /// Get the SLO configuration.
