@@ -586,6 +586,14 @@ export class BinaryDownloader {
         if (platform === 'darwin') {
             return arch === 'arm64' ? 'aarch64-apple-darwin' : 'x86_64-apple-darwin';
         } else if (platform === 'linux') {
+            // Check Termux first: isTermuxEnvironment() is the authoritative Termux
+            // detector.  isAndroidEnvironment() also matches TERMUX_VERSION and would
+            // shadow this branch if checked first, routing to the old arch-map path
+            // instead of the uniform `${archPrefix}-linux-android` form.
+            const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
+            if (this.isTermuxEnvironment()) {
+                return `${archPrefix}-linux-android`;
+            }
             if (this.isAndroidEnvironment()) {
                 const androidArchMap: Record<string, string> = {
                     arm64: 'aarch64-linux-android',
@@ -594,10 +602,6 @@ export class BinaryDownloader {
                     arm: 'armv7-linux-androideabi'
                 };
                 return androidArchMap[arch] ?? `${arch}-linux-android`;
-            }
-            const archPrefix = arch === 'arm64' ? 'aarch64' : 'x86_64';
-            if (this.isTermuxEnvironment()) {
-                return `${archPrefix}-linux-android`;
             }
             const libc = this.detectMusl() ? 'musl' : 'gnu';
             return `${archPrefix}-unknown-linux-${libc}`;
