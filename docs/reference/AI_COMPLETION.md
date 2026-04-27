@@ -66,6 +66,8 @@ built-in default values.
 | Variable | Purpose |
 |----------|---------|
 | `OPENAI_API_KEY` | Default API key variable. The server reads the key from whatever variable name is configured in `apiKeyEnv`. |
+| `GEMINI_API_KEY` | Fallback key variable used automatically when `apiKeyEnv` is unset/empty in the environment. Useful for Gemini CLI/OpenAI-compatible setups. |
+| `GOOGLE_API_KEY` | Secondary fallback key variable for Gemini/OpenAI-compatible setups. |
 
 The API key is resolved at runtime via `std::env::var`. The variable must be
 set in the environment where the LSP server process runs. If the variable is
@@ -74,17 +76,30 @@ back to deterministic rules if `fallback` is true).
 
 ## Supported Providers
 
-The only supported provider type is `openai_compat`, which works with any API
-that implements the OpenAI chat completions interface with SSE streaming:
+The only supported provider type is `openai_compat`, which supports both
+OpenAI-compatible wire formats:
+
+- **Responses API** (recommended when available)
+- **Chat Completions API** (legacy compatibility)
+
+The server auto-selects the request/stream format from your configured endpoint:
+
+- Endpoints containing `/responses` use Responses payload and event parsing
+- Other endpoints use Chat Completions payload and event parsing
 
 - **OpenAI** -- `https://api.openai.com/v1/chat/completions`
+- **OpenAI (Responses)** -- `https://api.openai.com/v1/responses`
 - **Azure OpenAI** -- `https://<resource>.openai.azure.com/openai/deployments/<deployment>/chat/completions?api-version=<version>`
 - **Local servers** -- Any OpenAI-compatible local inference server (e.g. llama.cpp, vLLM, Ollama with OpenAI compatibility layer)
+- **Gemini (OpenAI-compatible)** -- `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` (typically with `model` like `gemini-2.5-pro` or `gemini-2.5-flash`)
 - **Other providers** -- Any service that accepts the same request format and returns SSE `data:` lines with `choices[].delta.content`
 
-The request format is a standard chat completion with `"stream": true`,
+For Chat Completions endpoints, the request format uses `"stream": true`,
 `messages` (system + user with fill-in-the-middle context), and the configured
 `model` and `max_tokens`.
+
+For Responses endpoints, the request format uses `"stream": true`,
+`instructions`, `input`, `model`, and `max_output_tokens`.
 
 ## Example Configuration (VS Code `settings.json`)
 
@@ -174,9 +189,10 @@ the server falls back to deterministic pattern-based completions when
 
 **Wrong endpoint format**
 
-- The endpoint must be the full URL to the chat completions resource
-  (e.g. `https://api.openai.com/v1/chat/completions`), not just the
-  base URL.
+- The endpoint must be a full API resource URL, not just the base URL.
+- Use `.../v1/chat/completions` for Chat Completions format.
+- Use `.../v1/responses` for Responses format (recommended for Codex Desktop
+  and modern OpenAI-compatible stacks).
 
 **Fallback completions appearing instead of AI**
 

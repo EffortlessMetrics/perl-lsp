@@ -1717,13 +1717,19 @@ impl LspServer {
         match &node.kind {
             NodeKind::Subroutine { name: sub_name, .. } => {
                 if let Some(sub_name) = sub_name {
-                    if sub_name == name {
+                    let (_, sub_bare) = perl_parser::qualified_name::split_qualified_name(sub_name);
+                    let (_, name_bare) = perl_parser::qualified_name::split_qualified_name(name);
+                    if sub_bare == name_bare {
                         return Some(node);
                     }
                 }
             }
-            NodeKind::Method { name: method_name, .. } if method_name == name => {
-                return Some(node);
+            NodeKind::Method { name: method_name, .. } => {
+                let (_, method_bare) = perl_parser::qualified_name::split_qualified_name(method_name);
+                let (_, name_bare) = perl_parser::qualified_name::split_qualified_name(name);
+                if method_bare == name_bare {
+                    return Some(node);
+                }
             }
             NodeKind::Class { body, .. } => {
                 if let Some(found) = self.find_subroutine_definition(body, name) {

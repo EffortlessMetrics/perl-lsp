@@ -1,0 +1,10 @@
+{
+  "name": "lint",
+  "selected": true,
+  "required": true,
+  "verdict": "fail",
+  "classification": "code_regression",
+  "repro": {
+    "command": "cargo clippy --workspace"
+  }
+}

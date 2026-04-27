@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/methodology-gate.schema.json",
+  "title": "Methodology Gate Receipt",
+  "allOf": [
+    { "$ref": "./common-gate-receipt.schema.json" },
+    {
+      "type": "object",
+      "required": ["check", "selection_reason"],
+      "properties": {
+        "check": { "const": "methodology-gate" },
+        "selected": { "type": "boolean" },
+        "selection_reason": { "type": "string" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "stale_check_count": { "type": "integer", "minimum": 0 },
+            "missing_required_count": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  ]
+}

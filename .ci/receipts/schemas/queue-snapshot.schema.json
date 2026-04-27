@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Queue Snapshot",
+  "type": "object",
+  "required": ["snapshot_id", "captured_at", "repository", "default_branch", "master_sha", "prs", "buckets"],
+  "properties": {
+    "snapshot_id": {"type": "string"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "repository": {"type": "string"},
+    "default_branch": {"type": "string"},
+    "master_sha": {"type": "string"},
+    "prs": {"type": "array"},
+    "buckets": {"type": "object"},
+    "leases": {"type": "array"}
+  }
+}
