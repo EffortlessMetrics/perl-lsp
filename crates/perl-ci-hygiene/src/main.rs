@@ -1,4 +1,4 @@
-mod version_sync;
+use perl_ci_hygiene::version_sync;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
