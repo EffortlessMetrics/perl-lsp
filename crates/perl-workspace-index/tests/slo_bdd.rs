@@ -121,13 +121,10 @@ fn given_a_mix_of_operation_types_when_tracking_across_the_tracker_then_all_stat
 #[test]
 fn given_all_statistics_are_collected_when_reset_is_called_then_tracker_state_is_empty() {
     let tracker = SloTracker::default();
-    let _ = tracker.start_operation(OperationType::Completion);
-    tracker.record_operation(
-        tracker.start_operation(OperationType::Completion),
-        OperationResult::Success,
-    );
-    let before_reset = tracker.all_statistics();
-    assert!(before_reset.values().next().is_some(), "at least one statistic should exist");
+    let start = tracker.start_operation(OperationType::Completion);
+    tracker.record_operation_type(OperationType::Completion, start, OperationResult::Success);
+
+    assert_eq!(tracker.sample_count(OperationType::Completion), 1, "sample should be recorded");
 
     tracker.reset();
     assert!(tracker.all_statistics().values().all(|stats| stats.total_count == 0));

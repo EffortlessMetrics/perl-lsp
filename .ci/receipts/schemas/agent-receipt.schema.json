@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EffortlessMetrics/perl-lsp/.ci/receipts/schemas/agent-receipt.schema.json",
+  "title": "AgentReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "snapshot_id",
+    "head_sha",
+    "lease_path",
+    "required_output_schema",
+    "received_at",
+    "idempotency_key",
+    "mutation",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "task_id": { "type": "string", "minLength": 1 },
+    "snapshot_id": { "type": "string", "minLength": 1 },
+    "head_sha": { "type": "string", "minLength": 1 },
+    "lease_path": { "type": "string", "minLength": 1 },
+    "required_output_schema": { "type": "string", "minLength": 1 },
+    "received_at": { "type": "string", "format": "date-time" },
+    "idempotency_key": { "type": "string", "minLength": 1 },
+    "mutation": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 }
+  }
+}

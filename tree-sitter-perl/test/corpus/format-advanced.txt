@@ -51,10 +51,10 @@ select((select(REPORT), $~ = "MYFORMAT")[0]);
 
 (source_file
   (format_declaration)
-  (statement)
+  (expression_statement)
   (format_declaration)
-  (eval_statement)
-  (statement))
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Complex format expressions
@@ -100,8 +100,8 @@ $~ = "REPORT";
 (source_file
   (format_declaration)
   (format_declaration)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Numeric format fields
@@ -148,9 +148,9 @@ format_line_break_characters STDOUT, "-\n";
 
 (source_file
   (format_declaration)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Format with filehandles
@@ -177,14 +177,14 @@ format_top_name $fh, "FILE_TOP";
 
 (source_file
   (format_declaration)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement)
-  (statement))
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement)
+  (expression_statement))
 
 ==================
 Multiline format fields
