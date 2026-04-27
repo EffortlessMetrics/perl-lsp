@@ -7,9 +7,9 @@
 > - **Reference sections**: Configuration specifications and options
 > - **Explanation sections**: Understanding DAP architecture and design
 
-**Status**: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
-**Version**: 0.9.x
-**Date**: 2025-10-04
+**Status**: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer for legacy bridge mode)
+**Version**: 0.12.x
+**Date**: 2026-04-27
 
 **Note**: The `perl-dap` CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
 
@@ -50,7 +50,7 @@ Before you begin debugging Perl code with VS Code, ensure you have:
    perl --version  # Should output Perl version
    ```
 
-2. **VS Code**: Visual Studio Code 1.70 or higher with Perl LSP extension installed
+2. **VS Code**: Visual Studio Code 1.88 or higher with the `EffortlessMetrics.perl-lsp-rs` extension installed
 
 3. **Operating System**: Windows, macOS, Linux, or WSL
 

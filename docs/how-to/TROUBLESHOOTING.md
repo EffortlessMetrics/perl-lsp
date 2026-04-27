@@ -15,6 +15,22 @@ perllsp --info
 If those fail, fix the binary installation and `PATH` first. If they pass, the
 problem is usually in editor integration, workspace roots, or a stale cache.
 
+## VS Code Quick Checks
+
+1. Confirm the extension can locate the binary:
+
+   ```bash
+   command -v perllsp
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Open **Output** → **Perl Language Server** in VS Code and review startup logs.
+3. If you rely on managed binaries, verify `"perl-lsp.autoDownload": true`.
+4. If `perllsp --stdio` appears to hang in a terminal, that is expected; it is
+   waiting for framed LSP JSON-RPC input.
+
 ## The Server Will Not Start
 
 1. Run the server in the foreground:

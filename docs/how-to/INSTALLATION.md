@@ -61,7 +61,7 @@ cargo build --release --bin perllsp -p perllsp
 If you want the binary installed into Cargo's bin directory instead:
 
 ```bash
-cargo install perllsp
+cargo install --path crates/perllsp --locked
 ```
 
 ## Prebuilt Releases

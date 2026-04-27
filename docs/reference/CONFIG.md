@@ -611,11 +611,15 @@ Settings specific to the VS Code extension (`vscode-extension/package.json`).
 These are separate from the LSP workspace settings above and control extension
 behaviour such as binary management and feature toggles.
 
+The extension uses the `perl-lsp.*` namespace. Server-side LSP workspace
+settings use the `perl.*` namespace, and not every LSP client forwards
+`perl.*` settings in the same way.
+
 ### Binary management
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
@@ -643,7 +647,7 @@ behaviour such as binary management and feature toggles.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.includePaths` | `string[]` | `["lib", "local/lib/perl5"]` | Additional module search paths (merged with server-side `perl.workspace.includePaths`). |
+| `perl-lsp.includePaths` | `string[]` | `["lib", ".", "local/lib/perl5"]` | Additional module search paths (merged with server-side `perl.workspace.includePaths`). |
 | `perl-lsp.perltidyConfig` | `string` | `""` | Path to a `.perltidyrc` configuration file. Empty = use Perl::Tidy defaults. |
 | `perl-lsp.featureProfile` | `string` | `"auto"` | Feature profile passed to the server at startup (see [Feature Profiles](#feature-profiles)). |
 

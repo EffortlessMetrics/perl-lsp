@@ -1,5 +1,5 @@
 #!/bin/bash
-# Perl LSP installer for Linux and macOS
+# perllsp installer for Linux and macOS
 # Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 set -euo pipefail
@@ -21,7 +21,7 @@ else
     INSTALL_DIR="$HOME/.local/bin"
 fi
 REPO="EffortlessMetrics/perl-lsp"
-NAME="perl-lsp"
+NAME="perllsp"
 
 # Functions
 write_info() {
