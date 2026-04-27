@@ -1536,6 +1536,17 @@ enum QueueCommand {
         #[arg(long)]
         fixture: Option<PathBuf>,
     },
+
+    /// Classify master queue health into GREEN/PENDING/RED modes.
+    Health {
+        /// Output path for queue-health receipt JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        /// Fixture JSON input for deterministic health classification.
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1616,6 +1627,9 @@ fn main() -> Result<()> {
         Commands::CheckToolchain { doctor } => check_toolchain::run(doctor),
         Commands::Queue { command } => match command {
             QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
+            QueueCommand::Health { receipt, fixture } => {
+                queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
+            }
         },
         Commands::Build { release, features, c_scanner, rust_scanner } => {
             build::run(release, features, c_scanner, rust_scanner)
