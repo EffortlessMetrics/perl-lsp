@@ -559,14 +559,10 @@ enum Commands {
         bench: bool,
     },
 
-    /// Prepare release
+    /// Release automation commands.
     Release {
-        /// Version to release
-        version: String,
-
-        /// Skip confirmation
-        #[arg(long)]
-        yes: bool,
+        #[command(subcommand)]
+        command: ReleaseCommand,
     },
 
     /// Extract the curated release body from `docs/releases/<tag>.md`.
@@ -1426,6 +1422,40 @@ enum FeaturesCommand {
 }
 
 #[derive(Subcommand)]
+enum ReleaseCommand {
+    /// Prepare release artifacts.
+    Prepare {
+        /// Version to release
+        version: String,
+
+        /// Skip confirmation
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Create release evidence scaffold receipt list.
+    Evidence {
+        /// Release version without `v` prefix (for example: 0.13.0)
+        #[arg(long)]
+        version: String,
+        /// Output bundle directory.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify release evidence bundle and emit summary receipt.
+    VerifyEvidence {
+        /// Release version without `v` prefix (for example: 0.13.0)
+        #[arg(long)]
+        version: String,
+        /// Output summary receipt path.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Bundle directory to validate.
+        #[arg(long)]
+        bundle_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum MetricsCommand {
     /// Emit parser phase timings and benchmark summary.
     ParserStats {
@@ -1669,7 +1699,16 @@ fn main() -> Result<()> {
         Commands::ParseRust { source, sexp, ast, bench } => {
             parse_rust::run(source, sexp, ast, bench)
         }
-        Commands::Release { version, yes } => release::run(version, yes),
+        Commands::Release { command } => match command {
+            ReleaseCommand::Prepare { version, yes } => release::run(version, yes),
+            ReleaseCommand::Evidence { version, out } => release_evidence::scaffold(&version, &out),
+            ReleaseCommand::VerifyEvidence { version, receipt, bundle_dir } => {
+                let effective_bundle_dir = bundle_dir.unwrap_or_else(|| {
+                    PathBuf::from(format!("target/release-evidence/v{version}"))
+                });
+                release_evidence::verify(&version, &effective_bundle_dir, &receipt)
+            }
+        },
         Commands::ReleaseNotes { tag, output, root } => release_notes::run(tag, output, root),
         Commands::ReleaseTurnkey {
             version,
