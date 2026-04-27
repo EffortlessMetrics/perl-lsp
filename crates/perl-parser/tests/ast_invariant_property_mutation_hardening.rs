@@ -35,10 +35,12 @@ fn count_parentheses_balance(s: &str) -> i32 {
 
     let mut balance = 0;
     let mut in_double_string = false;
-    let mut in_single_string = false;
     let mut escape_next = false;
     let chars = normalized.chars().peekable();
 
+    // S-expressions in this codebase use double-quoted strings ("...") only.
+    // Single quotes appear in raw identifier text (e.g. Perl's old package separator
+    // Foo'bar) and must not be treated as string delimiters here.
     for ch in chars {
         if escape_next {
             escape_next = false;
@@ -46,17 +48,14 @@ fn count_parentheses_balance(s: &str) -> i32 {
         }
 
         match ch {
-            '\\' if (in_double_string || in_single_string) => {
+            '\\' if in_double_string => {
                 escape_next = true;
             }
-            '"' if !in_single_string => {
+            '"' => {
                 in_double_string = !in_double_string;
             }
-            '\'' if !in_double_string => {
-                in_single_string = !in_single_string;
-            }
-            '(' if !in_double_string && !in_single_string => balance += 1,
-            ')' if !in_double_string && !in_single_string => balance -= 1,
+            '(' if !in_double_string => balance += 1,
+            ')' if !in_double_string => balance -= 1,
             _ => {}
         }
     }
