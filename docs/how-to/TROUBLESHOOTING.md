@@ -71,6 +71,40 @@ If the editor is using a helper extension or plugin, check its own logs too.
 If you are debugging with `perl-dap`, check the DAP guide:
 [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md).
 
+## Zed Does Not Start `perllsp`
+
+1. Confirm `perllsp` works outside Zed:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the installed Zed extension registers the same server ID used in
+   `settings.json`, for example `perl-lsp`.
+
+3. If Zed logs `no language server found matching 'perl-lsp'`, the server is
+   not registered. Installing `perllsp` alone is not enough.
+
+4. If Zed cannot find the binary, start Zed from the project shell:
+
+   ```bash
+   zed .
+   ```
+
+   or use an absolute `lsp.perl-lsp.binary.path`.
+
+5. Check Zed logs with `zed: open log`. For more startup detail, relaunch Zed
+   from a terminal:
+
+   ```bash
+   zed --foreground .
+   ```
+
+6. If `perllsp --stdio` appears to hang when run manually, that is expected: it
+   is waiting for framed LSP JSON-RPC input.
+
 ## When To Escalate
 
 Report an issue when you can include:
