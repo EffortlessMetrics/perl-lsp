@@ -1,0 +1,6 @@
+{
+  "check": "methodology-gate",
+  "schema_version": "1",
+  "event": "pull_request",
+  "selection_reason": "missing verdict field intentionally"
+}

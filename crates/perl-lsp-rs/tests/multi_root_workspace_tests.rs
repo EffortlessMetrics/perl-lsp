@@ -17,6 +17,15 @@
 //! implemented. The tests use best-effort assertions and provide clear error
 //! messages about what's expected vs. what's currently working.
 
+// All tests in this file are gated behind
+// `cfg(all(feature = "workspace", feature = "expose_lsp_test_api"))`. When
+// either feature is disabled (the default for `cargo clippy --workspace --lib`
+// and many CI lanes), the supporting helpers and imports become unreferenced.
+// They are not truly dead -- only conditionally unused -- so silence those
+// lints at the file level rather than fragmenting the code with cfg attributes
+// on every helper.
+#![allow(dead_code, unused_imports)]
+
 mod support;
 
 use serde_json::json;
