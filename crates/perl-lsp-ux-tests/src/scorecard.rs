@@ -155,10 +155,7 @@ mod tests {
             definition_exact_hit: def,
             symbol_correct: sym,
             cross_file_success: cross,
-            mean_latency_ms: latency
-                .iter()
-                .map(|(k, v)| ((*k).to_string(), *v))
-                .collect(),
+            mean_latency_ms: latency.iter().map(|(k, v)| ((*k).to_string(), *v)).collect(),
             ..Default::default()
         }
     }
@@ -167,12 +164,22 @@ mod tests {
     fn aggregate_editor_ux_scorecard_computes_expected_rows() -> Result<()> {
         let s1 = make_score(
             "hover-and-def",
-            Some(true), Some(false), Some(true), Some(true), Some(true), Some(true),
+            Some(true),
+            Some(false),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
             &[("hover", 12.0), ("completion", 20.0), ("definition", 30.0)],
         );
         let s2 = make_score(
             "completion-and-cross-file",
-            Some(false), Some(true), Some(true), Some(false), Some(false), Some(true),
+            Some(false),
+            Some(true),
+            Some(true),
+            Some(false),
+            Some(false),
+            Some(true),
             &[("hover", 8.0), ("completion", 40.0), ("workspace_symbols", 50.0)],
         );
 
@@ -203,7 +210,12 @@ mod tests {
     fn aggregate_editor_ux_scorecard_uses_none_when_metric_not_measured() -> Result<()> {
         let s = make_score(
             "symbols-only",
-            None, None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             &[("document_symbols", 18.0)],
         );
 
@@ -275,7 +287,12 @@ mod tests {
     fn all_false_correctness_produces_zero_pct() -> Result<()> {
         let s = make_score(
             "all-fail",
-            Some(false), Some(false), Some(false), Some(false), Some(false), Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
+            Some(false),
             &[],
         );
 
@@ -295,7 +312,12 @@ mod tests {
     fn single_scenario_all_true_produces_100_pct() -> Result<()> {
         let s = make_score(
             "all-pass",
-            Some(true), Some(true), Some(true), Some(true), Some(true), Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
+            Some(true),
             &[("hover", 15.0), ("completion", 25.0)],
         );
 
@@ -326,7 +348,10 @@ mod tests {
         let scorecard = aggregate_editor_ux_scorecard(&scenarios);
 
         let pct = scorecard.symbol_correctness_pct;
-        assert!(pct.is_some_and(|v| (v - 66.666_666).abs() < 0.01), "expected ~66.67%, got {pct:?}");
+        assert!(
+            pct.is_some_and(|v| (v - 66.666_666).abs() < 0.01),
+            "expected ~66.67%, got {pct:?}"
+        );
 
         Ok(())
     }
