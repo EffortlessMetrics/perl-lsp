@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -559,7 +559,7 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -847,11 +847,25 @@ require("lspconfig").perl_ls.setup({
 
 #### Helix (`languages.toml`)
 
+Helix has built-in Perl language support, but its default Perl language server is
+`perlnavigator`. To use `perllsp`, define the server and attach it to the `perl`
+language:
+
 ```toml
-[language-server.perl-lsp.config.perl]
-workspace.includePaths = ["lib", ".", "local/lib/perl5"]
-workspace.useSystemInc = false
-inlayHints.enabled = true
+[language-server.perl-lsp]
+command = "perllsp"
+args = ["--stdio"]
+
+[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
+
+[language-server.perl-lsp.config.perl.workspace]
+includePaths = ["lib", ".", "local/lib/perl5"]
+useSystemInc = false
+
+[language-server.perl-lsp.config.perl.inlayHints]
+enabled = true
 ```
 
 #### Emacs (eglot)

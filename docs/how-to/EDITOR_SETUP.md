@@ -28,7 +28,7 @@ perllsp --health
 | Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
-| Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
+| Helix | override the built-in Perl language server from `perlnavigator` to `perllsp --stdio` in `languages.toml` | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
@@ -80,15 +80,29 @@ both configured to launch `perllsp --stdio`. See
 
 ### Helix
 
-```toml
-[[language]]
-name = "perl"
-language-servers = ["perllsp"]
+Helix already has a Perl language entry, but its default server is
+`perlnavigator`. To use `perllsp`, define a new language server and attach it to
+the `perl` language:
 
-[language-server.perllsp]
+```toml
+[language-server.perl-lsp]
 command = "perllsp"
 args = ["--stdio"]
+
+[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
 ```
+
+Check setup with:
+
+```bash
+hx --health perl
+perllsp --health
+perllsp --info
+```
+
+See [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) for a full example.
 
 ### Zed
 
