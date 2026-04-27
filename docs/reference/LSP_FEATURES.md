@@ -463,9 +463,9 @@ Intelligent code folding:
 ```json
 {
   "perl.testRunner.enabled": true,
-  "perl.testRunner.testCommand": "perl",
-  "perl.testRunner.testArgs": [],
-  "perl.testRunner.testTimeout": 60000
+  "perl.testRunner.command": "perl",
+  "perl.testRunner.args": [],
+  "perl.testRunner.timeout": 60000
 }
 ```
 
@@ -591,8 +591,11 @@ With lsp-mode or eglot:
 # Check if perllsp is in PATH
 which perllsp
 
-# Test standalone
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perllsp --stdio
+# Run server diagnostics and info commands
+perllsp --version
+perllsp --health
+perllsp --info
+perllsp --check path/to/file.pl
 ```
 
 **Slow performance:**
