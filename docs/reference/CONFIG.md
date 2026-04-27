@@ -219,6 +219,32 @@ Extra arguments passed to the Perl interpreter when probing startup `@INC`.
 }
 ```
 
+#### OpenCode initialization example
+
+OpenCode passes LSP startup settings through the `initialization` field in
+`opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi"],
+      "initialization": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+For settings that should apply across all editors, prefer `.perl-lsp.toml`.
+
 #### `perl.workspace.useSystemInc`
 
 | Property | Value |
