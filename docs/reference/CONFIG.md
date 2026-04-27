@@ -864,23 +864,28 @@ inlayHints.enabled = true
       (useSystemInc . :json-false)))))
 ```
 
-#### Sublime Text (LSP package)
+#### Sublime Text (`LSP` package)
+
+Open `Preferences: LSP Server Configurations` and add:
 
 ```json
 {
-  "clients": {
-    "perl-lsp": {
-      "initializationOptions": {
-        "perl": {
-          "workspace": {
-            "includePaths": ["lib", ".", "local/lib/perl5"]
-          }
+  "perl-lsp": {
+    "enabled": true,
+    "command": ["perllsp", "--stdio"],
+    "selector": "source.perl",
+    "initialization_options": {
+      "perl": {
+        "workspace": {
+          "includePaths": ["lib", ".", "local/lib/perl5"]
         }
       }
     }
   }
 }
 ```
+
+Sublime LSP uses `initialization_options`; the LSP protocol field is named `initializationOptions`.
 
 #### Claude Code (plugin `.lsp.json`)
 
