@@ -21,7 +21,7 @@ else
     INSTALL_DIR="$HOME/.local/bin"
 fi
 REPO="EffortlessMetrics/perl-lsp"
-NAME="perl-lsp"
+NAME="perllsp"
 
 # Functions
 write_info() {

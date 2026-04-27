@@ -20,7 +20,9 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 ### Required
 
 - **VS Code** version 1.88 or later
-- **perl-lsp** server installed (see [Installation](#installation))
+- **EffortlessMetrics.perl-lsp-rs** VS Code extension (see [Installation](#installation))
+
+The extension can auto-download the matching `perllsp` server binary. Install `perllsp` manually only for offline environments, pinned deployments, or when `perl-lsp.autoDownload` is disabled.
 
 ### Optional but Recommended
 
@@ -31,14 +33,26 @@ This guide helps you set up and configure the Perl Language Server in Visual Stu
 
 ## Installation
 
-### Install the Server
+### Install the VS Code Extension
+
+The recommended VS Code path is to install the official extension and let it auto-download the matching `perllsp` binary automatically.
+
+```bash
+code --install-extension EffortlessMetrics.perl-lsp-rs
+```
+
+Or install it from the Extensions view by searching for `perl-lsp`.
+
+### Optional: Install `perllsp` Manually
+
+Manual installation is useful for offline environments, pinned deployments, or when `"perl-lsp.autoDownload": false`.
 
 Choose one of the following methods:
 
 #### Option 1: Install from crates.io (Recommended)
 
 ```bash
-cargo install perllsp
+cargo install perllsp --locked
 ```
 
 #### Option 2: Download Pre-built Binary
@@ -46,26 +60,23 @@ cargo install perllsp
 Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
 
 ```bash
-# Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
-tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+# Example: Linux x86_64 (glibc)
+VERSION=0.12.4
+TARGET=x86_64-unknown-linux-gnu
 
-# macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
-tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
-
-# Windows (x86_64)
-# Download and extract to a directory in your PATH
+curl -LO "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${VERSION}/perllsp-${VERSION}-${TARGET}.tar.gz"
+tar xzf "perllsp-${VERSION}-${TARGET}.tar.gz"
+sudo install -m 0755 "perllsp-${VERSION}-${TARGET}/perllsp" /usr/local/bin/perllsp
 ```
+
+For other platforms, use the matching `perllsp-<version>-<target>` asset from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
 #### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
-cargo install perllsp
+cargo install --path crates/perllsp --locked
 ```
 
 ### Verify Installation
@@ -74,8 +85,9 @@ cargo install perllsp
 # Check version
 perllsp --version
 
-# Quick health check
+# Quick health checks
 perllsp --health
+perllsp --info
 ```
 
 ---
@@ -123,7 +135,7 @@ Add to your workspace `.vscode/settings.json`:
   "perl-lsp.enableFormatting": true,
   "perl-lsp.formatOnSave": false,
   "perl-lsp.enableRefactoring": true,
-  "perl-lsp.includePaths": ["lib", "local/lib/perl5"],
+  "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"],
   "perl-lsp.enableTestIntegration": true
 }
 ```
@@ -136,6 +148,7 @@ For project-specific settings, create `.vscode/settings.json` in your project ro
 {
   "perl-lsp.includePaths": [
     "lib",
+    ".",
     "local/lib/perl5",
     "vendor/lib"
   ],
@@ -160,13 +173,16 @@ Or edit `settings.json` directly:
 2. Type "Preferences: Open Settings (JSON)"
 3. Add your configuration
 
-### All Extension Settings
+### Common Extension Settings
+
+For the authoritative list, see the VS Code Settings UI or the extension manifest (`vscode-extension/package.json`). This guide lists the settings most users need.
+
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `perl-lsp.serverPath` | string | `""` | Absolute path to `perl-lsp` binary. Leave empty to auto-download. |
-| `perl-lsp.autoDownload` | boolean | `true` | Auto-download `perl-lsp` binary if not found locally. |
-| `perl-lsp.includePaths` | array | `["lib", "local/lib/perl5"]` | Additional library paths to search for Perl modules. |
+| `perl-lsp.serverPath` | string | `""` | Absolute path to the `perllsp` binary. Leave empty to auto-download. |
+| `perl-lsp.autoDownload` | boolean | `true` | Auto-download `perllsp` binary if not found locally. |
+| `perl-lsp.includePaths` | array | `["lib", ".", "local/lib/perl5"]` | Additional library paths to search for Perl modules. |
 | `perl-lsp.enableDiagnostics` | boolean | `true` | Enable real-time syntax diagnostics. |
 | `perl-lsp.enableSemanticTokens` | boolean | `true` | Enable semantic syntax highlighting. |
 | `perl-lsp.perltidyConfig` | string | `""` | Path to `.perltidyrc` configuration file. |
@@ -179,7 +195,7 @@ Or edit `settings.json` directly:
 | `perl-lsp.trace.server` | string | `"off"` | LSP traffic logging: `off`, `messages`, `verbose`. |
 | `perl-lsp.channel` | string | `"latest"` | Release channel: `latest`, `stable`, or `tag`. |
 | `perl-lsp.versionTag` | string | `""` | Specific release tag when channel is `tag`. |
-| `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting perl-lsp archives (bypasses GitHub). |
+| `perl-lsp.downloadBaseUrl` | string | `""` | Internal base URL for hosting perllsp archives (bypasses GitHub). |
 
 ---
 
@@ -311,17 +327,17 @@ Reference counts and quick actions inline in the editor.
 
 ### Default LSP Keybindings
 
-| Action | Windows/Linux | macOS |
-|--------|---------------|-------|
-| Go to Definition | `F12` | `F12` |
-| Peek Definition | `Ctrl+Shift+F10` | `Ctrl+Shift+F10` |
-| Find References | `Shift+F12` | `Shift+F12` |
-| Rename Symbol | `F2` | `F2` |
-| Format Document | `Shift+Alt+F` | `Shift+Option+F` |
-| Quick Fix | `Ctrl+.` | `Cmd+.` |
-| Show Hover | `Ctrl+K Ctrl+I` | `Ctrl+K Ctrl+I` |
-| Open Symbol by Name | `Ctrl+T` | `Cmd+T` |
-| Show All Symbols | `Ctrl+Shift+O` | `Cmd+Shift+O` |
+| Action | Windows | Linux | macOS |
+|--------|---------|-------|-------|
+| Go to Definition | `F12` | `F12` | `F12` |
+| Peek Definition | `Alt+F12` | `Ctrl+Shift+F10` | `Option+F12` |
+| Find References | `Shift+F12` | `Shift+F12` | `Shift+F12` |
+| Rename Symbol | `F2` | `F2` | `F2` |
+| Format Document | `Shift+Alt+F` | `Ctrl+Shift+I` | `Shift+Option+F` |
+| Quick Fix | `Ctrl+.` | `Ctrl+.` | `Cmd+.` |
+| Show Hover | `Ctrl+K Ctrl+I` | `Ctrl+K Ctrl+I` | `Cmd+K Cmd+I` |
+| Open Symbol by Name | `Ctrl+T` | `Ctrl+T` | `Cmd+T` |
+| Show All Symbols | `Ctrl+Shift+O` | `Ctrl+Shift+O` | `Cmd+Shift+O` |
 
 ### Extension-Specific Keybindings
 
@@ -364,35 +380,43 @@ Example:
 
 ### Server Not Starting
 
-**Symptoms**: No diagnostics, no completion, error in output panel
+**Symptoms**: no diagnostics, no completion, or errors in the Output panel.
 
-**Solutions**:
-
-1. **Verify binary is in PATH**:
+1. **Check whether the extension can find `perllsp`**:
    ```bash
-   which perl-lsp
-   # Should output: /usr/local/bin/perl-lsp or similar
+   command -v perllsp
+   perllsp --version
+   perllsp --health
    ```
 
-2. **Check extension logs**:
+   On Windows:
+   ```powershell
+   where perllsp
+   perllsp --version
+   perllsp --health
+   ```
+
+2. **If you rely on auto-download, confirm**:
+   ```json
+   {
+     "perl-lsp.autoDownload": true
+   }
+   ```
+
+3. **Check extension logs**:
    - Open Output panel: `Ctrl+Shift+U` (Cmd+Shift+U on macOS)
    - Select "Perl Language Server" from dropdown
    - Look for error messages
 
-3. **Enable debug logging**:
+4. **Enable debug logging only while troubleshooting**:
    ```json
    {
      "perl-lsp.trace.server": "verbose"
    }
    ```
 
-4. **Run health check**:
-   - Press `Ctrl+Shift+P` → "Perl: Run Health Check"
-
-5. **Test server manually**:
-   ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
-   ```
+5. **If `perllsp --stdio` appears to hang, that is expected**:
+   it waits for framed LSP JSON-RPC input (`Content-Length` headers).
 
 ### No Diagnostics
 
@@ -421,18 +445,9 @@ Example:
 
 **Solutions**:
 
-1. **Reduce result caps** (server-side limits via `initializationOptions`):
-   ```json
-   {
-     "perl": {
-       "limits": {
-         "workspaceSymbolCap": 100,
-         "referencesCap": 200,
-         "completionCap": 50
-       }
-     }
-   }
-   ```
+1. **Use a project config file for server-side limits**:
+   - Prefer `.perl-lsp.toml` for workspace-wide caps and scan limits.
+   - See [Configuration Reference](../reference/CONFIG.md) for `perl.limits` options.
 
 2. **Disable semantic tokens** (if not needed):
    ```json
@@ -572,7 +587,7 @@ For teams hosting their own perl-lsp binaries:
 
 ```json
 {
-  "perl-lsp.serverPath": "/opt/perl-lsp/bin/perl-lsp",
+  "perl-lsp.serverPath": "/opt/perl-lsp/bin/perllsp",
   "perl-lsp.autoDownload": false
 }
 ```
@@ -612,24 +627,9 @@ See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
 
 ### Server-Side Performance Limits
 
-The `perl.*` namespace passes server-side initialization options. These control internal server caps and are separate from the extension's `perl-lsp.*` settings:
+The VS Code extension settings use the `perl-lsp.*` namespace. Server-side LSP workspace settings use the `perl.*` namespace and are client-dependent.
 
-```json
-{
-  "perl": {
-    "limits": {
-      "workspaceSymbolCap": 200,
-      "referencesCap": 500,
-      "completionCap": 100,
-      "astCacheMaxEntries": 50,
-      "maxIndexedFiles": 5000,
-      "maxTotalSymbols": 250000,
-      "workspaceScanDeadlineMs": 20000,
-      "referenceSearchDeadlineMs": 1500
-    }
-  }
-}
-```
+For VS Code projects, prefer setting server-wide limits in `.perl-lsp.toml` and use [Configuration Reference](../reference/CONFIG.md) for the full `perl.limits` options.
 
 ### Logging and Tracing
 
@@ -662,6 +662,7 @@ Here is a typical `.vscode/settings.json` for a Perl project using only real ext
   "perl-lsp.enableTestIntegration": true,
   "perl-lsp.includePaths": [
     "lib",
+    ".",
     "local/lib/perl5",
     "vendor/lib"
   ],

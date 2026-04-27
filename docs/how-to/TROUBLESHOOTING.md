@@ -15,6 +15,22 @@ perllsp --info
 If those fail, fix the binary installation and `PATH` first. If they pass, the
 problem is usually in editor integration, workspace roots, or a stale cache.
 
+## VS Code-Specific Checks
+
+When using the `EffortlessMetrics.perl-lsp-rs` extension:
+
+1. Open **Output** and select **Perl Language Server**.
+2. Confirm extension settings use the `perl-lsp.*` namespace.
+3. Verify the server binary from a terminal:
+
+```bash
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+Avoid raw `perllsp --stdio` pipe tests unless you send framed LSP messages with `Content-Length` headers.
+
 ## The Server Will Not Start
 
 1. Run the server in the foreground:
