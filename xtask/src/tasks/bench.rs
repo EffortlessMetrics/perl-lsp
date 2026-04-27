@@ -204,8 +204,9 @@ fn extract_rust_mean_from(criteria_root: &Path, bench_name: Option<&str>) -> Res
         .filter_map(|entry| {
             let path = entry.path().to_path_buf();
             if let Some(bench_name) = bench_name {
-                let path_text = path.to_string_lossy();
-                if !path_text.contains(&format!("/{bench_name}/")) {
+                // Check path components to be OS-agnostic (avoid hardcoding '/' separator on Windows)
+                let matches = path.components().any(|c| c.as_os_str() == bench_name);
+                if !matches {
                     return None;
                 }
             }
