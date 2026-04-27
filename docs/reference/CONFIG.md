@@ -951,6 +951,35 @@ useSystemInc = false
 enabled = true
 ```
 
+#### Zed (`settings.json`)
+
+Zed requires a language extension that registers the language server ID used
+below. The `lsp` block configures known servers; it does not register a new
+language server by itself.
+
+```json
+{
+  "lsp": {
+    "perl-lsp": {
+      "binary": {
+        "path": "/usr/local/bin/perllsp",
+        "arguments": ["--stdio"]
+      },
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          },
+          "inlayHints": {
+            "enabled": true
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 #### Emacs (eglot)
 
 ```elisp
