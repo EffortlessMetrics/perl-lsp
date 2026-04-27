@@ -1725,7 +1725,8 @@ impl LspServer {
                 }
             }
             NodeKind::Method { name: method_name, .. } => {
-                let (_, method_bare) = perl_parser::qualified_name::split_qualified_name(method_name);
+                let (_, method_bare) =
+                    perl_parser::qualified_name::split_qualified_name(method_name);
                 let (_, name_bare) = perl_parser::qualified_name::split_qualified_name(name);
                 if method_bare == name_bare {
                     return Some(node);
