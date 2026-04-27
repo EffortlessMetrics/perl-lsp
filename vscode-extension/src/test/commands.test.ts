@@ -135,17 +135,16 @@ describe('perl-lsp command palette commands (issue #2058)', () => {
   });
 
   describe('activation events', () => {
-    test('every contributed command has an activation event', () => {
-      for (const command of pkg.contributes.commands) {
-        expect(pkg.activationEvents).toContain(`onCommand:${command.command}`);
-      }
-    });
+    test('contributed commands do not declare onCommand activation events', () => {
+      // VS Code 1.74+ implicitly activates extensions when contributed commands are
+      // invoked, so explicit `onCommand:*` activation events are redundant. This
+      // extension targets `^1.88.0` (see package.json `engines.vscode`).
+      const commandActivationEvents = pkg.activationEvents.filter((event: string) =>
+        event.startsWith('onCommand:')
+      );
 
-    for (const id of NEW_COMMAND_IDS) {
-      test(`activates on ${id} command`, () => {
-        expect(pkg.activationEvents).toContain(`onCommand:${id}`);
-      });
-    }
+      expect(commandActivationEvents).toEqual([]);
+    });
   });
 });
 
@@ -351,10 +350,6 @@ describe('perl-lsp.createDebugConfig command', () => {
     expect(entry).toBeDefined();
     // Available when at least one workspace folder is open
     expect(entry.when).toContain('workspaceFolderCount');
-  });
-
-  test('has an activation event', () => {
-    expect(pkg.activationEvents).toContain('onCommand:perl-lsp.createDebugConfig');
   });
 });
 
