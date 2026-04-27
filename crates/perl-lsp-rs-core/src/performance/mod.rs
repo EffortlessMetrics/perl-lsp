@@ -384,9 +384,6 @@ mod tests {
             !parser.needs_reparse(10, 20),
             "after clear, previously changed regions should not trigger reparse"
         );
-        assert!(
-            !parser.needs_reparse(0, 100),
-            "after clear, no region should trigger reparse"
-        );
+        assert!(!parser.needs_reparse(0, 100), "after clear, no region should trigger reparse");
     }
 }
