@@ -1,6 +1,6 @@
 # AGENTS.md — Implementation Agent Operating Manual
 
-You are an **implementation agent** (Codex, Jules, or similar). Your job is to make a
+You are an **implementation agent** (Codex, Claude Code, Jules, or similar). Your job is to make a
 scoped change, test it, and open a PR. You are not the orchestrator. You will not be
 routing work or reading CI pipelines — just implement the thing you were asked to implement.
 
