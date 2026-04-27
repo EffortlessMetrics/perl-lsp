@@ -31,12 +31,9 @@ print $name;
 fn has_global_symbol_diagnostic(diags: &[serde_json::Value], symbol: &str) -> bool {
     diags.iter().any(|diag| {
         let message = diag.get("message").and_then(serde_json::Value::as_str).unwrap_or_default();
+        let code = diag.get("code").and_then(serde_json::Value::as_str).unwrap_or_default();
         message.contains(symbol)
-            || diag
-                .get("code")
-                .and_then(serde_json::Value::as_str)
-                .map(|code| code.contains("Global symbol"))
-                .unwrap_or(false)
+            || (code.contains("Global symbol") && message.contains(symbol))
     })
 }
 
@@ -83,7 +80,7 @@ fn given_live_edit_when_variable_is_declared_then_navigation_remains_responsive(
     harness.change_file_full("live_edit.pl", DECLARED_SOURCE)?;
 
     let _post_edit_diagnostics =
-        harness.wait_for_diagnostics("live_edit.pl", Duration::from_secs(6));
+        harness.wait_for_latest_diagnostics("live_edit.pl", Duration::from_secs(6));
 
     let definitions = harness.definition("live_edit.pl", 4, 7);
     assert!(

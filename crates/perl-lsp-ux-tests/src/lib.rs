@@ -447,10 +447,46 @@ impl UxHarness {
     }
 
     /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
-    /// for the given file, then return all diagnostics collected for it.
+    /// for the given file, then return the first published diagnostics collected
+    /// for it.
     ///
     /// Returns an empty vec if the deadline expires with no diagnostics published.
+    /// To get the most recently published diagnostics instead, use
+    /// [`UxHarness::wait_for_latest_diagnostics`].
     pub fn wait_for_diagnostics(
+        &self,
+        relative_path: &str,
+        timeout: std::time::Duration,
+    ) -> Vec<Value> {
+        let uri = self.workspace.uri(relative_path);
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            {
+                let events = self.client.peek_events();
+                for ev in events.iter() {
+                    if let LspEvent::Diagnostics { uri: diag_uri, diagnostics } = ev {
+                        if diag_uri == &uri {
+                            return diagnostics.clone();
+                        }
+                    }
+                }
+            }
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        Vec::new()
+    }
+
+    /// Wait up to `timeout` for a `textDocument/publishDiagnostics` notification
+    /// for the given file, then return the most recently published diagnostics
+    /// for the URI, ignoring earlier buffered publications.
+    ///
+    /// Returns an empty vec if the deadline expires with no diagnostics published.
+    /// Use this when you need the latest server state after an edit; for the
+    /// initial (first published) diagnostics use [`UxHarness::wait_for_diagnostics`].
+    pub fn wait_for_latest_diagnostics(
         &self,
         relative_path: &str,
         timeout: std::time::Duration,
