@@ -73,6 +73,7 @@ pub mod release;
 pub mod release_evidence;
 pub mod release_notes;
 pub mod release_turnkey;
+pub mod review_receipts;
 pub mod srp_microcrates;
 pub mod swarm_summary;
 pub mod targeted_checks;
