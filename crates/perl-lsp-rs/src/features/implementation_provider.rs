@@ -315,14 +315,18 @@ impl ImplementationProvider {
         results: &mut Vec<LocationLink>,
     ) {
         match &node.kind {
-            NodeKind::Subroutine { name: Some(name), .. } if name == method_name => {
-                let target_uri = parse_uri(uri);
-                results.push(LocationLink {
-                    origin_selection_range: None,
-                    target_uri,
-                    target_range: self.node_to_range(node, source),
-                    target_selection_range: self.node_to_range(node, source),
-                });
+            NodeKind::Subroutine { name: Some(name), .. } => {
+                let (_, name_bare) = perl_parser::qualified_name::split_qualified_name(name);
+                let (_, method_bare) = perl_parser::qualified_name::split_qualified_name(method_name);
+                if name_bare == method_bare {
+                    let target_uri = parse_uri(uri);
+                    results.push(LocationLink {
+                        origin_selection_range: None,
+                        target_uri,
+                        target_range: self.node_to_range(node, source),
+                        target_selection_range: self.node_to_range(node, source),
+                    });
+                }
             }
             NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
