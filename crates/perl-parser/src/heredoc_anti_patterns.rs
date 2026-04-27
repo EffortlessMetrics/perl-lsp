@@ -9,6 +9,7 @@
 //! references.
 
 use regex::Regex;
+use std::collections::HashSet;
 use std::sync::LazyLock;
 
 /// Source location of a detected anti-pattern.
@@ -584,6 +585,13 @@ static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+
     Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),
 });
 
+/// Pattern for identifying print statements that write heredocs to a handle.
+static PRINT_HEREDOC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"print\s+([*$]?\w+)\s+<<") {
+        Ok(re) => re,
+        Err(_) => unreachable!("PRINT_HEREDOC_PATTERN regex failed to compile"),
+    });
+
 impl PatternDetector for TiedHandleDetector {
     fn detect(
         &self,
@@ -594,33 +602,38 @@ impl PatternDetector for TiedHandleDetector {
         let mut results = Vec::new();
         let scan_code = mask_non_code_regions(code);
 
-        // First find tied handles
-        let mut tied_handles = Vec::new();
+        // First collect tied handles in normalized form:
+        // *FH -> FH, $fh -> $fh.
+        let mut tied_handles = HashSet::new();
         for cap in TIE_PATTERN.captures_iter(&scan_code) {
             if let Some(handle_match) = cap.get(1) {
-                tied_handles.push(handle_match.as_str());
+                let raw_handle = handle_match.as_str();
+                let normalized = raw_handle.strip_prefix('*').unwrap_or(raw_handle);
+                tied_handles.insert(normalized.to_string());
             }
         }
 
-        for raw_handle in tied_handles {
-            // If it's a glob (*FH), we typically print to the bare handle (FH).
-            // If it's a scalar ($fh), we print to the scalar ($fh).
-            let handle_to_search = raw_handle.strip_prefix('*').unwrap_or(raw_handle);
+        // Use a single static regex for all print-heredoc matches, then filter
+        // by whether the handle is in the tied set. This avoids O(n) Regex
+        // compilations (one per tied handle) and is faster for large files.
+        for cap in PRINT_HEREDOC_PATTERN.captures_iter(&scan_code) {
+            let (Some(match_pos), Some(handle_match)) = (cap.get(0), cap.get(1)) else {
+                continue;
+            };
 
-            // Look for usage of this handle with heredoc
-            let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
-            if let Ok(re) = Regex::new(&usage_pattern) {
-                for usage_match in re.find_iter(&scan_code) {
-                    let location = location_from_start(line_starts, offset, usage_match.start());
+            let raw_print_handle = handle_match.as_str();
+            let normalized_print_handle =
+                raw_print_handle.strip_prefix('*').unwrap_or(raw_print_handle);
 
-                    results.push((
-                        AntiPattern::TiedHandleHeredoc {
-                            location: location.clone(),
-                            handle_name: handle_to_search.to_string(),
-                        },
-                        location,
-                    ));
-                }
+            if tied_handles.contains(normalized_print_handle) {
+                let location = location_from_start(line_starts, offset, match_pos.start());
+                results.push((
+                    AntiPattern::TiedHandleHeredoc {
+                        location: location.clone(),
+                        handle_name: normalized_print_handle.to_string(),
+                    },
+                    location,
+                ));
             }
         }
 
@@ -918,6 +931,26 @@ SECOND
             .filter(|diag| matches!(diag.pattern, AntiPattern::TiedHandleHeredoc { .. }))
             .count();
         assert_eq!(tied_handle_count, 2);
+    }
+
+    #[test]
+    fn test_tied_handle_does_not_report_other_handles() {
+        // Regression: PRINT_HEREDOC_PATTERN must only flag handles in the tied set.
+        // Writing a heredoc to an *untied* handle (OTHER) must not produce a diagnostic.
+        let detector = AntiPatternDetector::new();
+        let code = r###"
+tie *FH, 'Tie::Handle';
+print OTHER <<'DATA';
+Not tied
+DATA
+"###;
+
+        let diagnostics = detector.detect_all(code);
+        let tied_handle_count = diagnostics
+            .iter()
+            .filter(|diag| matches!(diag.pattern, AntiPattern::TiedHandleHeredoc { .. }))
+            .count();
+        assert_eq!(tied_handle_count, 0);
     }
 
     #[test]
