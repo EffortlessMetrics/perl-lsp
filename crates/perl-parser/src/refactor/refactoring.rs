@@ -2847,7 +2847,7 @@ sub complex {
                 create_backups: true,
                 max_backup_retention: 2,
                 backup_max_age_seconds: 0, // Disable age-based retention
-                backup_root: Some(backup_root),
+                backup_root: Some(backup_root.clone()),
                 ..RefactoringConfig::default()
             };
             let mut engine = RefactoringEngine::with_config(config);
