@@ -998,6 +998,12 @@ enum Commands {
         command: AgentCommand,
     },
 
+    /// Classify failed CI receipts into typed fix-forward playbooks.
+    FixForward {
+        #[command(subcommand)]
+        command: FixForwardCommand,
+    },
+
     /// Update derived metrics in docs/project/status/ subsystem files.
     ///
     /// Computes workspace test counts, ignored test counts, feature catalog
@@ -1453,6 +1459,23 @@ enum ReleaseCommand {
         #[arg(long)]
         bundle_dir: Option<PathBuf>,
     },
+}
+
+#[derive(Subcommand)]
+enum FixForwardCommand {
+    /// Classify a failing receipt into a typed fix-forward playbook.
+    Classify {
+        /// Path to a CI receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+
+        /// Output path for fix-forward receipt JSON.
+        #[arg(long)]
+        output: PathBuf,
+    },
+
+    /// List configured fix-forward playbooks.
+    ListPlaybooks,
 }
 
 #[derive(Subcommand)]
@@ -1957,6 +1980,12 @@ fn main() -> Result<()> {
                 AgentReceiptCommand::Validate { receipt } => agent_receipt::validate(&receipt),
             },
             AgentCommand::Worktree { command } => worktree_allocator::run(command),
+        },
+        Commands::FixForward { command } => match command {
+            FixForwardCommand::Classify { receipt, output } => {
+                fix_forward::classify(receipt, output)
+            }
+            FixForwardCommand::ListPlaybooks => fix_forward::list_playbooks(),
         },
         Commands::UpdateStatus { write, check, only } => update_status::run(write, check, only),
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
