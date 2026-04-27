@@ -3860,6 +3860,7 @@ dependencies = [
  "console",
  "duct",
  "flate2",
+ "glob",
  "indicatif",
  "notify",
  "peak_alloc",

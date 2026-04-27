@@ -425,8 +425,16 @@ mod tests {
 
     #[test]
     fn computes_percentiles() {
-        let rows =
-            vec![measurement("s1", None, None, None, None, None, None, &[("hover", vec![10, 20, 30, 40])])];
+        let rows = vec![measurement(
+            "s1",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            &[("hover", vec![10, 20, 30, 40])],
+        )];
 
         let latency = compute_latency_percentiles(&rows);
         let hover = latency.get("hover").expect("hover present");
@@ -437,7 +445,13 @@ mod tests {
     #[test]
     fn single_sample_latency_p50_equals_p95() {
         let rows = vec![measurement(
-            "single", None, None, None, None, None, None,
+            "single",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             &[("definition", vec![42])],
         )];
         let latency = compute_latency_percentiles(&rows);
@@ -450,7 +464,13 @@ mod tests {
     fn two_sample_latency_percentiles() {
         // [10, 90]: p50 rank=(2-1)*0.5=0.5→1, samples[1]=90; p95 rank=(2-1)*0.95=0.95→1, samples[1]=90
         let rows = vec![measurement(
-            "two", None, None, None, None, None, None,
+            "two",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             &[("hover", vec![10, 90])],
         )];
         let latency = compute_latency_percentiles(&rows);
