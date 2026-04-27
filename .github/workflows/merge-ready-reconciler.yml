@@ -1,0 +1,42 @@
+name: Merge Ready Reconciler
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply label removal (default false for advisory mode)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Advisory reconcile (default)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.apply != 'true' }}
+        run: cargo xtask merge-ready reconcile --dry-run
+
+      - name: Apply reconcile
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply == 'true' }}
+        run: cargo xtask merge-ready reconcile --apply
+
+      - name: Comment when apply mode removes merge-ready
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.apply == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "If merge-ready is removed, post reason + receipt details from reconcile output."
