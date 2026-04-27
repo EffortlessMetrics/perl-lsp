@@ -39,6 +39,48 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
+
+
+### Vim does not start `perllsp`
+
+1. Confirm Vim can see the binary:
+
+   ```vim
+   :echo executable('perllsp')
+   ```
+
+2. Confirm the buffer filetype:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. For `vim-lsp`, inspect:
+
+   ```vim
+   :LspStatus
+   :LspDocumentDiagnostics
+   ```
+
+4. For `coc.nvim`, inspect:
+
+   ```vim
+   :CocInfo
+   :CocOpenLog
+   :CocCommand document.echoFiletype
+   :CocCommand workspace.showOutput
+   ```
+
+5. Check the server outside Vim:
+
+   ```bash
+   perllsp --health
+   perllsp --info
+   perllsp --check path/to/file.pl
+   ```
+
 ## Diagnostics Or Completions Are Missing
 
 - Re-check the install with `perllsp --health`.
