@@ -163,13 +163,7 @@ pub fn split_completion_path_components(path: &str) -> (String, String) {
 }
 
 /// Resolve a directory used for file completion traversal.
-///
-/// When `workspace_root` is `Some`, the resolved path is checked for workspace
-/// containment so that symlinks pointing outside the workspace are rejected.
-pub fn resolve_completion_base_directory(
-    dir_part: &str,
-    workspace_root: Option<&Path>,
-) -> Option<PathBuf> {
+pub fn resolve_completion_base_directory(dir_part: &str) -> Option<PathBuf> {
     let path = Path::new(dir_part);
 
     if path.is_absolute() && dir_part != "/" {
@@ -181,19 +175,7 @@ pub fn resolve_completion_base_directory(
     }
 
     match path.canonicalize() {
-        Ok(canonical) => {
-            if let Some(root) = workspace_root {
-                let root_canonical = root.canonicalize().ok()?;
-                let root_canonical = normalize_filesystem_path(root_canonical);
-                let canonical = normalize_filesystem_path(canonical);
-                if !canonical.starts_with(&root_canonical) {
-                    return None;
-                }
-                Some(canonical)
-            } else {
-                Some(normalize_filesystem_path(canonical))
-            }
-        }
+        Ok(canonical) => Some(normalize_filesystem_path(canonical)),
         Err(_) => {
             if path.exists() && path.is_dir() {
                 Some(path.to_path_buf())
@@ -1103,15 +1085,15 @@ mod tests {
     fn test_resolve_completion_base_rejects_absolute() {
         use super::resolve_completion_base_directory;
 
-        assert!(resolve_completion_base_directory("/etc", None).is_none());
-        assert!(resolve_completion_base_directory("/usr/bin", None).is_none());
+        assert!(resolve_completion_base_directory("/etc").is_none());
+        assert!(resolve_completion_base_directory("/usr/bin").is_none());
     }
 
     #[test]
     fn test_resolve_completion_base_allows_dot() {
         use super::resolve_completion_base_directory;
 
-        let result = resolve_completion_base_directory(".", None);
+        let result = resolve_completion_base_directory(".");
         assert!(result.is_some());
         assert_eq!(result, Some(PathBuf::from(".")));
     }
@@ -1120,32 +1102,8 @@ mod tests {
     fn test_resolve_completion_base_nonexistent_returns_none() {
         use super::resolve_completion_base_directory;
 
-        let result = resolve_completion_base_directory("definitely_not_a_real_dir_xyz123", None);
+        let result = resolve_completion_base_directory("definitely_not_a_real_dir_xyz123");
         assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_resolve_completion_base_symlink_escape_rejected_with_workspace_root() -> TestResult {
-        // Simulate an absolute path being produced by canonicalize outside the workspace.
-        // We test by passing an absolute path that would normally be blocked by
-        // the `is_absolute` guard — but we test the containment logic by calling
-        // resolve on an existing non-workspace path with workspace_root set.
-        // Since the function rejects absolute input, we instead verify that when
-        // canonicalize of a relative path returns a result outside workspace_root,
-        // the function returns None.  The easiest way to trigger this without CWD
-        // manipulation is to use the public validate_workspace_path API (which
-        // calls the containment check) — so this test focuses on the workspace_root
-        // parameter wiring via a normal existing directory check.
-        let workspace = tempfile::tempdir()?;
-        let external = tempfile::tempdir()?;
-
-        // Passing an absolute external path is blocked by the is_absolute guard.
-        let abs_external = external.path().to_str().unwrap_or("/tmp").to_string();
-        let result =
-            super::resolve_completion_base_directory(&abs_external, Some(workspace.path()));
-        assert!(result.is_none(), "absolute path outside workspace should always be rejected");
-
-        Ok(())
     }
 
     #[test]
