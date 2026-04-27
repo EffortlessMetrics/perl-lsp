@@ -46,6 +46,7 @@ pub mod forbid_fatal_constructs;
 pub mod forensics;
 pub mod gate_receipts;
 pub mod gates;
+pub mod generated_files;
 pub mod github;
 pub mod hardening;
 #[cfg(feature = "parser-tasks")]
