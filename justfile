@@ -412,6 +412,34 @@ doctor-env:
 # Short alias for the developer environment quick check
 devex: doctor-env
 
+# Print recent commits from the best available remote base ref.
+# Renamed from agent-preflight to avoid collision with `scripts/agent-preflight.sh`
+# (the real safety-check script invoked by the /agent-preflight command skill).
+# Ref-selection order mirrors devex-targeted: origin/HEAD > origin/main >
+# origin/master > local main > local master > HEAD (fallback, shows local branch).
+agent-context-log:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=""
+    # origin/HEAD is the most authoritative canonical remote default — check first.
+    if git symbolic-ref --quiet --short refs/remotes/origin/HEAD >/dev/null 2>&1; then
+        ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD)"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        ref="origin/main"
+    elif git rev-parse --verify --quiet origin/master >/dev/null; then
+        ref="origin/master"
+    elif git rev-parse --verify --quiet main >/dev/null; then
+        ref="main"
+    elif git rev-parse --verify --quiet master >/dev/null; then
+        ref="master"
+    else
+        # HEAD fallback: shows the local branch — useful as last resort but
+        # agents should note this reflects their own branch, not remote master.
+        ref="HEAD"
+    fi
+    echo "Showing last 20 commits from: $ref"
+    git log "$ref" --oneline -20
+
 # One-command pre-flight before pushing a branch:
 # 1) repair/report workspace state issues, then 2) run the fast PR gate.
 ready: doctor pr-fast
