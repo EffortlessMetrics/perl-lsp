@@ -611,11 +611,15 @@ Settings specific to the VS Code extension (`vscode-extension/package.json`).
 These are separate from the LSP workspace settings above and control extension
 behaviour such as binary management and feature toggles.
 
+The VS Code extension uses the `perl-lsp.*` namespace. Server-side workspace
+settings use the `perl.*` namespace and may be forwarded via initialization
+options or client-specific configuration mechanisms.
+
 ### Binary management
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
