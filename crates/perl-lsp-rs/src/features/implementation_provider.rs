@@ -317,7 +317,8 @@ impl ImplementationProvider {
         match &node.kind {
             NodeKind::Subroutine { name: Some(name), .. } => {
                 let (_, name_bare) = perl_parser::qualified_name::split_qualified_name(name);
-                let (_, method_bare) = perl_parser::qualified_name::split_qualified_name(method_name);
+                let (_, method_bare) =
+                    perl_parser::qualified_name::split_qualified_name(method_name);
                 if name_bare == method_bare {
                     let target_uri = parse_uri(uri);
                     results.push(LocationLink {
