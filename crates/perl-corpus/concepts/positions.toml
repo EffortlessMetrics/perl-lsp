@@ -1,0 +1,71 @@
+[[concepts]]
+id = "position.byte_span.basic"
+status = "seeded"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["positions"] }
+fixtures = { floors = ["test_corpus/basic_constructs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "position.utf16.non_ascii"
+status = "seeded"
+scope = { crates = ["perl-line-index", "perl-position-tracking"], risk_tags = ["unicode", "positions"] }
+fixtures = { floors = ["test_corpus/edge_cases/unicode_encoding_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "position.crlf.line_index"
+status = "seeded"
+scope = { crates = ["perl-line-index", "perl-position-tracking"], risk_tags = ["line_endings", "positions"] }
+fixtures = { floors = ["test_corpus/edge_cases/unicode_encoding_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "position.multibyte.heredoc_body"
+status = "proposed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["unicode", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "skip", nightly = "smoke", release = "full" }
+
+[[concepts]]
+id = "position.range.operator"
+status = "seeded"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["operator", "positions"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "position.comments.trailing"
+status = "proposed"
+scope = { crates = ["perl-position-tracking", "perl-lexer"], risk_tags = ["comments", "positions"] }
+fixtures = { floors = ["test_corpus/clean_misc_kinds.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = "skip", nightly = "smoke", release = "full" }
+
+[[concepts]]
+id = "position.special_vars.offsets"
+status = "proposed"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["special_vars", "positions"] }
+fixtures = { floors = ["test_corpus/caller_context_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "skip", nightly = "smoke", release = "full" }
+
+[[concepts]]
+id = "position.statement_modifier.boundaries"
+status = "active"
+scope = { crates = ["perl-position-tracking", "perl-parser"], risk_tags = ["statement_modifier", "positions"] }
+fixtures = { floors = ["test_corpus/statement_modifier_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "snapshot_only" }
+snapshots = { tokens = false, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }

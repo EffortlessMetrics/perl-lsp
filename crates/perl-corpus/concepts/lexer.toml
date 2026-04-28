@@ -1,0 +1,71 @@
+[[concepts]]
+id = "lexer.regex.literal_vs_division"
+status = "seeded"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["ambiguity", "regex"] }
+fixtures = { floors = ["test_corpus/clean_regex_substitution.pl"], variants = ["test_corpus/advanced_regex.pl"] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.regex.substitution_delimiters"
+status = "seeded"
+scope = { crates = ["perl-lexer"], risk_tags = ["regex", "delimiters"] }
+fixtures = { floors = ["test_corpus/clean_regex_substitution.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.quote_like.q_braces"
+status = "seeded"
+scope = { crates = ["perl-lexer"], risk_tags = ["quote_like"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.quote_like.qq_parens"
+status = "seeded"
+scope = { crates = ["perl-lexer"], risk_tags = ["quote_like"] }
+fixtures = { floors = ["test_corpus/expressions_and_refs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.heredoc.basic"
+status = "seeded"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.heredoc.indented"
+status = "seeded"
+scope = { crates = ["perl-lexer"], risk_tags = ["heredoc", "perl_5_26"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.data_section.double_underscore_data"
+status = "seeded"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["data_section"] }
+fixtures = { floors = ["test_corpus/data_end_sections.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "lexer.filetest.chained_operators"
+status = "proposed"
+scope = { crates = ["perl-lexer", "perl-parser"], risk_tags = ["operator"] }
+fixtures = { floors = ["test_corpus/io_operations_comprehensive.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_only" }
+snapshots = { tokens = true, ast = false, spans = false }
+run = { pr = "skip", nightly = "smoke", release = "full" }

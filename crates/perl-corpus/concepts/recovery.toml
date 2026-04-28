@@ -1,0 +1,71 @@
+[[concepts]]
+id = "parser.recovery.missing_closing_brace"
+status = "seeded"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery"] }
+fixtures = { floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = ["test_corpus/parser_stress_cases.pl"] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.missing_paren"
+status = "seeded"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery"] }
+fixtures = { floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.unclosed_quote"
+status = "seeded"
+scope = { crates = ["perl-parser", "perl-lexer"], risk_tags = ["recovery", "quote_like"] }
+fixtures = { floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.malformed_signature"
+status = "seeded"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery", "signature"] }
+fixtures = { floors = ["test_corpus/signatures_parameters_production_enhanced.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.unterminated_heredoc"
+status = "proposed"
+scope = { crates = ["perl-parser", "perl-lexer"], risk_tags = ["recovery", "heredoc"] }
+fixtures = { floors = ["test_corpus/heredoc_depth.pl"], variants = [] }
+expect = { panic = false, timeout = true, mode = "parse_and_recover" }
+snapshots = { tokens = true, ast = true, spans = true }
+run = { pr = "skip", nightly = "smoke", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.double_else"
+status = "proposed"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery", "control_flow"] }
+fixtures = { floors = ["test_corpus/edge_cases/error_recovery_edge_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "skip", nightly = "smoke", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.missing_semicolon"
+status = "seeded"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery"] }
+fixtures = { floors = ["test_corpus/parser_stress_cases.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
+
+[[concepts]]
+id = "parser.recovery.nested_block_boundary"
+status = "active"
+scope = { crates = ["perl-parser"], risk_tags = ["recovery", "nesting"] }
+fixtures = { floors = ["test_corpus/edge_cases/deeply_nested_constructs.pl"], variants = [] }
+expect = { panic = false, timeout = false, mode = "parse_and_recover" }
+snapshots = { tokens = false, ast = true, spans = true }
+run = { pr = "smoke", nightly = "full", release = "full" }
