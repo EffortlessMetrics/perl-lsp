@@ -1,0 +1,10 @@
+{
+  "master_sha": "1111111aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "ci_state": "green",
+  "pending_checks": [],
+  "running_checks": [],
+  "failed_checks": [],
+  "gate_policy": {
+    "pending_allows_merge_ready_if_candidate_current": true
+  }
+}

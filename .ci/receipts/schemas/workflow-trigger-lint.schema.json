@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/workflow-trigger-lint.schema.json",
+  "title": "workflow-trigger-lint receipt",
+  "type": "object",
+  "required": ["schema_version", "overall_ok", "evaluations"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "policy_path": { "type": ["string", "null"] },
+    "fixture_path": { "type": ["string", "null"] },
+    "overall_ok": { "type": "boolean" },
+    "evaluations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "workflow", "required", "ok", "violations"],
+        "properties": {
+          "name": { "type": "string" },
+          "workflow": { "type": "string" },
+          "required": { "type": "boolean" },
+          "ok": { "type": "boolean" },
+          "violations": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

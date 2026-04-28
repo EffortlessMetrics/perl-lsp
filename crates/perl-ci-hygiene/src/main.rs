@@ -1,4 +1,4 @@
-mod version_sync;
+use perl_ci_hygiene::version_sync;
 
 use chrono::Utc;
 use clap::{Parser, Subcommand};
@@ -867,6 +867,10 @@ fn cmd_quick_bench(repo_root: &Path) -> Result<i32> {
         "  c-grammar  : bench_parser_c      (tree-sitter C grammar binding, requires libclang)"
     );
     println!();
+    println!("Building benchmark binaries...");
+    build_quick_bench_binaries(repo_root)?;
+    println!("Using median of {QUICK_BENCH_SAMPLES} direct binary runs per parser/file.");
+    println!();
 
     let files = vec![
         repo_root.join("test_corpus/simple.pl"),
@@ -1172,27 +1176,70 @@ const FACADE_BENCH_CRATE: &str = "tree-sitter-perl-rs";
 /// `three_way_bench_all_binaries_distinct`.
 const FACADE_BENCH_BIN: &str = "bench_facade";
 
-/// Run the v3 native Rust parser bench binary against `file`.
+/// Number of timed samples collected per parser/file pair in quick-bench mode.
+const QUICK_BENCH_SAMPLES: usize = 3;
+
+/// Build the quick-bench parser binaries ahead of timing.
 ///
-/// Returns wall-clock duration in microseconds, or `None` if the bench
-/// binary exits non-zero. Note that the elapsed time includes the
-/// `cargo run` startup overhead; both [`run_rust_bench_us`] and
-/// [`run_c_bench_us`] share that overhead so the comparison stays fair.
-fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+/// The C grammar bench is optional because it depends on libclang. Failures
+/// while building that bench are treated as "N/A" at measurement time.
+fn build_quick_bench_binaries(repo_root: &Path) -> Result<()> {
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", RUST_BENCH_CRATE, "--bin", RUST_BENCH_BIN],
+        &[],
+    )?;
+    command_status_strict(
+        repo_root,
+        "cargo",
+        &["build", "--quiet", "--release", "-p", FACADE_BENCH_CRATE, "--bin", FACADE_BENCH_BIN],
+        &[],
+    )?;
+    // Optional dependency path: allow failure and report as N/A during run.
+    let _ = command_status(
+        repo_root,
+        "cargo",
+        &[
+            "build",
+            "--quiet",
+            "--release",
+            "--manifest-path",
+            C_BENCH_MANIFEST,
+            "--bin",
+            C_BENCH_BIN,
+            "--features",
+            "test-utils",
+        ],
+        &[],
+    )?;
+    Ok(())
+}
+
+/// Return the median duration in microseconds over `QUICK_BENCH_SAMPLES` runs.
+fn run_bench_samples_us(repo_root: &Path, command: &Path, file: &Path) -> Result<Option<f64>> {
+    let command_str = command.to_string_lossy().into_owned();
     let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        RUST_BENCH_CRATE,
-        "--bin",
-        RUST_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let args = [file_arg.as_str()];
+    let mut samples = Vec::with_capacity(QUICK_BENCH_SAMPLES);
+    for _ in 0..QUICK_BENCH_SAMPLES {
+        let (status, elapsed) = command_timed_status(repo_root, &command_str, &args, &[])?;
+        if status != 0 {
+            return Ok(None);
+        }
+        samples.push(elapsed.as_micros() as f64);
+    }
+    if samples.is_empty() {
+        return Ok(None);
+    }
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    Ok(samples.get(samples.len() / 2).copied())
+}
+
+/// Run the v3 native Rust parser bench binary against `file`.
+fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
+    let binary = repo_root.join("target").join("release").join(RUST_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the legacy C tree-sitter parser bench binary against `file`.
@@ -1207,22 +1254,13 @@ fn run_rust_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// libclang installed). Quick-bench treats `None` as N/A in the speedup
 /// column rather than failing the whole run.
 fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "--manifest-path",
-        C_BENCH_MANIFEST,
-        "--bin",
-        C_BENCH_BIN,
-        "--features",
-        "test-utils",
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root
+        .join("crates")
+        .join("tree-sitter-perl-c")
+        .join("target")
+        .join("release")
+        .join(C_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 /// Run the `tree-sitter-perl-rs` facade bench binary against `file`.
@@ -1231,20 +1269,8 @@ fn run_c_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
 /// `-p` rather than `--manifest-path`. Returns wall-clock duration in
 /// microseconds, or `None` if the bench binary exits non-zero.
 fn run_facade_bench_us(repo_root: &Path, file: &Path) -> Result<Option<f64>> {
-    let file_arg = file.to_string_lossy().into_owned();
-    let args = [
-        "run",
-        "--quiet",
-        "--release",
-        "-p",
-        FACADE_BENCH_CRATE,
-        "--bin",
-        FACADE_BENCH_BIN,
-        "--",
-        file_arg.as_str(),
-    ];
-    let (status, elapsed) = command_timed_status(repo_root, "cargo", &args, &[])?;
-    if status == 0 { Ok(Some(elapsed.as_micros() as f64)) } else { Ok(None) }
+    let binary = repo_root.join("target").join("release").join(FACADE_BENCH_BIN);
+    run_bench_samples_us(repo_root, &binary, file)
 }
 
 fn timed_file_run_ms(repo_root: &Path, parser: &Path, file: &Path) -> Result<f64> {
@@ -3155,9 +3181,12 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
     Ok(0)
 }
 
-fn is_allowlisted_prod_panic_hit(rel_path: &str, line: &str) -> bool {
-    normalize_path_for_match(rel_path) == "crates/perl-heredoc-anti-patterns/src/lib.rs"
-        && line.contains("regex failed to compile")
+fn is_allowlisted_prod_panic_hit(_rel_path: &str, line: &str) -> bool {
+    // Static LazyLock<Regex> initializers that use unreachable!() for known-good patterns
+    // are exempt regardless of which file they live in.  Two message conventions:
+    //   • "... regex failed to compile" — used in heredoc anti-pattern initializers
+    //   • "... is a known-good static pattern ..." — used in other static regex initializers
+    line.contains("regex failed to compile") || line.contains("known-good static pattern")
 }
 
 fn cmd_quick_check(repo_root: &Path) -> Result<i32> {
@@ -5085,23 +5114,35 @@ mod tests {
 
     #[test]
     fn allowlisted_prod_panic_hit_matches_heredoc_regex_initializers() {
+        // Line content is the discriminator — path no longer matters after the
+        // heredoc anti-patterns module moved into perl-parser.
+        assert!(is_allowlisted_prod_panic_hit(
+            "crates/perl-parser/src/heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        assert!(is_allowlisted_prod_panic_hit(
+            r"crates\perl-parser\src\heredoc_anti_patterns.rs",
+            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+        ));
+        // Old path still matches (line content drives the decision)
         assert!(is_allowlisted_prod_panic_hit(
             "crates/perl-heredoc-anti-patterns/src/lib.rs",
             r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
         ));
+        // "known-good static pattern" convention used in other LazyLock<Regex> initializers
         assert!(is_allowlisted_prod_panic_hit(
-            r"crates\perl-heredoc-anti-patterns\src\lib.rs",
-            r#"        Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),"#
+            "crates/perl-lsp-rs/src/runtime/language/code_actions.rs",
+            r#"        Err(err) => unreachable!("GLOBAL_VAR_ASSIGNMENT_RE is a known-good static pattern: {err}"),"#
         ));
+        // Bare unreachable!() without a qualifying message is NOT allowlisted
         assert!(!is_allowlisted_prod_panic_hit(
             "crates/perl-lsp-diagnostics/src/lints/ffi_checklib.rs",
             r#"                        _ => unreachable!(),"#
         ));
     }
 
-    // Regression guard for issue #4245: is_allowlisted_prod_panic_hit() must pass
-    // all 7 unreachable!() calls in perl-heredoc-anti-patterns/src/lib.rs under
-    // both forward-slash and backslash path separators (Windows vs Unix).
+    // Regression guard for issue #4245: all unreachable!() calls in the heredoc
+    // anti-patterns module must be allowlisted regardless of which file they live in.
     #[test]
     fn allowlisted_prod_panic_hit_all_seven_patterns_both_separators() {
         let all_seven = [
@@ -5113,8 +5154,8 @@ mod tests {
             r#"        Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),"#,
             r#"    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),"#,
         ];
-        let forward = "crates/perl-heredoc-anti-patterns/src/lib.rs";
-        let backward = r"crates\perl-heredoc-anti-patterns\src\lib.rs";
+        let forward = "crates/perl-parser/src/heredoc_anti_patterns.rs";
+        let backward = r"crates\perl-parser\src\heredoc_anti_patterns.rs";
         for line in &all_seven {
             assert!(
                 is_allowlisted_prod_panic_hit(forward, line),

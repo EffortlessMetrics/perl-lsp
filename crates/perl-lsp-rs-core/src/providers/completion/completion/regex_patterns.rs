@@ -384,6 +384,11 @@ pub fn add_regex_flag_completions(
     }
 }
 
+/// Append regex-aware completion items to `completions` based on the cursor context.
+///
+/// Detects whether the cursor is inside a regex literal and, if so, contributes
+/// modifier flags, character-class names, and quantifier snippets appropriate
+/// for the current regex prefix.
 pub fn add_regex_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,

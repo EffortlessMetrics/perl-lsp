@@ -113,20 +113,37 @@ impl<'a> Parser<'a> {
                 }
             }
         } else {
-            // For non-balanced delimiters, just scan for the closing char
-            // This avoids recursion entirely
-            while !self.tokens.is_eof() {
-                let token = self.consume_token()?;
-                if token.text.contains(close_delim) {
-                    let pos = token.text.find(close_delim).ok_or_else(|| {
-                        ParseError::syntax("Closing delimiter not found in token", token.start)
-                    })?;
-                    content.push_str(&token.text[..pos]);
-                    break;
-                } else {
-                    content.push_str(&token.text);
-                    if !preserve_exact_content && !self.tokens.is_eof() {
-                        content.push(' ');
+            // For non-balanced delimiters, just scan for the closing char.
+            //
+            // Special case: when `hash_brace_depth > 0`, the lexer suppresses
+            // quote-operator recognition and emits e.g. `qw/a b c/` as
+            // Identifier("qw") + Regex("/a b c/").  In that situation
+            // `delim_token` already holds the complete content including both
+            // delimiters, so extract it directly rather than scanning forward
+            // tokens (which would incorrectly consume the `}` that closes the
+            // enclosing hash subscript).
+            let delim_text = delim_token.text.as_ref();
+            if delim_text.len() >= 2
+                && delim_text.starts_with(delim_char)
+                && delim_text.ends_with(close_delim)
+            {
+                content = delim_text
+                    [delim_char.len_utf8()..delim_text.len() - close_delim.len_utf8()]
+                    .to_string();
+            } else {
+                while !self.tokens.is_eof() {
+                    let token = self.consume_token()?;
+                    if token.text.contains(close_delim) {
+                        let pos = token.text.find(close_delim).ok_or_else(|| {
+                            ParseError::syntax("Closing delimiter not found in token", token.start)
+                        })?;
+                        content.push_str(&token.text[..pos]);
+                        break;
+                    } else {
+                        content.push_str(&token.text);
+                        if !preserve_exact_content && !self.tokens.is_eof() {
+                            content.push(' ');
+                        }
                     }
                 }
             }
