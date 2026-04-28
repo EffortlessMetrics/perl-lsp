@@ -1,13 +1,13 @@
 # Emacs Setup Guide for perl-lsp
 
-This guide gives you a fast, reliable Emacs setup for `perllsp` with a minimal first-run path.
+This guide shows how to use `perllsp` from Emacs.
 
-## Official support posture
+## Recommended Support Posture
 
-- **Primary path (Emacs 29+)**: `eglot`
-- **Alternative path**: `lsp-mode` (for users who prefer that stack)
+- **Primary path:** Eglot, especially on Emacs 29 or later
+- **Alternative path:** `lsp-mode`, for users already using that stack
 
-Both clients are supported with the same server command:
+Both clients launch the same server command:
 
 ```bash
 perllsp --stdio
@@ -15,141 +15,280 @@ perllsp --stdio
 
 ## Prerequisites
 
-- Emacs 29+ recommended
-- `perllsp` installed and available on your `PATH`
+- Emacs 29 or later recommended
+- `perllsp` installed and available to Emacs
+- A Perl project opened from the project root
 
-Install `perllsp` using the same methods described in:
+Emacs 29 includes Eglot. If you use Emacs 28 or older, install Eglot separately
+or use `lsp-mode`.
 
-- [README Quick Start](../../README.md)
-- [Getting Started](../tutorials/GETTING_STARTED.md)
+Install `perllsp` using the project installation guide or README.
 
-> Do not use `cargo install perl-lsp` (different crates.io package name).
+Do not use:
 
-## 1) Minimal setup (recommended)
+```bash
+cargo install perl-lsp
+```
 
-Copy this into your Emacs config:
+That crates.io package name belongs to a different project. Use:
+
+```bash
+cargo install perllsp
+```
+
+Verify the server before changing Emacs configuration:
+
+```bash
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+## Perl File Modes
+
+Emacs has built-in `perl-mode` and `cperl-mode`.
+
+`perl-ts-mode` is optional and third-party. Do not include it in your hooks unless
+you have installed a package that provides it.
+
+If files such as `.t`, `.psgi`, `.cgi`, or `.fcgi` are not detected as Perl, add
+file associations:
+
+```elisp
+(add-to-list 'auto-mode-alist '("\\.t\\'" . perl-mode))
+(add-to-list 'auto-mode-alist '("\\.psgi\\'" . perl-mode))
+(add-to-list 'auto-mode-alist '("\\.cgi\\'" . perl-mode))
+(add-to-list 'auto-mode-alist '("\\.fcgi\\'" . perl-mode))
+```
+
+## 1. Minimal Eglot Setup
+
+For Emacs 29+, add this to your Emacs config:
 
 ```elisp
 (use-package eglot
+  :ensure nil
   :hook ((perl-mode . eglot-ensure)
-         (cperl-mode . eglot-ensure)
-         (perl-ts-mode . eglot-ensure))  ; remove if perl-ts-mode is not installed
+         (cperl-mode . eglot-ensure))
   :config
   (add-to-list 'eglot-server-programs
-               '((perl-mode cperl-mode perl-ts-mode) . ("perllsp" "--stdio"))))
+               '(((perl-mode :language-id "perl")
+                  (cperl-mode :language-id "perl"))
+                 . ("perllsp" "--stdio"))))
 ```
 
-> **Note:** `perl-mode` and `cperl-mode` are built into Emacs. `perl-ts-mode` is a
-> third-party package (not included in Emacs core); remove it from the hook and mode list
-> if you have not installed it separately.
+If you have installed `perl-ts-mode`, add it explicitly:
+
+```elisp
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '((perl-ts-mode :language-id "perl")
+                 . ("perllsp" "--stdio"))))
+
+(add-hook 'perl-ts-mode-hook #'eglot-ensure)
+```
 
 Then:
 
 1. Restart Emacs.
-2. Open a `.pl` or `.pm` file.
-3. Confirm `eglot` is attached (`M-x eglot`).
+2. Open a Perl file such as `lib/My/Module.pm`, `script/app.pl`, or `t/basic.t`.
+3. Confirm the mode line shows `[eglot:PROJECT]`.
+4. Introduce a temporary syntax error.
+5. Confirm Flymake diagnostics appear.
+6. Remove the syntax error after testing.
 
-### Minimal key commands
+You can also check attachment with:
 
-- Go to definition: `M-.`
-- Find references: `M-?`
-- Rename symbol: `M-x eglot-rename`
-- Code actions: `M-x eglot-code-actions`
-- Format buffer: `M-x eglot-format-buffer`
+```elisp
+M-: (eglot-managed-p)
+```
 
-With `eglot`, diagnostics are provided through Flymake in standard Emacs UI.
+## Useful Eglot Commands
 
-## 2) Team/project configuration (preferred over large Emacs Lisp)
+| Action                  | Command                                |
+| ----------------------- | -------------------------------------- |
+| Start / reconnect Eglot | `M-x eglot`                            |
+| Restart server          | `M-x eglot-reconnect`                  |
+| Go to definition        | `M-.` / `M-x xref-find-definitions`    |
+| Find references         | `M-?` / `M-x xref-find-references`     |
+| Rename symbol           | `M-x eglot-rename`                     |
+| Code actions            | `M-x eglot-code-actions`               |
+| Format buffer           | `M-x eglot-format-buffer`              |
+| Toggle inlay hints      | `M-x eglot-inlay-hints-mode`           |
+| Buffer diagnostics      | `M-x flymake-show-buffer-diagnostics`  |
+| Project diagnostics     | `M-x flymake-show-project-diagnostics` |
+| Protocol log            | `M-x eglot-events-buffer`              |
+| Server stderr           | `M-x eglot-stderr-buffer`              |
 
-Keep project-wide defaults in `.perl-lsp.toml` at repository root.
+## 2. Project Configuration
 
-Example:
+For team-shared settings, prefer `.perl-lsp.toml` at the repository root.
 
 ```toml
 [perl]
-include_paths = ["lib", "local/lib/perl5"]
+include_paths = ["lib", ".", "local/lib/perl5", "vendor/lib"]
 
 [diagnostics]
-enabled = true
+perlcritic = true
+perlcritic_severity = 3
 
-[format]
-enabled = true
-
-[perlcritic]
-enabled = true
+[features]
+inlay_hints = true
 ```
 
-This keeps editor startup config thin and makes settings portable across VS Code, Neovim, Emacs, and other clients.
+If your project only needs the built-in defaults, omit `include_paths`. The
+built-in include paths are `lib`, `.`, and `local/lib/perl5`.
 
-For full configuration reference, see [docs/reference/CONFIG.md](../reference/CONFIG.md).
+## 3. lsp-mode Alternative
 
-## 3) lsp-mode alternative
-
-If you prefer `lsp-mode`, use this minimal config:
+Use this path if you already prefer `lsp-mode`.
 
 ```elisp
 (use-package lsp-mode
+  :commands (lsp lsp-deferred)
   :hook ((perl-mode . lsp-deferred)
-         (cperl-mode . lsp-deferred)
-         (perl-ts-mode . lsp-deferred))  ; remove if perl-ts-mode is not installed
-  :commands lsp
+         (cperl-mode . lsp-deferred))
   :config
+  (add-to-list 'lsp-language-id-configuration '(perl-mode . "perl"))
+  (add-to-list 'lsp-language-id-configuration '(cperl-mode . "perl"))
+
   (lsp-register-client
    (make-lsp-client
     :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
-    :major-modes '(perl-mode cperl-mode perl-ts-mode)
+    :activation-fn (lsp-activate-on "perl")
+    :major-modes '(perl-mode cperl-mode)
+    :priority 1
     :server-id 'perllsp)))
 ```
 
-> **Note:** `perl-ts-mode` is a third-party package (not built into Emacs); remove it
-> from `:hook` and `:major-modes` if you have not installed it separately.
+If using `perl-ts-mode`:
 
-Keep optional packages (`lsp-ui`, custom completion stacks, extra modeline integrations) layered on only after base connectivity works.
+```elisp
+(with-eval-after-load 'lsp-mode
+  (add-to-list 'lsp-language-id-configuration '(perl-ts-mode . "perl")))
 
-## 4) Troubleshooting quick checks
+(add-hook 'perl-ts-mode-hook #'lsp-deferred)
+```
 
-Run these in order:
+Keep optional packages such as `lsp-ui`, `company`, `corfu`, `cape`,
+`consult`, `vertico`, `orderless`, or modeline integrations layered on only after
+base connectivity works.
 
-1. Binary resolution:
+## 4. Verify It Is Running
 
-   ```elisp
-   M-: (executable-find "perllsp")
-   ```
+### Eglot
 
-2. Verify server outside Emacs:
+1. Open a Perl file.
+2. Confirm `[eglot:PROJECT]` appears in the mode line.
+3. Run `M-: (eglot-managed-p)`.
+4. Check diagnostics with `M-x flymake-show-buffer-diagnostics`.
+5. Check logs if needed:
+   - `M-x eglot-events-buffer`
+   - `M-x eglot-stderr-buffer`
 
-   ```bash
-   perllsp --version
-   perllsp --health
-   ```
+### lsp-mode
 
-3. Verify active major mode:
+1. Open a Perl file.
+2. Run `M-x lsp-describe-session`.
+3. Check logs with `M-x lsp-workspace-show-log`.
 
-   ```elisp
-   M-: major-mode
-   ```
+## 5. Troubleshooting
 
-   Expected: `perl-mode`, `cperl-mode`, or `perl-ts-mode`.
+### Emacs cannot find `perllsp`
 
-4. Check client attachment:
+Check inside Emacs:
 
-   - `eglot`: `M-x eglot`
-   - `lsp-mode`: `M-x lsp-describe-session`
+```elisp
+M-: (executable-find "perllsp")
+```
 
-5. Optional low-level server check:
+It should return a path.
 
-   ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perllsp --stdio
-   ```
+Check from a shell:
 
-If the CLI checks pass but Emacs does not attach, see [Troubleshooting](../how-to/TROUBLESHOOTING.md).
+```bash
+command -v perllsp
+perllsp --version
+perllsp --health
+perllsp --info
+```
 
-## 5) Scope and expectations
+On Windows PowerShell:
 
-This page intentionally focuses on:
+```powershell
+where perllsp
+perllsp --version
+perllsp --health
+perllsp --info
+```
 
-- a successful first connection,
-- consistent binary naming (`perllsp`), and
-- consistent mode coverage (`perl-mode` + `cperl-mode` + `perl-ts-mode`).
+If GUI Emacs does not inherit your shell `PATH`, either fix Emacs `exec-path` or
+use an absolute path:
 
-For broader editor guidance, see [Editor Setup](../how-to/EDITOR_SETUP.md).
+```elisp
+(add-to-list 'eglot-server-programs
+             '(((perl-mode :language-id "perl")
+                (cperl-mode :language-id "perl"))
+               . ("/absolute/path/to/perllsp" "--stdio")))
+```
+
+### Emacs starts the wrong Perl language server
+
+`lsp-mode` has existing Perl clients for other Perl language servers. If another
+Perl server starts instead of `perllsp`, raise the custom client's priority,
+disable the other Perl clients, or remove the other server binary from `PATH`.
+
+### No diagnostics
+
+Check the active major mode:
+
+```elisp
+M-: major-mode
+```
+
+Expected values include `perl-mode`, `cperl-mode`, or `perl-ts-mode`.
+
+If the file is not in a Perl mode, add an `auto-mode-alist` entry for the file
+extension.
+
+Then check the server outside Emacs:
+
+```bash
+perllsp --check path/to/file.pl
+```
+
+### Module resolution issues
+
+Prefer `.perl-lsp.toml` for project-wide include paths:
+
+```toml
+[perl]
+include_paths = ["lib", ".", "local/lib/perl5", "vendor/lib"]
+```
+
+### Formatting does not work
+
+Install `perltidy` and confirm it is visible to Emacs:
+
+```bash
+perltidy --version
+```
+
+Then try `M-x eglot-format-buffer` or `M-x lsp-format-buffer`.
+
+### `perllsp --stdio` appears to hang
+
+That is expected. In stdio mode, `perllsp` waits for framed LSP JSON-RPC input
+from Emacs. Use these manual checks instead:
+
+```bash
+perllsp --health
+perllsp --info
+perllsp --check path/to/file.pl
+```
+
+For server-side behavior and configuration details, see:
+
+- [Configuration Reference](../reference/CONFIG.md)
+- [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md)
+- [Editor Setup](../how-to/EDITOR_SETUP.md)
