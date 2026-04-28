@@ -39,6 +39,43 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
+## Neovim Does Not Start `perllsp`
+
+1. Confirm the binary works outside Neovim:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the buffer filetype:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. Confirm the LSP config is enabled:
+
+   ```vim
+   :checkhealth vim.lsp
+   ```
+
+4. For Neovim 0.11+, confirm the config name matches the enabled name:
+
+   ```lua
+   vim.lsp.config('perllsp', { cmd = { 'perllsp', '--stdio' } })
+   vim.lsp.enable('perllsp')
+   ```
+
+5. Use manual diagnostics instead of raw stdio JSON:
+
+   ```bash
+   perllsp --check path/to/file.pl
+   ```
+
 ## Diagnostics Or Completions Are Missing
 
 - Re-check the install with `perllsp --health`.

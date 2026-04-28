@@ -829,20 +829,35 @@ perllsp --features-json --feature-profile production
 
 ### Editor-specific snippets
 
-#### Neovim (lua)
+#### Neovim 0.11+ (lua)
 
 ```lua
-require("lspconfig").perl_ls.setup({
-  settings = {
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
     perl = {
       workspace = {
-        includePaths = { "lib", ".", "local/lib/perl5" },
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
         useSystemInc = false,
       },
-      inlayHints = { enabled = true, parameterHints = true },
+      inlayHints = {
+        enabled = true,
+        parameterHints = true,
+      },
     },
   },
 })
+
+vim.lsp.enable('perllsp')
 ```
 
 #### Helix (`languages.toml`)
