@@ -421,7 +421,10 @@ mod tests {
     fn receipt_verdict_pass_for_master_red() -> Result<()> {
         let input = load_input(&fixture("master-red.json"))?;
         let receipt = classify(&input);
-        assert_eq!(receipt.verdict, "pass", "master_red is not a PR-owned failure; verdict must be pass");
+        assert_eq!(
+            receipt.verdict, "pass",
+            "master_red is not a PR-owned failure; verdict must be pass"
+        );
         Ok(())
     }
 
