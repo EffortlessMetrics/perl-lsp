@@ -913,6 +913,23 @@ Sublime LSP uses `initialization_options`; the LSP protocol field is named
 }
 ```
 
+#### OpenAI Codex app
+
+Codex app is not a documented generic LSP client. Do not configure
+`perllsp --stdio` as a Codex MCP server; `perllsp` speaks LSP, not MCP.
+
+Use Codex app to run non-editor checks:
+
+```bash
+perllsp --check path/to/file.pl
+perllsp --check-project .
+perllsp --info
+```
+
+For live editor LSP features while using Codex, install the OpenAI Codex IDE
+Extension and the `EffortlessMetrics.perl-lsp-rs` extension in a VS
+Code-compatible editor.
+
 ---
 
 ## See Also
