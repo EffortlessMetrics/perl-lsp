@@ -1,5 +1,8 @@
 package Demo::Symbols;
 
+use strict;
+use warnings;
+
 sub alpha {
     return 1;
 }
