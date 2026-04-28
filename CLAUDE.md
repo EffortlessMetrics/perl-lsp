@@ -4,6 +4,8 @@
 
 ## Orchestration Model
 
+perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.
+
 > For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
 
 The orchestrator routes work to agents, never writes code directly.
