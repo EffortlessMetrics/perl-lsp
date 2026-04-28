@@ -104,7 +104,6 @@ fn token_span_at_byte(
     Some((start, name_start, end))
 }
 
-
 /// Extract a symbol and its kind from `source` at `position`.
 ///
 /// `position` uses byte offsets. Returns the symbol name (without sigil) and
@@ -115,10 +114,7 @@ pub fn extract_symbol_from_source(
     source: &str,
 ) -> Option<(String, CursorSymbolKind)> {
     let bytes = source.as_bytes();
-    let options = ScanOptions {
-        include_leading_identifier: false,
-        allow_cursor_on_sigil: true,
-    };
+    let options = ScanOptions { include_leading_identifier: false, allow_cursor_on_sigil: true };
     let (start, name_start, end) =
         token_span_at_byte(bytes, position, is_cursor_ident_char, is_symbol_sigil, options)?;
 
@@ -147,10 +143,7 @@ pub fn get_symbol_range_at_position(position: usize, source: &str) -> Option<(us
     }
 
     let bytes = source.as_bytes();
-    let options = ScanOptions {
-        include_leading_identifier: true,
-        allow_cursor_on_sigil: false,
-    };
+    let options = ScanOptions { include_leading_identifier: true, allow_cursor_on_sigil: false };
     if let Some((start, _name_start, end)) =
         token_span_at_byte(bytes, position, is_cursor_ident_char, is_symbol_sigil, options)
     {
@@ -189,11 +182,9 @@ pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<S
     let byte_pos = byte_offset_utf16(line_text, col_utf16);
     let bytes = line_text.as_bytes();
 
-    let options = ScanOptions {
-        include_leading_identifier: true,
-        allow_cursor_on_sigil: true,
-    };
-    let (start, _name_start, end) = token_span_at_byte(bytes, byte_pos, is_modchar, is_module_sigil, options)?;
+    let options = ScanOptions { include_leading_identifier: true, allow_cursor_on_sigil: true };
+    let (start, _name_start, end) =
+        token_span_at_byte(bytes, byte_pos, is_modchar, is_module_sigil, options)?;
     Some(line_text[start..end].to_string())
 }
 
