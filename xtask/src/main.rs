@@ -874,7 +874,6 @@ enum Commands {
         verbose: bool,
     },
 
-<<<<<<< HEAD
     /// Manage gate receipt schema registry and validate receipt payloads.
     GateReceipts {
         #[command(subcommand)]
@@ -887,8 +886,6 @@ enum Commands {
         command: GatePolicyCommand,
     },
 
-=======
->>>>>>> 73aa519b4 (feat(queue): project labels from canonical PR state (#6853))
     /// Show technical debt report from debt ledger
     ///
     /// Reads `.ci/debt-ledger.yaml` and reports on quarantined tests,
@@ -1055,7 +1052,7 @@ enum Commands {
 
         /// Output format (default: human)
         #[arg(long, short, value_enum, default_value = "human")]
-        format: OutputFormat,
+        format: GatesOutputFormat,
 
         /// Emit receipt JSON (also writes to target/receipts/receipt.json)
         #[arg(long, short)]
@@ -1080,6 +1077,33 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+    },
+
+    /// Detect contradictory PR label states and emit a methodology receipt.
+    MethodologyGate {
+        /// Fixture JSON file (local snapshot or GitHub event payload).
+        #[arg(long)]
+        fixture: Option<PathBuf>,
+
+        /// Pull request number to inspect via gh CLI.
+        #[arg(long)]
+        pr: Option<u64>,
+
+        /// Path to output receipt JSON.
+        #[arg(long, default_value = "target/receipts/methodology-gate.json")]
+        receipt: PathBuf,
+
+        /// Do not write receipt to disk.
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Enforce mode: contradictory states fail the command.
+        #[arg(long)]
+        enforce: bool,
+
+        /// Output format.
+        #[arg(long, value_enum, default_value = "human")]
+        format: MethodologyOutputFormat,
     },
 
     /// Verify hook scripts are executable.
@@ -1372,6 +1396,38 @@ enum QueueCommand {
         #[arg(long, default_value = ".ci/state/label-projection.toml")]
         config: PathBuf,
     },
+}
+
+#[derive(Subcommand)]
+enum GateReceiptsCommand {
+    /// List registered receipt schemas.
+    List {
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate a single receipt JSON file.
+    Validate {
+        /// Path to receipt JSON file.
+        path: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+    /// Validate all receipt JSON files under a directory.
+    ValidateAll {
+        /// Root directory containing receipt JSON files.
+        dir: PathBuf,
+        /// Output format (default: human).
+        #[arg(long, value_enum, default_value = "human")]
+        format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GateReceiptsFormat {
+    Human,
+    Json,
 }
 
 #[derive(ValueEnum, Clone)]
@@ -1749,7 +1805,6 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
-<<<<<<< HEAD
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {
                 gate_receipts::list(convert_gate_receipts_format(format))
@@ -1775,8 +1830,6 @@ fn main() -> Result<()> {
                 format,
             })
         }
-=======
->>>>>>> 73aa519b4 (feat(queue): project labels from canonical PR state (#6853))
         Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
         Commands::ResolvePackageName { crate_dir } => {
             // Use the current working directory as workspace root so this subcommand
@@ -1812,5 +1865,12 @@ fn print_top_level_commands() {
 
     for command_name in command_names {
         println!("{command_name}");
+    }
+}
+
+fn convert_gate_receipts_format(format: GateReceiptsFormat) -> gate_receipts::OutputFormat {
+    match format {
+        GateReceiptsFormat::Human => gate_receipts::OutputFormat::Human,
+        GateReceiptsFormat::Json => gate_receipts::OutputFormat::Json,
     }
 }
