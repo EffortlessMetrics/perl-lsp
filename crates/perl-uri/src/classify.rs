@@ -196,6 +196,18 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_legacy_file_uri_two_slashes_forward_slash() {
+        // Some clients emit `file://C:/...` (two slashes, forward slashes) instead of
+        // the canonical three-slash form.  The pre-pass handles both backslash and
+        // forward-slash variants of the two-slash form.
+        assert_eq!(uri_key("file://C:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
+        assert_eq!(
+            uri_key("file://D:/projects/MyApp/script.pl"),
+            "file:///d:/projects/MyApp/script.pl"
+        );
+    }
+
+    #[test]
     fn canonical_file_uri_three_slashes_unchanged_by_legacy_pass() {
         // Canonical `file:///c:/...` must NOT be double-processed by the legacy pass.
         assert_eq!(uri_key("file:///c:/Users/dev/example.pl"), "file:///c:/Users/dev/example.pl");
