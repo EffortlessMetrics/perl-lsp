@@ -378,6 +378,17 @@ pub(super) fn generate_parser_status(metrics: &ParserMetrics, original: &str) ->
     Ok(text)
 }
 
+#[cfg(test)]
+pub(super) const PARSER_STATUS_MARKERS: [&str; 7] = [
+    "PARSER_TRACKING_TABLE",
+    "PARSER_PERFORMANCE_TABLE",
+    "PARSER_METRICS_BULLETS",
+    "TOKEN_HEALTH_TABLE",
+    "PARSER_NODEKIND_ROW",
+    "PARSER_RELIABILITY_ROW",
+    "PARSER_STRICT_CLEAN_ROW",
+];
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -674,6 +685,42 @@ mod tests {
             ),
             "TOKEN_HEALTH_TABLE block must be replaced — replace_block did not fire"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn status_marker_contract_parser_doc() -> Result<()> {
+        let root = crate::utils::project_root()?;
+        let target_file = root.join("docs/project/status/parser.md");
+        let content = std::fs::read_to_string(&target_file).map_err(|err| {
+            color_eyre::eyre::eyre!("failed reading {}: {err}", target_file.display())
+        })?;
+
+        for marker in PARSER_STATUS_MARKERS {
+            let begin = format!("<!-- BEGIN: {marker} -->");
+            let end = format!("<!-- END: {marker} -->");
+            let begin_count = content.match_indices(&begin).count();
+            let end_count = content.match_indices(&end).count();
+
+            assert_eq!(
+                begin_count,
+                1,
+                "status marker contract violation: missing or duplicate marker in {} (BEGIN count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
+                target_file.display(),
+                begin_count,
+                begin,
+                end,
+            );
+            assert_eq!(
+                end_count,
+                1,
+                "status marker contract violation: missing or duplicate marker in {} (END count = {}). expected BEGIN string: `{}`; expected END string: `{}`",
+                target_file.display(),
+                end_count,
+                begin,
+                end,
+            );
+        }
         Ok(())
     }
 }
