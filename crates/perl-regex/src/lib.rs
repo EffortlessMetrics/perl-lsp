@@ -564,7 +564,10 @@ impl RegexAnalyzer {
     /// Generate hover text for a Perl regex pattern and its modifiers.
     ///
     /// Summarises the named capture groups and explains the meaning of each
-    /// modifier flag (`i`, `m`, `s`, `x`, `g`).
+    /// modifier flag (`i`, `m`, `s`, `x`, `g`, `a`, `d`, `l`, `u`, `n`,
+    /// `p`, `r`, `c`, `o`, `e`). Repeated modifiers are deduplicated.
+    /// Unknown modifier flags are collected and appended as
+    /// `Unknown modifiers: \`…\`` at the end of the hover text.
     ///
     /// # Example
     /// ```
@@ -595,17 +598,21 @@ impl RegexAnalyzer {
         }
 
         // Modifier explanations.
-        let modifier_notes: Vec<&str> = modifiers
-            .chars()
-            .filter_map(|m| match m {
-                'i' => Some("case-insensitive matching"),
-                'm' => Some("multiline mode: ^ and $ match line boundaries"),
-                's' => Some("single-line mode: dot matches newline"),
-                'x' => Some("extended mode: whitespace and comments allowed"),
-                'g' => Some("global: match all occurrences"),
-                _ => None,
-            })
-            .collect();
+        let mut seen_modifiers: Vec<char> = Vec::new();
+        let mut modifier_notes: Vec<&str> = Vec::new();
+        let mut unknown_modifiers: Vec<char> = Vec::new();
+        for modifier in modifiers.chars() {
+            if seen_modifiers.contains(&modifier) {
+                continue;
+            }
+            seen_modifiers.push(modifier);
+            match describe_modifier(modifier) {
+                Some(description) => modifier_notes.push(description),
+                None => {
+                    unknown_modifiers.push(modifier);
+                }
+            }
+        }
 
         if !modifier_notes.is_empty() {
             parts.push("Modifiers:".to_string());
@@ -614,7 +621,33 @@ impl RegexAnalyzer {
             }
         }
 
+        if !unknown_modifiers.is_empty() {
+            let unknown: String = unknown_modifiers.into_iter().collect();
+            parts.push(format!("Unknown modifiers: `{unknown}`"));
+        }
+
         parts.join("\n")
+    }
+}
+
+fn describe_modifier(modifier: char) -> Option<&'static str> {
+    match modifier {
+        'i' => Some("case-insensitive matching"),
+        'm' => Some("multiline mode: ^ and $ match line boundaries"),
+        's' => Some("single-line mode: dot matches newline"),
+        'x' => Some("extended mode: whitespace and comments allowed"),
+        'g' => Some("global: match all occurrences"),
+        'a' => Some("ASCII-safe character classes"),
+        'd' => Some("native platform character set semantics"),
+        'l' => Some("locale-dependent character semantics"),
+        'u' => Some("Unicode character semantics"),
+        'n' => Some("non-capturing by default for unnamed groups"),
+        'p' => Some("preserve string for ${^PREMATCH}, ${^MATCH}, ${^POSTMATCH}"),
+        'r' => Some("non-destructive substitution result"),
+        'c' => Some("keep current match position for /g scans"),
+        'o' => Some("compile pattern only once"),
+        'e' => Some("evaluate replacement as code in substitutions"),
+        _ => None,
     }
 }
 
