@@ -1,0 +1,13 @@
+{
+  "title": "fix(vscode): VS Code activation fix",
+  "body": "Closes #6747",
+  "changed_files": [
+    "vscode-extension/package.json",
+    "crates/perl-lsp-rs/tests/vscode_activation.rs"
+  ],
+  "evidence": {
+    "test_updated": true,
+    "behavior_receipt": false,
+    "override_approved": false
+  }
+}

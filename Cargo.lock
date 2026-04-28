@@ -1574,17 +1574,13 @@ dependencies = [
 name = "perl-incremental-parsing"
 version = "0.12.4"
 dependencies = [
- "anyhow",
  "criterion",
  "lsp-types",
  "perl-lexer",
- "perl-line-index",
  "perl-parser",
- "perl-parser-core",
  "perl-tdd-support",
  "ropey",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -1645,6 +1641,7 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-uri",
  "perl-workspace",
  "predicates",
  "proptest",
@@ -1818,6 +1815,7 @@ dependencies = [
 name = "perl-pragma"
 version = "0.12.4"
 dependencies = [
+ "criterion",
  "perl-ast",
 ]
 
@@ -1840,6 +1838,7 @@ dependencies = [
 name = "perl-regex"
 version = "0.12.4"
 dependencies = [
+ "proptest",
  "thiserror",
 ]
 
@@ -1851,7 +1850,9 @@ dependencies = [
  "perl-parser-core",
  "perl-symbol",
  "perl-tdd-support",
+ "perl-test-generators",
  "perl-workspace",
+ "proptest",
  "regex",
  "rustc-hash",
  "tracing",
@@ -1868,7 +1869,10 @@ dependencies = [
 name = "perl-symbol"
 version = "0.12.4"
 dependencies = [
+ "anyhow",
+ "criterion",
  "perl-ast",
+ "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -1900,6 +1904,13 @@ version = "0.12.4"
 [[package]]
 name = "perl-token"
 version = "0.12.4"
+dependencies = [
+ "criterion",
+ "perl-lexer",
+ "perl-parser-core",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "perl-uri"
@@ -3146,6 +3157,7 @@ version = "0.12.4"
 dependencies = [
  "cc",
  "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]
@@ -3154,8 +3166,11 @@ version = "0.12.4"
 dependencies = [
  "insta",
  "perl-ast",
+ "perl-module",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma",
+ "perl-semantic-analyzer",
  "perl-tdd-support",
 ]
 
@@ -3845,11 +3860,13 @@ dependencies = [
  "console",
  "duct",
  "flate2",
+ "glob",
  "indicatif",
  "notify",
  "peak_alloc",
  "perl-corpus",
  "perl-lsp-rs-core",
+ "perl-lsp-ux-tests",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",

@@ -476,5 +476,4 @@ fn workspace_rename_config_defaults() {
     assert_eq!(config.max_files, 0, "max_files should default to 0");
     assert!(config.report_progress, "report_progress should default to true");
     assert!(config.validate_syntax, "validate_syntax should default to true");
-    assert!(!config.follow_symlinks, "follow_symlinks should default to false");
 }

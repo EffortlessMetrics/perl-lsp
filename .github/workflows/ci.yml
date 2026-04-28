@@ -9,15 +9,16 @@ on:
   pull_request:
     branches: [ main, master ]
     types: [opened, synchronize, reopened, labeled, ready_for_review, converted_to_draft]
+  merge_group: {}
   push:
     branches: [ main, master ]
   workflow_dispatch: {}
 
-# Coalesce-queue-tail: let the running CI complete; skip superseded SHAs at a
-# preflight gate instead of cancelling in-flight work mid-run.
+# Cancel in-progress runs for PR events on new pushes; let push/merge_group runs complete.
+# The preflight SHA-staleness check provides additional skip logic for superseded SHAs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write
@@ -156,14 +157,15 @@ jobs:
             echo "::notice::ci-scope diff_class=$DIFF_CLASS crates=$CRATES_ARGS"
           fi
 
-      # Skip heavy lanes entirely for prose-only or CI-config-only diffs.
-      - name: Skip notice (prose-only / CI-config diff)
+      # Skip heavy lanes entirely for prose/docs-as-code/CI-config-only diffs.
+      - name: Skip notice (prose/docs-as-code/CI-config diff)
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           (steps.scope.outputs.diff_class == 'prose_only' ||
+           steps.scope.outputs.diff_class == 'docs_as_code' ||
            steps.scope.outputs.diff_class == 'ci_config')
         run: |
-          echo "::notice::Prose-only / CI-config diff — skipping Rust build lanes (no code changed)"
+          echo "::notice::Prose/docs-as-code/CI-config diff — skipping Rust build lanes (no Rust code changed)"
 
       # ── Scoped clippy (scope-aware path) ─────────────────────────────────
       # Runs when ci-scope succeeded AND diff is not prose/CI-config AND
@@ -172,6 +174,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -182,6 +185,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -192,6 +196,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'true' &&
           steps.scope.outputs.diff_class != 'prose_only' &&
+          steps.scope.outputs.diff_class != 'docs_as_code' &&
           steps.scope.outputs.diff_class != 'ci_config' &&
           steps.scope.outputs.crates_args != ''
         run: |
@@ -205,6 +210,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'false' ||
           (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'docs_as_code' &&
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just clippy-core
@@ -213,6 +219,7 @@ jobs:
         if: |
           steps.scope.outputs.scope_ok == 'false' ||
           (steps.scope.outputs.diff_class != 'prose_only' &&
+           steps.scope.outputs.diff_class != 'docs_as_code' &&
            steps.scope.outputs.diff_class != 'ci_config' &&
            steps.scope.outputs.crates_args == '')
         run: just test-core
@@ -258,6 +265,9 @@ jobs:
 
       - name: Run full ci-gate with receipts
         run: just gates
+
+      - name: Release history drift check
+        run: bash scripts/check_release_history.sh
 
       - name: Upload gate receipt
         if: always()
