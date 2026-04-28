@@ -7,7 +7,7 @@
 
 A fast, native Perl 5 language server extension. Written in Rust for speed and reliability. No runtime dependencies -- just install and code.
 
-> **0.12.3 Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
+> **Public Alpha** -- This extension is under active development. Every feature listed below is wired up and exercised by tests, but as an alpha you will find edge cases where behavior is incomplete or wrong. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose) if you encounter problems. For what the project's headline numbers mean (and do not mean), see the [status overview](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/status/index.md).
 
 ## Features
 
@@ -83,6 +83,10 @@ code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # VSCodium / Open VSX
 codium --install-extension EffortlessMetrics.perl-lsp-rs
+
+# PearAI (VS Code-compatible)
+# Install from Open VSX inside PearAI's Extensions view:
+# EffortlessMetrics.perl-lsp-rs
 ```
 
 The extension automatically downloads the correct `perllsp` binary for your platform on first activation:
@@ -140,6 +144,7 @@ All settings are under the `perl-lsp.*` namespace. Open settings with `Ctrl+,` a
 | `perl-lsp.trace.server` | `"off"` | LSP trace level for debugging: `off`, `messages`, `verbose` |
 | `perl-lsp.featureProfile` | `"auto"` | Runtime feature profile: `auto`, `ga`, `ga-lock`, `prod`, `all` |
 | `perl-lsp.downloadBaseUrl` | `""` | Internal mirror URL for air-gapped deployments |
+| `perl-lsp.mcp.servers` | `[]` | Optional MCP stdio server definitions (`label`, `command`, `args`, `cwd`, `env`, `version`, `enabled`) published to VS Code language models |
 
 ### Internal / Air-Gapped Deployment
 
@@ -198,6 +203,7 @@ The `perllsp` binary works with any editor that supports the Language Server Pro
 |--------|---------------|
 | **VS Code / VSCodium** | This extension (auto-configured) |
 | **Cursor** | This extension |
+| **PearAI** | This extension (install from Open VSX) |
 | **Neovim** | `nvim-lspconfig` with `perl_lsp` server |
 | **Emacs** | `lsp-mode` or `eglot` |
 | **Helix** | `languages.toml` with `perllsp --stdio` |

@@ -23,7 +23,7 @@ use console::{Style, Term};
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -209,40 +209,42 @@ pub struct Receipt {
     pub metadata: ReceiptMetadata,
     pub gates: Vec<GateResult>,
     pub summary: ReceiptSummary,
-    pub agent_receipt: AgentReceipt,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_receipt: Option<AgentReceipt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diff_config: Option<DiffConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentReceipt {
+    pub sha: String,
+    pub is_latest: bool,
+    pub tier: String,
     pub scope: AgentScope,
     pub selected_lanes: Vec<AgentLane>,
-    pub reasons: BTreeMap<String, String>,
-    pub failures: AgentFailures,
-    pub baselines: Vec<String>,
-    pub next_actions: Vec<String>,
+    pub failures: Vec<AgentFailure>,
+    pub suggested_next_actions: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AgentScope {
-    pub base: String,
-    pub diff_class: String,
-    pub changed_files: Vec<String>,
     pub direct_crates: Vec<String>,
-    pub reverse_dep_closure: Vec<String>,
+    pub reverse_deps: Vec<String>,
+    pub risk_tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AgentLane {
-    pub lane: String,
-    pub scope: Vec<String>,
+    pub name: String,
+    pub reason: String,
+    pub status: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct AgentFailures {
-    pub blocking: Vec<String>,
-    pub repro: Vec<String>,
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AgentFailure {
+    pub lane: String,
+    pub summary: String,
+    pub repro: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -304,6 +306,25 @@ pub struct EnvironmentInfo {
     pub nix_shell: Option<bool>,
 }
 
+/// First failing test extracted from `cargo test` output.
+///
+/// Populated only when a `cargo test`-class gate exits non-zero.
+/// Used by followers and curators to repair without re-running gates locally.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct FirstFailure {
+    /// Full test path, e.g. `module::submod::tests::test_name`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test: Option<String>,
+    /// Panic location as `file:line`, e.g. `src/lib.rs:42`
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub site: Option<String>,
+    /// Panic / assertion message (first non-empty line after the `panicked at` line)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Process exit code
+    pub exit_code: i32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GateResult {
     pub gate_name: String,
@@ -323,6 +344,9 @@ pub struct GateResult {
     pub metrics: Option<GateMetrics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifacts: Option<Vec<String>>,
+    /// First failing test details for `cargo test`-class gates that exit non-zero.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_failure: Option<FirstFailure>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -735,7 +759,7 @@ fn run_gates(
         },
         aggregate_metrics: None, // Could aggregate test counts etc.
     };
-    let agent_receipt = build_agent_receipt(&root, &results);
+    let agent_receipt = Some(build_agent_receipt(&root, &results, &config.tier));
 
     Ok(Receipt {
         schema_version: "1.0.0".to_string(),
@@ -747,101 +771,136 @@ fn run_gates(
     })
 }
 
-fn build_agent_receipt(root: &Path, results: &[GateResult]) -> AgentReceipt {
+/// Phase-1 agent-facing receipt shape contract (Issue #5020):
+/// keep this as a stable, minimal JSON slice consumed by CI artifacts.
+fn build_agent_receipt(root: &Path, results: &[GateResult], tier: &GateTier) -> AgentReceipt {
     let scope_output = compute_scope_output(root).ok();
+    let gate_status_by_name: HashMap<String, String> =
+        results.iter().map(|result| (result.gate_name.clone(), result.status.clone())).collect();
     let selected_lanes = scope_output
         .as_ref()
         .map(|scope| {
-            scope
-                .selected_lanes
-                .iter()
-                .map(|lane| AgentLane { lane: lane.lane.clone(), scope: lane.scope.clone() })
-                .collect()
+            let standard = scope.selected_lanes.iter().map(|lane| {
+                let explanation = scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
+                let reason = if explanation.is_empty() {
+                    lane.reason.clone()
+                } else {
+                    format!("{} — {}", lane.reason, explanation)
+                };
+                AgentLane {
+                    name: lane.lane.clone(),
+                    reason,
+                    status: gate_status_by_name
+                        .get(&lane.lane)
+                        .cloned()
+                        .unwrap_or_else(|| "not_run".to_string()),
+                }
+            });
+            let heavy = scope.selected_heavy_lanes.iter().map(|lane| AgentLane {
+                name: lane.lane.clone(),
+                reason: lane.reason.clone(),
+                status: gate_status_by_name
+                    .get(&lane.lane)
+                    .cloned()
+                    .unwrap_or_else(|| "not_run".to_string()),
+            });
+            standard.chain(heavy).collect()
         })
         .unwrap_or_default();
-    let reasons = scope_output
-        .as_ref()
-        .map(|scope| {
-            scope
-                .selected_lanes
-                .iter()
-                .map(|lane| {
-                    let explanation =
-                        scope.explanations.get(&lane.lane).cloned().unwrap_or_default();
-                    let reason = if explanation.is_empty() {
-                        lane.reason.clone()
-                    } else {
-                        format!("{} — {}", lane.reason, explanation)
-                    };
-                    (lane.lane.clone(), reason)
-                })
-                .collect()
-        })
+    let (failures, next_actions) = failure_guidance(results);
+    let sha = cmd("git", ["rev-parse", "HEAD"])
+        .dir(root)
+        .read()
+        .map(|s| s.trim().to_string())
         .unwrap_or_default();
-    let (blocking, repro, next_actions) = failure_guidance(results);
-    let baselines = discover_baselines(root);
+    let is_latest = is_latest_commit(root);
 
     let scope = if let Some(scope) = scope_output {
         AgentScope {
-            base: scope.base,
-            diff_class: scope.diff_class,
-            changed_files: scope.changed_files,
             direct_crates: scope.direct_crates.into_iter().map(|entry| entry.name).collect(),
-            reverse_dep_closure: scope
-                .reverse_dep_closure
-                .into_iter()
-                .map(|entry| entry.name)
-                .collect(),
+            reverse_deps: scope.reverse_dep_closure.into_iter().map(|entry| entry.name).collect(),
+            risk_tags: scope.risk_tags,
         }
     } else {
         AgentScope::default()
     };
 
     AgentReceipt {
+        sha,
+        is_latest,
+        tier: tier.to_string(),
         scope,
         selected_lanes,
-        reasons,
-        failures: AgentFailures { blocking, repro },
-        baselines,
-        next_actions,
+        failures,
+        suggested_next_actions: next_actions,
     }
 }
 
-fn failure_guidance(results: &[GateResult]) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let blocking = blocking_failure_gate_names(results);
-    let repro: Vec<String> = results
+fn failure_guidance(results: &[GateResult]) -> (Vec<AgentFailure>, Vec<String>) {
+    let failures: Vec<AgentFailure> = results
         .iter()
-        .filter(|result| blocking.iter().any(|name| name == &result.gate_name))
-        .map(|result| format!("{} # gate={}", result.command, result.gate_name))
+        .filter(|result| is_blocking_gate_status(&result.status) && result.required.unwrap_or(true))
+        .map(|result| {
+            let base_summary =
+                format!("Gate '{}' ended with status '{}'", result.gate_name, result.status);
+            // Augment summary with first_failure details when available
+            let summary = match &result.first_failure {
+                Some(ff) => {
+                    let mut parts = vec![base_summary];
+                    if let Some(test) = &ff.test {
+                        parts.push(format!("  test:  {}", test));
+                    }
+                    if let Some(site) = &ff.site {
+                        parts.push(format!("  site:  {}", site));
+                    }
+                    if let Some(msg) = &ff.message {
+                        parts.push(format!("  msg:   {}", msg));
+                    }
+                    parts.join("\n")
+                }
+                None => base_summary,
+            };
+            AgentFailure {
+                lane: result.gate_name.clone(),
+                summary,
+                repro: format!("{} # gate={}", result.command, result.gate_name),
+            }
+        })
         .collect();
-    let next_actions = if blocking.is_empty() {
+    let next_actions = if failures.is_empty() {
         vec!["No blocking failures detected. Proceed with review or merge flow.".to_string()]
     } else {
-        blocking
+        failures
             .iter()
-            .map(|gate| {
+            .map(|failure| {
                 format!(
-                    "Reproduce and fix gate '{gate}' locally, then rerun: cargo xtask gates --gate {gate}"
+                    "Reproduce and fix gate '{}' locally, then rerun: cargo xtask gates --gate {}",
+                    failure.lane, failure.lane
                 )
             })
             .collect()
     };
-    (blocking, repro, next_actions)
+    (failures, next_actions)
 }
 
-fn discover_baselines(root: &Path) -> Vec<String> {
-    let candidates = [
-        ".ci/public-api-baselines",
-        ".ci/metrics/baselines",
-        "benchmarks/baselines",
-        ".ci/parser-corpus-baseline.json",
-        ".ci/cpan-corpus-baseline.json",
-    ];
-    candidates
-        .iter()
-        .filter(|path| root.join(path).exists())
-        .map(|path| (*path).to_string())
-        .collect()
+fn is_latest_commit(root: &Path) -> bool {
+    // In detached HEAD (PR runs), @{upstream} fails with "HEAD does not point to a branch".
+    // Suppress stderr so that message does not leak into CI output.
+    let upstream =
+        match cmd("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+            .dir(root)
+            .stderr_null()
+            .read()
+        {
+            Ok(value) => value.trim().to_string(),
+            Err(_) => return true,
+        };
+    let head = cmd("git", ["rev-parse", "HEAD"]).dir(root).read().ok();
+    let upstream_sha = cmd("git", ["rev-parse", &upstream]).dir(root).read().ok();
+    match (head, upstream_sha) {
+        (Some(head), Some(upstream_sha)) => head.trim() == upstream_sha.trim(),
+        _ => true,
+    }
 }
 
 fn compute_scope_output(root: &Path) -> Result<ScopeOutput> {
@@ -879,7 +938,10 @@ fn select_scope_base(root: &Path) -> String {
     let mut candidates: Vec<String> = env_candidates.into_iter().flatten().collect();
     candidates.extend(["origin/master", "master", "HEAD~1"].into_iter().map(str::to_string));
     for candidate in candidates {
-        let exists = cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).run().is_ok();
+        // Suppress stderr: in shallow clones "HEAD~1" does not exist and git prints
+        // "fatal: Needed a single revision" to stderr, polluting CI output.
+        let exists =
+            cmd("git", ["rev-parse", "--verify", &candidate]).dir(root).stderr_null().run().is_ok();
         if exists {
             return candidate;
         }
@@ -927,6 +989,7 @@ fn run_single_gate(
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         });
     }
 
@@ -978,6 +1041,13 @@ fn run_single_gate(
                 None
             };
 
+            // For failing cargo test gates, extract the first failure details
+            let first_failure = if status == "fail" && is_cargo_test_command(command) {
+                parse_first_failure(&stdout, exit_code)
+            } else {
+                None
+            };
+
             Ok(GateResult {
                 gate_name: gate.name.clone(),
                 tier: gate.tier.clone(),
@@ -994,6 +1064,7 @@ fn run_single_gate(
                 } else {
                     Some(gate.artifacts.clone())
                 },
+                first_failure,
             })
         }
         Err(e) => {
@@ -1010,6 +1081,7 @@ fn run_single_gate(
                 log_path: None,
                 metrics: None,
                 artifacts: None,
+                first_failure: None,
             })
         }
     }
@@ -1046,6 +1118,7 @@ fn run_internal_xtask_gate(
         log_path: Some(format!("logs/{}.log", gate.name)),
         metrics: None,
         artifacts: if gate.artifacts.is_empty() { None } else { Some(gate.artifacts.clone()) },
+        first_failure: None,
     })
 }
 
@@ -1061,11 +1134,20 @@ fn collect_metadata(timestamp: DateTime<Utc>) -> Result<ReceiptMetadata> {
     let git_sha_short =
         if git_sha.len() >= 7 { git_sha[..7].to_string() } else { "UNVERIF".to_string() };
 
-    let git_branch = cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
-        .read()
-        .unwrap_or_else(|_| "unknown".to_string())
-        .trim()
-        .to_string();
+    // In a detached HEAD (GitHub Actions PR runs check out by SHA), `git rev-parse
+    // --abbrev-ref HEAD` returns the literal string "HEAD" rather than a branch name.
+    // Prefer the CI environment variable that carries the real source branch name.
+    let git_branch = std::env::var("GITHUB_HEAD_REF")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("GITHUB_REF_NAME").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| {
+            cmd!("git", "rev-parse", "--abbrev-ref", "HEAD")
+                .read()
+                .unwrap_or_else(|_| "unknown".to_string())
+                .trim()
+                .to_string()
+        });
 
     let git_dirty =
         cmd!("git", "status", "--porcelain").read().map(|s| !s.trim().is_empty()).unwrap_or(false);
@@ -1234,6 +1316,155 @@ fn extract_number(line: &str, suffix: &str) -> Option<u32> {
     })
 }
 
+/// Parse the first failing test name, panic site, and message from `cargo test` stdout.
+///
+/// Returns `None` only if the output contains no recognisable failure markers (e.g. a
+/// pure compilation error with no test output).  All three sub-fields (`test`, `site`,
+/// `message`) are individually optional because any one may be absent in edge cases.
+///
+/// # Patterns detected
+///
+/// * Test name — `test <path> ... FAILED` or `---- <path> stdout ----`
+/// * Panic site — `panicked at '<file>:<line>:<col>:'` (Rust <1.73 style) or
+///   `panicked at <file>:<line>:<col>:` (Rust ≥1.73 style)
+/// * Message — the first non-empty line that follows the `panicked at` line
+pub fn parse_first_failure(output: &str, exit_code: i32) -> Option<FirstFailure> {
+    let mut test_name: Option<String> = None;
+    let mut site: Option<String> = None;
+    let mut message: Option<String> = None;
+
+    let lines: Vec<&str> = output.lines().collect();
+
+    // --- Pass 1: find the first "test ... FAILED" line ---
+    // Cargo test emits either:
+    //   test module::path::test_name ... FAILED
+    // or (for individual test stdout sections):
+    //   ---- module::path::test_name stdout ----
+    for line in &lines {
+        let trimmed = line.trim();
+        // "test <path> ... FAILED"
+        if trimmed.starts_with("test ") && trimmed.ends_with("... FAILED") {
+            let inner = trimmed
+                .strip_prefix("test ")
+                .and_then(|s| s.strip_suffix("... FAILED"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                break;
+            }
+        }
+        // "---- <path> stdout ----"
+        if test_name.is_none() && trimmed.starts_with("---- ") && trimmed.ends_with(" stdout ----")
+        {
+            let inner = trimmed
+                .strip_prefix("---- ")
+                .and_then(|s| s.strip_suffix(" stdout ----"))
+                .map(str::trim);
+            if let Some(name) = inner
+                && !name.is_empty()
+            {
+                test_name = Some(name.to_string());
+                // don't break — keep looking for a "... FAILED" line to prefer
+            }
+        }
+    }
+
+    // --- Pass 2: find the first "panicked at" line and the message line after it ---
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // Rust ≥1.73: `panicked at src/lib.rs:42:5:`
+        // Rust <1.73:  `panicked at 'message', src/lib.rs:42:5`
+        //
+        // The line may be prefixed with thread info:
+        //   `thread 'test::name' panicked at src/lib.rs:42:5:`
+        // or may start directly with `panicked at`:
+        //   `panicked at src/lib.rs:42:5:`
+        //
+        // We find the `panicked at ` substring anywhere in the line.
+        if let Some(panic_pos) = trimmed.find("panicked at ") {
+            let rest = &trimmed[panic_pos + "panicked at ".len()..];
+
+            // Try new-style first (Rust ≥1.73), then fall back to old-style (Rust <1.73)
+            let parsed_site =
+                parse_panic_site_new_style(rest).or_else(|| parse_panic_site_old_style(rest));
+
+            site = parsed_site;
+
+            // The message is the next non-empty line
+            message = lines[idx + 1..]
+                .iter()
+                .find(|l| !l.trim().is_empty())
+                .map(|l| l.trim().to_string());
+
+            break;
+        }
+    }
+
+    // Only return Some if we found at least one piece of useful info
+    if test_name.is_some() || site.is_some() {
+        Some(FirstFailure { test: test_name, site, message, exit_code })
+    } else {
+        None
+    }
+}
+
+/// Parse a Rust ≥1.73 panic site: `src/lib.rs:42:5:` → `src/lib.rs:42`
+fn parse_panic_site_new_style(rest: &str) -> Option<String> {
+    // Strip trailing colon if present
+    let rest = rest.trim_end_matches(':');
+    // Format is typically: path/to/file.rs:LINE:COL
+    // Split by ':' and find the first pure-integer segment, treating everything before as path.
+    let parts: Vec<&str> = rest.splitn(4, ':').collect();
+    // We need at least path:line
+    match parts.len() {
+        2.. => {
+            // Detect Windows drive letter: single alpha char
+            let (path_part, line_part) = if parts[0].len() == 1
+                && parts[0].chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                && parts.len() >= 3
+            {
+                // Windows path: C:\path\file.rs  -> parts = ["C", "\\path\\file.rs", "LINE", ...]
+                (format!("{}:{}", parts[0], parts[1]), parts[2])
+            } else {
+                (parts[0].to_string(), parts[1])
+            };
+            // line_part must be a valid integer
+            if line_part.parse::<u64>().is_ok() && !path_part.is_empty() {
+                return Some(format!("{}:{}", path_part, line_part));
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Parse a Rust <1.73 panic site: `'assertion failed', src/lib.rs:42:5` → `src/lib.rs:42`
+fn parse_panic_site_old_style(rest: &str) -> Option<String> {
+    // Format: `'<message>', <path>:<line>:<col>`
+    // Find the last `', ` to split message from location
+    let loc_start = rest.rfind("', ").map(|i| i + 3)?;
+    let loc = &rest[loc_start..];
+    // Now parse loc as new-style
+    parse_panic_site_new_style(loc)
+}
+
+/// Check whether a gate command is a `cargo test`-class command.
+///
+/// Returns `true` for commands whose first word-token is `cargo` and second is `test`,
+/// ignoring leading whitespace and path prefixes.  This covers:
+/// - `cargo test ...`
+/// - `cargo test -p foo ...`
+pub fn is_cargo_test_command(command: &str) -> bool {
+    let mut tokens = command.split_whitespace();
+    let first = tokens.next().unwrap_or("");
+    // Allow for path-prefixed cargo (e.g. `/usr/local/bin/cargo`)
+    let is_cargo = first == "cargo" || first.ends_with("/cargo") || first.ends_with("\\cargo");
+    is_cargo && tokens.next().is_some_and(|t| t == "test")
+}
+
 /// Output results in the requested format
 fn output_results(receipt: &Receipt, config: &GateRunnerConfig) -> Result<()> {
     match config.output_format {
@@ -1308,8 +1539,33 @@ fn output_human(receipt: &Receipt) -> Result<()> {
     {
         writeln!(term)?;
         writeln!(term, "{}", red.apply_to("Blocking failures:"))?;
-        for gate in failures {
-            writeln!(term, "  - {}", gate)?;
+        // Build a lookup from gate name to GateResult so we can print first_failure details
+        let gate_by_name: HashMap<&str, &GateResult> =
+            receipt.gates.iter().map(|g| (g.gate_name.as_str(), g)).collect();
+        for gate_name in failures {
+            let exit_code_str = gate_by_name
+                .get(gate_name.as_str())
+                .and_then(|g| g.exit_code)
+                .map(|c| format!(" (exit {})", c))
+                .unwrap_or_default();
+            writeln!(term, "  - {}{}", gate_name, exit_code_str)?;
+            // Print first_failure details if available
+            if let Some(ff) =
+                gate_by_name.get(gate_name.as_str()).and_then(|g| g.first_failure.as_ref())
+            {
+                if let Some(ref test) = ff.test {
+                    writeln!(term, "      test:   {}", test)?;
+                }
+                if let Some(ref site) = ff.site {
+                    writeln!(term, "      site:   {}", site)?;
+                }
+                if let Some(ref msg) = ff.message {
+                    writeln!(term, "      msg:    {}", msg)?;
+                }
+                if let Some(gate) = gate_by_name.get(gate_name.as_str()) {
+                    writeln!(term, "      repro:  {}", gate.command)?;
+                }
+            }
         }
     }
 
@@ -1394,7 +1650,7 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         }
     }
 
-    // Find metric changes
+    // Find metric changes across all tracked gate metrics.
     let mut metric_changes = Vec::new();
     for (name, current_gate) in &current_gates {
         if let (Some(_baseline_gate), Some(current_metrics), Some(baseline_metrics)) = (
@@ -1402,21 +1658,76 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
             &current_gate.metrics,
             baseline_gates.get(name).and_then(|g| g.metrics.as_ref()),
         ) {
-            // Compare tests_total
-            if let (Some(old), Some(new)) =
-                (baseline_metrics.tests_total, current_metrics.tests_total)
-                && old != new
-            {
-                let delta = ((new as f64 - old as f64) / old as f64) * 100.0;
-                metric_changes.push(MetricChange {
-                    gate_name: name.to_string(),
-                    metric_name: "tests_total".to_string(),
-                    old_value: old as f64,
-                    new_value: new as f64,
-                    delta_percent: delta,
-                    exceeds_threshold: delta.abs() > 10.0,
-                });
-            }
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_total",
+                baseline_metrics.tests_total.map(f64::from),
+                current_metrics.tests_total.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_passed",
+                baseline_metrics.tests_passed.map(f64::from),
+                current_metrics.tests_passed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_failed",
+                baseline_metrics.tests_failed.map(f64::from),
+                current_metrics.tests_failed.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_skipped",
+                baseline_metrics.tests_skipped.map(f64::from),
+                current_metrics.tests_skipped.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "tests_ignored",
+                baseline_metrics.tests_ignored.map(f64::from),
+                current_metrics.tests_ignored.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "warnings_count",
+                baseline_metrics.warnings_count.map(f64::from),
+                current_metrics.warnings_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "errors_count",
+                baseline_metrics.errors_count.map(f64::from),
+                current_metrics.errors_count.map(f64::from),
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "coverage_percent",
+                baseline_metrics.coverage_percent,
+                current_metrics.coverage_percent,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "memory_peak_mb",
+                baseline_metrics.memory_peak_mb,
+                current_metrics.memory_peak_mb,
+            );
+            push_metric_change(
+                &mut metric_changes,
+                name,
+                "files_checked",
+                baseline_metrics.files_checked.map(f64::from),
+                current_metrics.files_checked.map(f64::from),
+            );
         }
     }
 
@@ -1431,6 +1742,36 @@ fn compare_receipts(baseline: &Receipt, current: &Receipt) -> Result<DiffResult>
         metric_changes,
         overall_regression,
     })
+}
+
+fn push_metric_change(
+    metric_changes: &mut Vec<MetricChange>,
+    gate_name: &str,
+    metric_name: &str,
+    old: Option<f64>,
+    new: Option<f64>,
+) {
+    let (Some(old_value), Some(new_value)) = (old, new) else {
+        return;
+    };
+    if (old_value - new_value).abs() < f64::EPSILON {
+        return;
+    }
+
+    let delta_percent = if old_value.abs() < f64::EPSILON {
+        if new_value.abs() < f64::EPSILON { 0.0 } else { 100.0 }
+    } else {
+        ((new_value - old_value) / old_value) * 100.0
+    };
+
+    metric_changes.push(MetricChange {
+        gate_name: gate_name.to_string(),
+        metric_name: metric_name.to_string(),
+        old_value,
+        new_value,
+        delta_percent,
+        exceeds_threshold: delta_percent.abs() > 10.0,
+    });
 }
 
 /// Output diff results
@@ -1540,8 +1881,9 @@ fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'stat
 #[cfg(test)]
 mod tests {
     use super::{
-        GateResult, blocking_failure_gate_names, determine_overall_status, failure_guidance,
-        is_blocking_gate_status,
+        DiffResult, FirstFailure, GateMetrics, GateResult, MetricChange, Receipt,
+        blocking_failure_gate_names, compare_receipts, determine_overall_status, failure_guidance,
+        is_blocking_gate_status, is_cargo_test_command, parse_first_failure,
     };
 
     fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
@@ -1557,6 +1899,7 @@ mod tests {
             log_path: None,
             metrics: None,
             artifacts: None,
+            first_failure: None,
         }
     }
 
@@ -1597,14 +1940,491 @@ mod tests {
             gate_result("doc", "pass", true),
             gate_result("lint", "fail", false),
         ];
-        let (blocking, repro, next_actions) = failure_guidance(&results);
-        assert_eq!(blocking, vec!["clippy"]);
-        assert_eq!(repro, vec!["true # gate=clippy"]);
+        let (failures, next_actions) = failure_guidance(&results);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].lane, "clippy");
+        assert_eq!(failures[0].repro, "true # gate=clippy");
         assert_eq!(
             next_actions,
             vec![
                 "Reproduce and fix gate 'clippy' locally, then rerun: cargo xtask gates --gate clippy"
             ]
         );
+    }
+
+    #[test]
+    fn agent_receipt_phase1_fields_roundtrip_with_correct_values() {
+        // Verify that the phase-1 agent receipt shape deserializes correctly
+        // and that values survive the serde round-trip unchanged.
+        // Uses Option<AgentReceipt> to confirm old receipts without the field
+        // still deserialize successfully (backward compat).
+        let receipt: Receipt = serde_json::from_str(r#"{
+            "schema_version": "1.0.0",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            },
+            "agent_receipt": {
+                "sha": "deadbeef1234567890abcdef1234567890abcdef",
+                "is_latest": false,
+                "tier": "pr_fast",
+                "scope": {
+                    "direct_crates": ["xtask", "perl-parser"],
+                    "reverse_deps": ["perl-lsp-rs"],
+                    "risk_tags": ["ci_policy", "parser_recovery"]
+                },
+                "selected_lanes": [
+                    {"name":"clippy_scoped","reason":"direct_crate_change","status":"passed"},
+                    {"name":"test_scoped","reason":"direct_crate_change","status":"not_run"}
+                ],
+                "failures": [{"lane":"clippy","summary":"clippy found 3 warnings","repro":"cargo clippy -p xtask"}],
+                "suggested_next_actions": ["fix clippy warnings", "rerun gate"]
+            }
+        }"#)
+        .expect("phase-1 agent receipt shape should deserialize");
+
+        // agent_receipt must be present (Some, not None)
+        let ar = receipt.agent_receipt.expect("agent_receipt should be Some when present in JSON");
+
+        // Verify field values, not just key presence — these would fail if
+        // a field were silently dropped or misnamed in the struct definition.
+        assert_eq!(ar.sha, "deadbeef1234567890abcdef1234567890abcdef");
+        assert!(!ar.is_latest, "is_latest should be false");
+        assert_eq!(ar.tier, "pr_fast");
+        assert_eq!(ar.scope.direct_crates, vec!["xtask", "perl-parser"]);
+        assert_eq!(ar.scope.reverse_deps, vec!["perl-lsp-rs"]);
+        assert_eq!(ar.scope.risk_tags, vec!["ci_policy", "parser_recovery"]);
+        assert_eq!(ar.selected_lanes.len(), 2);
+        assert_eq!(ar.selected_lanes[0].name, "clippy_scoped");
+        assert_eq!(ar.selected_lanes[0].status, "passed");
+        assert_eq!(ar.selected_lanes[1].status, "not_run");
+        assert_eq!(ar.failures.len(), 1);
+        assert_eq!(ar.failures[0].lane, "clippy");
+        assert_eq!(ar.failures[0].repro, "cargo clippy -p xtask");
+        assert_eq!(ar.suggested_next_actions.len(), 2);
+
+        // Confirm backward compatibility: a receipt WITHOUT agent_receipt deserializes to None.
+        let old_receipt: Receipt = serde_json::from_str(
+            r#"{
+            "schema_version": "1.0.0",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 0,
+                "passed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            }
+        }"#,
+        )
+        .expect("receipt without agent_receipt should deserialize for backward compat");
+        assert!(
+            old_receipt.agent_receipt.is_none(),
+            "receipt without agent_receipt field must deserialize to None"
+        );
+    }
+
+    #[test]
+    fn failure_guidance_with_no_gates_produces_proceed_action() {
+        // Edge case: no gates ran at all (empty results slice).
+        let (failures, next_actions) = failure_guidance(&[]);
+        assert!(failures.is_empty(), "no failures expected when no gates ran");
+        assert_eq!(next_actions.len(), 1);
+        assert!(
+            next_actions[0].contains("No blocking failures"),
+            "expected proceed action, got: {:?}",
+            next_actions[0]
+        );
+    }
+
+    #[test]
+    fn failure_guidance_all_required_and_failing_each_gets_action() {
+        // Multiple blocking failures — each should produce its own next_action entry.
+        let results = vec![
+            gate_result("fmt", "fail", true),
+            gate_result("clippy", "error", true),
+            gate_result("tests", "timeout", true),
+        ];
+        let (failures, next_actions) = failure_guidance(&results);
+        assert_eq!(failures.len(), 3, "all three blocking gates should appear in failures");
+        assert_eq!(next_actions.len(), 3, "each failure gets one next_action");
+        // Repro command must include the gate's command string
+        assert!(failures[0].repro.contains("fmt"), "repro should reference the gate");
+        assert!(failures[2].summary.contains("timeout"), "summary should mention the status");
+    }
+
+    fn test_receipt_with_metrics(metrics: GateMetrics) -> Receipt {
+        // Deserialize from a minimal JSON skeleton so we don't have to
+        // construct every required nested struct (ToolchainInfo, PlatformInfo,
+        // EnvironmentInfo, AgentReceipt, …) by hand.  compare_receipts only
+        // reads receipt.gates and receipt.metadata.timestamp, so the rest can
+        // be placeholder values.
+        let mut receipt: Receipt = serde_json::from_str(
+            r#"{
+            "schema_version": "1",
+            "metadata": {
+                "timestamp": "2026-04-23T00:00:00Z",
+                "git_sha": "abc123",
+                "git_sha_short": "abc123",
+                "git_branch": "work",
+                "git_dirty": false,
+                "toolchain": {"rustc_version": "1.0.0"},
+                "platform": {"os": "linux", "arch": "x86_64"},
+                "environment": {"type": "local"}
+            },
+            "gates": [],
+            "summary": {
+                "total_gates": 1,
+                "passed": 1,
+                "failed": 0,
+                "skipped": 0,
+                "total_duration_ms": 10,
+                "overall_status": "pass"
+            },
+            "agent_receipt": {
+                "sha": "abc123",
+                "is_latest": true,
+                "tier": "merge_gate",
+                "scope": {"direct_crates": [], "reverse_deps": [], "risk_tags": []},
+                "selected_lanes": [],
+                "failures": [],
+                "suggested_next_actions": []
+            }
+        }"#,
+        )
+        .expect("minimal receipt JSON is valid");
+        receipt.gates.push(GateResult {
+            gate_name: "tests".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "pass".to_string(),
+            required: Some(true),
+            duration_ms: 10,
+            command: "cargo test".to_string(),
+            exit_code: Some(0),
+            output_summary: None,
+            log_path: None,
+            metrics: Some(metrics),
+            artifacts: None,
+            first_failure: None,
+        });
+        receipt
+    }
+
+    fn metric_change_for<'a>(diff: &'a DiffResult, name: &str) -> Option<&'a MetricChange> {
+        diff.metric_changes.iter().find(|change| change.metric_name == name)
+    }
+
+    #[test]
+    fn compare_receipts_reports_multiple_metric_dimensions() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(100),
+            tests_passed: Some(95),
+            tests_failed: Some(5),
+            warnings_count: Some(2),
+            coverage_percent: Some(80.0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            tests_total: Some(110),
+            tests_passed: Some(108),
+            tests_failed: Some(2),
+            warnings_count: Some(1),
+            coverage_percent: Some(82.5),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        assert!(
+            metric_change_for(&diff, "tests_total").is_some(),
+            "tests_total change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_passed").is_some(),
+            "tests_passed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "tests_failed").is_some(),
+            "tests_failed change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "warnings_count").is_some(),
+            "warnings_count change should be recorded"
+        );
+        assert!(
+            metric_change_for(&diff, "coverage_percent").is_some(),
+            "coverage_percent change should be recorded"
+        );
+    }
+
+    #[test]
+    fn compare_receipts_handles_zero_baseline_delta_without_nan() {
+        let baseline = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(0),
+            ..GateMetrics::default()
+        });
+        let current = test_receipt_with_metrics(GateMetrics {
+            warnings_count: Some(3),
+            ..GateMetrics::default()
+        });
+
+        let diff = compare_receipts(&baseline, &current).expect("compare receipts should succeed");
+        let warning_change =
+            metric_change_for(&diff, "warnings_count").expect("warnings_count metric should exist");
+        assert_eq!(warning_change.delta_percent, 100.0);
+        assert!(!warning_change.delta_percent.is_nan());
+        assert!(!warning_change.delta_percent.is_infinite());
+    }
+
+    // ==========================================================================
+    // Tests for parse_first_failure and is_cargo_test_command
+    // ==========================================================================
+
+    /// Fixture: realistic cargo test output for a failing test (Rust ≥1.73 style).
+    /// Based on the evidence from issue #7031 investigation.
+    const CARGO_TEST_FAILURE_NEW_STYLE: &str = r#"
+running 4 tests
+test refactor::refactoring::tests::validation_tests::test_cleanup_preserves_required ... ok
+test refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count ... FAILED
+test refactor::refactoring::tests::validation_tests::test_basic_refactoring ... ok
+test refactor::refactoring::tests::validation_tests::test_empty_input ... ok
+
+failures:
+
+---- refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count stdout ----
+thread 'refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count' panicked at crates/perl-parser/src/refactor/refactoring.rs:2859:9:
+assertion `left == right` failed
+  left: 0
+  right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+"#;
+
+    /// Fixture: Rust <1.73 style panic output (quoted message before location).
+    const CARGO_TEST_FAILURE_OLD_STYLE: &str = r#"
+running 2 tests
+test module::tests::test_something ... ok
+test module::tests::test_other ... FAILED
+
+failures:
+
+---- module::tests::test_other stdout ----
+thread 'module::tests::test_other' panicked at 'assertion failed: x == y', src/module.rs:42:5
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+failures:
+    module::tests::test_other
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+"#;
+
+    /// Fixture: output with no test failure markers (compile error only).
+    const COMPILE_ERROR_OUTPUT: &str = r#"
+error[E0308]: mismatched types
+ --> src/lib.rs:10:5
+  |
+10 |     42
+   |     ^^ expected `()`, found integer
+
+error: aborting due to previous error
+"#;
+
+    #[test]
+    fn parse_first_failure_extracts_test_name_site_and_message_new_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101)
+            .expect("should find failure in new-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            ),
+            "test name should be the first FAILED test"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("crates/perl-parser/src/refactor/refactoring.rs:2859"),
+            "site should be file:line (no column)"
+        );
+        // The message is the first non-empty line after `panicked at`
+        assert_eq!(
+            ff.message.as_deref(),
+            Some("assertion `left == right` failed"),
+            "message should be the line immediately after panicked at"
+        );
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn parse_first_failure_extracts_site_old_style() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_OLD_STYLE, 101)
+            .expect("should find failure in old-style output");
+
+        assert_eq!(
+            ff.test.as_deref(),
+            Some("module::tests::test_other"),
+            "test name should come from the FAILED line"
+        );
+        assert_eq!(
+            ff.site.as_deref(),
+            Some("src/module.rs:42"),
+            "site should be extracted from old-style quoted panic location"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_compile_error_only() {
+        // No test failure markers — should return None since nothing useful to extract
+        let result = parse_first_failure(COMPILE_ERROR_OUTPUT, 101);
+        assert!(
+            result.is_none(),
+            "compile-only errors with no test failure markers should yield None"
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_returns_none_for_empty_output() {
+        let result = parse_first_failure("", 101);
+        assert!(result.is_none(), "empty output should yield None");
+    }
+
+    #[test]
+    fn parse_first_failure_exit_code_is_preserved() {
+        let ff = parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 42)
+            .expect("should find failure markers");
+        assert_eq!(ff.exit_code, 42, "exit_code should match what was passed in");
+    }
+
+    #[test]
+    fn parse_first_failure_prefers_failed_line_over_stdout_section() {
+        // When both `... FAILED` and `---- ... stdout ----` are present,
+        // the test name from `... FAILED` should win (it appears first).
+        let ff =
+            parse_first_failure(CARGO_TEST_FAILURE_NEW_STYLE, 101).expect("should find failure");
+        // The `... FAILED` line should be chosen
+        assert_eq!(
+            ff.test.as_deref(),
+            Some(
+                "refactor::refactoring::tests::validation_tests::test_cleanup_respects_retention_count"
+            )
+        );
+    }
+
+    #[test]
+    fn parse_first_failure_roundtrips_through_first_failure_struct() {
+        // Verify that FirstFailure serializes and deserializes without loss.
+        let ff = FirstFailure {
+            test: Some("my::test::path".to_string()),
+            site: Some("src/lib.rs:10".to_string()),
+            message: Some("assertion failed".to_string()),
+            exit_code: 101,
+        };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        let roundtripped: FirstFailure = serde_json::from_str(&json).expect("should deserialize");
+        assert_eq!(ff, roundtripped);
+    }
+
+    #[test]
+    fn first_failure_skips_serializing_none_fields() {
+        // None fields should be omitted from JSON (skip_serializing_if = "Option::is_none")
+        let ff = FirstFailure { test: None, site: None, message: None, exit_code: 1 };
+        let json = serde_json::to_string(&ff).expect("should serialize");
+        assert!(!json.contains("\"test\""), "None test field should be omitted from JSON");
+        assert!(!json.contains("\"site\""), "None site field should be omitted from JSON");
+        assert!(!json.contains("\"message\""), "None message field should be omitted from JSON");
+        assert!(json.contains("\"exit_code\""), "exit_code is always present");
+    }
+
+    #[test]
+    fn is_cargo_test_command_matches_standard_forms() {
+        assert!(is_cargo_test_command("cargo test"), "bare cargo test");
+        assert!(is_cargo_test_command("cargo test -p perl-parser --lib"), "with flags");
+        assert!(is_cargo_test_command("cargo test --workspace"), "workspace flag");
+        assert!(is_cargo_test_command("/usr/local/bin/cargo test"), "absolute path cargo");
+    }
+
+    #[test]
+    fn is_cargo_test_command_rejects_non_test_commands() {
+        assert!(!is_cargo_test_command("cargo clippy"), "clippy is not test");
+        assert!(!is_cargo_test_command("cargo build"), "build is not test");
+        assert!(!is_cargo_test_command("cargo check"), "check is not test");
+        assert!(!is_cargo_test_command("cargo xtask fmt --check"), "xtask fmt is not test");
+        assert!(!is_cargo_test_command("true"), "bare true is not test");
+        assert!(!is_cargo_test_command(""), "empty string is not test");
+    }
+
+    #[test]
+    fn gate_result_first_failure_field_roundtrips_in_json() {
+        // Verify that GateResult with first_failure serializes / deserializes correctly,
+        // and that old receipts (without first_failure) still deserialize (backward compat).
+        let result = GateResult {
+            gate_name: "unit_core".to_string(),
+            tier: "pr_fast".to_string(),
+            status: "fail".to_string(),
+            required: Some(true),
+            duration_ms: 1000,
+            command: "cargo test -p perl-parser --lib".to_string(),
+            exit_code: Some(101),
+            output_summary: None,
+            log_path: None,
+            metrics: None,
+            artifacts: None,
+            first_failure: Some(FirstFailure {
+                test: Some("parser::tests::test_foo".to_string()),
+                site: Some("src/lib.rs:99".to_string()),
+                message: Some("assertion failed".to_string()),
+                exit_code: 101,
+            }),
+        };
+        let json = serde_json::to_string(&result).expect("should serialize");
+        let roundtripped: GateResult = serde_json::from_str(&json).expect("should deserialize");
+        let ff = roundtripped.first_failure.expect("first_failure should be Some after roundtrip");
+        assert_eq!(ff.test.as_deref(), Some("parser::tests::test_foo"));
+        assert_eq!(ff.site.as_deref(), Some("src/lib.rs:99"));
+        assert_eq!(ff.exit_code, 101);
+    }
+
+    #[test]
+    fn gate_result_without_first_failure_deserializes_for_backward_compat() {
+        // Old receipts (before this feature) won't have `first_failure` in JSON.
+        // Deserialization must succeed and produce None.
+        let json = r#"{
+            "gate_name": "unit_core",
+            "tier": "pr_fast",
+            "status": "fail",
+            "duration_ms": 500,
+            "command": "cargo test -p perl-parser"
+        }"#;
+        let result: GateResult = serde_json::from_str(json).expect("backward compat deserialize");
+        assert!(result.first_failure.is_none(), "first_failure must be None when absent from JSON");
     }
 }

@@ -8,7 +8,7 @@
 
 <!-- BEGIN: QUALITY_METRICS_BULLETS -->
 - **Quality Metrics**: <50ms LSP response times, 931ns incremental parsing
-- **UX workflow harness**: 17 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
+- **UX workflow harness**: 23 scenario files in `perl-lsp-ux-tests`; `just ux-tests` runs the default release-confidence lane and `just ux-tests-full` adds the integration-only 10k-line large-file case; confidence signals (manual smoke, first-5-minutes coverage, issue-burndown regression guards) are tracked in `docs/project/status/editor_ux.json`
 - **Mutation testing**: mutation data pending first nightly CI run — run `just mutation-subset` locally to populate
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 <!-- END: QUALITY_METRICS_BULLETS -->
@@ -18,5 +18,39 @@
 <!-- BEGIN: QUALITY_CRATE_TABLE -->
 | Crate | Mutants listed | Tests (lib) |
 |-------|---------------|-------------|
-| — | no data yet | no data yet |
+| perl-ast | — | 2 |
+| perl-ast-v2 | — | 2 |
+| perl-corpus | — | 135 |
+| perl-dap | — | 378 |
+| perl-diagnostics | — | 4 |
+| perl-lexer | — | 55 |
+| perl-lsp | — | 477 |
+| perl-lsp-rs-core | — | 955 |
+| perl-lsp-ux-tests | — | 18 |
+| perl-parser | — | 219 |
+| perl-parser-core | — | 583 |
+| perl-parser-pest | — | 10 |
+| perl-position-tracking | — | 33 |
+| perl-refactoring | — | 110 |
+| perl-semantic-analyzer | — | 132 |
+| perl-subprocess-runtime | — | 6 |
+| perl-symbol | — | 25 |
+| perl-tdd-support | — | 15 |
+| perl-test-generators | — | 11 |
+| perl-test-must | — | 6 |
+| perl-uri | — | 23 |
+| perl-workspace | — | 254 |
+| tree-sitter-perl-c | — | 11 |
+| tree-sitter-perl-rs | — | 48 |
 <!-- END: QUALITY_CRATE_TABLE -->
+
+## Flaky Test Registry
+
+<!-- BEGIN: FLAKY_TESTS_SUMMARY -->
+| State | Count |
+|-------|-------|
+| Active | 0 |
+| Resolved | 1 |
+
+_Sourced from `.ci/flaky-tests.json`. Run `just status-update --only quality` to refresh._
+<!-- END: FLAKY_TESTS_SUMMARY -->

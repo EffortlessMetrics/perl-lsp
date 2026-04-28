@@ -24,10 +24,18 @@ perllsp --health
 | Editor | Fast path | Detailed guide |
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
-| Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
+| Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
+| Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
+| Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
+| Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
+| Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
+| OpenCode | configure a custom `perl-lsp` server in `opencode.json` | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
 ## Minimal Configurations
 
@@ -37,13 +45,38 @@ The repo-maintained extension is the easiest route. If you prefer a manual
 configuration, set the command to `perllsp --stdio` and keep the workspace
 root pointed at the project root.
 
+### Trae (ByteDance)
+
+Trae is VS Code-compatible, so the same extension and settings model applies.
+Install the `EffortlessMetrics.perl-lsp-rs` extension from Trae's Extensions
+panel, or configure a generic language server command as `perllsp --stdio`.
+
 ### Neovim
 
+For Neovim 0.11+:
+
 ```lua
-require('lspconfig').perl_lsp.setup({
+vim.lsp.config('perllsp', {
   cmd = { 'perllsp', '--stdio' },
   filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
+    perl = {
+      workspace = {
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
+      },
+    },
+  },
 })
+
+vim.lsp.enable('perllsp')
 ```
 
 ### Emacs
@@ -51,18 +84,83 @@ require('lspconfig').perl_lsp.setup({
 Use `lsp-mode` or `eglot` with the same `perllsp --stdio` command. The
 editor-specific guide has the full snippets for both.
 
+### Vim
+
+Use either `vim-lsp` (native LSP in Vim) or `coc.nvim` (Node-based client),
+both configured to launch `perllsp --stdio`. See
+[docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) for complete examples.
+
 ### Helix
 
 ```toml
-[[language-server.perl-lsp]]
+[[language]]
+name = "perl"
+language-servers = ["perllsp"]
+
+[language-server.perllsp]
 command = "perllsp"
 args = ["--stdio"]
 ```
 
+### Zed
+
+Zed requires a Perl extension that registers `perllsp`. Once installed, you
+can override the binary path via `settings.json`:
+
+```json
+{
+  "lsp": {
+    "perl-lsp": {
+      "binary": {
+        "path": "/usr/local/bin/perllsp",
+        "arguments": ["--stdio"]
+      }
+    }
+  }
+}
+```
+
+See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
+
+
 ### Sublime Text
 
-Register a client whose command is `["perllsp", "--stdio"]` and scope it to
-Perl source files.
+Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
+`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
+`.pl`, `.t`, and Pod buffers consistently attach to the server.
+
+### Amazon Kiro
+
+Register a Perl language-server client that launches `perllsp --stdio`, then
+restart the client after changing workspace settings or include paths.
+
+### Claude Code
+
+Create a plugin with `.lsp.json` that maps Perl extensions to a server entry
+using `command: "perllsp"` and `args: ["--stdio"]`.
+
+### Codex CLI
+
+Codex CLI uses MCP tools rather than direct LSP server registration. Configure
+an LSP-to-MCP bridge such as `lsp-mcp`, then point Codex at the bridge with a
+project-local `.codex/config.toml` entry like:
+
+```toml
+[mcp_servers.perl_lsp]
+command = "lsp-mcp"
+args = ["--config", "/absolute/path/to/project/lsp-mcp.toml", "--workspace", "/absolute/path/to/project"]
+cwd = "/absolute/path/to/project"
+```
+
+Do not register `perllsp --stdio` directly as an MCP server; it speaks LSP, not
+MCP. See [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for
+the full workflow, bridge config, and troubleshooting.
+
+### OpenCode
+
+Create or update `opencode.json` and register a custom LSP server with
+`"command": ["perllsp", "--stdio"]` and Perl extensions like `.pl`, `.pm`,
+and `.t`. See [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) for a full example.
 
 ## When Setup Fails
 
@@ -72,3 +170,9 @@ Perl source files.
   and confirm the workspace root is correct.
 - If completions or diagnostics are missing, move to
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the next steps.
+
+
+### Codex Desktop
+
+Configure a custom Perl language server process that runs `perllsp --stdio`.
+See the dedicated guide for the exact fields and verification steps.

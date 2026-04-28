@@ -61,12 +61,48 @@ Each agent sees its own step. Nobody has checked that:
 
 7. **PR metadata** — title has `(#NNN)`, body is meaningful, labels are complete.
 
+## External-agent PR rules (apply throughout audit)
+
+These aren't "next-step" operations — they're background context to carry as you audit. Keep them in mind for every PR.
+
+**Stale-base disambiguation first.** Before crying SCOPE DRIFT on a 500+ deletion diff, check the base. PRs branched before recent master fire-fix cascades will show mass "deletions" against current master — those are pre-cascade state, not scope drift. If the PR is >3 days old and shows 500+ deletions with no author edits in those files, call `/refresh-stale-prs` instead of flagging. Use three-dot diff (`git diff $(git merge-base origin/master HEAD)..HEAD`) not two-dot. See `docs/articles/FIRE_FIX_CASCADE_METHODOLOGY.md`.
+
+**Agent audit-trail additions are KEEP, not ARTIFACTS.** `.hermes/` / `.spec/` / `.jules/` / `.run/` / `.codex/` content from the PR's OWN agent for its OWN issue is the agent's audit trail — equivalent to our `.spec/` dirs — and must stay. Only flag as drift if: (a) the directory is for a DIFFERENT PR's issue, or (b) pre-existing agent-trail dirs in the repo were modified by this PR. Before flagging, check the dir name vs the PR's issue ref and whether the dir was new or pre-existing. See `memory/feedback_agent_audit_trail_directories.md`.
+
+**Cluster awareness.** If this PR shares a `task_e_...` body ID or a branch-name stem with nearby open PRs, and they touch different files, that's layer diversity, not drift. A perf PR + a parser PR + a completion PR from the same Codex task are complementary — each gets audited on its own scope, not flagged because the cluster is broad. See `docs/articles/BROAD_SCOPE_LAYER_DIVERSITY.md`.
+
+**Hallucination pre-gate awareness.** If this PR adds entries to `WebFrameworkKind`, `IMPLICIT_STRICT_MODULES`, `IMPLICIT_EXPORT_SKIP_LIST`, `COMMON_MODULES_TIER_1`, `PERL_SOURCE_EXTENSIONS`, or `detect_framework()`, the added name must have been verified on MetaCPAN before you set `diff-audited`. If you see a framework/module name and no MetaCPAN receipt from reviewer, spot-check with one `curl fastapi.metacpan.org/v1/module/_search?q=<Name>` before audit. Zero hits + AI-product name = hallucination; reject. See `docs/articles/CODEX_HALLUCINATION_TRIAGE.md`.
+
+**File-path over title.** Similar PR titles with different file sets = layer diversity. Only `same-file + overlapping-lines` is a real dup.
+
+**Cross-PR source-file contamination (not just `.hermes/`).** Sibling external-agent runs (Codex bursts, diffguard-bot work streams, etc.) sometimes leak orphan source/test files into a PR — files that belong to a SIBLING work stream's scope but ended up in this PR's branch through messy git history. Per the 2026-04-26 #5870 incident: 2043 of 2063 lines were cross-PR contamination from sibling work-43c756db (CLOSED PR #4495 ADRs) and work-afb1f466 (orphan tests for `perl-lsp-rs-core/` in a PR for `perl-lsp-diagnostics/`). The 2026-04-25 audit-trail-dirs harden patch only watched `.hermes/` paths and missed regular source/test contamination.
+
+Detection heuristic — for every file in the diff, ask: "does this file's path/content align with the PR's stated scope (title + body + linked issue)?"
+
+- If the diff adds tests for crate X but the PR title is about crate Y (and those tests aren't named in the spec): flag as CONTAMINATION
+- If the diff adds ADRs whose work-id doesn't match this PR's branch work-id: flag as CONTAMINATION
+- Tell-tale: PR title claims a small change but `--stat` shows >100 lines outside the named scope. Diff bulk shouldn't be unrelated to the title.
+- Mechanical check: `gh pr diff <num> --stat` then for each crate path, ask whether the PR title/body mentions it; orphan-crate paths are contamination candidates.
+
+When found, route to `needs-diff-fix` with a `git rm` list. Don't let a 22-of-2063-line legitimate change ride a 2043-line contaminated diff into master.
+
+## Master-green guard (HARD requirement before CLEAN verdict)
+
+Per the 2026-04-26 directive: **keep master green and require green to merge.** A PR that compiles per-crate but breaks the workspace fmt/clippy/build cascade WILL break master after merge — exactly the pattern that caused 3 fmt-cascade fixes (#6789, #6803, #6807) in one session.
+
+Before adding `diff-audited`:
+- Verify the PR's CI includes a **workspace-wide** fmt + check, not just per-crate (look for `Compile All Targets (bit-rot guard)` SUCCESS, `PR Smoke (Fast Feedback)` SUCCESS, and ideally a workspace fmt step)
+- If `PR Smoke` failed and the failure is fmt drift in a file the PR touches OR in a file recently merged that the PR's branch hasn't picked up: flag as `needs-ci-fix` with cascade-update instruction; do NOT add `diff-audited`
+- Skipped CI Nightly checks are fine; required PR-side checks must be SUCCESS
+
+**Judgment over box-checking.** "CLEAN, nothing to flag" on a 500+ line diff is almost never right. If you can't name a specific concrete observation (a regression risk, an artifact, a test gap, a sketchy commit), you haven't looked hard enough. The repo's quality bar is high; an honest skeptical pass is always superior to a mechanical LGTM.
+
 ## Verdicts
 
 - **CLEAN** — diff is coherent, scope is clean, ready for merge. Set label.
 - **ARTIFACTS** — found leftover debug code, temp files, or out-of-scope changes. List them for pr-responder.
 - **REGRESSION** — a late commit broke something an earlier agent did. Flag specifically what's broken.
-- **SCOPE DRIFT** — cumulative diff is larger than the spec warrants. List what should be reverted.
+- **SCOPE DRIFT** — cumulative diff is larger than the spec warrants. List what should be reverted. **Rule out stale-base FIRST** — if the "drift" is mass deletions from pre-cascade state, route to `/refresh-stale-prs`, not back to builder.
 
 ## Todo list
 
