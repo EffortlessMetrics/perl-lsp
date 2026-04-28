@@ -8,7 +8,11 @@ on:
     branches:
       - master
   pull_request:
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    # Deliberately exclude `labeled` / `unlabeled` — the reconciler itself
+    # adds/removes labels via gh API, which would fire those events and
+    # re-trigger this workflow in an infinite feedback loop. `synchronize`
+    # covers commits-pushed-to-PR cases; `opened` / `reopened` cover entry.
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
     inputs:
       advisory:
