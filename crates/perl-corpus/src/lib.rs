@@ -228,6 +228,7 @@ pub mod r#gen;
 pub mod glob_expressions;
 pub mod gold;
 pub mod index;
+pub mod inventory;
 pub mod lint;
 pub mod meta;
 pub mod tie_interface;
@@ -263,6 +264,8 @@ pub use gold::{
     load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
     load_goto_gold_fixtures, load_hover_gold_fixtures,
 };
+pub use index::write_indices;
+pub use inventory::{CorpusInventory, InventoryIds, InventoryTags, inventory_dir};
 use meta::Section;
 use regex::Regex;
 use std::collections::HashMap;
