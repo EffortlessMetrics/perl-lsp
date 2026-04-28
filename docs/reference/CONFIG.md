@@ -512,7 +512,7 @@ decrease them for resource-constrained environments.
 
 ## CLI Flags
 
-Flags passed when launching the `perl-lsp` binary. Source:
+Flags passed when launching the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### Server mode
@@ -557,9 +557,50 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ---
 
+### Vim Client Examples
+
+#### Vim with vim-lsp
+
+```vim
+autocmd User lsp_setup call lsp#register_server({
+      \ 'name': 'perl-lsp',
+      \ 'cmd': {server_info -> ['perllsp', '--stdio']},
+      \ 'allowlist': ['perl'],
+      \ 'workspace_config': {
+      \   'perl': {
+      \     'workspace': {
+      \       'includePaths': ['lib', '.', 'local/lib/perl5']
+      \     }
+      \   }
+      \ },
+      \ })
+```
+
+#### Vim with coc.nvim
+
+```json
+{
+  "languageserver": {
+    "perl-lsp": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"],
+      "rootPatterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "settings": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Environment Variables
 
-Environment variables read at startup by the `perl-lsp` binary. Source:
+Environment variables read at startup by the `perllsp` executable. Source:
 `crates/perl-lsp-launcher/src/lib.rs`.
 
 ### `PERL_LSP_LOG`
@@ -611,15 +652,34 @@ Settings specific to the VS Code extension (`vscode-extension/package.json`).
 These are separate from the LSP workspace settings above and control extension
 behaviour such as binary management and feature toggles.
 
+The VS Code extension uses the `perl-lsp.*` namespace. Server-side workspace
+settings use the `perl.*` namespace and may be forwarded via initialization
+options or client-specific configuration mechanisms.
+
 ### Binary management
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perl-lsp` binary. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
 | `perl-lsp.versionTag` | `string` | `""` | Specific release tag (e.g., `v0.8.3`) when `channel` is `"tag"`. |
+
+### Trae
+
+Trae can use VS Code-compatible extensions. Prefer the official
+`EffortlessMetrics.perl-lsp-rs` extension. For manual binary management, set:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+If using a generic LSP client extension instead, configure that extension to
+launch `perllsp --stdio`.
 
 ### Debugging
 
@@ -829,20 +889,35 @@ perllsp --features-json --feature-profile production
 
 ### Editor-specific snippets
 
-#### Neovim (lua)
+#### Neovim 0.11+ (lua)
 
 ```lua
-require("lspconfig").perl_ls.setup({
-  settings = {
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
     perl = {
       workspace = {
-        includePaths = { "lib", ".", "local/lib/perl5" },
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
         useSystemInc = false,
       },
-      inlayHints = { enabled = true, parameterHints = true },
+      inlayHints = {
+        enabled = true,
+        parameterHints = true,
+      },
     },
   },
 })
+
+vim.lsp.enable('perllsp')
 ```
 
 #### Helix (`languages.toml`)
@@ -857,11 +932,40 @@ inlayHints.enabled = true
 #### Emacs (eglot)
 
 ```elisp
-(setq-default eglot-workspace-configuration
-  '((perl
-     (workspace
-      (includePaths . ["lib" "." "local/lib/perl5"])
-      (useSystemInc . :json-false)))))
+(use-package eglot
+  :ensure nil
+  :hook ((perl-mode . eglot-ensure)
+         (cperl-mode . eglot-ensure))
+  :config
+  (add-to-list 'eglot-server-programs
+               '(((perl-mode :language-id "perl")
+                  (cperl-mode :language-id "perl"))
+                 . ("perllsp" "--stdio"
+                    :initializationOptions
+                    (:perl
+                     (:workspace
+                      (:includePaths ["lib" "." "local/lib/perl5"]
+                       :useSystemInc :json-false)))))))
+```
+
+#### Emacs (`lsp-mode`)
+
+```elisp
+(use-package lsp-mode
+  :commands (lsp lsp-deferred)
+  :hook ((perl-mode . lsp-deferred)
+         (cperl-mode . lsp-deferred))
+  :config
+  (add-to-list 'lsp-language-id-configuration '(perl-mode . "perl"))
+  (add-to-list 'lsp-language-id-configuration '(cperl-mode . "perl"))
+
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection '("perllsp" "--stdio"))
+    :activation-fn (lsp-activate-on "perl")
+    :major-modes '(perl-mode cperl-mode)
+    :priority 1
+    :server-id 'perllsp)))
 ```
 
 #### Sublime Text (LSP package)
@@ -885,8 +989,32 @@ Open `Preferences: LSP Server Configurations` and add:
 }
 ```
 
-Sublime LSP uses `initialization_options`; the LSP protocol field is named
-`initializationOptions`.
+#### OpenCode (`opencode.json`)
+
+OpenCode configures custom LSP servers through the `lsp` block. The `command`
+array launches the server, `extensions` controls activation, and
+`initialization` is sent as LSP initialization options.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "lsp": {
+    "perl-lsp": {
+      "command": ["perllsp", "--stdio"],
+      "extensions": [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"],
+      "initialization": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+For settings shared across editors, prefer `.perl-lsp.toml`.
 
 #### Claude Code (plugin `.lsp.json`)
 

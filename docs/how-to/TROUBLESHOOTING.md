@@ -39,34 +39,6 @@ problem is usually in editor integration, workspace roots, or a stale cache.
 
 If the editor is using a helper extension or plugin, check its own logs too.
 
-## Sublime Text Does Not Start `perllsp`
-
-1. Confirm `perllsp` works outside Sublime:
-
-   ```bash
-   perllsp --version
-   perllsp --health
-   perllsp --info
-   ```
-
-2. Confirm the `LSP` package is installed.
-3. Confirm `Preferences: LSP Server Configurations` contains:
-
-   ```json
-   {
-     "perl-lsp": {
-       "enabled": true,
-       "command": ["perllsp", "--stdio"],
-       "selector": "source.perl"
-     }
-   }
-   ```
-
-4. Run `Tools > Developer > Show Scope Name` in a Perl file and confirm the
-   root scope matches the configured selector.
-5. Run `LSP: Troubleshoot Server` and `LSP: Toggle Log Panel`.
-6. If Sublime cannot find `perllsp`, use an absolute path in `command`.
-
 ## Diagnostics Or Completions Are Missing
 
 - Re-check the install with `perllsp --health`.
@@ -93,6 +65,40 @@ If the editor is using a helper extension or plugin, check its own logs too.
 - Verify the editor has the relevant capability enabled.
 - Check whether the current file actually has a Perl mode or file type.
 - Inspect the LSP log for capability negotiation or request errors.
+
+## Neovim Does Not Start `perllsp`
+
+1. Confirm the binary works outside Neovim:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+2. Confirm the buffer filetype in Neovim:
+
+   ```vim
+   :set filetype?
+   ```
+
+   It must be `perl`.
+
+3. Confirm the LSP config is enabled:
+
+   ```vim
+   :checkhealth vim.lsp
+   ```
+
+4. For Neovim 0.11+, make sure config name and enable name match:
+
+   ```lua
+   vim.lsp.config('perllsp', { cmd = { 'perllsp', '--stdio' } })
+   vim.lsp.enable('perllsp')
+   ```
+
+5. Use `perllsp --check path/to/file.pl` for manual diagnostics.
+   Do not test stdio mode by piping unframed JSON.
 
 ## DAP Or Debugging Issues
 

@@ -123,7 +123,7 @@ impl<'a> Parser<'a> {
             // tokens (which would incorrectly consume the `}` that closes the
             // enclosing hash subscript).
             let delim_text = delim_token.text.as_ref();
-            if delim_text.len() >= 2
+            if delim_text.len() >= delim_char.len_utf8() + close_delim.len_utf8()
                 && delim_text.starts_with(delim_char)
                 && delim_text.ends_with(close_delim)
             {

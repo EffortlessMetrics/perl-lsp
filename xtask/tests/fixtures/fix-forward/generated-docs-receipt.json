@@ -3,7 +3,7 @@
     {
       "gate_name": "status-docs",
       "status": "fail",
-      "command": "cargo xtask status-docs --check",
+      "command": "cargo xtask update-status --check",
       "output_summary": "generated docs are stale; CURRENT_STATUS drift"
     }
   ]

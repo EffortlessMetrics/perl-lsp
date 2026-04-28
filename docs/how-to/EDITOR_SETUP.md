@@ -17,7 +17,6 @@ Verify the install before debugging editor settings:
 ```bash
 perllsp --version
 perllsp --health
-perllsp --info
 ```
 
 ## Pick Your Editor
@@ -26,12 +25,12 @@ perllsp --info
 | --- | --- | --- |
 | VS Code | install the extension or point it at `perllsp --stdio` | [docs/EDITORS/VS_CODE_SETUP.md](../EDITORS/VS_CODE_SETUP.md) |
 | Trae (ByteDance) | install the VS Code-compatible extension or set command to `perllsp --stdio` | [docs/EDITORS/TRAE_SETUP.md](../EDITORS/TRAE_SETUP.md) |
-| Neovim | configure `cmd = { "perllsp", "--stdio" }` | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
+| Neovim | define a custom `perllsp` config with `vim.lsp.config()` and enable via `vim.lsp.enable()` (legacy `nvim-lspconfig` supported for older Neovim) | [docs/EDITORS/NEOVIM_SETUP.md](../EDITORS/NEOVIM_SETUP.md) |
 | Vim | use `vim-lsp` or `coc.nvim` with `perllsp --stdio` | [docs/EDITORS/VIM_SETUP.md](../EDITORS/VIM_SETUP.md) |
 | Emacs | use `lsp-mode` or `eglot` with `perllsp --stdio` | [docs/EDITORS/EMACS_SETUP.md](../EDITORS/EMACS_SETUP.md) |
 | Helix | add a `perllsp` language server entry | [docs/EDITORS/HELIX_SETUP.md](../EDITORS/HELIX_SETUP.md) |
 | Zed | install a Perl extension, then optionally point at `perllsp` | [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) |
-| Sublime Text | install Sublime's `LSP` package and add `perllsp --stdio` in `LanguageServers.sublime-settings` | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
+| Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
 | Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
@@ -54,18 +53,30 @@ panel, or configure a generic language server command as `perllsp --stdio`.
 
 ### Neovim
 
-```lua
-local capabilities = vim.lsp.protocol.make_client_capabilities()
-local ok_cmp, cmp_lsp = pcall(require, "cmp_nvim_lsp")
-if ok_cmp then
-  capabilities = cmp_lsp.default_capabilities(capabilities)
-end
+For Neovim 0.11+:
 
-require("lspconfig").perl_lsp.setup({
-  cmd = { "perllsp", "--stdio" },
-  filetypes = { "perl" },
-  capabilities = capabilities,
+```lua
+vim.lsp.config('perllsp', {
+  cmd = { 'perllsp', '--stdio' },
+  filetypes = { 'perl' },
+  root_markers = {
+    '.perl-lsp.toml',
+    'Makefile.PL',
+    'Build.PL',
+    'cpanfile',
+    'dist.ini',
+    '.git',
+  },
+  init_options = {
+    perl = {
+      workspace = {
+        includePaths = { 'lib', '.', 'local/lib/perl5' },
+      },
+    },
+  },
 })
+
+vim.lsp.enable('perllsp')
 ```
 
 ### Emacs
@@ -114,21 +125,9 @@ See [docs/EDITORS/ZED_SETUP.md](../EDITORS/ZED_SETUP.md) for full setup details.
 
 ### Sublime Text
 
-Install the `LSP` package, then open `Preferences: LSP Server Configurations`
-and add:
-
-```json
-{
-  "perl-lsp": {
-    "enabled": true,
-    "command": ["perllsp", "--stdio"],
-    "selector": "source.perl"
-  }
-}
-```
-
-For project-specific server settings, prefer `.perl-lsp.toml` or add
-`initialization_options` under the `perl-lsp` server configuration.
+Register a client with `command: ["perllsp", "--stdio"]`, use a selector such as
+`source.perl | text.perl`, and set `syntaxes` to Perl/Pod syntax files so `.pm`,
+`.pl`, `.t`, and Pod buffers consistently attach to the server.
 
 ### Amazon Kiro
 

@@ -5,7 +5,7 @@
   "receipts": [
     {
       "owner": "status-docs",
-      "command": "cargo xtask status-docs"
+      "command": "cargo xtask update-status --write"
     }
   ]
 }

@@ -24,7 +24,7 @@ Generated status/docs files can drift when hand-edited without the corresponding
 ```toml
 [[generated]]
 path = "docs/project/status/**"
-command = "cargo xtask status-docs"
+command = "cargo xtask update-status --write"
 owner = "status-docs"
 allow_manual_edits = false
 ```
