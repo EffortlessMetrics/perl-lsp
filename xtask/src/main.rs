@@ -1549,6 +1549,10 @@ fn main() -> Result<()> {
         Commands::GhTriage { limit } => github::run_issues_needing_triage(limit),
         Commands::GhBackfillPrefixedLabels { apply } => github::run_backfill_prefixed_labels(apply),
         Commands::Queue { command } => match command {
+            QueueCommand::Snapshot { out, fixture } => queue_snapshot::run_snapshot(out, fixture),
+            QueueCommand::Health { receipt, fixture } => {
+                queue_health::run(queue_health::QueueHealthArgs { receipt, fixture })
+            }
             QueueCommand::ProjectLabels { state, dry_run, apply, receipt, config } => {
                 label_projector::run_project_labels(label_projector::LabelProjectorArgs {
                     state,
