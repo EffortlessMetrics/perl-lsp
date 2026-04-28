@@ -55,7 +55,8 @@ pr-fast: _check-tools-basic
     just _timed "publish-closure" "just ci-publish-closure" && \
     just _timed "publish-manifest-check" "just ci-publish-manifest-check" && \
     just _timed "layer-check" "just ci-layer-check" && \
-    just _timed "published-crate-count" "just ci-published-crate-count"
+    just _timed "published-crate-count" "just ci-published-crate-count" && \
+    just _timed "release-history-check" "just ci-release-history-check"
     RC=$?
     END=$(date +%s)
     echo ""
@@ -104,6 +105,7 @@ merge-gate: _check-tools-basic pr-fast
     START=$(date +%s)
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
+    just _timed "check-all-targets" "just check-all-targets" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
     just _timed "lsp-bdd" "just ci-lsp-bdd" && \
@@ -327,20 +329,29 @@ mutation-regression:
     @cargo test -p perl-parser --test mutation_hardening_tests
     @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
     @cargo test -p perl-lsp-rs --test mutation_survivors_elimination
+    @cargo test -p perl-parser-core --test path_security_mutation_hardening
+    @cargo test -p perl-parser-core --test path_normalize_mutation_hardening
+    @cargo test -p perl-parser-core --test qualified_name_mutation_hardening
     @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
     @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
     @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
+    @cargo +nightly fuzz run declaration_parsing -- -max_total_time=60 || echo "  Declaration parsing fuzzing complete"
     @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
+    @cargo +nightly fuzz run incremental_edit_sequences -- -max_total_time=60 || echo "  Incremental edit sequences fuzzing complete"
     @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run parser_integration -- -max_total_time=60 || echo "  Parser integration fuzzing complete"
     @cargo +nightly fuzz run quote_operators -- -max_total_time=60 || echo "  Quote operators fuzzing complete"
     @cargo +nightly fuzz run symbol_query_ranking -- -max_total_time=60 || echo "  Symbol query ranking fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
+    @cargo +nightly fuzz run utf16_roundtrip -- -max_total_time=60 || echo "  UTF-16 roundtrip fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
+    @cargo +nightly fuzz run lexer_tokenization -- -max_total_time=60 || echo "  Lexer tokenization fuzzing complete"
+    @cargo +nightly fuzz run dap_eval_validator -- -max_total_time=60 || echo "  DAP eval validator fuzzing complete"
+    @cargo +nightly fuzz run dap_stack_parser -- -max_total_time=60 || echo "  DAP stack parser fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
 # `bench` is the canonical benchmark target; keep this as a compatibility alias.
@@ -349,6 +360,33 @@ benchmarks: bench
 # ============================================================================
 # CI Aliases and Convenience Targets
 # ============================================================================
+
+# Print the decision tree for which command to run and when
+quick-ref:
+    @echo ""
+    @echo "  perl-lsp development quick reference"
+    @echo "  ====================================="
+    @echo ""
+    @echo "  WHEN                          COMMAND                          TIME"
+    @echo "  Every change / before push    just pr-fast                     ~1-2 min"
+    @echo "  Before merge to master        nix develop -c just ci-gate      ~3-5 min"
+    @echo "  New machine / after clone     just doctor                      ~10 sec"
+    @echo "  One-off lint check            just check                       ~30 sec"
+    @echo "  Reformat all code             cargo xtask fmt                  ~20 sec"
+    @echo "  Run tests only                cargo test --workspace --lib     ~1 min"
+    @echo "  Nightly / mutation / fuzz     just ci-full                     ~15-30 min"
+    @echo ""
+    @echo "  TIP: install the pre-push hook so pr-fast runs automatically:"
+    @echo "       bash scripts/install-githooks.sh"
+    @echo ""
+
+# Lint all crates — treated as errors, same as CI (alias for cargo clippy)
+check:
+    cargo clippy --workspace -- -D warnings
+
+# Auto-fix clippy warnings where possible
+fix:
+    cargo clippy --workspace --fix --allow-dirty
 
 # Canonical local merge gate via Nix (use before merge, not as the push hook)
 ci-local:
@@ -373,6 +411,34 @@ doctor-env:
 
 # Short alias for the developer environment quick check
 devex: doctor-env
+
+# Print recent commits from the best available remote base ref.
+# Renamed from agent-preflight to avoid collision with `scripts/agent-preflight.sh`
+# (the real safety-check script invoked by the /agent-preflight command skill).
+# Ref-selection order mirrors devex-targeted: origin/HEAD > origin/main >
+# origin/master > local main > local master > HEAD (fallback, shows local branch).
+agent-context-log:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ref=""
+    # origin/HEAD is the most authoritative canonical remote default — check first.
+    if git symbolic-ref --quiet --short refs/remotes/origin/HEAD >/dev/null 2>&1; then
+        ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD)"
+    elif git rev-parse --verify --quiet origin/main >/dev/null; then
+        ref="origin/main"
+    elif git rev-parse --verify --quiet origin/master >/dev/null; then
+        ref="origin/master"
+    elif git rev-parse --verify --quiet main >/dev/null; then
+        ref="main"
+    elif git rev-parse --verify --quiet master >/dev/null; then
+        ref="master"
+    else
+        # HEAD fallback: shows the local branch — useful as last resort but
+        # agents should note this reflects their own branch, not remote master.
+        ref="HEAD"
+    fi
+    echo "Showing last 20 commits from: $ref"
+    git log "$ref" --oneline -20
 
 # One-command pre-flight before pushing a branch:
 # 1) repair/report workspace state issues, then 2) run the fast PR gate.
@@ -707,6 +773,40 @@ devex-targeted base='' mode='all':
     echo "Running targeted checks (base=$base, mode={{mode}})..."
     cargo xtask targeted-checks --base "$base" --mode "{{mode}}"
 
+# Show recent upstream commits using an auto-detected base ref.
+# Helpful in detached or minimal-clone environments where origin/master may not exist.
+upstream-log count='20' base='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="{{base}}"
+    count="{{count}}"
+    if ! [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: count must be a positive integer (received: $count)"
+        exit 1
+    fi
+    if [ -z "$base" ]; then
+        base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet origin/master >/dev/null; then
+        base="origin/master"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet main >/dev/null; then
+        base="main"
+    fi
+    if [ -z "$base" ] && git rev-parse --verify --quiet master >/dev/null; then
+        base="master"
+    fi
+    if [ -z "$base" ]; then
+        echo "ERROR: Could not auto-detect base ref."
+        echo "Hint: run 'just upstream-log <count> <base-ref>' (example: just upstream-log 20 origin/master)."
+        exit 1
+    fi
+    echo "Showing last $count commits from $base"
+    git log "$base" --oneline -n "$count"
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
@@ -830,6 +930,7 @@ ci-gate:
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
+    just check-all-targets && \
     just common-corpus-check && \
     just ci-policy && \
     just ci-v2-bundle-sync && \
@@ -848,7 +949,8 @@ ci-gate:
     just ci-publish-closure && \
     just ci-publish-manifest-check && \
     just ci-layer-check && \
-    just ci-published-crate-count
+    just ci-published-crate-count && \
+    just ci-release-history-check
     # @START=$$(date +%s); \
 
 # Gate runner with receipt output (Issue #210)
@@ -966,6 +1068,12 @@ ci-published-crate-count:
     @echo "🧮 Checking published-crate count ratchet..."
     @cargo xtask published-crate-count
     @echo "✅ Published-crate count ratchet passed"
+
+# Release-history drift check: tags, notes, ledger, changelog
+ci-release-history-check:
+    @echo "📚 Checking release-history surface drift..."
+    bash scripts/check_release_history.sh
+    @echo "✅ Release-history drift check passed"
 
 # Offline manifest validation: allowlist drift + LICENSE present (see #4499)
 ci-publish-manifest-check:
@@ -2013,13 +2121,16 @@ fuzz-check-crashes:
 fuzz-regression duration='30':
     @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
     @just fuzz builtin_functions {{duration}} || true
+    @just fuzz declaration_parsing {{duration}} || true
     @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz incremental_edit_sequences {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz parser_integration {{duration}} || true
     @just fuzz quote_operators {{duration}} || true
     @just fuzz symbol_query_ranking {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz utf16_roundtrip {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"

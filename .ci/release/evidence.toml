@@ -1,0 +1,47 @@
+[[receipts]]
+name = "ci-gate"
+file = "ci-gate.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "parser-ratchet-release"
+file = "parser-ratchet-release.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "vscode-extension-smoke"
+file = "vscode-extension-smoke.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "lsp-scenario"
+file = "lsp-scenario.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "real-workspace-baseline"
+file = "real-workspace-baseline.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "ai-completion-e2e"
+file = "ai-completion-e2e.json"
+required = true
+release_blocking = true
+
+[[receipts]]
+name = "advisory-status"
+file = "advisory-status.json"
+required = true
+release_blocking = false
+
+[[receipts]]
+name = "unresolved-risk-register"
+file = "unresolved-risk-register.json"
+required = true
+release_blocking = true
