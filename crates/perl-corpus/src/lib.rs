@@ -223,6 +223,7 @@ pub mod cases;
 pub mod codegen;
 pub mod continue_redo;
 pub mod files;
+pub mod fixture_expectations;
 pub mod format_statements;
 pub mod r#gen;
 pub mod glob_expressions;
@@ -249,6 +250,10 @@ pub use continue_redo::{
 pub use files::{
     CORPUS_ROOT_ENV, CorpusFile, CorpusLayer, CorpusPaths, get_all_test_files, get_corpus_files,
     get_corpus_files_from, get_fuzz_files, get_test_files,
+};
+pub use fixture_expectations::{
+    ConceptRegistry, ExpectationMode, FixtureExpectation, SidecarFixture, ValidationNote,
+    discover_sidecars, parse_sidecar_file, validate_sidecar, validate_sidecars_under,
 };
 pub use format_statements::{
     FormatStatementCase, FormatStatementGenerator, find_format_case, format_statement_cases,

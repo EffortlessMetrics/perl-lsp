@@ -1,0 +1,17 @@
+[concept]
+id = "parser.heredoc.data_section"
+tier = "pr"
+
+[expect]
+panic = false
+timeout = false
+mode = "parse_clean"
+
+[metrics]
+max_error_nodes = 0
+must_emit_node_kinds = ["Heredoc", "DataSection"]
+
+[snapshots]
+tokens = false
+ast = true
+spans = true
