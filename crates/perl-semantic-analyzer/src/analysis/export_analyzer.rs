@@ -113,7 +113,7 @@ impl ExportSymbolExtractor {
             // The parser stores qw-lists as a single normalised string like `"qw(Exporter)"`,
             // so we must check both single-quoted strings and the qw-expanded form.
             NodeKind::Use { module, args, .. } if module == "parent" => {
-                if args.iter().any(Self::arg_contains_exporter) {
+                if args.iter().any(|arg| Self::arg_contains_exporter(arg)) {
                     return Some(ExporterDetector::UseParentExporter);
                 }
             }
@@ -122,7 +122,7 @@ impl ExportSymbolExtractor {
             // `use base` is the older form of `use parent` and is still widely used in
             // legacy CPAN code. The same qw-normalisation applies.
             NodeKind::Use { module, args, .. } if module == "base" => {
-                if args.iter().any(Self::arg_contains_exporter) {
+                if args.iter().any(|arg| Self::arg_contains_exporter(arg)) {
                     return Some(ExporterDetector::UseBaseExporter);
                 }
             }
@@ -161,7 +161,7 @@ impl ExportSymbolExtractor {
     ///
     /// The parser normalises `qw(Foo Bar)` forms to the string `"qw(Foo Bar)"`.
     /// Single-quoted module names arrive as `"'Exporter'"`.
-    fn arg_contains_exporter(arg: &String) -> bool {
+    fn arg_contains_exporter(arg: &str) -> bool {
         let arg = arg.trim();
         // Single- or double-quoted: 'Exporter' or "Exporter"
         if arg.trim_matches('\'').trim_matches('"') == "Exporter" {
