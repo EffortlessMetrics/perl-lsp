@@ -986,6 +986,12 @@ enum Commands {
         receipt: Option<PathBuf>,
     },
 
+    /// Parser ratchet receipt producer scaffold.
+    ParserRatchet {
+        #[command(subcommand)]
+        command: ParserRatchetCommand,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -1598,6 +1604,28 @@ enum MetricsCommand {
 }
 
 #[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Emit parser ratchet scaffold receipt.
+    Run {
+        /// Execution profile (pr/nightly/release).
+        #[arg(long, value_enum)]
+        profile: parser_ratchet::ParserRatchetProfile,
+        /// Explicit base revision (SHA or revspec).
+        #[arg(long)]
+        base: String,
+        /// Explicit head revision (SHA or revspec).
+        #[arg(long)]
+        head: String,
+        /// Output path for parser-ratchet receipt JSON.
+        #[arg(long)]
+        receipt: PathBuf,
+        /// Force selected=true while still emitting scaffold-only payload.
+        #[arg(long)]
+        force_selected: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum QueueCommand {
     /// Capture the open PR queue into a stable JSON snapshot document.
     Snapshot {
@@ -1929,6 +1957,17 @@ fn main() -> Result<()> {
                 receipt,
             })
         }
+        Commands::ParserRatchet { command } => match command {
+            ParserRatchetCommand::Run { profile, base, head, receipt, force_selected } => {
+                parser_ratchet::run(parser_ratchet::ParserRatchetRunArgs {
+                    profile,
+                    base,
+                    head,
+                    receipt,
+                    force_selected,
+                })
+            }
+        },
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();
             match command {
