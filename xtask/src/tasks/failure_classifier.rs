@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use color_eyre::eyre::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-const CHECK_NAME: &str = "Failure Classifier";
+const CHECK_NAME: &str = "failure-classifier";
+const SCHEMA_VERSION: &str = "1";
 
 #[derive(Debug, Clone)]
 pub struct FailureClassifierConfig {
@@ -19,7 +20,14 @@ pub struct FailureClassifierConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailureReceipt {
+    /// Matches the schema `check` constant `"failure-classifier"`.
     pub check: String,
+    /// Schema version for forward compatibility.
+    pub schema_version: String,
+    /// Triggering event context.
+    pub event: String,
+    /// Overall gate verdict: `"pass"` when no PR-owned failure detected.
+    pub verdict: String,
     pub signature: String,
     pub affected_prs: Vec<u64>,
     pub master_sha: Option<String>,
@@ -30,10 +38,15 @@ pub struct FailureReceipt {
     pub evidence: Vec<String>,
 }
 
+/// Classification values align with the `common-gate-receipt.schema.json` enum.
+///
+/// `CodeRegression` is the schema's name for what the classifier calls PR_OWNED
+/// (a failure in code the PR changed). The schema uses `snake_case` values.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "snake_case")]
 pub enum FailureClassification {
-    PrOwned,
+    /// Failure in code changed by the PR (schema: `code_regression`).
+    CodeRegression,
     StaleBase,
     MasterRed,
     InfraFailure,
@@ -173,7 +186,7 @@ fn classify(input: &SnapshotInput) -> FailureReceipt {
         FailureClassification::Flaky
     } else if pr_owned_by_file_overlap(input, &failing_pr_checks) {
         evidence.push("Failed check references files changed by PR".to_string());
-        FailureClassification::PrOwned
+        FailureClassification::CodeRegression
     } else {
         evidence.push("No decisive routing signal found".to_string());
         FailureClassification::Unknown
@@ -190,8 +203,19 @@ fn classify(input: &SnapshotInput) -> FailureReceipt {
         }
     }
 
+    // verdict: "fail" when the failure is PR-owned (action required on PR);
+    // "pass" when the failure is attributed to infra/master/stale-base/flaky.
+    let verdict = match classification {
+        FailureClassification::CodeRegression => "fail",
+        _ => "pass",
+    }
+    .to_string();
+
     FailureReceipt {
         check: CHECK_NAME.to_string(),
+        schema_version: SCHEMA_VERSION.to_string(),
+        event: "pull_request".to_string(),
+        verdict,
         signature,
         affected_prs,
         master_sha: input.pr.master_sha.clone(),
@@ -282,7 +306,8 @@ fn pr_owned_by_file_overlap(input: &SnapshotInput, failing: &[&CheckInput]) -> b
 
 fn recommended_action(classification: &FailureClassification) -> &'static str {
     match classification {
-        FailureClassification::PrOwned => "NEEDS_CI_FIX / builder",
+        // code_regression in schema maps to PR_OWNED semantics.
+        FailureClassification::CodeRegression => "NEEDS_CI_FIX / builder",
         FailureClassification::StaleBase => "NEEDS_CASCADE_UPDATE",
         FailureClassification::MasterRed => "master incident / no PR-owned label",
         FailureClassification::InfraFailure => "infra/tooling route",
@@ -297,7 +322,7 @@ fn confidence(classification: &FailureClassification, has_head_evidence: bool) -
     }
 
     match classification {
-        FailureClassification::MasterRed | FailureClassification::PrOwned => "high",
+        FailureClassification::MasterRed | FailureClassification::CodeRegression => "high",
         FailureClassification::StaleBase | FailureClassification::InfraFailure => "medium",
         FailureClassification::Flaky | FailureClassification::Unknown => "low",
     }
@@ -340,8 +365,8 @@ mod tests {
     fn fixture_pr_owned_classifies_pr_owned() -> Result<()> {
         let input = load_input(&fixture("pr-owned.json"))?;
         let receipt = classify(&input);
-        if receipt.classification != FailureClassification::PrOwned {
-            bail!("expected PR_OWNED, got {:?}", receipt.classification);
+        if receipt.classification != FailureClassification::CodeRegression {
+            bail!("expected CODE_REGRESSION (PR_OWNED), got {:?}", receipt.classification);
         }
         Ok(())
     }
@@ -353,6 +378,52 @@ mod tests {
         if receipt.classification != FailureClassification::Unknown {
             bail!("expected UNKNOWN, got {:?}", receipt.classification);
         }
+        Ok(())
+    }
+
+    /// Verify the receipt shape is schema-conformant: required fields present,
+    /// check value matches schema const, classification is snake_case.
+    #[test]
+    fn receipt_fields_are_schema_conformant() -> Result<()> {
+        let input = load_input(&fixture("pr-owned.json"))?;
+        let receipt = classify(&input);
+
+        // check field must match schema const "failure-classifier"
+        assert_eq!(receipt.check, "failure-classifier", "check must match schema const");
+
+        // schema_version must be non-empty
+        assert!(!receipt.schema_version.is_empty(), "schema_version must not be empty");
+
+        // event must be a known value
+        assert!(
+            matches!(receipt.event.as_str(), "pull_request" | "merge_group" | "push" | "local"),
+            "event must be a known value, got: {}",
+            receipt.event
+        );
+
+        // verdict for code_regression must be "fail"
+        assert_eq!(receipt.verdict, "fail", "code_regression receipt must have verdict=fail");
+
+        // classification serializes as snake_case
+        let json = serde_json::to_string(&receipt)?;
+        assert!(
+            json.contains("\"code_regression\""),
+            "classification must serialize as snake_case 'code_regression', got: {json}"
+        );
+        assert!(
+            !json.contains("\"PR_OWNED\"") && !json.contains("\"CodeRegression\""),
+            "classification must NOT serialize as SCREAMING_SNAKE_CASE or PascalCase"
+        );
+
+        Ok(())
+    }
+
+    /// Verify that non-PR-owned classifications produce verdict="pass".
+    #[test]
+    fn receipt_verdict_pass_for_master_red() -> Result<()> {
+        let input = load_input(&fixture("master-red.json"))?;
+        let receipt = classify(&input);
+        assert_eq!(receipt.verdict, "pass", "master_red is not a PR-owned failure; verdict must be pass");
         Ok(())
     }
 }
