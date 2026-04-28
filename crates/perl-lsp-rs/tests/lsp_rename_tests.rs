@@ -618,3 +618,67 @@ fn test_rename_out_of_bounds() -> TestResult {
 
     Ok(())
 }
+
+/// Workspace rename of an unqualified cross-package call must return a JSON-RPC
+/// error (AmbiguousIdentity) rather than silently renaming the wrong symbol.
+#[test]
+fn test_workspace_rename_refuses_ambiguous_symbol_identity() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let foo_uri = "file:///Foo.pm";
+    let bar_uri = "file:///Bar.pm";
+
+    harness.open(foo_uri, "package Foo;\nsub process_data { return 1; }\n1;\n")?;
+    // Bar calls process_data without qualification — ambiguous cross-package reference.
+    harness.open(bar_uri, "package Bar;\nsub run { return process_data(); }\n1;\n")?;
+
+    let result = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": foo_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "process_records"
+        }),
+    );
+
+    // The rename must refuse with an error — NOT silently rename the wrong call site.
+    let error = result.expect_err("rename should refuse ambiguous workspace identity");
+    assert!(
+        error.contains("ambiguous symbol identity"),
+        "expected ambiguous-identity refusal, got: {error}"
+    );
+
+    Ok(())
+}
+
+/// Workspace rename of a fully qualified cross-package call must succeed and
+/// include edits in both the definition file and the usage file.
+#[test]
+fn test_workspace_rename_returns_multi_file_workspace_edit() -> TestResult {
+    let mut harness = LspHarness::new();
+    let _init = harness.initialize(None)?;
+
+    let lib_uri = "file:///A.pm";
+    let app_uri = "file:///B.pm";
+
+    harness.open(lib_uri, "package A;\nsub target_name { return 1; }\n1;\n")?;
+    // B.pm uses a fully qualified call — unambiguous, safe to rename.
+    harness.open(app_uri, "package B;\nuse A;\nsub run { return A::target_name(); }\n1;\n")?;
+
+    let response = harness.request(
+        "textDocument/rename",
+        json!({
+            "textDocument": { "uri": lib_uri },
+            "position": { "line": 1, "character": 5 },
+            "newName": "renamed_target"
+        }),
+    )?;
+
+    let changes =
+        response["changes"].as_object().ok_or("workspace rename should return changes map")?;
+    assert!(changes.contains_key(lib_uri), "workspace rename must include definition file edits");
+    assert!(changes.contains_key(app_uri), "workspace rename must include usage file edits");
+
+    Ok(())
+}

@@ -201,6 +201,36 @@ fn test_modifiers_attached_to_s_operator() {
 }
 
 #[test]
+fn test_s_operator_paired_with_mixed_replacement_delimiter() {
+    let code = r#"s{old}[new]ger"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (subst + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Substitution),
+        "Expected Substitution token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "s{old}[new]ger");
+}
+
+#[test]
+fn test_tr_operator_paired_with_mixed_replacement_delimiter() {
+    let code = r#"tr{abc}<xyz>cds"#;
+    let mut lexer = PerlLexer::new(code);
+    let tokens = lexer.collect_tokens();
+
+    assert_eq!(tokens.len(), 2, "Expected 2 tokens (tr + EOF)");
+    assert!(
+        matches!(tokens[0].token_type, TokenType::Transliteration),
+        "Expected Transliteration token, got: {:?}",
+        tokens[0].token_type
+    );
+    assert_eq!(tokens[0].text.as_ref(), "tr{abc}<xyz>cds");
+}
+
+#[test]
 fn test_various_non_standard_delimiters() {
     let test_cases = vec![
         ("m~pattern~", TokenType::RegexMatch, "tilde"),

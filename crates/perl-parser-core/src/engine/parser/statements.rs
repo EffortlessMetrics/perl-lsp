@@ -305,7 +305,16 @@ impl<'a> Parser<'a> {
                 let sub_node = self.parse_subroutine()?;
                 self.finish_subroutine_statement(sub_node)
             }
-            TokenKind::Class => self.parse_class(),
+            TokenKind::Class
+                if matches!(
+                    self.tokens.peek_second().map(|t| t.kind),
+                    Ok(TokenKind::Identifier)
+                        | Ok(TokenKind::DoubleColon)
+                        | Ok(TokenKind::Colon)
+                ) =>
+            {
+                self.parse_class()
+            }
             // `method NAME SIGNATURE BLOCK` is a Perl 5.38+ declaration.
             // Legacy code uses `method` as a function name; disambiguate by
             // checking the next token is an Identifier (the method name).
@@ -698,7 +707,7 @@ impl<'a> Parser<'a> {
                     }
 
                     if has_parens {
-                        self.expect(TokenKind::RightParen)?;
+                        self.expect_closing_delimiter(TokenKind::RightParen)?;
                     }
 
                     let end = self.previous_position();

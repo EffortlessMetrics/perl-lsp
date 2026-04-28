@@ -4,9 +4,37 @@
 
 ## Orchestration Model
 
+perl-lsp's orchestration is an *Octopus Cluster* — see [docs/reference/OCTOPUS_CLUSTER.md](docs/reference/OCTOPUS_CLUSTER.md) for the umbrella framing.
+
+> For the design rationale and direction behind this orchestration model, see [docs/reference/ORCHESTRATION_DOCTRINE.md](docs/reference/ORCHESTRATION_DOCTRINE.md).
+
 The orchestrator routes work to agents, never writes code directly.
 
+### Gates and Agents
+
+The pipeline is organized into **7 gates** (coarse stages) with multiple agents working within each gate:
+
+| Gate | Purpose | Key agents |
+|------|---------|-----------|
+| **1. Identify** | Accurate, builder-ready problem statement | scout, accuracy-scout, research-verifier |
+| **2. Spec** | Scoped, project-aligned approach | plan-reviewer, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-planner |
+| **3. Build** | Well-tested, implemented PR | red-tdd, builder, green-tdd |
+| **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
+| **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
+| **6. Merge** | Land it | ops |
+| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator |
+
+**Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
+
+**Some gates may be skipped** when they are not relevant for a given PR's nature (e.g., a 1-line fmt fix skips Gates 1 and 2; a docs-only PR skips reviewer-deep in Gate 4).
+
+**Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
+
+See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+
+The default sequence within and across gates. Adapt to PR nature; skip gates that don't apply.
 
 Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
 
@@ -46,10 +74,14 @@ Every change flows through this pipeline. Each stage is a cheap pass that catche
 - Reviewers push improvements directly to PR branches. Every PR gets improved, no LGTM-only.
 - Every agent recommends next steps for the orchestrator.
 - Learning is continuous — every agent-wrapup captures what was learned.
+- **Master must stay green; merge requires green** (2026-04-26 directive). Per-crate green is necessary but not sufficient — workspace-wide xtask fmt and clippy cascades break master if a single PR's drift goes unchecked. Verify workspace-wide CI before merging; route to fmt/clippy fix if not.
+- **Each agent's pass produces ONE routing decision.** Sign-off is itself one of the routing options — applied across ALL agents (reviewer, maintainer-pr, refactor-planner, green-tdd, deep-reviewer, diff-auditor, green-ci, accuracy-scout, research-verifier, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-test-code-match). Each pass picks exactly one of: (a) sign off (gate clean, apply `<gate>-reviewed`) OR (b) bounce back (apply the appropriate `needs-*` routing label). Never both. Per the 2026-04-26 #6780 incident: applying `review-reviewed` AND `needs-builder-fix` simultaneously confused the merge gate and let unfixed bugs ride to master. The principle is one-decision-per-pass: gate-clean OR bounce, not gate-clean AND bounce.
+- **No `needs-*` label on a PR may merge.** Even with `merge-ready`, presence of any `needs-builder-fix` / `needs-ci-fix` / `needs-diff-fix` / `needs-spec-fix` / `needs-red-tdd-fix` label MUST block ops merge. The presence of an active routing label means the PR has unaddressed work.
+- **External-source PRs (claude-burst, codex-burst, diffguard-bot, etc.) require the same gate set as internal PRs.** Don't shortcut review on third-party PRs; they're frequently the source of cross-PR contamination, hallucinated APIs, and scope drift between title and diff.
 
 ### Pipeline State Labels
 
-Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them.
+Labels are the authoritative state for every issue and PR. The orchestrator reads them; agents write them. For the principle distinguishing live-truth labels (CI, mergeability) from authoritative-only labels (signoffs, routing), see [docs/reference/LIVE_SIGNALS_VS_LABELS.md](docs/reference/LIVE_SIGNALS_VS_LABELS.md).
 
 **Sign-off labels** (`<agent>-reviewed` = agent completed its pass):
 
@@ -107,6 +139,8 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 Labels are sign-off receipts. The *presence* of a label means an agent reviewed and approved. The *absence* means the pass hasn't happened yet. The orchestrator routes based on what's missing.
 
 ### Label-based routing
+
+Default routing pattern. The orchestrator may skip individual queries when the PR's nature makes that gate's check trivially satisfied or irrelevant. See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for skip criteria.
 
 **Pre-plan-review verification** (issue has `needs-plan-review`):
 ```
@@ -349,7 +383,9 @@ Invoke `/coding-standards` for full detail.
 
 ## Documentation
 
-[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [features.toml](features.toml)
+[Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [RECEIPT_SCHEMA.md](docs/reference/RECEIPT_SCHEMA.md) | [JUDGMENT_COMPOSITION.md](docs/reference/JUDGMENT_COMPOSITION.md) | [CLUSTER_CURATION.md](docs/reference/CLUSTER_CURATION.md) | [features.toml](features.toml)
+
+**Orchestration vocabulary**: [GLOSSARY.md](docs/reference/GLOSSARY.md) — single index of terms used across the orchestration reference docs (Candidate, Conveyor, Derived State, Ensemble, Gate, Receipt, Reconciler, Substrate, Three-Axis Triangulation, and more).
 
 ## Contributing
 
