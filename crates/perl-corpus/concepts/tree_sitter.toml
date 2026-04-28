@@ -1,0 +1,135 @@
+[[concepts]]
+id = "tree_sitter.parity.package_decl"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter"]
+fixtures.floors = ["test_corpus/package_production_enhanced.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "tree_sitter.parity.sub_decl"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = ["test_corpus/prototypes_only.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "tree_sitter.parity.method_call"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "dispatch"]
+fixtures.floors = ["test_corpus/method_class.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "tree_sitter.parity.given_when"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "switch"]
+fixtures.floors = ["test_corpus/given_when.pl"]
+fixtures.variants = ["test_corpus/clean_given_when.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "tree_sitter.parity.regex_substitution"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "regex"]
+fixtures.floors = ["test_corpus/clean_regex_substitution.pl"]
+fixtures.variants = ["test_corpus/regex_timeout_hardening.pl"]
+expect.panic = false
+expect.timeout = true
+expect.mode = "parity"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "tree_sitter.parity.statement_modifiers"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "statement-modifier"]
+fixtures.floors = ["test_corpus/statement_modifier_comprehensive.pl"]
+fixtures.variants = ["test_corpus/statement_modifier_production_enhanced.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "tree_sitter.parity.glob_assignments"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "glob"]
+fixtures.floors = ["test_corpus/glob_assignments.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "tree_sitter.parity.deferred_blocks"
+status = "seed"
+scope.crates = ["perl-parser", "perl-corpus"]
+scope.risk_tags = ["parity", "tree-sitter", "phaser"]
+fixtures.floors = ["test_corpus/defer_blocks.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parity"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false

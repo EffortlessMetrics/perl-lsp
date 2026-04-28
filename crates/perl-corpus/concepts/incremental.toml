@@ -1,0 +1,135 @@
+[[concepts]]
+id = "incremental.edit_inside_expression"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-parser"]
+scope.risk_tags = ["incremental", "expression"]
+fixtures.floors = ["test_corpus/ternary_expressions_comprehensive.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "incremental.edit_shifts_following_nodes"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-parser-core"]
+scope.risk_tags = ["incremental", "positions"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = ["test_corpus/parser_stress_cases.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "incremental.rename.local_shadow"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-workspace-index"]
+scope.risk_tags = ["incremental", "rename"]
+fixtures.floors = ["test_corpus/workspace_rename/scoping/lexical_scope_shadowing.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "incremental.rename.package_conflict"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-workspace-index"]
+scope.risk_tags = ["incremental", "rename", "workspace"]
+fixtures.floors = ["test_corpus/workspace_rename/scoping/package_scope_conflict.pm"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "incremental.workspace.multi_file_reference"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-workspace-index"]
+scope.risk_tags = ["incremental", "workspace"]
+fixtures.floors = ["test_corpus/workspace_rename/basic/multi_file_main.pl", "test_corpus/workspace_rename/basic/multi_file_utils.pm"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "incremental.circular_dependencies"
+status = "seed"
+scope.crates = ["perl-workspace-index", "perl-lsp-rs-core"]
+scope.risk_tags = ["incremental", "workspace", "cycle"]
+fixtures.floors = ["test_corpus/workspace_rename/edge_cases/circular_deps_a.pm", "test_corpus/workspace_rename/edge_cases/circular_deps_b.pm"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "incremental.trivia_only_edit"
+status = "planned"
+scope.crates = ["perl-lsp-rs-core", "perl-parser-core"]
+scope.risk_tags = ["incremental", "trivia"]
+fixtures.floors = []
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "incremental.edit_near_data_section"
+status = "seed"
+scope.crates = ["perl-lsp-rs-core", "perl-parser"]
+scope.risk_tags = ["incremental", "data-section"]
+fixtures.floors = ["test_corpus/end_section.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false

@@ -1,0 +1,135 @@
+[[concepts]]
+id = "position.byte_span.basic"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-parser"]
+scope.risk_tags = ["positions", "byte-offset"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "position.utf16.non_ascii"
+status = "planned"
+scope.crates = ["perl-parser-core", "perl-lsp-rs-core"]
+scope.risk_tags = ["positions", "utf16"]
+fixtures.floors = ["test_corpus/workspace_rename/edge_cases/unicode_identifiers.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.crlf.line_index"
+status = "planned"
+scope.crates = ["perl-parser-core", "perl-lsp-rs-core"]
+scope.risk_tags = ["positions", "crlf"]
+fixtures.floors = []
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "index"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.multiline.heredoc_spans"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-parser"]
+scope.risk_tags = ["positions", "heredoc"]
+fixtures.floors = ["test_corpus/heredoc_depth.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.regex.capture_boundaries"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-lexer"]
+scope.risk_tags = ["positions", "regex"]
+fixtures.floors = ["test_corpus/clean_regex_substitution.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.package_decl.leading_comments"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-parser"]
+scope.risk_tags = ["positions", "comments"]
+fixtures.floors = ["test_corpus/package_production_enhanced.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.statement_modifier_tail"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-parser"]
+scope.risk_tags = ["positions", "statement-modifier"]
+fixtures.floors = ["test_corpus/statement_modifier_comprehensive.pl"]
+fixtures.variants = ["test_corpus/statement_modifier_production_enhanced.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "position.loop_labels.boundaries"
+status = "seed"
+scope.crates = ["perl-parser-core", "perl-parser"]
+scope.risk_tags = ["positions", "labels"]
+fixtures.floors = ["test_corpus/clean_for_labeled.pl"]
+fixtures.variants = ["test_corpus/loop_control_comprehensive.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false

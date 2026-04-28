@@ -1,0 +1,135 @@
+[[concepts]]
+id = "parser.recovery.missing_closing_brace"
+status = "seed"
+scope.crates = ["perl-parser", "perl-parser-core"]
+scope.risk_tags = ["recovery", "brace"]
+fixtures.floors = ["test_corpus/error_recovery.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.recovery.missing_paren"
+status = "seed"
+scope.crates = ["perl-parser", "perl-parser-core"]
+scope.risk_tags = ["recovery", "paren"]
+fixtures.floors = ["test_corpus/error_recovery.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.recovery.unclosed_quote"
+status = "seed"
+scope.crates = ["perl-parser", "perl-lexer"]
+scope.risk_tags = ["recovery", "quote"]
+fixtures.floors = ["test_corpus/error_recovery.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.recovery.malformed_signature"
+status = "seed"
+scope.crates = ["perl-parser", "perl-parser-core"]
+scope.risk_tags = ["recovery", "signature"]
+fixtures.floors = ["test_corpus/error_recovery.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.recovery.bad_format_block"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["recovery", "format"]
+fixtures.floors = ["test_corpus/format_statements.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.recovery.given_when_fallback"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["recovery", "switch"]
+fixtures.floors = ["test_corpus/given_when.pl"]
+fixtures.variants = ["test_corpus/clean_given_when.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.recovery.loop_control"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["recovery", "loop-control"]
+fixtures.floors = ["test_corpus/loop_control_comprehensive.pl"]
+fixtures.variants = ["test_corpus/clean_for_labeled.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.recovery.ternary_colon_missing"
+status = "planned"
+scope.crates = ["perl-parser", "perl-parser-core"]
+scope.risk_tags = ["recovery", "ternary"]
+fixtures.floors = []
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "recover"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false

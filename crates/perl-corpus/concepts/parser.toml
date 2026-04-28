@@ -1,0 +1,186 @@
+[[concepts]]
+id = "parser.package.declaration"
+status = "seed"
+scope.crates = ["perl-parser", "perl-parser-core"]
+scope.risk_tags = ["declaration"]
+fixtures.floors = ["test_corpus/package_production_enhanced.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.sub.named"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["declaration", "subroutine"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = ["test_corpus/prototypes_only.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.sub.anonymous"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["subroutine", "expression"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.sub.signature"
+status = "seed"
+scope.crates = ["perl-parser", "perl-semantic-analyzer"]
+scope.risk_tags = ["signature", "perl-5.20+"]
+fixtures.floors = ["test_corpus/variable_with_attributes_comprehensive.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.variable.my_our_local_state"
+status = "seed"
+scope.crates = ["perl-parser", "perl-semantic-analyzer"]
+scope.risk_tags = ["scope", "declaration"]
+fixtures.floors = ["test_corpus/variable_list_declaration_comprehensive.pl"]
+fixtures.variants = ["test_corpus/basic_constructs.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.expression.fat_arrow"
+status = "seed"
+scope.crates = ["perl-parser", "perl-lexer"]
+scope.risk_tags = ["operator", "associativity"]
+fixtures.floors = ["test_corpus/string_ops_edge_cases.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.expression.range"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["operator", "precedence"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = ["test_corpus/parser_stress_cases.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.expression.word_operators"
+status = "seed"
+scope.crates = ["perl-parser"]
+scope.risk_tags = ["operator", "keyword-operator"]
+fixtures.floors = ["test_corpus/string_ops_edge_cases.pl"]
+fixtures.variants = ["test_corpus/basic_constructs.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "parser.hash.array_literals"
+status = "seed"
+scope.crates = ["perl-parser", "perl-semantic-analyzer"]
+scope.risk_tags = ["literal", "data-structure"]
+fixtures.floors = ["test_corpus/basic_constructs.pl"]
+fixtures.variants = ["test_corpus/glob_assignments.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.method_call.arrow"
+status = "seed"
+scope.crates = ["perl-parser", "perl-semantic-analyzer"]
+scope.risk_tags = ["method-call", "dispatch"]
+fixtures.floors = ["test_corpus/method_class.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "parser.indirect_object_call"
+status = "planned"
+scope.crates = ["perl-parser", "perl-semantic-analyzer"]
+scope.risk_tags = ["ambiguity", "dispatch"]
+fixtures.floors = []
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = false
+snapshots.ast = true
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false

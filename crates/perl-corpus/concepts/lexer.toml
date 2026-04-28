@@ -1,0 +1,135 @@
+[[concepts]]
+id = "lexer.regex.literal_vs_division"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["token-boundary", "regex"]
+fixtures.floors = ["test_corpus/clean_regex_substitution.pl"]
+fixtures.variants = ["test_corpus/parser_stress_cases.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "lexer.regex.substitution_delimiters"
+status = "seed"
+scope.crates = ["perl-lexer"]
+scope.risk_tags = ["regex", "delimiter"]
+fixtures.floors = ["test_corpus/clean_regex_substitution.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = false
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "lexer.quote_like.q_braces"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["quote-like"]
+fixtures.floors = ["test_corpus/string_ops_edge_cases.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "lexer.quote_like.qq_parens"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["quote-like", "nesting"]
+fixtures.floors = ["test_corpus/string_ops_edge_cases.pl"]
+fixtures.variants = ["test_corpus/basic_constructs.pl"]
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "lexer.heredoc.basic"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["heredoc"]
+fixtures.floors = ["test_corpus/heredoc_depth.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "lexer.heredoc.indented"
+status = "planned"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["heredoc", "indentation"]
+fixtures.floors = []
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
+
+[[concepts]]
+id = "lexer.data_section.double_underscore_data"
+status = "seed"
+scope.crates = ["perl-lexer", "perl-parser"]
+scope.risk_tags = ["data-section", "eof"]
+fixtures.floors = ["test_corpus/end_section.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = true
+snapshots.spans = true
+run.pr = true
+run.nightly = true
+run.release = true
+
+[[concepts]]
+id = "lexer.source_filter.boundary_tokens"
+status = "seed"
+scope.crates = ["perl-lexer"]
+scope.risk_tags = ["source-filter", "token-boundary"]
+fixtures.floors = ["test_corpus/source_filters.pl"]
+fixtures.variants = []
+expect.panic = false
+expect.timeout = false
+expect.mode = "parse"
+snapshots.tokens = true
+snapshots.ast = false
+snapshots.spans = true
+run.pr = false
+run.nightly = true
+run.release = false
