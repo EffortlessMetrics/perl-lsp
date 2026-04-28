@@ -974,11 +974,11 @@ gates-json tier='merge-gate':
 gates-list:
     @cargo xtask gates --list
 
-# Validate gate-policy invariants and registry alignment.
+# Validate effective gate policy invariants (PR safety + registry alignment)
 gate-policy-check:
     @cargo xtask gate-policy check
 
-# Print effective gates for a policy profile (pr, merge, nightly, release).
+# Show effective gate policy for a profile (pr/nightly/release)
 gate-policy-effective profile='pr':
     @cargo xtask gate-policy effective --profile {{profile}}
 

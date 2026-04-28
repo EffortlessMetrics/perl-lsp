@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::check_test_wiring;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
+use tasks::gate_policy::GatePolicyProfile;
 use tasks::gates::{GateTier, OutputFormat as GatesOutputFormat};
 use tasks::methodology_gate::MethodologyOutputFormat;
 use tasks::metrics;
@@ -1172,6 +1173,12 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Inspect and validate effective gate policy profiles.
+    GatePolicy {
+        #[command(subcommand)]
+        command: GatePolicyCommand,
+    },
+
     /// Detect contradictory PR label states and emit a methodology receipt.
     MethodologyGate {
         /// Fixture JSON file (local snapshot or GitHub event payload).
@@ -1439,6 +1446,18 @@ enum GateReceiptsCommand {
         /// Output format (default: human).
         #[arg(long, value_enum, default_value = "human")]
         format: GateReceiptsFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GatePolicyCommand {
+    /// Validate policy/registry invariants for PR safety.
+    Check,
+    /// Show effective required/advisory gates for a profile.
+    Effective {
+        /// Profile to evaluate (pr/nightly/release).
+        #[arg(long, value_enum, default_value = "pr")]
+        profile: GatePolicyProfile,
     },
 }
 
@@ -2156,6 +2175,10 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::GatePolicy { command } => match command {
+            GatePolicyCommand::Check => tasks::gate_policy::check(),
+            GatePolicyCommand::Effective { profile } => tasks::gate_policy::effective(profile),
+        },
         Commands::GateReceipts { command } => match command {
             GateReceiptsCommand::List { format } => {
                 gate_receipts::list(convert_gate_receipts_format(format))
