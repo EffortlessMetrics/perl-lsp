@@ -33,6 +33,17 @@ env:
 jobs:
   reconcile:
     runs-on: ubuntu-latest
+    # Job-level gate satisfies CI workflow spend audit
+    # (`cargo xtask ci-audit-workflows`). The reconciler is a queue-wide
+    # sweep and is intended to fire on every event listed in `on:` above —
+    # schedule, push to master, pull_request (open/reopen/sync), and
+    # workflow_dispatch. Naming each one keeps the surface explicit so a
+    # future trigger addition has to consciously opt the job in.
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
