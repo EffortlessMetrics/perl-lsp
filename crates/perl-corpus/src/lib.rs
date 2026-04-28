@@ -257,13 +257,16 @@ pub use format_statements::{
 pub use glob_expressions::{
     GlobExpressionCase, GlobExpressionGenerator, find_glob_case, glob_expression_cases,
 };
-pub use inventory::{CorpusInventory, InventoryIds, InventoryTags, inventory_from_corpus_dir, inventory_json_from_corpus_dir};
 pub use gold::{
     CompletionAssertion, CompletionAssertionKind, CompletionGoldExpected, CompletionGoldFixture,
     GoldAssertion, GoldExpected, GoldFixture, GotoAssertion, GotoAssertionKind, GotoGoldExpected,
     GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
     load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
     load_goto_gold_fixtures, load_hover_gold_fixtures,
+};
+pub use inventory::{
+    CorpusInventory, InventoryIds, InventoryTags, inventory_from_corpus_dir,
+    inventory_json_from_corpus_dir,
 };
 use meta::Section;
 use regex::Regex;
