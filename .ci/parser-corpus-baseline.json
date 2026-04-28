@@ -1,36 +1,66 @@
 {
   "schema_version": "1.3.0",
-  "commit": "522c47f",
-  "timestamp": "2026-04-24T11:42:34.639510034+00:00",
+  "commit": "3c287d7db",
+  "timestamp": "2026-04-28T09:33:05.003748112+00:00",
   "corpus_profile": "system",
   "corpus_roots": [
     "/usr/share/perl",
     "/usr/lib/x86_64-linux-gnu/perl",
     "/usr/share/perl5"
   ],
-  "resolved_roots_count": 17,
+  "resolved_roots_count": 86,
   "perl_version": "5.038002",
-  "total_files": 2990,
-  "files_unreadable": 42,
-  "clean_files": 2825,
-  "files_with_errors": 123,
-  "total_error_nodes": 490,
-  "first_error_buckets": {
+  "total_files": 7095,
+  "files_unreadable": 48,
+  "clean_files": 6871,
+  "files_with_errors": 176,
+  "total_dirty_files": 176,
+  "files_with_structured_recovery_only": 36,
+  "files_with_error_nodes": 140,
+  "files_with_catastrophic_parse_failure": 0,
+  "total_error_nodes": 536,
+  "recovered_node_count": 94,
+  "first_unrecovered_error_node_buckets": {
+    "expected_colon": 4,
     "expected_comma": 4,
-    "expected_left_brace": 5,
-    "invalid_substitution_modifier": 4,
-    "unclosed_brace": 8,
-    "unclosed_brace_eof": 4,
+    "expected_left_brace": 6,
+    "substitution_misparse": 2,
+    "unclosed_brace": 10,
+    "unclosed_bracket": 2,
     "unclosed_paren": 2,
-    "unclosed_paren_identifier": 20,
+    "unclosed_paren_identifier": 22,
     "unexpected_assign_expr": 12,
-    "unexpected_comma_expr": 16,
+    "unexpected_comma_expr": 10,
     "unexpected_eq_expr": 10,
-    "unexpected_rbrace_expr": 10,
-    "unexpected_token_in_expr": 24,
+    "unexpected_rbrace_expr": 6,
+    "unexpected_rparen_expr": 8,
+    "unexpected_token_in_expr": 38,
+    "unexpected_word_op_or": 4
+  },
+  "first_error_buckets": {
+    "expected_colon": 4,
+    "expected_comma": 4,
+    "expected_left_brace": 6,
+    "substitution_misparse": 2,
+    "unclosed_brace": 10,
+    "unclosed_bracket": 2,
+    "unclosed_paren": 2,
+    "unclosed_paren_identifier": 22,
+    "unexpected_assign_expr": 12,
+    "unexpected_comma_expr": 10,
+    "unexpected_eq_expr": 10,
+    "unexpected_rbrace_expr": 6,
+    "unexpected_rparen_expr": 8,
+    "unexpected_token_in_expr": 38,
     "unexpected_word_op_or": 4
   },
   "files_by_bucket": {
+    "expected_colon": [
+      "/usr/share/perl5/Parse/RecDescent.pm",
+      "/usr/share/perl5/Parse/RecDescent.pm",
+      "/usr/share/perl5/Regexp/Common/SEN.pm",
+      "/usr/share/perl5/Regexp/Common/SEN.pm"
+    ],
     "expected_comma": [
       "/usr/share/perl/5.38/Memoize/Expire.pm",
       "/usr/share/perl/5.38/Memoize/Expire.pm",
@@ -42,29 +72,28 @@
       "/usr/share/perl/5.38/CPAN/Shell.pm",
       "/usr/share/perl/5.38.2/CPAN/Shell.pm",
       "/usr/share/perl/5.38.2/CPAN/Shell.pm",
-      "/usr/share/perl5/Git.pm"
+      "/usr/share/perl5/Method/Generate/Accessor.pm",
+      "/usr/share/perl5/Method/Generate/Accessor.pm"
     ],
-    "invalid_substitution_modifier": [
-      "/usr/share/perl/5.38/ExtUtils/MM_VMS.pm",
-      "/usr/share/perl/5.38/ExtUtils/MM_VMS.pm",
-      "/usr/share/perl/5.38.2/ExtUtils/MM_VMS.pm",
-      "/usr/share/perl/5.38.2/ExtUtils/MM_VMS.pm"
+    "substitution_misparse": [
+      "/usr/share/perl5/Biber/Input/file/bibtex.pm",
+      "/usr/share/perl5/Biber/Input/file/bibtex.pm"
     ],
     "unclosed_brace": [
-      "/usr/share/perl/5.38/B/Deparse.pm",
-      "/usr/share/perl/5.38/B/Deparse.pm",
+      "/usr/share/perl/5.38/Test/More.pm",
+      "/usr/share/perl/5.38/Test/More.pm",
       "/usr/share/perl/5.38/fields.pm",
       "/usr/share/perl/5.38/fields.pm",
-      "/usr/share/perl/5.38.2/B/Deparse.pm",
-      "/usr/share/perl/5.38.2/B/Deparse.pm",
+      "/usr/share/perl/5.38.2/Test/More.pm",
+      "/usr/share/perl/5.38.2/Test/More.pm",
       "/usr/share/perl/5.38.2/fields.pm",
-      "/usr/share/perl/5.38.2/fields.pm"
+      "/usr/share/perl/5.38.2/fields.pm",
+      "/usr/share/perl5/Log/Log4perl/Logger.pm",
+      "/usr/share/perl5/Log/Log4perl/Logger.pm"
     ],
-    "unclosed_brace_eof": [
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/Encode/Guess.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/Encode/Guess.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/Guess.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/Encode/Guess.pm"
+    "unclosed_bracket": [
+      "/usr/share/perl5/Regexp/Common/zip.pm",
+      "/usr/share/perl5/Regexp/Common/zip.pm"
     ],
     "unclosed_paren": [
       "/usr/share/perl5/Dpkg/Source/Archive.pm",
@@ -90,7 +119,9 @@
       "/usr/share/perl/5.38.2/ExtUtils/MM_Unix.pm",
       "/usr/share/perl/5.38.2/ExtUtils/MM_Unix.pm",
       "/usr/share/perl/5.38.2/Pod/Simple/XHTML.pm",
-      "/usr/share/perl/5.38.2/Pod/Simple/XHTML.pm"
+      "/usr/share/perl/5.38.2/Pod/Simple/XHTML.pm",
+      "/usr/share/perl5/Regexp/Common/comment.pm",
+      "/usr/share/perl5/Regexp/Common/comment.pm"
     ],
     "unexpected_assign_expr": [
       "/usr/lib/x86_64-linux-gnu/perl/5.38/re.pm",
@@ -107,22 +138,16 @@
       "/usr/share/perl/5.38.2/Unicode/UCD.pm"
     ],
     "unexpected_comma_expr": [
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/File/Spec/Win32.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/File/Spec/Win32.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/File/Spec/Win32.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/File/Spec/Win32.pm",
       "/usr/share/perl/5.38/App/Cpan.pm",
       "/usr/share/perl/5.38/App/Cpan.pm",
-      "/usr/share/perl/5.38/overload.pm",
-      "/usr/share/perl/5.38/overload.pm",
       "/usr/share/perl/5.38/unicore/Name.pm",
       "/usr/share/perl/5.38/unicore/Name.pm",
       "/usr/share/perl/5.38.2/App/Cpan.pm",
       "/usr/share/perl/5.38.2/App/Cpan.pm",
-      "/usr/share/perl/5.38.2/overload.pm",
-      "/usr/share/perl/5.38.2/overload.pm",
       "/usr/share/perl/5.38.2/unicore/Name.pm",
-      "/usr/share/perl/5.38.2/unicore/Name.pm"
+      "/usr/share/perl/5.38.2/unicore/Name.pm",
+      "/usr/share/perl5/OLE/Storage_Lite.pm",
+      "/usr/share/perl5/OLE/Storage_Lite.pm"
     ],
     "unexpected_eq_expr": [
       "/usr/share/perl/5.38/CPAN/Distribution.pm",
@@ -137,16 +162,22 @@
       "/usr/share/perl5/Debian/AdduserLogging.pm"
     ],
     "unexpected_rbrace_expr": [
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/Data/Dumper.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38/Data/Dumper.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/Data/Dumper.pm",
-      "/usr/lib/x86_64-linux-gnu/perl/5.38.2/Data/Dumper.pm",
       "/usr/share/perl/5.38/B/Op_private.pm",
       "/usr/share/perl/5.38/B/Op_private.pm",
       "/usr/share/perl/5.38.2/B/Op_private.pm",
       "/usr/share/perl/5.38.2/B/Op_private.pm",
       "/usr/share/perl5/Dpkg/Source/Quilt.pm",
       "/usr/share/perl5/Dpkg/Source/Quilt.pm"
+    ],
+    "unexpected_rparen_expr": [
+      "/usr/share/perl/5.38/B/Deparse.pm",
+      "/usr/share/perl/5.38/B/Deparse.pm",
+      "/usr/share/perl/5.38.2/B/Deparse.pm",
+      "/usr/share/perl/5.38.2/B/Deparse.pm",
+      "/usr/share/perl5/Data/Compare.pm",
+      "/usr/share/perl5/Data/Compare.pm",
+      "/usr/share/perl5/Date/Manip/DM5.pm",
+      "/usr/share/perl5/Date/Manip/DM5.pm"
     ],
     "unexpected_token_in_expr": [
       "/usr/share/perl/5.38/English.pm",
@@ -172,7 +203,21 @@
       "/usr/share/perl/5.38.2/experimental.pm",
       "/usr/share/perl/5.38.2/experimental.pm",
       "/usr/share/perl/5.38.2/feature.pm",
-      "/usr/share/perl/5.38.2/feature.pm"
+      "/usr/share/perl/5.38.2/feature.pm",
+      "/usr/share/perl5/Data/Dump.pm",
+      "/usr/share/perl5/Data/Dump.pm",
+      "/usr/share/perl5/File/MimeInfo.pm",
+      "/usr/share/perl5/File/MimeInfo.pm",
+      "/usr/share/perl5/IPC/Run3.pm",
+      "/usr/share/perl5/IPC/Run3.pm",
+      "/usr/share/perl5/MIME/Lite.pm",
+      "/usr/share/perl5/MIME/Lite.pm",
+      "/usr/share/perl5/MIME/Type.pm",
+      "/usr/share/perl5/MIME/Type.pm",
+      "/usr/share/perl5/Mail/Sendmail.pm",
+      "/usr/share/perl5/Mail/Sendmail.pm",
+      "/usr/share/perl5/Ref/Util.pm",
+      "/usr/share/perl5/Ref/Util.pm"
     ],
     "unexpected_word_op_or": [
       "/usr/share/perl/5.38/Pod/Perldoc.pm",
@@ -181,114 +226,115 @@
       "/usr/share/perl/5.38.2/Pod/Perldoc.pm"
     ]
   },
-  "elapsed_secs": 4.113297269,
+  "elapsed_secs": 4.777117897,
   "phase_timings": {
-    "discovery_ms": 15,
-    "file_io_ms": 113,
-    "parse_ms": 3621,
-    "total_ms": 4113
+    "discovery_ms": 18,
+    "file_io_ms": 145,
+    "parse_ms": 4147,
+    "total_ms": 4777
   },
-  "median_error_density_per_1k_loc": 1.949317738791423,
+  "median_error_density_per_1k_loc": 1.8656716417910448,
+  "recovery_salvage_rate": 0.20454545454545456,
   "slowest_files": [
     {
-      "path": "/usr/share/perl/5.38/Module/CoreList.pm",
-      "parse_duration_ms": 110,
-      "line_count": 23759
-    },
-    {
-      "path": "/usr/share/perl/5.38/Module/CoreList.pm",
-      "parse_duration_ms": 109,
-      "line_count": 23759
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Module/CoreList.pm",
-      "parse_duration_ms": 99,
-      "line_count": 23759
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Module/CoreList.pm",
-      "parse_duration_ms": 89,
-      "line_count": 23759
-    },
-    {
-      "path": "/usr/share/perl/5.38/B/Deparse.pm",
-      "parse_duration_ms": 47,
-      "line_count": 7266
-    },
-    {
-      "path": "/usr/share/perl/5.38/B/Deparse.pm",
+      "path": "/usr/share/perl5/Perl/Tidy/Formatter.pm",
       "parse_duration_ms": 32,
-      "line_count": 7266
+      "line_count": 30467
     },
     {
-      "path": "/usr/share/perl/5.38/Math/BigFloat.pm",
+      "path": "/usr/share/perl/5.38.2/Module/CoreList.pm",
+      "parse_duration_ms": 31,
+      "line_count": 23759
+    },
+    {
+      "path": "/usr/share/perl/5.38.2/Module/CoreList.pm",
+      "parse_duration_ms": 30,
+      "line_count": 23759
+    },
+    {
+      "path": "/usr/share/perl/5.38/Module/CoreList.pm",
       "parse_duration_ms": 29,
+      "line_count": 23759
+    },
+    {
+      "path": "/usr/share/perl/5.38/Module/CoreList.pm",
+      "parse_duration_ms": 29,
+      "line_count": 23759
+    },
+    {
+      "path": "/usr/share/perl5/Perl/Tidy/Formatter.pm",
+      "parse_duration_ms": 29,
+      "line_count": 30467
+    },
+    {
+      "path": "/usr/share/perl5/XML/Twig.pm",
+      "parse_duration_ms": 19,
+      "line_count": 14361
+    },
+    {
+      "path": "/usr/share/perl5/XML/Twig.pm",
+      "parse_duration_ms": 18,
+      "line_count": 14361
+    },
+    {
+      "path": "/usr/share/perl/5.38/B/Deparse.pm",
+      "parse_duration_ms": 14,
+      "line_count": 7266
+    },
+    {
+      "path": "/usr/share/perl5/Date/Manip/DM5.pm",
+      "parse_duration_ms": 14,
+      "line_count": 7486
+    },
+    {
+      "path": "/usr/share/perl5/Date/Manip/DM5.pm",
+      "parse_duration_ms": 14,
+      "line_count": 7486
+    },
+    {
+      "path": "/usr/share/perl/5.38/B/Deparse.pm",
+      "parse_duration_ms": 12,
+      "line_count": 7266
+    },
+    {
+      "path": "/usr/share/perl/5.38.2/B/Deparse.pm",
+      "parse_duration_ms": 11,
+      "line_count": 7266
+    },
+    {
+      "path": "/usr/share/perl/5.38.2/B/Deparse.pm",
+      "parse_duration_ms": 11,
+      "line_count": 7266
+    },
+    {
+      "path": "/usr/share/perl5/Perl/Tidy/Tokenizer.pm",
+      "parse_duration_ms": 10,
+      "line_count": 10661
+    },
+    {
+      "path": "/usr/share/perl/5.38.2/Math/BigFloat.pm",
+      "parse_duration_ms": 9,
       "line_count": 6838
     },
     {
-      "path": "/usr/share/perl/5.38.2/B/Deparse.pm",
-      "parse_duration_ms": 28,
-      "line_count": 7266
+      "path": "/usr/share/perl/5.38.2/Math/BigFloat.pm",
+      "parse_duration_ms": 9,
+      "line_count": 6838
     },
     {
-      "path": "/usr/share/perl/5.38.2/B/Deparse.pm",
-      "parse_duration_ms": 27,
-      "line_count": 7266
+      "path": "/usr/share/perl/5.38/CPAN/Distribution.pm",
+      "parse_duration_ms": 9,
+      "line_count": 4930
     },
     {
-      "path": "/usr/share/perl/5.38/Math/BigInt.pm",
-      "parse_duration_ms": 26,
-      "line_count": 8612
+      "path": "/usr/share/perl/5.38/CPAN/Distribution.pm",
+      "parse_duration_ms": 9,
+      "line_count": 4930
     },
     {
       "path": "/usr/share/perl/5.38/Math/BigFloat.pm",
-      "parse_duration_ms": 24,
+      "parse_duration_ms": 9,
       "line_count": 6838
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Math/BigFloat.pm",
-      "parse_duration_ms": 22,
-      "line_count": 6838
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Math/BigFloat.pm",
-      "parse_duration_ms": 22,
-      "line_count": 6838
-    },
-    {
-      "path": "/usr/share/perl/5.38/Math/BigInt.pm",
-      "parse_duration_ms": 21,
-      "line_count": 8612
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Math/BigInt.pm",
-      "parse_duration_ms": 19,
-      "line_count": 8612
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/Math/BigInt.pm",
-      "parse_duration_ms": 19,
-      "line_count": 8612
-    },
-    {
-      "path": "/usr/share/perl/5.38/CPAN/Distribution.pm",
-      "parse_duration_ms": 19,
-      "line_count": 4930
-    },
-    {
-      "path": "/usr/share/perl/5.38/CPAN/Distribution.pm",
-      "parse_duration_ms": 18,
-      "line_count": 4930
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/CPAN/Distribution.pm",
-      "parse_duration_ms": 17,
-      "line_count": 4930
-    },
-    {
-      "path": "/usr/share/perl/5.38.2/CPAN/Distribution.pm",
-      "parse_duration_ms": 17,
-      "line_count": 4930
     }
   ]
 }

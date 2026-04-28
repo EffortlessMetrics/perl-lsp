@@ -861,6 +861,32 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Compare parser corpus metrics between base and candidate commits.
+    ParserRatchet {
+        /// Profile in .ci/parser-ratchet/profiles/<profile>.toml
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// Base commit SHA for comparison mode.
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Candidate commit SHA for comparison mode.
+        #[arg(long)]
+        head: Option<String>,
+
+        /// Manifest path used for both base and candidate sweeps.
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+
+        /// Receipt path to write comparator result JSON.
+        #[arg(long)]
+        receipt: Option<PathBuf>,
+
+        #[command(subcommand)]
+        command: Option<ParserRatchetCommand>,
+    },
+
     /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
     CpanCorpus {
         #[command(subcommand)]
@@ -1319,6 +1345,19 @@ enum GeneratedFilesCommand {
         /// Explicit override for manual edits in this run.
         #[arg(long)]
         allow_manual_edits: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ParserRatchetCommand {
+    /// Compare precomputed base/head metric receipts.
+    Compare {
+        #[arg(long)]
+        base_metrics: PathBuf,
+        #[arg(long)]
+        head_metrics: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
     },
 }
 
@@ -1935,6 +1974,31 @@ fn main() -> Result<()> {
                 verbose,
                 receipt,
             })
+        }
+        Commands::ParserRatchet { profile, base, head, manifest, receipt, command } => {
+            match command {
+                Some(ParserRatchetCommand::Compare { base_metrics, head_metrics, receipt }) => {
+                    parser_ratchet_compare::run_compare(parser_ratchet_compare::CompareConfig {
+                        base_metrics,
+                        head_metrics,
+                        receipt,
+                    })
+                }
+                None => {
+                    let profile = profile.ok_or_else(|| eyre!("--profile is required"))?;
+                    let base_sha = base.ok_or_else(|| eyre!("--base is required"))?;
+                    let head_sha = head.ok_or_else(|| eyre!("--head is required"))?;
+                    let manifest = manifest.ok_or_else(|| eyre!("--manifest is required"))?;
+                    let receipt = receipt.ok_or_else(|| eyre!("--receipt is required"))?;
+                    parser_ratchet::run(parser_ratchet::ParserRatchetConfig {
+                        profile,
+                        base_sha,
+                        head_sha,
+                        manifest,
+                        receipt,
+                    })
+                }
+            }
         }
         Commands::CpanCorpus { command } => {
             let mut config = cpan_corpus::CpanCorpusConfig::default();

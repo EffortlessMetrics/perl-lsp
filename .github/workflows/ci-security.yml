@@ -95,7 +95,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-audit
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: cargo-audit
 
@@ -148,7 +148,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@cf39a74df4a72510be4e5b63348d61067f11e64a  # v2.75.0
+        uses: taiki-e/install-action@cf525cb33f51aca27cd6fa02034117ab963ff9f1  # v2.75.22
         with:
           tool: cargo-deny
 

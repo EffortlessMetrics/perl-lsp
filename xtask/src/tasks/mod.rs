@@ -63,6 +63,8 @@ pub mod metrics;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod parser_matrix;
+pub mod parser_ratchet;
+pub mod parser_ratchet_compare;
 pub mod populate_book;
 pub mod prep_crates_io_launch;
 pub mod publication_facts;
