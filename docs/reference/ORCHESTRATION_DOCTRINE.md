@@ -1,6 +1,8 @@
 # Orchestration Doctrine
 
 > **This doc is the north star for orchestration design decisions. When an implementation pass hits ambiguous decisions, resolve by reading this doc.**
+>
+> For the umbrella concept and vocabulary — what an Octopus Cluster is, why variance is search not waste, and what we're gaining — see [OCTOPUS_CLUSTER.md](OCTOPUS_CLUSTER.md).
 
 This document captures the mentality, direction, why, and design behind the perl-lsp orchestration model. The tactical roadmap issues are implementation phases; this doc captures the principles those tactics serve. It is a reference doc, not a how-to.
 
