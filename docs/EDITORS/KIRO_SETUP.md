@@ -1,73 +1,219 @@
 # Amazon Kiro Setup Guide for perl-lsp
 
-This guide gives you a reliable setup path for using `perllsp` in Amazon Kiro.
+This guide covers using `perl-lsp` with Amazon Kiro.
+
+Kiro has two setup paths:
+
+- **Kiro IDE** — install the OpenVSX extension `EffortlessMetrics.perl-lsp-rs`
+- **Kiro CLI** — configure a workspace custom language server that launches `perllsp --stdio`
 
 ## Prerequisites
 
-- Amazon Kiro installed
-- `perllsp` installed and available on `PATH`
-- A Perl workspace opened in Kiro
+### Kiro IDE
 
-Verify the server first:
+- Kiro IDE installed
+- A Perl project opened in Kiro
+- `EffortlessMetrics.perl-lsp-rs` installed from OpenVSX
+
+The extension can auto-download `perllsp`. Manual binary installation is mainly
+for offline, pinned, or policy-restricted environments.
+
+### Kiro CLI
+
+- Kiro CLI installed
+- `perllsp` installed and available to the shell that launches Kiro CLI
+- A Perl project opened from project root
+
+Verify manual binary install:
 
 ```bash
 perllsp --version
 perllsp --health
+perllsp --info
 ```
 
-## Kiro IDE (Desktop)
+## Kiro IDE Setup
 
-Kiro IDE is built on VS Code's open-source foundation and uses the OpenVSX
-extension registry. Install the Perl LSP extension from the Extensions panel:
+Kiro uses OpenVSX-compatible extensions. Install:
 
-- Search for `perl-lsp` in Kiro's Extensions panel
-- Extension ID: `EffortlessMetrics.perl-lsp-rs`
+```text
+EffortlessMetrics.perl-lsp-rs
+```
 
-If the extension is not available in OpenVSX, download the `.vsix` from
-[GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and
-install it via "Install from VSIX..." in the Extensions panel menu.
+From Kiro:
 
-## Kiro CLI
+1. Open Extensions.
+2. Search for `perl-lsp` or `EffortlessMetrics.perl-lsp-rs`.
+3. Install the extension.
+4. Open a `.pm`, `.pl`, or `.t` file.
 
-If you use the Kiro command-line interface, add a custom language server entry
-in `.kiro/settings/lsp.json` at your project root:
+## Optional: Manual Binary Path (Kiro IDE)
+
+Use this only when extension-managed download is disabled or blocked:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+## Recommended Kiro IDE Settings
+
+```json
+{
+  "perl-lsp.autoDownload": true,
+  "perl-lsp.trace.server": "off",
+  "perl-lsp.enableDiagnostics": true,
+  "perl-lsp.enableSemanticTokens": true,
+  "perl-lsp.enableFormatting": true,
+  "perl-lsp.formatOnSave": false,
+  "perl-lsp.includePaths": ["lib", ".", "local/lib/perl5"]
+}
+```
+
+Use protocol tracing only for debugging:
+
+```json
+{
+  "perl-lsp.trace.server": "messages"
+}
+```
+
+## Kiro CLI Setup
+
+Kiro CLI supports workspace-scoped custom LSP entries.
+
+Run in project root:
+
+```text
+/code init
+```
+
+Then edit the `lsp.json` file that Kiro creates.
+
+Current Kiro docs describe this as project-root `lsp.json`; some Kiro CLI
+examples/builds refer to `.kiro/settings/lsp.json`. Use the file path created
+by your installed Kiro CLI.
+
+Add or merge:
 
 ```json
 {
   "languages": {
     "perl": {
-      "name": "perllsp",
+      "name": "perl-lsp",
       "command": "perllsp",
       "args": ["--stdio"],
-      "file_extensions": ["pl", "pm", "t", "psgi"],
-      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL"],
-      "multi_workspace": false
+      "file_extensions": ["pl", "PL", "pm", "t", "psgi", "cgi", "fcgi", "xs", "xsi"],
+      "project_patterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "exclude_patterns": ["**/.git/**", "**/local/**", "**/blib/**", "**/node_modules/**"],
+      "multi_workspace": false,
+      "request_timeout_secs": 60,
+      "initialization_options": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"],
+            "useSystemInc": false,
+            "resolutionTimeout": 50
+          }
+        }
+      }
     }
   }
 }
 ```
 
-Run `/code init` in the project root first if the `.kiro/settings/` directory
-does not exist, then restart the Kiro CLI to load the new configuration.
+Restart servers:
 
-## Recommended Workspace Settings
+```text
+/code init -f
+```
 
-- Keep your project root open as the workspace root.
-- Add include/library paths in project settings when your code uses nonstandard
-  module locations.
-- Restart the language server after changing server path or arguments.
+Check status and logs:
+
+```text
+/code status
+/code logs
+/code logs -l DEBUG -n 100
+```
+
+## Kiro CLI Caveat
+
+Perl is not currently listed in Kiro CLI's built-in tree-sitter language set.
+Treat custom Perl LSP support as version-dependent and verify locally.
+
+If diagnostics work but hover/references/definition/completion/rename do not,
+that can be a Kiro CLI custom-LSP limitation rather than a `perllsp` issue.
+
+## Verify It Is Running
+
+### Kiro IDE
+
+1. Open the project root.
+2. Open a Perl file.
+3. Introduce a temporary syntax error.
+4. Confirm diagnostics appear.
+5. Remove the temporary error.
+
+### Kiro CLI
+
+After `/code init`, try LSP-backed queries and confirm responses are populated.
+Also validate server behavior directly:
+
+```bash
+perllsp --check path/to/file.pl
+```
 
 ## Troubleshooting
 
-1. **Server does not start**
-   - Run `perllsp --health` in an external shell.
-   - Confirm Kiro inherits the same `PATH` as your shell.
-2. **No diagnostics or completions**
-   - Confirm the file is recognized as Perl.
-   - Confirm the LSP client is attached to the current buffer/file.
-3. **Definitions/references incomplete**
-   - Open the repository root, not a nested subfolder.
-   - Ensure local library paths are configured in project settings.
+### Kiro IDE extension does not install
 
-For cross-editor fallback patterns, see [Editor Setup](../how-to/EDITOR_SETUP.md)
-and [Troubleshooting](../how-to/TROUBLESHOOTING.md).
+- Confirm the extension exists on OpenVSX.
+- Update Kiro.
+- If using an internal extension registry, confirm it mirrors `EffortlessMetrics.perl-lsp-rs`.
+
+### Kiro IDE cannot find `perllsp`
+
+If using auto-download, verify:
+
+```json
+{
+  "perl-lsp.autoDownload": true
+}
+```
+
+If using manual binary mode, run:
+
+```bash
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+Use absolute `perl-lsp.serverPath` if GUI launch does not inherit `PATH`.
+
+### Kiro CLI cannot start `perllsp`
+
+Run from the same shell used to launch Kiro CLI:
+
+```bash
+command -v perllsp
+perllsp --version
+perllsp --health
+perllsp --info
+```
+
+Then restart and inspect logs:
+
+```text
+/code init -f
+/code logs -l ERROR
+/code logs -l DEBUG -n 100
+```
+
+## See Also
+
+- [Editor Setup](../how-to/EDITOR_SETUP.md)
+- [Configuration](../reference/CONFIG.md)
+- [Troubleshooting](../how-to/TROUBLESHOOTING.md)

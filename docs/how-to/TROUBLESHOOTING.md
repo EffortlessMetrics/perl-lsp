@@ -71,6 +71,53 @@ If the editor is using a helper extension or plugin, check its own logs too.
 If you are debugging with `perl-dap`, check the DAP guide:
 [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md).
 
+## Amazon Kiro Does Not Start `perllsp`
+
+### Kiro IDE
+
+1. Confirm `EffortlessMetrics.perl-lsp-rs` is installed and enabled.
+2. Confirm the active file language is Perl.
+3. If using extension-managed downloads, verify:
+
+   ```json
+   {
+     "perl-lsp.autoDownload": true
+   }
+   ```
+
+4. If using a manual binary, run:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+5. If Kiro cannot find the binary, set an absolute `perl-lsp.serverPath`.
+
+### Kiro CLI
+
+1. Run `/code init` in project root.
+2. Edit the generated LSP config and add a Perl entry that launches
+   `perllsp --stdio`.
+3. Restart LSP servers:
+
+   ```text
+   /code init -f
+   ```
+
+4. Check status and logs:
+
+   ```text
+   /code status
+   /code logs -l ERROR
+   /code logs -l DEBUG -n 100
+   ```
+
+5. If diagnostics work but hover, definition, references, completion, or rename
+   do not, verify whether your Kiro CLI build fully supports client-initiated
+   custom-LSP operations for non-built-in languages.
+
 ## When To Escalate
 
 Report an issue when you can include:
