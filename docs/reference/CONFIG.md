@@ -611,6 +611,10 @@ Settings specific to the VS Code extension (`vscode-extension/package.json`).
 These are separate from the LSP workspace settings above and control extension
 behaviour such as binary management and feature toggles.
 
+The VS Code extension uses the `perl-lsp.*` namespace. Server-side workspace
+settings use the `perl.*` namespace and may be forwarded via initialization
+options or client-specific configuration mechanisms.
+
 ### Binary management
 
 | Setting | Type | Default | Description |
