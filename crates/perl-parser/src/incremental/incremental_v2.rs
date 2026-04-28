@@ -78,10 +78,12 @@ pub struct IncrementalMetrics {
 }
 
 impl IncrementalMetrics {
+    /// Create zeroed metrics.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Percentage of nodes reused out of all nodes touched (0–100).
     pub fn efficiency_percentage(&self) -> f64 {
         if self.nodes_reused + self.nodes_reparsed == 0 {
             return 0.0;
@@ -89,10 +91,12 @@ impl IncrementalMetrics {
         self.nodes_reused as f64 / (self.nodes_reused + self.nodes_reparsed) as f64 * 100.0
     }
 
+    /// Return `true` when the last parse completed in under 1 ms.
     pub fn is_sub_millisecond(&self) -> bool {
         self.parse_time_micros < 1000
     }
 
+    /// Return a human-readable performance tier label for the last parse time.
     pub fn performance_category(&self) -> &'static str {
         match self.parse_time_micros {
             0..=100 => "Excellent (<100µs)",
@@ -222,6 +226,7 @@ pub struct IncrementalParserV2 {
 }
 
 impl IncrementalParserV2 {
+    /// Create a parser with default reuse configuration and no cached tree.
     pub fn new() -> Self {
         IncrementalParserV2 {
             last_tree: None,
@@ -249,10 +254,14 @@ impl IncrementalParserV2 {
         }
     }
 
+    /// Queue an edit to be applied on the next [`parse`] call.
+    ///
+    /// [`parse`]: IncrementalParserV2::parse
     pub fn edit(&mut self, edit: Edit) {
         self.pending_edits.add(edit);
     }
 
+    /// Parse `source`, reusing cached tree nodes where edits did not affect them.
     pub fn parse(&mut self, source: &str) -> ParseResult<Node> {
         // Reset statistics
         self.reused_nodes = 0;

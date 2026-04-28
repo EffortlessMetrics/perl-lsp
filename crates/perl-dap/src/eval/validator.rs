@@ -86,7 +86,7 @@ impl SafeEvaluator {
         }
 
         // Check for assignment operators while avoiding comparison false positives
-        if let Some(re) = ASSIGNMENT_OP_TOKENS_RE.as_ref().ok() {
+        if let Ok(re) = ASSIGNMENT_OP_TOKENS_RE.as_ref() {
             for mat in re.find_iter(expression) {
                 let op = mat.as_str();
                 if ASSIGNMENT_OPERATORS.contains(&op) {
