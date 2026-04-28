@@ -387,6 +387,8 @@ Invoke `/coding-standards` for full detail.
 
 **Orchestration vocabulary**: [GLOSSARY.md](docs/reference/GLOSSARY.md) — single index of terms used across the orchestration reference docs (Candidate, Conveyor, Derived State, Ensemble, Gate, Receipt, Reconciler, Substrate, Three-Axis Triangulation, and more).
 
+**SDLC positioning**: [DISTRIBUTED_ENGINEERING_LINEAGE.md](docs/reference/DISTRIBUTED_ENGINEERING_LINEAGE.md) — situates the Octopus Cluster in classical engineering practice (Kanban, code review, trunk-health, CI/CD, SRE) with Beowulf contrast and SDLC-mapping table.
+
 ## Contributing
 
 Run `just pr-fast` while iterating and `nix develop -c just ci-gate` before merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
