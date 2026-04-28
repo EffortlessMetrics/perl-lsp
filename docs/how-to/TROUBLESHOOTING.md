@@ -110,6 +110,22 @@ If the editor is using a helper extension or plugin, check its own logs too.
 5. Run `LSP: Troubleshoot Server` and `LSP: Toggle Log Panel`.
 6. If Sublime cannot find `perllsp`, use an absolute path in `command`.
 
+### Trae does not start `perllsp`
+
+1. Confirm the `EffortlessMetrics.perl-lsp-rs` extension is installed and enabled.
+2. Confirm the active document language is Perl.
+3. If using extension-managed downloads, confirm `perl-lsp.autoDownload` is `true`.
+4. If using a manual binary, run:
+
+   ```bash
+   perllsp --version
+   perllsp --health
+   perllsp --info
+   ```
+
+5. If Trae cannot find the binary, use an absolute `perl-lsp.serverPath`.
+6. Check the Perl LSP output/log panel and temporarily set `perl-lsp.trace.server` to `messages`.
+
 ## Diagnostics Or Completions Are Missing
 
 - Re-check the install with `perllsp --health`.
