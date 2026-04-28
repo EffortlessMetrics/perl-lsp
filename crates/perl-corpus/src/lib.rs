@@ -228,6 +228,7 @@ pub mod r#gen;
 pub mod glob_expressions;
 pub mod gold;
 pub mod index;
+pub mod inventory;
 pub mod lint;
 pub mod meta;
 pub mod tie_interface;
@@ -262,6 +263,10 @@ pub use gold::{
     GotoGoldFixture, HoverAssertion, HoverAssertionKind, HoverGoldExpected, HoverGoldFixture,
     load_completion_gold_fixtures, load_gold_fixture, load_gold_fixtures, load_gold_fixtures_from,
     load_goto_gold_fixtures, load_hover_gold_fixtures,
+};
+pub use inventory::{
+    CorpusInventory, InventoryIds, InventoryMarkers, InventoryTags, build_inventory,
+    build_inventory_from_paths, generator_families, inventory_from_sections,
 };
 use meta::Section;
 use regex::Regex;
