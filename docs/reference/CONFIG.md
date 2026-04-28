@@ -1041,6 +1041,36 @@ For settings shared across editors, prefer `.perl-lsp.toml`.
 }
 ```
 
+#### Codex CLI via MCP bridge
+
+Codex CLI does not configure LSP servers directly. Use an MCP bridge that
+launches `perllsp --stdio`.
+
+Codex config (`~/.codex/config.toml` or trusted `.codex/config.toml`):
+
+```toml
+[mcp_servers.perl_lsp]
+command = "lsp-mcp"
+args = ["--config", "/absolute/path/to/project/lsp-mcp.toml", "--workspace", "/absolute/path/to/project"]
+cwd = "/absolute/path/to/project"
+startup_timeout_sec = 20
+tool_timeout_sec = 120
+```
+
+Bridge config (`lsp-mcp.toml`):
+
+```toml
+[[servers]]
+name = "perl"
+command = ["perllsp", "--stdio"]
+extensions = [".pl", ".PL", ".pm", ".t", ".pod", ".psgi", ".cgi", ".fcgi", ".xs", ".xsi"]
+root_markers = [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"]
+language_id = "perl"
+```
+
+Do not register `perllsp --stdio` directly as an MCP server; it speaks LSP, not
+MCP.
+
 ---
 
 ## See Also

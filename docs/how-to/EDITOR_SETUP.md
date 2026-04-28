@@ -33,7 +33,7 @@ perllsp --health
 | Sublime Text | register `perllsp` in the LSP package settings | [docs/EDITORS/SUBLIME_SETUP.md](../EDITORS/SUBLIME_SETUP.md) |
 | Amazon Kiro | register a Perl LSP client using `perllsp --stdio` | [docs/EDITORS/KIRO_SETUP.md](../EDITORS/KIRO_SETUP.md) |
 | Claude Code | provide a plugin `.lsp.json` pointing to `perllsp --stdio` | [docs/EDITORS/CLAUDE_CODE_SETUP.md](../EDITORS/CLAUDE_CODE_SETUP.md) |
-| Codex CLI | connect an MCP LSP bridge to `perllsp --stdio` | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
+| Codex CLI | configure an MCP bridge such as `lsp-mcp`; the bridge exposes tools to Codex and launches `perllsp --stdio` internally | [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) |
 | Codex Desktop | add a custom Perl server command `perllsp --stdio` | [docs/EDITORS/CODEX_DESKTOP_SETUP.md](../EDITORS/CODEX_DESKTOP_SETUP.md) |
 | OpenCode | configure a custom `perl-lsp` server in `opencode.json` | [docs/EDITORS/OPENCODE_SETUP.md](../EDITORS/OPENCODE_SETUP.md) |
 
@@ -141,10 +141,20 @@ using `command: "perllsp"` and `args: ["--stdio"]`.
 
 ### Codex CLI
 
-Configure an MCP LSP bridge that launches `perllsp --stdio`, then verify the
-bridge appears in Codex via `/mcp`. See
-[docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for a full
-example config and troubleshooting flow.
+Codex CLI uses MCP tools rather than direct LSP server registration. Configure
+an LSP-to-MCP bridge such as `lsp-mcp`, then point Codex at the bridge with a
+project-local `.codex/config.toml` entry like:
+
+```toml
+[mcp_servers.perl_lsp]
+command = "lsp-mcp"
+args = ["--config", "/absolute/path/to/project/lsp-mcp.toml", "--workspace", "/absolute/path/to/project"]
+cwd = "/absolute/path/to/project"
+```
+
+Do not register `perllsp --stdio` directly as an MCP server; it speaks LSP, not
+MCP. See [docs/EDITORS/CODEX_CLI_SETUP.md](../EDITORS/CODEX_CLI_SETUP.md) for
+the full workflow, bridge config, and troubleshooting.
 
 ### OpenCode
 
