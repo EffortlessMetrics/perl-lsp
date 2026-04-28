@@ -296,13 +296,18 @@ impl LspServer {
                                 // Use coordinator.index() directly instead of workspace_index()
                                 // to ensure we go through routing policy
                                 let idx = coordinator.index();
-                                let edits =
-                                    crate::workspace_rename::build_rename_edit(idx, key, normalized_bare)
-                                        .map_err(|refusal| JsonRpcError {
-                                            code: -32602,
-                                            message: refusal.to_string(),
-                                            data: None,
-                                        })?;
+                                let edits = crate::workspace_rename::build_rename_edit(
+                                    idx,
+                                    key,
+                                    normalized_bare,
+                                )
+                                .map_err(|refusal| {
+                                    JsonRpcError {
+                                        code: -32602,
+                                        message: refusal.to_string(),
+                                        data: None,
+                                    }
+                                })?;
                                 if edits.is_empty() {
                                     // Fall through to same-file rename
                                 } else {
