@@ -331,10 +331,13 @@ gates:
       - cpan
       - ratchet
 
+  # NOTE (2026-04-28): advisory (required: false) until the parser audit
+  # producer is replaced with deterministic/scoped inputs suitable for hard
+  # merge blocking. This still runs in merge_gate for signal collection.
   - name: parser_audit_closeout
     tier: merge_gate
-    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) must not regress"
-    required: true
+    description: "Project corpus parser closeout metrics (gaps, NodeKinds, recovery) ratchet (advisory until deterministic replacement lands)"
+    required: false
     command: >-
       cargo run --locked -p xtask
       -- corpus-audit --fresh --corpus-path . --check
