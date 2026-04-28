@@ -8,7 +8,31 @@
 
 The orchestrator routes work to agents, never writes code directly.
 
+### Gates and Agents
+
+The pipeline is organized into **7 gates** (coarse stages) with multiple agents working within each gate:
+
+| Gate | Purpose | Key agents |
+|------|---------|-----------|
+| **1. Identify** | Accurate, builder-ready problem statement | scout, accuracy-scout, research-verifier |
+| **2. Spec** | Scoped, project-aligned approach | plan-reviewer, oppositional-planner, advocatus-diaboli, architecture-reviewer, maintainer-issue, spec-planner |
+| **3. Build** | Well-tested, implemented PR | red-tdd, builder, green-tdd |
+| **4. Review/improve** | Right thing × what codebase needs × right way | reviewer, maintainer-pr, refactor-planner, green-refactor, reviewer-deep, diff-auditor |
+| **5. CI green** | Live CI actually green (not just a label) | green-ci, pr-responder |
+| **6. Merge** | Land it | ops |
+| **7. Learn** | Consolidate captured learning into durable artifacts | wisdom, memory-recalibrator |
+
+**Sequencing within a gate** is preferred when agents build on each other's output, but is not strict — parallel agents within a gate are fine when they don't depend on each other.
+
+**Some gates may be skipped** when they are not relevant for a given PR's nature (e.g., a 1-line fmt fix skips Gates 1 and 2; a docs-only PR skips reviewer-deep in Gate 4).
+
+**Learning is captured continuously** by every agent in every gate. Gate 7 is the dedicated consolidation layer — it shapes captured artifacts into durable memory, doctrine, and follow-up work.
+
+See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for the full gate model: skip criteria, within-gate ordering, three-axis triangulation in Gate 4, and worked examples.
+
 ### Pipeline: Scout → Accuracy-Scout → Plan-Review → Build → Review → Green → Merge → Wisdom
+
+The default sequence within and across gates. Adapt to PR nature; skip gates that don't apply.
 
 Every change flows through this pipeline. Each stage is a cheap pass that catches what the previous one missed.
 
@@ -113,6 +137,8 @@ Labels are the authoritative state for every issue and PR. The orchestrator read
 Labels are sign-off receipts. The *presence* of a label means an agent reviewed and approved. The *absence* means the pass hasn't happened yet. The orchestrator routes based on what's missing.
 
 ### Label-based routing
+
+Default routing pattern. The orchestrator may skip individual queries when the PR's nature makes that gate's check trivially satisfied or irrelevant. See [docs/reference/PIPELINE_GATES.md](docs/reference/PIPELINE_GATES.md) for skip criteria.
 
 **Pre-plan-review verification** (issue has `needs-plan-review`):
 ```
