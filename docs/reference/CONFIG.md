@@ -557,6 +557,47 @@ perllsp --completion bash >> ~/.bashrc  # install bash completions
 
 ---
 
+### Vim Client Examples
+
+#### Vim with vim-lsp
+
+```vim
+autocmd User lsp_setup call lsp#register_server({
+      \ 'name': 'perl-lsp',
+      \ 'cmd': {server_info -> ['perllsp', '--stdio']},
+      \ 'allowlist': ['perl'],
+      \ 'workspace_config': {
+      \   'perl': {
+      \     'workspace': {
+      \       'includePaths': ['lib', '.', 'local/lib/perl5']
+      \     }
+      \   }
+      \ },
+      \ })
+```
+
+#### Vim with coc.nvim
+
+```json
+{
+  "languageserver": {
+    "perl-lsp": {
+      "command": "perllsp",
+      "args": ["--stdio"],
+      "filetypes": ["perl"],
+      "rootPatterns": [".perl-lsp.toml", "Makefile.PL", "Build.PL", "cpanfile", "dist.ini", ".git"],
+      "settings": {
+        "perl": {
+          "workspace": {
+            "includePaths": ["lib", ".", "local/lib/perl5"]
+          }
+        }
+      }
+    }
+  }
+}
+```
+
 ## Environment Variables
 
 Environment variables read at startup by the `perllsp` executable. Source:
@@ -619,11 +660,26 @@ options or client-specific configuration mechanisms.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` executable. Empty = auto-download. |
+| `perl-lsp.serverPath` | `string` | `""` | Absolute path to the `perllsp` binary. Empty = auto-download. |
 | `perl-lsp.autoDownload` | `boolean` | `true` | Download the binary automatically if not found locally. |
 | `perl-lsp.downloadBaseUrl` | `string` | `""` | Override the GitHub releases base URL for internal mirrors. |
 | `perl-lsp.channel` | `"latest"\|"stable"\|"tag"` | `"latest"` | Release channel to track. |
 | `perl-lsp.versionTag` | `string` | `""` | Specific release tag (e.g., `v0.8.3`) when `channel` is `"tag"`. |
+
+### Trae
+
+Trae can use VS Code-compatible extensions. Prefer the official
+`EffortlessMetrics.perl-lsp-rs` extension. For manual binary management, set:
+
+```json
+{
+  "perl-lsp.serverPath": "/absolute/path/to/perllsp",
+  "perl-lsp.autoDownload": false
+}
+```
+
+If using a generic LSP client extension instead, configure that extension to
+launch `perllsp --stdio`.
 
 ### Debugging
 
