@@ -426,4 +426,76 @@ mod tests {
         assert_eq!(receipt.verdict, "pass", "master_red is not a PR-owned failure; verdict must be pass");
         Ok(())
     }
+
+    /// When master_checks is absent but behind_master=true, the classifier must
+    /// NOT classify as STALE_BASE — it cannot confirm master is green without
+    /// master evidence. Conservative fallback is UNKNOWN.
+    #[test]
+    fn behind_master_without_master_checks_is_unknown_not_stale_base() {
+        let input = SnapshotInput {
+            pr: PullRequestInput {
+                number: Some(9999),
+                head_sha: Some("head-sha-999".to_string()),
+                master_sha: Some("master-sha-abc".to_string()),
+                behind_master: true,
+                changed_files: vec!["src/main.rs".to_string()],
+            },
+            pr_checks: vec![CheckInput {
+                name: Some("ci / test".to_string()),
+                signature: Some("ci / test: build failure".to_string()),
+                sha: Some("head-sha-999".to_string()),
+                conclusion: Some("failure".to_string()),
+                ..CheckInput::default()
+            }],
+            master_checks: vec![], // no master data
+            ..SnapshotInput::default()
+        };
+
+        let receipt = classify(&input);
+        assert_ne!(
+            receipt.classification,
+            FailureClassification::StaleBase,
+            "should not classify as STALE_BASE without master evidence to confirm master is green"
+        );
+        // Without file overlap and no infra pattern, falls to UNKNOWN
+        assert_eq!(
+            receipt.classification,
+            FailureClassification::Unknown,
+            "insufficient evidence should produce UNKNOWN"
+        );
+    }
+
+    /// When head_sha is None, any failing check is treated as head-evidence.
+    /// This is a known conservative behavior: classifier trusts available data.
+    #[test]
+    fn no_head_sha_includes_all_failing_checks() {
+        let input = SnapshotInput {
+            pr: PullRequestInput {
+                number: Some(8888),
+                head_sha: None, // no head SHA in input
+                master_sha: None,
+                behind_master: false,
+                changed_files: vec!["crates/foo/src/lib.rs".to_string()],
+            },
+            pr_checks: vec![CheckInput {
+                name: Some("ci / test".to_string()),
+                signature: Some("ci / test: link error".to_string()),
+                sha: Some("some-old-sha".to_string()),
+                conclusion: Some("failure".to_string()),
+                files: vec!["crates/foo/src/lib.rs".to_string()],
+                ..CheckInput::default()
+            }],
+            master_checks: vec![],
+            ..SnapshotInput::default()
+        };
+
+        let receipt = classify(&input);
+        // With no head_sha, the check passes the SHA filter and produces evidence.
+        // File overlap exists, so should classify as CodeRegression.
+        assert_eq!(
+            receipt.classification,
+            FailureClassification::CodeRegression,
+            "without head_sha, failing check with file overlap should classify as code_regression"
+        );
+    }
 }
