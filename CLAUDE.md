@@ -385,6 +385,8 @@ Invoke `/coding-standards` for full detail.
 
 [Status Overview](docs/project/status/index.md) | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) (stub) | [ROADMAP.md](docs/project/ROADMAP.md) | [COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) | [FAILURE_MODES.md](docs/reference/FAILURE_MODES.md) | [features.toml](features.toml)
 
+**Orchestration vocabulary**: [GLOSSARY.md](docs/reference/GLOSSARY.md) — single index of terms used across the orchestration reference docs (Candidate, Conveyor, Derived State, Ensemble, Gate, Receipt, Reconciler, Substrate, Three-Axis Triangulation, and more).
+
 ## Contributing
 
 Run `just pr-fast` while iterating and `nix develop -c just ci-gate` before merge. See [CONTRIBUTING.md](CONTRIBUTING.md).
